@@ -2566,8 +2566,8 @@
     "command": "ALL",
     "roles": ["public"],
     "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_sitemap_touches'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_sitemap_touches'::regclass)::oid)))"
+    "using": "true",
+    "withCheck": "true"
   },
   {
     "schema": "public",

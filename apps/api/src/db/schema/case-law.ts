@@ -2928,8 +2928,8 @@ export const caseLawSitemapTouches = p.pgTable(
     p.pgPolicy("case_law_sitemap_touch_owner_access", {
       for: "all",
       to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_touches'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_touches'::regclass)`,
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
   ],
 );

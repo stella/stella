@@ -12,9 +12,13 @@ CREATE TABLE "case_law_sitemap_touches" (
 
 ALTER TABLE "case_law_sitemap_touches" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "case_law_sitemap_touches" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE POLICY "case_law_sitemap_touch_owner_access" ON "case_law_sitemap_touches" FOR ALL TO public
-  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_touches'::regclass))
-  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_touches'::regclass));--> statement-breakpoint
+-- Row security is forced, so the owner-run refresh and the owner's trigger
+-- function are bound by policy too. As on case_law_sitemap_changes, table
+-- privileges decide who reaches the rows, and a constant policy leaves the
+-- planner's row estimates for the ordered batch read intact.
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: only the owner and the owner's trigger function write the queue; no role is granted
+CREATE POLICY "case_law_sitemap_touch_owner_access" ON "case_law_sitemap_touches"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_touches" FROM stella;--> statement-breakpoint
 
 -- The function runs as its owner, so the writers of case_law_decisions need

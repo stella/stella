@@ -41,6 +41,7 @@ import {
   lockCaseLawSitemapRefreshCursor,
   lockCaseLawSitemapSnapshot,
   tryLockCaseLawSitemapMonth,
+  tryLockCaseLawSitemapSnapshot,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -501,25 +502,33 @@ export const sitemapTouchFoldSql = (limit: number): SQL => sql`
 /**
  * Fold at most `limit` touches in one short transaction under the snapshot
  * fence a recount and a removal take, so the fold never interleaves with a
- * shard rewrite. Whether a full batch may have left more queued.
+ * shard rewrite: a recount whose snapshot predates a touch would otherwise
+ * replace the row the fold raised after the touch was deleted. A fence held
+ * by a recount or a removal is not waited on; the touches stay queued for a
+ * later run (`held`). Otherwise whether a full batch may have left more.
  */
 const foldTouches = async (
   { db, budget, signal }: RunContext,
   limit: number,
-): Promise<{ retired: number; more: boolean }> =>
-  await withAggregateTransaction(db, async (tx) => {
+): Promise<{ status: "held" } | { status: "folded"; more: boolean }> => {
+  const folded = await withAggregateTransaction(db, async (tx) => {
     await setTransactionBudget(tx, budget);
-    await lockCaseLawSitemapSnapshot(tx);
-    const folded = v.parse(
+    if (!(await tryLockCaseLawSitemapSnapshot(tx))) {
+      return undefined;
+    }
+    return v.parse(
       v.object({
         retired: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
         raised: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
       }),
       executedRows(await tx.execute(sitemapTouchFoldSql(limit))).at(0),
     );
-    throwIfAborted(signal);
-    return { retired: folded.retired, more: folded.retired === limit };
   });
+  throwIfAborted(signal);
+  return folded === undefined
+    ? { status: "held" }
+    : { status: "folded", more: folded.retired === limit };
+};
 
 const wholeCountryRow = (country: string): SitemapMonth => ({
   country,
@@ -1105,8 +1114,14 @@ export const refreshCaseLawSitemapShards = async (
     }
     if (step !== "progress") {
       // Queued touches wait on no month lock or snapshot.
-      return pendingOutcome(touches.more ? "immediate" : step);
+      return pendingOutcome(
+        touches.status === "folded" && touches.more ? "immediate" : step,
+      );
     }
+  }
+  if (touches.status === "held") {
+    // A recount or removal held the fence; the queue waits for the retry.
+    return pendingOutcome("delayed");
   }
   if (touches.more) {
     return pendingOutcome("immediate");
