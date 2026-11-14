@@ -14,12 +14,14 @@ import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
 import { ChatComposer } from "@/components/chat-composer";
+import { ChatDraftDocuments } from "@/components/chat-draft-document";
 import { ChatInputCard } from "@/components/chat-input-card";
 import type { InputNotice } from "@/components/chat-input-card";
 import { ChatMessage } from "@/components/chat-message";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
+import { ThreadMatter } from "@/components/thread-matter";
 import { useChatTurn } from "@/components/use-chat-turn";
 import type { LiveTurn } from "@/components/use-chat-turn";
 import { useMarkChatReadWhileOpen } from "@/components/use-mark-chat-read";
@@ -92,19 +94,23 @@ export const ChatThreadView = ({
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator color={colors.accent} style={styles.fill} />}
-    >
-      <LoadedThread
-        load={load}
-        matterId={matterId}
-        onReload={reload}
-        refreshing={refreshing}
-        shareId={shareId}
-        source={source}
-        threadId={threadId}
-      />
-    </Suspense>
+    <ThreadMatter value={matterId}>
+      <Suspense
+        fallback={
+          <ActivityIndicator color={colors.accent} style={styles.fill} />
+        }
+      >
+        <LoadedThread
+          load={load}
+          matterId={matterId}
+          onReload={reload}
+          refreshing={refreshing}
+          shareId={shareId}
+          source={source}
+          threadId={threadId}
+        />
+      </Suspense>
+    </ThreadMatter>
   );
 };
 
@@ -375,6 +381,8 @@ const ThreadMessages = ({
                 notice={inputNotice}
                 onAnswer={answer}
                 pending={pending}
+                source={source}
+                threadId={threadId}
               />
             ) : null}
           </View>
@@ -390,7 +398,17 @@ const ThreadMessages = ({
             tintColor={colors.muted}
           />
         }
-        renderItem={({ item }) => <ChatMessage entry={item} />}
+        renderItem={({ item }) =>
+          item.drafts.length === 0 ? (
+            <ChatMessage entry={item} />
+          ) : (
+            // The drafts the answer wrote follow it, each opening its pages.
+            <View style={styles.live}>
+              <ChatMessage entry={item} />
+              <ChatDraftDocuments drafts={item.drafts} />
+            </View>
+          )
+        }
       />
       <View style={screenStyles.readable}>
         {markFailure === null ? null : (
@@ -448,8 +466,8 @@ const LiveTurnView = ({
       {turn.question === undefined ? null : (
         <ChatMessage entry={turn.question} uploading={uploading} />
       )}
-      {answer.text === "" && answer.tools.length === 0 ? null : (
-        <ChatMessage entry={answer} />
+      {answer.blocks.length === 0 ? null : (
+        <ChatMessage entry={answer} live={status === "streaming"} />
       )}
       {status === "streaming" ? (
         <View style={styles.working}>

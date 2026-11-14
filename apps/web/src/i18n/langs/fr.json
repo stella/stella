@@ -571,6 +571,21 @@
       "showBefore": "Afficher le texte avant le ¶ {from}",
       "verifyParagraphs": "Vérifier des paragraphes"
     },
+    "staleness": {
+      "failed": "Les affirmations n’ont pas pu être revérifiées",
+      "finished": "{count, plural, one {# affirmation revérifiée} other {# affirmations revérifiées} many {# affirmations revérifiées}}",
+      "partial": "{rechecked, number} revérifiée(s), {failed, plural, one {# en échec} other {# en échec} many {# en échec}}",
+      "reasons": {
+        "factChanged": "Fait modifié",
+        "factHeld": "Fait exclu",
+        "factRemoved": "Fait retiré",
+        "newFactRelated": "Nouveau fait lié"
+      },
+      "recheckAll": "Tout revérifier",
+      "recheckLocked": "En cours de revérification avec les autres affirmations obsolètes",
+      "runLine": "{count, plural, one {# affirmation est peut-être obsolète} other {# affirmations sont peut-être obsolètes} many {# affirmations sont peut-être obsolètes}}",
+      "running": "{count, plural, one {Revérification de # affirmation…} other {Revérification de # affirmations…} many {Revérification de # affirmations…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contredite",
@@ -628,100 +643,21 @@
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Créer la version bilingue",
-      "creating": "Création…",
-      "description": "Crée une copie de ce document sur deux colonnes : le texte original à gauche, une copie à traduire à droite, avec une numérotation indépendante. La copie est enregistrée dans ce dossier comme nouveau document.",
-      "sameLanguage": "Choisissez deux langues différentes.",
-      "sourceLanguage": "Langue source",
-      "title": "Version bilingue"
-    },
-    "error": {
-      "title": "Échec de la version bilingue"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> est prêt avec {rowCount, plural, one {# ligne} other {# lignes} many {# lignes}} à traduire.",
-      "title": "Version bilingue créée"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Remplit la colonne de traduction de ce document sur deux colonnes. Vérifiez ce qui arrive à chaque ligne et la façon dont les termes définis sont rendus, puis lancez la traduction.",
-      "prepare": "Préparer",
-      "preparing": "Lecture du document…",
-      "preparingHint": "Lire l'intégralité du document et évaluer chaque ligne prend jusqu'à deux minutes.",
-      "title": "Traduire la version bilingue"
+      "prepare": "Préparer"
     },
     "dispositions": {
-      "inline": "Les deux langues",
       "keep": "Laisser tel quel"
     },
-    "error": {
-      "prepareTitle": "Le document n'a pas pu être préparé",
-      "startTitle": "La traduction n'a pas pu être lancée"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Aucun modèle d'IA n'est disponible pour la traduction.",
-      "applyFailed": "Les traductions n'ont pas pu être réécrites dans le document.",
-      "documentChanged": "Le document a changé pendant la traduction. Préparez-le à nouveau.",
-      "documentUnresolved": "Le document ou son fichier n'est plus disponible.",
-      "enqueueFailed": "La traduction n'a pas pu être mise en file d'attente.",
-      "internal": "La traduction s'est arrêtée de façon inattendue.",
-      "notBilingual": "Ce document ne contient pas de tableau bilingue.",
-      "translationFailed": "Un lot de lignes n'a pas pu être traduit.",
-      "unknown": "La traduction s'est arrêtée de façon inattendue."
-    },
-    "glossary": {
-      "add": "Ajouter un terme",
-      "description": "Ces rendus s'appliquent à toutes les lignes. Un terme sans traduction doit être complété ou supprimé.",
-      "empty": "Aucun terme défini trouvé.",
-      "formsHint": "Séparez les autres formes par des virgules.",
-      "formsSource": "Autres formes du terme",
-      "formsTarget": "Autres formes de la traduction",
-      "incomplete": "Complétez les traductions manquantes ou supprimez ces termes.",
-      "origins": {
-        "detected": "Détecté",
-        "user": "Le vôtre"
-      },
-      "term": "Terme",
-      "title": "Termes définis",
-      "tooManyForms": "Un terme peut compter au maximum {max} autres formes.",
-      "translation": "Traduction"
-    },
     "kinds": {
-      "heading": "Titre",
-      "listItem": "Élément de liste",
-      "paragraph": "Paragraphe",
-      "table": "Tableau entier"
-    },
-    "origins": {
-      "default": "Non évalué",
-      "model": "IA"
+      "paragraph": "Paragraphe"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# ligne a été ignorée} other {# lignes ont été ignorées} many {# lignes ont été ignorées}} : elles ne contiennent aucun texte traduisible.",
-      "start": "Lancer la traduction",
       "starting": "Lancement…"
     },
     "rows": {
-      "description": "Choisissez ce qui arrive à chaque ligne de la colonne de traduction.",
-      "ordinal": "#",
-      "sourceText": "Texte source",
-      "title": "Lignes",
-      "whatToDo": "Que faire"
-    },
-    "run": {
-      "cancelled": "La traduction a été annulée.",
-      "doneSummary": "{count, plural, one {# ligne traduite} other {# lignes traduites} many {# lignes traduites}}.",
-      "doneTitle": "Traduction terminée",
-      "failedRows": "{count, plural, one {# ligne n'a pas pu être traduite} other {# lignes n'ont pas pu être traduites} many {# lignes n'ont pas pu être traduites}}.",
-      "failedTitle": "Traduction interrompue",
-      "hint": "La traduction s'exécute sur le serveur. Gardez cette fenêtre ouverte pour la suivre.",
-      "moreRows": "{count, plural, one {# ligne de plus} other {# lignes de plus} many {# lignes de plus}}",
-      "progress": "{completed} lignes traduites sur {total}",
-      "title": "Traduction en cours…",
-      "warningsTitle": "Lignes à vérifier"
+      "title": "Lignes"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
       "none": "Aucune citation enregistrée pour l'instant.",
       "notInStella": "Pas encore dans stella",
-      "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
       "paragraphLabel": "Point {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1918,7 +1853,8 @@
       "restored": "Modifications de fichiers annulées"
     },
     "localRun": {
-      "cloud": "Cloud stella",
+      "backgroundTasks": "{count, plural, one {# tâche en arrière-plan en cours} other {# tâches en arrière-plan en cours} many {# tâches en arrière-plan en cours}}",
+      "errorFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible sur votre ordinateur. Vérifiez-le dans stella desktop, puis renvoyez ceci.",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
@@ -1927,26 +1863,39 @@
       "errorRestoring": "Votre ordinateur annule encore des modifications de fichiers. Renvoyez ceci dans un instant.",
       "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "filesNotShared": "Les fichiers qui n'ont pas pu être partagés restent sur votre ordinateur : {fileNames}",
-      "onThisComputer": "{harness} sur cet ordinateur",
+      "folderApprovalDescription": "Autorisez {harness} à travailler dans le dossier « {folder} » de votre ordinateur. L’agent peut y lire, modifier et supprimer des fichiers, et les fichiers joints y sont copiés.",
+      "folderApprove": "Autoriser dans {folder}",
+      "folderHint": "Liez des dossiers de votre ordinateur dans les réglages de stella desktop.",
+      "folderOwn": "Dossier propre à la conversation",
+      "folderStateMoved": "Déplacé ou supprimé",
+      "folderStateOffline": "Disque non connecté",
+      "folderStatePending": "En attente de votre accord",
+      "folderStateProtected": "Contient les données de stella",
+      "folderStateUnlinked": "N’est plus lié",
+      "folderStateUnreadable": "Illisible",
       "permissionAboveLimit": "Non autorisé par votre organisation",
       "permissionAskDescription": "Modifie seul les fichiers du dossier de la conversation ; demande avant tout le reste.",
       "permissionAutoDescription": "Fait seul ce qu’il juge sûr ; demande pour le reste.",
       "permissionFullAuto": "Entièrement automatique",
       "permissionFullAutoDescription": "Ne demande jamais rien dans le dossier de la conversation ; demande toujours avant de modifier votre ordinateur.",
+      "permissionPlan": "Planifier",
+      "permissionPlanDescription": "Lit et planifie d’abord ; demande avant chaque modification tant que vous n’avez pas approuvé le plan.",
       "permissionSandboxed": "S’exécute dans un bac à sable ; demande avant de modifier votre ordinateur.",
       "permissionUnavailable": "Indisponible sur cet ordinateur",
       "permissions": "Autorisations",
       "refusalConflictingRunMode": "Cette demande doit s’exécuter à la fois avec l’agent cloud et sur votre ordinateur. Choisissez-en un sous Exécuter sur.",
+      "refusalFolderNotApproved": "Autorisez d’abord l’agent de code à travailler dans le dossier lié à cette conversation.",
+      "refusalFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible. Vérifiez-le sous Exécuter sur ou dans stella desktop.",
       "refusalHarnessUnavailable": "L’agent de code de votre ordinateur ne peut pas traiter cette demande pour le moment. Vérifiez-le dans stella desktop.",
       "refusalModelUnavailable": "L’agent de code de votre ordinateur ne propose plus ce modèle. Choisissez-en un autre sous Exécuter sur.",
-      "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté. Ouvrez stella desktop, puis renvoyez le message.",
+      "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté.",
       "refusalPermissionAboveLimit": "Votre organisation n’accorde pas ces autorisations à l’agent de code de votre ordinateur. Choisissez une autre option sous Autorisations.",
       "refusalPermissionUnavailable": "L’agent de code de votre ordinateur ne peut pas s’exécuter avec ces autorisations. Choisissez une autre option sous Autorisations.",
+      "refusalReasoningEffortUnavailable": "L’agent de code de votre ordinateur ne propose pas ce niveau de raisonnement pour le modèle. Choisissez-en un autre sous Niveau de raisonnement.",
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
-      "runOn": "Exécuter sur",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
       "stateModelUnavailable": "Modèle plus disponible",
       "stateNeedsLogin": "Connexion requise",
@@ -2109,6 +2058,25 @@
     "richContentLoading": "Chargement du contenu interactif…",
     "richContentTitle": "Contenu interactif",
     "richContentUnavailable": "Ce contenu ne peut pas être affiché en toute sécurité.",
+    "runOn": {
+      "checkFailed": "Impossible de vérifier votre ordinateur",
+      "chipLabel": "Exécution : {place}",
+      "cloud": "Cloud",
+      "cloudDescription": "S’exécute dans le cloud. Fonctionne partout.",
+      "harnessModels": "Modèles {harness}",
+      "hintInstall": "Installez-le depuis stella desktop",
+      "hintOffline": "Ouvrez stella desktop sur votre ordinateur",
+      "hintSignIn": "Connectez-vous dans stella desktop",
+      "hintUpdate": "Mettez-le à jour depuis stella desktop",
+      "localFolderPlace": "Votre ordinateur, {harness}, {folder}",
+      "localFolderSelection": "Votre ordinateur · {harness} · {folder}",
+      "localPlace": "Votre ordinateur, {harness}",
+      "localSelection": "Votre ordinateur · {harness}",
+      "modelDefault": "Par défaut (recommandé)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Votre ordinateur",
+      "yourComputerDescription": "Utilise Codex ou Claude Code sur votre ordinateur avec votre propre abonnement. Il peut lire et modifier les fichiers du dossier de cette conversation ; ses autorisations fixent ce qu’il peut faire sans demander."
+    },
     "selection": {
       "askInNewChat": "Demander dans une nouvelle conversation",
       "quoteInReply": "Citer dans la réponse",
@@ -2160,6 +2128,7 @@
     "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
+    "stopping": "Arrêt en cours…",
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
     "suggestedFollowupsLabel": "Suggestions de questions de suivi",
@@ -2302,15 +2271,32 @@
       "field": "Champ",
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
+      "localOutput": {
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
+        "cut": "Affichage des {kept} premiers sur {total}",
+        "diff": "Modifications des fichiers",
+        "elsewhere": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
+        "empty": "Aucun résultat",
+        "failed": "L’application de bureau stella sur cet ordinateur n’a pas pu l’afficher.",
+        "imageTooLarge": "Cette image fait {total}. Les images de plus de {kept} ne sont pas conservées sur cet ordinateur ; elle ne peut donc pas être affichée ici.",
+        "notKept": "Rien de cette étape n’est conservé sur cet ordinateur",
+        "reading": "Lecture depuis cet ordinateur"
+      },
       "output": "Résultat",
       "patternInPath": "{pattern} dans {path}",
+      "proposedPlan": "Proposition d’un plan",
       "readFile": "Lecture d’un fichier",
       "searchFiles": "Recherche dans les fichiers",
+      "signInToContinue": "Connectez-vous pour continuer",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
+      "subagent": "Exécution d’un sous-agent",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}",
-      "updatePlan": "Mise à jour du plan"
+      "updatePlan": "Mise à jour du plan",
+      "viewImage": "Consultation d’une image"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",
@@ -2321,6 +2307,8 @@
       "replyReadyTitle": "Réponse prête"
     },
     "turnStatus": {
+      "answerFailed": "La réponse n’a pas pu être terminée",
+      "answerReady": "Réponse prête",
       "waitingForApproval": "En attente d’approbation",
       "waitingForInput": "En attente de saisie",
       "writing": "Rédaction"
@@ -2600,6 +2588,7 @@
     "filter": "Filtrer",
     "filters": "Filtres",
     "find": "Rechercher",
+    "folder": "Dossier",
     "formula": "Formule",
     "goBack": "Retour",
     "goBackToEditing": "Revenir à l’édition",
@@ -2696,6 +2685,7 @@
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
     "organizations": "Organisations",
+    "outOfDate": "Obsolète",
     "page": "Page n° {page}",
     "paymentRetryNotice": "Problème de paiement. Mettez à jour votre moyen de paiement avant le {date} pour conserver votre accès.",
     "pin": "Épingler",
@@ -3360,6 +3350,8 @@
       "organizationMemberLimitReached": "Cette organisation a atteint sa limite de membres.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
+      "runActiveLimitReached": "Votre organisation a atteint la limite de traitements simultanés. Attendez la fin de l’un d’eux, puis réessayez.",
+      "runDailyLimitReached": "Votre organisation a atteint la limite quotidienne de traitements. Réessayez après minuit (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft a refusé l’accès à ce site, cette bibliothèque ou ce fichier.",
       "sharepointFileTooLarge": "Ce fichier est trop volumineux pour être importé.",
       "sharepointInvalidCursor": "La liste a changé pendant votre navigation. Rouvrez le dossier.",
@@ -3375,8 +3367,6 @@
       "validationRequired": "Un champ obligatoire est vide.",
       "validationTooLong": "Trop long : {limit, number} caractères au maximum.",
       "validationTooShort": "Trop court : {limit, number} caractères au minimum.",
-      "verificationActiveLimitReached": "Votre organisation a atteint la limite de vérifications simultanées. Attendez la fin d’une vérification, puis réessayez.",
-      "verificationDailyLimitReached": "Votre organisation a atteint la limite quotidienne de vérifications. Réessayez après minuit (Europe/Prague).",
       "versionConflict": "Quelqu’un d’autre l’a modifié pendant votre édition. Rechargez pour obtenir la version actuelle."
     },
     "failedToAcceptInvitation": "Impossible d'accepter l'invitation",
@@ -5515,7 +5505,6 @@
       "caseLaw": "Jurisprudence",
       "chat": "Conversation",
       "contact": "Contact",
-      "folder": "Dossier",
       "link": "Lien",
       "matter": "Dossier",
       "message": "Message",
@@ -5846,6 +5835,7 @@
         "case_law_research_column": "colonne de recherche jurisprudentielle",
         "chat_browser_site_grant": "autorisation de site web dans la discussion",
         "chat_file": "fichier de discussion",
+        "chat_local_folder_approval": "autorisation de dossier local",
         "chat_message": "message de discussion",
         "chat_thread": "fil de discussion",
         "chat_tool_execution": "exécution d’outil de discussion",
@@ -6101,7 +6091,6 @@
     "comments": "Commentaires",
     "commentsEmpty": "Sélectionnez du texte pour le commenter.",
     "noRevisions": "Aucune révision pour l'instant",
-    "outOfDate": "Obsolète",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Sans résumé",
     "proposals": "Propositions",

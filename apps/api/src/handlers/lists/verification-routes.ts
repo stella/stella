@@ -11,6 +11,7 @@ import createClaimComment from "@/api/handlers/lists/verifications/claim-comment
 import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
 import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
 import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
+import createBulkClaimRechecks from "@/api/handlers/lists/verifications/claim-rechecks/bulk/create";
 import createClaimRecheck from "@/api/handlers/lists/verifications/claim-rechecks/create";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
@@ -35,6 +36,7 @@ export const createListVerificationRoutes = (
       "/claim-reviews": { GET: listClaimReviews, POST: createClaimReview },
       "/claim-reviews/bulk": { POST: createBulkClaimReviews },
       "/claim-rechecks": { POST: createClaimRecheck },
+      "/claim-rechecks/bulk": { POST: createBulkClaimRechecks },
       "/claim-comments": { GET: listClaimComments, POST: createClaimComment },
       "/claim-comments/:annotationId": {
         PATCH: updateClaimComment,

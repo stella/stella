@@ -1,5 +1,0 @@
-{
-  "metric": "api-lib-top-level-entries",
-  "delta": 1,
-  "reason": "apps/api/src/lib/conflict-check owns internal conflict-of-interest checks (matching, the walled-matter routines' readers, outcome, projection and the record operations). No existing lib module owns a firm-wide conflict search; the sanctions lib owns external list screening only."
-}

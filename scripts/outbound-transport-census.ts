@@ -1005,6 +1005,20 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/browser/bridge.ts",
+    class: "package-owned-client",
+    reason:
+      "Listens on the holder's private Unix socket for the browser native host; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/browser/native-host.ts",
+    class: "package-owned-client",
+    reason:
+      "Connects to the holder's private Unix socket by path to relay Chrome's native messages; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/holder-server.ts",
     class: "package-owned-client",
     reason:
@@ -1058,13 +1072,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "package-owned-client",
     reason:
       "Standalone CLI stamps its client identity on API requests through the shared fetch owner.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/cli-release-channel.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns public release-channel metadata reads with an injectable transport.",
     transports: ["global:fetch"],
   },
   {

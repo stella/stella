@@ -294,6 +294,7 @@ const seedMatter = async (): Promise<Matter> => {
       },
       facts: { changed: [], removed: [] },
       modelRef: null,
+      assertedOn: { type: "none" },
     } satisfies ClaimReviewEventPayload;
     await tx.insert(legalListClaimReviewEvents).values({
       id: recheckId,
@@ -407,7 +408,7 @@ const applyWrite = async (
 
 const writesOf = (matter: Matter): AnyWrite[] => [
   { type: "run", runId: matter.runId },
-  { type: "recheck", eventId: matter.recheckId },
+  { type: "recheck", eventIds: [matter.recheckId] },
   {
     type: "fact-sources",
     sourceIds: matter.sources,

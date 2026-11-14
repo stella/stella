@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
 import {
+  type ReadsExactly,
   REVIEW_DECISION,
   type ReviewDecision,
 } from "@stll/api-contract/review-decision";
@@ -104,6 +105,18 @@ export const LEGAL_LIST_REVIEW_DECISIONS = [
 ] as const;
 export type LegalListReviewDecision =
   (typeof LEGAL_LIST_REVIEW_DECISIONS)[number];
+
+// What each list status means in the shared review vocabulary is the
+// owner's (`REVIEW_STATUS_DECISION`), and it reads exactly these.
+true satisfies ReadsExactly<"listItem", LegalListReviewDecision>;
+true satisfies ReadsExactly<
+  "listItemSource",
+  LegalListSourceVerificationStatus
+>;
+true satisfies ReadsExactly<
+  "listGenerationCandidate",
+  LegalListGenerationCandidateStatus
+>;
 
 const LEGAL_LIST_STATUS_SQL_VALUES = LEGAL_LIST_STATUSES.map((status) =>
   sql.raw(`'${status}'`),

@@ -855,7 +855,7 @@ export const LIST_CLAUSES_LIST_PROJECTION = v.strictObject({
       }),
     ),
   ),
-  // Opaque `${isoDate}|${clauseId}` cursor.
+  // Opaque `(createdAt, clauseId)` keyset cursor.
   nextCursor: v.nullable(passthroughId()),
 });
 

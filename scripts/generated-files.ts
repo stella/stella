@@ -109,7 +109,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/sanctions/screening-vocabulary.ts",
     "apps/api/src/lib/lists/graph/contract.ts",
     "apps/api/src/lib/lists/verification/contract.ts",
-    "apps/api/src/lib/lists/verification/run-cap-config.ts",
+    "apps/api/src/lib/usage/model-run-caps/config.ts",
     "apps/api/src/lib/observability/*",
     "apps/api/src/lib/rate-limit/budget-config.ts",
     "apps/api/src/lib/rate-limit/store-unavailable.ts",
@@ -149,6 +149,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
     "packages/permissions/src/index.ts",
+    "packages/permissions/src/role-grants.ts",
     "packages/portable-path/src/index.ts",
     "packages/redis-config/src/connection.ts",
     "packages/runtime-mode/src/index.ts",
@@ -204,6 +205,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/deepl/deepl.ts",
     "apps/api/src/lib/deepl/errors.ts",
     "apps/api/src/lib/desktop-runner/chunk.ts",
+    "apps/api/src/lib/desktop-runner/output-keys.ts",
     "apps/api/src/lib/document-translation/*",
     "apps/api/src/lib/docx-authoring/apply-ai-edits.ts",
     "apps/api/src/lib/docx-authoring/create-template-buffer.ts",
@@ -362,7 +364,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/item-operations.ts",
     "apps/api/src/lib/lists/sanctions/*",
     "apps/api/src/lib/lists/verification/contract.ts",
-    "apps/api/src/lib/lists/verification/run-cap-config.ts",
+    "apps/api/src/lib/usage/model-run-caps/config.ts",
+    "apps/api/src/lib/usage/model-run-caps/caps.ts",
     "apps/api/src/lib/markdown/ai-tool.ts",
     "apps/api/src/lib/markdown/sanitize-html.ts",
     "apps/api/src/lib/mcp-connectors/app-urls.ts",
@@ -485,6 +488,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/money/src/index.ts",
     "packages/parameter-store/src/read-parameter.ts",
     "packages/permissions/src/index.ts",
+    "packages/permissions/src/role-grants.ts",
     "packages/redis-config/src/connection.ts",
     "packages/redis-config/src/store-policy.ts",
     "packages/runtime-mode/src/index.ts",
@@ -547,7 +551,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/kill-switches/registry.ts",
     "apps/api/src/lib/legal-search/*",
     "apps/api/src/lib/legal-search/parser-entries/**",
-    "apps/api/src/lib/lists/verification/run-cap-config.ts",
+    "apps/api/src/lib/usage/model-run-caps/config.ts",
     "apps/api/src/lib/observability/data-invariants/config-schema.ts",
     "apps/api/src/lib/observability/release-failure-contract.ts",
     "apps/api/src/lib/rate-limit/mcp-read-fence-policy.ts",
@@ -595,7 +599,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/kill-switches/registry.ts",
     "apps/api/src/lib/legal-search/*",
     "apps/api/src/lib/legal-search/parser-entries/**",
-    "apps/api/src/lib/lists/verification/run-cap-config.ts",
+    "apps/api/src/lib/usage/model-run-caps/config.ts",
     "apps/api/src/lib/observability/data-invariants/config-schema.ts",
     "apps/api/src/lib/observability/release-failure-contract.ts",
     "apps/api/src/lib/rate-limit/budget-config-schema.ts",
@@ -674,7 +678,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/kill-switches/registry.ts",
     "apps/api/src/lib/legal-search/*",
     "apps/api/src/lib/legal-search/parser-entries/**",
-    "apps/api/src/lib/lists/verification/run-cap-config.ts",
+    "apps/api/src/lib/usage/model-run-caps/config.ts",
     "apps/api/src/lib/observability/data-invariants/config-schema.ts",
     "apps/api/src/lib/observability/release-failure-contract.ts",
     "apps/api/src/lib/rate-limit/budget-config-schema.ts",
@@ -754,7 +758,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/sanctions/screening-vocabulary.ts",
     "apps/api/src/lib/lists/graph/contract.ts",
     "apps/api/src/lib/lists/verification/contract.ts",
-    "apps/api/src/lib/lists/verification/run-cap-config.ts",
+    "apps/api/src/lib/usage/model-run-caps/config.ts",
     "apps/api/src/lib/observability/*",
     "apps/api/src/lib/rate-limit/budget-config.ts",
     "apps/api/src/lib/rate-limit/store-unavailable.ts",
@@ -794,6 +798,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
     "packages/permissions/src/index.ts",
+    "packages/permissions/src/role-grants.ts",
     "packages/portable-path/src/index.ts",
     "packages/redis-config/src/connection.ts",
     "packages/runtime-mode/src/index.ts",
@@ -871,7 +876,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/sanctions/screening-vocabulary.ts",
     "apps/api/src/lib/lists/graph/contract.ts",
     "apps/api/src/lib/lists/verification/contract.ts",
-    "apps/api/src/lib/lists/verification/run-cap-config.ts",
+    "apps/api/src/lib/usage/model-run-caps/config.ts",
     "apps/api/src/lib/observability/*",
     "apps/api/src/lib/rate-limit/budget-config.ts",
     "apps/api/src/lib/rate-limit/store-unavailable.ts",
@@ -912,6 +917,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
     "packages/permissions/src/index.ts",
+    "packages/permissions/src/role-grants.ts",
     "packages/portable-path/src/index.ts",
     "packages/redis-config/src/connection.ts",
     "packages/runtime-mode/src/index.ts",
@@ -1871,12 +1877,12 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    // Refreshes only the reviewed digests of jobs whose kind, qualifier and
-    // privilege are unchanged since the merge base; new, reclassified and
-    // privileged jobs keep failing the check until a human reviews them.
+    // Removes only the decisions of jobs that are not privileged or no longer
+    // exist; a privileged job without a current approval keeps failing the
+    // check until a human reviews it.
     // This file loads without imports in reduced checkouts, so the paths are
     // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
-    id: "ci-job-classification-digests",
+    id: "ci-job-classification-decisions",
     outputKind: "committed",
     outputs: [
       ".github/ci-job-classification-decisions/**",
@@ -1900,7 +1906,7 @@ const GENERATOR_DECLARATIONS = [
     // preload every `--check` command must use; it runs as the default mode.
     checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     // Its outputs live under .github/, which the autofix action may not
-    // modify, so pull requests refresh them by hand.
+    // modify, so pull requests run it by hand or through the pre-push hook.
     autofix: false,
     after: [],
   },
