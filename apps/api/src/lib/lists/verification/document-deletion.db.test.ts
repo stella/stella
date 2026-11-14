@@ -92,6 +92,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           "20261112025400_legal_list_claim_carry_over",
           "20261112080005_legal_list_verification_run_scope",
           "20261112112228_legal_graph_edges",
+          "20261112134328_legal_list_claim_asserted_dates",
         ]) {
           await applyMigration(name);
         }

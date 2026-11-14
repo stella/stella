@@ -5,7 +5,11 @@
  * that fails leaves the fact and the link in place, so it can be asked again.
  */
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useIsMutating,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
@@ -37,6 +41,18 @@ type GapScope = {
 };
 
 type LinkInput = { factEntityId: string; change: "link" | "unlink" };
+
+const claimRecheckKey = ({ workspaceId, runId, claimId }: GapScope) => [
+  "avt",
+  workspaceId,
+  "claim-recheck",
+  runId,
+  claimId,
+];
+
+/** Whether a re-check of the claim, from any of its buttons, is out. */
+export const useClaimRecheckPending = (scope: GapScope) =>
+  useIsMutating({ mutationKey: claimRecheckKey(scope) }) > 0;
 
 export const useClaimGapActions = ({
   workspaceId,
@@ -110,8 +126,9 @@ export const useClaimGapActions = ({
       }),
     );
 
+  const recheckKey = claimRecheckKey({ workspaceId, runId, listId, claimId });
   const recheck = useMutation({
-    mutationKey: ["avt", workspaceId, "claim-recheck", runId, claimId],
+    mutationKey: recheckKey,
     mutationFn: recheckClaim,
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.recheckFailed")),
@@ -238,5 +255,15 @@ export const useClaimGapActions = ({
     onError: (error) => notifyUserError(error, t("avt.gap.addFactFailed")),
   });
 
-  return { recheck, link, addFact, addFactResume: resume };
+  // Every re-check button of the claim (its staleness notice, its linked
+  // facts) holds its own instance of these actions; a re-check sent from
+  // any of them keeps all of them busy, so none sends a second one.
+  const recheckPending = useClaimRecheckPending({
+    workspaceId,
+    runId,
+    listId,
+    claimId,
+  });
+
+  return { recheck, recheckPending, link, addFact, addFactResume: resume };
 };

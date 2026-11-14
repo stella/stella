@@ -571,6 +571,21 @@
       "showBefore": "إظهار النص قبل ¶ {from}",
       "verifyParagraphs": "التحقق من فقرات"
     },
+    "staleness": {
+      "failed": "تعذّرت إعادة فحص الادعاءات",
+      "finished": "{count, plural, zero {لم يُعَد فحص أي ادعاء} one {أُعيد فحص ادعاء واحد} two {أُعيد فحص ادعاءين} few {أُعيد فحص # ادعاءات} many {أُعيد فحص # ادعاءً} other {أُعيد فحص # ادعاء}}",
+      "partial": "أُعيد الفحص: {rechecked, number}، تعذّر: {failed, plural, zero {#} one {#} two {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "تغيّرت الواقعة",
+        "factHeld": "استُبعدت الواقعة",
+        "factRemoved": "أُزيلت الواقعة",
+        "newFactRelated": "واقعة جديدة ذات صلة"
+      },
+      "recheckAll": "إعادة فحص الكل",
+      "recheckLocked": "يُعاد فحصه مع الادعاءات القديمة الأخرى",
+      "runLine": "{count, plural, zero {لا ادعاءات قد تكون قديمة} one {ادعاء واحد قد يكون قديمًا} two {ادعاءان قد يكونان قديمين} few {# ادعاءات قد تكون قديمة} many {# ادعاءً قد يكون قديمًا} other {# ادعاء قد يكون قديمًا}}",
+      "running": "{count, plural, zero {لا ادعاءات قيد إعادة الفحص…} one {جارٍ إعادة فحص ادعاء واحد…} two {جارٍ إعادة فحص ادعاءين…} few {جارٍ إعادة فحص # ادعاءات…} many {جارٍ إعادة فحص # ادعاءً…} other {جارٍ إعادة فحص # ادعاء…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "متعارض",
@@ -628,100 +643,21 @@
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "إنشاء نسخة ثنائية اللغة",
-      "creating": "جارٍ الإنشاء…",
-      "description": "ينشئ نسخة من هذا المستند في عمودين: النص الأصلي في العمود الأيسر ونسخة للترجمة في العمود الأيمن بترقيم مستقل. تُحفَظ النسخة في هذا الملف القانوني كمستند جديد.",
-      "sameLanguage": "اختر لغتين مختلفتين.",
-      "sourceLanguage": "اللغة المصدر",
-      "title": "نسخة ثنائية اللغة"
-    },
-    "error": {
-      "title": "تعذّر إنشاء النسخة ثنائية اللغة"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> جاهز ويحتوي على {rowCount, plural, zero {لا صفوف} one {صف واحد} two {صفين} few {# صفوف} many {# صفًا} other {# صف}} للترجمة.",
-      "title": "تم إنشاء النسخة ثنائية اللغة"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "يملأ عمود الترجمة في هذا المستند ذي العمودين. راجع ما سيحدث لكل صف وكيف تُترجم المصطلحات المحددة، ثم ابدأ الترجمة.",
-      "prepare": "تحضير",
-      "preparing": "جارٍ قراءة المستند…",
-      "preparingHint": "قراءة المستند بالكامل وتقييم كل صف تستغرق ما يصل إلى دقيقتين.",
-      "title": "ترجمة النسخة ثنائية اللغة"
+      "prepare": "تحضير"
     },
     "dispositions": {
-      "inline": "اللغتان معًا",
       "keep": "الإبقاء كما هو"
     },
-    "error": {
-      "prepareTitle": "تعذّر تحضير المستند",
-      "startTitle": "تعذّر بدء الترجمة"
-    },
-    "errorCodes": {
-      "aiUnavailable": "لا يتوفر أي نموذج ذكاء اصطناعي للترجمة.",
-      "applyFailed": "تعذّرت كتابة الترجمات في المستند.",
-      "documentChanged": "تغيّر المستند أثناء تشغيل الترجمة. حضّره من جديد.",
-      "documentUnresolved": "لم يعد المستند أو ملفه متاحًا.",
-      "enqueueFailed": "تعذّر إدراج الترجمة في قائمة الانتظار.",
-      "internal": "توقفت الترجمة بشكل غير متوقع.",
-      "notBilingual": "لا يحتوي هذا المستند على جدول ثنائي اللغة.",
-      "translationFailed": "تعذّرت ترجمة دفعة من الصفوف.",
-      "unknown": "توقفت الترجمة بشكل غير متوقع."
-    },
-    "glossary": {
-      "add": "إضافة مصطلح",
-      "description": "تُستخدم هذه الترجمات في كل الصفوف. يجب استكمال ترجمة أي مصطلح ناقص أو إزالته.",
-      "empty": "لم يتم العثور على مصطلحات محددة.",
-      "formsHint": "افصل الصيغ الأخرى بفواصل.",
-      "formsSource": "صيغ أخرى للمصطلح",
-      "formsTarget": "صيغ أخرى للترجمة",
-      "incomplete": "أكمل الترجمات الناقصة أو أزل تلك المصطلحات.",
-      "origins": {
-        "detected": "مكتشف",
-        "user": "خاص بك"
-      },
-      "term": "المصطلح",
-      "title": "المصطلحات المحددة",
-      "tooManyForms": "يمكن أن يحتوي المصطلح على {max} صيغة أخرى كحد أقصى.",
-      "translation": "الترجمة"
-    },
     "kinds": {
-      "heading": "عنوان",
-      "listItem": "عنصر قائمة",
-      "paragraph": "فقرة",
-      "table": "جدول كامل"
-    },
-    "origins": {
-      "default": "غير مُقيَّم",
-      "model": "ذكاء اصطناعي"
+      "paragraph": "فقرة"
     },
     "review": {
-      "droppedRows": "{count, plural, zero {لم يُتخطَّ أي صف} one {تم تخطي صف واحد} two {تم تخطي صفين} few {تم تخطي # صفوف} many {تم تخطي # صفًا} other {تم تخطي # صف}}: لا تحتوي على نص قابل للترجمة.",
-      "start": "بدء الترجمة",
       "starting": "جارٍ البدء…"
     },
     "rows": {
-      "description": "اختر ما سيحدث لكل صف في عمود الترجمة.",
-      "ordinal": "#",
-      "sourceText": "النص المصدر",
-      "title": "الصفوف",
-      "whatToDo": "ما الإجراء"
-    },
-    "run": {
-      "cancelled": "تم إلغاء الترجمة.",
-      "doneSummary": "{count, plural, zero {لم تتم ترجمة أي صف} one {تمت ترجمة صف واحد} two {تمت ترجمة صفين} few {تمت ترجمة # صفوف} many {تمت ترجمة # صفًا} other {تمت ترجمة # صف}}.",
-      "doneTitle": "اكتملت الترجمة",
-      "failedRows": "{count, plural, zero {لم يتعذّر أي صف} one {تعذّرت ترجمة صف واحد} two {تعذّرت ترجمة صفين} few {تعذّرت ترجمة # صفوف} many {تعذّرت ترجمة # صفًا} other {تعذّرت ترجمة # صف}}.",
-      "failedTitle": "توقفت الترجمة",
-      "hint": "تعمل الترجمة على الخادم. أبقِ هذه النافذة مفتوحة لمتابعتها.",
-      "moreRows": "{count, plural, zero {لا صفوف أخرى} one {صف واحد آخر} two {صفان آخران} few {# صفوف أخرى} many {# صفًا آخر} other {# صف آخر}}",
-      "progress": "تمت ترجمة {completed} من {total} صف",
-      "title": "الترجمة قيد التنفيذ…",
-      "warningsTitle": "صفوف تحتاج مراجعة"
+      "title": "الصفوف"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
       "none": "لم تُسجَّل أي استشهادات بعد.",
       "notInStella": "غير متوفر في stella بعد",
-      "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
       "paragraphLabel": "الفقرة {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1918,7 +1853,8 @@
       "restored": "تم التراجع عن تغييرات الملفات"
     },
     "localRun": {
-      "cloud": "سحابة stella",
+      "backgroundTasks": "{count, plural, zero {# مهمة تعمل في الخلفية} one {# مهمة تعمل في الخلفية} two {# مهمتان تعملان في الخلفية} few {# مهام تعمل في الخلفية} many {# مهمة تعمل في الخلفية} other {# مهمة تعمل في الخلفية}}",
+      "errorFolderUnavailable": "المجلد المرتبط بهذه الدردشة غير متاح على حاسوبك. تحقق منه في stella desktop، ثم أرسل هذا مرة أخرى.",
       "errorLimitReached": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. حاول مرة أخرى بعد إعادة ضبط الحد.",
       "errorLimitResetsAt": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. يمكنك المحاولة مرة أخرى بعد {time}.",
       "errorNeedsLogin": "يطلب وكيل البرمجة على حاسوبك تسجيل الدخول مجددًا. سجّل الدخول عبر stella desktop ثم حاول مرة أخرى.",
@@ -1927,26 +1863,39 @@
       "errorRestoring": "لا يزال حاسوبك يتراجع عن تغييرات الملفات. أرسل هذا مرة أخرى بعد قليل.",
       "errorUnavailable": "توقف حاسوبك عن معالجة هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى.",
       "filesNotShared": "تبقى الملفات التي تعذّرت مشاركتها على حاسوبك: {fileNames}",
-      "onThisComputer": "{harness} على هذا الحاسوب",
+      "folderApprovalDescription": "اسمح لـ {harness} بالعمل في المجلد «{folder}» على حاسوبك. يمكنه قراءة الملفات فيه وتغييرها وحذفها، وتُنسخ إليه الملفات التي ترفقها.",
+      "folderApprove": "السماح في {folder}",
+      "folderHint": "اربط مجلدات حاسوبك من إعدادات stella desktop.",
+      "folderOwn": "مجلد الدردشة الخاص",
+      "folderStateMoved": "نُقل أو حُذف",
+      "folderStateOffline": "القرص غير متصل",
+      "folderStatePending": "بانتظار موافقتك",
+      "folderStateProtected": "يحتوي على بيانات stella نفسها",
+      "folderStateUnlinked": "لم يعد مرتبطًا",
+      "folderStateUnreadable": "تتعذر قراءته",
       "permissionAboveLimit": "غير مسموح به في مؤسستك",
       "permissionAskDescription": "يعدّل الملفات في مجلد الدردشة من تلقاء نفسه، ويسأل قبل أي شيء آخر.",
       "permissionAutoDescription": "ينفّذ من تلقاء نفسه ما يراه آمنًا، ويسأل عن الباقي.",
       "permissionFullAuto": "تلقائي بالكامل",
       "permissionFullAutoDescription": "لا يسأل عن أي شيء داخل مجلد الدردشة، ويسأل دائمًا قبل تغيير أي شيء على حاسوبك.",
+      "permissionPlan": "خطة",
+      "permissionPlanDescription": "يقرأ ويخطط أولًا، ويسأل قبل أي تغيير حتى توافق على الخطة.",
       "permissionSandboxed": "يعمل في بيئة معزولة، ويسأل قبل تغيير أي شيء على حاسوبك.",
       "permissionUnavailable": "غير متاح على هذا الحاسوب",
       "permissions": "الأذونات",
       "refusalConflictingRunMode": "يطلب هذا الطلب التشغيل مع الوكيل السحابي وعلى حاسوبك معًا. اختر واحدًا من قائمة التشغيل على.",
+      "refusalFolderNotApproved": "اسمح أولًا لوكيل البرمجة بالعمل في المجلد المرتبط بهذه الدردشة.",
+      "refusalFolderUnavailable": "المجلد المرتبط بهذه الدردشة غير متاح. تحقّق منه في قائمة التشغيل على أو في stella desktop.",
       "refusalHarnessUnavailable": "لا يستطيع وكيل البرمجة على حاسوبك تولّي هذا الطلب الآن. تحقّق منه في stella desktop.",
       "refusalModelUnavailable": "لم يعد وكيل البرمجة على حاسوبك يقدّم هذا النموذج. اختر نموذجًا آخر من قائمة التشغيل على.",
-      "refusalNoComputer": "لا يوجد أي حاسوب من حواسيبك متصل. افتح stella desktop ثم أرسل مجددًا.",
+      "refusalNoComputer": "لا يوجد أي حاسوب من حواسيبك متصل.",
       "refusalPermissionAboveLimit": "لا تسمح مؤسستك لوكيل البرمجة على حاسوبك بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
       "refusalPermissionUnavailable": "لا يمكن لوكيل البرمجة على حاسوبك العمل بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
+      "refusalReasoningEffortUnavailable": "لا يقدّم وكيل البرمجة على حاسوبك مستوى الاستدلال هذا لهذا النموذج. اختر مستوى آخر من قائمة مستوى الاستدلال.",
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
-      "runOn": "التشغيل على",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "تعذّر على وكيل البرمجة على حاسوبك استئناف العمل من حيث توقف، لذا تابع اعتمادًا على رسائل هذه الدردشة.",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
       "stateModelUnavailable": "النموذج لم يعد متاحًا",
       "stateNeedsLogin": "يلزم تسجيل الدخول",
@@ -2109,6 +2058,25 @@
     "richContentLoading": "جارٍ تحميل المحتوى التفاعلي…",
     "richContentTitle": "محتوى تفاعلي",
     "richContentUnavailable": "لا يمكن عرض هذا المحتوى بأمان.",
+    "runOn": {
+      "checkFailed": "تعذّر التحقق من حاسوبك",
+      "chipLabel": "مكان التشغيل: {place}",
+      "cloud": "السحابة",
+      "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
+      "harnessModels": "نماذج {harness}",
+      "hintInstall": "ثبّته من stella desktop",
+      "hintOffline": "افتح stella desktop على حاسوبك",
+      "hintSignIn": "سجّل الدخول من stella desktop",
+      "hintUpdate": "حدّثه من stella desktop",
+      "localFolderPlace": "حاسوبك، {harness}، {folder}",
+      "localFolderSelection": "حاسوبك · {harness} · {folder}",
+      "localPlace": "حاسوبك، {harness}",
+      "localSelection": "حاسوبك · {harness}",
+      "modelDefault": "الافتراضي (موصى به)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "حاسوبك",
+      "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، وتحدد الأذونات ما يمكنه فعله دون أن يسألك."
+    },
     "selection": {
       "askInNewChat": "اسأل في دردشة جديدة",
       "quoteInReply": "اقتبس في الرد",
@@ -2160,6 +2128,7 @@
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
+    "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
@@ -2302,15 +2271,32 @@
       "field": "الحقل",
       "input": "المدخلات",
       "interrupted": "توقّف قبل الاكتمال",
+      "localOutput": {
+        "conversation": "محادثة الوكيل الفرعي",
+        "conversationPrompt": "المهمة",
+        "conversationReport": "التقرير",
+        "cut": "يُعرض أول {kept} من {total}",
+        "diff": "تغييرات الملفات",
+        "elsewhere": "افتحه على الحاسوب الذي نفّذه",
+        "empty": "لا توجد مخرجات",
+        "failed": "تعذّر على تطبيق stella لسطح المكتب على هذا الحاسوب عرض هذا.",
+        "imageTooLarge": "حجم هذه الصورة {total}. لا تُحفظ على هذا الحاسوب الصور التي تتجاوز {kept}، لذا لا يمكن عرضها هنا.",
+        "notKept": "لم يُحفظ شيء من هذه الخطوة على هذا الحاسوب",
+        "reading": "جارٍ القراءة من هذا الحاسوب"
+      },
       "output": "المخرجات",
       "patternInPath": "{pattern} في {path}",
+      "proposedPlan": "اقتراح خطة",
       "readFile": "قراءة ملف",
       "searchFiles": "البحث في الملفات",
+      "signInToContinue": "سجّل الدخول للمتابعة",
       "sourceCode": "الشيفرة المصدرية",
       "statusWaiting": "في الانتظار",
+      "subagent": "تشغيل وكيل فرعي",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}",
-      "updatePlan": "تحديث الخطة"
+      "updatePlan": "تحديث الخطة",
+      "viewImage": "عرض صورة"
     },
     "turnNotification": {
       "failedBody": "لم يكتمل رد في دردشة stella.",
@@ -2321,6 +2307,8 @@
       "replyReadyTitle": "الرد جاهز"
     },
     "turnStatus": {
+      "answerFailed": "تعذّر إكمال الإجابة",
+      "answerReady": "الإجابة جاهزة",
       "waitingForApproval": "في انتظار الموافقة",
       "waitingForInput": "في انتظار الإدخال",
       "writing": "جارٍ الكتابة"
@@ -2600,6 +2588,7 @@
     "filter": "تصفية",
     "filters": "عوامل التصفية",
     "find": "بحث",
+    "folder": "مجلد",
     "formula": "صيغة حسابية",
     "goBack": "رجوع",
     "goBackToEditing": "العودة إلى التعديل",
@@ -2696,6 +2685,7 @@
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
     "organizations": "المؤسسات",
+    "outOfDate": "غير محدَّث",
     "page": "الصفحة {page}",
     "paymentRetryNotice": "هناك مشكلة في الدفع. حدّث طريقة الدفع بحلول {date} للحفاظ على إمكانية الوصول.",
     "pin": "تثبيت",
@@ -3360,6 +3350,8 @@
       "organizationMemberLimitReached": "بلغت هذه المؤسسة الحد الأقصى للأعضاء.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
+      "runActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى للمهام الجارية في الوقت نفسه. انتظر حتى تكتمل إحداها، ثم حاول مرة أخرى.",
+      "runDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي للمهام. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "sharepointAccessDenied": "رفضت Microsoft منح الوصول إلى هذا الموقع أو المكتبة أو الملف.",
       "sharepointFileTooLarge": "هذا الملف كبير جدًا بحيث لا يمكن استيراده.",
       "sharepointInvalidCursor": "تغيّرت القائمة أثناء التصفح. افتح المجلد مرة أخرى.",
@@ -3375,8 +3367,6 @@
       "validationRequired": "حقل مطلوب فارغ.",
       "validationTooLong": "طويل جدًا: استخدم {limit, number} حرفًا كحد أقصى.",
       "validationTooShort": "قصير جدًا: استخدم {limit, number} حرفًا على الأقل.",
-      "verificationActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى لعمليات التحقق المتزامنة. انتظر حتى تكتمل إحدى عمليات التحقق، ثم حاول مرة أخرى.",
-      "verificationDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي لعمليات التحقق. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "versionConflict": "غيّر شخص آخر هذا أثناء تحريرك له. أعد التحميل للحصول على النسخة الحالية."
     },
     "failedToAcceptInvitation": "تعذّر قبول الدعوة",
@@ -5515,7 +5505,6 @@
       "caseLaw": "الاجتهاد القضائي",
       "chat": "دردشة",
       "contact": "جهة اتصال",
-      "folder": "مجلد",
       "link": "رابط",
       "matter": "ملف قانوني",
       "message": "رسالة",
@@ -5846,6 +5835,7 @@
         "case_law_research_column": "عمود بحث في الأحكام القضائية",
         "chat_browser_site_grant": "موافقة موقع في الدردشة",
         "chat_file": "ملف الدردشة",
+        "chat_local_folder_approval": "موافقة على مجلد محلي",
         "chat_message": "رسالة الدردشة",
         "chat_thread": "سلسلة الدردشة",
         "chat_tool_execution": "تنفيذ أداة الدردشة",
@@ -6101,7 +6091,6 @@
     "comments": "التعليقات",
     "commentsEmpty": "حدّد نصًا للتعليق عليه.",
     "noRevisions": "لا توجد مراجعات بعد",
-    "outOfDate": "غير محدَّث",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "بلا ملخص",
     "proposals": "الاقتراحات",

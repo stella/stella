@@ -23,7 +23,7 @@ import {
   MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
@@ -313,8 +313,8 @@ export const CLI_KNOWN_SCOPES = ${JSON.stringify(cliKnownScopes, null, 2)} as co
 export const CLI_REQUIRED_RESOURCE_SCOPES = ${JSON.stringify(MCP_ADVANCED_RESOURCE_SCOPES, null, 2)} as const;
 export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
-export const VERIFICATION_RUN_CAP_CODES = ${JSON.stringify(VERIFICATION_RUN_CAP_CODES, null, 2)} as const;
-export type VerificationRunCapCode = (typeof VERIFICATION_RUN_CAP_CODES)[keyof typeof VERIFICATION_RUN_CAP_CODES];
+export const MODEL_RUN_CAP_CODES = ${JSON.stringify(MODEL_RUN_CAP_CODES, null, 2)} as const;
+export type ModelRunCapCode = (typeof MODEL_RUN_CAP_CODES)[keyof typeof MODEL_RUN_CAP_CODES];
 export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUSALS, null, 2)} as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;

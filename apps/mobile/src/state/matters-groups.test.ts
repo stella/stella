@@ -6,7 +6,9 @@ import { groupByClient } from "./matters-groups";
 const matter = (id: string, client?: string): MatterSummary => ({
   id,
   name: `Matter ${id}`,
-  ...(client === undefined ? {} : { client: { displayName: client } }),
+  ...(client === undefined
+    ? {}
+    : { client: { id: `contact-${client}`, displayName: client } }),
 });
 
 describe("matters by client", () => {

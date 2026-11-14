@@ -1,4 +1,4 @@
-import { PDF } from "@libpdf/core";
+import { PDF, PdfBool, PdfNumber, PdfString } from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
@@ -608,6 +608,122 @@ describe("two-phase PDF signing", () => {
       }),
     );
     expect(applied.level).toBe("B-B");
+  });
+
+  describe("a form that leaves its appearances to the viewer", () => {
+    const FIELD_VALUE = "Jana Nováková";
+    const DRAWN_TOTAL = "100";
+    const CURRENT_TOTAL = "120";
+
+    /**
+     * What a producer relying on `/NeedAppearances true` writes: field
+     * values, and no appearance for the text field.
+     */
+    const buildNeedAppearancesForm = async () => {
+      const created = PDF.create();
+      const page = created.addPage({ width: 300, height: 400 });
+      const form = created.getOrCreateForm();
+      const name = form.createTextField("name");
+      page.drawField(name, { x: 20, y: 340, width: 200, height: 24 });
+      name.setValue(FIELD_VALUE);
+      const agree = form.createCheckbox("agree");
+      page.drawField(agree, { x: 20, y: 300, width: 16, height: 16 });
+      agree.check();
+      for (const widget of name.getWidgets()) {
+        widget.dict.delete("AP");
+      }
+      // A read-only field whose appearance shows an older value: a viewer
+      // honouring the flag draws the current one.
+      const total = form.createTextField("total");
+      page.drawField(total, { x: 20, y: 260, width: 200, height: 24 });
+      total.setValue(DRAWN_TOTAL);
+      total.acroField().set("Ff", PdfNumber.of(1));
+      total.acroField().set("V", PdfString.fromString(CURRENT_TOTAL));
+      form.acroForm().getDict().set("NeedAppearances", PdfBool.of(true));
+      // LibPDF sets SigFlags on adding a field, as a form with an empty
+      // signature field carries them: that alone is no signature.
+      expect(form.properties.hasSignatures).toBe(true);
+      return await created.save();
+    };
+
+    const revisionCount = (bytes: Uint8Array) =>
+      Buffer.from(bytes).toString("latin1").split("%%EOF").length - 1;
+
+    const signBoth = async (basePdf: Uint8Array) => {
+      const { invocation, privateKey } = await buildInvocation();
+      const withBase = { ...invocation, basePdf };
+      const digestHex = await digestOf(withBase);
+      // Phase 1 run twice, and phase 2 accepting the digest, is the
+      // byte-identity check: the digest covers every prepared byte.
+      expect(await digestOf(withBase)).toBe(digestHex);
+      return await settled(
+        applySignature({
+          ...withBase,
+          permit,
+          certificateChainComplete: true,
+          expectedDigestHex: digestHex,
+          signature: await signDigestLikeAKeychain(privateKey, digestHex),
+          timestampAuthorities: [],
+        }),
+      );
+    };
+
+    test("draws the fields and clears the flag in a revision before the signature", async () => {
+      const basePdf = await buildNeedAppearancesForm();
+      expect(
+        (await PDF.load(basePdf)).getForm()?.properties.needAppearances,
+      ).toBe(true);
+
+      const applied = await signBoth(basePdf);
+
+      expect(
+        Buffer.from(applied.bytes.subarray(0, basePdf.byteLength)),
+      ).toEqual(Buffer.from(basePdf));
+      // One revision for the appearances, one for the signature.
+      expect(revisionCount(applied.bytes)).toBe(revisionCount(basePdf) + 2);
+      const form = (await PDF.load(applied.bytes)).getForm();
+      expect(form?.properties.needAppearances).toBe(false);
+      expect(form?.getTextField("name")?.getValue()).toBe(FIELD_VALUE);
+      expect(form?.getCheckbox("agree")?.isChecked()).toBe(true);
+      expect(
+        form
+          ?.getTextField("name")
+          ?.getWidgets()
+          .every((widget) => widget.hasNormalAppearance()),
+      ).toBe(true);
+      const total = form?.getTextField("total");
+      expect(total?.isReadOnly()).toBe(true);
+      expect(
+        Buffer.from(
+          total?.getWidgets().at(0)?.getNormalAppearance()?.getDecodedData() ??
+            [],
+        ).toString("latin1"),
+      ).toContain(`(${CURRENT_TOTAL})`);
+      expect(applied.warnings.map(({ code }) => code)).toEqual([]);
+    });
+
+    test("leaves an already signed form as it is", async () => {
+      const signed = await PDF.load(await createSignedPdf({ keyPool }));
+      signed
+        .getOrCreateForm()
+        .acroForm()
+        .getDict()
+        .set("NeedAppearances", PdfBool.of(true));
+      const basePdf = await signed.save({ incremental: true });
+
+      const applied = await signBoth(basePdf);
+
+      expect(
+        Buffer.from(applied.bytes.subarray(0, basePdf.byteLength)),
+      ).toEqual(Buffer.from(basePdf));
+      expect(revisionCount(applied.bytes)).toBe(revisionCount(basePdf) + 1);
+      expect(
+        (await PDF.load(applied.bytes)).getForm()?.properties.needAppearances,
+      ).toBe(true);
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "FIELD_APPEARANCES_LEFT_TO_VIEWER",
+      ]);
+    });
   });
 
   describe("the signature placeholder", () => {

@@ -571,6 +571,21 @@
       "showBefore": "Show the text before ¶ {from}",
       "verifyParagraphs": "Verify paragraphs"
     },
+    "staleness": {
+      "failed": "The claims could not be checked again",
+      "finished": "{count, plural, one {# claim re-checked} other {# claims re-checked}}",
+      "partial": "{rechecked, number} re-checked, {failed, plural, one {# failed} other {# failed}}",
+      "reasons": {
+        "factChanged": "Fact changed",
+        "factHeld": "Fact held",
+        "factRemoved": "Fact removed",
+        "newFactRelated": "New related fact"
+      },
+      "recheckAll": "Re-check all",
+      "recheckLocked": "Being re-checked with the other out-of-date claims",
+      "runLine": "{count, plural, one {# claim may be out of date} other {# claims may be out of date}}",
+      "running": "{count, plural, one {Re-checking # claim…} other {Re-checking # claims…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contradicted",
@@ -628,100 +643,21 @@
       "pickList": "Choose the list whose facts this matter's documents are checked against."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Create bilingual version",
-      "creating": "Creating…",
-      "description": "Create a copy of this document laid out in two columns: the original text on the left and a copy to translate on the right, numbered independently. The copy lands in this matter as a new document.",
-      "sameLanguage": "Choose two different languages.",
-      "sourceLanguage": "Source language",
-      "title": "Bilingual version"
-    },
-    "error": {
-      "title": "Bilingual version failed"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> is ready with {rowCount, plural, one {# row} other {# rows}} to translate.",
-      "title": "Bilingual version created"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Fill the translation column of this two-column document. Review what happens to each row and how the defined terms are rendered, then start the translation.",
-      "prepare": "Prepare",
-      "preparing": "Reading the document…",
-      "preparingHint": "Reading the whole document and assessing every row takes up to two minutes.",
-      "title": "Translate bilingual version"
+      "prepare": "Prepare"
     },
     "dispositions": {
-      "inline": "Both languages",
       "keep": "Keep as is"
     },
-    "error": {
-      "prepareTitle": "The document could not be prepared",
-      "startTitle": "The translation could not be started"
-    },
-    "errorCodes": {
-      "aiUnavailable": "No AI model is available for translation.",
-      "applyFailed": "The translations could not be written back into the document.",
-      "documentChanged": "The document changed while the translation was running. Prepare it again.",
-      "documentUnresolved": "The document or its file is no longer available.",
-      "enqueueFailed": "The translation could not be queued.",
-      "internal": "The translation stopped unexpectedly.",
-      "notBilingual": "This document has no bilingual table.",
-      "translationFailed": "A batch of rows could not be translated.",
-      "unknown": "The translation stopped unexpectedly."
-    },
-    "glossary": {
-      "add": "Add term",
-      "description": "These renderings apply to every row. A term without a translation must be filled in or removed.",
-      "empty": "No defined terms found.",
-      "formsHint": "Separate other forms with commas.",
-      "formsSource": "Other forms of the term",
-      "formsTarget": "Other forms of the translation",
-      "incomplete": "Fill in the missing translations, or remove those terms.",
-      "origins": {
-        "detected": "Found",
-        "user": "Yours"
-      },
-      "term": "Term",
-      "title": "Defined terms",
-      "tooManyForms": "A term can list at most {max} other forms.",
-      "translation": "Translation"
-    },
     "kinds": {
-      "heading": "Heading",
-      "listItem": "List item",
-      "paragraph": "Paragraph",
-      "table": "Whole table"
-    },
-    "origins": {
-      "default": "Not assessed",
-      "model": "AI"
+      "paragraph": "Paragraph"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# row was skipped} other {# rows were skipped}}: they hold no text that can be translated.",
-      "start": "Start translation",
       "starting": "Starting…"
     },
     "rows": {
-      "description": "Choose what happens to each row of the translation column.",
-      "ordinal": "#",
-      "sourceText": "Source text",
-      "title": "Rows",
-      "whatToDo": "What to do"
-    },
-    "run": {
-      "cancelled": "The translation was cancelled.",
-      "doneSummary": "{count, plural, one {# row} other {# rows}} translated.",
-      "doneTitle": "Translation finished",
-      "failedRows": "{count, plural, one {# row could not be translated} other {# rows could not be translated}}.",
-      "failedTitle": "Translation stopped",
-      "hint": "The translation runs on the server. Keep this window open to follow it.",
-      "moreRows": "{count, plural, one {# more row} other {# more rows}}",
-      "progress": "{completed} of {total} rows translated",
-      "title": "Translation in progress…",
-      "warningsTitle": "Rows to check"
+      "title": "Rows"
     }
   },
   "billing": {
@@ -1234,7 +1170,6 @@
       "negativeCount": "{count, plural, one {# negative} other {# negative}}",
       "none": "No citations recorded yet.",
       "notInStella": "Not in stella yet",
-      "openAtCitation": "Open at the citation",
       "openDecision": "Open decision",
       "paragraphLabel": "Paragraph {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1918,7 +1853,8 @@
       "restored": "File changes undone"
     },
     "localRun": {
-      "cloud": "stella cloud",
+      "backgroundTasks": "{count, plural, one {# background task running} other {# background tasks running}}",
+      "errorFolderUnavailable": "The folder linked to this chat is not available on your computer. Check it in stella desktop, then send this again.",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
@@ -1927,26 +1863,39 @@
       "errorRestoring": "Your computer is still undoing file changes. Send this again in a moment.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
-      "onThisComputer": "{harness} on this computer",
+      "folderApprovalDescription": "Let {harness} work in “{folder}” on your computer. It can read, change and delete files there, and files you attach are copied into it.",
+      "folderApprove": "Allow in {folder}",
+      "folderHint": "Link folders of your computer in stella desktop's settings.",
+      "folderOwn": "This chat's own folder",
+      "folderStateMoved": "Moved or deleted",
+      "folderStateOffline": "Drive not connected",
+      "folderStatePending": "Waiting for your OK",
+      "folderStateProtected": "Holds stella's own data",
+      "folderStateUnlinked": "No longer linked",
+      "folderStateUnreadable": "Cannot be read",
       "permissionAboveLimit": "Not allowed by your organization",
       "permissionAskDescription": "Edits files in the chat's folder on its own; asks before anything else.",
       "permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
       "permissionFullAuto": "Full auto",
       "permissionFullAutoDescription": "Never asks for anything inside the chat's folder; always asks before changing your computer.",
+      "permissionPlan": "Plan",
+      "permissionPlanDescription": "Reads and plans first; asks before any change until you approve the plan.",
       "permissionSandboxed": "Runs in a sandbox; asks before changing your computer.",
       "permissionUnavailable": "Not available on this computer",
       "permissions": "Permissions",
       "refusalConflictingRunMode": "This request asks to run both with the cloud agent and on your computer. Choose one under Run on.",
+      "refusalFolderNotApproved": "Allow the coding agent to work in the folder linked to this chat first.",
+      "refusalFolderUnavailable": "The folder linked to this chat is not available. Check it under Run on or in stella desktop.",
       "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
       "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
-      "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
+      "refusalNoComputer": "None of your computers is connected.",
       "refusalPermissionAboveLimit": "Your organization does not allow these permissions for the coding agent on your computer. Choose another option under Permissions.",
       "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
+      "refusalReasoningEffortUnavailable": "The coding agent on your computer does not offer this reasoning effort for the model. Choose another one under Reasoning effort.",
       "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
-      "runOn": "Run on",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
       "stateLimitUntil": "Limit reached until {time}",
       "stateModelUnavailable": "Model no longer available",
       "stateNeedsLogin": "Sign-in needed",
@@ -2109,6 +2058,25 @@
     "richContentLoading": "Loading interactive content…",
     "richContentTitle": "Interactive content",
     "richContentUnavailable": "This content cannot be displayed safely.",
+    "runOn": {
+      "checkFailed": "Couldn't check your computer",
+      "chipLabel": "Runs on: {place}",
+      "cloud": "Cloud",
+      "cloudDescription": "Runs in the cloud. Works anywhere.",
+      "harnessModels": "{harness} models",
+      "hintInstall": "Install it from stella desktop",
+      "hintOffline": "Open stella desktop on your computer",
+      "hintSignIn": "Sign in from stella desktop",
+      "hintUpdate": "Update it from stella desktop",
+      "localFolderPlace": "Your computer, {harness}, {folder}",
+      "localFolderSelection": "Your computer · {harness} · {folder}",
+      "localPlace": "Your computer, {harness}",
+      "localSelection": "Your computer · {harness}",
+      "modelDefault": "Default (recommended)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Your computer",
+      "yourComputerDescription": "Uses Codex or Claude Code on your computer with your own subscription. It can read and change files in this chat's folder; its permissions decide what it does without asking."
+    },
     "selection": {
       "askInNewChat": "Ask in new chat",
       "quoteInReply": "Quote in reply",
@@ -2160,6 +2128,7 @@
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
     "stopped": "Stopped",
+    "stopping": "Stopping…",
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
     "suggestedFollowupsLabel": "Suggested follow-up prompts",
@@ -2302,15 +2271,32 @@
       "field": "Field",
       "input": "Input",
       "interrupted": "Interrupted before finishing",
+      "localOutput": {
+        "conversation": "Subagent conversation",
+        "conversationPrompt": "Task given",
+        "conversationReport": "Report",
+        "cut": "Showing the first {kept} of {total}",
+        "diff": "File changes",
+        "elsewhere": "Open on the computer that ran it",
+        "empty": "No output",
+        "failed": "The stella desktop app on this computer could not show this.",
+        "imageTooLarge": "This image is {total}. Images over {kept} are not kept on this computer, so it cannot be shown here.",
+        "notKept": "Nothing from this step is kept on this computer",
+        "reading": "Reading from this computer"
+      },
       "output": "Output",
       "patternInPath": "{pattern} in {path}",
+      "proposedPlan": "Proposing a plan",
       "readFile": "Reading a file",
       "searchFiles": "Searching files",
+      "signInToContinue": "Sign in to continue",
       "sourceCode": "Source code",
       "statusWaiting": "Waiting",
+      "subagent": "Running a subagent",
       "toggleDetails": "Toggle details",
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}",
-      "updatePlan": "Updating the plan"
+      "updatePlan": "Updating the plan",
+      "viewImage": "Viewing an image"
     },
     "turnNotification": {
       "failedBody": "A chat reply in stella did not finish.",
@@ -2321,6 +2307,8 @@
       "replyReadyTitle": "Reply ready"
     },
     "turnStatus": {
+      "answerFailed": "The answer could not be finished",
+      "answerReady": "Answer ready",
       "waitingForApproval": "Waiting for approval",
       "waitingForInput": "Waiting for input",
       "writing": "Writing"
@@ -2600,6 +2588,7 @@
     "filter": "Filter",
     "filters": "Filters",
     "find": "Find",
+    "folder": "Folder",
     "formula": "Formula",
     "goBack": "Go back",
     "goBackToEditing": "Go back to editing",
@@ -2696,6 +2685,7 @@
     "organization": "Organization",
     "organizationName": "Organization name",
     "organizations": "Organizations",
+    "outOfDate": "Out of date",
     "page": "Page {page}",
     "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.",
     "pin": "Pin",
@@ -3360,6 +3350,8 @@
       "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.",
+      "runActiveLimitReached": "Your organization has reached its limit of runs in progress. Wait for one to finish, then try again.",
+      "runDailyLimitReached": "Your organization has reached its daily run limit. Try again after midnight (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft denied access to this site, library or file.",
       "sharepointFileTooLarge": "This file is too large to import.",
       "sharepointInvalidCursor": "The list changed while you were browsing. Open the folder again.",
@@ -3375,8 +3367,6 @@
       "validationRequired": "A required field is empty.",
       "validationTooLong": "Too long: use at most {limit, number} characters.",
       "validationTooShort": "Too short: use at least {limit, number} characters.",
-      "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.",
-      "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).",
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version."
     },
     "failedToAcceptInvitation": "Failed to accept invitation",
@@ -5515,7 +5505,6 @@
       "caseLaw": "Case law",
       "chat": "Chat",
       "contact": "Contact",
-      "folder": "Folder",
       "link": "Link",
       "matter": "Matter",
       "message": "Message",
@@ -5846,6 +5835,7 @@
         "case_law_research_column": "case law research column",
         "chat_browser_site_grant": "chat website approval",
         "chat_file": "chat file",
+        "chat_local_folder_approval": "local folder approval",
         "chat_message": "chat message",
         "chat_thread": "chat thread",
         "chat_tool_execution": "chat tool execution",
@@ -6101,7 +6091,6 @@
     "comments": "Comments",
     "commentsEmpty": "Select text in the body to comment on it.",
     "noRevisions": "No revisions yet",
-    "outOfDate": "Out of date",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "No summary",
     "proposals": "Proposals",

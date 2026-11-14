@@ -24,6 +24,25 @@ for (const context of ["staging/verified", "main/heavy", "main/pr-depth"]) {
   }
 }
 
+for (const [name, gate, now] of [
+  ["a missing", "missing", "missing"],
+  ["a pending", { state: "pending", creator: "User" }, "pending"],
+  ["a failed", { state: "failure", creator: "User" }, "failure"],
+  ["a bot's", { state: "success", creator: "Bot" }, "not-a-person"],
+] as const) {
+  test(`${name} release/prod-gate waits without a final tag or publication`, () => {
+    const proof = finalize({ gate });
+    expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
+    expect(proof.result.stderr.toString()).toContain(
+      `waits for release/prod-gate=success on ${proof.sha} (now: ${now})`,
+    );
+    expect(proof.finalSha).toBeNull();
+    expect(proof.pushes).toBe("");
+    expect(proof.publications).toBe("");
+    expect(proof.landing).toBeNull();
+  });
+}
+
 for (const workflow of ["deploy-staging.yml", "main-heavy.yml"]) {
   test(`a still running ${workflow} proof defers finalization without writes`, () => {
     const proof = finalize({
@@ -182,7 +201,7 @@ test("release landing waits for finalization and uses trusted tooling with a sep
   const landing = workflow.jobs["land-release-pr"];
   expect(landing.needs).toBe("finalize");
   expect(landing.if).toBe(
-    "github.event_name == 'workflow_run' && needs.finalize.outputs.final_tag != ''",
+    "(github.event_name == 'workflow_run' || github.event_name == 'status') && needs.finalize.outputs.final_tag != ''",
   );
   expect(workflow.jobs.finalize.outputs["final_tag"]).toBe(
     `\${{ steps.finalize.outputs.final_tag }}`,

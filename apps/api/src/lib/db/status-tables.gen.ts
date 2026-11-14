@@ -451,7 +451,13 @@ export const ENUM_COLUMNS = {
   ],
   legal_list_claim_carry_outcomes: ["entity_feature_gate", "outcome"],
   legal_list_claim_review_events: ["entity_feature_gate", "kind"],
-  legal_list_claims: ["entity_feature_gate", "framing", "type"],
+  legal_list_claims: [
+    "asserted_on_precision",
+    "asserted_on_source",
+    "entity_feature_gate",
+    "framing",
+    "type",
+  ],
   legal_list_fact_details: [
     "confidence",
     "entity_feature_gate",
@@ -498,6 +504,7 @@ export const ENUM_COLUMNS = {
   mcp_connectors: ["auth_type"],
   mcp_user_connections: ["response_disposition"],
   mcp_web_handoff: ["kind"],
+  model_run_budgets: ["run_kind"],
   notifications: ["entity_type", "kind"],
   number_series: ["document_type"],
   number_series_allocations: ["document_type"],

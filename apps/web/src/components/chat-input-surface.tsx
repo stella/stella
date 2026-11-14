@@ -69,6 +69,8 @@ type ChatInputSurfaceProps = {
    */
   isGenerating?: boolean;
   onStop?: () => void;
+  /** See `ChatComposerActionButton`'s `stopping`. */
+  stopping?: boolean;
   /**
    * Whether this surface will send the next request anonymized, driving
    * the box's blue-ring "shield active" treatment. The surface feeds this
@@ -137,6 +139,7 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
+  stopping = false,
   anonymized = false,
   dock,
   onNewThread,
@@ -368,6 +371,7 @@ export const ChatInputSurface = ({
                     detached(submitDraft(), "chat-input-surface.submit-draft");
                   }}
                   onStop={onStop}
+                  stopping={stopping}
                 />
               </ControlGroup>
             </div>

@@ -58,6 +58,7 @@ const CODEX: ChatLocalRunTarget = {
   harness: "codex",
   model: "gpt-5-codex",
   approvals: "ask",
+  reasoningEffort: null,
 };
 
 const CODEX_READY: DesktopRunnerHarnessReport & { id: "codex" } = {
@@ -66,7 +67,7 @@ const CODEX_READY: DesktopRunnerHarnessReport & { id: "codex" } = {
   version: "0.50.0",
   capabilities: ["approvals"],
   approvalModes: ["ask"],
-  models: [{ id: CODEX.model, label: "GPT-5 Codex" }],
+  models: [{ id: CODEX.model, label: "GPT-5 Codex", reasoningEfforts: [] }],
 };
 
 const DESKTOP_ID = Bun.randomUUIDv7();
@@ -95,6 +96,8 @@ const control = asTestRaw<DesktopRunnerControl>({
       type: "available",
       desktopId: DESKTOP_ID,
       harness: CODEX_READY,
+      linkedFolders: [],
+      approvedFolderIds: [],
     };
     return await Promise.resolve(Result.ok(picked));
   },

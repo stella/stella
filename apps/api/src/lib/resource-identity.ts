@@ -236,7 +236,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     reason: "association",
   },
   legalListGenerationRun: { type: "non_resource", reason: "job" },
-  legalListVerificationRun: { type: "non_resource", reason: "job" },
+  legalListVerificationRun: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+  },
   legalListClaim: { type: "non_resource", reason: "subresource" },
   legalListClaimReviewEvent: { type: "non_resource", reason: "subresource" },
   legalGraphEdge: { type: "non_resource", reason: "subresource" },

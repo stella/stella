@@ -34,6 +34,10 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
+import {
+  assertedDateColumns,
+  claimAssertedDate,
+} from "@/api/lib/lists/verification/claim-date";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
@@ -43,6 +47,7 @@ import {
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimAssertedDate,
   ClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
@@ -60,10 +65,6 @@ import {
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
 import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
-import {
-  checkVerificationDispatchBudget,
-  ListVerificationRunCapError,
-} from "@/api/lib/lists/verification/run-caps";
 import {
   completeVerificationRun,
   failVerificationRun,
@@ -92,6 +93,17 @@ import {
   formatModelRef,
   getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
+import {
+  checkModelRunCaps,
+  ModelRunCapError,
+} from "@/api/lib/usage/model-run-caps/caps";
+
+/** A verification's model calls re-check the list counter it was charged to. */
+const VERIFICATION_DISPATCH_CAPS = {
+  kind: "list-run",
+  operation: "lists.verifications.create",
+  phase: "dispatch",
+} as const;
 
 const QUEUE_NAME = "legal-list-verification-runs";
 
@@ -556,11 +568,17 @@ const resolvePinnedFile = async (
 
 type ClaimRow = typeof legalListClaims.$inferInsert;
 
-/** One row per claim in reading order; a set-aside claim is never graded. */
+type GradedClaims = {
+  grades: ReadonlyMap<string, ClaimGrade>;
+  assertedDates: ReadonlyMap<string, ClaimAssertedDate>;
+};
+
+/** One row per claim in reading order; a set-aside claim is never graded,
+ *  so its date is read from its words alone. */
 const claimRows = (
   actor: RunActor,
   claims: readonly ExtractedClaim[],
-  grades: ReadonlyMap<string, ClaimGrade>,
+  { grades, assertedDates }: GradedClaims,
 ): ClaimRow[] =>
   claims.map((claim, position): ClaimRow => {
     const base = {
@@ -572,6 +590,10 @@ const claimRows = (
       framing: claim.framing,
       text: claim.text,
       anchor: claim.anchor,
+      ...assertedDateColumns(
+        assertedDates.get(String(position)) ??
+          claimAssertedDate(claim.text, null),
+      ),
     };
     if (claim.type !== "fact") {
       return {
@@ -738,9 +760,10 @@ const executeRun = async ({
     checkRunBudget: async () =>
       await actor.writeDb(
         async (tx) =>
-          await checkVerificationDispatchBudget({
+          await checkModelRunCaps({
             tx,
             organizationId: actor.organizationId,
+            ...VERIFICATION_DISPATCH_CAPS,
           }),
       ),
     ...(execution.generateObjectForTask === undefined
@@ -773,7 +796,7 @@ const executeRun = async ({
 
   const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
-    if (extracted.error.cause instanceof ListVerificationRunCapError) {
+    if (extracted.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return extracted.error.cause instanceof ListVerificationAccessRevokedError
@@ -803,7 +826,7 @@ const executeRun = async ({
     deps,
   });
   if (Result.isError(graded)) {
-    if (graded.error.cause instanceof ListVerificationRunCapError) {
+    if (graded.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return graded.error.cause instanceof ListVerificationAccessRevokedError
@@ -814,7 +837,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value.grades);
+  const rows = claimRows(actor, claims, graded.value);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,
