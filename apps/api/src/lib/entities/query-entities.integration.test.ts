@@ -1057,7 +1057,9 @@ describe("property sort order", () => {
     return panic("Paging did not terminate");
   };
 
-  // Rows without a value come last in both directions.
+  // Number and money rows without a value come last in both directions;
+  // person rows sort by their text key, so rows without one come first
+  // ascending and last descending.
   const expectations = [
     {
       label: "int by number",
