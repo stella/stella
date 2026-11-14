@@ -354,7 +354,7 @@ const toolResults = (chunks: readonly Record<string, unknown>[]) =>
   chunks.flatMap((chunk) =>
     chunk["type"] === EventType.TOOL_CALL_RESULT &&
     typeof chunk["content"] === "string"
-      ? [JSON.parse(chunk["content"])]
+      ? [JSON.parse(chunk["content"]) as unknown]
       : [],
   );
 

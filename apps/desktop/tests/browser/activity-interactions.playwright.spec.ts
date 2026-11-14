@@ -129,7 +129,9 @@ const releaseCandidates = async (page: Page) => {
     .toBe(true);
   await page.evaluate((key) => {
     const release: unknown = Reflect.get(window, key);
-    if (typeof release !== "function") {
+    const isRelease = (value: unknown): value is () => void =>
+      typeof value === "function";
+    if (!isRelease(release)) {
       throw new TypeError("No matters read is held");
     }
     release();
@@ -3045,7 +3047,7 @@ test("the day's blocks wait for its matters and are drawn once", async ({
     /^Example matter · Example Editor/u,
   );
   const drawn: unknown = await page.evaluate(
-    (key) => Reflect.get(window, key),
+    (key): unknown => Reflect.get(window, key),
     DRAWN_BLOCKS,
   );
   expect(drawn).toEqual([expect.stringMatching(/^Example matter · /u)]);
