@@ -140,9 +140,13 @@ export const createParagraphLineReader = <T>(
           case "blockCustomXml":
             visit(block.content, membership);
             break;
+          // parser-output-unchanged: comment range markers carry no text and
+          // were not block content before folio 0.68.
           case "preservedBlock":
           case "bookmarkStart":
           case "bookmarkEnd":
+          case "commentRangeStart":
+          case "commentRangeEnd":
           case "moveFromRangeStart":
           case "moveFromRangeEnd":
           case "moveToRangeStart":

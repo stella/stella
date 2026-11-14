@@ -219,6 +219,10 @@
       },
       "patternInPath": "{pattern} unter {path}",
       "commandExited": "{command} (Exit-Code {code})",
+      "browserClick": "„{target}“ auf {url} anklicken",
+      "browserPressKey": "Taste {key} in „{target}“ auf {url} drücken",
+      "browserSelect": "„{option}“ in „{target}“ auf {url} auswählen",
+      "browserType": "Text in „{target}“ auf {url} eingeben",
       "opensOnComputer": "Auf dem Computer öffnen, auf dem der Schritt lief",
       "status": {
         "needs_approval": "Warten auf Genehmigung",

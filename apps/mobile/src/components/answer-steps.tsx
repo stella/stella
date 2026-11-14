@@ -4,12 +4,12 @@ import { panic } from "better-result";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { localRunToolSubtitleText } from "@stll/api-contract/chat-local-run-steps";
 import { PROCESS_SUMMARY_KINDS } from "@stll/api-contract/chat-tool-activity";
 import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
 import { Text } from "@stll/ui/text";
 
 import { keyedBy } from "@/components/keyed";
+import { useLocalRunSubtitleText } from "@/components/local-run-subtitle";
 import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { AnswerBlock, AnswerStep } from "@/state/chat-answer";
 import { useAppColors } from "@/theme";
@@ -200,6 +200,7 @@ const StepList = ({ steps }: { steps: readonly AnswerStep[] }) => {
   const t = useTranslations("chat");
   const colors = useAppColors();
   const stepTitle = useStepTitle();
+  const localRunSubtitleText = useLocalRunSubtitleText();
   const about = (step: AnswerStep): string | null => {
     switch (step.type) {
       case "reasoning":
@@ -208,10 +209,7 @@ const StepList = ({ steps }: { steps: readonly AnswerStep[] }) => {
         return null;
       case "local":
         // A subagent started inside another names what it was started for.
-        return localRunToolSubtitleText(step.subtitle, {
-          patternInPath: (values) => t("localRun.patternInPath", values),
-          commandExited: (values) => t("localRun.commandExited", values),
-        });
+        return localRunSubtitleText(step.subtitle);
       default:
         step satisfies never;
         return panic("Unhandled answer step");

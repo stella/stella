@@ -1559,6 +1559,7 @@ const config = defineConfig({
   rules: {
     "confine-aggregate-lock/confine-aggregate-lock": "error",
     "count-gated-completion/count-gated-completion": "error",
+    "require-static-timeout-label/require-static-timeout-label": "error",
     "no-raw-sha256/no-raw-sha256": "error",
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
@@ -2085,6 +2086,7 @@ const config = defineConfig({
   jsPlugins: [
     { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
+    "./.oxlint-plugins/require-static-timeout-label.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
@@ -2567,6 +2569,9 @@ const config = defineConfig({
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
     },
+    fixtureRuleOverride("require-static-timeout-label.fixture.ts", [
+      "require-static-timeout-label/require-static-timeout-label",
+    ]),
     {
       files: [
         "apps/api/src/handlers/case-law/ingestion/retention/sources/**/*.ts",

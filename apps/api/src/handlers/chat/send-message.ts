@@ -121,6 +121,7 @@ import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistenc
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  chatTurnRunBoundOf,
   countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
@@ -930,7 +931,10 @@ export class ChatSendLifecycle {
    * run gets nothing of the request, so it behaves the same once the request
    * is gone.
    */
-  startRun(connectors: LoadedExternalMcpTools | undefined): ChatTurnRun {
+  startRun(
+    connectors: LoadedExternalMcpTools | undefined,
+    runsOn: ChatRunTarget["kind"],
+  ): ChatTurnRun {
     if (this.claimedTurn.status !== "preflight") {
       return panic("Cannot start a run for a turn this send does not hold");
     }
@@ -939,7 +943,7 @@ export class ChatSendLifecycle {
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
-      deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      bound: chatTurnRunBoundOf(runsOn),
       mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
@@ -3509,7 +3513,10 @@ export const createSendMessage = (
               // The run owns the turn and the loaded connectors from here.
               // Agent runs load none for streaming, so the send's cleanup
               // closes any validation-only load.
-              const run = lifecycle.startRun(externalMcpTools);
+              const run = lifecycle.startRun(
+                externalMcpTools,
+                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,
+              );
               try {
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,

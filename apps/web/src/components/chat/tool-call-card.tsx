@@ -9,7 +9,6 @@ import { useTranslations } from "use-intl";
 import {
   isLocalRunInterruptedOutput,
   localRunStepFailed,
-  localRunToolSubtitleText,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { Temporal } from "@stll/time";
@@ -36,6 +35,7 @@ import {
   LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
+import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -485,6 +485,7 @@ const ToolCallCardComponent = ({
   showDetails?: boolean;
 }) => {
   const t = useTranslations();
+  const localRunSubtitleText = useLocalRunSubtitleText();
   const format = useFormatter();
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
@@ -533,10 +534,7 @@ const ToolCallCardComponent = ({
           part,
           toolName: name,
         })
-      : localRunToolSubtitleText(localRunTool.subtitle, {
-          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
-          commandExited: (values) => t("chat.toolCall.commandExited", values),
-        });
+      : localRunSubtitleText(localRunTool.subtitle);
 
   const isLoading = isRunningToolPart(part);
   const [timing, setTiming] = useState(() =>

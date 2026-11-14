@@ -7,6 +7,7 @@ import {
   BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
   type BrowserControlResult,
+  type BrowserControlSnapshot,
   type BrowserObservedTab,
 } from "@stll/api-contract/browser-control";
 import {
@@ -77,6 +78,44 @@ const page = (revision: string): BrowserControlResult => ({
   status: "success",
 });
 
+/** `result`'s page with another element or the chat's tabs. */
+const withPage = (
+  result: BrowserControlResult,
+  change: (snapshot: BrowserControlSnapshot) => BrowserControlSnapshot,
+): BrowserControlResult =>
+  result.status === "success"
+    ? { ...result, snapshot: change(result.snapshot) }
+    : result;
+
+const COURT_SELECT = {
+  context: ABSENT,
+  href: ABSENT,
+  id: "E2",
+  name: "Court",
+  ref: "e:0:3.0",
+  role: "select",
+  value: "",
+} as const;
+
+/** The search page with a court select beside the search field. */
+const formPage = (revision: string) =>
+  withPage(page(revision), (snapshot) => ({
+    ...snapshot,
+    elements: [...snapshot.elements, COURT_SELECT],
+  }));
+
+const SEARCH_URL = "https://fixture-library.test/search";
+const DECISION_URL = "https://fixture-library.test/doc/1";
+
+/** The search page, read at another address. */
+const pageAt = (revision: string, url: string) =>
+  withPage(page(revision), (snapshot) => ({ ...snapshot, url }));
+
+const tabbed = (
+  result: BrowserControlResult,
+  tabs: BrowserControlSnapshot["tabs"],
+) => withPage(result, (snapshot) => ({ ...snapshot, tabs }));
+
 const found = (): BrowserControlResult => ({
   found: {
     contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
@@ -92,6 +131,11 @@ const found = (): BrowserControlResult => ({
   protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
   status: "found",
 });
+
+/** A question the member was asked, each kind with its own fields. */
+type AskedStep<Request = BrowserApprovalRequest> = Request extends unknown
+  ? Omit<Request, "signal">
+  : never;
 
 type Sent = {
   command: BrowserControlCommand;
@@ -112,7 +156,7 @@ const recorder = (
   } = {},
 ) => {
   const sent: Sent[] = [];
-  const asked: Omit<BrowserApprovalRequest, "signal">[] = [];
+  const asked: AskedStep[] = [];
   const finished: string[] = [];
   const context = {
     approvals,
@@ -664,5 +708,565 @@ describe("browser steps by the run's approval mode", () => {
     await session.call("snapshot", {}, browser.context);
     await session.call("click", LINK, browser.context);
     expect(browser.finished).toEqual(["failed"]);
+  });
+});
+
+const SEARCH_TARGET = {
+  context: ABSENT,
+  href: ABSENT,
+  name: "Search",
+  ref: "e:0:1.0",
+  role: "textbox",
+} as const;
+
+const COURT_TARGET = {
+  context: ABSENT,
+  href: ABSENT,
+  name: "Court",
+  ref: "e:0:3.0",
+  role: "select",
+} as const;
+
+const NEEDS_MEMBER: BrowserControlResult = {
+  code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+  message: "This page asks for a sign-in.",
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  status: "error",
+};
+
+describe("keys, options, history and tabs", () => {
+  test("press_key presses an allowed key in the element the latest read listed", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1"), page("r-2")], {
+      approvals: "full_auto",
+    });
+    await session.call("snapshot", {}, browser.context);
+    const pressed = await session.call(
+      "press_key",
+      { ref: "E1", key: "Enter" },
+      browser.context,
+    );
+    expect(pressed.isError).toBe(false);
+    expect(browser.sent.at(1)).toEqual({
+      command: {
+        action: "press-key",
+        key: "Enter",
+        page: { revision: "r-1", url: SEARCH_URL },
+        target: SEARCH_TARGET,
+      },
+      observedTab: { revision: "r-1", tabId: 7 },
+    });
+  });
+
+  test("press_key refuses a key outside the list and a ref the read did not list, without reaching Chrome", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1")], { approvals: "full_auto" });
+    await session.call("snapshot", {}, browser.context);
+    const backspace = await session.call(
+      "press_key",
+      { ref: "E1", key: "Backspace" },
+      browser.context,
+    );
+    expect(parsed(backspace)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+      message: expect.stringContaining(
+        "Enter, Escape, Tab, ArrowDown, ArrowUp",
+      ),
+    });
+    const unlisted = await session.call(
+      "press_key",
+      { ref: "E9", key: "Enter" },
+      browser.context,
+    );
+    expect(parsed(unlisted)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
+    });
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+  });
+
+  test("select sends the option the agent named, as a label or a value", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([formPage("r-1"), formPage("r-2")], {
+      approvals: "full_auto",
+    });
+    await session.call("snapshot", {}, browser.context);
+    await session.call(
+      "select",
+      { ref: "E2", option: "Supreme Court" },
+      browser.context,
+    );
+    expect(browser.sent.at(1)?.command).toEqual({
+      action: "select",
+      page: { revision: "r-1", url: SEARCH_URL },
+      target: COURT_TARGET,
+      value: "Supreme Court",
+    });
+    const empty = await session.call(
+      "select",
+      { ref: "E2", option: "" },
+      browser.context,
+    );
+    expect(parsed(empty)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+    });
+    expect(browser.sent).toHaveLength(2);
+  });
+
+  test("go_back reaches the page the chat read before, and reads it", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([
+      pageAt("r-1", DECISION_URL),
+      page("r-2"),
+      pageAt("r-3", DECISION_URL),
+    ]);
+    await session.call("open", { url: DECISION_URL }, browser.context);
+    await session.call("open", { url: SEARCH_URL }, browser.context);
+    const back = await session.call("go_back", undefined, browser.context);
+    expect(back.isError).toBe(false);
+    expect(parsed(back)).toMatchObject({
+      text: "Results\nDecision 1 [L1]",
+      url: DECISION_URL,
+    });
+    expect(browser.sent.at(2)).toEqual({
+      command: { action: "go-back" },
+      observedTab: { revision: "r-2", tabId: 7 },
+    });
+    // That was the first page read in the tab: nothing is before it.
+    const again = await session.call("go_back", {}, browser.context);
+    expect(parsed(again)).toMatchObject({ refused: "no_earlier_page" });
+    expect(browser.sent).toHaveLength(3);
+  });
+
+  test("go_back with no earlier page read in the tab is refused without navigating", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1")]);
+    const unread = await session.call("go_back", {}, browser.context);
+    await session.call("snapshot", {}, browser.context);
+    const once = await session.call("go_back", {}, browser.context);
+    for (const result of [unread, once]) {
+      expect(result.isError).toBe(true);
+      expect(parsed(result)).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+        hint: "Call open with the address of the page you want.",
+        refused: "no_earlier_page",
+      });
+    }
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+  });
+
+  test("go_back to a page the chat never read shows nothing of it and returns the tab", async () => {
+    const MEMBER_PAGE = "https://fixture-library.test/account/welcome";
+    const session = createLocalBrowserSession();
+    const browser = recorder([
+      pageAt("r-1", DECISION_URL),
+      page("r-2"),
+      // The member opened another page in the tab between the two reads.
+      withPage(pageAt("r-3", MEMBER_PAGE), (snapshot) => ({
+        ...snapshot,
+        text: "Member's own page",
+        title: "Member account",
+      })),
+      page("r-4"),
+    ]);
+    await session.call("open", { url: DECISION_URL }, browser.context);
+    await session.call("snapshot", {}, browser.context);
+    const back = await session.call("go_back", {}, browser.context);
+    expect(back.isError).toBe(true);
+    expect(parsed(back)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+      hint: "Call open with the address of the page you want.",
+      message: expect.stringContaining("back on the page it was on"),
+      refused: "not_read_before",
+    });
+    const shown = back.content.at(0)?.text ?? "";
+    for (const unreadContent of [
+      MEMBER_PAGE,
+      "Member's own page",
+      "Member account",
+    ]) {
+      expect(shown).not.toContain(unreadContent);
+    }
+    // The tab went back to the page it left, addressed as the page it
+    // reached.
+    expect(browser.sent.slice(2)).toEqual([
+      {
+        command: { action: "go-back" },
+        observedTab: { revision: "r-2", tabId: 7 },
+      },
+      {
+        command: { action: "open", url: SEARCH_URL },
+        observedTab: { revision: "r-3", tabId: 7 },
+      },
+    ]);
+    // The agent saw no read of the page the tab returned to, so no id is
+    // valid until it reads it: an id from the page before is refused here.
+    const next = recorder([page("r-5"), page("r-6")]);
+    const stale = await session.call("click", { ref: "L1" }, next.context);
+    expect(parsed(stale)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
+    });
+    expect(next.sent).toEqual([]);
+    await session.call("snapshot", {}, next.context);
+    await session.call("click", { ref: "L1" }, next.context);
+    expect(next.sent).toEqual([
+      {
+        command: { action: "snapshot" },
+        observedTab: { revision: "r-4", tabId: 7 },
+      },
+      expect.objectContaining({
+        command: expect.objectContaining({
+          action: "click",
+          page: { revision: "r-5", url: SEARCH_URL },
+        }),
+        observedTab: { revision: "r-5", tabId: 7 },
+      }),
+    ]);
+  });
+
+  test("go_back that cannot return to the page it left still shows nothing", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([
+      pageAt("r-1", DECISION_URL),
+      page("r-2"),
+      pageAt("r-3", "https://fixture-library.test/account/welcome"),
+      NEEDS_MEMBER,
+    ]);
+    await session.call("snapshot", {}, browser.context);
+    await session.call("snapshot", {}, browser.context);
+    const back = await session.call("go_back", {}, browser.context);
+    expect(parsed(back)).toMatchObject({
+      message: expect.stringContaining("could not return"),
+      refused: "not_read_before",
+    });
+    expect(back.content.at(0)?.text ?? "").not.toContain("account/welcome");
+    // The tab is not on the page the ids came from: none is used.
+    const stale = await session.call("click", { ref: "L1" }, browser.context);
+    expect(parsed(stale)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
+    });
+    expect(browser.sent).toHaveLength(4);
+  });
+
+  test("open opens a new tab only when asked to", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1"), page("r-2"), page("r-3")]);
+    await session.call(
+      "open",
+      { url: DECISION_URL, newTab: true },
+      browser.context,
+    );
+    await session.call(
+      "open",
+      { url: DECISION_URL, newTab: false },
+      browser.context,
+    );
+    await session.call("open", { url: DECISION_URL }, browser.context);
+    expect(browser.sent.map(({ command }) => command)).toEqual([
+      { action: "open", newTab: true, url: DECISION_URL },
+      { action: "open", url: DECISION_URL },
+      { action: "open", url: DECISION_URL },
+    ]);
+  });
+
+  test("a read lists the chat's tabs only when it has more than one", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([
+      tabbed(page("r-1"), [{ active: true, tabId: 7, url: SEARCH_URL }]),
+      tabbed(page("r-2"), [
+        { active: true, tabId: 7, url: SEARCH_URL },
+        { active: false, tabId: 9, url: DECISION_URL },
+      ]),
+    ]);
+    const one = parsed(await session.call("snapshot", {}, browser.context));
+    expect(one).not.toHaveProperty("tabs");
+    const two = parsed(await session.call("snapshot", {}, browser.context));
+    expect(two).toMatchObject({
+      tabs: [
+        { active: true, tabId: 7, url: SEARCH_URL },
+        { active: false, tabId: 9, url: DECISION_URL, opened: true },
+      ],
+    });
+  });
+
+  test("a click that opens a tab reports it once, and switch_tab moves there", async () => {
+    const session = createLocalBrowserSession();
+    const bothTabs = [
+      { active: true, tabId: 7, url: SEARCH_URL },
+      { active: false, tabId: 9, url: DECISION_URL },
+    ];
+    const browser = recorder(
+      [
+        tabbed(page("r-1"), [{ active: true, tabId: 7, url: SEARCH_URL }]),
+        tabbed(page("r-2"), bothTabs),
+        tabbed(page("r-3"), bothTabs),
+        withPage(page("r-4"), (snapshot) => ({
+          ...snapshot,
+          tabId: 9,
+          tabs: [
+            { active: true, tabId: 9, url: DECISION_URL },
+            { active: false, tabId: 7, url: SEARCH_URL },
+          ],
+          url: DECISION_URL,
+        })),
+      ],
+      { approvals: "full_auto" },
+    );
+    await session.call("snapshot", {}, browser.context);
+    const clicked = parsed(
+      await session.call("click", { ref: "L1" }, browser.context),
+    );
+    expect(clicked).toMatchObject({
+      tabs: [
+        { tabId: 7, active: true },
+        { tabId: 9, active: false, opened: true },
+      ],
+    });
+    // The next read knows the tab: it is no longer new.
+    const again = parsed(await session.call("snapshot", {}, browser.context));
+    expect(again).toMatchObject({
+      tabs: [{ tabId: 7 }, { tabId: 9 }],
+    });
+    expect(JSON.stringify(again)).not.toContain("opened");
+
+    const switched = parsed(
+      await session.call("switch_tab", { tabId: 9 }, browser.context),
+    );
+    expect(browser.sent.at(3)).toEqual({
+      command: { action: "switch-tab", tabId: 9, url: DECISION_URL },
+      observedTab: { revision: "r-3", tabId: 7 },
+    });
+    expect(switched).toMatchObject({ url: DECISION_URL });
+    // Element refs now address the tab switched to.
+    await session.call("click", { ref: "L1" }, browser.context);
+    expect(browser.sent.at(4)).toMatchObject({
+      command: { action: "click", page: { revision: "r-4" } },
+      observedTab: { revision: "r-4", tabId: 9 },
+    });
+  });
+
+  test("switch_tab takes only a tab the latest read listed", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([
+      tabbed(page("r-1"), [{ active: true, tabId: 7, url: SEARCH_URL }]),
+    ]);
+    const before = await session.call(
+      "switch_tab",
+      { tabId: 9 },
+      browser.context,
+    );
+    expect(parsed(before)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+      hint: "Call snapshot and use a tabId from its tabs.",
+    });
+    await session.call("snapshot", {}, browser.context);
+    const unlisted = await session.call(
+      "switch_tab",
+      { tabId: 9 },
+      browser.context,
+    );
+    expect(unlisted.isError).toBe(true);
+    const malformed = await session.call(
+      "switch_tab",
+      { tabId: "9" },
+      browser.context,
+    );
+    expect(parsed(malformed)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+    });
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+  });
+
+  test("no step gets past a sign-in: the member signs in, and chat keeps only that", async () => {
+    for (const [tool, input] of [
+      ["press_key", { ref: "E1", key: "Enter" }],
+      ["select", { ref: "E2", option: "Supreme Court" }],
+      ["go_back", {}],
+      ["switch_tab", { tabId: 9 }],
+      ["open", { url: DECISION_URL, newTab: true }],
+    ] as const) {
+      const session = createLocalBrowserSession();
+      const browser = recorder(
+        [
+          pageAt("r-0", DECISION_URL),
+          tabbed(formPage("r-1"), [
+            { active: true, tabId: 7, url: SEARCH_URL },
+            { active: false, tabId: 9, url: DECISION_URL },
+          ]),
+          NEEDS_MEMBER,
+        ],
+        { approvals: "full_auto" },
+      );
+      // Two pages read in the tab, so going back has a page to reach.
+      await session.call("snapshot", {}, browser.context);
+      await session.call("snapshot", {}, browser.context);
+      const result = await session.call(tool, input, browser.context);
+      expect(browser.sent).toHaveLength(3);
+      expect({ tool, result: parsed(result) }).toMatchObject({
+        tool,
+        result: {
+          hint: expect.stringContaining("sign in"),
+          status: CHAT_LOCAL_RUN_NEEDS_MEMBER,
+        },
+      });
+      expect(
+        shownChatLocalRunToolResult(
+          CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+          result.content.at(0)?.text ?? "",
+          true,
+        ),
+      ).toBe(JSON.stringify({ status: CHAT_LOCAL_RUN_NEEDS_MEMBER }));
+    }
+  });
+});
+
+describe("keys, options, history and tabs by the run's approval mode", () => {
+  type Step = "press_key" | "select" | "go_back" | "switch_tab";
+
+  const INPUTS = {
+    press_key: { ref: "E1", key: "Enter" },
+    select: { ref: "E2", option: "Supreme Court" },
+    go_back: {},
+    switch_tab: { tabId: 9 },
+  } as const satisfies Record<Step, unknown>;
+
+  const SENT = {
+    press_key: "press-key",
+    select: "select",
+    go_back: "go-back",
+    switch_tab: "switch-tab",
+  } as const satisfies Record<Step, BrowserControlCommand["action"]>;
+
+  /** What each step does in each mode: runs, asks first, or is refused. */
+  const GATES = {
+    plan: {
+      press_key: "refuse",
+      select: "refuse",
+      go_back: "run",
+      switch_tab: "run",
+    },
+    ask: { press_key: "ask", select: "ask", go_back: "run", switch_tab: "run" },
+    auto: {
+      press_key: "run",
+      select: "ask",
+      go_back: "run",
+      switch_tab: "run",
+    },
+    full_auto: {
+      press_key: "run",
+      select: "run",
+      go_back: "run",
+      switch_tab: "run",
+    },
+  } as const satisfies Record<
+    DesktopRunnerApprovalMode,
+    Record<Step, "run" | "ask" | "refuse">
+  >;
+
+  const MODES = [
+    "plan",
+    "ask",
+    "auto",
+    "full_auto",
+  ] as const satisfies readonly DesktopRunnerApprovalMode[];
+  const STEPS = [
+    "press_key",
+    "select",
+    "go_back",
+    "switch_tab",
+  ] as const satisfies readonly Step[];
+
+  const CASES = MODES.flatMap((approvals) =>
+    STEPS.map((step) => ({ approvals, gate: GATES[approvals][step], step })),
+  );
+
+  test.each(CASES)(
+    "$approvals: $step is $gate",
+    async ({ approvals, gate, step }) => {
+      const session = createLocalBrowserSession();
+      const browser = recorder(
+        [
+          pageAt("r-0", DECISION_URL),
+          tabbed(formPage("r-1"), [
+            { active: true, tabId: 7, url: SEARCH_URL },
+            { active: false, tabId: 9, url: DECISION_URL },
+          ]),
+          // Going back reaches the first page read; anything else stays.
+          step === "go_back" ? pageAt("r-2", DECISION_URL) : formPage("r-2"),
+        ],
+        { approvals },
+      );
+      await session.call("snapshot", {}, browser.context);
+      await session.call("snapshot", {}, browser.context);
+      const result = await session.call(step, INPUTS[step], browser.context);
+      const askedAbout: string[] = browser.asked.map(({ action }) => action);
+      expect(askedAbout).toEqual(gate === "ask" ? [step] : []);
+      expect(browser.sent.map(({ command }) => command.action)).toEqual(
+        gate === "refuse"
+          ? ["snapshot", "snapshot"]
+          : ["snapshot", "snapshot", SENT[step]],
+      );
+      expect(result.isError).toBe(gate === "refuse");
+      if (gate === "refuse") {
+        expect(parsed(result)).toMatchObject({
+          code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+          message: expect.stringContaining("Plan mode is read-only"),
+        });
+      }
+    },
+  );
+
+  test("the member is asked which key on which element, and which option", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder(
+      [formPage("r-1"), formPage("r-2"), formPage("r-3")],
+      {
+        approvals: "ask",
+      },
+    );
+    await session.call("snapshot", {}, browser.context);
+    await session.call("press_key", INPUTS.press_key, browser.context);
+    await session.call("select", INPUTS.select, browser.context);
+    expect(browser.asked).toEqual([
+      {
+        action: "press_key",
+        key: "Enter",
+        name: "Search",
+        role: "textbox",
+        url: SEARCH_URL,
+      },
+      {
+        action: "select",
+        name: "Court",
+        option: "Supreme Court",
+        role: "select",
+        url: SEARCH_URL,
+      },
+    ]);
+    expect(browser.finished).toEqual(["completed", "completed"]);
+  });
+
+  test("a declined key press or option runs nothing", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([formPage("r-1")], {
+      approvals: "ask",
+      decision: APPROVAL_DECISION.deny,
+    });
+    await session.call("snapshot", {}, browser.context);
+    const results = [
+      await session.call("press_key", INPUTS.press_key, browser.context),
+      await session.call("select", INPUTS.select, browser.context),
+    ];
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+    for (const result of results) {
+      expect(parsed(result)).toMatchObject({ status: "declined" });
+    }
   });
 });
