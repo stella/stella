@@ -584,7 +584,12 @@ describe("a file a turn on the computer hands back", () => {
 });
 
 describe("a turn accepted while no computer can take it", () => {
-  type Stored = { id: string; role: string; metadata?: unknown };
+  type Stored = {
+    id: string;
+    role: string;
+    parts: readonly unknown[];
+    metadata?: unknown;
+  };
   const outcomeOf = (messages: readonly Stored[]) =>
     asTestRaw<{ turnOutcome?: { type: string; error?: string } } | undefined>(
       messages.findLast(({ role }) => role === "assistant")?.metadata,
