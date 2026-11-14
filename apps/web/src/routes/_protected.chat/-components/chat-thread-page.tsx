@@ -75,6 +75,10 @@ import {
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
 import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -142,6 +146,8 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
@@ -561,6 +567,17 @@ export const ChatThreadPage = ({
             threadId: threadRef.threadId,
             title: args.length > 0 ? args : null,
           });
+        },
+        "make-skill": (args) => {
+          controller.setContent(composerText(""));
+          if (messages.length === 0) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
         },
       });
       // Inside the member's send gesture, before any await: a turn for

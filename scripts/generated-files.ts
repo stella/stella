@@ -376,6 +376,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/observability/data-invariants/config-schema.ts",
     "apps/api/src/lib/proofs/checked-transaction.ts",
     "apps/api/src/lib/properties/*",
+    "apps/api/src/lib/queue/*",
     "apps/api/src/lib/rate-limit/*",
     "apps/api/src/lib/s3/credential-guard.ts",
     "apps/api/src/lib/s3/credentials.ts",

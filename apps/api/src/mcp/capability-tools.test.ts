@@ -364,6 +364,15 @@ describe("list verification access grants across MCP tools", () => {
       params,
       query: { listId: resourceId },
     },
+    "lists.graph.nodes.list": { params, query: { text: "delivery" } },
+    "lists.graph.neighbours.list": {
+      params,
+      query: { nodeKind: "fact", nodeId: resourceId },
+    },
+    "lists.graph.paths.list": {
+      params,
+      query: { nodeKind: "claim", nodeId: resourceId, depth: 2 },
+    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
@@ -1074,6 +1083,13 @@ describe("list verification access grants across MCP tools", () => {
         expect(result.isError).not.toBe(true);
         expect(parseToolPayload(result)).toEqual({
           documents: [{ documentEntityId: resourceId, sourceKind: "document" }],
+        });
+      } else if (capability === "lists.graph.nodes.list") {
+        // Nothing in the fixture's matter matches.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          nodes: [],
+          nextCursor: null,
         });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);

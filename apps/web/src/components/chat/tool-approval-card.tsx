@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_TOOL_NAME,
+  BROWSER_FIND_TYPE,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
@@ -1325,9 +1326,13 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
     case BROWSER_CONTROL_ACTION.select:
       return "chat.approval.browser.actions.select";
     case BROWSER_CONTROL_ACTION.snapshot:
-      return (command.textOffset ?? 0) > 0
-        ? "chat.approval.browser.actions.snapshotContinue"
-        : "chat.approval.browser.actions.snapshot";
+      return command.cursor === undefined
+        ? "chat.approval.browser.actions.snapshot"
+        : "chat.approval.browser.actions.snapshotContinue";
+    case BROWSER_CONTROL_ACTION.find:
+      return command.search.type === BROWSER_FIND_TYPE.headings
+        ? "chat.approval.browser.actions.findHeadings"
+        : "chat.approval.browser.actions.find";
     case BROWSER_CONTROL_ACTION.switchTab:
       return "chat.approval.browser.actions.switchTab";
     default:

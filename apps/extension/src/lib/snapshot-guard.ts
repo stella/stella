@@ -109,8 +109,11 @@ export const checkCommandIdentity = ({
   switch (command.action) {
     // Switching moves control on purpose; its target is held to chat's
     // tabs instead.
+    // A read's cursor names its own document; the read refuses one the tab
+    // no longer shows.
     case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.snapshot:
+    case BROWSER_CONTROL_ACTION.find:
       return { documentId: null, status: "ok" };
     case BROWSER_CONTROL_ACTION.open:
     case BROWSER_CONTROL_ACTION.goBack:

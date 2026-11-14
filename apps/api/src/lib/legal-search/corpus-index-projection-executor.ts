@@ -20,7 +20,6 @@ import { drainCaseLawRankingSignalChanges } from "@/api/lib/legal-search/case-la
 import {
   CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
   type CorpusIndexClient,
-  corpusIndexCommittedIngestTimeoutMs,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -32,7 +31,6 @@ import {
   legislationV2NeedsPassages,
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
-  censusCorpusProjectionRevisions,
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
@@ -41,7 +39,10 @@ import {
   corpusIndexCommitTimeoutSecs,
   type CorpusProjectionAppendCommitMode,
   type CorpusProjectionAppendEntry,
+  corpusProjectionAppendIngestBudgetMs,
+  type CorpusProjectionPresenceProof,
   planCorpusProjectionAppendRequests,
+  proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   type CorpusProjectionMaterial,
@@ -548,7 +549,7 @@ type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
 export const corpusProjectionAppendStartMarginMs = (
   manifest: CorpusIndexManifest,
 ): number =>
-  corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest)) +
+  corpusProjectionAppendIngestBudgetMs(manifest) +
   Math.ceil(
     CORPUS_PROJECTION_APPEND_MAX_REVISIONS /
       CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
@@ -880,20 +881,31 @@ type ConfirmProjectionAppendOptions = {
   entries: readonly PreparedProjectionEntry[];
 };
 
+type ProvenProjectionEntry = {
+  entry: PreparedProjectionEntry;
+  proof: CorpusProjectionPresenceProof;
+};
+
 /** Each revision belongs to one document_id; require all of its passages. */
 const confirmProjectionAppend = async ({
   client,
   indexId,
   entries,
-}: ConfirmProjectionAppendOptions): Promise<Result<void, CorpusIndexError>> => {
+}: ConfirmProjectionAppendOptions): Promise<
+  Result<ProvenProjectionEntry[], CorpusIndexError>
+> => {
+  const proven: ProvenProjectionEntry[] = [];
   for (const batch of chunkItems(
     entries,
     CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   )) {
-    const census = await censusCorpusProjectionRevisions({
+    const census = await proveCorpusProjectionRevisionsPresent({
       client,
       indexId,
-      revisions: batch.map(({ material }) => material.lease.intentId),
+      expected: batch.map(({ material, documentCount }) => ({
+        revision: material.lease.intentId,
+        documentCount,
+      })),
     });
     if (census.isErr()) {
       return Result.err(
@@ -904,28 +916,35 @@ const confirmProjectionAppend = async ({
         }),
       );
     }
-    const counts = new Map(
-      census.value.present.map(({ revision, documentCount }) => [
-        revision,
-        documentCount,
-      ]),
-    );
-    if (
-      batch.some(
-        ({ material, documentCount }) =>
-          counts.get(material.lease.intentId) !== documentCount,
-      )
-    ) {
-      return Result.err(
-        new CorpusIndexError({
-          message:
-            "projection append is not fully searchable after publication",
-          rejection: "transient",
-        }),
-      );
+    switch (census.value.status) {
+      case "unproven":
+        return Result.err(
+          new CorpusIndexError({
+            message:
+              "projection append is not fully searchable after publication",
+            rejection: "transient",
+          }),
+        );
+      case "proven": {
+        const proofs = new Map(
+          census.value.proofs.map((proof) => [proof.revision, proof]),
+        );
+        for (const entry of batch) {
+          proven.push({
+            entry,
+            proof:
+              proofs.get(entry.material.lease.intentId) ??
+              panic(`Lost presence proof ${entry.material.lease.intentId}`),
+          });
+        }
+        break;
+      }
+      default:
+        census.value satisfies never;
+        return panic(`Unhandled presence census: ${String(census.value)}`);
     }
   }
-  return Result.ok(undefined);
+  return Result.ok(proven);
 };
 
 type PublishAndConfirmProjectionAppendOptions =
@@ -1128,12 +1147,11 @@ const processPreparedRequests = async ({
     async () =>
       await runInTransaction(async (tx) => {
         const outcomes = await mapSequentially(
-          started,
-          async (preparedEntry) =>
+          appended.value,
+          async ({ entry, proof }) =>
             await commitCorpusProjectionAppendTx(tx, {
-              intentId: preparedEntry.material.lease.intentId,
-              leaseToken: preparedEntry.material.lease.leaseToken,
-              documentCount: preparedEntry.documentCount,
+              proof,
+              leaseToken: entry.material.lease.leaseToken,
             }),
         );
         const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
@@ -1349,14 +1367,16 @@ const processMultipartEntry = async ({
       stopForEngine: failure.stopForEngine,
     });
   }
+  const proven =
+    confirmed.value.at(0) ??
+    panic(`Lost multipart presence proof ${lease.intentId}`);
   const committed = await measured(
     async () =>
       await runInTransaction(
         async (tx) =>
           await commitCorpusProjectionAppendTx(tx, {
-            intentId: lease.intentId,
+            proof: proven.proof,
             leaseToken: lease.leaseToken,
-            documentCount: entry.documentCount,
           }),
       ),
     (elapsedMs) => {
@@ -1605,9 +1625,9 @@ const processPreparedStream = async ({
 /**
  * Execute one bounded append cycle. The operator chooses scope, cadence,
  * limits, concurrency, and what an acceptance means; this primitive owns
- * durable ordering and exact outcomes. A queued cycle no longer waits a commit period
- * per request, so a backlog is bounded by payload and index throughput rather
- * than by in-flight requests times the commit period.
+ * durable ordering and exact outcomes. Both commit modes wait for publication
+ * on every request (`ingestCorpusProjectionRequest`), so each request holds
+ * its chain for up to the generation's commit window.
  */
 export const executeCorpusProjectionAppendCycle = async <
   Family extends CorpusProjectionIntentLease["family"],
