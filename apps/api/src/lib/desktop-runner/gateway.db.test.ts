@@ -5592,12 +5592,12 @@ describe("chat turns on a computer", () => {
   };
 
   /** A local turn of `chatThreadId` on `desktopId`, served as a send serves it. */
-  const serveLocalTurn = (
+  const serveLocalTurn = async (
     chatThreadId: SafeId<"chatThread">,
     desktopId: string,
     responseMessageId: SafeId<"chatMessage">,
   ) =>
-    serveTurn(
+    await serveTurn(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
         {
           chatRunId: Bun.randomUUIDv7(),
