@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
@@ -7,6 +7,7 @@ import { CHAT_THREAD_NOT_FOUND_ERROR_CODE } from "@stll/api-contract";
 import type { Transaction } from "@/api/db/root";
 import { chatThreads, chatTurns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -21,7 +22,7 @@ const ANSWERED_TURN_STATUSES = [
 
 /**
  * The thread's latest answer, by one backward step through
- * chat_turns_org_user_thread_created_idx per row; a later turn stopped or
+ * chat_turns_thread_ordinal_uidx per row; a later turn stopped or
  * interrupted before answering leaves it in place. Correlated with the
  * chat_threads row of the statement it is used in.
  */
@@ -39,7 +40,7 @@ const latestAnswer = new QueryBuilder()
       )})`,
     ),
   )
-  .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+  .orderBy(...NEWEST_CHAT_TURN_FIRST)
   .limit(1);
 
 /** The latest answer as a lateral join, for a read over many threads. */
