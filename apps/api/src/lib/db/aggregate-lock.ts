@@ -3526,11 +3526,16 @@ export const lockRowsForWrite = async <
     panic("Locked rows must be read from the table they are written to");
   }
   // `where()` names rows by `table.id`, so the projected `id` must be that
-  // column, not a joined table's id under the same name.
-  const projectedId: unknown = Reflect.get(
-    getColumns(query.as("locked_rows")),
-    "id",
-  );
+  // column, not a joined table's id under the same name. The builder's own
+  // selection keeps each column's table; a subquery view of it would rename
+  // every column's table to the subquery's alias.
+  const builder: unknown = Reflect.get(query, "_");
+  const selection: unknown = isRecord(builder)
+    ? builder["selectedFields"]
+    : undefined;
+  const projectedId: unknown = isRecord(selection)
+    ? selection["id"]
+    : undefined;
   if (
     !is(projectedId, PgColumn) ||
     projectedId.name !== table.id.name ||

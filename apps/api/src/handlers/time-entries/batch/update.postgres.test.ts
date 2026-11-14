@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, or } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
 import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -38,6 +39,7 @@ import {
   safeDbIn,
   withLockThenWriteRace,
 } from "@/api/tests/helpers/lock-then-write-race";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import batchUpdate from "./update";
@@ -106,6 +108,7 @@ const withFixture = async (
     const submittedId = createSafeId<"timeEntry">();
     const draftId = createSafeId<"timeEntry">();
     const lateId = createSafeId<"timeEntry">();
+    const testClock = createTestClock();
     const day = Temporal.Now.plainDateISO("UTC")
       .subtract({ days: 1 })
       .toString();
@@ -122,7 +125,7 @@ const withFixture = async (
         id: organizationId,
         name: "Batch approval race organization",
         slug: organizationId,
-        createdAt: new Date(),
+        createdAt: new Date(testClock.now()),
       });
       await db.insert(organizationAccessStates).values({
         organizationId,
@@ -134,14 +137,14 @@ const withFixture = async (
           organizationId,
           userId: approverId,
           role: "owner",
-          createdAt: new Date(),
+          createdAt: new Date(testClock.now()),
         },
         {
           id: mintAuthProviderIdValue(),
           organizationId,
           userId: timekeeperId,
           role: "member",
-          createdAt: new Date(),
+          createdAt: new Date(testClock.now()),
         },
       ]);
       await db.insert(featureEnrolments).values({
@@ -179,7 +182,7 @@ const withFixture = async (
         ]);
       await run(fixture);
     } finally {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(inArray(user.id, [approverId, timekeeperId]));
     }
   });
