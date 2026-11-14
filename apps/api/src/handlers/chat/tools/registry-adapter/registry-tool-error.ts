@@ -29,6 +29,7 @@ const MCP_CODE_TO_CHAT_KIND = {
   // A 409 needs a different action (refetch state, rename, regenerate), which
   // is the model correcting its input, not a defect or a bare retry.
   conflict: "invalid-input",
+  legal_hold_active: "invalid-input",
   rate_limited: "transient",
   upstream_unavailable: "transient",
   public_read_timeout: "transient",

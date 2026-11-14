@@ -9,6 +9,8 @@ import {
 } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 /** How far a typed status is followed through transport wrappers. */
 export const MAX_TRANSPORT_WRAPPER_DEPTH = 3;
@@ -84,6 +86,28 @@ const admissionHandlerError = (
   return null;
 };
 
+const legalHoldHandlerError = (error: unknown): HandlerError | null => {
+  let candidate = error;
+  for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    if (LegalHoldActiveError.is(candidate)) {
+      return legalHoldRefusal(candidate);
+    }
+    if (HandlerError.is(candidate) && candidate.status !== 500) {
+      break;
+    }
+    if (!(candidate instanceof Error)) {
+      break;
+    }
+    const wrapper = candidate;
+    const cause = Result.try(() => wrapper.cause);
+    if (Result.isError(cause)) {
+      break;
+    }
+    candidate = cause.value;
+  }
+  return null;
+};
+
 /**
  * The typed `HandlerError` an error carries, or null.
  *
@@ -99,6 +123,10 @@ export const resolveHandlerError = (
   error: unknown,
   contactUrl?: string,
 ): HandlerError | null => {
+  const legalHold = legalHoldHandlerError(error);
+  if (legalHold !== null) {
+    return legalHold;
+  }
   const admission = admissionHandlerError(error, contactUrl);
   if (admission !== null) {
     return admission;

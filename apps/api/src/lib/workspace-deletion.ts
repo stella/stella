@@ -18,6 +18,7 @@ import {
   lockMatterAccessAssignments,
   lockMatterAccessWorkspaceRows,
   lockMemberAccessRow,
+  lockOrganizationObjectIntentsForLifecycle,
   lockWorkspaceLifecycle,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -35,6 +36,11 @@ import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import type { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import {
+  lockLegalHoldOrganization,
+  requireNoHold,
+} from "@/api/lib/workspaces/legal-holds/holds";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
@@ -70,7 +76,8 @@ type TransactionWorkspaceDeletionOutcome =
   | {
       cleanupRequestIds: SafeId<"entityDeletionCleanupRequest">[];
       status: "deleted";
-    };
+    }
+  | { error: LegalHoldActiveError; status: "legal-hold" };
 
 const lockAuthorizedActorRole = async ({
   actorUserId,
@@ -169,6 +176,8 @@ export const executeAuthorizedWorkspaceDeletion = async (
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
       return await withAggregateTransaction(database, async (tx) => {
+        await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+        await lockLegalHoldOrganization({ tx, organizationId });
         const actorRole = await lockAuthorizedActorRole({
           actorUserId,
           organizationId,
@@ -218,6 +227,16 @@ export const executeAuthorizedWorkspaceDeletion = async (
         });
         if (!authorized) {
           return { status: "not-authorized" } as const;
+        }
+        const hold = await requireNoHold({
+          tx,
+          organizationId,
+          target: { type: "matter", workspaceId },
+        });
+        if (hold.isErr()) {
+          // Refused before any write: the locks taken so far end with the
+          // transaction.
+          return { error: hold.error, status: "legal-hold" } as const;
         }
         if (!workspaceAcceptsWrites(workspace.status)) {
           return { status: "workspace-unavailable" } as const;
@@ -293,6 +312,9 @@ export const executeAuthorizedWorkspaceDeletion = async (
     return Result.err(transactionResult.error);
   }
 
+  if (transactionResult.value.status === "legal-hold") {
+    return Result.err(transactionResult.value.error);
+  }
   if (transactionResult.value.status !== "deleted") {
     return Result.ok(transactionResult.value);
   }

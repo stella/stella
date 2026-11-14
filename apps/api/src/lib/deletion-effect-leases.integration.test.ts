@@ -199,6 +199,7 @@ describe("destructive-effect lease fencing", () => {
       requests.map(({ id, updatedAt }) => ({
         id,
         organizationIds: [],
+        retainedWorkspaceIds: [],
         status: "pending" as const,
         storageCleanup: { s3Keys: [`user/${id}`] },
         updatedAt,
@@ -358,6 +359,7 @@ describe("destructive-effect lease fencing", () => {
         currentUserId: userId,
         deletionRequestId: producerRequestId,
         organizationIds: [],
+        retainedWorkspaceIds: [],
         s3KeysToDelete: keys,
         taskReassignmentCount: 0,
         tx: asTestRaw(tx),

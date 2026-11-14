@@ -449,6 +449,7 @@ export const ENUM_COLUMNS = {
     "stance",
     "to_kind",
   ],
+  legal_holds: ["scope_type"],
   legal_list_claim_carry_outcomes: ["entity_feature_gate", "outcome"],
   legal_list_claim_review_events: ["entity_feature_gate", "kind"],
   legal_list_claims: [

@@ -87,15 +87,23 @@ export const rootPoolConnectionCount = (): number | null => {
   return isRootPoolSentinel(existing) ? existing.connections : null;
 };
 
+/**
+ * Whether this process runs against a real shared database (the Postgres and
+ * performance runners) rather than the hermetic sentinel. Read from the
+ * runner's environment, so it holds before any preload configures the pools.
+ */
+export const runsAgainstSharedTestDatabase = (
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean =>
+  environment[POSTGRES_TEST_MARKER] === POSTGRES_TEST_RUNNER.gateValue ||
+  environment[packageJson.ciGateTestRunners["test:perf"].gate] ===
+    packageJson.ciGateTestRunners["test:perf"].gateValue;
+
 export const configureTestDatabaseEnvironment = (
   environment: NodeJS.ProcessEnv = process.env,
   sentinelUrl: () => string = rootPoolSentinelUrl,
 ) => {
-  if (
-    environment[POSTGRES_TEST_MARKER] === POSTGRES_TEST_RUNNER.gateValue ||
-    environment[packageJson.ciGateTestRunners["test:perf"].gate] ===
-      packageJson.ciGateTestRunners["test:perf"].gateValue
-  ) {
+  if (runsAgainstSharedTestDatabase(environment)) {
     return;
   }
   environment["DATABASE_URL"] = sentinelUrl();

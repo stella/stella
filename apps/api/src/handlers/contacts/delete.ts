@@ -17,6 +17,8 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const deleteContactParamsSchema = v.object({
   contactId: resourceIdSchema("contact", {
@@ -43,6 +45,19 @@ export const deleteContactHandler = async function* ({
   flushWorkspaceSearchRepairs: flushRepairs,
 }: DeleteContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    const hold = await requireNoHold({
+      tx,
+      organizationId,
+      target: { type: "contactIds", ids: [contactId] },
+    });
+    if (hold.isErr()) {
+      return {
+        ok: false as const,
+        status: 409 as const,
+        message: hold.error.message,
+        error: hold.error,
+      };
+    }
     await lockContactCapacity(tx, organizationId);
 
     const contact = await tx
@@ -140,6 +155,9 @@ export const deleteContactHandler = async function* ({
   }
 
   if (!txResult.value.ok) {
+    if ("error" in txResult.value) {
+      return Result.err(legalHoldRefusal(txResult.value.error));
+    }
     return yield* Result.err(
       new HandlerError({
         status: txResult.value.status,

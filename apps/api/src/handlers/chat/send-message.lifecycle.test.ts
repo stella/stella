@@ -29,6 +29,7 @@ describe("send lifecycle checkpoint indexing", () => {
     for (const turn of ["turn-a", "turn-b"]) {
       const db = createScopedDbMock({});
       const lifecycle = new ChatSendLifecycle({
+        organizationId: toSafeId<"organization">("organization_lifecycle"),
         mode: "raw",
         indexThread: async () => undefined,
         startAdmission: async (options) => {
@@ -169,6 +170,7 @@ describe("send lifecycle checkpoint indexing", () => {
       const indexedThreads: string[] = [];
       const threadId = toSafeId<"chatThread">("thread_lifecycle");
       const lifecycle = new ChatSendLifecycle({
+        organizationId: toSafeId<"organization">("organization_lifecycle"),
         mode: "raw",
         indexThread: async (indexedThreadId) => {
           indexedThreads.push(indexedThreadId);

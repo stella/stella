@@ -15,6 +15,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const config = {
   contract: "patch",
@@ -33,6 +35,7 @@ const config = {
 
 export type DeleteWorkspaceContactHandlerProps = {
   safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   workspaceContactId: SafeId<"workspaceContact">;
   recordAuditEvent: AuditRecorder;
@@ -43,12 +46,21 @@ export type DeleteWorkspaceContactHandlerProps = {
 // and search-index writes.
 export const deleteWorkspaceContactHandler = async function* ({
   safeDb,
+  organizationId,
   workspaceId,
   workspaceContactId,
   recordAuditEvent,
 }: DeleteWorkspaceContactHandlerProps) {
   const deletedRows = yield* Result.await(
     safeDb(async (tx) => {
+      const hold = await requireNoHold({
+        tx,
+        organizationId,
+        target: { type: "matter", workspaceId },
+      });
+      if (hold.isErr()) {
+        return hold;
+      }
       const rows = await tx
         .delete(workspaceContacts)
         .where(
@@ -85,10 +97,13 @@ export const deleteWorkspaceContactHandler = async function* ({
         await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
       }
 
-      return rows;
+      return Result.ok(rows);
     }),
   );
-  const deleted = deletedRows.at(0);
+  if (deletedRows.isErr()) {
+    return Result.err(legalHoldRefusal(deletedRows.error));
+  }
+  const deleted = deletedRows.value.at(0);
 
   if (!deleted) {
     return Result.err(
@@ -115,12 +130,14 @@ const deleteWorkspaceContact = createSafeHandler(
   config,
   async function* ({
     safeDb,
+    session,
     workspaceId,
     params: { workspaceContactId },
     recordAuditEvent,
   }) {
     return yield* deleteWorkspaceContactHandler({
       safeDb,
+      organizationId: session.activeOrganizationId,
       workspaceId,
       workspaceContactId,
       recordAuditEvent,

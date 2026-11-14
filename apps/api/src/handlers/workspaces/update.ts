@@ -36,6 +36,8 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const updateWorkspaceBodySchema = v.object({
   billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
@@ -182,6 +184,33 @@ const flushUpdatedWorkspaceSearch = (workspaceId: SafeId<"workspace">) => {
   );
 };
 
+type HeldClientOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  body: { clientId?: SafeId<"contact"> | undefined };
+  workspace: { id: SafeId<"workspace">; clientId: SafeId<"contact"> | null };
+};
+
+/** A held matter keeps the client its evidence names. */
+const heldClient = async ({
+  tx,
+  organizationId,
+  body,
+  workspace,
+}: HeldClientOptions) => {
+  if (body.clientId === undefined || body.clientId === workspace.clientId) {
+    return null;
+  }
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "matter", workspaceId: workspace.id },
+  });
+  return hold.isErr()
+    ? { ok: false as const, refusal: legalHoldRefusal(hold.error) }
+    : null;
+};
+
 // Shared matter-update logic reused by the HTTP handler and the
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -225,6 +254,11 @@ export const updateWorkspaceHandler = async function* ({
         status: 404 as const,
         message: "Workspace not found",
       };
+    }
+
+    const held = await heldClient({ tx, organizationId, body, workspace });
+    if (held) {
+      return held;
     }
 
     if (body.clientId !== undefined) {
@@ -384,11 +418,13 @@ export const updateWorkspaceHandler = async function* ({
   const failure = txResult.value;
   if (!failure.ok) {
     return yield* Result.err(
-      new HandlerError({
-        status: failure.status,
-        message: failure.message,
-        ...(failure.status === 409 ? { code: failure.code } : {}),
-      }),
+      "refusal" in failure
+        ? failure.refusal
+        : new HandlerError({
+            status: failure.status,
+            message: failure.message,
+            ...(failure.status === 409 ? { code: failure.code } : {}),
+          }),
     );
   }
 

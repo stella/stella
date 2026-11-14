@@ -22,6 +22,7 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { lockLegalHoldOrganization } from "@/api/lib/workspaces/legal-holds/holds";
 
 const createWorkspaceContactBodySchema = v.object({
   contactId: resourceIdSchema("contact", {
@@ -84,6 +85,7 @@ export const createWorkspaceContactHandler = async function* ({
   dependencies = { flushWorkspaceSearchRepairs },
 }: CreateWorkspaceContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    await lockLegalHoldOrganization({ tx, organizationId, mode: "share" });
     // The parent matter lock precedes the contact count and insert, matching
     // matter members and entity capacity.
     await lockWorkspacesForEntityCap(tx, [workspaceId]);

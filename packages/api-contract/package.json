@@ -49,6 +49,7 @@
     "./mcp-chat-tool-policy": "./src/mcp-chat-tool-policy.gen.ts",
     "./untrusted-content-fence": "./src/untrusted-content-fence.ts",
     "./audit-log": "./src/audit-log.ts",
+    "./legal-holds": "./src/legal-holds.ts",
     "./model-run-caps": "./src/model-run-caps.ts",
     "./verification-rechecks": "./src/verification-rechecks.ts",
     "./action-admission": "./src/action-admission.ts",

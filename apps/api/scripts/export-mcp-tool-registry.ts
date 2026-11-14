@@ -18,6 +18,7 @@ import "../src/tests/setup-env";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
   MCP_TOOL_NAME_MAX_LENGTH,
@@ -313,6 +314,7 @@ export const CLI_KNOWN_SCOPES = ${JSON.stringify(cliKnownScopes, null, 2)} as co
 export const CLI_REQUIRED_RESOURCE_SCOPES = ${JSON.stringify(MCP_ADVANCED_RESOURCE_SCOPES, null, 2)} as const;
 export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+export const LEGAL_HOLD_ACTIVE = ${JSON.stringify(LEGAL_HOLD_ACTIVE)} as const;
 export const MODEL_RUN_CAP_CODES = ${JSON.stringify(MODEL_RUN_CAP_CODES, null, 2)} as const;
 export type ModelRunCapCode = (typeof MODEL_RUN_CAP_CODES)[keyof typeof MODEL_RUN_CAP_CODES];
 export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUSALS, null, 2)} as const;
