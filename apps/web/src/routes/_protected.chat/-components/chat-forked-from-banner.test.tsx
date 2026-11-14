@@ -42,6 +42,7 @@ describe("chat forked-from banner", () => {
   test("links a global source at the top-level chat path", () => {
     const html = render({
       threadId: "thread-parent",
+      messageId: "message-parent",
       title: "Lease renewal",
       type: "parent",
       workspaceId: null,
@@ -57,6 +58,7 @@ describe("chat forked-from banner", () => {
   test("links a matter-scoped source under its matter", () => {
     const html = render({
       threadId: "thread-parent",
+      messageId: "message-parent",
       title: "Lease renewal",
       type: "parent",
       workspaceId: "matter-1",
@@ -71,6 +73,7 @@ describe("chat forked-from banner", () => {
     const html = render(
       {
         threadId: "thread-parent",
+        messageId: "message-parent",
         title: CHAT_THREAD_PLACEHOLDER_TITLE,
         type: "parent",
         workspaceId: null,

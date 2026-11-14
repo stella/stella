@@ -133,10 +133,7 @@ import {
 import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
-import {
-  LocalRunStepOutputDetails,
-  localRunStepOutputKindOf,
-} from "@/components/chat/local-run-step-output";
+import { localRunSubagentConversation } from "@/components/chat/local-run-step-output";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
@@ -2311,6 +2308,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          threadId={threadRef?.threadId}
         />
       );
     }
@@ -2417,6 +2415,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          threadId={threadRef?.threadId}
         />
       );
     }
@@ -2453,14 +2452,11 @@ const AssistantMessageParts = ({
           );
           return (
             <LocalRunSubagentGroup
-              conversation={
-                localRunStepOutputKindOf(subagent.part) === null ? null : (
-                  <LocalRunStepOutputDetails
-                    activeOrganizationId={activeOrganizationId}
-                    part={subagent.part}
-                  />
-                )
-              }
+              conversation={localRunSubagentConversation({
+                activeOrganizationId,
+                part: subagent.part,
+                threadId: threadRef?.threadId,
+              })}
               key={subagent.part.id}
               part={subagent.part}
               rows={steps

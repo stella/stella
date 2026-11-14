@@ -91,6 +91,8 @@ export type ForkProvenance =
   | { type: "parent-unavailable" }
   | {
       threadId: string;
+      /** The parent's message the fork was made up to. */
+      messageId: string;
       title: string;
       type: "parent";
       workspaceId: string | null;

@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
+import {
+  type ChatLocalRunStepContent,
+  chatLocalRunStepContentWindow,
+} from "@stll/api-contract/chat-local-run-step-content";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -9,50 +12,108 @@ import {
   diffLines,
   diffLineTone,
   foldLocalRunStepOutput,
-  isLocalRunStepOutputCut,
   LOCAL_RUN_STEP_OUTPUT_UNREAD,
   localRunConversationEntries,
-  localRunStepImageView,
-  type LocalRunStepOutputEvent,
   localRunStepOutputStaleTime,
 } from "./local-run-step-output.logic";
 
-const fold = (events: LocalRunStepOutputEvent[]) => {
+const fold = (answers: readonly ChatLocalRunStepContent[]) => {
   let view = LOCAL_RUN_STEP_OUTPUT_UNREAD;
-  for (const event of events) {
-    view = foldLocalRunStepOutput(view, event);
+  for (const answer of answers) {
+    view = foldLocalRunStepOutput(view, answer);
   }
   return view;
 };
 
-describe("a step's output as its row shows it", () => {
-  test("text arrives in order after the size, and counts the bytes kept", () => {
-    expect(
-      fold([
-        { type: "started", totalBytes: 9 },
-        { type: "text", text: "zsh: ", bytes: 5 },
-        { type: "text", text: "nope", bytes: 4 },
-      ]),
-    ).toEqual({
-      status: "shown",
-      text: "zsh: nope",
-      keptBytes: 9,
-      totalBytes: 9,
+/** The windows the API answers for `text`, each read from the last one's end. */
+const windowsOf = (text: string, limit: number, totalBytes: number) => {
+  const bytes = new TextEncoder().encode(text);
+  const answers: ChatLocalRunStepContent[] = [];
+  let start: number | null = 0;
+  while (start !== null) {
+    const window = chatLocalRunStepContentWindow(bytes, start, limit);
+    answers.push({
+      state: "stored",
+      kind: "command",
+      totalBytes,
+      storedBytes: bytes.byteLength,
+      start: window.start,
+      text: new TextDecoder().decode(bytes.subarray(window.start, window.end)),
+      nextStart: window.nextStart,
     });
-  });
+    start = window.nextStart;
+  }
+  return answers;
+};
 
-  test("a run on another computer or a step with nothing kept says so", () => {
-    expect(fold([{ type: "elsewhere" }])).toEqual({ status: "elsewhere" });
-    expect(fold([{ type: "not-kept" }])).toEqual({ status: "not-kept" });
-  });
-
-  test("only output past the cap reads as cut", () => {
-    expect(isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text)).toBe(
-      false,
+describe("a step's content as its row shows it", () => {
+  test("windows read in order rejoin to the stored text, however small", () => {
+    assertProperty(
+      "web step content windows rejoin to the stored text",
+      fc.property(
+        // A window as short as one byte up to the whole text.
+        fc.string({ unit: "grapheme" }).chain((text) =>
+          fc.tuple(
+            fc.constant(text),
+            fc.integer({
+              min: 1,
+              max: Math.max(1, new TextEncoder().encode(text).byteLength),
+            }),
+          ),
+        ),
+        ([text, limit]) => {
+          const bytes = new TextEncoder().encode(text).byteLength;
+          const view = fold(windowsOf(text, limit, bytes + 7));
+          expect(view).toEqual({
+            status: "text",
+            kind: "command",
+            text,
+            readBytes: bytes,
+            storedBytes: bytes,
+            totalBytes: bytes + 7,
+          });
+          expect(localRunStepOutputStaleTime(view)).toBe(
+            Number.POSITIVE_INFINITY,
+          );
+        },
+      ),
     );
+  });
+
+  test("a read cut short holds what arrived and is read again", () => {
+    const [first] = windowsOf("zsh: no such file", 5, 17);
+    const view = fold(first === undefined ? [] : [first]);
+    expect(view).toMatchObject({ status: "text", text: "zsh: ", readBytes: 5 });
+    expect(localRunStepOutputStaleTime(view)).toBe(0);
+    expect(localRunStepOutputStaleTime(undefined)).toBe(0);
+    expect(localRunStepOutputStaleTime(LOCAL_RUN_STEP_OUTPUT_UNREAD)).toBe(0);
+  });
+
+  test("a step still arriving or not yet copied is read again; a settled one holds", () => {
+    for (const content of [
+      { state: "arriving" },
+      { state: "not_copied" },
+    ] as const) {
+      const view = fold([content]);
+      expect(view).toEqual({ status: "answered", content });
+      expect(localRunStepOutputStaleTime(view)).toBe(0);
+    }
+    for (const content of [
+      { state: "not_stored" },
+      { state: "run_budget_reached", kind: "diff", totalBytes: 40 },
+      { state: "too_large", kind: "image", totalBytes: 12_000_000 },
+    ] as const) {
+      expect(localRunStepOutputStaleTime(fold([content]))).toBe(
+        Number.POSITIVE_INFINITY,
+      );
+    }
+  });
+
+  test("a later answer that is no window of the text read replaces it", () => {
+    const [first] = windowsOf("partial output", 4, 14);
     expect(
-      isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text + 1),
-    ).toBe(true);
+      fold([...(first === undefined ? [] : [first]), { state: "not_stored" }]),
+    ).toEqual({ status: "answered", content: { state: "not_stored" } });
   });
 
   test("a diff's file headers read as headers, not as changed lines", () => {
@@ -67,19 +128,6 @@ describe("a step's output as its row shows it", () => {
       ].map(diffLineTone),
     ).toEqual(["file", "file", "hunk", "removed", "added", "context"]);
   });
-});
-
-test("an output found elsewhere is read again; one the desktop answered holds", () => {
-  expect(localRunStepOutputStaleTime({ status: "elsewhere" })).toBe(0);
-  for (const answered of [
-    { status: "not-kept" },
-    { status: "shown", text: "ok", keptBytes: 2, totalBytes: 2 },
-  ] as const) {
-    expect(localRunStepOutputStaleTime(answered)).toBe(
-      Number.POSITIVE_INFINITY,
-    );
-  }
-  expect(localRunStepOutputStaleTime(undefined)).toBe(Number.POSITIVE_INFINITY);
 });
 
 test("a long diff shows its first lines toned and the rest as one block", () => {
@@ -155,110 +203,5 @@ describe("a subagent's conversation as its group shows it", () => {
     for (const [said, key] of keys(first)) {
       expect(later.get(said)).toBe(key);
     }
-  });
-});
-
-describe("an image a step viewed, as its row shows it", () => {
-  const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  /** The most bytes generated after the signature, and chunk edges among them. */
-  const GENERATED_BYTES = 200;
-  const GENERATED_EDGES = 4;
-
-  test("is shown as the kind its bytes name, whole, however it arrived", () => {
-    assertProperty(
-      "is shown as the kind its bytes name, whole, however it arrived",
-      fc.property(
-        fc.uint8Array({ maxLength: GENERATED_BYTES }),
-        fc.array(fc.nat(), { maxLength: GENERATED_EDGES }),
-        (rest, cuts) => {
-          const bytes = new Uint8Array([...PNG, ...rest]);
-          // The same bytes, split into chunks at arbitrary points.
-          const edges = [
-            0,
-            ...cuts.map((cut) => cut % bytes.length).toSorted((a, b) => a - b),
-            bytes.length,
-          ];
-          const chunks = edges
-            .slice(1)
-            .map((end, index) => bytes.subarray(edges[index], end));
-          const view = localRunStepImageView({
-            chunks,
-            totalBytes: bytes.length,
-          });
-          expect(view).toEqual({
-            status: "shown",
-            type: "image/png",
-            src: `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`,
-          });
-        },
-      ),
-    );
-  });
-
-  test("bytes that are no image are never given a form, whatever they claim to be", () => {
-    const text = (value: string) => new TextEncoder().encode(value);
-    for (const other of [
-      text("<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>"),
-      text("<!doctype html><script>alert(1)</script>"),
-      text('{"role":"prompt","text":"x"}'),
-      new Uint8Array(),
-    ]) {
-      expect(
-        localRunStepImageView({ chunks: [other], totalBytes: other.length }),
-      ).toEqual({ status: "not-image" });
-    }
-  });
-
-  test("an image past what the computer keeps says how large it is and shows nothing", () => {
-    const cap = CHAT_LOCAL_RUN_STEP_MAX_BYTES.image;
-    const totalBytes = cap + 1;
-    // The computer kept only its size.
-    expect(localRunStepImageView({ chunks: [], totalBytes })).toEqual({
-      status: "too-large",
-      totalBytes,
-    });
-    // More than the cap is never shown, even if a desktop sent it.
-    const oversized = new Uint8Array(cap + 1);
-    oversized.set(PNG);
-    expect(
-      localRunStepImageView({ chunks: [oversized], totalBytes: cap }),
-    ).toEqual({ status: "not-image" });
-  });
-
-  test("an image at its cap is shown whole, past the most a text keeps", () => {
-    const cap = CHAT_LOCAL_RUN_STEP_MAX_BYTES.image;
-    expect(cap).toBeGreaterThan(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text);
-    const whole = new Uint8Array(cap);
-    whole.set(PNG);
-    // As it arrives: in chunks.
-    const half = cap / 2;
-    const view = localRunStepImageView({
-      chunks: [whole.subarray(0, half), whole.subarray(half)],
-      totalBytes: cap,
-    });
-    expect(view.status).toBe("shown");
-    if (view.status !== "shown") {
-      return;
-    }
-    expect(view.type).toBe("image/png");
-    const data = view.src.slice("data:image/png;base64,".length);
-    expect(Buffer.compare(Buffer.from(data, "base64"), whole)).toBe(0);
-  });
-
-  test("a read cut short shows no image and is read again", () => {
-    const whole = new Uint8Array([...PNG, 1, 2, 3, 4]);
-    const view = localRunStepImageView({
-      chunks: [whole.subarray(0, PNG.length + 1)],
-      totalBytes: whole.length,
-    });
-    expect(view).toEqual({ status: "incomplete" });
-    expect(localRunStepOutputStaleTime(view)).toBe(0);
-  });
-
-  test("an image found elsewhere is read again; one the desktop answered holds", () => {
-    expect(localRunStepOutputStaleTime({ status: "elsewhere" })).toBe(0);
-    expect(
-      localRunStepOutputStaleTime({ status: "too-large", totalBytes: 1 }),
-    ).toBe(Number.POSITIVE_INFINITY);
   });
 });

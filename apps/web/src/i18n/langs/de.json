@@ -2348,17 +2348,18 @@
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
       "localOutput": {
+        "arriving": "Wird noch vom Computer übertragen, auf dem der Schritt lief",
         "conversation": "Unterhaltung des Subagenten",
         "conversationPrompt": "Aufgabe",
         "conversationReport": "Bericht",
+        "copyToFork": "In diesen Chat kopieren",
         "cut": "Die ersten {kept} von {total} werden angezeigt",
         "diff": "Dateiänderungen",
-        "elsewhere": "Auf dem Computer öffnen, auf dem der Schritt lief",
         "empty": "Keine Ausgabe",
-        "failed": "Die stella-Desktop-App auf diesem Computer konnte dies nicht anzeigen.",
-        "imageTooLarge": "Dieses Bild ist {total} groß. Bilder über {kept} werden auf diesem Computer nicht gespeichert, daher kann es hier nicht angezeigt werden.",
-        "notKept": "Von diesem Schritt ist auf diesem Computer nichts gespeichert",
-        "reading": "Wird von diesem Computer gelesen"
+        "imageTooLargeToStore": "Dieses Bild ist {total} groß. Bilder über {kept} werden nicht gespeichert, daher kann es nicht angezeigt werden.",
+        "notCopied": "Noch nicht in diesen Chat kopiert",
+        "notStored": "Von diesem Schritt wurde nichts gespeichert",
+        "runBudgetReached": "Nicht gespeichert: Dieser Lauf hatte bereits so viel gespeichert, wie ein Lauf darf"
       },
       "output": "Ausgabe",
       "patternInPath": "{pattern} unter {path}",
