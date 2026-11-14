@@ -3,6 +3,11 @@
 //! cut, so this computer's model answers one request at a time and stella AI
 //! gets one chunk at a time, and recording never waits for either.
 //!
+//! This computer transcribes each stretch as it is cut. stella AI admits a
+//! set number of requests a minute, so its stretches ride together: a request
+//! goes out once `UPLOAD_MILLIS` of audio waits, with every stretch cut by
+//! then, and the rest goes when recording stops.
+//!
 //! The texts are joined only once recording stops, so nothing is typed
 //! before then. A stretch stella AI cannot transcribe sends the whole
 //! dictation to this computer, as a failed recording always did: the
@@ -18,7 +23,7 @@
 
 use std::{
   collections::BTreeMap,
-  io,
+  io, iter,
   sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -29,9 +34,16 @@ use std::{
 
 use crate::{
   dictation::Failure,
-  dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, resample},
+  dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, resample, samples_in},
   dictation_cloud::{self, Attempt, Destination},
 };
+
+/// The least audio one request to stella AI carries while recording goes on.
+/// The server admits 30 transcription requests a minute for one person, and a
+/// request for every one-second stretch would spend them within a single
+/// dictation. Twelve a minute leaves room for the last request of each
+/// dictation and for dictation elsewhere on the same account.
+const UPLOAD_MILLIS: usize = 5_000;
 
 /// What turns one stretch of 16 kHz audio into text, or `None` when it
 /// cannot.
@@ -70,8 +82,11 @@ pub struct Transcription<T> {
   local_installed: bool,
   attempt: Attempt,
   texts: Transcripts,
-  /// Stretches stella AI answered, kept while this computer may still have
-  /// to transcribe the whole dictation.
+  /// Stretches not yet sent to stella AI, as one piece of audio at the place
+  /// of the first.
+  waiting: Option<(usize, Vec<f32>)>,
+  /// Audio stella AI answered, kept while this computer may still have to
+  /// transcribe the whole dictation.
   kept: Vec<(usize, Vec<f32>)>,
   failure: Option<Failure>,
 }
@@ -88,6 +103,7 @@ impl<T: Transcribe> Transcription<T> {
       local_installed,
       attempt,
       texts: Transcripts::default(),
+      waiting: None,
       kept: Vec::new(),
       failure: None,
     }
@@ -98,28 +114,53 @@ impl<T: Transcribe> Transcription<T> {
     self.failure.is_none()
   }
 
-  /// Transcribes stretch `index`. Silent stretches are skipped; after a
+  /// Takes stretch `index`: this computer transcribes it at once, stella AI
+  /// gets it with its next request. Silent stretches are skipped; after a
   /// failure nothing more is transcribed.
   pub fn add(&mut self, index: usize, samples: Vec<f32>) {
     if !self.wants_audio() || !holds_speech(&samples) {
       return;
     }
     match self.attempt {
-      Attempt::Cloud => match self.transcriber.cloud(&samples) {
-        Some(text) => {
-          self.texts.insert(index, &text);
-          if self.local_installed {
-            self.kept.push((index, samples));
-          }
-        }
-        None => self.fall_back(index, samples),
+      Attempt::Cloud => match self.waiting.as_mut() {
+        Some((_, waiting)) => waiting.extend_from_slice(&samples),
+        None => self.waiting = Some((index, samples)),
       },
       Attempt::Local => self.local(index, &samples),
     }
   }
 
+  /// Sends stella AI the stretches that wait, once they are worth a request
+  /// while recording goes on.
+  pub fn upload_due(&mut self) {
+    let due = samples_in(UPLOAD_MILLIS, MODEL_SAMPLE_RATE);
+    if self
+      .waiting
+      .as_ref()
+      .is_some_and(|(_, waiting)| waiting.len() >= due)
+    {
+      self.upload();
+    }
+  }
+
+  /// Sends stella AI every stretch that waits, as one piece of audio.
+  fn upload(&mut self) {
+    let Some((index, samples)) = self.waiting.take() else {
+      return;
+    };
+    match self.transcriber.cloud(&samples) {
+      Some(text) => {
+        self.texts.insert(index, &text);
+        if self.local_installed {
+          self.kept.push((index, samples));
+        }
+      }
+      None => self.fall_back(index, samples),
+    }
+  }
+
   /// stella AI failed: this computer transcribes the whole dictation, the
-  /// stretches already answered included, or the dictation fails.
+  /// audio already answered included, or the dictation fails.
   fn fall_back(&mut self, index: usize, samples: Vec<f32>) {
     if !self.local_installed {
       self.fail();
@@ -149,6 +190,7 @@ impl<T: Transcribe> Transcription<T> {
       self.local_installed,
     ));
     self.texts = Transcripts::default();
+    self.waiting = None;
     self.kept = Vec::new();
   }
 
@@ -158,14 +200,20 @@ impl<T: Transcribe> Transcription<T> {
     self.kept.iter().map(|(_, samples)| samples.len()).sum()
   }
 
-  /// The joined text, or the failure the dictation reports, and the
-  /// transcriber back.
-  pub fn finish(self) -> (Result<String, Failure>, T) {
+  /// Recording stopped: sends stella AI what still waits, then the joined
+  /// text, or the failure the dictation reports, and the transcriber back.
+  pub fn finish(mut self) -> (Result<String, Failure>, T) {
+    self.upload();
     let result = match self.failure {
       Some(failure) => Err(failure),
       None => Ok(self.texts.joined()),
     };
     (result, self.transcriber)
+  }
+
+  /// The transcriber back without another request: what waits is dropped.
+  pub fn discard(self) -> T {
+    self.transcriber
   }
 }
 
@@ -199,18 +247,30 @@ impl<T: Transcribe + Send + 'static> Live<T> {
     let thread = thread::Builder::new()
       .name("dictation-transcription".to_string())
       .spawn(move || {
-        for (index, stretch) in received {
-          if flag.load(Ordering::SeqCst) {
+        let discarded = || flag.load(Ordering::SeqCst);
+        'recording: while let Ok(first) = received.recv() {
+          // Every stretch cut while the last request was out is taken with
+          // this one, so stella AI gets them in one request.
+          for (index, stretch) in iter::once(first).chain(received.try_iter()) {
+            if discarded() {
+              break 'recording;
+            }
+            if transcription.wants_audio() {
+              let samples = resample(&stretch, rate, MODEL_SAMPLE_RATE);
+              drop(stretch);
+              transcription.add(index, samples);
+            }
+          }
+          if discarded() {
             break;
           }
-          if transcription.wants_audio() {
-            let samples = resample(&stretch, rate, MODEL_SAMPLE_RATE);
-            drop(stretch);
-            transcription.add(index, samples);
-          }
+          transcription.upload_due();
+        }
+        if discarded() {
+          return (Ended::Cancelled, transcription.discard());
         }
         let (result, transcriber) = transcription.finish();
-        let ended = if flag.load(Ordering::SeqCst) {
+        let ended = if discarded() {
           Ended::Cancelled
         } else {
           match result {
@@ -258,58 +318,104 @@ mod tests {
   use super::*;
 
   const SECOND: usize = MODEL_SAMPLE_RATE as usize;
+  /// The audio that is worth a request to stella AI.
+  const UPLOAD: usize = UPLOAD_MILLIS / 1_000 * SECOND;
 
-  /// A stretch of speech whose first sample names it.
-  fn stretch(name: usize) -> Vec<f32> {
-    let mut samples = vec![0.3; SECOND];
+  /// Speech of `length` samples whose first sample names it.
+  fn speech(name: usize, length: usize) -> Vec<f32> {
+    let mut samples = vec![0.3; length];
     samples[0] = name as f32 / 100.0;
     samples
+  }
+
+  /// A one-second stretch.
+  fn stretch(name: usize) -> Vec<f32> {
+    speech(name, SECOND)
+  }
+
+  /// A stretch that is worth a request to stella AI by itself.
+  fn long(name: usize) -> Vec<f32> {
+    speech(name, UPLOAD)
   }
 
   fn name(samples: &[f32]) -> usize {
     (samples[0] * 100.0).round() as usize
   }
 
-  /// Answers by the stretch's name; `None` for the names listed as failing.
+  /// Answers by the name of the audio's first stretch; `None` for the names
+  /// listed as failing.
   #[derive(Default)]
   struct Fake {
     cloud_fails: Vec<usize>,
     local_fails: Vec<usize>,
     cloud_calls: Vec<usize>,
+    /// How much audio each call to stella AI carried.
+    cloud_lengths: Vec<usize>,
     local_calls: Vec<usize>,
-    /// Signals each local call, then waits for leave to answer.
+    /// Signals each call, then waits for leave to answer.
     gate: Option<(Sender<usize>, Receiver<()>)>,
+  }
+
+  impl Fake {
+    fn pass(&self, name: usize) {
+      if let Some((started, leave)) = &self.gate {
+        started.send(name).unwrap();
+        leave.recv().unwrap();
+      }
+    }
   }
 
   impl Transcribe for Fake {
     fn cloud(&mut self, samples: &[f32]) -> Option<String> {
       let name = name(samples);
       self.cloud_calls.push(name);
+      self.cloud_lengths.push(samples.len());
+      self.pass(name);
       (!self.cloud_fails.contains(&name)).then(|| format!("cloud{name}"))
     }
 
     fn local(&mut self, samples: &[f32]) -> Option<String> {
       let name = name(samples);
       self.local_calls.push(name);
-      if let Some((started, leave)) = &self.gate {
-        started.send(name).unwrap();
-        leave.recv().unwrap();
-      }
+      self.pass(name);
       (!self.local_fails.contains(&name)).then(|| format!("local{name}"))
     }
   }
 
+  /// Transcribes `count` stretches made by `stretch` and named from one, the
+  /// way the background thread does when none of them had to queue.
+  fn run_each(
+    fake: Fake,
+    destination: Destination,
+    installed: bool,
+    count: usize,
+    stretch: fn(usize) -> Vec<f32>,
+  ) -> (Result<String, Failure>, Fake) {
+    let mut transcription = Transcription::new(fake, destination, installed);
+    for index in 0..count {
+      transcription.add(index, stretch(index + 1));
+      transcription.upload_due();
+    }
+    transcription.finish()
+  }
+
+  /// One-second stretches.
   fn run(
     fake: Fake,
     destination: Destination,
     installed: bool,
     count: usize,
   ) -> (Result<String, Failure>, Fake) {
-    let mut transcription = Transcription::new(fake, destination, installed);
-    for index in 0..count {
-      transcription.add(index, stretch(index + 1));
-    }
-    transcription.finish()
+    run_each(fake, destination, installed, count, stretch)
+  }
+
+  /// Stretches that each go to stella AI as a request of their own.
+  fn run_long(
+    fake: Fake,
+    installed: bool,
+    count: usize,
+  ) -> (Result<String, Failure>, Fake) {
+    run_each(fake, Destination::Cloud, installed, count, long)
   }
 
   #[test]
@@ -357,9 +463,62 @@ mod tests {
 
   #[test]
   fn stella_ai_answers_without_this_computer() {
-    let (result, fake) = run(Fake::default(), Destination::Cloud, true, 3);
+    let (result, fake) = run_long(Fake::default(), true, 3);
     assert_eq!(result, Ok("cloud1 cloud2 cloud3".to_string()));
+    assert_eq!(fake.cloud_lengths, vec![UPLOAD; 3]);
     assert!(fake.local_calls.is_empty());
+  }
+
+  #[test]
+  fn short_stretches_wait_and_go_to_stella_ai_in_one_request() {
+    let mut transcription =
+      Transcription::new(Fake::default(), Destination::Cloud, true);
+    for index in 0..3 {
+      transcription.add(index, stretch(index + 1));
+      transcription.upload_due();
+    }
+    // Three seconds are not worth a request while recording goes on.
+    assert!(transcription.transcriber.cloud_calls.is_empty());
+    let (result, fake) = transcription.finish();
+    assert_eq!(result, Ok("cloud1".to_string()));
+    assert_eq!(fake.cloud_lengths, vec![3 * SECOND]);
+  }
+
+  #[test]
+  fn a_request_goes_to_stella_ai_once_enough_audio_waits() {
+    let (result, fake) = run(Fake::default(), Destination::Cloud, true, 12);
+    assert_eq!(result, Ok("cloud1 cloud6 cloud11".to_string()));
+    assert_eq!(fake.cloud_lengths, vec![UPLOAD, UPLOAD, 2 * SECOND]);
+  }
+
+  #[test]
+  fn a_minute_of_one_second_stretches_is_twelve_requests() {
+    let (_, fake) = run(Fake::default(), Destination::Cloud, false, 60);
+    assert_eq!(fake.cloud_calls.len(), 12);
+    assert_eq!(fake.cloud_lengths.iter().sum::<usize>(), 60 * SECOND);
+  }
+
+  #[test]
+  fn every_stretch_already_cut_goes_in_one_request() {
+    let mut transcription =
+      Transcription::new(Fake::default(), Destination::Cloud, false);
+    // Four long stretches were cut while an earlier request was out.
+    for index in 0..4 {
+      transcription.add(index, long(index + 1));
+    }
+    transcription.upload_due();
+    let (result, fake) = transcription.finish();
+    assert_eq!(result, Ok("cloud1".to_string()));
+    assert_eq!(fake.cloud_lengths, vec![4 * UPLOAD]);
+  }
+
+  #[test]
+  fn a_discarded_transcription_sends_nothing_that_waited() {
+    let mut transcription =
+      Transcription::new(Fake::default(), Destination::Cloud, true);
+    transcription.add(0, stretch(1));
+    transcription.upload_due();
+    assert!(transcription.discard().cloud_calls.is_empty());
   }
 
   #[test]
@@ -368,7 +527,7 @@ mod tests {
       cloud_fails: vec![3],
       ..Fake::default()
     };
-    let (result, fake) = run(fake, Destination::Cloud, true, 5);
+    let (result, fake) = run_long(fake, true, 5);
     // Every stretch, the ones stella AI answered included, comes from this
     // computer, and nothing after the failure goes to stella AI.
     assert_eq!(result, Ok("local1 local2 local3 local4 local5".to_string()));
@@ -377,12 +536,31 @@ mod tests {
   }
 
   #[test]
+  fn a_failed_last_request_falls_back_with_what_waited() {
+    let fake = Fake {
+      cloud_fails: vec![2],
+      ..Fake::default()
+    };
+    let mut transcription = Transcription::new(fake, Destination::Cloud, true);
+    transcription.add(0, long(1));
+    transcription.upload_due();
+    // Two short stretches wait until recording stops, then stella AI fails.
+    transcription.add(1, stretch(2));
+    transcription.add(2, stretch(3));
+    transcription.upload_due();
+    let (result, fake) = transcription.finish();
+    assert_eq!(result, Ok("local1 local2".to_string()));
+    assert_eq!(fake.cloud_calls, vec![1, 2]);
+    assert_eq!(fake.local_calls, vec![1, 2]);
+  }
+
+  #[test]
   fn a_stella_ai_failure_without_the_model_fails_the_dictation() {
     let fake = Fake {
       cloud_fails: vec![2],
       ..Fake::default()
     };
-    let (result, fake) = run(fake, Destination::Cloud, false, 4);
+    let (result, fake) = run_long(fake, false, 4);
     assert_eq!(result, Err(Failure::CloudTranscription));
     assert_eq!(fake.cloud_calls, vec![1, 2]);
     assert!(fake.local_calls.is_empty());
@@ -395,7 +573,7 @@ mod tests {
       local_fails: vec![1],
       ..Fake::default()
     };
-    let (result, fake) = run(fake, Destination::Cloud, true, 3);
+    let (result, fake) = run_long(fake, true, 3);
     assert_eq!(result, Err(Failure::CloudTranscription));
     assert_eq!(fake.local_calls, vec![1]);
   }
@@ -417,20 +595,25 @@ mod tests {
     local.add(0, stretch(1));
     assert_eq!(local.kept_samples(), 0);
     let mut unbacked = Transcription::new(Fake::default(), Destination::Cloud, false);
-    unbacked.add(0, stretch(1));
+    unbacked.add(0, long(1));
+    unbacked.upload_due();
     assert_eq!(unbacked.kept_samples(), 0);
     let fake = Fake {
       cloud_fails: vec![3],
       ..Fake::default()
     };
     let mut backed = Transcription::new(fake, Destination::Cloud, true);
-    backed.add(0, stretch(1));
-    backed.add(1, stretch(2));
-    assert_eq!(backed.kept_samples(), 2 * SECOND);
+    backed.add(0, long(1));
+    backed.upload_due();
+    backed.add(1, long(2));
+    backed.upload_due();
+    assert_eq!(backed.kept_samples(), 2 * UPLOAD);
     // Once this computer has redone them, nothing is held any more.
-    backed.add(2, stretch(3));
+    backed.add(2, long(3));
+    backed.upload_due();
     assert_eq!(backed.kept_samples(), 0);
-    backed.add(3, stretch(4));
+    backed.add(3, long(4));
+    backed.upload_due();
     assert_eq!(backed.kept_samples(), 0);
   }
 
@@ -488,6 +671,41 @@ mod tests {
     let (ended, fake) = live.finish().unwrap();
     assert_eq!(ended, Ended::Cancelled);
     assert_eq!(fake.local_calls, vec![1]);
+  }
+
+  #[test]
+  fn stretches_cut_during_a_request_go_to_stella_ai_in_the_next_one() {
+    let (started, started_rx) = mpsc::channel();
+    let (leave, leave_rx) = mpsc::channel();
+    let fake = Fake {
+      gate: Some((started, leave_rx)),
+      ..Fake::default()
+    };
+    let transcription = Transcription::new(fake, Destination::Cloud, false);
+    let mut live =
+      Live::start(transcription, MODEL_SAMPLE_RATE, Arc::default()).unwrap();
+    live.send(long(1));
+    // Three more stretches are cut while the first request is out.
+    assert_eq!(started_rx.recv().unwrap(), 1);
+    live.send(long(2));
+    live.send(long(3));
+    live.send(stretch(4));
+    leave.send(()).unwrap();
+    assert_eq!(started_rx.recv().unwrap(), 2);
+    leave.send(()).unwrap();
+    let (ended, fake) = live.finish().unwrap();
+    assert_eq!(ended, Ended::Text("cloud1 cloud2".to_string()));
+    assert_eq!(fake.cloud_lengths, vec![UPLOAD, 2 * UPLOAD + SECOND]);
+  }
+
+  #[test]
+  fn cancelling_sends_stella_ai_nothing_that_waited() {
+    let transcription = Transcription::new(Fake::default(), Destination::Cloud, true);
+    let mut live =
+      Live::start(transcription, MODEL_SAMPLE_RATE, Arc::default()).unwrap();
+    live.send(stretch(1));
+    let fake = live.cancel().unwrap();
+    assert!(fake.cloud_calls.is_empty());
   }
 
   #[test]
