@@ -23,6 +23,7 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockCorpusProjectionStatesByAppliedRevision } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
   CorpusIndexClient,
@@ -38,9 +39,9 @@ import {
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  corpusIndexUnknownAppendBarrierAt,
   countCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   lockCorpusIndexProjectionIntentMutationsTx,
   lockCorpusIndexProjectionMutationsTx,
@@ -910,6 +911,7 @@ export const settleCorpusProjectionCleanupTx = async (
   { proof, testNow }: SettleCorpusProjectionCleanupOptions,
 ): Promise<number> => {
   await lockCorpusIndexProjectionIntentMutationsTx(tx, proof.intentIds);
+  await lockCorpusProjectionStatesByAppliedRevision(tx, proof.intentIds);
   await lockCorpusProjectionIntentsById(tx, proof.intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
@@ -1570,8 +1572,8 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
       }
       return {
         id: row.id,
-        barrier: corpusIndexUnknownAppendBarrierAt(
-          row.appendStartedAt,
+        barrier: corpusProjectionAppendPublishBarrier(
+          { type: "unknown", appendStartedAt: row.appendStartedAt },
           manifest,
         ),
       };

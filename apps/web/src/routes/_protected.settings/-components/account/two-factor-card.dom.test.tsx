@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/account/security",
@@ -85,7 +86,7 @@ const mount = (emailAvailable: boolean) => {
     localPassword: false,
     reviewPasswordSignIn: false,
     bootstrap: false,
-    social: { google: false, microsoft: false },
+    social: { google: false, microsoft: false, apple: false },
     transactionalEmail: emailAvailable,
   });
   render(

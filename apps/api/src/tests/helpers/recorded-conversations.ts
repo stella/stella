@@ -1,7 +1,7 @@
 import { StreamProcessor } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   existsSync,
   readdirSync,
@@ -10,6 +10,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -75,7 +77,6 @@ export const registerRecordedConversationSuite = (
   let ids: TestIds;
   let safeDb: SafeDb;
   let scopedDb: ScopedDb;
-  const seededThreadIds: SafeId<"chatThread">[] = [];
 
   beforeAll(async () => {
     const fixture = await getRlsFixture();
@@ -119,11 +120,6 @@ export const registerRecordedConversationSuite = (
   });
 
   afterAll(async () => {
-    if (seededThreadIds.length > 0) {
-      await testDb
-        .delete(chatThreads)
-        .where(inArray(chatThreads.id, seededThreadIds));
-    }
     await releaseRlsFixture();
   });
 
@@ -343,12 +339,6 @@ return { id: document.entityId, name: document.name };`;
         import.meta.url,
       ).href
     );
-    const draft: unknown = await import(
-      new URL(
-        "../../../../web/src/components/chat/create-document-draft.logic.ts",
-        import.meta.url,
-      ).href
-    );
     const { name, source } = asTestRaw<{ name: string; source: string }>(
       JSON.parse(DRAFT_ARGUMENTS),
     );
@@ -360,9 +350,6 @@ return { id: document.entityId, name: document.name };`;
         | { fixes: unknown[]; status: "ok"; warnings: unknown[] }
         | { status: "error" };
     }>(compiler);
-    const { buildCreateDocumentDownloadFileName } = asTestRaw<{
-      buildCreateDocumentDownloadFileName: (name: string) => string;
-    }>(draft);
     const compiled = compileCreateDocumentSourceToDocument(source, {
       titleFallback: name,
     });
@@ -723,34 +710,37 @@ return { id: document.entityId, name: document.name };`;
   ): Promise<{ failure: unknown; recording: RecordedConversation }> => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
     const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(threadId);
-    const exchanges = harness.recordThread(threadId);
-    const initialPage = await harness.readPage(threadId);
-    const client = await harness.openWebClient(threadId);
-    const recorder: Recorder = {
-      client,
-      exchanges,
-      harness,
-      steps: [],
-      threadId,
-    };
-    let failure: unknown;
     try {
-      await run(recorder);
-      // The recording keeps what the page saw; which target each stored ref
-      // names in each request is only visible to the server, so it is checked
-      // here, on every scenario.
-      harness.expectStableRefs(threadId);
-    } catch (error) {
-      failure = error;
+      const exchanges = harness.recordThread(threadId);
+      const initialPage = await harness.readPage(threadId);
+      const client = await harness.openWebClient(threadId);
+      const recorder: Recorder = {
+        client,
+        exchanges,
+        harness,
+        steps: [],
+        threadId,
+      };
+      let failure: unknown;
+      try {
+        await run(recorder);
+        // The recording keeps what the page saw; which target each stored ref
+        // names in each request is only visible to the server, so it is checked
+        // here, on every scenario.
+        harness.expectStableRefs(threadId);
+      } catch (error) {
+        failure = error;
+      } finally {
+        recorder.client.dispose();
+      }
+      return {
+        failure,
+        recording: { initialPage, scenario, steps: recorder.steps, threadId },
+      };
     } finally {
-      recorder.client.dispose();
       await harness.close();
+      await testDb.delete(chatThreads).where(eq(chatThreads.id, threadId));
     }
-    return {
-      failure,
-      recording: { initialPage, scenario, steps: recorder.steps, threadId },
-    };
   };
 
   const checkRecording = async (

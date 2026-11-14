@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
@@ -135,12 +134,12 @@ describe("files a URL import leaves out", () => {
   });
 
   test("a zip package at a URL reports the files it leaves out", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "pack/SKILL.md", SKILL_SOURCE);
-    writeZipEntry(zip, "pack/scripts/helper.ts", "export const helper = true;");
-    writeZipEntry(zip, "pack/references/latin1.txt", NOT_UTF8);
-    writeZipEntry(zip, "pack/notes/todo.md", "Later.");
-    const bytes = await zip.generateAsync({ type: "uint8array" });
+    const zip = new ZipArchive();
+    zip.set("pack/SKILL.md", SKILL_SOURCE);
+    zip.set("pack/scripts/helper.ts", "export const helper = true;");
+    zip.set("pack/references/latin1.txt", NOT_UTF8);
+    zip.set("pack/notes/todo.md", "Later.");
+    const bytes = await zip.generate({ compression: "store" });
 
     const result = await fetchSkillPackageFromUrl(
       "https://skills.example/pack.zip",

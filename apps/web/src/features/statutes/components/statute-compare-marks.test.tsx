@@ -9,14 +9,15 @@ import {
   InlineContent,
 } from "@stll/decision-reader/document-ast-text";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import { compareStatuteBlocks } from "@stll/legal-ast/statute-compare";
+import { compareText, markSide } from "@stll/legal-ast/statute-diff-marks";
+import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
 import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
 
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { StatuteBlock } from "@/features/statutes/components/statute-text";
-import { compareStatuteBlocks } from "@/features/statutes/statute-compare";
-import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
-import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
+import { statuteComparisonAdapter } from "@/features/statutes/statute-comparison-adapter";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
@@ -45,7 +46,7 @@ const renderSide = (side: StatuteCompareSide) =>
           block={block}
           key={block.id}
           rangesByPieceId={rangesByPieceId}
-          statuteLists={E_SBIRKA_LIST_SCHEME}
+          statuteAnchors={E_SBIRKA_ANCHORS}
         />
       ))}
     </>,
@@ -122,7 +123,11 @@ describe("compared blocks render as the reader renders them", () => {
     provisionHeading("Price of sold goods"),
     letter("a) the agreed purchase price,"),
   ];
-  const compared = compareStatuteBlocks({ newer, older });
+  const compared = compareStatuteBlocks({
+    newer,
+    older,
+    adapter: statuteComparisonAdapter,
+  });
   if (compared.isErr()) {
     throw compared.error;
   }
@@ -134,7 +139,7 @@ describe("compared blocks render as the reader renders them", () => {
         anchorPresentation="document"
         block={newer[0] ?? provisionHeading("")}
         rangesByPieceId={{}}
-        statuteLists={E_SBIRKA_LIST_SCHEME}
+        statuteAnchors={E_SBIRKA_ANCHORS}
       />,
     );
     const cell = renderSide(headingRow?.after ?? { blocks: [], segments: [] });

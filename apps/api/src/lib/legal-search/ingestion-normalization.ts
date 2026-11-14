@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
@@ -12,6 +12,7 @@ import {
   type DocumentAst,
   withProjectedPlainText,
 } from "@stll/legal-ast/document-ast";
+import { withStableBlockAnchors } from "@stll/legal-ast/stable-block-anchors";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
@@ -25,13 +26,16 @@ import {
   TEXT_FIELD_TYPE,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
+import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
+import type { PreparedCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
@@ -102,10 +106,40 @@ export const decisionCourtExceedsStorage = (
 const DECISION_TYPE_NOISE =
   /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
 
-const normalizeDecisionType = (raw: string | undefined): string | undefined =>
-  raw
-    ? raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
-    : undefined;
+// An address is a column read out of place (a code-list IRI), never a type.
+const URL_SHAPED = /^[a-z][a-z\d+.-]*:\/\//iu;
+
+/**
+ * A decision type as one value every adapter stores the same way: lowercase,
+ * without the republic formula, and a publisher list folded into one field
+ * ("uznesenie,uznesenie") naming each type once. A value shaped like an
+ * address or a docket is no type at all, so none is stored; the adapter keeps
+ * what the publisher stated in metadata.
+ */
+export const normalizeDecisionType = (
+  raw: string | undefined,
+): string | undefined => {
+  if (!raw) {
+    return undefined;
+  }
+  const stated = raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase();
+  const value = [
+    ...new Set(
+      stated
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0),
+    ),
+  ].join(", ");
+  if (
+    value.length === 0 ||
+    URL_SHAPED.test(value) ||
+    isDocketShapedDecisionType(value)
+  ) {
+    return undefined;
+  }
+  return value;
+};
 
 const sanitizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
@@ -265,7 +299,7 @@ export const storedCaseNumberOf = (
 };
 
 const isPreparedDocumentAst = (
-  ast: ReturnType<typeof prepareCorpusAst>["ast"],
+  ast: PreparedCorpusAst["ast"],
 ): ast is DocumentAst => ast !== null && Array.isArray(ast.blocks);
 
 /**
@@ -285,7 +319,7 @@ const isPreparedDocumentAst = (
 export const sanitizeResult = (
   result: RawIngestionResult,
   metadataUrlSchema?: unknown,
-): IngestionResult => {
+): Result<IngestionResult, StoredCorpusValidationError> => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
@@ -324,13 +358,21 @@ export const sanitizeResult = (
   // rewrites inline text (no-break spaces become spaces), which can turn a
   // run into a collapsible one.
   const sanitizedDocumentAst = deepSanitize(result.documentAst);
-  const preparedAst = prepareCorpusAst({
+  const preparedAstResult = prepareCorpusAst({
     ast: sanitizedDocumentAst,
+    fallbackText: result.fulltext,
     parserVersion: result.parserVersion,
   });
+  if (preparedAstResult.isErr()) {
+    return preparedAstResult;
+  }
+  const preparedAst = preparedAstResult.value;
   const readableAst = preparedAst.ast;
+  // Anchors are made stable here, at the one boundary every write and every
+  // replay comparison reads through, so a stored row and a reparse of it are
+  // compared in the same anchors and a replay reaches a fixed point.
   const documentAst = isPreparedDocumentAst(readableAst)
-    ? withProjectedPlainText(readableAst)
+    ? withStableBlockAnchors(withProjectedPlainText(readableAst))
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);
@@ -437,56 +479,58 @@ export const sanitizeResult = (
   const ecli = strip(result.ecli);
   // The write planner checks aggregate index bytes against its actual language group key.
 
-  return plainTextIngestionResult(
-    {
-      ...result,
-      observationDetail,
-      caseNumber,
-      court,
-      caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
-      identifiers,
-      sourceDocumentId,
-      sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
-        (identity): identity is string =>
-          strip(identity) === identity &&
-          isPersistableSourceDocumentId(identity),
-      ),
-      sourceDocumentIdRepairAliases:
-        result.sourceDocumentIdRepairAliases?.filter(
+  return Result.ok(
+    plainTextIngestionResult(
+      {
+        ...result,
+        observationDetail,
+        caseNumber,
+        court,
+        caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
+        identifiers,
+        sourceDocumentId,
+        sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
           (identity): identity is string =>
             strip(identity) === identity &&
             isPersistableSourceDocumentId(identity),
         ),
-      legacySourceUrls: result.legacySourceUrls
-        ?.map((url) => strip(url))
-        .filter((url): url is string => url !== undefined),
-      legacyEcli: strip(result.legacyEcli),
-      legacyCaseNumber: strip(result.legacyCaseNumber),
-      sheetNumber: strip(result.sheetNumber),
-      fulltext: result.fulltext
-        ? collapseSpacedLetters(strip(result.fulltext) ?? "")
-        : undefined,
-      ecli,
-      decisionDate: boundDecisionDate(result.decisionDate),
-      decisionType,
-      sourceUrl: strip(result.sourceUrl),
-      documentUrl: strip(result.documentUrl),
-      metadata,
-      textFields,
-      publisherCitedCases: result.publisherCitedCases?.map((cited) =>
-        stripDangerousChars(cited),
-      ),
-      sections: result.sections?.map((section) => ({
-        ...section,
-        title:
-          section.title === null ? null : stripDangerousChars(section.title),
-        text: collapseSpacedLetters(strip(section.text) ?? ""),
-      })),
-      documentAst,
-      citationScopes:
-        preparedAst.type === "text-only" ? undefined : result.citationScopes,
-      sourceRaw: strip(result.sourceRaw),
-    },
-    metadataUrlSchema,
+        sourceDocumentIdRepairAliases:
+          result.sourceDocumentIdRepairAliases?.filter(
+            (identity): identity is string =>
+              strip(identity) === identity &&
+              isPersistableSourceDocumentId(identity),
+          ),
+        legacySourceUrls: result.legacySourceUrls
+          ?.map((url) => strip(url))
+          .filter((url): url is string => url !== undefined),
+        legacyEcli: strip(result.legacyEcli),
+        legacyCaseNumber: strip(result.legacyCaseNumber),
+        sheetNumber: strip(result.sheetNumber),
+        fulltext: result.fulltext
+          ? collapseSpacedLetters(strip(result.fulltext) ?? "")
+          : undefined,
+        ecli,
+        decisionDate: boundDecisionDate(result.decisionDate),
+        decisionType,
+        sourceUrl: strip(result.sourceUrl),
+        documentUrl: strip(result.documentUrl),
+        metadata,
+        textFields,
+        publisherCitedCases: result.publisherCitedCases?.map((cited) =>
+          stripDangerousChars(cited),
+        ),
+        sections: result.sections?.map((section) => ({
+          ...section,
+          title:
+            section.title === null ? null : stripDangerousChars(section.title),
+          text: collapseSpacedLetters(strip(section.text) ?? ""),
+        })),
+        documentAst,
+        citationScopes:
+          preparedAst.type === "text-only" ? undefined : result.citationScopes,
+        sourceRaw: strip(result.sourceRaw),
+      },
+      metadataUrlSchema,
+    ),
   );
 };

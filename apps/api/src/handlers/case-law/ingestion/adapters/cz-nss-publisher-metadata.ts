@@ -1,6 +1,6 @@
 // parser-output-unchanged: source-fields-shared-contract: Closing inventory migration policies and field audit states leaves parsed decisions unchanged.
-import { load } from "cheerio";
-import type { AnyNode } from "domhandler";
+import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 
 import {
   ownTableRows,

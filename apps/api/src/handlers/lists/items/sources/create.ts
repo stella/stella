@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
+import { spotTargetSchema } from "@stll/api-contract/spot";
 
 import {
   entities,
@@ -17,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 
 const bodySchema = v.object({
@@ -24,17 +26,7 @@ const bodySchema = v.object({
   itemEntityId: resourceIdSchema("entity"),
   sourceEntityId: resourceIdSchema("entity"),
   sourceEntityVersionId: resourceIdSchema("entityVersion"),
-  locator: v.union([
-    v.object({ type: v.literal("document") }),
-    v.object({
-      type: v.literal("docx-block"),
-      blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
-    }),
-    v.object({
-      type: v.literal("pdf-page"),
-      pageNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
-    }),
-  ]),
+  locator: spotTargetSchema,
   quote: v.optional(
     v.nullable(
       v.pipe(v.string(), v.maxLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH)),
@@ -117,6 +109,11 @@ const createItemSource = createSafeHandler(
           createdBy: user.id,
         } satisfies typeof legalListItemSources.$inferInsert;
         await tx.insert(legalListItemSources).values(sourceValues);
+        await writeFactSourceEdges(tx, workspaceId, {
+          type: "fact-sources",
+          sourceIds: [id],
+          producer: { type: "reviewer" },
+        });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,

@@ -4,6 +4,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { SOFT_LAW_READ_SURFACE } from "@/api/lib/legal-search/soft-law-serving";
 import {
   credentialPermissionsForContext,
   roleForDisplay,
@@ -50,17 +51,12 @@ export type ChatRegistryContextDeps = {
    */
   recordAuditEvent?: AuditRecorder | undefined;
   /**
-   * Optional per-workspace status. Chat's `AuthorizedToolWorkspaceIds` is a
-   * bare id list and carries no status; every projected read tool gates
-   * workspace access on the id set alone (`ensureWorkspaceAccess`) and never
-   * consults `accessibleWorkspaceStatusById` (only write tools do, via
-   * `ensureActiveWorkspace` / `getWorkspaceStatus`). So this defaults to
-   * "active" for every authorized workspace: a value that is never read on the
-   * read path. It is accepted here so the write-tool driver (a later step) can
-   * supply real statuses without reshaping this adapter.
+   * The real status of each authorized matter. Required, and never defaulted:
+   * a matter without a status here is refused by every write tool's
+   * `ensureActiveWorkspace` gate, so an archived matter can never read as
+   * active because a caller forgot to pass it.
    */
-  workspaceStatusById?:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 // oxlint-disable-next-line typescript/promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
@@ -72,10 +68,10 @@ const deriveWorkspaceStatusMap = ({
 }: ChatRegistryContextDeps): Map<string, AccessibleWorkspace["status"]> => {
   const statusById = new Map<string, AccessibleWorkspace["status"]>();
   for (const workspaceId of toolWorkspaceIds) {
-    statusById.set(
-      workspaceId,
-      workspaceStatusById?.get(workspaceId) ?? "active",
-    );
+    const status = workspaceStatusById.get(workspaceId);
+    if (status !== undefined) {
+      statusById.set(workspaceId, status);
+    }
   }
   return statusById;
 };
@@ -110,6 +106,7 @@ export const buildMcpContextFromChat = (
       )
     : undefined;
   return {
+    softLawReadSurface: SOFT_LAW_READ_SURFACE.chat,
     featureAccessSnapshot: deps.featureAccessSnapshot,
     ...(deps.testDependencies === undefined
       ? {}

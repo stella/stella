@@ -49,6 +49,10 @@ inputs:
       includes the frontend.
     required: false
     default: ""
+  proof-state-path:
+    description: Local proof state path for the deployment ECS receipt
+    required: false
+    default: ""
   expected-sha:
     description: Expected production commit; permits reusing a completed promotion receipt
     required: false
@@ -89,6 +93,7 @@ runs:
         IMAGE_DIGEST: ${{ inputs.image-digest }}
         WEB_IMAGE_DIGEST: ${{ inputs.web-image-digest }}
         GIT_SHA: ${{ inputs.git-sha }}
+        STAGING_PROOF_STATE_PATH: ${{ inputs.proof-state-path }}
         EXPECTED_SHA: ${{ inputs.expected-sha }}
         STAGING_LEASE_BEFORE_HOURS: ${{ inputs.staging-lease-before-hours }}
         STAGING_LEASE_AFTER_HOURS: ${{ inputs.staging-lease-after-hours }}
@@ -240,23 +245,22 @@ runs:
         fi
 
         dispatch_args=(
-          -f "ref=main"
-          -f "inputs[release_ref]=${RELEASE_REF}"
-          -f "inputs[target_environment]=${TARGET_ENV}"
-          -f "inputs[run_migrations]=${RUN_MIGRATIONS}"
-          -f "inputs[frontend]=${FRONTEND}"
+          "release_ref=${RELEASE_REF}"
+          "target_environment=${TARGET_ENV}"
+          "run_migrations=${RUN_MIGRATIONS}"
+          "frontend=${FRONTEND}"
         )
         # Only sent when set: promote-release.yml rejects git_sha on tagged
         # releases, where a populated value would silently swap the checked-out
         # source for a different commit.
         if [[ -n "$IMAGE_DIGEST" ]]; then
-          dispatch_args+=(-f "inputs[image_digest]=${IMAGE_DIGEST}")
+          dispatch_args+=("image_digest=${IMAGE_DIGEST}")
         fi
         if [[ -n "$WEB_IMAGE_DIGEST" ]]; then
-          dispatch_args+=(-f "inputs[web_image_digest]=${WEB_IMAGE_DIGEST}")
+          dispatch_args+=("web_image_digest=${WEB_IMAGE_DIGEST}")
         fi
         if [[ -n "$GIT_SHA" ]]; then
-          dispatch_args+=(-f "inputs[git_sha]=${GIT_SHA}")
+          dispatch_args+=("git_sha=${GIT_SHA}")
         fi
 
         # Call the dispatches endpoint directly. `gh workflow run` first looks
@@ -264,12 +268,12 @@ runs:
         # the narrowly-scoped App token (permission-actions: write only, no
         # contents/metadata) those implicit lookups can fail silently and kill
         # the step in well under a second with no output. Any failure here
-        # surfaces as a real HTTP error in the log.
+        # surfaces as a real HTTP error in the log. A server error is repeated
+        # only when no run with the expected title appeared.
         if [[ -z "$run_id" ]]; then
           echo "Dispatching ${WORKFLOW_FILE} on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
-          bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method POST \
-            "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
-            "${dispatch_args[@]}"
+          bash "$GITHUB_ACTION_PATH/../../../scripts/gh-dispatch-workflow.sh" \
+            "$INFRA_REPO" "$WORKFLOW_FILE" main "$expected_title" "${dispatch_args[@]}"
 
           # The dispatches endpoint returns 204 with no body, so the run id has
           # to be recovered by listing. Match on exact display_title so
@@ -328,6 +332,19 @@ runs:
           fi
           sleep "$WATCH_POLL_SECONDS"
         done
+
+        if [[ -n "${STAGING_PROOF_STATE_PATH:-}" ]]; then
+          receipt_directory="${STAGING_PROOF_STATE_PATH}.ecs"
+          mkdir -p "$receipt_directory"
+          rm -f "${STAGING_PROOF_STATE_PATH}.ecs.json" "$receipt_directory/receipt.json"
+          if bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" run download "$run_id" \
+            --repo "$INFRA_REPO" --name staging-ecs-readiness --dir "$receipt_directory" \
+            >/dev/null 2>&1 && [[ -f "$receipt_directory/receipt.json" ]]; then
+            cp "$receipt_directory/receipt.json" "${STAGING_PROOF_STATE_PATH}.ecs.json"
+          else
+            echo "::warning::Deployment ECS readiness receipt is unavailable."
+          fi
+        fi
 
         if [[ "$conclusion" == "success" ]]; then
           echo "Promote run completed successfully: ${run_url}"

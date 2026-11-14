@@ -8,7 +8,6 @@ import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_DATE_OUT_OF_BOUNDS,
@@ -26,6 +25,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   STATED_ECLI_IDENTITY,
   type StatedEcliIdentity,
@@ -35,6 +35,7 @@ import {
   observedDocketOf,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** An ECLI's lookup spelling, or undefined when nothing searchable remains. */
@@ -101,8 +102,15 @@ export const observeDecision = ({
   metadataUrlSchema,
   input,
   sourceId,
-}: ObserveDecisionOptions): ObservedDecision => {
-  const observed = sanitizeResult(input, metadataUrlSchema);
+}: ObserveDecisionOptions): Result<
+  ObservedDecision,
+  StoredCorpusValidationError
+> => {
+  const sanitized = sanitizeResult(input, metadataUrlSchema);
+  if (sanitized.isErr()) {
+    return sanitized;
+  }
+  const observed = sanitized.value;
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator
@@ -182,14 +190,14 @@ export const observeDecision = ({
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }
-  return {
+  return Result.ok({
     observed,
     persistedDecisionDate,
     exactSourceIdentityCandidates,
     repairSourceIdentityCandidates,
     sourceIdentityCandidates,
     legacyCaseNumbers,
-  };
+  });
 };
 
 const IDENTITY_COLUMNS = {
@@ -487,8 +495,8 @@ const findExistingDecisionTx = async (
   const repairClaimIsCurrent =
     exactClaimedDecisionId !== undefined ||
     repairClaimedDecisionId === undefined ||
-    (provisionalIdentified?.sourceDocumentId !== null &&
-      provisionalIdentified?.sourceDocumentId !== undefined &&
+    (provisionalIdentified !== undefined &&
+      provisionalIdentified.sourceDocumentId !== null &&
       repairSourceIdentityCandidates.includes(
         provisionalIdentified.sourceDocumentId,
       ));
@@ -566,10 +574,9 @@ const findExistingDecisionTx = async (
           orderBy: { id: "asc" },
           limit: MAX_LEGACY_DOCKET_CANDIDATES,
         });
-  // ECLIs compare the way identifiers are looked up: an adapter release
-  // may spell the same identifier with different case or separators.
-  // Every legacy candidate is already pinned to this document's docket;
-  // each one is proved on its own, since siblings share that docket.
+  // ECLIs compare as identifiers do, case and separators aside. Each legacy
+  // candidate is proved alone: siblings share the docket that found them, and
+  // only a URL holding the document id overrides a contradicting ECLI.
   const incomingEcliKeys = [observed.ecli, observed.legacyEcli].flatMap(
     (ecli) => {
       const key = ecli === undefined ? undefined : ecliComparisonKey(ecli);
@@ -586,7 +593,8 @@ const findExistingDecisionTx = async (
       incomingEcliKeys.length > 0 &&
       !ecliMatches;
     const sourceUrlMatches =
-      !legacyEcliContradicts &&
+      (!legacyEcliContradicts ||
+        legacy.sourceUrl?.includes(observed.sourceDocumentId ?? "") === true) &&
       legacy.sourceUrl !== null &&
       observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
     return ecliMatches || sourceUrlMatches;

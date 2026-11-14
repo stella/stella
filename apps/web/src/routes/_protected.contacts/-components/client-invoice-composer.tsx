@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
@@ -176,12 +177,9 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <div className="flex flex-wrap gap-4 px-4 sm:px-6">
         <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="client-invoice-period-start"
-            className="text-sm font-medium"
-          >
+          <Label htmlFor="client-invoice-period-start">
             {t("billing.clientComposer.periodStart")}
-          </label>
+          </Label>
           <DatePickerPopover
             id="client-invoice-period-start"
             value={periodStart}
@@ -189,12 +187,9 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="client-invoice-period-end"
-            className="text-sm font-medium"
-          >
+          <Label htmlFor="client-invoice-period-end">
             {t("billing.clientComposer.periodEnd")}
-          </label>
+          </Label>
           <DatePickerPopover
             id="client-invoice-period-end"
             value={periodEnd}
@@ -203,12 +198,9 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
         </div>
         {currency !== undefined && currencies.length > 1 && (
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="client-invoice-currency"
-              className="text-sm font-medium"
-            >
+            <Label htmlFor="client-invoice-currency">
               {t("common.currency")}
-            </label>
+            </Label>
             <Select
               onValueChange={(value) => {
                 const next = currencies.find((option) => option === value);

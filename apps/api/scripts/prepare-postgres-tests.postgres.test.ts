@@ -1,8 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   PostgresTestMigrationError,

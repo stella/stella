@@ -4,10 +4,13 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { readerPdfPageAnchorId } from "@stll/api-contract/legal-reader-annotations";
+import { DETACHED_REASON } from "@stll/api-contract/pdf-mark-placement";
+import type { DetachedReason } from "@stll/api-contract/pdf-mark-placement";
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
 import { ReviewCommentCard } from "@stll/ui/review-comment-card";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { saveCommentEdit } from "@/components/legal-reader/annotations/comment-edit";
 import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
@@ -16,8 +19,6 @@ import {
   MarginNotes,
 } from "@/components/legal-reader/margin-notes";
 import type { CommentMarginItem } from "@/components/legal-reader/margin-notes";
-import { DETACHED_REASON } from "@/components/pdf/annotations/document-mark-anchor.logic";
-import type { DetachedReason } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import type {
   DocumentMark,
   DocumentMarks,
@@ -182,9 +183,13 @@ export const DocumentMarksPanel = ({
       <ScrollArea className="min-h-0 flex-1">
         {composing === null ? null : (
           <div className="border-b px-3 py-2">
-            <p className="text-muted-foreground text-2xs mb-1 line-clamp-2 italic">
+            <TruncatedText
+              className="text-muted-foreground text-2xs mb-1 italic"
+              lines={2}
+              render={<p />}
+            >
               {composing.quote}
-            </p>
+            </TruncatedText>
             <MarginNotes
               items={[
                 {

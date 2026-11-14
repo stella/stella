@@ -21,9 +21,11 @@ const ThreadScreen = () => {
   const t = useTranslations("chat");
   const headerHeight = useHeaderHeight();
   const { state } = useSession();
-  const { fresh, matterId, threadId, title } = useLocalSearchParams<{
+  const { fresh, matterId, shareId, threadId, title } = useLocalSearchParams<{
     fresh?: string;
     matterId?: string;
+    /** A share from another app the new conversation starts with. */
+    shareId?: string;
     threadId: string;
     title?: string;
   }>();
@@ -38,7 +40,7 @@ const ThreadScreen = () => {
           headerBackButtonDisplayMode: "minimal",
           headerShown: true,
           headerStyle: { backgroundColor: colors.card },
-          headerTintColor: colors.accent,
+          headerTintColor: colors.text,
           headerTitleStyle: { color: colors.text },
           title: title ?? t("threadTitle"),
         }}
@@ -52,6 +54,7 @@ const ThreadScreen = () => {
           <ChatThreadView
             fresh={fresh === "1"}
             matterId={matterId}
+            shareId={shareId}
             source={state.source}
             threadId={threadId}
           />

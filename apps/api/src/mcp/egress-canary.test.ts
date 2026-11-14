@@ -3,8 +3,11 @@ import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+import { cents } from "@stll/money";
 
+import { BILLING_STATUS, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
@@ -14,13 +17,12 @@ import {
 } from "@/api/mcp/tool-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import {
+  invoiceDetailRowFixture,
+  invoiceListRowFixture,
+} from "@/api/tests/helpers/invoice-tool-fixtures";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
-
-beforeEach(() => {
-  anonymizeTextFieldsMock.mockClear();
-  loadOrgAIConfigMock.mockClear();
-});
 
 /**
  * Registry-driven canary corpus over the MCP anonymized surface (plan 049,
@@ -250,6 +252,8 @@ const buildContext = ({
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),
     testDependencies: {
+      readWithdrawnCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       // The canary is about tenant text leaving the pipeline. `search` also
       // asks the public corpus, whose hits carry no tenant text at all, so
@@ -287,6 +291,8 @@ const buildContext = ({
         await Promise.resolve({
           status: "available" as const,
           readBlocks: async () => await Promise.resolve([]),
+          readTextPieces: async () => await Promise.resolve([]),
+          resolveHeldAnchors: async () => await Promise.resolve(new Map()),
         }),
     },
     safeDb,
@@ -343,6 +349,8 @@ const expectSeedsQueuedForAnonymization = (seeds: readonly string[]): void => {
 };
 
 beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+  loadOrgAIConfigMock.mockClear();
   anonymizeTextFieldsMock.mockClear();
   searchProviderSearchMock.mockReset();
   searchProviderSearchMock.mockResolvedValue({
@@ -578,51 +586,52 @@ describe("MCP anonymization canary corpus", () => {
 
   const mattersCanary = canaryTestsFor("list_matters");
 
-  mattersCanary(
-    "list_matters (list mode) anonymizes matter names",
-    async (tool) => {
-      const nameSeed = mkSeed(tool, 0);
-      const tx = {
-        select: () =>
-          chainableRows([
-            {
-              id: "00000000-0000-4000-8000-0000000a0001",
-              name: nameSeed,
-              reference: "REF-1",
-              status: "active",
-              lastActivityAt: new Date("2026-01-01"),
-              createdAt: new Date("2026-01-01"),
-            },
-          ]),
-      };
-      const context = buildContext({ tx });
-
-      const response = await STELLA_TOOL_HANDLERS.list_matters({
-        args: {},
-        context,
-      });
-      const result = await finalize(context, response);
-
-      expectNoSeedLeak(result, [nameSeed]);
-      expectSeedsQueuedForAnonymization([nameSeed]);
-      // The id is the surface's intentional output (callers need the matter id
-      // for follow-up tool calls), not a declared text field, so anonymized
-      // mode must return it byte-for-byte — unlike `name`/`reference`, which
-      // are declared text fields and come back redacted.
-      expect(JSON.parse(parseResultText(result))).toEqual({
-        matters: [
+  const listMattersCanaryCase = async (tool: "list_matters") => {
+    const nameSeed = mkSeed(tool, 0);
+    const tx = {
+      select: () =>
+        chainableRows([
           {
             id: "00000000-0000-4000-8000-0000000a0001",
-            name: "[ANON_0]",
-            reference: "[ANON_1]",
+            name: nameSeed,
+            reference: "REF-1",
             status: "active",
-            lastActivityAt: "2026-01-01T00:00:00.000Z",
-            createdAt: "2026-01-01T00:00:00.000Z",
+            lastActivityAt: new Date("2026-01-01"),
+            createdAt: new Date("2026-01-01"),
           },
-        ],
-        nextCursor: null,
-      });
-    },
+        ]),
+    };
+    const context = buildContext({ tx });
+
+    const response = await STELLA_TOOL_HANDLERS.list_matters({
+      args: {},
+      context,
+    });
+    const result = await finalize(context, response);
+
+    expectNoSeedLeak(result, [nameSeed]);
+    expectSeedsQueuedForAnonymization([nameSeed]);
+    // The id is the surface's intentional output (callers need the matter id
+    // for follow-up tool calls), not a declared text field, so anonymized
+    // mode must return it byte-for-byte — unlike `name`/`reference`, which
+    // are declared text fields and come back redacted.
+    expect(JSON.parse(parseResultText(result))).toEqual({
+      matters: [
+        {
+          id: "00000000-0000-4000-8000-0000000a0001",
+          name: "[ANON_0]",
+          reference: "[ANON_1]",
+          status: "active",
+          lastActivityAt: "2026-01-01T00:00:00.000Z",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      nextCursor: null,
+    });
+  };
+  mattersCanary(
+    "list_matters (list mode) anonymizes matter names",
+    listMattersCanaryCase,
   );
 
   mattersCanary(
@@ -852,58 +861,63 @@ describe("MCP anonymization canary corpus", () => {
 
   const contactCanary = canaryTestsFor("read_contact");
 
+  const readContactCanaryCase = async (tool: "read_contact") => {
+    const displayNameSeed = mkSeed(tool, 0);
+    const firstNameSeed = mkSeed(tool, 1);
+    const lastNameSeed = mkSeed(tool, 2);
+    const organizationNameSeed = mkSeed(tool, 3);
+    const emailSeed = mkSeed(tool, 4);
+    const phoneSeed = mkSeed(tool, 5);
+    const externalIdSeed = mkSeed(tool, 6);
+    const tx = {
+      query: {
+        contacts: {
+          findFirst: async () => ({
+            id: "00000000-0000-4000-8000-0000000c0001",
+            type: "person",
+            displayName: displayNameSeed,
+            dateOfBirthYear: 1984,
+            dateOfBirthMonth: 3,
+            dateOfBirthDay: 12,
+            nationalityCodes: ["JP"],
+            firstName: firstNameSeed,
+            lastName: lastNameSeed,
+            organizationName: organizationNameSeed,
+            emails: [{ label: "work", address: emailSeed }],
+            phones: [{ label: "mobile", number: phoneSeed }],
+            externalSource: "address-book",
+            externalId: externalIdSeed,
+          }),
+        },
+      },
+    };
+    const context = buildContext({ tx });
+
+    const response = await STELLA_TOOL_HANDLERS.read_contact({
+      args: { contact_id: "00000000-0000-4000-8000-0000000c0001" },
+      context,
+    });
+    const result = await finalize(context, response);
+
+    const seeds = [
+      displayNameSeed,
+      firstNameSeed,
+      lastNameSeed,
+      organizationNameSeed,
+      emailSeed,
+      phoneSeed,
+    ];
+    expectNoSeedLeak(result, [...seeds, externalIdSeed]);
+    expectSeedsQueuedForAnonymization(seeds);
+    expect(result.structuredContent).toMatchObject({
+      dateOfBirth: null,
+      nationalityCodes: [],
+      external: null,
+    });
+  };
   contactCanary(
     "read_contact anonymizes text and redacts structured personal fields",
-    async (tool) => {
-      const displayNameSeed = mkSeed(tool, 0);
-      const firstNameSeed = mkSeed(tool, 1);
-      const lastNameSeed = mkSeed(tool, 2);
-      const organizationNameSeed = mkSeed(tool, 3);
-      const emailSeed = mkSeed(tool, 4);
-      const phoneSeed = mkSeed(tool, 5);
-      const tx = {
-        query: {
-          contacts: {
-            findFirst: async () => ({
-              id: "00000000-0000-4000-8000-0000000c0001",
-              type: "person",
-              displayName: displayNameSeed,
-              dateOfBirthYear: 1984,
-              dateOfBirthMonth: 3,
-              dateOfBirthDay: 12,
-              nationalityCodes: ["JP"],
-              firstName: firstNameSeed,
-              lastName: lastNameSeed,
-              organizationName: organizationNameSeed,
-              emails: [{ label: "work", address: emailSeed }],
-              phones: [{ label: "mobile", number: phoneSeed }],
-            }),
-          },
-        },
-      };
-      const context = buildContext({ tx });
-
-      const response = await STELLA_TOOL_HANDLERS.read_contact({
-        args: { contact_id: "00000000-0000-4000-8000-0000000c0001" },
-        context,
-      });
-      const result = await finalize(context, response);
-
-      const seeds = [
-        displayNameSeed,
-        firstNameSeed,
-        lastNameSeed,
-        organizationNameSeed,
-        emailSeed,
-        phoneSeed,
-      ];
-      expectNoSeedLeak(result, seeds);
-      expectSeedsQueuedForAnonymization(seeds);
-      expect(result.structuredContent).toMatchObject({
-        dateOfBirth: null,
-        nationalityCodes: [],
-      });
-    },
+    readContactCanaryCase,
   );
 
   // --- document-tools ------------------------------------------------------
@@ -1503,82 +1517,85 @@ describe("MCP anonymization canary corpus", () => {
 
   const invoicesCanary = canaryTestsFor("list_invoices");
 
+  const listInvoicesCanaryCase = async (tool: "list_invoices") => {
+    const referenceSeed = mkSeed(tool, 0);
+    const tx = {
+      select: () =>
+        chainableRows([
+          invoiceListRowFixture({
+            id: "inv_1",
+            clientId: null,
+            matterShare: 1000,
+            invoiceNumber: null,
+            documentType: "invoice",
+            originalInvoiceId: null,
+            reference: referenceSeed,
+            status: "draft",
+            invoiceDate: "2026-01-01",
+            dueDate: "2026-02-01",
+            currency: "EUR",
+            totalAmount: 1000,
+            paidAmount: 0,
+            createdAtCursor: new Date("2026-01-01"),
+          }),
+        ]),
+    };
+    const context = buildContext({ tx });
+
+    const response = await BILLING_TOOL_HANDLERS.list_invoices({
+      args: { matter_id: "00000000-0000-4000-8000-0000000a0001" },
+      context,
+    });
+    expect(response).toMatchObject({
+      egress: "structured",
+      payload: {
+        invoices: [expect.objectContaining({ invoiceNumber: null })],
+      },
+    });
+    const result = await finalize(context, response);
+
+    expectNoSeedLeak(result, [referenceSeed]);
+    expectSeedsQueuedForAnonymization([referenceSeed]);
+  };
   invoicesCanary(
     "list_invoices (list mode) anonymizes invoice reference",
-    async (tool) => {
-      const referenceSeed = mkSeed(tool, 0);
-      const tx = {
-        select: () =>
-          chainableRows([
-            {
-              id: "inv_1",
-              clientId: null,
-              matterShare: 1000,
-              invoiceNumber: null,
-              documentType: "invoice",
-              originalInvoiceId: null,
-              reference: referenceSeed,
-              status: "draft",
-              invoiceDate: "2026-01-01",
-              dueDate: "2026-02-01",
-              currency: "EUR",
-              totalAmount: 1000,
-              createdAtCursor: new Date("2026-01-01"),
-            },
-          ]),
-      };
-      const context = buildContext({ tx });
-
-      const response = await BILLING_TOOL_HANDLERS.list_invoices({
-        args: { matter_id: "00000000-0000-4000-8000-0000000a0001" },
-        context,
-      });
-      expect(response).toMatchObject({
-        egress: "structured",
-        payload: {
-          invoices: [expect.objectContaining({ invoiceNumber: null })],
-        },
-      });
-      const result = await finalize(context, response);
-
-      expectNoSeedLeak(result, [referenceSeed]);
-      expectSeedsQueuedForAnonymization([referenceSeed]);
-    },
+    listInvoicesCanaryCase,
   );
 
-  invoicesCanary(
-    "list_invoices detail anonymizes authored text in buyer details, lines, entries, and expenses",
-    async (tool) => {
-      const referenceSeed = mkSeed(tool, 1);
-      const notesSeed = mkSeed(tool, 2);
-      const teNarrativeSeed = mkSeed(tool, 3);
-      const teInvoiceNarrativeSeed = mkSeed(tool, 4);
-      const teEntityNameSeed = mkSeed(tool, 5);
-      const exDescriptionSeed = mkSeed(tool, 6);
-      const exInvoiceDescriptionSeed = mkSeed(tool, 7);
-      const exEntityNameSeed = mkSeed(tool, 8);
-      const lineDescriptionSeed = mkSeed(tool, 9);
-      const lineUnitSeed = mkSeed(tool, 10);
-      const recordedDescriptionSeed = mkSeed(tool, 19);
-      const recordedUnitSeed = mkSeed(tool, 20);
-      const matterNameSeed = mkSeed(tool, 21);
-      const buyerSeeds = {
-        buyerName: mkSeed(tool, 11),
-        buyerRegistrationId: mkSeed(tool, 12),
-        buyerVatId: mkSeed(tool, 13),
-        buyerAddressLine1: mkSeed(tool, 14),
-        buyerAddressLine2: mkSeed(tool, 15),
-        buyerCity: mkSeed(tool, 16),
-        buyerPostalCode: mkSeed(tool, 17),
-        buyerCountry: mkSeed(tool, 18),
-      };
-      const tx = {
-        query: {
-          invoices: {
-            findFirst: async () => ({
-              id: "00000000-0000-4000-8000-000000020002",
+  const invoiceDetailsCanaryCase = async (tool: "list_invoices") => {
+    const referenceSeed = mkSeed(tool, 1);
+    const notesSeed = mkSeed(tool, 2);
+    const teNarrativeSeed = mkSeed(tool, 3);
+    const teInvoiceNarrativeSeed = mkSeed(tool, 4);
+    const teEntityNameSeed = mkSeed(tool, 5);
+    const exDescriptionSeed = mkSeed(tool, 6);
+    const exInvoiceDescriptionSeed = mkSeed(tool, 7);
+    const exEntityNameSeed = mkSeed(tool, 8);
+    const lineDescriptionSeed = mkSeed(tool, 9);
+    const lineUnitSeed = mkSeed(tool, 10);
+    const recordedDescriptionSeed = mkSeed(tool, 19);
+    const recordedUnitSeed = mkSeed(tool, 20);
+    const matterNameSeed = mkSeed(tool, 21);
+    const buyerSeeds = {
+      buyerName: mkSeed(tool, 11),
+      buyerRegistrationId: mkSeed(tool, 12),
+      buyerVatId: mkSeed(tool, 13),
+      buyerAddressLine1: mkSeed(tool, 14),
+      buyerAddressLine2: mkSeed(tool, 15),
+      buyerCity: mkSeed(tool, 16),
+      buyerPostalCode: mkSeed(tool, 17),
+      buyerCountry: mkSeed(tool, 18),
+    };
+    const tx = {
+      query: {
+        invoices: {
+          findFirst: async () =>
+            invoiceDetailRowFixture({
+              id: toSafeId<"invoice">("00000000-0000-4000-8000-000000020002"),
               clientId: null,
-              workspaceId: "00000000-0000-4000-8000-0000000a0001",
+              workspaceId: toSafeId<"workspace">(
+                "00000000-0000-4000-8000-0000000a0001",
+              ),
               invoiceNumber: null,
               documentType: "invoice",
               originalInvoiceId: null,
@@ -1587,9 +1604,9 @@ describe("MCP anonymization canary corpus", () => {
               invoiceDate: "2026-01-01",
               dueDate: "2026-02-01",
               currency: "EUR",
-              totalAmount: 2000,
-              netAmount: 100,
-              vatAmount: 21,
+              totalAmount: cents(2000),
+              netAmount: cents(100),
+              vatAmount: cents(21),
               notes: notesSeed,
               taxableSupplyDate: "2026-01-01",
               sellerProfileId: null,
@@ -1597,64 +1614,86 @@ describe("MCP anonymization canary corpus", () => {
               paidAt: null,
               createdAt: new Date("2026-01-01"),
               updatedAt: new Date("2026-01-01"),
+              payments: [],
               timeEntries: [
                 {
-                  id: "te_1",
-                  workspaceId: "00000000-0000-4000-8000-0000000a0001",
-                  workItemId: "00000000-0000-4000-8000-0000000e0001",
+                  id: toSafeId<"timeEntry">("te_1"),
+                  workspaceId: toSafeId<"workspace">(
+                    "00000000-0000-4000-8000-0000000a0001",
+                  ),
+                  workItemId: toSafeId<"entity">(
+                    "00000000-0000-4000-8000-0000000e0001",
+                  ),
+                  workItemReference: null,
                   dateWorked: "2026-01-01",
                   billedMinutes: 60,
-                  rateAtEntry: 100,
+                  rateAtEntry: cents(100),
                   currency: "EUR",
                   narrative: teNarrativeSeed,
                   invoiceNarrative: teInvoiceNarrativeSeed,
-                  status: "invoiced",
+                  status: BILLING_STATUS.BILLED,
+                  noCharge: false,
+                  invoiceAttachment: "charged",
                   workItem: {
-                    id: "00000000-0000-4000-8000-0000000e0001",
+                    id: toSafeId<"entity">(
+                      "00000000-0000-4000-8000-0000000e0001",
+                    ),
                     name: teEntityNameSeed,
                   },
                 },
               ],
               expenses: [
                 {
-                  id: "ex_1",
-                  workspaceId: "00000000-0000-4000-8000-0000000a0001",
-                  matterId: "entity_2",
+                  id: toSafeId<"expense">("ex_1"),
+                  workspaceId: toSafeId<"workspace">(
+                    "00000000-0000-4000-8000-0000000a0001",
+                  ),
+                  matterId: toSafeId<"entity">("entity_2"),
+                  matterReference: null,
                   dateIncurred: "2026-01-01",
-                  amount: 100,
+                  amount: cents(100),
                   currency: "EUR",
                   category: "travel",
                   description: exDescriptionSeed,
                   invoiceDescription: exInvoiceDescriptionSeed,
                   billable: true,
                   markup: 0,
-                  matter: { id: "entity_2", name: exEntityNameSeed },
+                  matter: {
+                    id: toSafeId<"entity">("entity_2"),
+                    name: exEntityNameSeed,
+                  },
                 },
               ],
               lines: [
                 {
-                  id: "line_1",
-                  workspaceId: "00000000-0000-4000-8000-0000000a0001",
+                  id: toSafeId<"invoiceLine">("line_1"),
+                  workspaceId: toSafeId<"workspace">(
+                    "00000000-0000-4000-8000-0000000a0001",
+                  ),
                   workspace: {
-                    id: "00000000-0000-4000-8000-0000000a0001",
+                    id: toSafeId<"workspace">(
+                      "00000000-0000-4000-8000-0000000a0001",
+                    ),
                     name: matterNameSeed,
                     color: null,
                   },
                   recordedDescription: recordedDescriptionSeed,
                   recordedQuantity: "1",
                   recordedUnit: recordedUnitSeed,
-                  recordedUnitPrice: 100,
-                  recordedNetAmount: 100,
+                  recordedUnitPrice: cents(100),
+                  recordedNetAmount: cents(100),
                   position: 0,
                   description: lineDescriptionSeed,
                   quantity: "1.0000",
                   unit: lineUnitSeed,
-                  unitPrice: 100,
+                  unitPrice: cents(100),
                   vatRateBps: 2100,
                   vatTreatment: "domestic_vat",
-                  netAmount: 100,
-                  vatAmount: 21,
-                  grossAmount: 121,
+                  exemptionReason: null,
+                  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
+                  netAmount: cents(100),
+                  vatAmount: cents(21),
+                  grossAmount: cents(121),
                   source: "manual",
                   timeEntryId: null,
                   expenseId: null,
@@ -1662,40 +1701,43 @@ describe("MCP anonymization canary corpus", () => {
                 },
               ],
             }),
-          },
         },
-      };
-      const context = buildContext({ tx });
+      },
+    };
+    const context = buildContext({ tx });
 
-      const response = await BILLING_TOOL_HANDLERS.list_invoices({
-        args: { invoice_id: "00000000-0000-4000-8000-000000020002" },
-        context,
-      });
-      expect(response).toMatchObject({
-        egress: "structured",
-        payload: { invoice: expect.objectContaining({ invoiceNumber: null }) },
-      });
-      const result = await finalize(context, response);
+    const response = await BILLING_TOOL_HANDLERS.list_invoices({
+      args: { invoice_id: "00000000-0000-4000-8000-000000020002" },
+      context,
+    });
+    expect(response).toMatchObject({
+      egress: "structured",
+      payload: { invoice: expect.objectContaining({ invoiceNumber: null }) },
+    });
+    const result = await finalize(context, response);
 
-      const seeds = [
-        referenceSeed,
-        notesSeed,
-        teNarrativeSeed,
-        teInvoiceNarrativeSeed,
-        teEntityNameSeed,
-        exDescriptionSeed,
-        exInvoiceDescriptionSeed,
-        exEntityNameSeed,
-        lineDescriptionSeed,
-        lineUnitSeed,
-        recordedDescriptionSeed,
-        recordedUnitSeed,
-        matterNameSeed,
-        ...Object.values(buyerSeeds),
-      ];
-      expectNoSeedLeak(result, seeds);
-      expectSeedsQueuedForAnonymization(seeds);
-    },
+    const seeds = [
+      referenceSeed,
+      notesSeed,
+      teNarrativeSeed,
+      teInvoiceNarrativeSeed,
+      teEntityNameSeed,
+      exDescriptionSeed,
+      exInvoiceDescriptionSeed,
+      exEntityNameSeed,
+      lineDescriptionSeed,
+      lineUnitSeed,
+      recordedDescriptionSeed,
+      recordedUnitSeed,
+      matterNameSeed,
+      ...Object.values(buyerSeeds),
+    ];
+    expectNoSeedLeak(result, seeds);
+    expectSeedsQueuedForAnonymization(seeds);
+  };
+  invoicesCanary(
+    "list_invoices detail anonymizes authored text in buyer details, lines, entries, and expenses",
+    invoiceDetailsCanaryCase,
   );
 
   // --- reader-annotation-tools ------------------------------------------------
@@ -1720,6 +1762,8 @@ describe("MCP anonymization canary corpus", () => {
         startOffset: 0,
         endOffset: 5,
         quote,
+        quotePrefix: "",
+        quoteSuffix: "",
         body,
         createdAt: new Date("2026-01-01"),
         updatedAt: new Date("2026-01-01"),

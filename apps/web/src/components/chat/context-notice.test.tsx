@@ -22,6 +22,15 @@ describe("an answer's context notice", () => {
     expect(markup).toContain(messages.chat.historyTrimmed);
   });
 
+  test("says the coding agent started over from the chat's messages", () => {
+    const markup = render({ contextNotice: { type: "session-not-resumed" } });
+
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain(
+      messages.chat.localRun.sessionNotResumed.replace("'", "&#x27;"),
+    );
+  });
+
   test("stays hidden on an answer whose context left nothing out", () => {
     expect(render(undefined)).toBe("");
     expect(render({})).toBe("");

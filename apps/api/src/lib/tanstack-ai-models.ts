@@ -1084,9 +1084,10 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
     case "google":
       return !!env.GOOGLE_GENERATIVE_AI_API_KEY;
     case "openrouter":
-      // Whether the deployment provisions managed OpenRouter at all: any
-      // tier's credential does. Each request still resolves only its own
-      // tier's credential at dispatch, so a tier without one refuses there.
+      // Each request dispatches on its own tier's credential; the boot
+      // invariant in env-schema (managedProviderCheckInvariantViolation)
+      // provisions every tier an organization can stand on whenever any
+      // tier is, so one deployment-wide answer holds for each of them.
       return Object.values(MANAGED_MODEL_TIER).some(
         (tier) =>
           getManagedOpenRouterConfiguration(tier).type !== "unavailable",

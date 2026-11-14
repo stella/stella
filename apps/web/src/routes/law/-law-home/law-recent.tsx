@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -23,7 +23,9 @@ import {
   LandingItemText,
   LandingSection,
 } from "@stll/ui/landing";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -34,6 +36,8 @@ import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
+
+const RECENT_VISIBLE_COUNT = 5;
 
 const FILTER_OPTIONS = {
   all: { value: "all", labelKey: "common.all" },
@@ -48,7 +52,7 @@ type HistoryEntry = Extract<
   ReturnType<typeof useLawHistory>["list"],
   { status: "ready" }
 >["entries"][number];
-const recentEntryIcon = (entry: HistoryEntry) => {
+const recentEntryMark = (entry: HistoryEntry) => {
   switch (entry.kind) {
     case "search":
       return <SearchIcon className="size-4" />;
@@ -60,6 +64,17 @@ const recentEntryIcon = (entry: HistoryEntry) => {
       return panic("Unhandled law history kind");
   }
 };
+
+/** Every row's mark sits in one fixed-width column, so all titles start at
+ * the same edge whether the mark is the search icon, a court chip or a
+ * statute number. The column fits a four-letter court chip and a short
+ * statute number; a statute number wider than it shows its short form
+ * (`262/06`), which the badge picks by container query. */
+const recentEntryIcon = (entry: HistoryEntry) => (
+  <span className="flex w-11 shrink-0 justify-start" data-slot="recent-mark">
+    {recentEntryMark(entry)}
+  </span>
+);
 
 type LawRecentProps = {
   onSearch: (query: string) => void;
@@ -74,6 +89,7 @@ export const LawRecent = ({
   const history = useLawHistory({ filter, country });
   return (
     <LawRecentList
+      key={country}
       onSearch={onSearch}
       history={history}
       filter={filter}
@@ -110,7 +126,12 @@ const ScopedLawRecentList = ({
 }: LawRecentListProps) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
+  const listId = useId();
+  const [expanded, setExpanded] = useState(false);
   const entries = history.list.status === "ready" ? history.list.entries : [];
+  const visibleEntries = expanded
+    ? entries
+    : entries.slice(0, RECENT_VISIBLE_COUNT);
   const [clearScope, setClearScope] = useState<NonNullable<
     ReturnType<typeof useLawHistory>["scope"]
   > | null>(null);
@@ -157,7 +178,10 @@ const ScopedLawRecentList = ({
                 <Button
                   aria-pressed={filter === value}
                   key={value}
-                  onClick={() => onFilterChange(value)}
+                  onClick={() => {
+                    setExpanded(false);
+                    onFilterChange(value);
+                  }}
                   size="xs"
                   variant={filter === value ? "secondary" : "ghost"}
                 >
@@ -205,7 +229,9 @@ const ScopedLawRecentList = ({
                 className="flex items-start gap-2 px-2 py-1.5"
                 key={index}
               >
-                <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+                <span className="flex w-11 shrink-0">
+                  <Skeleton className="mt-0.5 size-4 rounded-sm" />
+                </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <Skeleton className="h-4 w-3/5" />
                   <Skeleton className="h-3 w-2/5" />
@@ -217,61 +243,89 @@ const ScopedLawRecentList = ({
         {emptyLabel !== undefined ? (
           <LandingEmpty>{t(emptyLabel)}</LandingEmpty>
         ) : (
-          entries.map((entry) => {
-            const title = entry.kind === "search" ? entry.query : entry.title;
-            const text =
-              entry.kind === "statute" ? (
-                <span className="flex min-w-0 items-start gap-2">
-                  {recentEntryIcon(entry)}
-                  <span className="min-w-0 flex-1">
-                    <span className="text-foreground block text-sm font-medium wrap-anywhere whitespace-normal">
-                      {title}
-                    </span>
-                    <span className="text-muted-foreground block truncate text-xs">
-                      {relativeTime(entry.lastUsedAt)}
-                    </span>
-                  </span>
-                </span>
-              ) : (
-                <LandingItemText
-                  icon={recentEntryIcon(entry)}
-                  meta={relativeTime(entry.lastUsedAt)}
-                  title={title}
-                />
-              );
-            return (
-              <div
-                className="group flex min-w-0 items-center gap-1"
-                key={entry.id}
-              >
-                {entry.kind === "search" ? (
-                  <button
-                    className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
-                    onClick={() => onSearch(entry.query)}
-                    type="button"
-                  >
-                    {text}
-                  </button>
-                ) : (
-                  <a
-                    className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
-                    href={sanitizeHref(entry.path)}
-                  >
-                    {text}
-                  </a>
-                )}
-                <Button
-                  aria-label={t("common.remove")}
-                  disabled={history.remove.isPending}
-                  onClick={() => history.remove.mutate(entry)}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <XIcon className="size-3.5" />
-                </Button>
+          entries.length > 0 && (
+            <ScrollArea
+              axis="vertical"
+              className="h-64 max-h-[40dvh] shrink-0"
+              id={listId}
+            >
+              <div className="flex flex-col gap-1 p-1">
+                {visibleEntries.map((entry) => {
+                  const title =
+                    entry.kind === "search" ? entry.query : entry.title;
+                  const text =
+                    entry.kind === "statute" ? (
+                      <span className="flex min-w-0 items-start gap-2">
+                        {recentEntryIcon(entry)}
+                        <span className="min-w-0 flex-1">
+                          <span className="text-foreground block text-sm font-medium wrap-anywhere whitespace-normal">
+                            {title}
+                          </span>
+                          <TruncatedText className="text-muted-foreground text-xs">
+                            {relativeTime(entry.lastUsedAt)}
+                          </TruncatedText>
+                        </span>
+                      </span>
+                    ) : (
+                      <LandingItemText
+                        icon={recentEntryIcon(entry)}
+                        meta={relativeTime(entry.lastUsedAt)}
+                        title={title}
+                      />
+                    );
+                  return (
+                    <div
+                      className="group flex min-w-0 items-center gap-1"
+                      key={entry.id}
+                    >
+                      {entry.kind === "search" ? (
+                        <Button
+                          className="group/row group flex min-w-0 flex-1"
+                          onClick={() => onSearch(entry.query)}
+                          variant="plain"
+                        >
+                          {/* The landing row's inset and hover tint, so a
+                              search row lines up and lights like the page
+                              links beside it. */}
+                          <span className="group-hover/row:bg-accent/50 min-w-0 flex-1 rounded-md px-2 py-1.5">
+                            {text}
+                          </span>
+                        </Button>
+                      ) : (
+                        <a
+                          className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
+                          href={sanitizeHref(entry.path)}
+                        >
+                          {text}
+                        </a>
+                      )}
+                      <Button
+                        aria-label={t("common.remove")}
+                        disabled={history.remove.isPending}
+                        onClick={() => history.remove.mutate(entry)}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <XIcon className="size-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })
+            </ScrollArea>
+          )
+        )}
+        {entries.length > RECENT_VISIBLE_COUNT && (
+          <Button
+            aria-controls={listId}
+            aria-expanded={expanded}
+            className="self-start"
+            onClick={() => setExpanded((current) => !current)}
+            size="xs"
+            variant="ghost"
+          >
+            {expanded ? t("common.showLess") : t("common.showMore")}
+          </Button>
         )}
       </LandingSection>
       <AlertDialog

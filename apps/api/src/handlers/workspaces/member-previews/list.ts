@@ -18,6 +18,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 type WorkspaceMemberRow = typeof workspaceMembers.$inferSelect;
 type UserRow = typeof user.$inferSelect;
@@ -45,6 +46,8 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "preferredName",
   // Editor shortcut preferences are unrelated to team previews.
   "wordEditShortcut",
+  // Answer language is a private reading preference.
+  "readerAnswerLanguage",
   // Keyboard rebindings belong to the user's settings.
   "userShortcuts",
   // Onboarding progress belongs to the signed-in user's session.
@@ -131,7 +134,7 @@ const listWorkspaceMemberPreviews = createSafeRootHandler(
             and(
               inArray(workspaces.id, query.workspaceIds),
               eq(workspaces.organizationId, session.activeOrganizationId),
-              inArray(workspaces.status, ["active", "archived"]),
+              visibleWorkspaceSql(),
             ),
           )
           .limit(LIMITS.workspaceMemberPreviewBatchMax);

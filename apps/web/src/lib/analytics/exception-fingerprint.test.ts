@@ -7,6 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   automaticExceptionKey,
+  capturedApiErrorIdentity,
   capturedExceptionIdentity,
   fingerprintExceptionEvent,
   fingerprintExceptionScope,
@@ -14,6 +15,7 @@ import {
   routeExceptionFingerprintKey,
   sanitizeFingerprintFields,
 } from "@/lib/analytics/exception-fingerprint";
+import { toAuthClientError } from "@/lib/errors/auth";
 
 const fixture = {
   entries: [{ type: "TypeError" }],
@@ -508,4 +510,24 @@ test("fresh hostile prototype chains cannot consume unbounded browser identity w
     status: "read_failed",
   });
   expect(reads).toBeLessThanOrEqual(17);
+});
+
+describe("captured API error identity", () => {
+  test("reads the status of an auth client error", () => {
+    const error = toAuthClientError({
+      code: "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
+      status: 403,
+      statusText: "Forbidden",
+    });
+
+    expect(capturedApiErrorIdentity(error)).toEqual({ status: 403 });
+  });
+
+  test("reads the status of an auth client error behind a cause", () => {
+    const cause = toAuthClientError({ status: 429, statusText: "Too Many" });
+
+    expect(capturedApiErrorIdentity(new Error("wrap", { cause }))).toEqual({
+      status: 429,
+    });
+  });
 });

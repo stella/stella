@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "cff65e51af1338a5c31d01769cdd74466831ca9ce0120b28095b76cbb22fb824",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgement/content?id=151005050004027_VIII_GC_001117_2025_Uz_2026-05-11_002",
+  "capturedAt": "2026-11-09T21:33:13.847Z",
+  "note": "VIII GC 1117/25: portal judgment the judge signs under the ruling points and under the reasons as 'Sędzia' and a name; gzip of the captured content"
+}

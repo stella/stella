@@ -14,6 +14,8 @@ import type {
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import type { ChatLocalFilesUndone } from "@stll/api-contract/chat-local-files-undo";
+import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
@@ -121,8 +123,13 @@ export type ChatTanStackPart =
         providerMetadata?: PersistedToolProviderMetadata;
       })
   | (ThinkingPart & {
-      /** Server-issued replay identity; historical parts may have none. */
-      provenance?: ReasoningProvenance;
+      /**
+       * Server-issued replay identity; historical parts may have none. One
+       * naming a provider or format this release does not list (a newer
+       * release's, or one since retired) is kept as stored but unverified:
+       * replay accepts only a provenance it can verify.
+       */
+      provenance?: ReasoningProvenance | PersistedJsonObject;
       /** Provider artefacts a writer stored with the reasoning, kept as stored. */
       providerMetadata?: PersistedJsonObject;
     });
@@ -161,7 +168,14 @@ export type ChatTurnOutcome =
          * whose input is complete and whose result the chat client posts back
          * as a native interrupt resolution.
          */
-        | { type: "client-tool"; toolCallId: string };
+        | { type: "client-tool"; toolCallId: string }
+        /**
+         * A blocking question a coding-agent harness on the member's computer
+         * asked (`HARNESS_QUESTION_TOOL`). The call stays as the harness
+         * reported it; the answer is the resume payload of the question's
+         * interrupt, which the API hands to the run that asked it.
+         */
+        | { type: "harness-question"; toolCallId: string };
     }
   | { type: "completed" }
   | { type: "cancelled"; reason: ChatTurnCancellationReason }
@@ -175,13 +189,47 @@ export type ChatTurnOutcome =
        */
       providerDiagnostic?: ProviderDiagnostic;
       refusal?: ActionAdmissionRefusal;
+      /**
+       * When the usage limit of the harness that ran the turn on the
+       * member's computer resets (ISO 8601), for a `local_runner_limit_reached`
+       * failure whose harness reported it.
+       */
+      limitResetsAt?: string;
     }
   | {
       type: "interrupted";
       reason: ChatTurnInterruptionReason;
     };
 
+/**
+ * What the server found for one quotation (a Markdown blockquote) of an
+ * answer, checked against the case-law decisions the answer cites by id
+ * (`answer-quote-checks.ts`).
+ *
+ * - `verified`: a cited decision holds it word for word, at this block.
+ * - `unverified`: every cited decision was read and none holds it.
+ * - `unchecked`: there was nothing to check it against: the answer cites no
+ *   decision, or a cited decision could not be read.
+ *
+ * `key` is `answerQuoteKey` of the quotation's displayed text, which the
+ * answer renderer computes from the rendered blockquote to find its result.
+ */
+export type ChatAnswerQuoteCheck =
+  | {
+      type: "verified";
+      key: string;
+      decisionId: SafeId<"caseLawDecision">;
+      anchorId: string;
+      paragraph: number | null;
+    }
+  | { type: "unverified"; key: string }
+  | { type: "unchecked"; key: string };
+
 export type ChatMessageMetadata = {
+  /** Server-owned: the answer's quotations as checked once it completed.
+   * Absent when the answer quotes nothing or the check could not run.
+   * Incoming client metadata deliberately does not accept this field. */
+  answerQuotes?: ChatAnswerQuoteCheck[] | undefined;
   /** Server-owned active execution time; human interaction waits are excluded. */
   turnTiming?: ChatTurnTiming | null | undefined;
   /** Server-owned generated-document draft binding. Incoming client metadata
@@ -193,6 +241,10 @@ export type ChatMessageMetadata = {
    * streamed; never stored. Incoming client metadata deliberately does not
    * accept this field. */
   contextNotice?: ChatContextNotice | null | undefined;
+  /** Server-owned: files a local run left on the member's computer because
+   * they could not be shared. Incoming client metadata deliberately does not
+   * accept this field. */
+  localRunFilesNotShared?: string[] | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;
@@ -233,6 +285,18 @@ export type ChatMessageMetadata = {
       }
     | undefined;
   usage?: ChatMessageUsage | undefined;
+  /**
+   * How full the context of the harness that ran the turn on the member's
+   * computer was after its last model request, against its window, as the
+   * harness reported both. Server-owned; absent on a cloud turn.
+   */
+  localRunContext?: ChatLocalRunContext | undefined;
+  /**
+   * The turn's file changes on the member's computer were undone. Written by
+   * the server when the computer reports the restore; incoming client
+   * metadata validation deliberately does not accept this field.
+   */
+  localFilesUndone?: ChatLocalFilesUndone | undefined;
 };
 
 // UIMessage's other fields do not depend on its tool map. Omitting from the

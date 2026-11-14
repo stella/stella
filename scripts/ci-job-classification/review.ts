@@ -5,41 +5,11 @@ import type { JobShape, ParsedDocument } from "./yaml";
 
 type PrivilegedJobOptions = {
   kind: (typeof CLASSIFICATIONS)[number] | undefined;
+  privileged: boolean;
   shape: JobShape;
 };
-// Inspect the parser's projected shape, including secret references and run markers.
-const hasPrivilege = (value: unknown): boolean => {
-  if (typeof value === "string") {
-    return /secrets(?:\.|\[)|publish|deploy|release|self-hosted/iu.test(value);
-  }
-  if (Array.isArray(value)) {
-    return value.some(hasPrivilege);
-  }
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  return Object.entries(value).some(([key, child]) => {
-    if (key === "publication-command" && child === true) {
-      return true;
-    }
-    if (key === "secrets" && child !== null) {
-      return true;
-    }
-    if (key === "permissions") {
-      return (
-        child === "write-all" ||
-        (typeof child === "object" &&
-          child !== null &&
-          Object.values(child).includes("write"))
-      );
-    }
-    return hasPrivilege(child);
-  });
-};
-export const isPrivilegedJob = ({ kind, shape }: PrivilegedJobOptions) =>
-  kind === "priority" ||
-  hasPrivilege(shape.document) ||
-  hasPrivilege(shape.job);
+export const isPrivilegedJob = ({ kind, privileged }: PrivilegedJobOptions) =>
+  kind === "priority" || privileged;
 
 // Repository writes: contents write permission, an app token that requests
 // it, or the shared signed-commit action. Such a job publishes commits, tags
@@ -102,13 +72,27 @@ type PrivilegedJobClosureOptions = PrivilegedJobOptions & {
 };
 export const isPrivilegedJobClosure = ({
   kind,
+  privileged,
   shape,
   reachableDocuments,
-}: PrivilegedJobClosureOptions) =>
-  isPrivilegedJob({ kind, shape }) ||
-  [...reachableDocuments].some((document) => document.privileged);
+}: PrivilegedJobClosureOptions) => {
+  const documents = [...reachableDocuments];
+  return (
+    isPrivilegedJob({ kind, privileged, shape }) ||
+    documents.some((document) => document.privileged) ||
+    // Only privileged jobs are reviewed, and a repository writer must be
+    // reviewed as `priority`: the signed-commit action writes without a
+    // token permission or secret that would mark the job otherwise.
+    isRepositoryWritingJob({ shape, reachableDocuments: documents })
+  );
+};
 
 export class ReviewRequiredError extends TaggedError("ReviewRequiredError")<{
   message: string;
   privilegedJobs: string[];
+  /** Privileged jobs whose review does not cover the current digest. */
+  staleJobs: string[];
+  /** Decision keys whose job is not privileged or no longer exists. */
+  staleDecisions: string[];
+  refusal?: string;
 }> {}

@@ -5,11 +5,16 @@ import { cn } from "../lib/utils";
 import { CourtBadge } from "./court-badge";
 import type { CourtBadgeSize } from "./court-badge";
 import {
+  caseNumberIdentityLabels,
   COURT_TIER_WEIGHT,
   statuteIdentityLabels,
 } from "./document-identity-badge.logic";
-import type { DocumentIdentity } from "./document-identity-badge.logic";
+import type {
+  DocumentIdentity,
+  IdentityLabels,
+} from "./document-identity-badge.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 export const DocumentIdentityBadge = ({
   identity,
@@ -47,30 +52,15 @@ function documentIdentityMark(
   switch (identity.kind) {
     case "statute": {
       const labels = statuteIdentityLabels(identity);
-      if (labels === null) {
-        return unknownDocumentMark();
-      }
-      // Container queries compare available space with the full label
-      // in the same monospace units; no observer or per-row state is needed.
-      return (
-        <span
-          className={cn(
-            "@container/document-identity inline-flex max-w-full shrink-0 items-center justify-center font-mono leading-4 font-semibold tabular-nums",
-            labels.short.length > 7 ? "text-[9px]" : "text-[10px]",
-          )}
-          style={{ width: `${labels.long.length + 0.25}ch` }}
-          data-slot="document-identity-badge"
-          data-kind="statute"
-          dir="ltr"
-        >
-          <bdi className={statuteLabelClasses(labels.long.length).short}>
-            {labels.short}
-          </bdi>
-          <bdi className={statuteLabelClasses(labels.long.length).long}>
-            {labels.long}
-          </bdi>
-        </span>
-      );
+      return labels === null
+        ? unknownDocumentMark()
+        : referenceLabelMark(labels, "statute");
+    }
+    case "caseNumber": {
+      const labels = caseNumberIdentityLabels(identity);
+      return labels === null
+        ? unknownDocumentMark()
+        : referenceLabelMark(labels, "caseNumber");
     }
     case "decision": {
       const abbreviation = identity.courtAbbreviation?.trim();
@@ -105,6 +95,47 @@ function documentIdentityMark(
       identity satisfies never;
       return panic("Unhandled document identity");
   }
+}
+
+/**
+ * A number standing for its document: a statute's `165/12`, a decision's
+ * `C-359/25`. Container queries compare available space with the full label
+ * in the same monospace units, so no observer or per-row state is needed; a
+ * label longer than its slot even in the short form truncates rather than
+ * spilling over its neighbour.
+ *
+ * The visible form depends on the slot, but the accessible name is always the
+ * full label: a narrow slot shows `262/06`, and a row whose title lacks the
+ * citation still exposes `262/2006`.
+ */
+function referenceLabelMark(
+  labels: IdentityLabels,
+  kind: "caseNumber" | "statute",
+) {
+  const classes = statuteLabelClasses(labels.long.length);
+  return (
+    <span
+      className={cn(
+        "@container/document-identity inline-flex max-w-full shrink-0 items-center justify-center font-mono leading-4 font-semibold tabular-nums",
+        labels.short.length > 7 ? "text-[9px]" : "text-[10px]",
+      )}
+      style={{ width: `${labels.long.length + 0.25}ch` }}
+      aria-label={labels.long}
+      data-slot="document-identity-badge"
+      data-kind={kind}
+      dir="ltr"
+      role="img"
+    >
+      {/* The badge's title tooltip, or the tab around it, names the document
+          in full, so a cut label adds no hint of its own. */}
+      <TruncatedText className={classes.short} hint={false} render={<bdi />}>
+        {labels.short}
+      </TruncatedText>
+      <TruncatedText className={classes.long} hint={false} render={<bdi />}>
+        {labels.long}
+      </TruncatedText>
+    </span>
+  );
 }
 
 function unknownDocumentMark() {

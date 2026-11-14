@@ -195,6 +195,15 @@ afterAll(async () => {
   await client.close();
 });
 
+test("an absent identifier checkpoint has no completed-pass age or repair count", async () => {
+  const report = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+
+  expect(report.lastCompletedIdentifierPass).toBeNull();
+});
+
 test("counts the serving generation's pending projections and reports only enabled scheduled-source freshness", async () => {
   const report = await db.transaction(
     async (tx) =>

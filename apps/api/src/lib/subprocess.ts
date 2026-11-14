@@ -6,6 +6,26 @@ import {
   type SubprocessTerminationReason,
 } from "@/api/lib/errors/tagged-errors";
 
+/**
+ * Writes a worker's answer to stdout and resolves once the pipe has taken all
+ * of it. A worker exits right after answering, and `process.exit` drops what
+ * is still queued on the pipe, so an unawaited large answer reaches the
+ * parent cut short.
+ */
+export const writeWorkerStdout = async (
+  output: string | Uint8Array,
+): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(output, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+};
+
 type SpawnWorkerOptions = {
   workerPath: string;
   args?: string[];

@@ -7,15 +7,16 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { AddCommentIcon, SparklesIcon, Trash2Icon } from "@stll/ui/icons";
 
+import { useSelectionCopyControl } from "@/components/copy-control";
 import type {
   AnnotationColor,
   AnnotationStyle,
   AnnotationVisibility,
 } from "@/components/legal-reader/annotations/annotation-types";
 import {
-  askAboutReaderPassage,
   readerSelectionLocator,
   readerSpansLocator,
+  useAskAboutReaderPassage,
   writeReaderPassage,
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
@@ -37,14 +38,16 @@ import { SelectionToolbar } from "@/components/selection-toolbar";
 import {
   SelectionAIActions,
   SelectionCopyMenu,
-  useSelectionCopy,
 } from "@/components/selection-toolbar-actions";
 import {
   MarkColorSwatches,
   MarkStyleButtons,
   MarkVisibilityToggle,
 } from "@/components/selection-toolbar-marks";
-import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
+import {
+  scrollMovesSelection,
+  selectionToolbarAnchor,
+} from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -65,6 +68,7 @@ type AnnotationToolbarProps = {
    * no notes margin, where the bar offers no comment at all rather than an
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
+  explainLanguagePicker?: ReactNode;
   onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
   /** Why Explain cannot take these spans, or `undefined` when it can. */
   explainRefusal?:
@@ -122,12 +126,14 @@ export const AnnotationToolbar = ({
   onClearActive,
   onCompose,
   onExplain,
+  explainLanguagePicker,
   explainRefusal,
   onSelectedSpansChange,
   scrollContainerRef,
   target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
+  const askAboutReaderPassage = useAskAboutReaderPassage();
   const barRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
@@ -141,7 +147,14 @@ export const AnnotationToolbar = ({
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
-  const selectionCopy = useSelectionCopy();
+  // The bar copies the words selected in the reader while it is showing.
+  const selectionCopy = useSelectionCopyControl({
+    ownsSelection: (selection, root) =>
+      barRef.current !== null &&
+      root.contains(selection.anchorNode) &&
+      root.contains(selection.focusNode),
+    rootRef: scrollContainerRef,
+  });
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -280,10 +293,22 @@ export const AnnotationToolbar = ({
           reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
-        // A fresh selection must not inherit the previous one's open menu.
-        setCopyOpen(false);
         const range = selection.getRangeAt(0);
         const spans = selectionAnchorsFrom(selection, root);
+        // The bar acts on a passage of the document: words selected in the
+        // reader's own chrome (a notice, a note, a label) touch none of its
+        // anchored blocks, and quoting them with the document's citation
+        // would be wrong. A text with no anchored blocks at all keeps the bar.
+        if (
+          spans.length === 0 &&
+          root.querySelector("[data-anchor]") !== null
+        ) {
+          setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
+          return;
+        }
+        // A fresh selection must not inherit the previous one's open menu.
+        setCopyOpen(false);
         // Reported before the bar's geometry: words scrolled out of view are
         // still selected, though the bar has nowhere to float.
         reportSelectedSpans(spans);
@@ -379,23 +404,13 @@ export const AnnotationToolbar = ({
       }
       readSelection();
     };
-    const onSelectionChange = () => {
-      selectionCopy.selectionChanged();
-      readSelection();
-    };
-    const onCopy = () => {
-      const selection = ownerDoc.getSelection();
-      if (
-        barRef.current !== null &&
-        selection !== null &&
-        !selection.isCollapsed &&
-        root.contains(selection.anchorNode) &&
-        root.contains(selection.focusNode)
-      ) {
-        selectionCopy.confirmNativeCopy();
+    const onSelectionChange = () => readSelection();
+    const onViewportChange = () => readSelection();
+    const onScroll = (event: Event) => {
+      if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
+        readSelection();
       }
     };
-    const onViewportChange = () => readSelection();
     // Dragging selected words carries the passage with the document it came
     // from, so a drop on the chat composer lands as chips where the corpus
     // offers a reference for it.
@@ -413,12 +428,11 @@ export const AnnotationToolbar = ({
       writePassage(event.dataTransfer, quote);
     };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
-    ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
     ownerDoc.addEventListener("pointerup", onPointerEnd);
-    ownerDoc.addEventListener("scroll", onViewportChange, true);
+    ownerDoc.addEventListener("scroll", onScroll, true);
     ownerDoc.defaultView?.addEventListener("resize", onViewportChange);
     const observer = new ResizeObserver(onViewportChange);
     observer.observe(root);
@@ -428,12 +442,11 @@ export const AnnotationToolbar = ({
       observer.disconnect();
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", onSelectionChange);
-      ownerDoc.removeEventListener("copy", onCopy);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
       ownerDoc.removeEventListener("pointerup", onPointerEnd);
-      ownerDoc.removeEventListener("scroll", onViewportChange, true);
+      ownerDoc.removeEventListener("scroll", onScroll, true);
       ownerDoc.defaultView?.removeEventListener("resize", onViewportChange);
       root.removeEventListener("click", onClick);
       root.removeEventListener("dragstart", onDragStart);
@@ -485,6 +498,7 @@ export const AnnotationToolbar = ({
   // the same question, and the tools look the provision up by it.
   const askAboutPassage = (quote: string, locator: string | null) => {
     askAboutReaderPassage({
+      locator,
       prompt: t("legalReader.annotations.askPassagePrompt", {
         citation: readerTargetCitation({ locator, target }).inline,
         quote,
@@ -591,6 +605,8 @@ export const AnnotationToolbar = ({
                       blockAnchorId: span.blockAnchorId,
                       endOffset: span.endOffset,
                       quote: span.quote,
+                      quotePrefix: span.quotePrefix,
+                      quoteSuffix: span.quoteSuffix,
                       startOffset: span.startOffset,
                     })),
                   );
@@ -671,6 +687,7 @@ export const AnnotationToolbar = ({
         {mode === "authenticated" && spans.length > 0 && (
           <SelectionAIActions
             explainRefusal={explainRefusal?.(spans)}
+            explainLanguagePicker={explainLanguagePicker}
             onAsk={() => {
               askAboutPassage(
                 spans.map(({ quote }) => quote).join(" "),
@@ -729,7 +746,9 @@ export const AnnotationToolbar = ({
       doc={doc}
       onAttach={attachBar}
     >
-      {content}
+      <div onMouseDown={(event) => event.preventDefault()} role="presentation">
+        {content}
+      </div>
     </SelectionToolbar>
   );
 };

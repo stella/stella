@@ -8,8 +8,8 @@ import { cn } from "@stll/ui/utils";
 import {
   type DesktopPlatform,
   MACOS_DMG_URL,
+  WINDOWS_ARM64_EXE_URL,
   WINDOWS_EXE_URL,
-  WINDOWS_MSI_URL,
 } from "@/lib/desktop-downloads";
 
 type DesktopDownloadButtonsProps = {
@@ -51,8 +51,11 @@ export const DesktopDownloadButtons = ({
           <DownloadIcon />
           {t("settings.account.desktopDownloadWindows")}
         </a>
-        <a className={secondaryClass} href={sanitizeHref(WINDOWS_MSI_URL)}>
-          {t("settings.account.desktopDownloadOtherWindows")}
+        <a
+          className={secondaryClass}
+          href={sanitizeHref(WINDOWS_ARM64_EXE_URL)}
+        >
+          {t("settings.account.desktopDownloadWindowsArm")}
         </a>
       </div>
     );

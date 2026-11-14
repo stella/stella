@@ -12,4 +12,6 @@ jq -e --arg sha "$release_sha" --arg ref "$release_ref" '
   and ([.image.digest, .webImage.digest, .productionWebImage.digest] |
     all(test("^sha256:[a-f0-9]{64}$")))
 ' "$rc_manifest" >/dev/null
-jq --arg version "$release_ref" '.version = $version' "$rc_manifest"
+# webImage is the web image for the manifest's own target: a final release
+# targets production, so it carries the RC's proven production web image.
+jq --arg version "$release_ref" '.version = $version | .webImage = .productionWebImage' "$rc_manifest"

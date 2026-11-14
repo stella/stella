@@ -10,6 +10,7 @@ const absentText = {
   type: "absent",
 } as const;
 const decision = {
+  extractionWarnings: [],
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   caseFile: { items: [], nextCursor: null, limit: 50 },
@@ -56,6 +57,7 @@ const decision = {
     name: "Synthetic fixture source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: absentText,
@@ -153,10 +155,11 @@ const {
 } = statute;
 const versions = {
   items: [
-    { ...version, amendedBy: null, isDefault: true },
+    { ...version, amendedBy: null, changes: null, isDefault: true },
     {
       ...version,
       amendedBy: null,
+      changes: null,
       id: olderStatute.id,
       status: olderStatute.status,
       effectiveDate: olderStatute.effectiveDate,

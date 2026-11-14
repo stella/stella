@@ -49,6 +49,12 @@ const config = {
 
 const SUGGEST_TITLE_TIMEOUT_MS = 15_000;
 
+const anonymizedConversationError = () =>
+  new HandlerError({
+    status: 403,
+    message: "Title suggestion is unavailable for anonymized conversations",
+  });
+
 // Proposes a title for an existing conversation from the same message window
 // the recap uses. Read-only by contract: the only title writer stays
 // `PATCH /threads/:threadId/title`, which owns titleSource stamping, the
@@ -75,6 +81,7 @@ export const createSuggestThreadTitle = ({
       user,
     } = ctx;
     const scope = yield* resolveChatScope({
+      admitted: "active",
       getWorkspaceAccess,
       workspaceId,
     });
@@ -108,13 +115,7 @@ export const createSuggestThreadTitle = ({
     yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
 
     if (thread.usedAnonymization) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message:
-            "Title suggestion is unavailable for anonymized conversations",
-        }),
-      );
+      return Result.err(anonymizedConversationError());
     }
 
     const messageWindow = yield* Result.await(
@@ -123,13 +124,7 @@ export const createSuggestThreadTitle = ({
     // Re-read with the messages: the thread may have switched since the
     // check above.
     if (messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message:
-            "Title suggestion is unavailable for anonymized conversations",
-        }),
-      );
+      return Result.err(anonymizedConversationError());
     }
 
     if (messageWindow.messages.length === 0) {
@@ -142,7 +137,7 @@ export const createSuggestThreadTitle = ({
     }
 
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     yield* requireTanStackAIAvailableForTask({
@@ -167,7 +162,6 @@ export const createSuggestThreadTitle = ({
         thread,
         messageWindow,
         admit,
-        generateTextForTask,
       }),
     );
     return await authorization.execute(async ({ proof }) => {
@@ -218,7 +212,7 @@ export const createSuggestThreadTitle = ({
                 const generated = yield* Result.await(
                   Result.tryPromise({
                     try: async () =>
-                      await checked.generateTextForTask({
+                      await generateTextForTask({
                         userId: modelAdmission.userId,
                         dataClass: "customer",
                         abortSignal: actionSignal,

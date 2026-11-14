@@ -3,7 +3,9 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
-  clusterExclusiveMigrationTests,
+  anyBootsPgliteTestDatabase,
+  bootsPgliteTestDatabase,
+  clusterExclusivePostgresTests,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
   isolateSharedTableDdlTests,
@@ -24,7 +26,7 @@ describe("PostgreSQL cluster-wide migration isolation", () => {
   ])("isolates canonical migration runner access: %s", (source) => {
     const testPath = "src/db/replay.db.test.ts";
     expect(
-      clusterExclusiveMigrationTests(new Map([[testPath, source]])),
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
     ).toEqual(new Set([testPath]));
   });
 
@@ -37,7 +39,7 @@ describe("PostgreSQL cluster-wide migration isolation", () => {
     "const fixture = 'import { runMigrations } from \"./migration-runner\"';",
   ])("retains parallelism for non-owning source: %s", (source) => {
     expect(
-      clusterExclusiveMigrationTests(
+      clusterExclusivePostgresTests(
         new Map([["src/db/example.db.test.ts", source]]),
       ),
     ).toEqual(new Set());
@@ -52,7 +54,7 @@ describe("PostgreSQL cluster-wide migration isolation", () => {
       path.join(import.meta.dirname, "..", testPath),
     ).text();
     expect(
-      clusterExclusiveMigrationTests(new Map([[testPath, source]])),
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
     ).toEqual(new Set([testPath]));
   });
 });
@@ -156,6 +158,33 @@ describe("PostgreSQL shared-table DDL isolation", () => {
   });
 });
 
+describe("PostgreSQL suites on the PGlite test database", () => {
+  test.each([
+    'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
+    'import { getTestDb } from "@/api/tests/security/test-utils";',
+    'import { createTestPglite } from "@/api/tests/pglite-test-db";',
+  ])("boots PGlite: %s", (source) => {
+    expect(bootsPgliteTestDatabase(source)).toBe(true);
+  });
+
+  test("a suite on PostgreSQL alone does not boot PGlite", () => {
+    expect(
+      bootsPgliteTestDatabase('import { getDb } from "@/api/db/root";'),
+    ).toBe(false);
+  });
+
+  // The runner boots these from one snapshot; this suite is the one whose
+  // in-process schema build outlasted its setup hook on a loaded runner.
+  test("detects the invoice export suite", async () => {
+    const apiRoot = path.resolve(import.meta.dir, "..");
+    expect(
+      await anyBootsPgliteTestDatabase(apiRoot, [
+        "src/handlers/invoices/pdf/export.integration.test.ts",
+      ]),
+    ).toBe(true);
+  });
+});
+
 describe("PostgreSQL shared batch", () => {
   // Every shared-batch file reuses one process and one cached auth instance,
   // so a module mock there arrives after another file built auth and never
@@ -185,4 +214,39 @@ describe("PostgreSQL shared batch", () => {
       `These PostgreSQL suites call mock.module in the shared test process; move the mocked cases to a .db.test.ts file, which runs in its own process:\n${mocking.join("\n")}`,
     ).toEqual([]);
   });
+});
+
+test.each([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+])(
+  "snapshot visibility proof %s runs after all cluster workers finish",
+  (testPath) => {
+    expect(
+      clusterExclusivePostgresTests(
+        new Map([[testPath, "test('visibility', () => {})"]]),
+      ),
+    ).toEqual(new Set([testPath]));
+  },
+);
+
+test("the scheduled-run block measurement runs after all cluster workers finish", async () => {
+  const testPath = "src/tests/query-perf/scheduled-run.postgres.test.ts";
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(
+    await discoverGatedTestFiles({
+      apiRoot: path.resolve(import.meta.dir, ".."),
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }),
+  ).toContain(testPath);
+  expect(
+    clusterExclusivePostgresTests(
+      new Map([[testPath, "test('measurement', () => {})"]]),
+    ),
+  ).toEqual(new Set([testPath]));
 });

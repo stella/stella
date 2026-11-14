@@ -19,7 +19,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
 import createMatterLink from "@/api/handlers/case-law/matter-links/create";
-import listMatterLinks from "@/api/handlers/case-law/matter-links/list";
+import { createListMatterLinks } from "@/api/handlers/case-law/matter-links/list";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -28,10 +28,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestCaseLawReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import {
   createTestIds,
   setupRlsTestData,
@@ -51,6 +53,9 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const listMatterLinks = createListMatterLinks({
+  caseLawDb: createTestCaseLawReader(() => testDb),
+});
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -113,6 +118,10 @@ const modelCapabilityContext = (): AuthorizedMcpRequestContext => {
     safeDb,
     scopedDb,
     testDependencies: {
+      loadCapabilityEndpoint: async (id: string) =>
+        id === "case-law.matter-links.list"
+          ? listMatterLinks
+          : await loadCapabilityEndpoint(id),
       consumeInvokeCapabilityRateLimit: async () => ({
         ok: true,
         retryAfterSeconds: 60,

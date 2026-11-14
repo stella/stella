@@ -18,7 +18,7 @@ import { panic } from "better-result";
 
 import {
   foldSearchMatchTextWithOffsets,
-  spacedLetterRunRegex,
+  letterSpacingJoins,
 } from "@stll/text-normalize";
 
 /**
@@ -98,23 +98,8 @@ export type FoldedMarkText = {
  * The spaces inside spaced-out emphasis (`r o z h o d o l`) that join their
  * letters into one word rather than separating them, by original index.
  */
-const spacedLetterJoins = (text: string): ReadonlySet<number> => {
-  const joins = new Set<number>();
-  for (const match of text.matchAll(spacedLetterRunRegex())) {
-    const run = match[0];
-    for (let offset = 1; offset < run.length; offset += 1) {
-      const before = run[offset - 1];
-      if (
-        run[offset] === " " &&
-        before !== undefined &&
-        WORD_CHARACTER.test(before)
-      ) {
-        joins.add(match.index + offset);
-      }
-    }
-  }
-  return joins;
-};
+const spacedLetterJoins = (text: string): ReadonlySet<number> =>
+  new Set(letterSpacingJoins(text));
 
 /**
  * Fold a text for marking: `foldSearchMatchTextWithOffsets` (the client-wide
@@ -189,27 +174,58 @@ export type QueryMarkTokens = readonly string[] & {
 };
 
 /**
- * The words of a query worth marking, folded and without repeats.
- * Punctuation is a separator, so the quotes a reader types around a phrase
- * never become part of a token.
+ * The words of a query, folded and without repeats, from the shortest that
+ * counts. Punctuation is a separator, so the quotes a reader types around a
+ * phrase never become part of a token.
  */
-export const queryHighlightTokens = (
+const foldedQueryWords = (
   query: string | undefined,
-): QueryMarkTokens => {
+  minimumLength: number,
+): string[] => {
   const tokens: string[] = [];
   if (query !== undefined) {
     const { text } = foldMarkText(query);
     for (const { end, start } of wordSpans(text)) {
       const token = text.slice(start, end);
-      if (
-        token.length >= MIN_HIGHLIGHT_TOKEN_LENGTH &&
-        !tokens.includes(token)
-      ) {
+      if (token.length >= minimumLength && !tokens.includes(token)) {
         tokens.push(token);
       }
     }
   }
-  return Object.assign(tokens, { [QUERY_MARK_TOKENS]: true as const });
+  return tokens;
+};
+
+/**
+ * The words of a search query worth marking in its results: the query was
+ * asked of the corpus, so its short words are noise there.
+ */
+export const queryHighlightTokens = (
+  query: string | undefined,
+): QueryMarkTokens =>
+  Object.assign(foldedQueryWords(query, MIN_HIGHLIGHT_TOKEN_LENGTH), {
+    [QUERY_MARK_TOKENS]: true as const,
+  });
+
+/**
+ * The words a reader typed to find in the text before them, every one of
+ * them: "1" is how a reader looks for § 1, and a find that drops it answers
+ * "no results" over a page that shows it.
+ */
+export const queryFindTokens = (query: string | undefined): QueryMarkTokens =>
+  Object.assign(foldedQueryWords(query, 1), {
+    [QUERY_MARK_TOKENS]: true as const,
+  });
+
+/**
+ * The words a reader typed, folded, in the order typed and with repeats kept:
+ * the phrase a find looks for before it falls back to the words one by one.
+ */
+export const queryFindPhrase = (query: string | undefined): string[] => {
+  if (query === undefined) {
+    return [];
+  }
+  const { text } = foldMarkText(query);
+  return wordSpans(text).map(({ end, start }) => text.slice(start, end));
 };
 
 /**

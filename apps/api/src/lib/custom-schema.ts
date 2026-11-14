@@ -3,16 +3,41 @@ import * as v from "valibot";
 import { INVOICE_LANGUAGES } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { safeIdSchema } from "@stll/api-contract/safe-id";
-import { UUID_PATTERN } from "@stll/uuid-codec";
+import { uuidSchema } from "@stll/api-contract/uuid";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 
-/** UUID string (8-4-4-4-12 hex digits), as `Bun.randomUUIDv7()` issues them. */
-export const uuidSchema = v.pipe(
-  v.string(),
-  v.length(36),
-  v.regex(new RegExp(UUID_PATTERN, "u")),
-);
+type Utf8ByteBounds = { maxBytes: number; maxSegmentBytes?: number };
+
+export type Utf8ByteBoundsKeywords = {
+  "x-maxUtf8Bytes"?: Utf8ByteBounds["maxBytes"];
+  "x-maxSegmentUtf8Bytes"?: Utf8ByteBounds["maxSegmentBytes"];
+};
+
+const UTF8_BYTE_BOUNDS = new WeakMap<object, Utf8ByteBounds>();
+
+export const readUtf8ByteBounds = (action: object) =>
+  UTF8_BYTE_BOUNDS.get(action);
+
+/** Byte limits are published as explicit x- keywords, not character limits. */
+export const utf8ByteBounds = (bounds: Utf8ByteBounds) => {
+  const { maxBytes, maxSegmentBytes } = bounds;
+  const check = v.check(
+    (value: string) =>
+      value.isWellFormed() &&
+      utf8ByteLength(value) <= maxBytes &&
+      (maxSegmentBytes === undefined ||
+        value
+          .split("/")
+          .every((segment) => utf8ByteLength(segment) <= maxSegmentBytes)),
+    "Expected text within its UTF-8 byte limits",
+  );
+  UTF8_BYTE_BOUNDS.set(check, { ...bounds });
+  return check;
+};
+
+export { uuidSchema };
 
 /**
  * A shared schema with per-use prose. The branded schemas below are module
@@ -72,6 +97,9 @@ export const fileSchema = ({ maxBytes }: { maxBytes: number }) =>
   );
 
 export { userIdSchema } from "@stll/api-contract/safe-id";
+
+/** Every name a person gives something; see `display-name.ts` in api-contract. */
+export { displayNameSchema } from "@stll/api-contract/display-name";
 
 export const defaultVarcharSchema = v.pipe(
   v.string(),

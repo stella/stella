@@ -73,7 +73,7 @@ const commandStrings = (value: unknown): string[] => {
 };
 
 /** Report compiler-backed checks reachable from either repository git hook. */
-export const hookTypecheckViolations = (root: string): Violation[] => {
+const hookTypecheckViolations = (root: string): Violation[] => {
   const manifest = v.parse(
     packageSchema,
     JSON.parse(readFileSync(path.join(root, "package.json"), "utf-8")),

@@ -31,6 +31,11 @@ type ContactRow = typeof contacts.$inferSelect;
 const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   // Tenant scope, implied by the caller's active organization.
   "organizationId",
+  // Import provenance belongs to contacts.get.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // Person-only fields the directory summary omits; full detail is on
   // contacts.get.
   "prefix",
@@ -58,6 +63,7 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   "currency",
   "paymentTermDays",
   "invoiceLanguage",
+  "timeBillingFormat",
   // Attorney assignment surfaces on the matter (workspace) contact fields,
   // not the standalone directory row.
   "originatingAttorneyId",
@@ -95,29 +101,10 @@ export const CONTACT_CURSOR_MAX_LENGTH = Math.ceil(
     3,
 );
 
-// Legacy cursors were base64 of `displayName\0uuid`; the current form is the
-// base64url JSON tuple `encodePaginationCursor` emits. Keep the fallback so an
-// in-flight legacy cursor does not silently restart pagination at page one.
-const LEGACY_CONTACT_CURSOR_SEPARATOR = "\0";
-
-const decodeLegacyContactCursor = (cursor: string): DecodedCursor | null => {
-  const decoded = Buffer.from(cursor, "base64").toString("utf-8");
-  const separatorIndex = decoded.indexOf(LEGACY_CONTACT_CURSOR_SEPARATOR);
-  if (separatorIndex === -1) {
-    return null;
-  }
-  const displayName = decoded.slice(0, separatorIndex);
-  const id = decoded.slice(separatorIndex + 1);
-  if (!isUuidPaginationCursorPart(id)) {
-    return null;
-  }
-  return { displayName, id: brandPersistedContactId(id) };
-};
-
 const decodeCursor = (cursor: string): DecodedCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts === null) {
-    return decodeLegacyContactCursor(cursor);
+    return null;
   }
   const displayName = parts.at(0);
   const id = parts.at(1);

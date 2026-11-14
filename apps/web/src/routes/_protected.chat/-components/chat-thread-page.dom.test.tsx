@@ -4,12 +4,13 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
 import type { WebApiRoutes } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -31,7 +32,8 @@ const sends: unknown[] = [];
 const unexpected: string[] = [];
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -56,6 +58,8 @@ const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { setThreadActiveSkill, useThreadActiveSkillStore } =
   await import("@/features/chat/thread-active-skill-store");
+const { toSafeId } = await import("@/lib/safe-id");
+const { skillsOptions } = await import("@/lib/knowledge/queries");
 const { ChatThreadPage } = await import("./chat-thread-page");
 
 const user = {
@@ -79,6 +83,7 @@ type ThreadResponse =
 const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
+  newestLocalTurn: null,
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,
@@ -106,7 +111,7 @@ const savedThread = {
   webSearchAvailable: false,
   webSearchEnabled: false,
 } satisfies ThreadResponse;
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   testing.cleanup();
@@ -145,15 +150,49 @@ const evictBuilder = () => {
   ).toBeUndefined();
 };
 
+type SkillsResponse = WebApiRoutes["skills"]["get"]["response"][200];
+const installedSkill = {
+  lastEdit: null,
+  id: toSafeId<"agentSkill">("00000000-0000-7000-8000-0000000051c1"),
+  scope: "team",
+  origin: "authored",
+  slug: "summarise-lease",
+  name: "Summarise a lease",
+  description: "Summarise the key terms of a lease.",
+  version: null,
+  license: null,
+  compatibility: null,
+  sourceUrl: null,
+  contentHash: "hash",
+  enabled: true,
+  invocation: "auto",
+  boundClientId: null,
+  boundWorkspaceId: null,
+  command: "summarise-lease",
+  body: "Summarise the key terms of this lease.",
+  userId: user.id,
+  createdAt: "2026-01-01T00:00:00.000Z",
+} as const satisfies SkillsResponse["installed"][number];
+
+type ServeOptions = {
+  aiAvailable?: boolean;
+  thread?: ThreadResponse;
+  installed?: SkillsResponse["installed"];
+};
+
 /** The server: the saved builder thread, which never records a turn. */
-const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
+const serveSavedBuilder = ({
+  aiAvailable = true,
+  thread = savedThread,
+  installed = [],
+}: ServeOptions = {}) => {
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
       const { pathname } = new URL(request.url);
       if (pathname.endsWith(`/chat/threads/${threadRef.threadId}/messages`)) {
         requests.push(request);
-        return Response.json(savedThread);
+        return Response.json(thread);
       }
       if (pathname.endsWith("/chat/tool-grants")) {
         return Response.json({ grants: [] });
@@ -224,21 +263,47 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
       if (pathname.endsWith("/skills")) {
         return Response.json({
           builtIn: [],
-          installed: [],
+          installed,
           canManageTeam: false,
           limit: 100,
           nextCursor: null,
-        } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
+        } satisfies SkillsResponse);
+      }
+      if (pathname.endsWith("/mcp/connections")) {
+        return Response.json({
+          connections: [],
+        } satisfies WebApiRoutes["mcp"]["connections"]["get"]["response"][200]);
       }
       if (pathname.endsWith("/mcp/connectors")) {
         return Response.json({
           canManageCustomConnectors: false,
           connectors: [],
           nativeTools: [],
-        });
+        } satisfies WebApiRoutes["mcp"]["connectors"]["get"]["response"][200]);
       }
       if (pathname.endsWith("/chat/skill-availability")) {
         return Response.json({ unavailable: [] });
+      }
+      // The composer's where chip: this member runs no turns on a computer.
+      if (pathname.endsWith("/chat/local-runners")) {
+        return Response.json({ status: "hidden" });
+      }
+      // Nothing of this chat runs in the background on a computer.
+      if (
+        pathname.endsWith(
+          `/chat/threads/${threadRef.threadId}/background-tasks`,
+        )
+      ) {
+        return Response.json({
+          count: 0,
+        } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["background-tasks"]["get"]["response"][200]);
+      }
+      // The open chat keeps itself read.
+      if (
+        pathname.endsWith(`/chat/threads/${threadRef.threadId}/read-state`) &&
+        request.method === "PATCH"
+      ) {
+        return Response.json({ readState: "read" });
       }
       if (pathname.startsWith("/api/auth/")) {
         return Response.json(null);
@@ -254,7 +319,7 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
 };
 
 const createClient = () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
@@ -276,9 +341,7 @@ const draftPrompt = (text: string) => {
 };
 
 /** The mounted thread page after its availability read settles. */
-const openThreadPage = async (
-  client: InstanceType<typeof query.QueryClient>,
-) => {
+const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
@@ -305,7 +368,7 @@ const openThreadPage = async (
   await appRouter.load();
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
-      <query.QueryClientProvider client={client}>
+      <QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
             <AuthenticatedUserProvider user={user}>
@@ -315,7 +378,7 @@ const openThreadPage = async (
             </AuthenticatedUserProvider>
           </FormattingProvider>
         </IntlProvider>
-      </query.QueryClientProvider>
+      </QueryClientProvider>
     </AnalyticsContext>,
   );
   await ui.findByRole("textbox");
@@ -392,7 +455,7 @@ test("an evicted builder's chat lives and goes with the thread entry the page re
   const firstVisit = await openThreadPage(client);
   await send(firstVisit, 1);
   await testing.waitFor(() =>
-    expect(firstVisit.queryByText(ANSWER)).not.toBeNull(),
+    expect(firstVisit.queryByText(ANSWER) === null).toBe(false),
   );
   expect(
     client
@@ -458,5 +521,62 @@ test("unavailable AI blocks sending and preserves the draft until availability r
   expect(sends.at(0)).toMatchObject({
     messages: [{ content: `<p>${prompt}</p>`, role: "user" }],
   });
+  expect(unexpected).toEqual([]);
+});
+
+const builderCopy = messages.knowledge.agentSkills.builtIn.playbookBuilder;
+const openingPrompts = Object.values(builderCopy.openingPrompts);
+
+test("an empty chat with an active skill introduces that skill in place of the general prompts", async () => {
+  serveSavedBuilder({ installed: [installedSkill] });
+  const client = createClient();
+  const ui = await openThreadPage(client);
+
+  expect(ui.getByRole("heading", { name: builderCopy.name }).textContent).toBe(
+    builderCopy.name,
+  );
+  expect(ui.getByText(builderCopy.description)).toBeDefined();
+  expect(openingPrompts).toHaveLength(3);
+  for (const prompt of openingPrompts) {
+    expect(
+      ui.getByRole("button", { name: new RegExp(prompt.name, "u") }),
+    ).toBeDefined();
+  }
+  // The general prompts come from the skills list; wait for it to load.
+  await testing.waitFor(() =>
+    expect(
+      client.getQueryState(
+        skillsOptions(user.activeOrganizationId, user.id).queryKey,
+      )?.status,
+    ).toBe("success"),
+  );
+  expect(ui.queryByText(installedSkill.name)).toBeNull();
+
+  const [first] = openingPrompts;
+  if (first === undefined) {
+    throw new Error("Expected an opening prompt");
+  }
+  await testing.act(async () => {
+    testing.fireEvent.click(
+      ui.getByRole("button", { name: new RegExp(first.name, "u") }),
+    );
+  });
+  expect(ui.getByRole("textbox").textContent).toBe(first.body);
+  expect(sends).toEqual([]);
+  expect(unexpected).toEqual([]);
+});
+
+test("an empty chat without a skill keeps the general prompts", async () => {
+  serveSavedBuilder({
+    installed: [installedSkill],
+    thread: { ...savedThread, activeSkill: null },
+  });
+  const ui = await openThreadPage(createClient());
+
+  expect(await ui.findByText(installedSkill.name)).toBeDefined();
+  expect(ui.queryByRole("heading", { name: builderCopy.name })).toBeNull();
+  for (const prompt of openingPrompts) {
+    expect(ui.queryByText(prompt.name)).toBeNull();
+  }
   expect(unexpected).toEqual([]);
 });

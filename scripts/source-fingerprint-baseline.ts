@@ -48,7 +48,11 @@ import {
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
-import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
+import {
+  addedEntries,
+  ledgerGitEnv,
+  runLedgerMembershipGuard,
+} from "./ledger-membership.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE = BASELINE_PATHS.sourceFingerprint;
@@ -550,12 +554,23 @@ const baselineAt = (args: readonly string[]): Baseline | null => {
   if (baseRef === undefined || baseRef === "") {
     panic("--base requires a nonempty Git reference");
   }
-  const result = Bun.spawnSync(["git", "show", `${baseRef}:${BASELINE}`], {
+  // Evolution is the branch's own change, so it is read at the fork point: a
+  // fingerprint the base bumped after the fork never reads as a decrease here.
+  // An unresolvable base keeps its ref, so the read below reports it.
+  const forkPoint = Bun.spawnSync(["git", "merge-base", "HEAD", baseRef], {
     cwd: ROOT,
+    env: ledgerGitEnv(),
+    stderr: "pipe",
+  });
+  const revision =
+    forkPoint.exitCode === 0 ? forkPoint.stdout.toString().trim() : baseRef;
+  const result = Bun.spawnSync(["git", "show", `${revision}:${BASELINE}`], {
+    cwd: ROOT,
+    env: ledgerGitEnv(),
     stderr: "pipe",
   });
   if (result.exitCode === 0) {
-    return parseBaseline(result.stdout.toString(), `${baseRef}:${BASELINE}`);
+    return parseBaseline(result.stdout.toString(), `${revision}:${BASELINE}`);
   }
   if (baseIndex !== -1) {
     panic(`Cannot read source fingerprint baseline at ${baseRef}`);

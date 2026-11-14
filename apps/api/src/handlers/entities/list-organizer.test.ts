@@ -135,6 +135,7 @@ describe("organizer entity lists", () => {
         parentId: null,
         fileName: "Document.pdf",
         mimeType: "application/pdf",
+        sizeBytes: 42,
       },
     ]);
     expect(result.nextCursor).toEqual(expect.any(String));

@@ -12,6 +12,7 @@ import {
   type McpOAuthScope,
   REQUEST_ID_HEADER,
 } from "@stll/api-contract";
+import { MCP_REGISTRY_VERSION_HEADER } from "@stll/api-contract/mcp-registry";
 
 import { env } from "@/api/env";
 import {
@@ -192,6 +193,8 @@ export const MCP_EXPOSE_HEADERS = [
     (reason) => STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON[reason],
   ),
   STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
+  // The tool-list projection version, so a browser client can compare it.
+  MCP_REGISTRY_VERSION_HEADER,
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server
   // logs the same way REST callers do.

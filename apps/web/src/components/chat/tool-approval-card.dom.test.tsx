@@ -2,9 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, cleanup, render, waitFor } =
@@ -87,6 +87,35 @@ test("a grant the API confirms answers the card", async () => {
       expect(approved).toEqual(["pending-approval"]);
     });
   });
+  queryClient.clear();
+});
+
+test("a coding agent's web search asks with its query on the card", () => {
+  const queryClient = new QueryClient();
+  const input = { query: "notice period for residential leases" };
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatApprovalContext value={testChatApprovalContextValue}>
+          <ToolApprovalCard
+            isAwaitingUser
+            isTurnActive
+            part={{
+              approval: { id: "harness-search-approval", needsApproval: true },
+              arguments: JSON.stringify(input),
+              id: "harness-search-call",
+              input,
+              name: "harness_web_search",
+              state: "approval-requested",
+              type: "tool-call",
+            }}
+          />
+        </ChatApprovalContext>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(view.getByText("notice period for residential leases")).toBeDefined();
   queryClient.clear();
 });
 
@@ -231,5 +260,37 @@ test("a document edit approval says what changes, never a block id", () => {
   expect(text).toContain("Either party may terminate on 60 days' notice.");
   expect(text).toContain("Replace the selected text with “60 days'”");
   expect(text).not.toContain(blockId);
+  queryClient.clear();
+});
+
+test("a coding agent's step names what it acts on before it is allowed", () => {
+  const queryClient = new QueryClient();
+  const input = {
+    tool: "Read",
+    detail: { kind: "read", path: "../shared/client-notes.md" },
+  };
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatApprovalContext value={testChatApprovalContextValue}>
+          <ToolApprovalCard
+            isAwaitingUser
+            isTurnActive
+            part={{
+              approval: { id: "native-approval", needsApproval: true },
+              arguments: JSON.stringify(input),
+              id: "native-tool-call",
+              input,
+              name: "harness_native_tool",
+              state: "approval-requested",
+              type: "tool-call",
+            }}
+          />
+        </ChatApprovalContext>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(view.getByText("../shared/client-notes.md")).toBeDefined();
   queryClient.clear();
 });

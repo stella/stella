@@ -1,0 +1,477 @@
+import { expect, test } from "bun:test";
+
+import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
+
+import {
+  STRUCTURE_FIDELITY_RULES,
+  structureFidelityIn,
+} from "./structure-fidelity";
+
+const paragraphs = (texts: readonly string[]): Block[] =>
+  texts.map((text, index) => ({
+    id: `b${String(index)}`,
+    anchorId: `p-${String(index)}`,
+    type: "paragraph",
+    role: "intro",
+    inlines: [{ type: "text", text }],
+    plainText: text,
+  }));
+
+const sentenceCuts = (texts: readonly string[]): string[] =>
+  structureFidelityIn(paragraphs(texts))
+    .filter(({ rule }) => rule === STRUCTURE_FIDELITY_RULES.SENTENCE_CUT)
+    .map(({ anchorId }) => anchorId);
+
+test("a separator word between two labelled party lines is not a cut sentence", () => {
+  expect(
+    sentenceCuts([
+      "žalobce: Jan Novák, bytem Praha, zastoupený advokátem Petrem Dvořákem",
+      "proti",
+      "žalovaná: Česká republika",
+    ]),
+  ).toEqual([]);
+});
+
+test("a one-word continuation followed by prose is still a cut sentence", () => {
+  expect(
+    sentenceCuts([
+      "Soud prvního stupně rozhodl o věci samé a o nákladech řízení v souladu se",
+      "zákonem",
+      "Odvolání je přípustné do patnácti dnů.",
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test("a separator word not followed by a labelled line is still a cut sentence", () => {
+  expect(
+    sentenceCuts([
+      "žalobce: Jan Novák, bytem Praha, zastoupený advokátem Petrem Dvořákem",
+      "proti",
+      "České republice o zaplacení částky.",
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test.each([
+  [
+    "Höhenexponent max. 2-Sek.-Mittel der Windgeschwindigkeit0,1429 nach Messung",
+    "50-jährliches, max. 2-Sek.-Mittel der Windg. in 100 m Höhe 43,9 m/s",
+  ],
+  [
+    "50-jährliches, max. 5-Sek.-Mittel der Windg. in 100 m Höhe 42,6 m/s",
+    "1-jährliches, max. 10-Min.-Mittel der Windg. in 10 m Höhe 16,9 m/s",
+  ],
+])("a printed table row is not a cut sentence: %s", (row, next) => {
+  expect(sentenceCuts([row, next])).toEqual([]);
+});
+
+test("a prose line with one number is still a cut sentence", () => {
+  expect(
+    sentenceCuts([
+      "Der Bescheid wurde der Beschwerdeführerin im Jahr 2020 zugestellt und die Frist",
+      "begann mit dem Tag der Zustellung zu laufen.",
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test("a digit-led prose continuation after a long line is still a cut sentence", () => {
+  expect(
+    sentenceCuts([
+      "Diese Bestimmungen sind im Wesentlichen textgleich mit § 75 Abs. 1 der GewO",
+      "1994, mit weiteren Nachweisen zur ständigen Rechtsprechung.",
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+const paragraph = (anchorId: string, plainText: string): ParagraphBlock => ({
+  id: anchorId,
+  anchorId,
+  type: "paragraph",
+  role: "intro",
+  inlines: [{ type: "text", text: plainText }],
+  plainText,
+});
+
+test("a sentence split between paragraph blocks is reported at its first half", () => {
+  const findings = structureFidelityIn([
+    paragraph(
+      "p-1",
+      "Sąd Apelacyjny w Szczecinie rozpoznał sprawę na posiedzeniu niejawnym,",
+    ),
+    paragraph("p-2", "sprawy z odwołania strony."),
+  ]);
+
+  expect(findings).toHaveLength(1);
+  expect(findings[0]).toMatchObject({
+    rule: "sentence-cut",
+    anchorId: "p-1",
+  });
+  expect(findings[0]?.excerpt).toContain("⏎ sprawy z odwołania strony.");
+});
+
+test("a sentence kept in one paragraph has no sentence-cut finding", () => {
+  const findings = structureFidelityIn([
+    paragraph(
+      "p-1",
+      "Sąd rozpoznał sprawę na posiedzeniu niejawnym, sprawy z odwołania strony.",
+    ),
+  ]);
+
+  expect(findings).toEqual([]);
+});
+
+type RoledBlock = readonly [ParagraphBlock["role"] | "heading", string];
+
+const roled = (blocks: readonly RoledBlock[]): Block[] =>
+  blocks.map(([role, text], index) =>
+    role === "heading"
+      ? {
+          id: `b${String(index)}`,
+          anchorId: `h-${String(index)}`,
+          type: "heading",
+          level: 2,
+          role: "section-heading",
+          inlines: [{ type: "text", text }],
+          plainText: text,
+        }
+      : {
+          id: `b${String(index)}`,
+          anchorId: `p-${String(index)}`,
+          type: "paragraph",
+          ...(role === undefined ? {} : { role }),
+          inlines: [{ type: "text", text }],
+          plainText: text,
+        },
+  );
+
+const roleFindings = (
+  blocks: readonly RoledBlock[],
+  language: string | undefined,
+): string[] =>
+  structureFidelityIn(roled(blocks), language)
+    .filter(
+      ({ rule }) =>
+        rule === STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS ||
+        rule === STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.INSTRUCTION_AS_HOLDING,
+    )
+    .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
+
+test("a bench signing under its ruling is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. zasądza od pozwanego na rzecz powoda kwotę 100 zł;"],
+        ["holding", "SSO Katarzyna Banko"],
+        ["holding", "Przewodniczący:…………………………"],
+      ],
+      "pl",
+    ),
+  ).toEqual(["signature-as-holding p-1", "signature-as-holding p-2"]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "I. Kasační stížnost se zamítá."],
+        ["holding", "předseda rozšířeného senátu"],
+      ],
+      "cs",
+    ),
+  ).toEqual(["signature-as-holding p-1"]);
+});
+
+test("nothing after the reasons heading is the ruling, however it is spaced", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. Uwzględnia odwołanie."],
+        ["holding", "U z a s a d n i e n i e"],
+        ["holding", "Zamawiający prowadzi postępowanie."],
+        ["argumentation", "Izba zważyła, co następuje."],
+      ],
+      "pl",
+    ),
+  ).toEqual(["holding-after-reasons p-2"]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "I. Kasační stížnost se zamítá."],
+        ["heading", "Odůvodnění:"],
+        ["holding", "Žalobce podal žalobu."],
+      ],
+      "cs",
+    ),
+  ).toEqual(["holding-after-reasons p-2"]);
+});
+
+test("a language without a role grammar is read for printed-page shapes only", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "SSO Katarzyna Banko"],
+        ["heading", "Uzasadnienie"],
+        ["holding", "Zamawiający prowadzi postępowanie."],
+      ],
+      undefined,
+    ),
+  ).toEqual([]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. zasądza od pozwanego kwotę 100 zł;"],
+        ["holding", "2. oddala powództwo w pozostałym zakresie."],
+        ["signature", "SSO Katarzyna Banko"],
+        ["heading", "Uzasadnienie"],
+        ["argumentation", "Powód domagał się zasądzenia."],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("the recital before the first line that rules is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu w sprawie przeciwko skazanemu D. P."],
+        ["holding", "zażalenia wniesionego przez Prokuratora Rejonowego"],
+        ["holding", "na podstawie art. 437 § 2 kpk"],
+        ["heading", "p o s t a n a w i a"],
+        ["holding", "uchylić zaskarżone postanowienie"],
+        ["holding", "na podstawie art. 438 kpk"],
+      ],
+      "pl",
+    ),
+  ).toEqual(["recital-as-holding p-2"]);
+  expect(
+    roleFindings(
+      [
+        [
+          "intro",
+          "Na podstawie art. 104 § 1 Kodeksu postępowania administracyjnego,",
+        ],
+        ["holding", "na podstawie art. 4 ust. 2 umorzyć postępowanie"],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("the instruction on appeal under the ruling is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. oddala odwołanie;"],
+        [
+          "holding",
+          "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej.",
+        ],
+      ],
+      "pl",
+    ),
+  ).toEqual(["instruction-as-holding p-1"]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. oddala odwołanie;"],
+        [
+          undefined,
+          "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej.",
+        ],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("a list point the sentence runs on into is the list's paragraph, not a cut", () => {
+  const cut = (blocks: readonly RoledBlock[]) =>
+    structureFidelityIn(roled(blocks), "cs")
+      .filter(({ rule }) => rule === STRUCTURE_FIDELITY_RULES.SENTENCE_CUT)
+      .map(({ anchorId }) => anchorId);
+  expect(
+    cut([
+      [
+        undefined,
+        "a) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+      ],
+      [undefined, "b) jak postupovat při kvalifikaci tvrzeného zásahu"],
+    ]),
+  ).toEqual([]);
+  expect(
+    cut([
+      [
+        undefined,
+        "a) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+      ],
+      [undefined, "jak postupovat při kvalifikaci tvrzeného zásahu"],
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test("a verdict's formula lines are its layout, not cuts", () => {
+  const cut = (blocks: readonly RoledBlock[], language: string) =>
+    structureFidelityIn(roled(blocks), language)
+      .filter(({ rule }) => rule === STRUCTURE_FIDELITY_RULES.SENTENCE_CUT)
+      .map(({ anchorId }) => anchorId);
+  expect(
+    cut(
+      [
+        [
+          "holding",
+          "A. D., nar. XX.XX.XXXX v Lučenci, trvale bytom E. G. XXXX/XX, D.,",
+        ],
+        ["holding", "uznáva sa za vinného, že"],
+        [
+          "holding",
+          "v bode 1) dňa 30.12.2016 spôsobil škodu vo výške 1.600,- eur,",
+        ],
+        ["holding", "teda"],
+      ],
+      "sk",
+    ),
+  ).toEqual([]);
+  // Outside the ruling the same break is a cut.
+  expect(
+    cut(
+      [
+        [
+          undefined,
+          "v bode 1) dňa 30.12.2016 spôsobil škodu vo výške 1.600,- eur,",
+        ],
+        [undefined, "teda"],
+      ],
+      "sk",
+    ),
+  ).toEqual(["p-0"]);
+});
+
+test("a decision that opens a ruling before its reasons holds it", () => {
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu sprawy ze skargi zamawiającego"],
+        ["intro", "I. oddala skargę,"],
+        ["heading", "Uzasadnienie"],
+        ["argumentation", "Zamawiający oddala protest."],
+      ],
+      "pl",
+    ),
+  ).toEqual(["ruling-without-holding p-1"]);
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu sprawy ze skargi zamawiającego"],
+        ["holding", "I. oddala skargę,"],
+        ["heading", "Uzasadnienie"],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+  // An operative verb in the reasons opens no ruling of the decision's own.
+  expect(
+    roleFindings(
+      [
+        ["heading", "Uzasadnienie"],
+        [
+          "argumentation",
+          "1. oddala apelację, jak orzekł sąd pierwszej instancji",
+        ],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("the Court of Justice's appearances and recital are its layout, a cut sentence is not", () => {
+  // A party's line, then the recital the court runs on in its own paragraph.
+  expect(
+    sentenceCuts([
+      "-     w imieniu Komisji Europejskiej – B.-R. Killmann oraz W. Roels, w charakterze pełnomocników,",
+      "podjąwszy, po zapoznaniu się ze stanowiskiem rzecznika generalnego, decyzję o rozstrzygnięciu sprawy bez opinii,",
+    ]),
+  ).toEqual([]);
+  expect(
+    sentenceCuts([
+      "the European Commission, by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents,",
+      "after hearing the Opinion of the Advocate General at the sitting on 8 June 2023,",
+    ]),
+  ).toEqual([]);
+  // A dashed line a sentence goes on from is still cut when no recital follows.
+  expect(
+    sentenceCuts([
+      "-     w imieniu Komisji Europejskiej – B.-R. Killmann oraz W. Roels, w charakterze pełnomocników,",
+      "którzy wnieśli o oddalenie skargi w całości jako bezzasadnej,",
+    ]),
+  ).toEqual(["p-0"]);
+  // A sentence a page cuts is still a cut sentence.
+  expect(
+    sentenceCuts([
+      "Rozporządzenie Ministra Finansów i Gospodarki z dnia 7 grudnia 2025 r. zmieniające",
+      "rozporządzenie w sprawie wystawiania faktur (Dz. U. poz. 1742).",
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test("an operative part's interpretation formula is the court's layout", () => {
+  expect(
+    sentenceCuts([
+      "Artykuły 1, 2, 7 i 15 Umowy, w związku z art. 9 ust. 2 załącznika I do tej umowy,",
+      "należy interpretować w ten sposób, że:",
+    ]),
+  ).toEqual([]);
+  expect(
+    sentenceCuts([
+      "Article 2(1) of Directive 93/13/EEC, read in conjunction with Articles 4 and 5 thereof,",
+      "must be interpreted as not precluding legislation of general application.",
+    ]),
+  ).toEqual([]);
+});
+
+test("a sentence opening on its date after a full stop is not a stray number", () => {
+  const strays = (texts: readonly string[]): string[] =>
+    structureFidelityIn(paragraphs(texts))
+      .filter(
+        ({ rule }) => rule === STRUCTURE_FIDELITY_RULES.STRAY_LEADING_NUMBER,
+      )
+      .map(({ anchorId }) => anchorId);
+  expect(
+    strays([
+      "System UE CCI będzie wdrażany w dwóch fazach.",
+      "1 lipca 2024 r. została wdrożona w Polsce I fazy systemu, jako moduł AIS/CCI.",
+    ]),
+  ).toEqual([]);
+  // A date cut off the line above is still a stray number.
+  expect(
+    strays([
+      "Wyrok wydano dnia",
+      "22 marca 2018 r. w składzie trzech sędziów.",
+    ]),
+  ).toEqual(["p-1"]);
+  // So is a page number the line above lost.
+  expect(
+    strays([
+      "Zgodnie z art. 479.",
+      "45 wzorców umownych uznano za niedozwolone.",
+    ]),
+  ).toEqual(["p-1"]);
+});
+
+test("ruling verbs in a document that rules on nothing open no ruling", () => {
+  const blocks = roled([
+    [
+      "argumentation",
+      "Zwalnia się z obowiązku local filing w Polsce, tylko jeżeli central filing nastąpił w jurysdykcji wskazanej we właściwym wykazie.",
+    ],
+  ]);
+  const rulingsWithoutHolding = (document: "decision" | "other") =>
+    structureFidelityIn(blocks, "pl", document)
+      .filter(
+        ({ rule }) => rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
+      )
+      .map(({ anchorId }) => anchorId);
+  expect(rulingsWithoutHolding("other")).toEqual([]);
+  // A decision that opens a ruling and holds none is still flagged.
+  expect(rulingsWithoutHolding("decision")).toEqual(["p-0"]);
+});

@@ -4,12 +4,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatInputMentionSource } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import messages from "@/i18n/langs/en.json";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -455,7 +455,7 @@ for (const { failingRead, failure, withHealthy = true } of [
       { target: { value: "contract" } },
     );
     await waitFor(() =>
-      expect(ui.getAllByRole("alert")).toHaveLength(
+      expect(ui.getAllByRole("alert").length).toBe(
         failingRead === "both" ? 2 : 1,
       ),
     );

@@ -6,19 +6,15 @@ import { entities } from "@/api/db/schema";
 import { readOverviewAgenda } from "@/api/handlers/workspaces/read-overview-agenda.query";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { workTask } from "@/api/lib/tasks/work-task";
 
 type ReadOverviewHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  /** The reader's local date for the agenda; the database's today if absent. */
-  agendaFrom?: string | undefined;
 };
 
 export const readOverviewHandler = async ({
   safeDb,
   workspaceId,
-  agendaFrom,
 }: ReadOverviewHandlerProps) => {
   const overview = await safeDb(async (tx) => {
     const [[totals, recent], upcomingAgenda] = await Promise.all([
@@ -27,7 +23,6 @@ export const readOverviewHandler = async ({
           .select({
             entityCount: sql<number>`count(*)::int`,
             documentCount: sql<number>`count(*) filter (where ${entities.kind} = 'document')::int`,
-            taskCount: sql<number>`count(*) filter (where ${workTask(entities)})::int`,
           })
           .from(entities)
           .where(eq(entities.workspaceId, workspaceId))
@@ -106,15 +101,15 @@ export const readOverviewHandler = async ({
           limit: LIMITS.overviewRecentEntities,
         }),
       ]),
-      readOverviewAgenda({ tx, workspaceId, agendaFrom }),
+      readOverviewAgenda({ tx, workspaceId }),
     ]);
 
     return {
       entityCount: totals.entityCount,
       documentCount: totals.documentCount,
-      taskCount: totals.taskCount,
+      taskCount: upcomingAgenda.totalCount,
       recentEntities: recent,
-      upcomingAgenda,
+      upcomingAgenda: upcomingAgenda.items,
     };
   });
   return overview.map(

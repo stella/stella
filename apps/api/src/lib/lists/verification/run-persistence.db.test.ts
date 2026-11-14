@@ -16,7 +16,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
-  readContestedFactIds,
+  readRunAttentionInputs,
   readRunEvidenceForGrading,
   readVerificationRun,
 } from "@/api/lib/lists/verification/read-run";
@@ -365,21 +365,21 @@ test("contested fact reader returns only identities and preserves missing runs",
     .values({ ...original, id: readerRunId, evidence });
   const scopedQuery = createScopedQuery(testDb);
   await scopedQuery([workspaceId], organizationId, async (tx) => {
-    const ids = await readContestedFactIds({
+    const inputs = await readRunAttentionInputs({
       tx,
       workspaceId,
       runId: readerRunId,
     });
-    expect(ids).toEqual(new Set([contestedFactId]));
+    expect(inputs?.contested).toEqual(new Set([contestedFactId]));
     expect(
       await readRunEvidenceForGrading({ tx, workspaceId, runId: readerRunId }),
     ).toEqual(evidence);
     const missingRunId = createSafeId<"legalListVerificationRun">();
     expect(
-      await readContestedFactIds({ tx, workspaceId, runId: missingRunId }),
+      await readRunAttentionInputs({ tx, workspaceId, runId: missingRunId }),
     ).toBeNull();
     expect(
-      await readContestedFactIds({
+      await readRunAttentionInputs({
         tx,
         workspaceId: createSafeId<"workspace">(),
         runId: readerRunId,

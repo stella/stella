@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import {
@@ -17,6 +18,8 @@ import type {
   DecisionRenderContext,
 } from "@/features/case-law/components/decision-cells";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
+import { decisionTypeKindLabel } from "@/features/case-law/decision-filter-facets.logic";
+import { getAnalytics } from "@/lib/analytics/provider";
 
 /**
  * The one column model for decision rows, wherever they are shown: the public
@@ -56,7 +59,7 @@ export const renderDecisionCell = ({
       return decision.decisionType === null ? (
         EMPTY_DECISION_VALUE
       ) : (
-        <HighlightedText columnId="type" text={decision.decisionType} />
+        <DecisionTypeCell decision={decision} />
       );
     case "headnote":
       return <HeadnoteCell context={context} decision={decision} />;
@@ -69,6 +72,38 @@ export const renderDecisionCell = ({
       return panic(`Unhandled decision column: ${String(column)}`);
     }
   }
+};
+
+const DecisionTypeCell = ({ decision }: { decision: Decision }) => {
+  const t = useTranslations();
+  const source = decision.decisionType ?? EMPTY_DECISION_VALUE;
+  if (decision.decisionTypeKind === null) {
+    reportUnclassifiedDecisionType();
+    return <HighlightedText columnId="type" text={source} />;
+  }
+  const label = decisionTypeKindLabel(decision.decisionTypeKind, t);
+  return (
+    <span>
+      <HighlightedText columnId="type" text={label} />
+      <span className="text-muted-foreground">
+        {" · "}
+        <HighlightedText columnId="type" text={source} />
+      </span>
+    </span>
+  );
+};
+
+let reportedUnclassifiedDecisionType = false;
+
+const reportUnclassifiedDecisionType = () => {
+  if (reportedUnclassifiedDecisionType) {
+    return;
+  }
+  reportedUnclassifiedDecisionType = true;
+  getAnalytics().captureError(new Error("Unclassified decision type"), {
+    fingerprintKey: "caseLaw:unclassifiedDecisionType",
+    scope: { type: "handler", handlerId: "case-law-decision-type-cell" },
+  });
 };
 
 /** What a cell draws for a value the decision does not carry. */

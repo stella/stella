@@ -11,12 +11,13 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { section72aSubsection1Blocks } from "@stll/legal-ast/fixtures/cz-141-1961-section-72a";
 import { section128Subsection2Blocks } from "@stll/legal-ast/fixtures/sk-300-2005-section-128";
 import {
-  E_SBIRKA_LIST_SCHEME,
-  SLOV_LEX_LIST_SCHEME,
-} from "@stll/legal-ast/statute-list";
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+} from "@stll/legal-ast/statute-anchor-scheme";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
+import { fakeReaderAdapters } from "../tests/reader-adapters";
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
-import { fakeReaderAdapters } from "./decision-text.test";
 import { BlockRenderer } from "./document-ast-text";
 import { DecisionReaderProvider } from "./reader-adapters";
 import type {
@@ -140,6 +141,11 @@ const wordingOf = (surface: Element) => {
 /** A provision drawn as one quotation, its letters hanging under the lead-in. */
 const expectOneStructuredQuote = (surface: Element) => {
   const quoted = wordingOf(surface);
+  for (const token of LEGAL_TEXT_CLASS_NAME.split(" ")) {
+    expect([...quoted.classList]).toContain(token);
+  }
+  expect([...quoted.classList]).toContain("hyphens-manual");
+  expect([...quoted.classList]).toContain("wrap-anywhere");
   expect(
     quoted.querySelectorAll('[data-slot="provision-card-quote"]'),
   ).toHaveLength(1);
@@ -295,7 +301,7 @@ describe("a cited provision's wording", () => {
             block={block}
             key={block.id}
             rangesByPieceId={{}}
-            statuteLists={E_SBIRKA_LIST_SCHEME}
+            statuteAnchors={E_SBIRKA_ANCHORS}
             variant="statute"
           />
         ))}
@@ -318,7 +324,7 @@ describe("a cited provision's wording", () => {
             block={block}
             key={block.id}
             rangesByPieceId={{}}
-            statuteLists={SLOV_LEX_LIST_SCHEME}
+            statuteAnchors={SLOV_LEX_ANCHORS}
             variant="statute"
           />
         ))}

@@ -10,6 +10,8 @@ import {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { Temporal } from "@stll/time";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -19,8 +21,11 @@ import {
   relations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import { encodePlUodoCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import { encodePlUokikCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -31,10 +36,19 @@ import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
+  PUBLISHER_CHECK,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  EMPTY_AST,
+  PUBLISHER_REQUEST,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
@@ -69,11 +83,7 @@ beforeAll(
       name: "Checkpoint legislation source",
     });
 
-    scopedDb = (async (callback: (tx: unknown) => Promise<unknown>) =>
-      await db.transaction(
-        async (tx) => await callback(tx),
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- pglite test transaction is structurally compatible with the production transaction used by ScopedDb
-      )) as unknown as ScopedDb;
+    scopedDb = createIngestionRoleScopedDb(db);
   },
   { timeout: 30_000 },
 );
@@ -124,6 +134,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -167,6 +178,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     };
@@ -190,6 +202,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
           id: caseLawSourceId,
           leaseToken: ingestionLeaseToken,
           observationOrder: 1n,
+          publisherCheck: PUBLISHER_CHECK.ANSWERED,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
       }),
@@ -201,6 +214,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
           id: caseLawSourceId,
           leaseToken: ingestionLeaseToken,
           observationOrder: 1n,
+          publisherCheck: PUBLISHER_CHECK.ANSWERED,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
       }),
@@ -235,6 +249,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -247,6 +262,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -275,6 +291,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -286,6 +303,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 2n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -297,6 +315,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 3n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -329,6 +348,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: createSafeId<"caseLawSource">(),
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -395,6 +415,7 @@ describe("case-law source ingestion lease", () => {
             documentAst: EMPTY_AST,
           }),
         ],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "lifecycle-page-2",
       });
     };
@@ -459,4 +480,183 @@ describe("case-law source ingestion lease", () => {
       },
     ]);
   });
+});
+
+describe("case-law last sync", () => {
+  const previousSync = new Date("2026-01-01T00:00:00.000Z");
+
+  const runOnePage = async (
+    fetchPage: typeof czNsAdapter.fetchPage,
+  ): Promise<Date | null> => {
+    await db
+      .update(caseLawSources)
+      .set({ lastSyncAt: previousSync })
+      .where(eq(caseLawSources.id, lifecycleSourceId));
+    const originalFetchPage = czNsAdapter.fetchPage;
+    czNsAdapter.fetchPage = fetchPage;
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: lifecycleSourceId,
+    });
+    if (!lease) {
+      throw new Error("last-sync source lease was not acquired");
+    }
+    try {
+      await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        maxPages: 1,
+        scopedDb,
+        source: lease.source,
+        sourceLease: lease,
+      });
+    } finally {
+      czNsAdapter.fetchPage = originalFetchPage;
+      await lease.release();
+    }
+    const stored = (
+      await db
+        .select({ lastSyncAt: caseLawSources.lastSyncAt })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.id, lifecycleSourceId))
+        .limit(1)
+    ).at(0);
+    if (stored === undefined) {
+      throw new Error("last-sync source unexpectedly missing");
+    }
+    return stored.lastSyncAt;
+  };
+
+  // A quiet court that answered with nothing new is current: the answer is
+  // the check, not what it held.
+  test("moves when the publisher answered, even with nothing new", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.ok({
+        decisions: [],
+        nextCursor: "quiet-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      }),
+    );
+    expect(lastSyncAt?.getTime()).toBeGreaterThan(previousSync.getTime());
+  });
+
+  test("stays when the adapter answered without asking the publisher", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.ok({
+        decisions: [],
+        nextCursor: "parked-at-end",
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      }),
+    );
+    expect(lastSyncAt).toEqual(previousSync);
+  });
+
+  test("stays when the page states its requests failed", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.ok({
+        decisions: [],
+        nextCursor: "held-page",
+        publisherRequest: PUBLISHER_REQUEST.FAILED,
+      }),
+    );
+    expect(lastSyncAt).toEqual(previousSync);
+  });
+
+  test("stays when every request failed", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.err(
+        new AdapterFetchError({
+          message: "publisher unavailable",
+          adapterKey: ADAPTER_KEYS.CZ_NS,
+          cursor: null,
+          httpStatus: 503,
+        }),
+      ),
+    );
+    expect(lastSyncAt).toEqual(previousSync);
+  });
+});
+
+/**
+ * Real adapters, parked where their own cursor says there is nothing to ask
+ * this cycle, run through the real pipeline. Each answers without a request,
+ * so the source's last sync must stay where its last request left it.
+ */
+describe("a parked adapter run keeps the last sync", () => {
+  const previousSync = new Date("2026-01-01T00:00:00.000Z");
+  const parkedUntil = Temporal.Now.plainDateISO("UTC")
+    .add({ days: 1 })
+    .toString();
+  const parked = [
+    {
+      adapterKey: ADAPTER_KEYS.PL_UODO,
+      cursor: encodePlUodoCursor({
+        mtimeMs: 1,
+        afterId: undefined,
+        parkedOn: parkedUntil,
+      }),
+    },
+    {
+      adapterKey: ADAPTER_KEYS.PL_UOKIK,
+      cursor: encodePlUokikCursor({
+        phase: "tip",
+        read: 1,
+        total: 1,
+        anchor: undefined,
+        parkedOn: parkedUntil,
+      }),
+    },
+    {
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      cursor: encodePlNsaCursor(
+        { shard: PL_NSA_SNAPSHOT.shards.length, row: 0 },
+        PL_NSA_SNAPSHOT,
+      ),
+    },
+  ] as const;
+
+  test.each(parked)(
+    "$adapterKey parked asks nothing and keeps its last sync",
+    async ({ adapterKey, cursor }) => {
+      const sourceId = createSafeId<"caseLawSource">();
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey,
+        name: `parked ${adapterKey}`,
+        syncCursor: cursor,
+        lastSyncAt: previousSync,
+      });
+      try {
+        const lease = await acquireCaseLawSourceIngestionLease({
+          scopedDb,
+          sourceId,
+        });
+        if (!lease) {
+          throw new Error("parked source lease was not acquired");
+        }
+        try {
+          const result = await runIngestionPipeline({
+            acquireStoredTotalAdmission: async () => "held",
+            maxPages: 1,
+            scopedDb,
+            source: lease.source,
+            sourceLease: lease,
+          });
+          expect(result.haltReason).toBeNull();
+          expect(result.nextCursor).toBe(cursor);
+        } finally {
+          await lease.release();
+        }
+        const stored = (
+          await db
+            .select({ lastSyncAt: caseLawSources.lastSyncAt })
+            .from(caseLawSources)
+            .where(eq(caseLawSources.id, sourceId))
+            .limit(1)
+        ).at(0);
+        expect(stored?.lastSyncAt).toEqual(previousSync);
+      } finally {
+        await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      }
+    },
+  );
 });

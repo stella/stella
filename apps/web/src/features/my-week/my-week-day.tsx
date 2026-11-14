@@ -5,6 +5,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PencilIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { plainDateEpoch } from "@/components/billing/format-plain-date";
 import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
@@ -42,6 +43,7 @@ type MyWeekDayProps = SuggestionActions & {
   /** Per-entry notes from the last submission, by entry id. */
   notes: ReadonlyMap<string, string>;
   onEditEntry: (entry: MyTimeEntry) => void;
+  onCreate: () => void;
 };
 
 const LONG_DAY = {
@@ -117,17 +119,24 @@ const EntryRow = ({
             {tDay("internalWork")}
           </span>
         ) : (
-          <Link
-            className="text-muted-foreground block truncate text-xs hover:underline"
-            params={{ workspaceId: entry.workspaceId }}
-            to="/workspaces/$workspaceId/timesheets"
+          <TruncatedText
+            className="text-muted-foreground text-xs hover:underline"
+            render={
+              <Link
+                params={{ workspaceId: entry.workspaceId }}
+                to="/workspaces/$workspaceId/timesheets"
+              />
+            }
           >
             <BidiText as="span">{entry.workspaceName}</BidiText>
-          </Link>
+          </TruncatedText>
         )}
-        <BidiText as="p" className="truncate text-sm font-medium">
+        <TruncatedText
+          className="text-sm font-medium"
+          render={<BidiText as="p" />}
+        >
           {entry.narrative}
-        </BidiText>
+        </TruncatedText>
         <span className="text-muted-foreground text-xs">
           {[
             tBilling(`statuses.${entry.status}`),
@@ -177,9 +186,11 @@ export const MyWeekDay = ({
   canEdit,
   notes,
   onEditEntry,
+  onCreate,
   ...actions
 }: MyWeekDayProps) => {
   const t = useTranslations("timesheets.week");
+  const tCommon = useTranslations("common");
   const format = useFormatter();
   const pending = canDecide && suggestions.length > 0;
 
@@ -220,9 +231,14 @@ export const MyWeekDay = ({
         </ul>
       )}
       {!pending && entriesComplete && (
-        <p className="text-muted-foreground rounded-lg border border-dashed py-8 text-center text-sm">
-          {entries.length === 0 ? t("noActivity") : t("allLogged")}
-        </p>
+        <div className="text-muted-foreground flex flex-col items-center gap-3 rounded-lg border border-dashed py-8 text-center text-sm">
+          <p>{entries.length === 0 ? t("noActivity") : t("allLogged")}</p>
+          {entries.length === 0 && canDecide && (
+            <Button onClick={onCreate} variant="outline">
+              {tCommon("logTime")}
+            </Button>
+          )}
+        </div>
       )}
     </section>
   );

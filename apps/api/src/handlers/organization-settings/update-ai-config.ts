@@ -30,7 +30,6 @@ import {
 } from "@/api/lib/ai-config-response";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -39,7 +38,6 @@ import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { createSafeId } from "@/api/lib/branded-types";
 import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isAllowedBYOKModelForTask } from "@/api/lib/tanstack-ai-models";
 import { probeDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
@@ -149,23 +147,17 @@ const updateAIConfig = createSafeRootHandler(
 
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
-    if (ciphertext && iv) {
-      const decryptResult = await Result.tryPromise({
-        try: async () =>
-          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-        catch: (error: unknown) => error,
-      });
+    if (ciphertext || iv) {
+      const decryptResult = await decryptAIConfig(
+        session.activeOrganizationId,
+        ciphertext,
+        iv,
+      );
 
       if (decryptResult.isErr()) {
-        captureError(
-          decryptResult.error,
-          handlerErrorContext(
-            "organizationsettings.updateAIConfig.decryptResult_error",
-          ),
-        );
         // The stored config is the merge base for a partial update, so an
         // unreadable one cannot be treated as "no providers configured".
-        return Result.err(storedAIConfigUnreadableError(decryptResult.error));
+        return Result.err(storedAIConfigUnreadableError());
       }
       existingConfig = decryptResult.value;
     }

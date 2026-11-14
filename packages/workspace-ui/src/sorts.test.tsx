@@ -25,7 +25,7 @@ test.each(
   (kind, direction) => {
     const markup = renderToStaticMarkup(
       <SortChips
-        labels={{ add: "Add", remove: "Remove", directions: DIRECTIONS }}
+        labels={{ addSort: "Sort", remove: "Remove", directions: DIRECTIONS }}
         onUpdate={() => undefined}
         properties={[
           { id: "p", name: "Property", type: "text", sortKind: kind },
@@ -35,6 +35,7 @@ test.each(
     );
 
     expect(markup).toContain(DIRECTIONS[kind][direction]);
+    expect(markup).toContain('aria-label="Sort"');
     for (const other of COLUMN_SORT_KINDS) {
       for (const otherDirection of SORT_DIRECTIONS) {
         if (other !== kind || otherDirection !== direction) {

@@ -201,7 +201,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       if (managedAIResidency === null) {
         return {
           type: "refused",
-          rejection: storedAIConfigUnreadableError(undefined),
+          rejection: storedAIConfigUnreadableError(),
         };
       }
       // Constructed only for AI fields; deterministic fills need no provider.

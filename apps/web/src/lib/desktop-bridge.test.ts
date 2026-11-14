@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { DesktopLinkStatus } from "@stll/api-contract/desktop-account-link";
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import type { FetchWithTimeoutInit } from "@stll/fetch";
 
@@ -22,6 +23,49 @@ const challenge = {
 };
 const fragment = `#desktop-account?${new URLSearchParams(challenge).toString()}`;
 
+/** Each status with the line the app signs for it. */
+const SIGNED_STATUSES = [
+  { status: { status: "pending" }, line: "pending" },
+  { status: { status: "connected" }, line: "connected" },
+  {
+    status: { status: "failed", reason: "account_conflict" },
+    line: "failed:account_conflict",
+  },
+  {
+    status: { status: "failed", reason: "switch_declined" },
+    line: "failed:switch_declined",
+  },
+] as const satisfies readonly {
+  status: DesktopLinkStatus;
+  line: string;
+}[];
+
+type SignedDesktopStatusOptions = {
+  status: DesktopLinkStatus;
+  line: string;
+  timestamp: string;
+  verifierHash?: string;
+  deviceJkt?: string;
+};
+
+/** A status as the app signs it, by default for `challenge`. */
+const signedDesktopStatus = ({
+  status,
+  line,
+  timestamp,
+  verifierHash = challenge.verifierHash,
+  deviceJkt = challenge.deviceJkt,
+}: SignedDesktopStatusOptions) => ({
+  correlationId: challenge.correlationId,
+  ...status,
+  timestamp,
+  proof: new Bun.CryptoHasher("sha256", challenge.portSecret)
+    .update(
+      `${challenge.correlationId}\n${verifierHash}\n${deviceJkt}\n${line}\n${timestamp}`,
+    )
+    .digest("hex"),
+});
+
 describe("account link challenges", () => {
   test("accepts a complete native challenge", () => {
     expect(parseDesktopAccountChallenge(fragment) !== null).toBe(true);
@@ -38,6 +82,20 @@ describe("account link challenges", () => {
       `${"A".repeat(42)}/`,
     ]) {
       const params = new URLSearchParams({ ...challenge, deviceJkt });
+      expect(
+        parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
+      ).toBeNull();
+    }
+    // The installed desktop from before failure reasons still links; older
+    // and future protocols do not.
+    for (const protocol of ["6", String(DESKTOP_ACCOUNT_POLICY.linkProtocol)]) {
+      const params = new URLSearchParams({ ...challenge, protocol });
+      expect(
+        parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
+      ).toEqual({ ...challenge, protocol });
+    }
+    for (const protocol of ["5", "8", "06"]) {
+      const params = new URLSearchParams({ ...challenge, protocol });
       expect(
         parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
       ).toBeNull();
@@ -123,81 +181,156 @@ describe("authenticated account status", () => {
     }
   });
 
-  test("accepts only fresh connection responses authenticated for this attempt", async () => {
+  test("accepts only fresh connection responses signed for this whole challenge", async () => {
     const timestamp = "1790851200";
-    for (const status of ["pending", "connected", "failed"] as const) {
-      const payload = {
-        correlationId: challenge.correlationId,
-        status,
-        timestamp,
-        proof: new Bun.CryptoHasher("sha256", challenge.portSecret)
-          .update(`${challenge.correlationId}\n${status}\n${timestamp}`)
-          .digest("hex"),
-      };
+    for (const { status, line } of SIGNED_STATUSES) {
+      const payload = signedDesktopStatus({ status, line, timestamp });
       for (const nowSeconds of [1_790_851_170, 1_790_851_200, 1_790_851_230]) {
         expect(
           await verifyDesktopConnectionStatus({
             payload,
-            correlationId: challenge.correlationId,
-            portSecret: challenge.portSecret,
+            challenge,
             nowSeconds,
           }),
-        ).toBe(status);
+        ).toEqual(status);
       }
+      const otherChallenge = (
+        field: "verifierHash" | "deviceJkt" | "portSecret",
+        value: string,
+      ) => ({ ...challenge, [field]: value });
       for (const invalid of [
+        // Outside the skew window in either direction.
+        { payload, nowSeconds: 1_790_851_231, challenge },
+        { payload, nowSeconds: 1_790_851_169, challenge },
         {
           payload,
-          nowSeconds: 1_790_851_231,
-          portSecret: challenge.portSecret,
+          nowSeconds: 1_790_851_200,
+          challenge: otherChallenge("portSecret", "c".repeat(64)),
+        },
+        // A status the app signed for another verifier or device key.
+        {
+          payload,
+          nowSeconds: 1_790_851_200,
+          challenge: otherChallenge("verifierHash", "c".repeat(64)),
         },
         {
           payload,
-          nowSeconds: 1_790_851_169,
-          portSecret: challenge.portSecret,
+          nowSeconds: 1_790_851_200,
+          challenge: otherChallenge("deviceJkt", "B".repeat(43)),
         },
-        { payload, nowSeconds: 1_790_851_200, portSecret: "c".repeat(64) },
+        {
+          payload: signedDesktopStatus({
+            status,
+            line,
+            timestamp,
+            verifierHash: "c".repeat(64),
+          }),
+          nowSeconds: 1_790_851_200,
+          challenge,
+        },
+        {
+          payload: signedDesktopStatus({
+            status,
+            line,
+            timestamp,
+            deviceJkt: "B".repeat(43),
+          }),
+          nowSeconds: 1_790_851_200,
+          challenge,
+        },
+        // The signature format before the challenge was bound.
+        {
+          payload: {
+            ...payload,
+            proof: new Bun.CryptoHasher("sha256", challenge.portSecret)
+              .update(`${challenge.correlationId}\n${line}\n${timestamp}`)
+              .digest("hex"),
+          },
+          nowSeconds: 1_790_851_200,
+          challenge,
+        },
         {
           payload: { ...payload, correlationId: "other" },
           nowSeconds: 1_790_851_200,
-          portSecret: challenge.portSecret,
+          challenge,
         },
         {
           payload: { ...payload, timestamp: "1790851201" },
           nowSeconds: 1_790_851_200,
-          portSecret: challenge.portSecret,
+          challenge,
         },
         {
           payload: {
             ...payload,
-            status: status === "connected" ? "pending" : "connected",
+            status: status.status === "connected" ? "pending" : "connected",
           },
           nowSeconds: 1_790_851_200,
-          portSecret: challenge.portSecret,
+          challenge,
+        },
+        // A reason the app did not sign, and a failure signed without one.
+        {
+          payload: { ...payload, status: "failed", reason: "declined" },
+          nowSeconds: 1_790_851_200,
+          challenge,
+        },
+        {
+          payload: signedDesktopStatus({
+            status: { status: "failed", reason: "account_conflict" },
+            line: "failed",
+            timestamp,
+          }),
+          nowSeconds: 1_790_851_200,
+          challenge,
         },
         {
           payload: { ...payload, proof: "0".repeat(64) },
           nowSeconds: 1_790_851_200,
-          portSecret: challenge.portSecret,
+          challenge,
         },
         {
           payload: { ...payload, status: "unknown" },
           nowSeconds: 1_790_851_200,
-          portSecret: challenge.portSecret,
+          challenge,
         },
         {
           payload: { ...payload, timestamp: "NaN" },
           nowSeconds: 1_790_851_200,
-          portSecret: challenge.portSecret,
+          challenge,
         },
       ]) {
-        expect(
-          await verifyDesktopConnectionStatus({
-            ...invalid,
-            correlationId: challenge.correlationId,
-          }),
-        ).toBeNull();
+        expect(await verifyDesktopConnectionStatus(invalid)).toBeNull();
       }
     }
+  });
+
+  test("a desktop from before failure reasons signs a bare failure", async () => {
+    const timestamp = "1790851200";
+    const before = { ...challenge, protocol: "6" };
+    const bare = {
+      correlationId: challenge.correlationId,
+      status: "failed",
+      timestamp,
+      proof: new Bun.CryptoHasher("sha256", challenge.portSecret)
+        .update(
+          `${challenge.correlationId}\n${challenge.verifierHash}\n${challenge.deviceJkt}\nfailed\n${timestamp}`,
+        )
+        .digest("hex"),
+    };
+    expect(
+      await verifyDesktopConnectionStatus({
+        payload: bare,
+        challenge: before,
+        nowSeconds: 1_790_851_200,
+      }),
+    ).toEqual({ status: "failed", reason: "unavailable" });
+    // A current desktop must sign its reason, so the same reply is refused.
+    expect(
+      await verifyDesktopConnectionStatus({
+        payload: bare,
+        challenge,
+        nowSeconds: 1_790_851_200,
+      }),
+    ).toBeNull();
   });
 
   test("unsigned status and incomplete proofs are rejected", async () => {
@@ -220,8 +353,7 @@ describe("authenticated account status", () => {
       expect(
         await verifyDesktopConnectionStatus({
           payload,
-          correlationId: challenge.correlationId,
-          portSecret: challenge.portSecret,
+          challenge,
           nowSeconds: 1_790_851_200,
         }),
       ).toBeNull();
@@ -276,8 +408,7 @@ test("sends every browser loopback request as a credentialless GET", async () =>
     init?: FetchWithTimeoutInit;
   }[] = [];
   await readDesktopConnection({
-    correlationId: challenge.correlationId,
-    portSecret: challenge.portSecret,
+    challenge,
     request: async (input, init) => {
       requests.push({ input, init });
       return new Response(null, { status: 503 });

@@ -1,5 +1,0 @@
-{
-  "metric": "web-lib-top-level-entries",
-  "delta": 1,
-  "reason": "The persisted-state module owns every persisted browser key: schema, version, size cap, scope decision and safe-mode handling."
-}

@@ -2,6 +2,14 @@ export type TableRetention =
   { ttlColumn: string; sweeper: string } | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  organization_creation_requests: {
+    boundedBy:
+      "One account-owned creation receipt per idempotency key, cascade-deleted with its account or created organization.",
+  },
+  request_idempotency_receipts: {
+    ttlColumn: "claimed_at",
+    sweeper: "requests.sweepReceipts",
+  },
   desktop_time_entry_batches: {
     boundedBy:
       "One receipt per authenticated account, organization and idempotency key; cascade-deleted with its account or organization.",
@@ -17,6 +25,10 @@ export const TABLE_RETENTION = {
     boundedBy:
       "One saved connection per organization, account and connector; cascade-deleted with any owner.",
   },
+  user_files: {
+    boundedBy:
+      "One row per file a member attached to, or a local run handed back in, a chat thread; deleted with its thread and cascade-deleted with its account.",
+  },
   chat_secrets: {
     boundedBy:
       "One receipt per thread tool call, cascade-deleted with its thread; encrypted payloads expire through chat.purgeSecrets.",
@@ -28,6 +40,30 @@ export const TABLE_RETENTION = {
   desktop_presence: {
     boundedBy:
       "One observation per account, organization and installation, overwritten by heartbeats and cascade-deleted with the account or organization.",
+  },
+  desktop_runners: {
+    boundedBy:
+      "At most DESKTOP_RUNNER_LIMITS.maxRunnersPerAccount runners per account and organization, one per installation and device key, overwritten by each socket, evicted when idle at the cap, and cascade-deleted with the account, the organization or the membership.",
+  },
+  desktop_runner_runs: {
+    ttlColumn: "updated_at",
+    sweeper: "pruneEndedRuns",
+  },
+  desktop_runner_commands: {
+    boundedBy:
+      "At most DESKTOP_RUNNER_LIMITS.maxCommandsPerRun commands per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_app_calls: {
+    boundedBy:
+      "MAX_APP_CALLS_PER_RUN rows per run, a few more only when calls were answered at the same moment, each within the chat app part limit, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_folder_restores: {
+    boundedBy:
+      "At most one live undo per run and one more per refused or expired attempt the member asks again, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_events: {
+    boundedBy:
+      "At most DESKTOP_RUNNER_LIMITS.maxMessagesPerRun messages and maxMessageBytesPerRun bytes per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
   },
   task_assignees: {
     boundedBy:
@@ -83,6 +119,10 @@ export const TABLE_RETENTION = {
     ttlColumn: "created_at",
     sweeper: "audit.purgeSystemRuns",
   },
+  billing_draft_user_settings: {
+    boundedBy:
+      "One consent and preference row per organization and user, deleted on organization offboarding or with its organization or user.",
+  },
   billing_arrangements: {
     boundedBy: "Organization-owned billing configuration and deletion.",
   },
@@ -126,6 +166,10 @@ export const TABLE_RETENTION = {
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
   },
+  hosted_customer_erasures: {
+    boundedBy:
+      "One reference-only intent per deleted organization, settled by the erasure task.",
+  },
   hosted_checkout_claims: {
     boundedBy:
       "At most one claim per organization, taken over in place once expired and deleted with its owner.",
@@ -140,6 +184,14 @@ export const TABLE_RETENTION = {
   },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",
+  },
+  usage_events: {
+    boundedBy:
+      "Organization-owned immutable usage accounting, retained across member removal and deleted with the organization.",
+  },
+  usage_lane_counters: {
+    boundedBy:
+      "One accounting accumulator per organization, user, lane kind and time bucket; historical buckets remain for accounting and are deleted with the organization or user.",
   },
   usage_entitlements: {
     boundedBy: "Organization-owned usage configuration and deletion.",

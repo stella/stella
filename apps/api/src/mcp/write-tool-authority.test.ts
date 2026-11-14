@@ -709,6 +709,7 @@ describe("write tool account access", () => {
         .toSorted(),
     ).toEqual([
       "add_matter_member:standard",
+      "create_organization:account-control",
       "fill_template:standard",
       "mint_web_handoff:standard",
       "remove_matter_member:standard",

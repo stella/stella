@@ -7,6 +7,7 @@ import {
 import type { KnowledgeSource } from "@/features/knowledge/views/knowledge-seam";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   knowledgeKeys,
   templateCategoriesOptions,
@@ -86,6 +87,7 @@ export const memberTemplatesSource = {
  * before: each returns the API response so the caller keeps its own toasts.
  */
 const useTemplateActions = (organizationId: string) => {
+  const submit = useIdempotentSubmit();
   const queryClient = useQueryClient();
 
   const invalidateTemplates = () => {
@@ -111,12 +113,22 @@ const useTemplateActions = (organizationId: string) => {
     invalidateCategories,
     discover: async (file: File) => api.templates.discover.post({ file }),
     upload: async (file: File, name: string) =>
-      api.templates.put({ file, name }),
-    createBlank: async (name: string) => api.templates.blank.put({ name }),
+      submit.run({
+        operation: "template-upload",
+        body: { file, name },
+        send: async (body) => api.templates.put(body),
+      }),
+    createBlank: async (name: string) =>
+      submit.run({
+        operation: "template-blank",
+        body: { name },
+        send: async (body) => api.templates.blank.put(body),
+      }),
     createFromStyleSet: async (name: string, styleSetId: string) =>
-      api.templates["style-set"].put({
-        name,
-        styleSetId: toSafeId<"styleSet">(styleSetId),
+      submit.run({
+        operation: "template-style-set",
+        body: { name, styleSetId: toSafeId<"styleSet">(styleSetId) },
+        send: async (body) => api.templates["style-set"].put(body),
       }),
     update: async (templateId: string, patch: TemplatePatch) =>
       api.templates({ templateId }).post(patch),
@@ -125,8 +137,11 @@ const useTemplateActions = (organizationId: string) => {
     /** Copies a catalogue template into the library, or reports the copy
      *  already there; the server binds the organization and checks the role. */
     installFromCatalogue: async (packId: string, templateSlug: string) =>
-      api["template-packs"]({ packId }).install.post({
-        templateSlugs: [templateSlug],
+      submit.run({
+        operation: `template-install:${packId}`,
+        body: { templateSlugs: [templateSlug] },
+        send: async (body) =>
+          api["template-packs"]({ packId }).install.post(body),
       }),
     /**
      * The audited presigned URL of the template's source DOCX, read from its

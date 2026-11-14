@@ -14,10 +14,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { readApiTypecheckConfig } from "./api-typecheck-config";
 import { childExitStatus } from "./child-exit-status";
+import { resolveTsrsBinary } from "./tsc-native";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const API_ROOT = path.join(REPO_ROOT, "apps/api");
-const COMPILER_CLI = path.join(REPO_ROOT, "node_modules/tsrs/bin/tsrs");
 const GENERATED_PREFIX = "./.cache/typecheck-declarations/";
 const FIX_COMMAND = "bun --filter @stll/api generate:typecheck-declarations";
 
@@ -70,8 +70,7 @@ const compilers = [
   {
     name: "tsrs",
     command: (project: string, listFiles = false) => [
-      process.execPath,
-      COMPILER_CLI,
+      resolveTsrsBinary(),
       "--pretty",
       "false",
       ...(listFiles ? ["--listFilesOnly"] : []),

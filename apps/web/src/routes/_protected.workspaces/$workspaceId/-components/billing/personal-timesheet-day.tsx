@@ -4,7 +4,7 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
@@ -22,6 +22,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 import { PencilIcon, PlusIcon, TrashIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   ManualTimeEntryForm,
@@ -31,6 +32,7 @@ import {
   timeEntryActionLabel,
   timeEntryNarrativeExcerpt,
 } from "@/components/billing/time-entry-copy.logic";
+import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
@@ -196,13 +198,16 @@ export const PersonalTimesheetDay = ({
       }
       setDialog({ type: "closed" });
     } catch (error) {
+      if (isTimeEntryRateRequired(error)) {
+        return Result.err(error);
+      }
       reportFailure(error, "PersonalTimesheetDay:submit");
     }
+    return undefined;
   };
 
-  const submitOnce = async (values: Parameters<typeof submit>[0]) => {
+  const submitOnce = async (values: Parameters<typeof submit>[0]) =>
     await submitGuard.run(async () => await submit(values));
-  };
 
   const pending =
     createEntry.isPending ||
@@ -299,9 +304,12 @@ export const PersonalTimesheetDay = ({
               key={entry.id}
             >
               <div className="min-w-0 flex-1">
-                <BidiText as="p" className="truncate text-sm font-medium">
+                <TruncatedText
+                  className="text-sm font-medium"
+                  render={<BidiText as="p" />}
+                >
                   {entry.narrative}
-                </BidiText>
+                </TruncatedText>
                 {(!entry.billable ||
                   entry.source === "suggested" ||
                   entry.source === "activity") && (
@@ -404,6 +412,8 @@ export const PersonalTimesheetDay = ({
               onSubmit={submitOnce}
               pending={pending}
               workspaceId={workspaceId}
+              userId={editingEntry?.userId ?? userId}
+              activityCode={editingEntry?.activityCode ?? null}
             />
           </DialogPanel>
         </DialogPopup>

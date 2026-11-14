@@ -19,6 +19,7 @@ import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import {
   holdSearchHistoryOwnerAccess,
   lockSearchHistoryOwner,
+  searchHistoryReadIdentityPredicate,
 } from "./entries";
 import {
   assertSearchHistoryScope,
@@ -84,18 +85,35 @@ const deleteSearchHistoryEntry = createSafeRootHandler(
             id: searchHistoryEntries.id,
             kind: searchHistoryEntries.kind,
             lookupKey: searchHistoryEntries.lookupKey,
+            baseLookupKey: searchHistoryEntries.baseLookupKey,
+            country: searchHistoryEntries.country,
           });
         const row = rows.at(0);
         if (!row) {
           return null;
         }
+        const deletedLookupKey = row.baseLookupKey ?? row.lookupKey;
+        // Delete every representation of the selected country's entry.
+        await tx.delete(searchHistoryEntries).where(
+          searchHistoryReadIdentityPredicate({
+            entry: searchHistoryEntries,
+            identity: {
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              kind: row.kind,
+              country: row.country,
+              baseLookupKey: row.baseLookupKey,
+              lookupKey: row.lookupKey,
+            },
+          }),
+        );
         await tx
           .insert(searchHistoryTombstones)
           .values({
             organizationId: session.activeOrganizationId,
             userId: user.id,
             kind: row.kind,
-            lookupKey: row.lookupKey,
+            lookupKey: deletedLookupKey,
             deletedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
           })
           .onConflictDoUpdate({

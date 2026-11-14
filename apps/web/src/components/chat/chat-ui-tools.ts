@@ -7,19 +7,32 @@ import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
-  ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
-  isServerChatToolCall,
+  isBrowserResolvedChatToolCall,
+  isChatPastedTextPart,
 } from "@stll/api-contract/chat";
-import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
-import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
+import type { LocalRunToolTitleKind } from "@stll/api-contract/chat-local-run-steps";
 import {
+  chatToolLabel,
+  isKnownChatToolName,
+  isUserInputChatToolName,
+} from "@stll/api-contract/chat-tool-activity";
+import type {
+  ChatToolLabel,
+  HarnessChatToolName,
+  RetiredChatToolName,
+} from "@stll/api-contract/chat-tool-activity";
+import {
+  externalMcpConnectorSlugOf,
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
+import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
 import type {
@@ -122,11 +135,23 @@ type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
   "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
-export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
+/**
+ * A harness-native step of a coding agent on the member's computer. The
+ * member approves one like any other call (`isApprovalToolName` accepts its
+ * name), and its input is the contract's (`chat-local-run-tool`).
+ */
+type HarnessToolName = HarnessChatToolName;
+export type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
+  name: HarnessToolName;
+};
+export type ApprovalToolName =
+  BuiltInApprovalToolName | HarnessToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
+export type ApprovalToolPart = (
+  RegisteredChatUIToolCallPart | HarnessChatToolCallPart
+) & {
   name: ApprovalToolName;
   approval: {
     approved?: boolean | undefined;
@@ -163,18 +188,7 @@ const TOOL_CALL_STATE_IS_RUNNING = {
 const isChatToolCallState = (
   value: string,
 ): value is ChatToolCallPart["state"] =>
-  Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
-const USER_INPUT_TOOL_NAMES = {
-  [ASK_USER_TOOL_NAME]: true,
-  [REQUEST_SECRET_TOOL_NAME]: true,
-  [CONNECT_CONNECTOR_TOOL_NAME]: true,
-} as const satisfies Record<string, true>;
-export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
-
-export const isUserInputChatToolName = (
-  name: string,
-): name is UserInputChatToolName => Object.hasOwn(USER_INPUT_TOOL_NAMES, name);
-
+  isOwnKey(TOOL_CALL_STATE_IS_RUNNING, value);
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
 // approval click: the read tools, plus the queue-only registration of
 // `suggest_changes` (the bridge parks operations for per-suggestion review
@@ -228,127 +242,31 @@ export const isSuggestChangesApplyOutput = (
   "success" in output &&
   typeof output.success === "boolean";
 
-const CHAT_TOOL_TITLE_KEYS = {
-  show_visual: "chat.generatedView",
-  add_comment: "chat.tool.add_comment",
-  "ask-user": "chat.tool.ask-user",
-  request_secret: "chat.tool.request_secret",
-  connect_connector: "chat.tool.connect_connector",
-  use_connector_secret: "chat.tool.use_connector_secret",
-  boe_find_related_laws: "chat.tool.boe_find_related_laws",
-  boe_get_law: "chat.tool.boe_get_law",
-  boe_get_law_block: "chat.tool.boe_get_law_block",
-  boe_get_law_structure: "chat.tool.boe_get_law_structure",
-  boe_search_legislation: "chat.tool.boe_search_legislation",
-  borme_get_summary: "chat.tool.borme_get_summary",
-  business_registry_lookup: "chat.tool.business_registry_lookup",
-  counterparty_check: "chat.tool.counterparty_check",
-  "use-browser": "chat.tool.use-browser",
-  review_folder_consistency: "chat.tool.review_folder_consistency",
-  "create-document": "chat.tool.create-document",
-  create_matter_document: "chat.tool.create_matter_document",
-  create_reader_annotation: "chat.tool.create_reader_annotation",
-  "create-current-skill-resource": "common.edit",
-  delete_clause: "chat.tool.delete_clause",
-  delete_contact: "chat.tool.delete_contact",
-  delete_document: "chat.tool.delete_document",
-  delete_matter: "chat.tool.delete_matter",
-  delete_reader_annotation: "chat.tool.delete_reader_annotation",
-  delete_task: "chat.tool.delete_task",
-  delete_time_entry: "chat.tool.delete_time_entry",
-  describe_template: "chat.tool.describe_template",
-  // Code-mode discovery companion to execute_typescript: fetches a read tool's
-  // full signature on demand.
-  discover_tools: "chat.tool.discover_tools",
-  // Code-mode sandbox runner (replaces run-stella-query).
-  execute_typescript: "chat.tool.execute_typescript",
-  "expand-chat-history": "chat.tool.expand-chat-history",
-  fetch_url: "chat.tool.fetch_url",
-  fill_template: "chat.tool.fill_template",
-  find_text: "chat.tool.find_text",
-  get_document_outline: "chat.tool.get_document_outline",
-  infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
-  link_matter_contact: "chat.tool.link_matter_contact",
+/**
+ * The web catalogue's key for each step title the shared activity rules
+ * name (`@stll/api-contract/chat-tool-activity`). A title is
+ * `chat.tool.<label>` unless the app already says it elsewhere.
+ */
+const SHARED_CHAT_TOOL_TITLE_KEYS = {
   list_connectable_connectors: "catalogue.filter.mcps",
-  list_stories: "chat.tool.list_stories",
-  list_templates: "chat.tool.list_templates",
-  add_matter_member: "chat.tool.add_matter_member",
-  remove_matter_member: "chat.tool.remove_matter_member",
-  update_organization_settings: "chat.tool.update_organization_settings",
-  run_playbook: "chat.tool.run_playbook",
-  save_clause: "chat.tool.save_clause",
-  save_playbook: "chat.tool.save_playbook",
-  save_contact: "chat.tool.save_contact",
-  save_document: "chat.tool.save_document",
-  save_matter: "chat.tool.save_matter",
-  save_task: "chat.tool.save_task",
-  create_template: "chat.tool.create_template",
-  configure_template_fields: "chat.tool.configure_template_fields",
-  save_time_entry: "chat.tool.save_time_entry",
-  set_field_value: "chat.tool.set_field_value",
-  set_practice_jurisdictions: "chat.tool.set_practice_jurisdictions",
-  spawn_subagents: "chat.tool.spawn_subagents",
-  suggest_template_fields: "chat.tool.suggest_template_fields",
-  "load-skill": "chat.tool.load-skill",
-  read_changes: "chat.tool.read_changes",
-  read_comments: "chat.tool.read_comments",
-  read_document: "chat.tool.read_document",
-  read_section: "chat.tool.read_section",
-  read_story: "chat.tool.read_story",
-  remember: "chat.tool.remember",
-  reply_comment: "chat.tool.reply_comment",
-  resolve_comment: "chat.tool.resolve_comment",
-  "read-skill-resource": "chat.tool.read-skill-resource",
-  "search-all-past-chats": "chat.tool.search-all-past-chats",
-  "search-chat-history": "chat.tool.search-chat-history",
-  "search-past-chats": "chat.tool.search-past-chats",
-  show_in_document: "chat.tool.show_in_document",
-  suggest_changes: "chat.tool.suggest_changes",
-  "update-current-skill-body": "common.edit",
-  "update-current-skill-resource": "common.edit",
-  "update-entity-fields": "chat.tool.update-entity-fields",
-  update_reader_annotation: "chat.tool.update_reader_annotation",
-  web_search: "chat.tool.web_search",
-} as const satisfies Record<keyof ChatUITools, TranslationKey>;
+  show_visual: "chat.generatedView",
+  "skill-edit": "common.edit",
+} as const satisfies Record<
+  Extract<
+    ChatToolLabel,
+    "list_connectable_connectors" | "show_visual" | "skill-edit"
+  >,
+  TranslationKey
+>;
 
-// Tools that used to be registered but were replaced by the unified
-// `business_registry_lookup` (or removed for other reasons). Keep
-// title keys around so historical chat history still renders with a
-// recognisable label rather than the generic "unknown" fallback.
-const RETIRED_CHAT_TOOL_TITLE_KEYS = {
-  // The manual DOCX edit tool that `suggest_changes` replaced; persisted
-  // threads still carry its calls.
-  "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
-  // The automatic DOCX edit tool the server-executed `suggest_changes`
-  // variant replaced; persisted threads still carry its calls.
-  edit_workspace_document: "chat.tool.suggest_changes",
-  // The generic documents.compare capability replaced the chat-only tool;
-  // persisted threads still carry its calls.
-  compare_versions: "chat.tool.compare_versions",
-  ares_lookup_company: "chat.tool.ares_lookup_company",
-  ares_search_companies: "chat.tool.ares_search_companies",
-  // Split into create_template and configure_template_fields; persisted
-  // threads still carry its calls and should not render as an unknown tool.
-  save_template: "chat.tool.save_template",
-  // Retired hand-rolled code-execution tools, replaced by the code-mode
-  // execute_typescript / discover_tools pair. Kept so historical threads that
-  // reference them still render a recognisable label.
-  "describe-stella-api": "chat.tool.describe-stella-api",
-  "describe-stella-function": "chat.tool.describe-stella-function",
-  "execute-typescript": "chat.tool.execute-typescript",
-  "read-contact": "chat.tool.read-contact",
-  "read-content-across-matters": "chat.tool.read-content-across-matters",
-  "run-stella-query": "chat.tool.run-stella-query",
-  "search-across-matters": "chat.tool.search-across-matters",
-} as const satisfies Record<string, TranslationKey>;
+type ChatToolTitleLabel = Exclude<
+  ChatToolLabel,
+  keyof typeof SHARED_CHAT_TOOL_TITLE_KEYS
+>;
 
-const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
-  ...CHAT_TOOL_TITLE_KEYS,
-  ...RETIRED_CHAT_TOOL_TITLE_KEYS,
-} as const;
-
-const UNKNOWN_CHAT_TOOL_TITLE_KEY =
-  "chat.tool.unknown" satisfies TranslationKey;
+/** `chat.tool.<label>`, which the catalogue must hold for every other label. */
+const toolTitleKey = (label: ChatToolTitleLabel) =>
+  `chat.tool.${label}` as const satisfies TranslationKey;
 
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_find_related_laws: true,
@@ -373,14 +291,7 @@ export const isExternalMcpToolName = (
 export const isExternalInputChatToolName = (
   toolName: ApprovalToolName,
 ): toolName is ExternalInputToolName =>
-  toolName in EXTERNAL_INPUT_CHAT_TOOL_NAMES;
-
-export const getExternalMcpConnectorSlugFromToolName = (
-  toolName: `mcp__${string}`,
-): string | null => {
-  const parts = toolName.split("__");
-  return parts.length >= 3 ? (parts.at(1) ?? null) : null;
-};
+  isOwnKey(EXTERNAL_INPUT_CHAT_TOOL_NAMES, toolName);
 
 export const getExternalMcpConnectorApprovalGrant = (
   connectorSlug: string,
@@ -394,7 +305,7 @@ export const getToolApprovalGrant = (
     return toolName;
   }
 
-  const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
+  const connectorSlug = externalMcpConnectorSlugOf(toolName);
   if (!connectorSlug) {
     return toolName;
   }
@@ -483,7 +394,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
 /**
  * The same decision for the retired tools whose calls persisted threads still
  * carry: a card that rendered a write summary when the call was made keeps
- * rendering it. A TOTAL record over `RETIRED_CHAT_TOOL_TITLE_KEYS`, so
+ * rendering it. A TOTAL record over the shared retired tool names, so
  * retiring a tool decides this rather than silently dropping its summary.
  * Every name here must also reach a redacting branch in
  * `buildRegistryWriteSummaryRows`; the generic branch formats each input
@@ -503,7 +414,9 @@ const RETIRED_REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "run-stella-query": false,
   save_template: true,
   "search-across-matters": false,
-} as const satisfies Record<keyof typeof RETIRED_CHAT_TOOL_TITLE_KEYS, boolean>;
+  read_contact: false,
+  read_content_across_matters: false,
+} as const satisfies Record<RetiredChatToolName, boolean>;
 
 const REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES = {
   ...REGISTRY_WRITE_SUMMARY_TOOL_NAMES,
@@ -513,20 +426,15 @@ const REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES = {
 const isRegistryWriteSummaryEligibleToolName = (
   toolName: string,
 ): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES =>
-  Object.hasOwn(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
+  isOwnKey(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
   REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES[toolName];
 
 export type ChatToolTitleKey =
-  | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]
-  | typeof UNKNOWN_CHAT_TOOL_TITLE_KEY;
-
-const isChatToolName = (
-  toolName: string,
-): toolName is keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS =>
-  toolName in CHAT_TOOL_DISPLAY_TITLE_KEYS;
+  | (typeof SHARED_CHAT_TOOL_TITLE_KEYS)[keyof typeof SHARED_CHAT_TOOL_TITLE_KEYS]
+  | ReturnType<typeof toolTitleKey>;
 
 export const isApprovalToolName = (
   toolName: string,
@@ -536,7 +444,7 @@ export const isApprovalToolName = (
   }
 
   return (
-    isChatToolName(toolName) &&
+    isKnownChatToolName(toolName) &&
     toolName !== "ask-user" &&
     toolName !== "create-document" &&
     toolName !== "request_secret" &&
@@ -550,12 +458,23 @@ export const isToolApprovalGrant = (
   isApprovalToolName(value) ||
   value.startsWith(MCP_CONNECTOR_APPROVAL_GRANT_PREFIX);
 
-export const getChatToolTitleKey = (toolName: string) => {
-  if (isChatToolName(toolName)) {
-    return CHAT_TOOL_DISPLAY_TITLE_KEYS[toolName];
-  }
+/** The title of a coding agent's own step, by what the step's row names. */
+export const LOCAL_RUN_TITLE_KEYS = {
+  sign_in: "chat.toolCall.signInToContinue",
+  read: "chat.toolCall.readFile",
+  search: "chat.toolCall.searchFiles",
+  fetch: "chat.tool.fetch_url",
+  plan: "chat.toolCall.updatePlan",
+  proposed_plan: "chat.toolCall.proposedPlan",
+  subagent: "chat.toolCall.subagent",
+  image: "chat.toolCall.viewImage",
+} as const satisfies Record<LocalRunToolTitleKind, TranslationKey>;
 
-  return UNKNOWN_CHAT_TOOL_TITLE_KEY;
+export const getChatToolTitleKey = (toolName: string): ChatToolTitleKey => {
+  const label = chatToolLabel(toolName);
+  return isOwnKey(SHARED_CHAT_TOOL_TITLE_KEYS, label)
+    ? SHARED_CHAT_TOOL_TITLE_KEYS[label]
+    : toolTitleKey(label);
 };
 
 const getToolNameFromPart = (part: unknown): string | null => {
@@ -654,8 +573,10 @@ export const isPendingApprovalPart = (
   );
 };
 
+// Any part: a coding agent's step is an approval part too, outside the
+// registered tool names.
 export const isApprovalRespondedPart = (
-  part: ChatPart,
+  part: unknown,
 ): part is ApprovalToolPart & {
   approval: { approved: boolean; id: string; needsApproval: boolean };
   state: "approval-responded";
@@ -705,7 +626,7 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
-  if (typeof part.name !== "string" || part.name in USER_INPUT_TOOL_NAMES) {
+  if (typeof part.name !== "string" || isUserInputChatToolName(part.name)) {
     return false;
   }
 
@@ -730,23 +651,23 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
       !(
         part.type === "tool-call" &&
         part.state === "input-complete" &&
-        isServerChatToolCall(part)
+        !isBrowserResolvedChatToolCall(part)
       ),
   );
 };
 
 type PersistedChatPart = PersistedChatMessage["parts"][number];
 
-const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
+export const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
   part.type === "tool-call" && part.state === "approval-requested";
 
 /** A part only the user can answer: an approval request, or a user-input
  *  card whose questions have fully arrived. */
-const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
+export const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
   isApprovalRequestPart(part) ||
   (part.type === "tool-call" &&
     part.state === "input-complete" &&
-    Object.hasOwn(USER_INPUT_TOOL_NAMES, part.name));
+    isUserInputChatToolName(part.name));
 
 /**
  * The latest assistant message, if it holds a part `isAwaitedPart` accepts
@@ -755,10 +676,10 @@ const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
  * interaction when it accepts it, so the cards stop being answerable at the
  * same moment their answers stop being accepted.
  */
-const findAwaitedAssistantMessageId = (
+const findAwaitedAssistantMessage = (
   messages: readonly PersistedChatMessage[],
   isAwaitedPart: (part: PersistedChatPart) => boolean,
-): string | null => {
+): PersistedChatMessage | null => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages.at(index);
     if (message === undefined || message.role === "user") {
@@ -767,7 +688,7 @@ const findAwaitedAssistantMessageId = (
     if (message.role !== "assistant") {
       continue;
     }
-    return message.parts.some(isAwaitedPart) ? message.id : null;
+    return message.parts.some(isAwaitedPart) ? message : null;
   }
   return null;
 };
@@ -777,14 +698,48 @@ const findAwaitedAssistantMessageId = (
 export const getCurrentApprovalPendingMessageId = (
   messages: readonly PersistedChatMessage[],
 ): string | null =>
-  findAwaitedAssistantMessageId(messages, isApprovalRequestPart);
+  findAwaitedAssistantMessage(messages, isApprovalRequestPart)?.id ?? null;
 
 /** The assistant message the conversation still waits on the user to answer,
  *  through an approval card or a user-input card, or null. */
 export const getAwaitedAssistantMessageId = (
   messages: readonly PersistedChatMessage[],
 ): string | null =>
-  findAwaitedAssistantMessageId(messages, isUserAnswerablePart);
+  findAwaitedAssistantMessage(messages, isUserAnswerablePart)?.id ?? null;
+
+/**
+ * Everything a conversation has open for the member to answer, one key per
+ * item: each part of the awaited assistant message only they can answer (an
+ * approval, a question or another user-input card) and the question a run on
+ * their computer paused the turn on. Empty when the turn waits on nothing.
+ *
+ * This is the one definition of "the member has something open here". The
+ * send queue holds on it and the runtime registry keeps a runtime for it, so
+ * a new kind of wait added here (or a new user-input tool) is held and kept
+ * alike. The same keys read from a runtime and from the stored thread name
+ * the same items.
+ */
+export const openMemberWaitKeys = ({
+  localRunQuestion,
+  messages,
+}: {
+  localRunQuestion: LocalRunQuestionPause | null;
+  messages: readonly PersistedChatMessage[];
+}): readonly string[] => {
+  const awaited = findAwaitedAssistantMessage(messages, isUserAnswerablePart);
+  return [
+    ...(awaited === null
+      ? []
+      : awaited.parts.flatMap((part) =>
+          part.type === "tool-call" && isUserAnswerablePart(part)
+            ? [`part:${part.id}`]
+            : [],
+        )),
+    ...(localRunQuestion === null
+      ? []
+      : [`interrupt:${localRunQuestion.interruptId}`]),
+  ];
+};
 
 /**
  * An unresolved auto-run folio-agents tool-call part (a read tool or
@@ -825,7 +780,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   if (
     part.type !== "tool-call" ||
     part.state !== "input-complete" ||
-    isServerChatToolCall(part)
+    !isBrowserResolvedChatToolCall(part)
   ) {
     return false;
   }
@@ -833,7 +788,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   return (
     "name" in part &&
     typeof part.name === "string" &&
-    part.name in FOLIO_AGENT_DOC_TOOL_NAMES
+    isOwnKey(FOLIO_AGENT_DOC_TOOL_NAMES, part.name)
   );
 };
 
@@ -915,7 +870,7 @@ export const sanitizeRunningToolCalls = (
       message.metadata?.turnOutcome?.type === "awaiting-user" &&
       part.type === "tool-call" &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part)
+      !isBrowserResolvedChatToolCall(part)
         ? part
         : toTerminalIfRunningToolPart(part),
     );
@@ -1061,9 +1016,12 @@ export const getChatAssistantTurnError = (
   switch (outcome.type) {
     case "failed":
       return outcome.refusal === undefined
-        ? withProviderDiagnostic(
-            new Error(outcome.error),
-            outcome.providerDiagnostic,
+        ? withLocalRunLimitResetsAt(
+            withProviderDiagnostic(
+              new Error(outcome.error),
+              outcome.providerDiagnostic,
+            ),
+            outcome.limitResetsAt,
           )
         : toAPIError({
             status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,
@@ -1102,13 +1060,13 @@ export const isOpaquePersistedChatToolCallPart = (
   ) {
     return false;
   }
-  return !isChatToolName(value.name) && !isExternalMcpToolName(value.name);
+  return !isKnownChatToolName(value.name) && !isExternalMcpToolName(value.name);
 };
 
 const isCanonicalBuiltInToolCall = (
   value: TanStackChatToolCallPart,
 ): value is BuiltInChatToolCallPart => {
-  if (!isChatToolName(value.name)) {
+  if (!isKnownChatToolName(value.name)) {
     return false;
   }
   // A call can end before its input is complete: still streaming it, or
@@ -1247,6 +1205,15 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
+ * The newest save a session has not handled yet. `history` marks a save that
+ * was loaded with older messages, not made while the session watched.
+ */
+export type PlaybookSaveTarget = {
+  playbookId: string;
+  source: "history" | "live";
+};
+
+/**
  * Consume the successful `save_playbook` calls this session has not handled,
  * returning whether caches changed and the latest playbook to follow. A
  * newly completed older call still changed caches even when a later call
@@ -1262,8 +1229,8 @@ export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds: Set<string>;
   historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
-}): { playbookId: string | null } | null => {
-  let latestPlaybookId: string | null = null;
+}): { target: PlaybookSaveTarget | null } | null => {
+  let target: PlaybookSaveTarget | null = null;
   let hasNewSaves = false;
 
   for (const message of messages) {
@@ -1283,19 +1250,20 @@ export const consumePlaybookSaveToolCalls = ({
         continue;
       }
       if (handledToolCallIds.has(part["id"])) {
-        latestPlaybookId = null;
+        target = null;
         continue;
       }
 
       handledToolCallIds.add(part["id"]);
       hasNewSaves = true;
-      latestPlaybookId = historicalToolCallIds?.has(part["id"])
-        ? null
-        : part["output"]["playbookId"];
+      target = {
+        playbookId: part["output"]["playbookId"],
+        source: historicalToolCallIds?.has(part["id"]) ? "history" : "live",
+      };
     }
   }
 
-  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
+  return hasNewSaves ? { target } : null;
 };
 
 /** The playbook a tool call saved, if it is a completed `save_playbook`
@@ -1381,7 +1349,14 @@ export const consumeReaderAnnotationWriteToolCalls = ({
   return hasWrite;
 };
 
-export const getUserMessageHtmlHistory = (
+/**
+ * The user's sent messages, newest first, as their text parts hold them: the
+ * composer's markup for one just sent, stored Markdown once the server has
+ * it. `userMessageComposerContent` reads either back into the composer.
+ * Pasted-text parts are attachments of the message, not its text, so they
+ * stay out: joined in, they would mix plain text into the composer markup.
+ */
+export const getUserMessageHistory = (
   messages: readonly PersistedChatMessage[],
 ) => {
   const history: string[] = [];
@@ -1394,7 +1369,11 @@ export const getUserMessageHtmlHistory = (
 
     const textParts: string[] = [];
     for (const part of message.parts) {
-      if (part.type === "text" && part.content.trim()) {
+      if (
+        part.type === "text" &&
+        !isChatPastedTextPart(part) &&
+        part.content.trim()
+      ) {
         textParts.push(part.content);
       }
     }

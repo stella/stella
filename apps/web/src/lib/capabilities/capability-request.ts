@@ -27,3 +27,30 @@ export const invokeCapability = async <TResult>(
   capability: CapabilityId,
   call: (request: CapabilityRequest) => Promise<TResult>,
 ): Promise<TResult> => await call(capabilityRequest(capability));
+
+export type AppOnlyWriteId =
+  | "chat.browser-site-grants.create"
+  | "chat.browser-site-grants.delete"
+  | "chat.local-runners.folder-approval.update"
+  | "chat.mcp-apps.call"
+  | "chat.threads.limit-reminder.cancel"
+  | "chat.threads.limit-reminder.set"
+  | "chat.threads.model.update"
+  | "files.document-properties.update"
+  | "files.email-attachment.save"
+  | "folio-collaboration.join"
+  | "folio-collaboration.refresh-token"
+  | "folio-collaboration.seed.acknowledge"
+  | "organization-settings.local-runs.update"
+  | "organizations.audit-export.create"
+  | "search.case-law-section.list"
+  | "sharepoint.connect"
+  | "sharepoint.connection.delete"
+  | "sharepoint.enablement.update"
+  | "sharepoint.imports.create";
+
+/** Declares an app-only write that deliberately has no automation capability. */
+export const invokeAppOnlyWrite = async <TResult>(
+  _id: AppOnlyWriteId,
+  call: () => Promise<TResult>,
+): Promise<TResult> => await call();

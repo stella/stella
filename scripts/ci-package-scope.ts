@@ -6,8 +6,8 @@ import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import { GENERATORS } from "./generated-files";
 import {
-  landingBuildRootInputs,
-  landingClosure,
+  buildRootInputs,
+  LANDING_PACKAGE,
   parseLockfile,
   workspaceClosure,
 } from "./landing-deploy-scope";
@@ -1547,7 +1547,7 @@ export const requiresLandingBuild = ({
     if (lock === undefined) {
       return true;
     }
-    const closure = landingClosure(lock);
+    const closure = workspaceClosure(lock, LANDING_PACKAGE);
     if (closure === undefined) {
       return true;
     }
@@ -1573,7 +1573,7 @@ export const requiresLandingBuild = ({
         }
       }
     }
-    const inputs = landingBuildRootInputs(turbo);
+    const inputs = buildRootInputs(turbo, LANDING_PACKAGE);
     // An absent task/input declaration cannot prove the landing is unaffected.
     if (inputs.length === 0) {
       return true;
