@@ -81,7 +81,7 @@ export const createReplayGate = (labels: readonly string[]) => {
       await withTimeout(
         async () => await Promise.race([state.reached.promise, failed.promise]),
         {
-          label: `The replay reaching the pause point ${label}`,
+          label: "provider-wire-replay-pause-point",
           timeoutMs: API_TEST_TIMEOUT_MS,
         },
       );

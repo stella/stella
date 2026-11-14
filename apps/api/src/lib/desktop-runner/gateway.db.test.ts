@@ -6869,9 +6869,9 @@ describe("undoing a turn's file changes", () => {
 
   /**
    * A turn of the thread, running until `completeTurn` ends it. Its start
-   * holds microseconds, as an accepted turn's does (the database's `now()`):
-   * the newest-turn rule compares starts, and a whole millisecond would hide
-   * a comparison that drops them. Just before the clock, so the turn can
+   * holds microseconds, as an accepted turn's does (the database's `now()`),
+   * so a newest-turn rule that compared starts read out at a whole
+   * millisecond would fail here. Just before the clock, so the turn can
    * settle at it.
    */
   const newTurn = async (threadId: Thread): Promise<Turn> => {

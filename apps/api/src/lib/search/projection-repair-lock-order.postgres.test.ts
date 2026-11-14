@@ -61,9 +61,11 @@ if (!databaseUrl || !runPostgresTests) {
     async ({ kind, parent, first }) => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const setup = openClient();
-        const repair = openClient({ connection: { statement_timeout: 5000 } });
+        // The observer releases intentional lock waits. A server deadline can
+        // expire while the test's event loop is descheduled, before that release.
+        const repair = openClient({ connection: { statement_timeout: 0 } });
         const deletion = openClient({
-          connection: { statement_timeout: 5000 },
+          connection: { statement_timeout: 0 },
         });
         const observer = openClient();
         const organizationId = mintAuthProviderId<"organization">();

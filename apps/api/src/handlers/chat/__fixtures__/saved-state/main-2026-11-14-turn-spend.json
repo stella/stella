@@ -1,35 +1,36 @@
 {
   "release": null,
-  "sourceCommit": "1dab61d9af1d73c0399b1514c995a153c747d77c",
-  "newestMigration": "20261114190000_corpus_projection_durable_commit",
-  "shape": "TODO: what this stored shape adds or drops",
+  "sourceCommit": "c099e0cb3e14c5e1c30fc041c2415bad8a72a729",
+  "newestMigration": "20261114200000_chat_turn_ordinals",
+  "shape": "Every terminal assistant message stores metadata.turnSpend: the prompt tokens its turn has spent of its budget.",
   "actors": {
-    "organizationId": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
-    "userId": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh"
+    "organizationId": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
+    "userId": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT"
   },
-  "threadId": "01a1db8c-9e52-74ae-834c-1374c08824cb",
+  "threadId": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
   "pendingToolCallId": "call-lease",
   "rows": {
     "chat_threads": [
       {
-        "id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
+        "id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
         "title": "Scripted side answer",
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "pinned_at": null,
         "chat_model": null,
-        "created_at": "2026-11-14T19:33:08.358+00:00",
+        "created_at": "2026-11-14T20:34:04.314+00:00",
         "recap_text": null,
-        "updated_at": "2026-11-14T19:33:10.847+00:00",
+        "updated_at": "2026-11-14T20:34:06.648+00:00",
         "active_skill": null,
-        "last_read_at": "2026-11-14T19:33:08.358+00:00",
+        "last_read_at": "2026-11-14T20:34:04.314+00:00",
         "title_source": "ai",
         "workspace_id": null,
         "rollback_token": null,
         "chat_run_target": null,
-        "organization_id": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
+        "organization_id": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
         "compaction_epoch": 4,
         "parent_thread_id": null,
         "recap_message_id": null,
+        "last_turn_ordinal": 6,
         "context_matter_ids": [],
         "data_workspace_ids": [],
         "recap_generated_at": null,
@@ -58,7 +59,7 @@
     ],
     "chat_messages": [
       {
-        "id": "01a1db8c-9e52-74b0-9dfb-fac5389d773d",
+        "id": "01a1dbc4-6767-704d-a1d4-2785d4673ce7",
         "role": "user",
         "content": {
           "data": [
@@ -69,15 +70,15 @@
           ],
           "version": 3
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:08.37+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:04.337+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-9f2e-770a-b0ed-465c4bcdb03d",
+        "id": "01a1dbc4-6873-751c-807e-47ad97dd8d39",
         "role": "assistant",
         "content": {
           "data": [
@@ -113,15 +114,15 @@
             }
           }
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:08.571+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:04.583+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a041-75b2-b000-e7c7e9a59d42",
+        "id": "01a1dbc4-69b3-74c2-98d5-c11b2984d656",
         "role": "user",
         "content": {
           "data": [
@@ -132,15 +133,15 @@
           ],
           "version": 3
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:08.862+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:04.929+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a0fc-707b-a771-142a24a4d75d",
+        "id": "01a1dbc4-6a76-72f1-b2fd-8ca31fbca44e",
         "role": "assistant",
         "content": {
           "data": [
@@ -157,7 +158,7 @@
                 "value": {
                   "templates": [
                     {
-                      "id": "01a1db8c-9d73-7479-9443-2b7a224ad40c",
+                      "id": "01a1dbc4-664e-7803-8353-58f7f243a8fb",
                       "name": "Tmpl A",
                       "tags": null,
                       "whenToUse": null,
@@ -209,15 +210,15 @@
             }
           }
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.109+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.123+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a1eb-7138-9d8c-2127db9d5593",
+        "id": "01a1dbc4-6b05-7301-b8f9-7b867c8c3a9f",
         "role": "user",
         "content": {
           "data": [
@@ -228,15 +229,15 @@
           ],
           "version": 3
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.286+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.244+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a29b-7202-966f-b142cc013bcc",
+        "id": "01a1dbc4-6bba-723b-ad4a-e7c5709d0791",
         "role": "assistant",
         "content": {
           "data": [
@@ -303,15 +304,15 @@
             }
           }
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.48+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.434+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a43e-77ed-9aea-7486762c354d",
+        "id": "01a1dbc4-6d27-7381-b8a5-7fcbf8b27a9a",
         "role": "user",
         "content": {
           "data": [
@@ -322,15 +323,15 @@
           ],
           "version": 3
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.876+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.789+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a4e0-72b9-96ab-2baa391964ce",
+        "id": "01a1dbc4-6dc3-72e3-b506-e71a99bca238",
         "role": "assistant",
         "content": {
           "data": [
@@ -399,15 +400,15 @@
             }
           }
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.058+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.939+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a657-71bd-a787-24c7743ac0e0",
+        "id": "01a1dbc4-6f04-701e-aef3-9cd620e8bc83",
         "role": "user",
         "content": {
           "data": [
@@ -418,15 +419,15 @@
           ],
           "version": 3
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.412+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.259+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a6f7-7792-ae25-ba47dfdf81f2",
+        "id": "01a1dbc4-6f9a-7438-9f33-5b1e254b3f19",
         "role": "assistant",
         "content": {
           "data": [],
@@ -453,15 +454,15 @@
             }
           }
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.544+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.384+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a751-7457-bfe3-079e272d1b61",
+        "id": "01a1dbc4-6fec-7729-893f-81346422d483",
         "role": "user",
         "content": {
           "data": [
@@ -472,15 +473,15 @@
           ],
           "version": 3
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.666+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.492+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a1db8c-a7f3-727b-8fa4-aca416497202",
+        "id": "01a1dbc4-707b-74ed-b57b-f95f3f2eb512",
         "role": "assistant",
         "content": {
           "data": [
@@ -550,8 +551,8 @@
             },
             "resumeSnapshot": {
               "resumeState": {
-                "runId": "run-01a1db8c-a751-7456-862f-2bfd8a26d50e",
-                "threadId": "01a1db8c-9e52-74ae-834c-1374c08824cb"
+                "runId": "run-01a1dbc4-6fec-7728-b418-3cd8964fe50c",
+                "threadId": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9"
               },
               "pendingInterrupts": [
                 {
@@ -575,7 +576,7 @@
                         "name": "lease"
                       },
                       "inputSchemaHash": "sha256:683d9429c1da897d8ebe18c7b70131ca0cedecbb26b499a5ccb82d2d01b08428",
-                      "interruptedRunId": "run-01a1db8c-a751-7456-862f-2bfd8a26d50e",
+                      "interruptedRunId": "run-01a1dbc4-6fec-7728-b418-3cd8964fe50c",
                       "approvalSchemaHash": "sha256:22f76d9a1c618a3cfaa891208a14f6e5e6ab1be4ff1c38cc8a8cd1e8fd0c0e4e",
                       "responseSchemaHash": "sha256:ffc21793d9e22678a177d3ad9e30c00c0330603b8e422b01dffa72054f8c18f4"
                     }
@@ -630,169 +631,175 @@
             }
           }
         },
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
         "revision": 0,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.836+00:00",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.642+00:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       }
     ],
     "chat_turns": [
       {
-        "id": "01a1db8c-9e92-75a5-bc7e-cfae0cc56d70",
-        "run_id": "run-01a1db8c-9e52-74af-8606-1d620d8d6973",
+        "id": "01a1dbc4-67b0-751c-a5e8-bc4d9ab4b5ae",
+        "run_id": "run-01a1dbc4-6767-704c-8d60-a6e77442eee9",
         "status": "completed",
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:08.37+00:00",
-        "settled_at": "2026-11-14T19:33:08.571+00:00",
-        "updated_at": "2026-11-14T19:33:08.582+00:00",
+        "ordinal": 1,
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:04.337+00:00",
+        "settled_at": "2026-11-14T20:34:04.583+00:00",
+        "updated_at": "2026-11-14T20:34:04.594+00:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
-        "user_message_id": "01a1db8c-9e52-74b0-9dfb-fac5389d773d",
+        "organization_id": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
+        "user_message_id": "01a1dbc4-6767-704d-a1d4-2785d4673ce7",
         "interaction_type": null,
         "lease_expires_at": null,
         "active_started_at": null,
         "failure_retryable": null,
-        "timing_message_id": "01a1db8c-9f2e-770a-b0ed-465c4bcdb03d",
-        "active_duration_ms": 201,
+        "timing_message_id": "01a1dbc4-6873-751c-807e-47ad97dd8d39",
+        "active_duration_ms": 246,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a1db8c-9f2e-770a-b0ed-465c4bcdb03d",
+        "assistant_message_id": "01a1dbc4-6873-751c-807e-47ad97dd8d39",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a1db8c-a07e-74c5-8494-f9d6b6f4582c",
-        "run_id": "run-01a1db8c-a041-75b1-8246-ee357be3d842",
+        "id": "01a1dbc4-6a01-73dc-b07a-697c9efae7e5",
+        "run_id": "run-01a1dbc4-69b3-74c1-9305-f9fa951daa63",
         "status": "completed",
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:08.862+00:00",
-        "settled_at": "2026-11-14T19:33:09.109+00:00",
-        "updated_at": "2026-11-14T19:33:09.129+00:00",
+        "ordinal": 2,
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:04.929+00:00",
+        "settled_at": "2026-11-14T20:34:05.123+00:00",
+        "updated_at": "2026-11-14T20:34:05.132+00:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
-        "user_message_id": "01a1db8c-a041-75b2-b000-e7c7e9a59d42",
+        "organization_id": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
+        "user_message_id": "01a1dbc4-69b3-74c2-98d5-c11b2984d656",
         "interaction_type": null,
         "lease_expires_at": null,
         "active_started_at": null,
         "failure_retryable": null,
-        "timing_message_id": "01a1db8c-a0fc-707b-a771-142a24a4d75d",
-        "active_duration_ms": 247,
+        "timing_message_id": "01a1dbc4-6a76-72f1-b2fd-8ca31fbca44e",
+        "active_duration_ms": 194,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a1db8c-a0fc-707b-a771-142a24a4d75d",
+        "assistant_message_id": "01a1dbc4-6a76-72f1-b2fd-8ca31fbca44e",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a1db8c-a226-71c7-86ae-4f0a239ea3f0",
-        "run_id": "run-01a1db8c-a332-7518-9ee2-f2d3ae8774f6",
+        "id": "01a1dbc4-6b3c-7697-b467-9fc2ea2f5c2c",
+        "run_id": "run-01a1dbc4-6c3d-77ff-977f-d6ef37737d77",
         "status": "completed",
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.286+00:00",
-        "settled_at": "2026-11-14T19:33:09.747+00:00",
-        "updated_at": "2026-11-14T19:33:09.763+00:00",
+        "ordinal": 3,
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.244+00:00",
+        "settled_at": "2026-11-14T20:34:05.665+00:00",
+        "updated_at": "2026-11-14T20:34:05.68+00:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
-        "user_message_id": "01a1db8c-a1eb-7138-9d8c-2127db9d5593",
+        "organization_id": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
+        "user_message_id": "01a1dbc4-6b05-7301-b8f9-7b867c8c3a9f",
         "interaction_type": null,
         "lease_expires_at": null,
         "active_started_at": null,
         "failure_retryable": null,
-        "timing_message_id": "01a1db8c-a29b-7202-966f-b142cc013bcc",
-        "active_duration_ms": 330,
+        "timing_message_id": "01a1dbc4-6bba-723b-ad4a-e7c5709d0791",
+        "active_duration_ms": 301,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a1db8c-a29b-7202-966f-b142cc013bcc",
+        "assistant_message_id": "01a1dbc4-6bba-723b-ad4a-e7c5709d0791",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a1db8c-a474-71df-9f91-1dc5826cae3d",
-        "run_id": "run-01a1db8c-a56d-7744-8a4c-bd73f5dccc65",
+        "id": "01a1dbc4-6d5d-7619-8b90-8b7b430e0d3a",
+        "run_id": "run-01a1dbc4-6e32-7432-ba13-215900817781",
         "status": "completed",
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.876+00:00",
-        "settled_at": "2026-11-14T19:33:10.286+00:00",
-        "updated_at": "2026-11-14T19:33:10.302+00:00",
+        "ordinal": 4,
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.789+00:00",
+        "settled_at": "2026-11-14T20:34:06.145+00:00",
+        "updated_at": "2026-11-14T20:34:06.16+00:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
-        "user_message_id": "01a1db8c-a43e-77ed-9aea-7486762c354d",
+        "organization_id": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
+        "user_message_id": "01a1dbc4-6d27-7381-b8a5-7fcbf8b27a9a",
         "interaction_type": null,
         "lease_expires_at": null,
         "active_started_at": null,
         "failure_retryable": null,
-        "timing_message_id": "01a1db8c-a4e0-72b9-96ab-2baa391964ce",
-        "active_duration_ms": 290,
+        "timing_message_id": "01a1dbc4-6dc3-72e3-b506-e71a99bca238",
+        "active_duration_ms": 246,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a1db8c-a4e0-72b9-96ab-2baa391964ce",
+        "assistant_message_id": "01a1dbc4-6dc3-72e3-b506-e71a99bca238",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a1db8c-a68c-70f3-84f7-a89ff9184825",
-        "run_id": "run-01a1db8c-a657-71bc-8cf4-7233e706c1ad",
+        "id": "01a1dbc4-6f33-7307-b031-00adb7b9c92c",
+        "run_id": "run-01a1dbc4-6f04-701d-be08-aff02f4ccd0a",
         "status": "failed",
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.412+00:00",
-        "settled_at": "2026-11-14T19:33:10.544+00:00",
-        "updated_at": "2026-11-14T19:33:10.55+00:00",
+        "ordinal": 5,
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.259+00:00",
+        "settled_at": "2026-11-14T20:34:06.384+00:00",
+        "updated_at": "2026-11-14T20:34:06.389+00:00",
         "execution_id": null,
         "failure_code": "provider-error",
         "workspace_id": null,
-        "organization_id": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
-        "user_message_id": "01a1db8c-a657-71bd-a787-24c7743ac0e0",
+        "organization_id": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
+        "user_message_id": "01a1dbc4-6f04-701e-aef3-9cd620e8bc83",
         "interaction_type": null,
         "lease_expires_at": null,
         "active_started_at": null,
         "failure_retryable": true,
-        "timing_message_id": "01a1db8c-a6f7-7792-ae25-ba47dfdf81f2",
-        "active_duration_ms": 132,
+        "timing_message_id": "01a1dbc4-6f9a-7438-9f33-5b1e254b3f19",
+        "active_duration_ms": 125,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a1db8c-a6f7-7792-ae25-ba47dfdf81f2",
+        "assistant_message_id": "01a1dbc4-6f9a-7438-9f33-5b1e254b3f19",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a1db8c-a78a-7472-823b-70476dafa4c1",
-        "run_id": "run-01a1db8c-a751-7456-862f-2bfd8a26d50e",
+        "id": "01a1dbc4-701c-72f4-8e46-8cf806a0b504",
+        "run_id": "run-01a1dbc4-6fec-7728-b418-3cd8964fe50c",
         "status": "awaiting-user",
-        "user_id": "Uh9oOOadK8YsetqKimpbFJdsz0MjKpQh",
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.666+00:00",
+        "ordinal": 6,
+        "user_id": "WI50AzPv4EVHvXsbExoP0VpWTzaJVqXT",
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.492+00:00",
         "settled_at": null,
-        "updated_at": "2026-11-14T19:33:10.849+00:00",
+        "updated_at": "2026-11-14T20:34:06.65+00:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "0N6g8H8pXoJylJBvelK2bUto8lLFOeAb",
-        "user_message_id": "01a1db8c-a751-7457-bfe3-079e272d1b61",
+        "organization_id": "B2BHaIlWHcTcKdPrkhT6fmaMHqcm4CRB",
+        "user_message_id": "01a1dbc4-6fec-7729-893f-81346422d483",
         "interaction_type": "approval",
         "lease_expires_at": null,
         "active_started_at": null,
         "failure_retryable": null,
-        "timing_message_id": "01a1db8c-a7f3-727b-8fa4-aca416497202",
-        "active_duration_ms": 170,
+        "timing_message_id": "01a1dbc4-707b-74ed-b57b-f95f3f2eb512",
+        "active_duration_ms": 150,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a1db8c-a7f3-727b-8fa4-aca416497202",
+        "assistant_message_id": "01a1dbc4-707b-74ed-b57b-f95f3f2eb512",
         "interaction_tool_call_id": "call-lease"
       }
     ],
@@ -801,43 +808,43 @@
         "kind": "ledger-start",
         "name": "",
         "target": null,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:08.571+00:00"
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:04.583+00:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-deferred-templates",
         "target": null,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.836+00:00"
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.642+00:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-draft",
         "target": null,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.48+00:00"
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.434+00:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-lease",
         "target": null,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.836+00:00"
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:06.642+00:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-memo",
         "target": null,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:10.058+00:00"
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.939+00:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-templates",
         "target": null,
-        "thread_id": "01a1db8c-9e52-74ae-834c-1374c08824cb",
-        "created_at": "2026-11-14T19:33:09.109+00:00"
+        "thread_id": "01a1dbc4-6766-7018-abc0-6d4f78ede0c9",
+        "created_at": "2026-11-14T20:34:05.123+00:00"
       }
     ]
   }

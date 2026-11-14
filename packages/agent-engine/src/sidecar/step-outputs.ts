@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 import { constants } from "node:fs";
-import { mkdir, open, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import type { ChatLocalRunStepContentKind } from "@stll/api-contract/chat-local-run-step-content";
 import {
   CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   chatLocalRunCallId,
@@ -26,13 +27,18 @@ import {
  * `{"bytes":<n>}` with how many bytes the step produced, then at most its
  * kind's share of them (`CHAT_LOCAL_RUN_STEP_MAX_BYTES`): a command's output,
  * a diff or a subagent's conversation as UTF-8 text, a viewed image as its
- * own bytes. The desktop reads the same layout to serve a step to a page on
- * this computer, whatever the bytes are, so it bounds an answer by the
- * largest share only: no file written here may hold more than its own.
+ * own bytes. A kept file is what is sent to stella (`step-uploads.ts`). The
+ * desktop also reads the same layout to serve a step to a page on this
+ * computer, whatever the bytes are, so it bounds an answer by the largest
+ * share only: no file written here may hold more than its own.
  */
 
 const PRIVATE_FILE_MODE = 0o600;
 const PRIVATE_FOLDER_MODE = 0o700;
+
+/** The folder a run's steps are kept in. */
+export const stepOutputRunDir = (stepOutputDir: string, runId: string) =>
+  path.join(path.resolve(stepOutputDir), runId);
 
 /** The file one step of a run is kept in. */
 export const stepOutputPath = ({
@@ -45,8 +51,7 @@ export const stepOutputPath = ({
   toolCallId: string;
 }) =>
   path.join(
-    path.resolve(stepOutputDir),
-    runId,
+    stepOutputRunDir(stepOutputDir, runId),
     sha256Hex(chatLocalRunCallId(runId, toolCallId, sha256Hex)),
   );
 
@@ -148,6 +153,52 @@ export const stepOutputFile = ({ kind, totalBytes, kept }: KeptStepOutput) => {
   return file;
 };
 
+const LINE_FEED = 0x0a;
+
+/** A kept file as read back: what it holds, or why it holds nothing to read. */
+export type KeptStepOutputFile =
+  | { type: "kept"; totalBytes: number; bytes: Uint8Array }
+  /** No file, or a file that was not written here. */
+  | { type: "none" }
+  /** The file is there and could not be read now. */
+  | { type: "unreadable" };
+
+const isMissingFile = (cause: unknown) =>
+  typeof cause === "object" &&
+  cause !== null &&
+  "code" in cause &&
+  cause.code === "ENOENT";
+
+/** A kept file as it was written: how many bytes the step produced and those kept. */
+export const readKeptStepOutput = async (
+  file: string,
+): Promise<KeptStepOutputFile> => {
+  const read = await Result.tryPromise({
+    try: async () => await readFile(file),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(read)) {
+    return { type: isMissingFile(read.error) ? "none" : "unreadable" };
+  }
+  const bytes = new Uint8Array(read.value);
+  const headerEnd = bytes.indexOf(LINE_FEED);
+  const header =
+    headerEnd === -1
+      ? null
+      : Result.try((): unknown =>
+          JSON.parse(new TextDecoder().decode(bytes.subarray(0, headerEnd))),
+        ).unwrapOr(null);
+  const totalBytes =
+    typeof header === "object" && header !== null && "bytes" in header
+      ? header.bytes
+      : null;
+  return typeof totalBytes === "number" &&
+    Number.isSafeInteger(totalBytes) &&
+    totalBytes >= 0
+    ? { type: "kept", totalBytes, bytes: bytes.subarray(headerEnd + 1) }
+    : { type: "none" };
+};
+
 /** What is kept of what a step produced, or `null` when nothing is. */
 const keptStepOutput = async (
   output: HarnessStepOutput,
@@ -181,11 +232,12 @@ type KeepStepOutputOptions = {
 };
 
 /**
- * Keep one step's output for the member to open on this computer. Written
+ * Keep one step's output, to be sent to stella and opened by the member. Written
  * whole under a temporary name and moved into place, so a reader never sees
  * half of it; a step reported twice keeps its last report. A step with
  * nothing to keep (a viewed file that is no image) keeps no file, an earlier
- * report's included.
+ * report's included. Answers the step's key and what kind it kept, or `null`
+ * when it kept nothing.
  */
 export const keepStepOutput = async ({
   stepOutputDir,
@@ -201,7 +253,7 @@ export const keepStepOutput = async ({
       const kept = await keptStepOutput(output, workspaceDir);
       if (kept === null) {
         await rm(file, { force: true });
-        return;
+        return null;
       }
       await mkdir(path.dirname(file), {
         recursive: true,
@@ -216,6 +268,8 @@ export const keepStepOutput = async ({
       } finally {
         await rm(temporary, { force: true });
       }
+      const kind: ChatLocalRunStepContentKind = output.type;
+      return { stepKey: path.basename(file), kind };
     },
     catch: (cause) => cause,
   });

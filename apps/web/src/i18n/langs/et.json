@@ -2335,6 +2335,10 @@
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
+      "browserClick": "Klõpsa elemendil „{target}“ lehel {url}",
+      "browserPressKey": "Vajuta klahvi {key} elemendis „{target}“ lehel {url}",
+      "browserSelect": "Vali „{option}“ elemendis „{target}“ lehel {url}",
+      "browserType": "Sisesta tekst väljale „{target}“ lehel {url}",
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
       "commandExited": "{command} (väljumiskood {code})",
       "consoleLogs": "Konsooli väljund",
@@ -6344,6 +6348,7 @@
       "previewBody5": "Enne konverteerimist annab müük või börsil noteerimine investorile õiguse saada kas ostuhind või konverteerimise alusel makstav tulu, olenevalt sellest, kumb on suurem.",
       "previewBody6": "Äriühing on nõuetekohaselt asutatud, tal on õigus käesolev leping sõlmida ning ta hangib selle täitmiseks kõik vajalikud heakskiidud.",
       "previewBody7": "Käesolev leping sisaldab poolte täielikku kokkulepet ja seda võib muuta üksnes kirjalikult nõutava nõusoleku alusel.",
+      "previewDocument": "Stiilikomplekti eelvaade",
       "previewFailed": "Eelvaadet ei õnnestunud luua.",
       "previewIntroduction": "Käesolev leping sõlmitakse ettevõtte Example Labs Ltd. (edaspidi „äriühing“) ja allkirjalehel nimetatud investori (edaspidi „investor“) vahel.",
       "previewLevel1": "Investeering",

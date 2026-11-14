@@ -171,6 +171,24 @@ export const lockInvoiceRepairBatch = async ({
     [limit],
   );
 
+/**
+ * The chat turn numbering repair takes each thread's row lock, the one a send
+ * holds while it stores a turn, in id order, and reads the threads' turns in
+ * later statements of its batch transaction. `threadIds` is one joined
+ * string: the migrate connection binds no arrays.
+ */
+export const lockChatThreadsForTurnNumbering = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+  threadIds: string,
+) =>
+  await connection.query(
+    `SELECT id FROM public.chat_threads
+      WHERE id = ANY(string_to_array($1, ',')::uuid[])
+      ORDER BY id
+        FOR UPDATE`,
+    [threadIds],
+  );
+
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = { ...aggregateChains } as const;
 
