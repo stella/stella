@@ -130,7 +130,7 @@ const lockCorpusProjectionIntentsById = async (
     .for("update");
 };
 
-export type CorpusProjectionCleanupLease = {
+type CorpusProjectionCleanupLease = {
   intentId: ProjectionIntentId;
   family: CorpusFamily;
   generation: string;
