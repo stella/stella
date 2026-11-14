@@ -54,19 +54,26 @@ const COMPARED_BEFORE = /(?<!-)(?:<=?|>=?)\s*$/u;
 const COMPARED_AFTER = /^\s*(?:<=?|>=?)(?!>)/u;
 // A row value's parenthesis follows no name, or a keyword; a function call's
 // follows the function's name, with or without a space.
-const OPENING_PARENTHESIS = /(?:([A-Za-z_][\w$]*)\s*)?\(\s*$/u;
 const KEYWORDS_BEFORE_ROW = new Set(
   "ALL AND ANY BY ELSE FROM HAVING IN NOT ON OR RETURNING SELECT SET SOME THEN VALUES WHEN WHERE".split(
     " ",
   ),
 );
+const WORD_CHARACTER = /[\w$]/u;
+// Read from the end, a character at a time: the text is whatever a template
+// holds, and a pattern over it would backtrack.
 const opensRow = (before: string): boolean => {
-  const opening = OPENING_PARENTHESIS.exec(before);
-  if (opening === null) {
+  const opened = before.trimEnd();
+  if (!opened.endsWith("(")) {
     return false;
   }
-  const word = opening[1];
-  return word === undefined || KEYWORDS_BEFORE_ROW.has(word.toUpperCase());
+  const preceding = opened.slice(0, -1).trimEnd();
+  let start = preceding.length;
+  while (start > 0 && WORD_CHARACTER.test(preceding.charAt(start - 1))) {
+    start -= 1;
+  }
+  const word = preceding.slice(start);
+  return word === "" || KEYWORDS_BEFORE_ROW.has(word.toUpperCase());
 };
 const OPENS_ROW_AFTER = /^\s*,/u;
 const ORDERED_BEFORE = /\bORDER\s+BY\s*$/iu;
