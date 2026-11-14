@@ -294,6 +294,8 @@
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
       "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
+      "verdictBy": "Išvadą pateikė {model}",
+      "verdictByGenerativeModel": "Išvadą pateikė generatyvusis modelis; sprendimų modelis jos nenustatė",
       "whyVerdict": "Išvados pagrindimas: atraminiai faktai"
     },
     "claimTypes": {
@@ -6074,7 +6076,13 @@
       "usageStatusTrialing": "Bandomasis laikotarpis",
       "usageUnitCount": "{count, plural, one {# vienetas} few {# vienetai} many {# vienetų} other {# vieneto}}",
       "usageUnitsBalanceTemplate": "Pasiekiama {remaining} vienetų",
-      "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
+      "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai",
+      "verificationDecisionModel": {
+        "description": "Tikrinant dokumentą pagal sąrašo faktus, sprendimų modelis parenka kiekvieno teiginio išvadą. Generatyvusis modelis ir toliau randa bei cituoja faktus. Jei sprendimų modelis nėra pakankamai tikras, galioja generatyviojo modelio išvada.",
+        "title": "Dokumentų tikrinimo išvados",
+        "unavailable": "Šiai organizacijai nėra prieinamo sprendimų modelio.",
+        "updated": "Tikrinimo nustatymas atnaujintas"
+      }
     }
   },
   "sharepoint": {

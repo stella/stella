@@ -756,6 +756,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/organization-settings/practice-jurisdictions": "crud",
   "POST /v1/organization-settings/preview": "crud",
   "POST /v1/organization-settings/sanctions-monitoring": "crud",
+  "POST /v1/organization-settings/verification-decision-model": "crud",
   "POST /v1/organization-settings/web-search-key": "crud",
   "POST /v1/pdf-signing-handoffs/redeem": "crud",
   "POST /v1/organizations": "crud",

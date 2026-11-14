@@ -43,6 +43,10 @@ const config = {
     "`day`, `month` or `year` precision stored as its first day and its " +
     "`source`: the words, or the grader when they name no complete date), " +
     "or `none`. " +
+    "`decider` says who decided the verdict: `llm` (with a `fallback` " +
+    "reason when the organization's decision model was asked and its " +
+    "answer was not used), or `decision-model` with its `model`, its " +
+    "`confidence` and the state it `replaced`. " +
     "`carryOver` says what the run took from the previous run of the same " +
     "document and list. Notes and fact links follow a claim with the same " +
     "words or with edited words in the same paragraph or page; other " +

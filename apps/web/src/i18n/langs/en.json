@@ -294,6 +294,8 @@
       "reopened": "Re-opened, check pending",
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
+      "verdictBy": "Verdict by {model}",
+      "verdictByGenerativeModel": "Verdict by the generative model; the decision model did not settle it",
       "whyVerdict": "Why this verdict: anchor facts"
     },
     "claimTypes": {
@@ -6074,7 +6076,13 @@
       "usageStatusTrialing": "Trialing",
       "usageUnitCount": "{count, plural, one {# unit} other {# units}}",
       "usageUnitsBalanceTemplate": "{remaining} units available",
-      "usageUnitsThisPeriod": "Usage units this period"
+      "usageUnitsThisPeriod": "Usage units this period",
+      "verificationDecisionModel": {
+        "description": "When a document is verified against a list's facts, the decision model chooses each claim's verdict. The generative model still finds and cites the facts. Where the decision model is not confident enough, the generative model's verdict stands.",
+        "title": "Verdicts in document verification",
+        "unavailable": "No decision model is available to this organization.",
+        "updated": "Verification setting updated"
+      }
     }
   },
   "sharepoint": {

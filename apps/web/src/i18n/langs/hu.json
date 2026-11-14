@@ -294,6 +294,8 @@
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
+      "verdictBy": "Következtetés: {model}",
+      "verdictByGenerativeModel": "A következtetést a generatív modell hozta; a döntési modell nem döntötte el",
       "whyVerdict": "A következtetés indoka: referenciatények"
     },
     "claimTypes": {
@@ -6074,7 +6076,13 @@
       "usageStatusTrialing": "Próbaidőszak",
       "usageUnitCount": "{count, plural, one {# egység} other {# egység}}",
       "usageUnitsBalanceTemplate": "{remaining} egység elérhető",
-      "usageUnitsThisPeriod": "Használati egységek ebben az időszakban"
+      "usageUnitsThisPeriod": "Használati egységek ebben az időszakban",
+      "verificationDecisionModel": {
+        "description": "Amikor egy dokumentumot egy lista tényei alapján ellenőriz, a döntési modell választja ki az egyes állítások következtetését. A tényeket továbbra is a generatív modell keresi meg és idézi. Ha a döntési modell nem elég biztos, a generatív modell következtetése marad érvényben.",
+        "title": "Következtetések a dokumentumok ellenőrzésekor",
+        "unavailable": "Ennek a szervezetnek nincs elérhető döntési modellje.",
+        "updated": "Az ellenőrzési beállítás frissült"
+      }
     }
   },
   "sharepoint": {

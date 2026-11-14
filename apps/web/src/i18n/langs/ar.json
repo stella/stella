@@ -294,6 +294,8 @@
       "reopened": "أُعيد فتحه، والفحص معلّق",
       "reopenedTooltip": "أعاد المراجع تصنيف هذا على أنه واقعة قابلة للفحص؛ ولا يزال فحص السجل المباشر معلقًا.",
       "sourceCount": "{count, plural, zero {لا مصادر} one {مصدر واحد} two {مصدران} few {# مصادر} many {# مصدرًا} other {# مصدر}}",
+      "verdictBy": "النتيجة من {model}",
+      "verdictByGenerativeModel": "النتيجة من النموذج التوليدي؛ لم يحسمها نموذج القرار",
       "whyVerdict": "سبب هذه النتيجة: الوقائع المرجعية"
     },
     "claimTypes": {
@@ -6074,7 +6076,13 @@
       "usageStatusTrialing": "قيد التجربة",
       "usageUnitCount": "{count, plural, zero {# وحدة} one {وحدة واحدة} two {وحدتان} few {# وحدات} many {# وحدة} other {# وحدة}}",
       "usageUnitsBalanceTemplate": "{remaining} وحدة متاحة",
-      "usageUnitsThisPeriod": "وحدات الاستخدام في هذه الفترة"
+      "usageUnitsThisPeriod": "وحدات الاستخدام في هذه الفترة",
+      "verificationDecisionModel": {
+        "description": "عند التحقق من مستند استنادًا إلى وقائع قائمة، يختار نموذج القرار نتيجة كل ادعاء. ويواصل النموذج التوليدي العثور على الوقائع والاستشهاد بها. وإذا لم يكن نموذج القرار واثقًا بما يكفي، تبقى نتيجة النموذج التوليدي.",
+        "title": "نتائج التحقق من المستندات",
+        "unavailable": "لا يتوفر نموذج قرار لهذه المؤسسة.",
+        "updated": "تم تحديث إعداد التحقق"
+      }
     }
   },
   "sharepoint": {

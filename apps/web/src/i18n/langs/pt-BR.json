@@ -294,6 +294,8 @@
       "reopened": "Reaberta, verificação pendente",
       "reopenedTooltip": "Um revisor reclassificou isto como um fato verificável; uma verificação ativa contra o registro ainda está pendente.",
       "sourceCount": "{count, plural, one {# fonte} other {# fontes} many {# fontes}}",
+      "verdictBy": "Veredito de {model}",
+      "verdictByGenerativeModel": "Veredito do modelo generativo; o modelo de decisão não o definiu",
       "whyVerdict": "Por que este veredito: fatos-âncora"
     },
     "claimTypes": {
@@ -6074,7 +6076,13 @@
       "usageStatusTrialing": "Em avaliação",
       "usageUnitCount": "{count, plural, one {# unidade} many {# unidades} other {# unidades}}",
       "usageUnitsBalanceTemplate": "{remaining} unidades disponíveis",
-      "usageUnitsThisPeriod": "Unidades de uso neste período"
+      "usageUnitsThisPeriod": "Unidades de uso neste período",
+      "verificationDecisionModel": {
+        "description": "Ao verificar um documento com base nos fatos de uma lista, o modelo de decisão escolhe o veredito de cada afirmação. O modelo generativo continua encontrando e citando os fatos. Se o modelo de decisão não tiver confiança suficiente, prevalece o veredito do modelo generativo.",
+        "title": "Vereditos da verificação de documentos",
+        "unavailable": "Nenhum modelo de decisão está disponível para esta organização.",
+        "updated": "Configuração de verificação atualizada"
+      }
     }
   },
   "sharepoint": {

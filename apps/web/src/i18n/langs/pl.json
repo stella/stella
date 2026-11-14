@@ -294,6 +294,8 @@
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
+      "verdictBy": "Rozstrzygnięcie: {model}",
+      "verdictByGenerativeModel": "Rozstrzygnięcie modelu generatywnego; model decyzyjny go nie ustalił",
       "whyVerdict": "Uzasadnienie rozstrzygnięcia: fakty referencyjne"
     },
     "claimTypes": {
@@ -6074,7 +6076,13 @@
       "usageStatusTrialing": "Okres próbny",
       "usageUnitCount": "{count, plural, one {# jednostka} few {# jednostki} many {# jednostek} other {# jednostki}}",
       "usageUnitsBalanceTemplate": "Dostępne jednostki: {remaining}",
-      "usageUnitsThisPeriod": "Jednostki użycia w tym okresie"
+      "usageUnitsThisPeriod": "Jednostki użycia w tym okresie",
+      "verificationDecisionModel": {
+        "description": "Podczas weryfikacji dokumentu na podstawie faktów z listy model decyzyjny wybiera rozstrzygnięcie dla każdego twierdzenia. Model generatywny nadal wyszukuje i cytuje fakty. Jeśli model decyzyjny nie jest wystarczająco pewny, obowiązuje rozstrzygnięcie modelu generatywnego.",
+        "title": "Rozstrzygnięcia przy weryfikacji dokumentów",
+        "unavailable": "Ta organizacja nie ma dostępnego modelu decyzyjnego.",
+        "updated": "Zaktualizowano ustawienie weryfikacji"
+      }
     }
   },
   "sharepoint": {

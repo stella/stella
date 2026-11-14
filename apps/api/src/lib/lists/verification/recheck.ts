@@ -66,6 +66,7 @@ import {
   EMPTY_CLAIM_REVIEW,
   rejectRecheck,
 } from "@/api/lib/lists/verification/review-fold";
+import { readVerdictDecider } from "@/api/lib/lists/verification/verdict-decider-setting";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   formatModelRef,
@@ -76,6 +77,7 @@ import {
   ModelRunCapError,
 } from "@/api/lib/usage/model-run-caps/caps";
 import type { ModelRunCaps } from "@/api/lib/usage/model-run-caps/config";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 /** One round of grading calls: a request re-checks at most as many claims
  *  as the grader takes in its batches at once, so it waits for one call. */
@@ -156,6 +158,9 @@ type RecheckCommon = RecheckScope & {
   caps?: ModelRunCaps;
   /** External model-dispatch boundary; supplied by focused tests. */
   generateObjectForTask?: VerificationModelDeps["generateObjectForTask"];
+  /** The decision model the verdict decider asks, in place of the org's;
+   *  supplied by focused tests. */
+  decisionModel?: DecisionModel | null;
 };
 
 export type RecheckClaimsArgs = RecheckCommon & {
@@ -376,6 +381,17 @@ const gradeRechecks = async ({
       ? {}
       : { generateObjectForTask: args.generateObjectForTask }),
   };
+  // A re-check is decided as a run would be now: by the switch as it stands.
+  const verdictDecider = (
+    await safeDb(
+      async (tx) =>
+        await readVerdictDecider(tx, {
+          organizationId,
+          orgAIConfig: args.orgAIConfig,
+          decisionModel: args.decisionModel,
+        }),
+    )
+  ).unwrap("The verification decision model setting could not be read.");
   const perBatch = await mapWithConcurrency({
     items: chunkItems(prepared.ready, GRADING_BATCH_SIZE),
     limit: GRADING_CONCURRENCY,
@@ -390,6 +406,7 @@ const gradeRechecks = async ({
         })),
         facts: prepared.current,
         deps,
+        verdictDecider,
       }),
     }),
   });

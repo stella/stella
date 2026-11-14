@@ -71,6 +71,7 @@ import {
   claimQualifiers,
   restingFactIds,
 } from "@/api/lib/lists/verification/qualifiers";
+import { LLM_DECIDER } from "@/api/lib/lists/verification/verdict-decider";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
@@ -519,6 +520,8 @@ const gradeMode = async (input: CaseInput): Promise<CaseRun> => {
       maxUsd: input.maxUsd,
       scopeKey: input.scope,
     }),
+    // The eval measures the generative grader on its own.
+    verdictDecider: LLM_DECIDER,
   });
   const durationMs = performance.now() - startedAt;
   if (Result.isError(graded)) {
@@ -593,6 +596,7 @@ const pipelineMode = async (input: CaseInput): Promise<CaseRun> => {
     })),
     facts: facts.evidence,
     deps: deps("grade"),
+    verdictDecider: LLM_DECIDER,
   });
   const durationMs = performance.now() - startedAt;
   const grades = Result.isError(graded)

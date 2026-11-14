@@ -726,6 +726,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organization-settings/verification-decision-model": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/web-search-key": {
     type: "non-replay",
     reason: "current-state",

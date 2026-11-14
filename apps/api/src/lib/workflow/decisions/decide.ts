@@ -34,6 +34,7 @@ import {
   decisionConfidenceFloor,
   decisionPrice,
 } from "@/api/lib/workflow/decisions/decision-policy";
+import type { DecisionConfidencePurpose } from "@/api/lib/workflow/decisions/decision-policy";
 import { recordDecisionUsage } from "@/api/lib/workflow/decisions/decision-usage";
 import type { DecisionUsageMetering } from "@/api/lib/workflow/decisions/decision-usage";
 import type {
@@ -94,7 +95,7 @@ type DecideBaseOptions = {
   dataClass: AIDataClass;
   state: SystemOneState;
   floor?: number | undefined;
-  confidencePurpose?: "default" | "polarity" | undefined;
+  confidencePurpose?: DecisionConfidencePurpose | undefined;
   abortSignal?: AbortSignal | undefined;
   timeoutMs?: number | undefined;
   /** Injected by tests and comparison runs; the org's resolved model otherwise. */
@@ -413,6 +414,22 @@ const askDecisionModel = async <TQuestions extends SystemOneQuestions>({
       : panic("Decision construction lost a question"),
     model: asked.value.model,
   };
+};
+
+/**
+ * The decision model alone, with no generative recovery: for a caller that
+ * already holds a generative answer and asks the decision model only whether
+ * it settles the question with enough confidence. An undecided question says
+ * why (no model, under the floor, a refusal, a failed call), so the caller
+ * keeps its own answer and records the reason.
+ */
+export const decideWithoutRecovery = async <
+  TQuestions extends SystemOneQuestions,
+>(
+  options: DecideBaseOptions & { questions: TQuestions },
+): Promise<DecideManyResult<TQuestions>> => {
+  options.abortSignal?.throwIfAborted();
+  return await askDecisionModel(options);
 };
 
 const refusalSchema = v.strictObject({ type: v.literal("refusal") });

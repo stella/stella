@@ -37,6 +37,7 @@ import {
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { wholeDocumentPassages } from "@/api/lib/lists/verification/paragraph-scope";
 import { RECHECKS_PER_REQUEST_MAX } from "@/api/lib/lists/verification/recheck";
+import { LLM_DECIDER } from "@/api/lib/lists/verification/verdict-decider";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
@@ -393,6 +394,7 @@ describe("gradeClaims", () => {
       ],
       facts: [fact(FACT_A, "An unrelated meeting")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     expect(Result.isOk(result)).toBe(true);
     expect(captured).toHaveLength(1);
@@ -434,6 +436,7 @@ describe("gradeClaims", () => {
       ],
       facts: [fact(FACT_A, "An unrelated meeting")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     expect(Result.isOk(result)).toBe(true);
     expect(captured).toHaveLength(1);
@@ -443,7 +446,12 @@ describe("gradeClaims", () => {
   });
 
   test("a list with no facts answers no coverage without a model call", async () => {
-    const result = await gradeClaims({ claims, facts: [], deps });
+    const result = await gradeClaims({
+      claims,
+      facts: [],
+      deps,
+      verdictDecider: LLM_DECIDER,
+    });
     expect(captured).toHaveLength(0);
     const outcome = Result.isOk(result) ? result.value : null;
     expect(outcome?.type).toBe("graded");
@@ -500,6 +508,7 @@ describe("gradeClaims", () => {
         fact(FACT_B, "EUR 30,000 paid"),
       ],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     expect(captured).toHaveLength(2);
     const outcome = Result.isOk(result) ? result.value : null;
@@ -511,6 +520,7 @@ describe("gradeClaims", () => {
         recordConflict: null,
         refs: [{ factEntityId: FACT_A, rel: "supports" }],
         qualifiers: [],
+        decider: { kind: "llm", fallback: null },
       });
       expect(outcome.grades.get("1")?.refs).toEqual([
         { factEntityId: FACT_B, rel: "conflicts" },
@@ -535,6 +545,7 @@ describe("gradeClaims", () => {
       claims,
       facts: [fact(FACT_A, "Meeting on 9 March 2021")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     const outcome = Result.isOk(result) ? result.value : null;
     expect(
@@ -561,6 +572,7 @@ describe("gradeClaims", () => {
       claims,
       facts: [fact(FACT_A, "Meeting on 9 March 2021")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     const second = Result.isOk(unreadable) ? unreadable.value : null;
     expect(
@@ -614,6 +626,7 @@ describe("gradeClaims", () => {
       ],
       facts: [fact(FACT_A, "An unrelated meeting took place")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     const outcome = Result.isOk(result) ? result.value : null;
     expect(outcome?.type).toBe("graded");
@@ -624,6 +637,7 @@ describe("gradeClaims", () => {
         recordConflict: null,
         refs: [],
         qualifiers: [],
+        decider: { kind: "llm", fallback: null },
       });
       expect(outcome.grades.get("fact")).toEqual({
         state: "nocover",
@@ -631,6 +645,7 @@ describe("gradeClaims", () => {
         recordConflict: null,
         refs: [],
         qualifiers: [],
+        decider: { kind: "llm", fallback: null },
       });
       // Stored types must match the verdicts: only a fact is checkable.
       const types = [...outcome.grades.values()].map(gradedClaimType);
@@ -661,6 +676,7 @@ describe("gradeClaims", () => {
       claims: claims.slice(0, 1),
       facts: [fact(FACT_A, "Diary: 9 March"), fact(FACT_B, "Email: 3 May")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     const outcome = Result.isOk(result) ? result.value : null;
     expect(outcome?.type === "graded" ? outcome.grades.get("0") : null).toEqual(
@@ -675,6 +691,7 @@ describe("gradeClaims", () => {
         },
         refs: [],
         qualifiers: [],
+        decider: { kind: "llm", fallback: null },
       },
     );
   });
@@ -719,6 +736,7 @@ describe("gradeClaims", () => {
         fact(FACT_B, "EUR 30,000 paid in 2020"),
       ],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     expect(captured).toHaveLength(1);
     const outcome = Result.isOk(result) ? result.value : null;
@@ -790,6 +808,7 @@ describe("gradeClaims", () => {
       claims: claims.slice(0, 1),
       facts: [fact(FACT_A, "Meeting on 9 March 2021")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     expect(captured).toHaveLength(2);
     expect(JSON.stringify(captured.at(1)?.messages)).toContain(
@@ -807,6 +826,7 @@ describe("gradeClaims", () => {
       claims: claims.slice(0, 1),
       facts: [fact(FACT_A, "Meeting on 9 March 2021")],
       deps,
+      verdictDecider: LLM_DECIDER,
     });
     expect(Result.isOk(result) ? result.value : null).toEqual({
       type: "incomplete",
@@ -888,6 +908,7 @@ test("access removal after extraction blocks the later grading batch", async () 
     })),
     facts: [fact(FACT_A, "The meeting took place on 9 March 2021")],
     deps: currentDeps,
+    verdictDecider: LLM_DECIDER,
   });
   expect(Result.isError(graded) ? graded.error.cause : null).toBeInstanceOf(
     ListVerificationAccessRevokedError,

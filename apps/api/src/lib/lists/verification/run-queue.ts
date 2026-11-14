@@ -35,12 +35,13 @@ import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract"
 import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import {
   gradedClaimType,
+  LLM_VERDICT,
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimAssertedDate,
-  ClaimGrade,
+  DecidedClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
   VerificationScope,
@@ -62,6 +63,7 @@ import {
   completeVerificationRun,
   failVerificationRun,
 } from "@/api/lib/lists/verification/run-persistence";
+import { readVerdictDecider } from "@/api/lib/lists/verification/verdict-decider-setting";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -93,6 +95,7 @@ import {
   checkModelRunCaps,
   ModelRunCapError,
 } from "@/api/lib/usage/model-run-caps/caps";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 /** A verification's model calls re-check the list counter it was charged to. */
 const VERIFICATION_DISPATCH_CAPS = {
@@ -454,7 +457,7 @@ const resolvePinnedFile = async (
 type ClaimRow = typeof legalListClaims.$inferInsert;
 
 type GradedClaims = {
-  grades: ReadonlyMap<string, ClaimGrade>;
+  grades: ReadonlyMap<string, DecidedClaimGrade>;
   assertedDates: ReadonlyMap<string, ClaimAssertedDate>;
 };
 
@@ -493,6 +496,8 @@ const claimRows = (
         refs: [],
         recordConflict: null,
         qualifiers: [],
+        // Extraction set it aside; no verdict was asked of any model.
+        decider: LLM_VERDICT,
       };
     }
     const grade =
@@ -505,6 +510,7 @@ const claimRows = (
       refs: grade.refs,
       recordConflict: grade.recordConflict,
       qualifiers: grade.qualifiers,
+      decider: grade.decider,
     };
   });
 };
@@ -543,11 +549,53 @@ const runPassages = (
     : passages;
 };
 
+/** The claims a run grades: each extracted fact with its passage, keyed by
+ *  its position among the extracted claims. */
+const gradingInputs = (
+  claims: readonly ExtractedClaim[],
+  passages: NonNullable<ReturnType<typeof runPassages>>,
+) =>
+  claims.flatMap((claim, position) =>
+    claim.type === "fact"
+      ? [
+          {
+            key: String(position),
+            text: claim.text,
+            context: passageContext(
+              passages.at(claim.blockIndex) ??
+                panic("An extracted claim names a block outside the run"),
+              claim.anchor,
+            ),
+            // A new run's claims have no reviewer yet.
+            linkedFactIds: [],
+          },
+        ]
+      : [],
+  );
+
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
   readDocument?: typeof readVerificationDocument;
   generateObjectForTask?: VerificationModelDeps["generateObjectForTask"];
+  /** The decision model the verdict decider asks, in place of the org's. */
+  decisionModel?: DecisionModel | null;
 };
+
+/** Who decides this run's verdicts: the organization's switch as it stands
+ *  when grading starts (`verdict-decider.ts`). */
+const runVerdictDecider = async (
+  actor: RunActor,
+  config: Pick<VerificationModelDeps, "orgAIConfig">,
+  execution: VerificationExecutionBoundaries,
+) =>
+  await actor.writeDb(
+    async (tx) =>
+      await readVerdictDecider(tx, {
+        organizationId: actor.organizationId,
+        orgAIConfig: config.orgAIConfig,
+        decisionModel: execution.decisionModel,
+      }),
+  );
 
 /** Null on success, else the code the run failed with. */
 type ExecuteRunArgs = {
@@ -699,25 +747,10 @@ const executeRun = async ({
   }
   const claims = extracted.value;
   const graded = await gradeClaims({
-    claims: claims.flatMap((claim, position) =>
-      claim.type === "fact"
-        ? [
-            {
-              key: String(position),
-              text: claim.text,
-              context: passageContext(
-                passages.at(claim.blockIndex) ??
-                  panic("An extracted claim names a block outside the run"),
-                claim.anchor,
-              ),
-              // A new run's claims have no reviewer yet.
-              linkedFactIds: [],
-            },
-          ]
-        : [],
-    ),
+    claims: gradingInputs(claims, passages),
     facts: run.evidence.facts,
     deps,
+    verdictDecider: await runVerdictDecider(actor, config.value, execution),
   });
   if (Result.isError(graded)) {
     if (graded.error.cause instanceof ModelRunCapError) {
