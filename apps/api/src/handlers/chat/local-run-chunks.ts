@@ -1170,8 +1170,14 @@ const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
     });
     if (text.isErr()) {
       observeFailure(text.error, { sink: LOCAL_RUN_STORE_SINK });
-      // The answer cannot hold the message; the chat sends it the usual way.
-      return [steerEvent({ inputId, status: "refused" })];
+      // A message the harness refused needs no text. One it took cannot be
+      // shown in the answer, but saying it was refused would have the chat
+      // stop the turn that holds it and send it again; the steer stays open
+      // and the turn's end leaves the message queued, as for an input the
+      // turn never answered.
+      return status === "rejected"
+        ? [steerEvent({ inputId, status: "refused" })]
+        : [];
     }
     if (text.value === null) {
       observeFailure(

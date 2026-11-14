@@ -1504,7 +1504,8 @@ export const createChatRuntime = ({
    * stopping it. Resolves once the turn said what became of it (`steered`:
    * its answer holds the message now; `refused`: it still runs and did not
    * take it, as a cloud turn never does), or `unsettled` when no turn of
-   * this page runs any more or it ended before saying.
+   * this page runs any more or it ended before saying. A request that
+   * failed settles nothing: the turn's stream or its end does.
    */
   const steerLocalTurn = async ({
     inputId,
@@ -1526,25 +1527,38 @@ export const createChatRuntime = ({
     const settled = new Promise<ChatSteerOutcome>((resolve) => {
       pendingSteers.set(inputId, resolve);
     });
-    const sent = await Result.tryPromise(
-      async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> =>
-        await invokeAppOnlyWrite("chat.turns.steer", async () => {
-          const { data, error } = await api.chat
-            .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
-            .turns({ turnId: steeredTurn })
-            .steer.post({ inputId, text });
-          return error ? Result.err(toAPIError(error)) : Result.ok(data.steer);
-        }),
-    );
-    if (Result.isError(sent)) {
-      captureRuntimeError(sent.error.cause);
-    } else if (Result.isError(sent.value)) {
-      captureRuntimeError(sent.value.error);
-    } else if (sent.value.value === "queued") {
-      return await settled;
-    }
-    // Only a turn that still runs is one the caller can stop and restart.
-    settleSteer(inputId, running() ? "refused" : "unsettled");
+    // The turn's stream settles the steer, possibly before this request
+    // answers, so the caller hears it as soon as the stream says.
+    const send = async () => {
+      const sent = await Result.tryPromise(
+        async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> =>
+          await invokeAppOnlyWrite("chat.turns.steer", async () => {
+            const { data, error } = await api.chat
+              .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
+              .turns({ turnId: steeredTurn })
+              .steer.post({ inputId, text });
+            return error
+              ? Result.err(toAPIError(error))
+              : Result.ok(data.steer);
+          }),
+      );
+      // A failed request may still have queued the input: the turn's stream
+      // or its end settles it, never a guess that it was refused.
+      if (Result.isError(sent)) {
+        captureRuntimeError(sent.error.cause);
+        return;
+      }
+      if (Result.isError(sent.value)) {
+        captureRuntimeError(sent.value.error);
+        return;
+      }
+      if (sent.value.value === "queued") {
+        return;
+      }
+      // Only a turn that still runs is one the caller can stop and restart.
+      settleSteer(inputId, running() ? "refused" : "unsettled");
+    };
+    detached(send(), "chat-runtime.steer-local-turn");
     return await settled;
   };
 

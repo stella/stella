@@ -136,8 +136,9 @@ const steeredText = ({ function: call }: ToolCall): string | null => {
  * Text a message contributes to the handoff, as one or more blocks.
  * Provider reasoning (`thinking`) belongs to the session that produced it and
  * is never handed to another harness. A message the member steered the turn
- * with is theirs, so it reads as a `User:` block after the assistant's, not
- * as a call the assistant made.
+ * with is theirs, so it reads as a `User:` block where the turn took it,
+ * between what the assistant had done by then and what it did after, not as
+ * a call the assistant made.
  */
 const messageBlocks = (
   message: HarnessTranscriptMessage,
@@ -148,19 +149,26 @@ const messageBlocks = (
     case "user":
       return text === "" ? [] : [`User: ${text}`];
     case "assistant": {
-      const calls: string[] = [];
-      const steered: string[] = [];
+      const blocks: string[] = [];
+      let lines: string[] = text === "" ? [] : [text];
+      const flush = () => {
+        if (lines.length > 0) {
+          blocks.push(`Assistant: ${lines.join("\n")}`);
+          lines = [];
+        }
+      };
       for (const toolCall of message.toolCalls ?? []) {
         const said = steeredText(toolCall);
         if (said === null) {
           const { name, arguments: args } = toolCall.function;
-          calls.push(`[tool ${name} ${truncateBytes(args, TOOL_MAX_BYTES)}]`);
+          lines.push(`[tool ${name} ${truncateBytes(args, TOOL_MAX_BYTES)}]`);
         } else if (said !== "") {
-          steered.push(`User: ${said}`);
+          flush();
+          blocks.push(`User: ${said}`);
         }
       }
-      const body = [text, ...calls].filter((line) => line !== "").join("\n");
-      return [...(body === "" ? [] : [`Assistant: ${body}`]), ...steered];
+      flush();
+      return blocks;
     }
     case "tool":
       // A steered message's delivery receipt says nothing the block above
@@ -209,19 +217,22 @@ const renderHistory = (
   let used = 0;
   let omitted = false;
   const steerCallIds = steerCallIdsOf(history);
-  const newestFirst = history
-    .flatMap((message) => messageBlocks(message, steerCallIds))
-    .toReversed();
-  for (const block of newestFirst) {
-    const bounded = truncateBytes(block, MESSAGE_MAX_BYTES);
-    const size =
-      byteLength(bounded) + (blocks.length === 0 ? 0 : separatorBytes);
-    if (used + size > budget) {
-      omitted = true;
+  // Rendered newest first, so a long history stops rendering at the budget.
+  for (const message of history.toReversed()) {
+    if (omitted) {
       break;
     }
-    used += size;
-    blocks.push(bounded);
+    for (const block of messageBlocks(message, steerCallIds).toReversed()) {
+      const bounded = truncateBytes(block, MESSAGE_MAX_BYTES);
+      const size =
+        byteLength(bounded) + (blocks.length === 0 ? 0 : separatorBytes);
+      if (used + size > budget) {
+        omitted = true;
+        break;
+      }
+      used += size;
+      blocks.push(bounded);
+    }
   }
   if (blocks.length === 0) {
     return null;

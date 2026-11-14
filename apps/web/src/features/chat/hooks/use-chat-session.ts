@@ -871,16 +871,14 @@ export const useChatSession = ({
     [applySendQueueEvent],
   );
 
-  /** Queued messages a running turn is being handed, so a repeat waits. */
-  const steeringIdsRef = useRef(new Set<string>());
-
   // "Send now" on a queued message: it moves to the front of the queue.
   // During a turn on the member's computer the turn is handed the message
   // and goes on with it; a turn that cannot take it is stopped, and the
   // queue drain sends the message once the stop settles. A turn that ends
-  // before it says leaves the message first in the queue, sent next. With
-  // the queue held after a failed turn it is sent at once, like a manual
-  // send.
+  // before it says leaves the message first in the queue, sent next. Until
+  // the steer settles nothing queued is sent, so a message the turn took
+  // is never sent again. With the queue held after a failed turn it is sent
+  // at once, like a manual send.
   const sendQueuedMessageNow = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-promoted", id });
@@ -890,19 +888,25 @@ export const useChatSession = ({
       const route =
         entry === undefined ? null : sendNowRoute(sendQueueRef.current, entry);
       if (route?.type === "steer") {
-        if (steeringIdsRef.current.has(id)) {
+        if (sendQueueRef.current.steeringIds.includes(id)) {
           return;
         }
-        steeringIdsRef.current.add(id);
+        applySendQueueEvent({ type: "steer-started", id });
         const steer = async () => {
           const outcome = await chat.steerLocalTurn({
             inputId: id,
             text: route.text,
           });
-          steeringIdsRef.current.delete(id);
           const next = steerFallback(outcome);
-          if (next === "remove") {
-            applySendQueueEvent({ type: "queued-message-removed", id });
+          const dispatched = applySendQueueEvent({
+            type: "steer-settled",
+            id,
+            next,
+          });
+          if (dispatched) {
+            await dispatchQueuedMessage(dispatched).catch(
+              ignoreQueuedDispatchError,
+            );
           } else if (next === "stop") {
             stop();
           }

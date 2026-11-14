@@ -258,6 +258,7 @@ describe("reduceSendQueue", () => {
       heldForMember: true,
       isGenerating: true,
       queue: [makeEntry("a"), makeEntry("b")],
+      steeringIds: ["b"],
       wasGenerating: true,
     };
 
@@ -273,6 +274,7 @@ describe("reduceSendQueue", () => {
       heldForMember: false,
       isGenerating: false,
       queue: [],
+      steeringIds: [],
       wasGenerating: false,
     });
     expect(result.dispatchedEntry).toBeNull();
@@ -581,6 +583,18 @@ describe("send now while a turn runs", () => {
       type: "stop_and_send",
     });
     expect(
+      sendNowRoute(running([]), {
+        ...makeEntry("a"),
+        options: { body: { sendMode: "anonymized" } },
+      }),
+    ).toEqual({ type: "stop_and_send" });
+    expect(
+      sendNowRoute(running([]), {
+        ...makeEntry("a"),
+        options: { body: { sendMode: "rawOverride" } },
+      }),
+    ).toEqual({ type: "steer", text: "message a" });
+    expect(
       sendNowRoute(
         createInitialSendQueueState(CONVERSATION_ID),
         makeEntry("a"),
@@ -610,5 +624,50 @@ describe("send now while a turn runs", () => {
     );
     expect(dispatchedEntry?.id).toBe("b");
     expect(state.queue.map(({ id }) => id)).toEqual(["a"]);
+  });
+
+  test("a turn that ends while its steer is open sends nothing until the steer settles", () => {
+    const steering = reduceSendQueue(promotedSecond(), {
+      type: "steer-started",
+      id: "b",
+    }).state;
+
+    const ended = applyRenderTick(steering, false, "ready");
+    expect(ended.dispatchedEntry).toBeNull();
+    expect(ended.state.drainHeld).toBe(true);
+
+    const taken = reduceSendQueue(ended.state, {
+      type: "steer-settled",
+      id: "b",
+      next: "remove",
+    });
+    expect(taken.dispatchedEntry?.id).toBe("a");
+    expect(taken.state.queue).toEqual([]);
+    expect(taken.state.steeringIds).toEqual([]);
+
+    const unanswered = reduceSendQueue(ended.state, {
+      type: "steer-settled",
+      id: "b",
+      next: "keep",
+    });
+    expect(unanswered.dispatchedEntry?.id).toBe("b");
+    expect(unanswered.state.queue.map(({ id }) => id)).toEqual(["a"]);
+  });
+
+  test("a steer that settles while the turn runs leaves the drain to the turn's end", () => {
+    const steering = reduceSendQueue(promotedSecond(), {
+      type: "steer-started",
+      id: "b",
+    }).state;
+    const refused = reduceSendQueue(steering, {
+      type: "steer-settled",
+      id: "b",
+      next: "stop",
+    });
+    expect(refused.dispatchedEntry).toBeNull();
+    expect(refused.state.steeringIds).toEqual([]);
+
+    const { dispatchedEntry } = applyRenderTick(refused.state, false, "ready");
+    expect(dispatchedEntry?.id).toBe("b");
   });
 });

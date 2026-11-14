@@ -114,6 +114,47 @@ describe("turn prompt from the portable transcript", () => {
     expect(text).not.toContain("delivered");
   });
 
+  test("a steered message keeps its place among the calls around it", () => {
+    const steered: ModelMessage[] = [
+      user("Summarise the lease."),
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "command_execution", arguments: '{"cmd":"ls"}' },
+          },
+          {
+            id: "steer_1",
+            type: "function",
+            function: {
+              name: CHAT_LOCAL_RUN_STEER_TOOL,
+              arguments: JSON.stringify({ text: "Only the annex." }),
+            },
+          },
+          {
+            id: "c2",
+            type: "function",
+            function: {
+              name: "command_execution",
+              arguments: '{"cmd":"cat annex.docx"}',
+            },
+          },
+        ],
+      },
+      user("And the deposit?"),
+    ];
+    expect(prompt(steered, "standalone")).toContain(
+      [
+        'Assistant: [tool command_execution {"cmd":"ls"}]',
+        "User: Only the annex.",
+        'Assistant: [tool command_execution {"cmd":"cat annex.docx"}]',
+      ].join("\n\n"),
+    );
+  });
+
   test("a transcript that does not end with user text is refused", () => {
     const refused: ModelMessage[][] = [
       [],
