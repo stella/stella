@@ -146,6 +146,7 @@ export const TAGGED_FAILURE_REASON = {
   CorpusPackError: "tagged_failure",
   CorpusPayloadUnavailableError: "tagged_failure",
   CorpusProjectionAppendError: "tagged_failure",
+  CorpusProjectionUnservedReadError: "tagged_failure",
   CorpusSchemaLaneUnavailableError: "tagged_failure",
   CorpusSearchFacetsError: "tagged_failure",
   CorpusServingGenerationAbsentError: "tagged_failure",
