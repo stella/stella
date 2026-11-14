@@ -123,6 +123,7 @@
       "tokenNotPresent": "Az intelligens kártya vagy a token nincs csatlakoztatva. Csatlakoztassa, majd próbálja újra.",
       "tokenSigningFailed": "Az intelligens kártya vagy a token nem írta alá a dokumentumot.",
       "tokenTimeout": "Az intelligens kártya vagy a token nem válaszolt időben. Próbálja újra.",
+      "tokenUnreadable": "Az intelligens kártyát vagy a tokent nem sikerült beolvasni. Próbálja újra.",
       "unsupportedAlgorithm": "Ennek a tanúsítványnak a kulcsával nem hozható létre a dokumentumhoz szükséges aláírás. Válasszon másik tanúsítványt.",
       "wouldBreakSignatures": "Az aláírás érvénytelenítené a PDF-ben már meglévő aláírásokat."
     },

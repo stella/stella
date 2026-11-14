@@ -123,6 +123,7 @@
       "tokenNotPresent": "Viedkarte vai marķieris nav pievienots. Pievienojiet to un mēģiniet vēlreiz.",
       "tokenSigningFailed": "Viedkarte vai marķieris neparakstīja dokumentu.",
       "tokenTimeout": "Viedkarte vai marķieris laikā neatbildēja. Mēģiniet vēlreiz.",
+      "tokenUnreadable": "Viedkarti vai marķieri neizdevās nolasīt. Mēģiniet vēlreiz.",
       "unsupportedAlgorithm": "Ar šī sertifikāta atslēgu nevar izveidot šim dokumentam vajadzīgo parakstu. Izvēlieties citu sertifikātu.",
       "wouldBreakSignatures": "Šī PDF parakstīšana padarītu nederīgus parakstus, kas tajā jau ir."
     },

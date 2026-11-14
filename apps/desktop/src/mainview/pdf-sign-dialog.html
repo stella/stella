@@ -629,7 +629,12 @@
         // the same certificate, with the token's new warning.
         if (result && result.status === "pinRejected") {
           showStatus(strings[result.messageKey], "error");
-          showTokenPanel(selectedIdentity());
+          // The token's count is the one Sign checks from now on.
+          const rejected = selectedIdentity();
+          if (rejected && rejected.token) {
+            rejected.token.pinRetries = result.pinRetries;
+          }
+          showTokenPanel(rejected);
           showPinWarning(result.pinRetries);
           element("pin").value = "";
           element("cancelBtn").disabled = false;

@@ -123,6 +123,7 @@
       "tokenNotPresent": "Lustinė kortelė arba žetonas neprijungtas. Prijunkite jį ir bandykite dar kartą.",
       "tokenSigningFailed": "Lustinė kortelė arba žetonas nepasirašė dokumento.",
       "tokenTimeout": "Lustinė kortelė arba žetonas laiku neatsakė. Bandykite dar kartą.",
+      "tokenUnreadable": "Nepavyko nuskaityti lustinės kortelės arba žetono. Bandykite dar kartą.",
       "unsupportedAlgorithm": "Šio sertifikato raktu negalima sukurti šiam dokumentui reikalingo parašo. Pasirinkite kitą sertifikatą.",
       "wouldBreakSignatures": "Pasirašius šį PDF, jame jau esantys parašai taptų negaliojantys."
     },

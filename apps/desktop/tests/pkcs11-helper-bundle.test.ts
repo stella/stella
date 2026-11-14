@@ -19,11 +19,18 @@ const read = (...segments: string[]) =>
 const entitlementKeys = (plist: string) =>
   [...plist.matchAll(/<key>([^<]+)<\/key>/gu)].map((match) => match[1]);
 
+// An entitlement is granted by its value, not its key: `<false/>` keeps
+// library validation on.
+const grantedEntitlements = (plist: string) =>
+  [...plist.matchAll(/<key>([^<]+)<\/key>\s*<true\/>/gu)].map(
+    (match) => match[1],
+  );
+
 describe("PKCS #11 helper bundle", () => {
   test("only the helper may load libraries signed by another team", () => {
-    expect(
-      entitlementKeys(read(TAURI_DIR, "Pkcs11HelperEntitlements.plist")),
-    ).toEqual([LIBRARY_VALIDATION_EXCEPTION]);
+    const helper = read(TAURI_DIR, "Pkcs11HelperEntitlements.plist");
+    expect(entitlementKeys(helper)).toEqual([LIBRARY_VALIDATION_EXCEPTION]);
+    expect(grantedEntitlements(helper)).toEqual([LIBRARY_VALIDATION_EXCEPTION]);
     expect(
       entitlementKeys(read(TAURI_DIR, "Entitlements.plist")),
     ).not.toContain(LIBRARY_VALIDATION_EXCEPTION);

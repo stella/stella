@@ -123,6 +123,7 @@
       "tokenNotPresent": "Die Chipkarte oder der Token ist nicht verbunden. Verbinden Sie sie und versuchen Sie es erneut.",
       "tokenSigningFailed": "Die Chipkarte oder der Token hat das Dokument nicht signiert.",
       "tokenTimeout": "Die Chipkarte oder der Token hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+      "tokenUnreadable": "Die Chipkarte oder der Token konnte nicht gelesen werden. Versuchen Sie es erneut.",
       "unsupportedAlgorithm": "Mit dem Schlüssel dieses Zertifikats lässt sich die für dieses Dokument nötige Signatur nicht erstellen. Wählen Sie ein anderes Zertifikat.",
       "wouldBreakSignatures": "Eine Signatur würde die Signaturen, die dieses PDF bereits trägt, ungültig machen."
     },

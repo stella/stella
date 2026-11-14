@@ -123,6 +123,7 @@
       "tokenNotPresent": "La carte à puce ou le jeton n’est pas connecté. Connectez-le, puis réessayez.",
       "tokenSigningFailed": "La carte à puce ou le jeton n’a pas signé le document.",
       "tokenTimeout": "La carte à puce ou le jeton n’a pas répondu à temps. Réessayez.",
+      "tokenUnreadable": "La carte à puce ou le jeton n’a pas pu être lu. Réessayez.",
       "unsupportedAlgorithm": "La clé de ce certificat ne peut pas produire la signature que ce document exige. Choisissez un autre certificat.",
       "wouldBreakSignatures": "Signer ce PDF invaliderait les signatures qu’il contient déjà."
     },

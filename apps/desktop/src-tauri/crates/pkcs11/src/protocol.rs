@@ -40,6 +40,10 @@ pub enum Request {
 #[serde(rename_all = "camelCase")]
 pub struct SignRequest {
   pub module: PathBuf,
+  /// The slot of the token that listed the certificate. It is searched
+  /// first, so a copy of the certificate on another token (one without its
+  /// key) cannot stand in for it.
+  pub slot: u64,
   pub certificate_sha256: String,
   pub digest_hex: String,
   pub key_type: KeyType,
@@ -335,7 +339,7 @@ mod tests {
   #[test]
   fn reads_a_sign_request_with_and_without_a_pin() {
     let with_pin = decode_request(
-      br#"{"op":"sign","module":"/m.dylib","certificateSha256":"ab","digestHex":"cd","keyType":"ec","pin":"1234"}"#,
+      br#"{"op":"sign","module":"/m.dylib","slot":0,"certificateSha256":"ab","digestHex":"cd","keyType":"ec","pin":"1234"}"#,
     )
     .unwrap();
     let Request::Sign(sign) = with_pin else {
@@ -345,7 +349,7 @@ mod tests {
     assert_eq!(sign.pin.as_ref().map(Pin::expose), Some("1234"));
 
     let pin_pad = decode_request(
-      br#"{"op":"sign","module":"/m.dylib","certificateSha256":"ab","digestHex":"cd","keyType":"rsa","pin":null}"#,
+      br#"{"op":"sign","module":"/m.dylib","slot":0,"certificateSha256":"ab","digestHex":"cd","keyType":"rsa","pin":null}"#,
     )
     .unwrap();
     assert!(matches!(
@@ -362,6 +366,7 @@ mod tests {
   fn round_trips_a_sign_request() {
     let request = Request::Sign(SignRequest {
       module: PathBuf::from("/m.dylib"),
+      slot: 3,
       certificate_sha256: "ab".to_string(),
       digest_hex: "cd".to_string(),
       key_type: KeyType::Rsa,
@@ -378,6 +383,7 @@ mod tests {
   fn never_prints_a_pin() {
     let request = SignRequest {
       module: PathBuf::from("/m.dylib"),
+      slot: 0,
       certificate_sha256: String::new(),
       digest_hex: String::new(),
       key_type: KeyType::Ec,

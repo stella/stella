@@ -110,7 +110,10 @@ fn list_token(pkcs11: &Pkcs11, slot: Slot) -> Result<TokenListing, Error> {
     .into_iter()
     .filter_map(|key| object_id(&session, key))
     .collect();
-  let keys_hidden = key_ids.is_empty() && info.login_required();
+  // A token that wants a login may hide any of its keys until then
+  // (`CKA_PRIVATE`), not only all of them: one visible key says nothing
+  // about the others.
+  let keys_hidden = info.login_required();
 
   let mut certificates = Vec::new();
   for handle in session.find_objects(&[Attribute::Class(ObjectClass::CERTIFICATE)])? {
@@ -248,7 +251,7 @@ fn sign_with_module(
   digest: &[u8; DIGEST_BYTES],
 ) -> Result<Vec<u8>, Failure> {
   let pkcs11 = open(&request.module)?;
-  let Some(located) = locate(&pkcs11, certificate_sha256)? else {
+  let Some(located) = locate(&pkcs11, request.slot, certificate_sha256)? else {
     return Err(Failure::new(
       SigningErrorCode::TokenNotPresent,
       "no token in this module holds the certificate",
@@ -322,11 +325,19 @@ fn sign_with_module(
   }
 }
 
+/// The token holding the certificate, looking first in `listed_slot`, the
+/// slot that listed it: a copy of the certificate on an earlier token,
+/// without its key, must not stand in for the token the user chose. The
+/// other slots are still searched, as a module may number its slots anew
+/// each time it loads.
 fn locate(
   pkcs11: &Pkcs11,
+  listed_slot: u64,
   certificate_sha256: &[u8],
 ) -> Result<Option<Located>, Error> {
-  for slot in pkcs11.get_slots_with_token()? {
+  let mut slots = pkcs11.get_slots_with_token()?;
+  slots.sort_by_key(|slot| slot.id() != listed_slot);
+  for slot in slots {
     let Ok(session) = pkcs11.open_ro_session(slot) else {
       continue;
     };
@@ -415,6 +426,20 @@ mod tests {
   }
 
   #[test]
+  fn a_visible_key_does_not_rule_out_one_behind_the_login() {
+    let visible: HashSet<Vec<u8>> = [vec![1]].into_iter().collect();
+
+    assert_eq!(
+      certificate_key(&[1], &visible, true),
+      CertificateKey::Paired
+    );
+    assert_eq!(
+      certificate_key(&[2], &visible, true),
+      CertificateKey::BehindLogin
+    );
+  }
+
+  #[test]
   fn a_token_that_hides_its_keys_may_hold_one_for_any_identified_certificate() {
     let none = HashSet::new();
 
@@ -438,6 +463,7 @@ mod tests {
   fn refuses_a_digest_that_is_not_sha256() {
     let request = SignRequest {
       module: PathBuf::from("/nonexistent.dylib"),
+      slot: 0,
       certificate_sha256: "00".repeat(32),
       digest_hex: "ab".repeat(20),
       key_type: KeyType::Rsa,
@@ -611,6 +637,7 @@ mod tests {
     let sign_with = |certificate: &[u8], key_type: KeyType, pin: &str| {
       sign(&SignRequest {
         module: module.clone(),
+        slot: token.slot,
         certificate_sha256: hex::encode(Sha256::digest(certificate)),
         digest_hex: digest_hex.clone(),
         key_type,

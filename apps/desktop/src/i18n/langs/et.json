@@ -123,6 +123,7 @@
       "tokenNotPresent": "Kiipkaart või turvavõti pole ühendatud. Ühendage see ja proovige uuesti.",
       "tokenSigningFailed": "Kiipkaart või turvavõti ei allkirjastanud dokumenti.",
       "tokenTimeout": "Kiipkaart või turvavõti ei vastanud õigel ajal. Proovige uuesti.",
+      "tokenUnreadable": "Kiipkaarti või turvavõtit ei õnnestunud lugeda. Proovige uuesti.",
       "unsupportedAlgorithm": "Selle sertifikaadi võtmega ei saa luua allkirja, mida see dokument nõuab. Valige mõni teine sertifikaat.",
       "wouldBreakSignatures": "Selle PDF-i allkirjastamine muudaks selles juba olevad allkirjad kehtetuks."
     },

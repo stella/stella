@@ -123,6 +123,7 @@
       "tokenNotPresent": "The smart card or token is not connected. Connect it and try again.",
       "tokenSigningFailed": "The smart card or token did not sign the document.",
       "tokenTimeout": "The smart card or token did not respond in time. Try again.",
+      "tokenUnreadable": "The smart card or token could not be read. Try again.",
       "unsupportedAlgorithm": "This certificate's key cannot make the signature this document needs. Choose another certificate.",
       "wouldBreakSignatures": "Signing this PDF would invalidate the signatures it already carries."
     },

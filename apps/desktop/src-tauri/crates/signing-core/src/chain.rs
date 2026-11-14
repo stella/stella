@@ -3,8 +3,11 @@
 //!
 //! A keychain builds chains itself. A PKCS #11 token only holds certificates:
 //! the signer's own and, often, its issuing CA's. Ordering them is a walk by
-//! name from the leaf to whichever certificate issued it, until a
-//! self-signed root or a name the pool does not have.
+//! name from the leaf to whichever certificate issued it, until a name the
+//! pool has no unused certificate for. A self-issued certificate (the same
+//! name as issuer and subject) does not end the walk on its own: in a key
+//! rollover it carries a new key signed by the old one, whose certificate
+//! has the same name and comes next.
 
 use crate::certificate::{CertificateNames, certificate_names};
 
@@ -37,8 +40,10 @@ pub fn issuer_chain(leaf_der: &[u8], pool: &[Vec<u8>]) -> Vec<Vec<u8>> {
 }
 
 /// The indexes of `candidates` from `leaf` up, each one the issuer of the
-/// one before. Stops at a self-signed certificate, a name not in the pool, a
-/// certificate already used, or [`MAX_CHAIN_LENGTH`].
+/// one before. Stops at a name with no unused certificate in the pool, or at
+/// [`MAX_CHAIN_LENGTH`]. After a self-issued certificate it looks for another
+/// of the same name, so a rollover certificate is followed by the one whose
+/// key signed it.
 fn walk(
   leaf: &CertificateNames<'_>,
   candidates: &[Option<CertificateNames<'_>>],
@@ -58,9 +63,6 @@ fn walk(
       break;
     };
     chain.push(index);
-    if names.issuer == names.subject {
-      break;
-    }
     current_issuer = names.issuer;
   }
   chain
@@ -103,6 +105,22 @@ mod tests {
     // a is issued by b, b by a: each is used once.
     let looping = [names(b"b", b"a"), names(b"a", b"b")];
     assert_eq!(walk(&leaf, &looping), vec![0, 1]);
+  }
+
+  #[test]
+  fn follows_a_rollover_certificate_to_the_key_that_signed_it() {
+    // leaf -> rollover (self-issued, new key) -> old intermediate -> root.
+    let leaf = CertificateNames {
+      issuer: b"intermediate",
+      subject: b"leaf",
+    };
+    let pool = [
+      names(b"root", b"root"),
+      names(b"intermediate", b"intermediate"),
+      names(b"root", b"intermediate"),
+    ];
+
+    assert_eq!(walk(&leaf, &pool), vec![1, 2, 0]);
   }
 
   #[test]

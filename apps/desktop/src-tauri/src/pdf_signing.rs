@@ -28,8 +28,8 @@ use tokio::sync::{Mutex, oneshot};
 use crate::config;
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::pkcs11_signing::{
-  CODE_TOKEN_SIGNING_FAILED, CODE_TOKEN_TIMEOUT, DriverNotice, HelperFailure,
-  TokenIdentity, TokenScan, TokenSource,
+  CODE_TOKEN_SIGNING_FAILED, CODE_TOKEN_TIMEOUT, CODE_TOKEN_UNREADABLE, DriverNotice,
+  HelperFailure, TokenIdentity, TokenScan, TokenSource,
 };
 use crate::session_manager::SessionManager;
 use crate::types::{ErrorResponse, is_safe_session_id};
@@ -114,6 +114,7 @@ fn message_key(code: &str) -> &'static str {
     "signing_failed" => "pdfSignErrors.signingFailed",
     CODE_TOKEN_TIMEOUT => "pdfSignErrors.tokenTimeout",
     CODE_TOKEN_SIGNING_FAILED => "pdfSignErrors.tokenSigningFailed",
+    CODE_TOKEN_UNREADABLE => "pdfSignErrors.tokenUnreadable",
     CODE_NETWORK_UNREACHABLE => "pdfSignErrors.networkUnreachable",
     CODE_RESPONSE_UNREADABLE => "pdfSignErrors.responseUnreadable",
     "pdf_signing_session_expired" | "pdf_signing_session_not_found" => {
@@ -630,9 +631,18 @@ pub async fn redeem_and_sign(
     token: redeemed.session_token,
   };
 
-  let (identities, driver_notices) = list_offered_identities().await;
+  let OfferedListing {
+    identities,
+    driver_notices,
+    token_failure,
+  } = list_offered_identities().await;
   let (state, state_message_key) = match &identities {
-    Ok(identities) if identities.is_empty() => (DialogState::NoIdentities, None),
+    // Nothing to offer because the tokens could not be listed is a failed
+    // read, not an empty store: the user may well have a card inserted.
+    Ok(identities) if identities.is_empty() => match token_failure {
+      Some(code) => (DialogState::KeychainUnavailable, Some(message_key(code))),
+      None => (DialogState::NoIdentities, None),
+    },
     Ok(_) => (DialogState::Ready, None),
     Err(SigningErrorCode::UnsupportedPlatform) => {
       (DialogState::UnsupportedPlatform, None)
@@ -766,6 +776,12 @@ pub async fn redeem_and_sign(
       .map_err(SigningStop::Failed),
       outcome_sender,
     ),
+    // A dialog closed while the digest was prepared is a user who walked
+    // away: the token is not asked, as the store's owner would not ask the
+    // store.
+    Provider::Pkcs11(_) if prompt_owner.while_open(|_| Ok(())).is_err() => {
+      (Err(SigningStop::Cancelled), outcome_sender)
+    }
     Provider::Pkcs11(source) => {
       sign_on_token(TokenSigning {
         session: &session,
@@ -1011,11 +1027,29 @@ async fn sign_on_token(
     mut outcome_sender,
   } = signing;
   loop {
-    let failure =
-      match crate::pkcs11_signing::sign(source, identity, digest, pin.take()).await {
-        Ok(signature) => return (Ok(signature), outcome_sender),
-        Err(failure) => failure,
-      };
+    // Each attempt, a PIN pad's included, ends inside the session: a
+    // signature made after it expired could not be submitted.
+    let Some(attempt_window) = wait_window(DIALOG_TIMEOUT, session.time_left()) else {
+      return (
+        Err(SigningStop::Failed(StepError::local(
+          CODE_SESSION_EXPIRED,
+          "the signing session ended before the token was asked".to_string(),
+        ))),
+        outcome_sender,
+      );
+    };
+    let failure = match crate::pkcs11_signing::sign(
+      source,
+      identity,
+      digest,
+      pin.take(),
+      attempt_window,
+    )
+    .await
+    {
+      Ok(signature) => return (Ok(signature), outcome_sender),
+      Err(failure) => failure,
+    };
     let pin_refused = failure.code == SigningErrorCode::PinIncorrect.as_str();
     if !pin_refused || source.pin_entry != PinEntry::Keyboard {
       let error = StepError::local(failure.code, failure.detail);
@@ -1234,14 +1268,20 @@ async fn list_identities() -> Result<Vec<SigningIdentity>, SigningErrorCode> {
   }
 }
 
+/// What the dialog offers to sign with, and what it says about drivers.
+struct OfferedListing {
+  identities: Result<Vec<OfferedIdentity>, SigningErrorCode>,
+  driver_notices: Vec<DriverNotice>,
+  /// The dialog code for tokens that could not be listed, if they could not.
+  token_failure: Option<&'static str>,
+}
+
 /// The store's identities and the tokens', merged, with what the dialog
 /// should say about drivers. A token listing that fails leaves the store's
-/// identities standing; a store that cannot be read is reported unless a
-/// token offers something to sign with.
-async fn list_offered_identities() -> (
-  Result<Vec<OfferedIdentity>, SigningErrorCode>,
-  Vec<DriverNotice>,
-) {
+/// identities standing and is reported when nothing else can sign; a store
+/// that cannot be read is reported unless a token offers something to sign
+/// with.
+async fn list_offered_identities() -> OfferedListing {
   let (store, tokens) = tokio::join!(
     list_identities(),
     crate::pkcs11_signing::scan(
@@ -1249,17 +1289,25 @@ async fn list_offered_identities() -> (
       crate::pkcs11_module_setting::chosen_module()
     )
   );
-  let tokens = match tokens {
-    Ok(scan) => scan,
-    Err(HelperFailure::Missing) => {
+  let tokens = tokens.unwrap_or_else(|failure| TokenScan {
+    failure: Some(failure),
+    ..TokenScan::default()
+  });
+  let token_failure = match &tokens.failure {
+    None => None,
+    Some(HelperFailure::Missing) => {
       tracing::warn!(
         "a smart card driver is installed, but this build has no PKCS #11 helper"
       );
-      TokenScan::default()
+      None
     }
-    Err(error) => {
+    Some(HelperFailure::TimedOut) => {
+      tracing::warn!("smart card tokens could not be listed in time");
+      Some(CODE_TOKEN_TIMEOUT)
+    }
+    Some(error @ HelperFailure::Failed(_)) => {
       tracing::warn!(error = %error, "smart card tokens could not be listed");
-      TokenScan::default()
+      Some(CODE_TOKEN_UNREADABLE)
     }
   };
   let offered = match store {
@@ -1273,7 +1321,11 @@ async fn list_offered_identities() -> (
     }
     Err(code) => Err(code),
   };
-  (offered, tokens.notices)
+  OfferedListing {
+    identities: offered,
+    driver_notices: tokens.notices,
+    token_failure,
+  }
 }
 
 /// The dialog stays open for as long as the store may show a prompt over it:
@@ -1762,6 +1814,7 @@ mod tests {
   const SHOWN_CODES: &[&str] = &[
     CODE_TOKEN_TIMEOUT,
     CODE_TOKEN_SIGNING_FAILED,
+    CODE_TOKEN_UNREADABLE,
     CODE_NETWORK_UNREACHABLE,
     CODE_RESPONSE_UNREADABLE,
     CODE_SESSION_EXPIRED,

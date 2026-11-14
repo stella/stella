@@ -123,6 +123,7 @@
       "tokenNotPresent": "O cartão inteligente ou token não está conectado. Conecte-o e tente novamente.",
       "tokenSigningFailed": "O cartão inteligente ou token não assinou o documento.",
       "tokenTimeout": "O cartão inteligente ou token não respondeu a tempo. Tente novamente.",
+      "tokenUnreadable": "Não foi possível ler o cartão inteligente ou token. Tente novamente.",
       "unsupportedAlgorithm": "A chave deste certificado não consegue criar a assinatura que este documento exige. Escolha outro certificado.",
       "wouldBreakSignatures": "Assinar este PDF invalidaria as assinaturas que ele já contém."
     },

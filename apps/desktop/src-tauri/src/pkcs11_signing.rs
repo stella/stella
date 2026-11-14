@@ -45,6 +45,9 @@ const SIGNING_TIMEOUT: Duration = Duration::from_secs(170);
 /// card is what failed.
 pub const CODE_TOKEN_TIMEOUT: &str = "token_timeout";
 pub const CODE_TOKEN_SIGNING_FAILED: &str = "token_signing_failed";
+/// The helper could not list the tokens: it crashed or answered something
+/// unreadable.
+pub const CODE_TOKEN_UNREADABLE: &str = "token_unreadable";
 
 /// Where a certificate offered from a token lives, so the signature goes to
 /// the module and token that listed it.
@@ -87,6 +90,10 @@ pub enum DriverNoticeKind {
 pub struct TokenScan {
   pub identities: Vec<TokenIdentity>,
   pub notices: Vec<DriverNotice>,
+  /// Why the tokens could not be listed, if they could not. The notices
+  /// found before the helper ran still stand, and no identities is then a
+  /// failed listing, not an empty one.
+  pub failure: Option<HelperFailure>,
 }
 
 /// Why the helper gave no answer.
@@ -144,15 +151,29 @@ pub async fn scan(
     return Ok(TokenScan {
       identities: Vec::new(),
       notices,
+      failure: None,
     });
   }
   // Even with no module to load, the helper reads the readers, so a card
   // whose driver is missing can be named.
-  let response = run(&Request::List { modules: loadable }, LISTING_TIMEOUT).await?;
-  let Response::Listed { modules, readers } = response else {
-    return Err(HelperFailure::Failed(
+  let listed = match run(&Request::List { modules: loadable }, LISTING_TIMEOUT).await {
+    Ok(Response::Listed { modules, readers }) => Ok((modules, readers)),
+    Ok(_) => Err(HelperFailure::Failed(
       "the helper answered a listing with something else".to_string(),
-    ));
+    )),
+    Err(failure) => Err(failure),
+  };
+  let (modules, readers) = match listed {
+    Ok(listed) => listed,
+    // The notices already found are kept: a driver that cannot run here is
+    // still worth naming when the helper fails.
+    Err(failure) => {
+      return Ok(TokenScan {
+        identities: Vec::new(),
+        notices,
+        failure: Some(failure),
+      });
+    }
   };
   let mut identities = Vec::new();
   let mut read_slots: Vec<String> = Vec::new();
@@ -182,6 +203,7 @@ pub async fn scan(
   Ok(TokenScan {
     identities,
     notices,
+    failure: None,
   })
 }
 
@@ -300,12 +322,14 @@ fn token_identities(
 }
 
 /// Sign a SHA-256 digest on the token that listed `identity`. `pin` is
-/// `None` for a PIN pad or a token that needs no login.
+/// `None` for a PIN pad or a token that needs no login. The helper gets no
+/// longer than `within`, the time the signing session has left for it.
 pub async fn sign(
   source: &TokenSource,
   identity: &SigningIdentity,
   digest: &[u8; 32],
   pin: Option<Pin>,
+  within: Duration,
 ) -> Result<Vec<u8>, TokenSignFailure> {
   tracing::info!(
     module = %source.module.display(),
@@ -314,13 +338,14 @@ pub async fn sign(
   );
   let request = Request::Sign(SignRequest {
     module: source.module.clone(),
+    slot: source.slot,
     certificate_sha256: identity.id.clone(),
     digest_hex: hex::encode(digest),
     key_type: identity.key_type.into(),
     pin,
   });
   let response =
-    run(&request, SIGNING_TIMEOUT)
+    run(&request, within.min(SIGNING_TIMEOUT))
       .await
       .map_err(|failure| TokenSignFailure {
         code: match failure {

@@ -123,6 +123,7 @@
       "tokenNotPresent": "Čipová karta alebo token nie je pripojený. Pripojte ho a skúste to znova.",
       "tokenSigningFailed": "Čipová karta alebo token dokument nepodpísal.",
       "tokenTimeout": "Čipová karta alebo token neodpovedal včas. Skúste to znova.",
+      "tokenUnreadable": "Čipovú kartu alebo token sa nepodarilo prečítať. Skúste to znova.",
       "unsupportedAlgorithm": "Kľúčom tohto certifikátu nemožno vytvoriť podpis, ktorý dokument vyžaduje. Vyberte iný certifikát.",
       "wouldBreakSignatures": "Podpísaním tohto PDF by prestali platiť podpisy, ktoré už obsahuje."
     },
