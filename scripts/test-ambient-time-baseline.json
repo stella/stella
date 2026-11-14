@@ -1364,17 +1364,7 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/document-review/run-inputs.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/document-review/run-queue.test.ts": {
-    "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/document-review/table-run.integration.test.ts": {
     "count": 3,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
