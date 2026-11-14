@@ -241,6 +241,12 @@
       "showSources": "Rodyti šaltinius",
       "title": "Atraminiai faktai"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# teiginys grindžiamas šiuo faktu} few {# teiginiai grindžiami šiuo faktu} many {# teiginio grindžiama šiuo faktu} other {# teiginių grindžiama šiuo faktu}}",
+      "empty": "Šiame sąraše dar nėra faktų.",
+      "moreClaims": "{count, plural, one {dar # teiginys} few {dar # teiginiai} many {dar # teiginio} other {dar # teiginių}}",
+      "undated": "Be datos"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
@@ -405,6 +411,42 @@
       "showNextSteps": "Rodyti tolesnius veiksmus",
       "unlink": "Nutraukti ryšį su: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# teiginys} few {# teiginiai} many {# teiginio} other {# teiginių}}",
+      "claimTitle": "Teiginys",
+      "columns": {
+        "claims": "Teiginiai",
+        "sources": "Šaltinio dokumentai",
+        "statements": "Pareiškimai"
+      },
+      "empty": "Šiame sąraše dar nėra faktų ar patikrintų dokumentų.",
+      "factCount": "{count, plural, one {# faktas} few {# faktai} many {# fakto} other {# faktų}}",
+      "factOverflow": "Rodoma pirmųjų šio sąrašo faktų: {count}.",
+      "filters": {
+        "allSources": "Visi šaltiniai",
+        "allVerdicts": "Visos išvados",
+        "conflicts": "Prieštaravimai",
+        "heldFacts": "Sulaikyti faktai",
+        "source": "Filtruoti pagal šaltinį",
+        "verdict": "Filtruoti pagal išvadą"
+      },
+      "held": "Sulaikyta",
+      "linkedFacts": "{count, plural, one {# susietas faktas} few {# susieti faktai} many {# susieto fakto} other {# susietų faktų}}",
+      "listLabel": "Grafas sąrašo forma",
+      "loadMore": "Įkelti daugiau dokumentų",
+      "noMatch": "Pagal šiuos filtrus nieko nerasta.",
+      "noStatements": "Pagal šį sąrašą dar nepatikrintas nė vienas dokumentas.",
+      "offList": "Nebėra sąraše",
+      "relation": {
+        "conflicts": "Prieštarauja",
+        "governs": "Vadovaujamasis",
+        "record": "Registre",
+        "recordConflict": "Prieštaringas įrašas",
+        "supports": "Patvirtina"
+      },
+      "unlinked": "Faktai, kuriais negrindžiamas joks teiginys",
+      "verifyInReview": "Patikrinti dokumentą"
+    },
     "guidance": {
       "escalate": "Perduoti",
       "manualJudgement": "Žmogaus sprendimas",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologija",
+      "graph": "Grafas",
+      "label": "Rodyti sąrašą kaip",
+      "review": "Peržiūra"
     },
     "qualifiers": {
       "heading": "Išlygos",
