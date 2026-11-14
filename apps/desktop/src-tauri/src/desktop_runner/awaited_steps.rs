@@ -775,6 +775,21 @@ mod tests {
     })
   }
 
+  /// When `run`'s markers were written: the tests' clock, read from the
+  /// files, since a marker's time is the file system's.
+  fn written(run: &AwaitedRun) -> SystemTime {
+    std::fs::read_dir(&run.awaited)
+      .unwrap()
+      .map(|entry| entry.unwrap().metadata().unwrap().modified().unwrap())
+      .max()
+      .unwrap()
+  }
+
+  /// A moment far past any marker's time.
+  fn long_after() -> SystemTime {
+    SystemTime::UNIX_EPOCH + Duration::from_secs(8_000_000_000)
+  }
+
   fn plan(run: &AwaitedRun, now: SystemTime) -> RunPlan {
     plan_run(run, now, MAX_STEPS_PER_LISTING).unwrap().sorted()
   }
@@ -838,7 +853,7 @@ mod tests {
 
     assert_eq!(awaited_runs(&stores.folders).unwrap(), vec![run.clone()]);
     assert_eq!(
-      plan(&run, SystemTime::now()),
+      plan(&run, written(&run)),
       RunPlan::Send(vec![key('a'), key('c')])
     );
     assert!(read_step(&run, &key('a')).is_some());
@@ -869,7 +884,7 @@ mod tests {
     let run = stores.run(&[(key('a'), "command", kept(3, b"out"))]);
     local_store::write_test_fixture(run.awaited.join("notes.txt"), "not a step")
       .unwrap();
-    let now = SystemTime::now();
+    let now = written(&run);
     assert_eq!(plan(&run, now), RunPlan::Send(vec![key('a')]));
     assert_eq!(
       plan(&run, now + LEFT_FOR - DAY),
@@ -890,7 +905,7 @@ mod tests {
     // The API awaits a step for as long as a run waits for its computer (a
     // day); a folder is given up here only well after that.
     assert!(LEFT_FOR > DAY * 2);
-    let now = SystemTime::now();
+    let now = long_after();
     assert!(!left_too_long(now - DAY, now));
     assert!(left_too_long(now - LEFT_FOR - Duration::from_secs(1), now));
     assert!(!left_too_long(now + DAY, now));
@@ -1148,7 +1163,7 @@ mod tests {
     let run = stores.run(&[(key('a'), "command", kept(3, b"out"))]);
     let sender = Scripted::answering(&[]);
     let steps = AwaitedSteps {
-      now: || SystemTime::now() + LEFT_FOR + DAY,
+      now: long_after,
       ..steps_of(&stores, &sender)
     };
     assert_eq!(steps.pass().await, Pass::Idle);
@@ -1164,7 +1179,7 @@ mod tests {
       .collect();
     let run = stores.run(&steps);
     assert!(matches!(
-      plan_run(&run, SystemTime::now(), 2).unwrap(),
+      plan_run(&run, written(&run), 2).unwrap(),
       RunPlan::Send(listed) if listed.len() == 2
     ));
     let sender = Scripted::answering(&[]);
