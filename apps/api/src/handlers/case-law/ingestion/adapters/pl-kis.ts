@@ -848,8 +848,12 @@ export const plKisQuarantineId = (row: Record<string, unknown>): string => {
     categoryOf(row, undefined)?.fields ?? PL_KIS_FIELD_TEMPLATES.common;
   return `${QUARANTINE_ID_PREFIX}${hashContent(
     JSON.stringify({
+      // A template without a signature field still tells two rows apart by
+      // the publisher's `SYG` where it states one.
       signature:
-        fields.signature === null ? null : (row[fields.signature] ?? null),
+        fields.signature === null
+          ? (row["SYG"] ?? null)
+          : (row[fields.signature] ?? null),
       issued: row[fields.date] ?? null,
       category: row["KATEGORIA_INFORMACJI"] ?? null,
       authority:

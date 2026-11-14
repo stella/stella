@@ -339,6 +339,12 @@ const CAPTURED = PL_KIS_INCLUDED_CATEGORIES.filter(
   ({ slug }) => slug !== "19-spor",
 );
 
+/** Captured rows that state no issue date: the walk reads them as undated. */
+const UNDATED_CAPTURES: ReadonlySet<string> = new Set([
+  "20-broszura",
+  "27-pigulka",
+]);
+
 describe("every ingested category, as the service served it", () => {
   for (const category of CAPTURED) {
     test(`${category.slug}: keyed, typed and read`, async () => {
@@ -364,7 +370,15 @@ describe("every ingested category, as the service served it", () => {
       expect(decision.court).toBe(
         Array.isArray(authorities) ? (authorities.at(0) ?? "") : "",
       );
-      expect(decision.decisionDate === row[category.fields.date]).toBe(true);
+      // A row states its date in the field its template names, or states
+      // none and is read as undated; a misnamed field would read every row
+      // of the category as undated.
+      const issued = row[category.fields.date];
+      expect(issued === undefined).toBe(UNDATED_CAPTURES.has(category.slug));
+      if (issued !== undefined) {
+        expect(issued).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+      }
+      expect(decision.decisionDate === issued).toBe(true);
       expect(decision.fulltext?.length ?? 0).toBeGreaterThan(100);
       expect(decision.isListingOnly).toBeUndefined();
       // Nothing the service states is a field the inventory has not decided.
@@ -1625,6 +1639,19 @@ test("all source categories are admitted by total and crawl requests without wid
     stub.restore();
   }
 });
+test("reference missing-id identities distinguish the publisher's signature", () => {
+  const first = {
+    KATEGORIA_INFORMACJI: ["Broszura informacyjna"],
+    DT_WYD: "2026-08-05",
+    AUTOR: ["Minister Finansów"],
+    TEZA: "Same thesis",
+    SYG: "DD3.8201.1.2026",
+  };
+  expect(plKisQuarantineId(first)).not.toBe(
+    plKisQuarantineId({ ...first, SYG: "DD3.8201.2.2026" }),
+  );
+});
+
 test("newsletter missing-id identities distinguish the publisher's title and date", () => {
   const first = {
     KATEGORIA_INFORMACJI: ["Newsletter"],
