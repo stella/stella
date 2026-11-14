@@ -286,18 +286,25 @@ type HeldDownload =
  */
 const createDownloadInbox = (
   runOf: (threadId: string) => BrowserMcpRun | null,
+  /** The member's home folder: Chrome saves downloads under it. */
+  home: string,
 ) => {
   const chats = new Map<string, HeldDownload[]>();
+  const receive = async (
+    download: BrowserBridgeDownload["download"],
+    run: BrowserMcpRun,
+  ) =>
+    await receiveBrowserDownload(download, {
+      home,
+      workspaceDir: run.workspaceDir,
+    });
   return {
     arrive: ({ controllerId, download }: BrowserBridgeDownload) => {
       const run = runOf(controllerId);
       const held: HeldDownload =
         run === null
           ? { download, type: "waiting" }
-          : {
-              outcome: receiveBrowserDownload(download, run.workspaceDir),
-              type: "saving",
-            };
+          : { outcome: receive(download, run), type: "saving" };
       chats.set(
         controllerId,
         [...(chats.get(controllerId) ?? []), held].slice(-MAX_HELD_DOWNLOADS),
@@ -313,10 +320,7 @@ const createDownloadInbox = (
             case "saving":
               return await entry.outcome;
             case "waiting":
-              return await receiveBrowserDownload(
-                entry.download,
-                run.workspaceDir,
-              );
+              return await receive(entry.download, run);
             default:
               entry satisfies never;
               return panic("Unhandled held download");
@@ -346,15 +350,18 @@ const sessionFor = (
 
 export const startLocalBrowserMcp = ({
   bridge,
+  home,
   version,
 }: {
   bridge: BrowserBridge;
+  /** The member's home folder: Chrome's downloads are taken only from under it. */
+  home: string;
   /** The sidecar's version, reported as the server's. */
   version: string;
 }): LocalBrowserMcp => {
   const endpoints = createEndpoints();
   const sessions = new Map<string, LocalBrowserSession>();
-  const downloads = createDownloadInbox(endpoints.runOf);
+  const downloads = createDownloadInbox(endpoints.runOf, home);
   bridge.onDownload(downloads.arrive);
   const listener = { host: "" };
 

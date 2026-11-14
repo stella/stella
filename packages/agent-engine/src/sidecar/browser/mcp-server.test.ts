@@ -83,8 +83,12 @@ const fakeBridge = () => {
   return { bridge, cancels, reportDownload, requests };
 };
 
-const start = (fake = fakeBridge()) => {
-  const mcp = startLocalBrowserMcp({ bridge: fake.bridge, version: "1.4.0" });
+const start = (fake = fakeBridge(), home = "/unused-home") => {
+  const mcp = startLocalBrowserMcp({
+    bridge: fake.bridge,
+    home,
+    version: "1.4.0",
+  });
   cleanups.push(async () => {
     await mcp.stop();
   });
@@ -321,7 +325,8 @@ describe("downloads of a chat's tab", () => {
     const staged = path.join(staging, `${crypto.randomUUID()}.pdf`);
     writeFileSync(staged, "%PDF-1.7\nfixture\n%%EOF\n");
 
-    const { mcp, reportDownload } = start();
+    // The temporary root stands in for the member's home folder.
+    const { mcp, reportDownload } = start(fakeBridge(), root);
     const binding = mcp.register({
       approvals: "auto",
       approve,

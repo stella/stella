@@ -22,6 +22,7 @@ import {
 
 import {
   BROWSER_DOWNLOADS_FOLDER,
+  type BrowserDownloadSeams,
   downloadFileStem,
   receiveBrowserDownload,
 } from "./downloads";
@@ -68,6 +69,21 @@ const saved = (
   suggestedName,
 });
 
+/**
+ * Takes a download for the run folder `workspaceDir`; the temporary root
+ * above it stands in for the member's home folder.
+ */
+const receive = async (
+  download: BrowserDownload,
+  workspaceDir: string,
+  seams: BrowserDownloadSeams = {},
+) =>
+  await receiveBrowserDownload(download, {
+    home: path.dirname(workspaceDir),
+    seams,
+    workspaceDir,
+  });
+
 const savedFiles = (workspaceDir: string) =>
   existsSync(path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER))
     ? readdirSync(path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER)).toSorted()
@@ -78,7 +94,7 @@ describe("a PDF a chat's tab downloaded", () => {
     const { stage, workspaceDir } = folders();
     const staged = stage(PDF);
 
-    const outcome = await receiveBrowserDownload(saved(staged), workspaceDir);
+    const outcome = await receive(saved(staged), workspaceDir);
 
     expect(outcome).toEqual({
       bytes: Buffer.byteLength(PDF),
@@ -100,11 +116,8 @@ describe("a PDF a chat's tab downloaded", () => {
     mkdirSync(downloads);
     writeFileSync(path.join(downloads, "Decision 1.pdf"), "the member's notes");
 
-    const second = await receiveBrowserDownload(
-      saved(stage(PDF)),
-      workspaceDir,
-    );
-    const third = await receiveBrowserDownload(saved(stage(PDF)), workspaceDir);
+    const second = await receive(saved(stage(PDF)), workspaceDir);
+    const third = await receive(saved(stage(PDF)), workspaceDir);
 
     expect([second, third].map((outcome) => outcome.status)).toEqual([
       "saved",
@@ -130,10 +143,7 @@ describe("a PDF a chat's tab downloaded", () => {
       ".hidden.pdf",
     ]) {
       // await-in-loop: one name at a time, so the outcomes stay apart.
-      const outcome = await receiveBrowserDownload(
-        saved(stage(PDF), suggested),
-        workspaceDir,
-      );
+      const outcome = await receive(saved(stage(PDF), suggested), workspaceDir);
       expect(outcome.status).toBe("saved");
     }
 
@@ -155,7 +165,7 @@ describe("a PDF a chat's tab downloaded", () => {
     symlinkSync(elsewhere, path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER));
     const staged = stage(PDF);
 
-    const outcome = await receiveBrowserDownload(saved(staged), workspaceDir);
+    const outcome = await receive(saved(staged), workspaceDir);
 
     expect(outcome).toMatchObject({
       reason: "folder_unavailable",
@@ -166,13 +176,70 @@ describe("a PDF a chat's tab downloaded", () => {
   });
 });
 
+describe("a downloads folder swapped for a link after it was checked", () => {
+  test("nothing is written outside the run's folder, and the file stays staged", async () => {
+    const { root, stage, workspaceDir } = folders();
+    const elsewhere = path.join(root, "elsewhere");
+    mkdirSync(elsewhere);
+    const downloads = path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER);
+    const staged = stage(PDF);
+
+    const outcome = await receive(saved(staged), workspaceDir, {
+      // What an agent in the run's folder can do between the two steps.
+      afterFolderCheck: async () => {
+        rmSync(downloads, { recursive: true });
+        symlinkSync(elsewhere, downloads);
+      },
+    });
+
+    expect(outcome).toMatchObject({
+      reason: "folder_unavailable",
+      status: "refused",
+    });
+    expect(readdirSync(elsewhere)).toEqual([]);
+    expect(lstatSync(downloads).isSymbolicLink()).toBe(true);
+    expect(existsSync(staged)).toBe(true);
+  });
+});
+
+describe("where a reported file may come from", () => {
+  test("not from outside the member's home folder", async () => {
+    const { stage, workspaceDir } = folders();
+    const staged = stage(PDF);
+    const elsewhere = mkdtempSync(path.join(tmpdir(), "stella-not-home-"));
+    roots.push(elsewhere);
+
+    const outcome = await receiveBrowserDownload(saved(staged), {
+      home: elsewhere,
+      workspaceDir,
+    });
+
+    expect(outcome).toMatchObject({ reason: "not_staged", status: "refused" });
+    expect(existsSync(staged)).toBe(true);
+  });
+
+  test("not from a staging folder inside the run's own folder", async () => {
+    const { workspaceDir } = folders();
+    const planted = path.join(workspaceDir, BROWSER_DOWNLOAD_STAGING_FOLDER);
+    mkdirSync(planted);
+    const staged = path.join(planted, `${crypto.randomUUID()}.pdf`);
+    writeFileSync(staged, PDF);
+
+    const outcome = await receive(saved(staged), workspaceDir);
+
+    expect(outcome).toMatchObject({ reason: "not_staged", status: "refused" });
+    expect(existsSync(staged)).toBe(true);
+    expect(savedFiles(workspaceDir)).toEqual([]);
+  });
+});
+
 describe("a download that is not what it says", () => {
   test("bytes that are not a PDF's are refused, and the file this download created is removed", async () => {
     const { stage, workspaceDir } = folders();
     // Named and typed as a PDF; the bytes say otherwise.
     const staged = stage("<html><body>Not a PDF</body></html>");
 
-    const outcome = await receiveBrowserDownload(saved(staged), workspaceDir);
+    const outcome = await receive(saved(staged), workspaceDir);
 
     expect(outcome).toEqual({
       message: "The download is not a PDF; only PDFs are saved.",
@@ -190,7 +257,7 @@ describe("a download that is not what it says", () => {
     // Sparse: no disk is used for the size.
     truncateSync(staged, BROWSER_CONTROL_LIMITS.downloadBytes + 1);
 
-    const outcome = await receiveBrowserDownload(saved(staged), workspaceDir);
+    const outcome = await receive(saved(staged), workspaceDir);
 
     expect(outcome).toMatchObject({ reason: "too_large", status: "refused" });
     expect(existsSync(staged)).toBe(false);
@@ -204,7 +271,7 @@ describe("a download that is not what it says", () => {
     const staged = path.join(staging, `${crypto.randomUUID()}.pdf`);
     symlinkSync(target, staged);
 
-    const outcome = await receiveBrowserDownload(saved(staged), workspaceDir);
+    const outcome = await receive(saved(staged), workspaceDir);
 
     expect(outcome).toMatchObject({ reason: "link", status: "refused" });
     expect(lstatSync(staged).isSymbolicLink()).toBe(true);
@@ -225,7 +292,7 @@ describe("a download that is not what it says", () => {
     const name = `${crypto.randomUUID()}.pdf`;
     writeFileSync(path.join(real, name), PDF);
 
-    const outcome = await receiveBrowserDownload(
+    const outcome = await receive(
       saved(path.join(linkedDownloads, BROWSER_DOWNLOAD_STAGING_FOLDER, name)),
       workspaceDir,
     );
@@ -251,10 +318,7 @@ describe("a download that is not what it says", () => {
       `${BROWSER_DOWNLOAD_STAGING_FOLDER}/${stagedName}`,
     ]) {
       // await-in-loop: each report is judged on its own.
-      const outcome = await receiveBrowserDownload(
-        saved(reported),
-        workspaceDir,
-      );
+      const outcome = await receive(saved(reported), workspaceDir);
       expect(outcome).toMatchObject({
         reason: "not_staged",
         status: "refused",
@@ -267,10 +331,7 @@ describe("a download that is not what it says", () => {
   test("a file gone before it was checked is reported as vanished", async () => {
     const { stage, workspaceDir } = folders();
 
-    const outcome = await receiveBrowserDownload(
-      saved(stage(null)),
-      workspaceDir,
-    );
+    const outcome = await receive(saved(stage(null)), workspaceDir);
 
     expect(outcome).toMatchObject({ reason: "vanished", status: "refused" });
   });
@@ -280,7 +341,7 @@ describe("a download that is not what it says", () => {
     const staged = path.join(staging, `${crypto.randomUUID()}.pdf`);
     mkdirSync(staged);
 
-    const outcome = await receiveBrowserDownload(saved(staged), workspaceDir);
+    const outcome = await receive(saved(staged), workspaceDir);
 
     expect(outcome).toMatchObject({ reason: "not_a_file", status: "refused" });
     expect(lstatSync(staged).isDirectory()).toBe(true);
@@ -296,7 +357,7 @@ describe("a download that is not what it says", () => {
     ] as const;
     for (const [reason, refusal] of cases) {
       // await-in-loop: each reason is judged on its own.
-      const outcome = await receiveBrowserDownload(
+      const outcome = await receive(
         {
           outcome: "stopped",
           reason,

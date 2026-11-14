@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import type { BigIntStats } from "node:fs";
-import { type FileHandle, lstat, mkdir, open, rm } from "node:fs/promises";
+import { type FileHandle, lstat, open, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -11,8 +11,14 @@ import {
   type BrowserDownload,
   type BrowserDownloadStopReason,
 } from "@stll/api-contract/browser-control";
+import { isPathInside } from "@stll/portable-path";
 
-import { NO_FOLLOW_READ_FLAGS } from "../workspace-file";
+import {
+  createWorkspaceFolder,
+  NO_FOLLOW_READ_FLAGS,
+  openInWorkspace,
+  removeWorkspaceFile,
+} from "../workspace-file";
 
 /**
  * The one place a file the member's Chrome downloaded for a local run is
@@ -24,9 +30,14 @@ import { NO_FOLLOW_READ_FLAGS } from "../workspace-file";
  * suggested and never over an existing file. The file is only read: never
  * opened in an app or executed. The agent never names a path here.
  *
- * Only a file in the staging folder, under a staged name, is ever removed,
- * and only the very file this check opened: that is the file this download
- * created.
+ * Every file made in the run's folder goes through `workspace-file`, which
+ * refuses a link at any segment at the moment of the open: the agent can
+ * write in that folder, and swapping a folder for a link after a check
+ * never sends a write elsewhere.
+ *
+ * Only a file in the staging folder, under a staged name, is ever removed
+ * from Chrome's folder, and only the very file this check opened: that is
+ * the file this download created.
  */
 
 /** Where in the run's folder downloaded files go. */
@@ -42,12 +53,8 @@ const FALLBACK_STEM = "download";
 const MAX_NAME_ATTEMPTS = 100;
 const COPY_CHUNK_BYTES = 1024 * 1024;
 const PRIVATE_FILE_MODE = 0o600;
-const PRIVATE_FOLDER_MODE = 0o700;
 
-/** Exclusive creation: refuses whatever is there, a link included. */
-const TARGET_FLAGS = "wx";
-
-export const BROWSER_DOWNLOAD_REFUSAL = {
+const BROWSER_DOWNLOAD_REFUSAL = {
   /** The bytes are not a PDF's, or the extension saw it was not one. */
   notPdf: "not_pdf",
   tooLarge: "too_large",
@@ -57,7 +64,7 @@ export const BROWSER_DOWNLOAD_REFUSAL = {
   interrupted: "interrupted",
   /** Nothing is where Chrome said it saved the file. */
   vanished: "vanished",
-  /** Chrome saved it somewhere other than the staging folder. */
+  /** Chrome saved it somewhere other than a staging folder it may use. */
   notStaged: "not_staged",
   /** A link stands where the file should be. */
   link: "link",
@@ -67,7 +74,7 @@ export const BROWSER_DOWNLOAD_REFUSAL = {
   unreadable: "unreadable",
 } as const;
 
-export type BrowserDownloadRefusal =
+type BrowserDownloadRefusal =
   (typeof BROWSER_DOWNLOAD_REFUSAL)[keyof typeof BROWSER_DOWNLOAD_REFUSAL];
 
 /** What the agent learns of one download. */
@@ -153,6 +160,24 @@ const clipUtf8 = (text: string, maxBytes: number): string => {
   return kept;
 };
 
+/** Whether `character` is a dot or whitespace, which a name may not start or end with. */
+const isEdgeFiller = (character: string) =>
+  character === "." || character.trim() === "";
+
+/** `text` without dots and whitespace at either end; linear in its length. */
+const trimEdgeFillers = (text: string): string => {
+  const characters = [...text];
+  let start = 0;
+  let end = characters.length;
+  while (start < end && isEdgeFiller(characters[start] ?? "")) {
+    start += 1;
+  }
+  while (end > start && isEdgeFiller(characters[end - 1] ?? "")) {
+    end -= 1;
+  }
+  return characters.slice(start, end).join("");
+};
+
 /**
  * The stem of the name a downloaded PDF is saved under (`<stem>.pdf`), from
  * the name the page suggested: its last segment only, any whitespace run
@@ -167,10 +192,9 @@ export const downloadFileStem = (suggested: string): string => {
     .replaceAll(/[\p{Cc}\p{Cf}]/gu, "")
     .replaceAll(/[<>:"|?*]/gu, "_")
     .replace(/\.pdf$/iu, "");
-  const trimmed = clipUtf8(
-    cleaned.replace(/^[\s.]+/u, ""),
-    MAX_NAME_STEM_BYTES,
-  ).replace(/[\s.]+$/u, "");
+  const trimmed = trimEdgeFillers(
+    clipUtf8(trimEdgeFillers(cleaned), MAX_NAME_STEM_BYTES),
+  );
   return trimmed === "" ? FALLBACK_STEM : trimmed;
 };
 
@@ -183,22 +207,56 @@ const candidateName = (stem: string, attempt: number): string => {
     : `${stem} (${crypto.randomUUID()}).pdf`;
 };
 
-const errorCode = (cause: unknown): string | null =>
-  cause instanceof Error && "code" in cause && typeof cause.code === "string"
-    ? cause.code
-    : null;
+const OPEN_REFUSALS: Readonly<Record<string, BrowserDownloadRefusal>> = {
+  ELOOP: BROWSER_DOWNLOAD_REFUSAL.link,
+  ENOENT: BROWSER_DOWNLOAD_REFUSAL.vanished,
+};
+
+const openRefusal = (cause: unknown): BrowserDownloadRefusal => {
+  const code =
+    cause instanceof Error && "code" in cause && typeof cause.code === "string"
+      ? cause.code
+      : "";
+  return Object.hasOwn(OPEN_REFUSALS, code)
+    ? (OPEN_REFUSALS[code] ?? BROWSER_DOWNLOAD_REFUSAL.unreadable)
+    : BROWSER_DOWNLOAD_REFUSAL.unreadable;
+};
+
+const realpathOrSelf = async (target: string) => {
+  const resolved = await Result.tryPromise(async () => await realpath(target));
+  return Result.isOk(resolved) ? resolved.value : target;
+};
+
+/** Where a reported file may be, as far as this computer can tell. */
+type StagingBounds = {
+  /** The member's home folder: Chrome saves under it. */
+  home: string;
+  /** The run's folder: the agent writes there, so no staged file may be. */
+  workspaceDir: string;
+};
 
 /**
  * The staged file Chrome reported, when it is one: an absolute, normal path
- * whose folder is the staging folder and whose name is a staged name.
+ * under the member's home folder and outside the run's folder, whose folder
+ * is a staging folder and whose name is a staged name. Chrome's download
+ * folder is the member's setting and is not read here.
  */
-const stagedFile = (reported: string): string | null => {
-  if (!path.isAbsolute(reported) || path.normalize(reported) !== reported) {
+const stagedFile = async (
+  reported: string,
+  { home, workspaceDir }: StagingBounds,
+): Promise<string | null> => {
+  if (
+    !path.isAbsolute(reported) ||
+    path.normalize(reported) !== reported ||
+    path.basename(path.dirname(reported)) !== BROWSER_DOWNLOAD_STAGING_FOLDER ||
+    !BROWSER_DOWNLOAD_STAGED_NAME_PATTERN.test(path.basename(reported))
+  ) {
     return null;
   }
-  return path.basename(path.dirname(reported)) ===
-    BROWSER_DOWNLOAD_STAGING_FOLDER &&
-    BROWSER_DOWNLOAD_STAGED_NAME_PATTERN.test(path.basename(reported))
+  const folders = [workspaceDir, await realpathOrSelf(workspaceDir)];
+  const homes = [home, await realpathOrSelf(home)];
+  return homes.some((root) => isPathInside(root, reported)) &&
+    !folders.some((folder) => isPathInside(folder, reported))
     ? reported
     : null;
 };
@@ -233,41 +291,33 @@ const removeIfSame = async (file: string, opened: BigIntStats) => {
   }
 };
 
-/** The run's downloads folder, created when missing; `null` when unusable. */
-const downloadsFolder = async (workspaceDir: string) => {
-  const folder = path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER);
-  const existing = await lstatOrNull(folder);
-  if (existing === null) {
-    const created = await Result.tryPromise(
-      async () => await mkdir(folder, { mode: PRIVATE_FOLDER_MODE }),
-    );
-    // Another download may have created it meanwhile.
-    if (
-      Result.isError(created) &&
-      errorCode(created.error.cause) !== "EEXIST"
-    ) {
-      return null;
-    }
-    const made = await lstatOrNull(folder);
-    return made?.isDirectory() === true ? folder : null;
-  }
-  // A link planted here would send the file elsewhere.
-  return existing.isDirectory() ? folder : null;
+/** Points where a test may act between two steps. */
+export type BrowserDownloadSeams = {
+  /** Between making sure the downloads folder exists and creating the file. */
+  afterFolderCheck?: () => Promise<void>;
 };
 
-/** Creates the first free name in `folder`; never replaces a file. */
-const createTarget = async (folder: string, stem: string) => {
+type Target = { handle: FileHandle; relativePath: string; name: string };
+
+/** Creates the first free name in the run's downloads folder; never replaces a file. */
+const createTarget = async (
+  workspaceDir: string,
+  stem: string,
+): Promise<Target | null> => {
   for (let attempt = 1; attempt <= MAX_NAME_ATTEMPTS + 1; attempt += 1) {
     const name = candidateName(stem, attempt);
+    const relativePath = `${BROWSER_DOWNLOADS_FOLDER}/${name}`;
     // await-in-loop: each name is tried only once the one before is taken.
-    const created = await Result.tryPromise(
-      async () =>
-        await open(path.join(folder, name), TARGET_FLAGS, PRIVATE_FILE_MODE),
+    const created = await openInWorkspace(
+      workspaceDir,
+      relativePath,
+      "create",
+      PRIVATE_FILE_MODE,
     );
     if (Result.isOk(created)) {
-      return { handle: created.value, name };
+      return { handle: created.value, name, relativePath };
     }
-    if (errorCode(created.error.cause) !== "EEXIST") {
+    if (created.error.reason !== "exists") {
       return null;
     }
   }
@@ -306,15 +356,69 @@ const startsWithPdfMagic = async (source: FileHandle) => {
   );
 };
 
+/**
+ * Copies into a target this module created, then closes it. A copy that
+ * fails or outgrows the limit is emptied through its own descriptor, so
+ * nothing of it stays even when it cannot be removed, then removed while
+ * it is still the file created.
+ */
+const fillTarget = async (
+  workspaceDir: string,
+  source: FileHandle,
+  target: Target,
+): Promise<Result<Copied, "unwritable">> => {
+  // Read before anything is written: what is removed later must be this file.
+  const identity = await Result.tryPromise(
+    async () => await target.handle.stat({ bigint: true }),
+  );
+  const filled = Result.isError(identity)
+    ? identity
+    : await Result.tryPromise(async () => {
+        const copied = await copyBounded(source, target.handle).catch(
+          async (error: unknown) => {
+            await target.handle.truncate(0);
+            throw error;
+          },
+        );
+        if (copied.type === "too_large") {
+          await target.handle.truncate(0);
+        }
+        return copied;
+      });
+  const closed = await Result.tryPromise(
+    async () => await target.handle.close(),
+  );
+  if (
+    Result.isOk(filled) &&
+    Result.isOk(closed) &&
+    filled.value.type === "copied"
+  ) {
+    return Result.ok(filled.value);
+  }
+  // An empty file whose identity is unknown stays: nothing of it is wrong.
+  if (Result.isOk(identity)) {
+    await removeWorkspaceFile(
+      workspaceDir,
+      target.relativePath,
+      identity.value,
+    );
+  }
+  return Result.isOk(filled) && Result.isOk(closed)
+    ? Result.ok(filled.value)
+    : Result.err("unwritable");
+};
+
 /** Judges the opened staged file and copies it into the run's folder. */
 const takeOpened = async ({
   file,
+  seams,
   source,
   sourceUrl,
   suggestedName,
   workspaceDir,
 }: {
   file: string;
+  seams: BrowserDownloadSeams;
   source: FileHandle;
   sourceUrl: string;
   suggestedName: string;
@@ -332,42 +436,37 @@ const takeOpened = async ({
     await removeIfSame(file, opened);
     return refused(BROWSER_DOWNLOAD_REFUSAL.notPdf, sourceUrl);
   }
-  const folder = await downloadsFolder(workspaceDir);
-  const target =
-    folder === null
-      ? null
-      : await createTarget(folder, downloadFileStem(suggestedName));
-  if (folder === null || target === null) {
+  const folder = await createWorkspaceFolder(
+    workspaceDir,
+    BROWSER_DOWNLOADS_FOLDER,
+  );
+  if (Result.isError(folder)) {
     return refused(BROWSER_DOWNLOAD_REFUSAL.folderUnavailable, sourceUrl);
   }
-  const saved = path.join(folder, target.name);
-  const copied = await Result.tryPromise(async () => {
-    try {
-      return await copyBounded(source, target.handle);
-    } finally {
-      await target.handle.close();
-    }
-  });
-  if (Result.isError(copied)) {
+  await seams.afterFolderCheck?.();
+  const target = await createTarget(
+    workspaceDir,
+    downloadFileStem(suggestedName),
+  );
+  if (target === null) {
+    return refused(BROWSER_DOWNLOAD_REFUSAL.folderUnavailable, sourceUrl);
+  }
+  const filled = await fillTarget(workspaceDir, source, target);
+  if (Result.isError(filled)) {
     // The staged file stays: nothing was wrong with it.
-    await removeFile(saved);
     return refused(BROWSER_DOWNLOAD_REFUSAL.folderUnavailable, sourceUrl);
   }
-  const result = copied.value;
+  const result = filled.value;
   switch (result.type) {
     case "too_large":
-      // It grew after it was measured. A partial copy that cannot be
-      // removed means the folder misbehaves.
-      if (!(await removeFile(saved))) {
-        return refused(BROWSER_DOWNLOAD_REFUSAL.folderUnavailable, sourceUrl);
-      }
+      // It grew after it was measured.
       await removeIfSame(file, opened);
       return refused(BROWSER_DOWNLOAD_REFUSAL.tooLarge, sourceUrl);
     case "copied":
       await removeIfSame(file, opened);
       return {
         bytes: result.bytes,
-        path: `${BROWSER_DOWNLOADS_FOLDER}/${target.name}`,
+        path: target.relativePath,
         sourceUrl,
         status: "saved",
       };
@@ -377,6 +476,11 @@ const takeOpened = async ({
   }
 };
 
+/** Where to take one download, and what bounds where it may come from. */
+type BrowserDownloadPlace = StagingBounds & {
+  seams?: BrowserDownloadSeams;
+};
+
 /**
  * Takes one download the extension reported for a run whose folder is
  * `workspaceDir`: the saved PDF lands in its downloads folder, and anything
@@ -384,13 +488,13 @@ const takeOpened = async ({
  */
 export const receiveBrowserDownload = async (
   download: BrowserDownload,
-  workspaceDir: string,
+  { home, seams = {}, workspaceDir }: BrowserDownloadPlace,
 ): Promise<BrowserDownloadOutcome> => {
   const { sourceUrl } = download;
   if (download.outcome === "stopped") {
     return refused(stoppedRefusal(download.reason), sourceUrl);
   }
-  const file = stagedFile(download.path);
+  const file = await stagedFile(download.path, { home, workspaceDir });
   if (file === null) {
     return refused(BROWSER_DOWNLOAD_REFUSAL.notStaged, sourceUrl);
   }
@@ -402,24 +506,19 @@ export const receiveBrowserDownload = async (
   if (!staging.isDirectory()) {
     return refused(BROWSER_DOWNLOAD_REFUSAL.notStaged, sourceUrl);
   }
-  const opened = await Result.tryPromise(
-    async () => await open(file, NO_FOLLOW_READ_FLAGS),
-  );
+  const opened = await Result.tryPromise({
+    try: async () => await open(file, NO_FOLLOW_READ_FLAGS),
+    catch: (cause) => openRefusal(cause),
+  });
   if (Result.isError(opened)) {
-    switch (errorCode(opened.error.cause)) {
-      case "ENOENT":
-        return refused(BROWSER_DOWNLOAD_REFUSAL.vanished, sourceUrl);
-      case "ELOOP":
-        return refused(BROWSER_DOWNLOAD_REFUSAL.link, sourceUrl);
-      default:
-        return refused(BROWSER_DOWNLOAD_REFUSAL.unreadable, sourceUrl);
-    }
+    return refused(opened.error, sourceUrl);
   }
   const source = opened.value;
   const taken = await Result.tryPromise(async () => {
     try {
       return await takeOpened({
         file,
+        seams,
         source,
         sourceUrl,
         suggestedName: download.suggestedName,
