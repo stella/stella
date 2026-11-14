@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { TimeoutError } from "@stll/concurrency/with-timeout";
+
 import type {
   ReadinessDependency,
   ReadinessProbes,
@@ -160,6 +162,33 @@ describe("API dependency readiness", () => {
       status: "ready",
     });
     expect(calls.toSorted()).toEqual(API_READINESS_DEPENDENCIES.toSorted());
+  });
+
+  test("names each dependency's timeout distinctly", async () => {
+    const timeouts = new Map<ReadinessDependency, TimeoutError>();
+    const probes = successfulProbes([]);
+    for (const dependency of API_READINESS_DEPENDENCIES) {
+      probes[dependency] = async (signal) =>
+        await new Promise<void>((_resolve) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              if (signal.reason instanceof TimeoutError) {
+                timeouts.set(dependency, signal.reason);
+              }
+            },
+            { once: true },
+          );
+        });
+    }
+
+    await runReadinessProbes(probes, 1);
+
+    const database = timeouts.get(READINESS_DEPENDENCY.database);
+    const redis = timeouts.get(READINESS_DEPENDENCY.redis);
+    expect(database?.label).toBe("database readiness probe");
+    expect(redis?.label).toBe("redis readiness probe");
+    expect(database?.label).not.toBe(redis?.label);
   });
 
   test.each(API_READINESS_DEPENDENCIES)(

@@ -1,0 +1,18 @@
+{
+  "id": "require-static-timeout-label",
+  "rules": ["require-static-timeout-label/require-static-timeout-label"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-20T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "require-static-timeout-label/require-static-timeout-label",
+    "."
+  ]
+}

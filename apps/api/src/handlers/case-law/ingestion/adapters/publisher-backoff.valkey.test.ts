@@ -52,6 +52,7 @@ const withStore = async (run: (store: PublisherStore) => Promise<void>) => {
           {
             intervalMs,
             key: slot,
+            publisherCode: "cellar-eu",
             publisher: "ECJ backoff test",
             cooldown: "shared",
           },

@@ -1,3 +1,4 @@
+// parser-output-unchanged: gate reservation timeouts carry a static label per gate; parsed response output is unchanged.
 // parser-output-unchanged: typed pacing availability and reply validation affect request scheduling only; parsed response values and persisted records are unchanged.
 // parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
 // parser-output-unchanged: checked coordination clients and bounded immediate gate checks; response parsing and stored output are unchanged.
@@ -10,6 +11,7 @@ import { Temporal } from "@stll/time";
 
 import type * as RedisClientModule from "@/api/lib/admission-redis";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
@@ -20,6 +22,38 @@ import {
 } from "./publisher-gate-fixture-state";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
+const PUBLISHER_GATE_TIMEOUT_LABEL = {
+  "uoou-cz": "uoou-cz publisher gate reservation",
+  "uohs-cz": "uohs-cz publisher gate reservation",
+  "edpb-eu": "edpb-eu publisher gate reservation",
+  "commission-eu": "commission-eu publisher gate reservation",
+  "nalus-usoud": "nalus-usoud publisher gate reservation",
+  "ris-bka": "ris-bka publisher gate reservation",
+  "findok-bmf": "findok-bmf publisher gate reservation",
+  "sn-pl": "sn-pl publisher gate reservation",
+  "uzp-pl": "uzp-pl publisher gate reservation",
+  "trybunal-pl": "trybunal-pl publisher gate reservation",
+  "ms-gov-pl": "ms-gov-pl publisher gate reservation",
+  "nsoud-cz": "nsoud-cz publisher gate reservation",
+  "nssoud-cz": "nssoud-cz publisher gate reservation",
+  "justice-cz": "justice-cz publisher gate reservation",
+  "justice-sk": "justice-sk publisher gate reservation",
+  "nsud-sk": "nsud-sk publisher gate reservation",
+  "nssud-sk": "nssud-sk publisher gate reservation",
+  "usoud-cz": "usoud-cz publisher gate reservation",
+  "ustavnysud-sk": "ustavnysud-sk publisher gate reservation",
+  "saos-pl": "saos-pl publisher gate reservation",
+  "huggingface-datasets": "huggingface-datasets publisher gate reservation",
+  "uodo-gov-pl": "uodo-gov-pl publisher gate reservation",
+  "uokik-gov-pl": "uokik-gov-pl publisher gate reservation",
+  "birosag-hu": "birosag-hu publisher gate reservation",
+  "eureka-mf": "eureka-mf publisher gate reservation",
+  "cellar-eu": "cellar-eu publisher gate reservation",
+  "bfdi-de": "bfdi-de publisher gate reservation",
+  "fcl-uk": "fcl-uk publisher gate reservation",
+  "suip-cz": "suip-cz publisher gate reservation",
+  "uoou-sk": "uoou-sk publisher gate reservation",
+} as const satisfies Record<PublisherGateId, string>;
 
 const TRY_RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
@@ -80,6 +114,7 @@ export type PublisherGateClient = {
 type PublisherRequestGateConfig = {
   intervalMs: number;
   key: string;
+  publisherCode: PublisherGateId;
   publisher: string;
   cooldown?: "shared";
 };
@@ -258,7 +293,13 @@ export class PublisherPacingStopped extends TaggedError(
 }> {}
 
 export const createPublisherRequestSlot = (
-  { intervalMs, key: slot, publisher, cooldown }: PublisherRequestGateConfig,
+  {
+    intervalMs,
+    key: slot,
+    publisherCode,
+    publisher,
+    cooldown,
+  }: PublisherRequestGateConfig,
   dependencies = defaultDependencies(intervalMs, cooldown),
 ) => {
   const { key, cooldownKey } = publisherGateKeys(slot);
@@ -281,7 +322,7 @@ export const createPublisherRequestSlot = (
             return await redis.send("EVAL", args);
           },
           {
-            label: `${publisher} publisher gate reservation`,
+            label: PUBLISHER_GATE_TIMEOUT_LABEL[publisherCode],
             signal,
             timeoutMs: PUBLISHER_GATE_COMMAND_TIMEOUT_MS,
           },

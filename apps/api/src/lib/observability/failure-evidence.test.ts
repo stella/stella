@@ -13,6 +13,7 @@ import {
   ExtractionWorkerError,
   HandlerError,
   SandboxError,
+  TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import {
   MAX_EVIDENCE_DEPTH,
@@ -231,6 +232,24 @@ describe("failure evidence survives hostile values", () => {
 });
 
 describe("failure evidence reads identity", () => {
+  test("reads deadline evidence only from a TimeoutError", () => {
+    const timeout = new TimeoutError({
+      message: "expired",
+      label: "workflow-reconcile-tick",
+      timeoutMs: 30_000,
+    });
+    const lookalike = Object.assign(new Error("expired"), {
+      label: "user-controlled",
+      timeoutMs: 1, // timeout: a lookalike field, never a deadline
+    });
+
+    expect(readEvidence(timeout).nodes[0]?.timeout).toMatchObject({
+      label: "workflow-reconcile-tick",
+      timeoutMs: 30_000,
+    });
+    expect(readEvidence(lookalike).nodes[0]?.timeout).toBeUndefined();
+  });
+
   test("a declared class name is kept only when the constructor vouches for it", () => {
     // Classes whose identifiers a build rewrote: named through
     // `defineProperty`, exactly as a bundler's output reports them.

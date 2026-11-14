@@ -145,6 +145,14 @@ export type EvidenceNode = {
   /** The prototype chain, read once; identity checks run against it. */
   readonly prototypes: readonly object[];
   readonly frame: FrameEvidence;
+  /** Static deadline identity and duration, trusted only on TimeoutError nodes. */
+  readonly timeout:
+    | {
+        readonly label: string;
+        readonly timeoutMs: number | undefined;
+        readonly callerFrame: FrameEvidence;
+      }
+    | undefined;
   readonly extraction: Readonly<Record<string, string>> | undefined;
   readonly discriminators?: Readonly<Record<string, string>> | undefined;
 };
@@ -488,7 +496,10 @@ const frameBlockOffset = ({
   return offsetAfterLines(stack, countLines(message));
 };
 
-const topFrame = (parts: StackParts): FrameEvidence => {
+const topFrame = (
+  parts: StackParts,
+  skipLocation: (location: string) => boolean = () => false,
+): FrameEvidence => {
   const stack = nonEmptyString(parts.stack);
   if (stack === undefined) {
     return { kind: "absent" };
@@ -505,7 +516,10 @@ const topFrame = (parts: StackParts): FrameEvidence => {
   }
   for (const line of lines.slice(0, MAX_STACK_FRAME_LINES)) {
     const location = frameLocation(line);
-    if (location !== undefined && !PANIC_HELPER_FRAME.test(location)) {
+    if (location !== undefined) {
+      if (skipLocation(location) || PANIC_HELPER_FRAME.test(location)) {
+        continue;
+      }
       return RECOGNIZED_FRAME_ORIGIN.test(location)
         ? { kind: "recognized", location }
         : { kind: "unrecognized" };
@@ -557,6 +571,7 @@ const PRIMITIVE_NODE: EvidenceNode = {
   brand: undefined,
   prototypes: [],
   frame: { kind: "absent" },
+  timeout: undefined,
   extraction: undefined,
 };
 
@@ -619,6 +634,14 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
             : undefined,
       })
     : undefined;
+  const isTimeoutError =
+    className === "TimeoutError" || (isTagged && rawTag === "TimeoutError");
+  const label = isTimeoutError
+    ? nonEmptyString(readKey(state, value, "label"))
+    : undefined;
+  const timeoutMsValue = isTimeoutError
+    ? readKey(state, value, "timeoutMs")
+    : undefined;
   const code = readKey(state, value, "code");
   const errno = readKey(state, value, "errno");
   const syscall = readKey(state, value, "syscall");
@@ -657,6 +680,11 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
   } else if (admission !== undefined) {
     handler = { status: admission.status, code: codeString };
   }
+  const stack =
+    className === undefined ? undefined : readKey(state, value, "stack");
+  const message =
+    className === undefined ? undefined : readKey(state, value, "message");
+  const frameParts = { stack, message, name, className: className ?? "" };
   const brand = readFailureBrand(value, {
     prototypes,
     read: (object, key) => readKey(state, object, key),
@@ -707,15 +735,21 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
     brand,
     discriminators,
     prototypes,
-    frame:
-      className === undefined
-        ? { kind: "absent" }
-        : topFrame({
-            stack: readKey(state, value, "stack"),
-            message: readKey(state, value, "message"),
-            name,
-            className,
-          }),
+    frame: className === undefined ? { kind: "absent" } : topFrame(frameParts),
+    timeout:
+      label === undefined
+        ? undefined
+        : {
+            label,
+            timeoutMs:
+              typeof timeoutMsValue === "number" &&
+              Number.isFinite(timeoutMsValue)
+                ? timeoutMsValue
+                : undefined,
+            callerFrame: topFrame(frameParts, (location) =>
+              location.includes("packages/concurrency/src/with-timeout.ts:"),
+            ),
+          },
     extraction: prototypes.includes(ExtractionWorkerError.prototype)
       ? extractionFields(state, value)
       : undefined,
