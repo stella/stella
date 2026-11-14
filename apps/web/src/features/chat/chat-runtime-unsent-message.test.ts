@@ -165,8 +165,8 @@ const serve = (initial: Refusal | null) => {
         );
       }
       state.stored = [
+        ...state.stored.filter(({ id }) => id !== ANSWER_ID),
         ...(holdsMessage ? [] : [storedMessage(MESSAGE_ID, "user", TEXT)]),
-        ...state.stored.filter(({ role }) => role === "user"),
         storedMessage(ANSWER_ID, "assistant", ANSWER),
       ];
       const runId = posted["runId"];
@@ -355,4 +355,46 @@ test("a resend whose thread cannot be read stays a regeneration", async () => {
     role: "user",
     text: TEXT,
   });
+});
+
+test("a kept unsent message follows what another tab stored in the thread meanwhile", async () => {
+  const { acquire, runtime, server } = await sendOnce(
+    serve({
+      type: "refused",
+      status: 409,
+      code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
+    }),
+  );
+  const refused = runtime.getSnapshot().error;
+  server.stored = [
+    storedMessage("00000000-0000-7000-8000-0000000000d1", "user", "Elsewhere"),
+    storedMessage(
+      "00000000-0000-7000-8000-0000000000d2",
+      "assistant",
+      "Answered elsewhere.",
+    ),
+  ];
+  server.revision += 1;
+
+  expect(await acquire()).toBe(runtime);
+  await Promise.resolve();
+
+  // The stored thread, then the message still to send, with its reason.
+  expect(textOf(runtime.getSnapshot().messages)).toEqual([
+    { role: "user", text: "Elsewhere" },
+    { role: "assistant", text: "Answered elsewhere." },
+    { role: "user", text: TEXT },
+  ]);
+  expect(runtime.getSnapshot().error).toBe(refused);
+
+  server.refusal = null;
+  await resendLatestChatMessage(runtime);
+
+  expect(intentOf(server.posted.at(1))).toBeUndefined();
+  expect(textOf(runtime.getSnapshot().messages)).toEqual([
+    { role: "user", text: "Elsewhere" },
+    { role: "assistant", text: "Answered elsewhere." },
+    { role: "user", text: TEXT },
+    { role: "assistant", text: ANSWER },
+  ]);
 });

@@ -166,6 +166,27 @@ const unsentMessageIdOf = (
   return latest.id;
 };
 
+/**
+ * Put the stored thread on a runtime that holds an unsent message, with that
+ * message after it. The runtime is kept for the message, not for the history
+ * it was built on: what another tab or device stored meanwhile shows above
+ * it, and a resend continues the thread the server holds. The turn's error
+ * stays, since it describes the unsent message.
+ */
+const showStoredThreadWithUnsentMessage = (
+  runtime: ChatRuntime,
+  storedMessages: readonly PersistedChatMessage[],
+): void => {
+  const unsentId = unsentMessageIdOf(runtime, storedMessages);
+  const unsent = runtime
+    .getSnapshot()
+    .messages.find((message) => message.id === unsentId);
+  if (unsent === undefined) {
+    return;
+  }
+  runtime.setMessages([...storedMessages, unsent]);
+};
+
 const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
   idle: "idle",
   replaceStaleApproval: "replace-stale-approval",
@@ -367,6 +388,7 @@ export const resendLatestChatMessage = async (
     Result.isOk(stored) &&
     unsentMessageIdOf(runtime, stored.value.messages) !== null
   ) {
+    showStoredThreadWithUnsentMessage(runtime, stored.value.messages);
     await runtime.sendLatestMessageAgain(options);
     return;
   }
@@ -387,6 +409,37 @@ const advanceAcknowledgedSeed = ({
       entry.seed = seed;
     }
   }
+};
+
+/**
+ * Keep `runtime` across a thread read that differs from the one it was built
+ * on: its seed moves to that read. A runtime kept for an unsent message also
+ * takes the read's history. Acquire runs while a page renders, so the
+ * runtime's subscribers hear of the new messages after the render, and only
+ * if the message is still unsent by then.
+ */
+const acknowledgeRefresh = ({
+  data,
+  disposition,
+  runtime,
+  seed,
+  threadIdentity,
+}: {
+  data: ChatThreadFetched;
+  disposition: ChatRuntimeReconcileDisposition;
+  runtime: ChatRuntime;
+  seed: ChatRuntimeSeedSignal;
+  threadIdentity: string;
+}): void => {
+  advanceAcknowledgedSeed({ runtime, seed, threadIdentity });
+  if (disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainUnsentMessage) {
+    return;
+  }
+  queueMicrotask(() => {
+    if (!hasInFlightChatRuntimeWork(runtime)) {
+      showStoredThreadWithUnsentMessage(runtime, data.messages);
+    }
+  });
 };
 
 /**
@@ -453,7 +506,9 @@ const findBusyChatRuntimeEntryForThread = ({
       continue;
     }
     if (acknowledgesRefresh(disposition) && hasAuthoritativeRefresh) {
-      advanceAcknowledgedSeed({
+      acknowledgeRefresh({
+        data,
+        disposition,
         runtime: entry.runtime,
         seed,
         threadIdentity,
@@ -651,7 +706,9 @@ export const acquireChatRuntime = ({
     acknowledgesRefresh(existingDisposition)
   ) {
     if (!seedSignalsEqual(existing.seed, seed)) {
-      advanceAcknowledgedSeed({
+      acknowledgeRefresh({
+        data,
+        disposition: existingDisposition,
         runtime: existing.runtime,
         seed,
         threadIdentity,
