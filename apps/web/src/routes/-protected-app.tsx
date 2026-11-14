@@ -65,6 +65,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { MakeSkillReviewDialog } from "@/features/chat/make-skill-review-dialog";
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
@@ -305,6 +306,7 @@ export const ProtectedAppFrame = ({
                 <DocxEditorHost />
                 <QuickEntry />
                 <CreateMatterDialog />
+                <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
                 <ShortcutEchoHud />

@@ -817,7 +817,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
-| assistant_chat | 17 |
+| assistant_chat | 19 |
 | auth_plumbing | 43 |
 | billing_ui | 1 |
 | chat_thread_ui | 31 |

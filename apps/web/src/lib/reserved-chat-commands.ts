@@ -7,7 +7,7 @@ import type { TranslationKey } from "@/i18n/types";
 // overload, since some keys require values, and reject a single-argument call.
 type ReservedChatCommandDescriptionKey = Extract<
   TranslationKey,
-  "chat.newChat" | "chat.renameThread"
+  "chat.newChat" | "chat.renameThread" | "chat.makeSkill.command"
 >;
 
 const RESERVED_CHAT_COMMANDS = [
@@ -17,6 +17,12 @@ const RESERVED_CHAT_COMMANDS = [
     name: "rename-chat",
     command: "/rename-chat",
     descriptionKey: "chat.renameThread",
+  },
+  {
+    id: "make-skill",
+    name: "make-skill",
+    command: "/make-skill",
+    descriptionKey: "chat.makeSkill.command",
   },
 ] as const satisfies readonly {
   id: string;
@@ -31,8 +37,9 @@ export type ReservedChatCommandId = ReservedChatCommand["id"];
 export type ReservedChatCommandContext = {
   /**
    * Whether the composer is bound to a thread persisted on the server (it
-   * has at least one message). `/rename-chat` is offered only there: an
-   * unsent draft thread has nothing to rename or summarize.
+   * has at least one message). `/rename-chat` and `/make-skill` are offered
+   * only there: an unsent draft thread has nothing to rename, summarize or
+   * learn a skill from.
    */
   hasPersistedThread: boolean;
 };
@@ -45,6 +52,7 @@ const isReservedChatCommandOffered = (
     case "new":
       return true;
     case "rename-chat":
+    case "make-skill":
       return context.hasPersistedThread;
     default:
       id satisfies never;

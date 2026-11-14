@@ -1963,6 +1963,24 @@
       "secretAnswer": "Atsakymas paslėptas",
       "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
     },
+    "makeSkill": {
+      "command": "Sukurti įgūdį iš šio pokalbio",
+      "drafted": "Įgūdžio juodraštis paruoštas. Peržiūrėkite jį ir tada įjunkite.",
+      "drafting": "Rengiamas įgūdžio juodraštis iš šio pokalbio…",
+      "emptyThread": "Pirmiausia išsiųskite žinutę, tada iš pokalbio bus galima sukurti įgūdį.",
+      "failed": "Nepavyko sukurti įgūdžio iš šio pokalbio",
+      "review": {
+        "description": "Įgūdžio juodraštyje yra šie vardai. Juos gali matyti visi, turintys prieigą prie šio įgūdžio.",
+        "replaceHint": "Panaikinkite vardo žymėjimą, kad jis būtų pakeistas bendru vietos rezervavimo ženklu.",
+        "role": {
+          "organization": "organizacijos pavadinimas",
+          "person": "asmens vardas"
+        },
+        "saveAll": "Palikti visus ir išsaugoti",
+        "saveReplacing": "Pakeisti nepažymėtus ir išsaugoti",
+        "title": "Išsaugoti šiuos vardus įgūdyje?"
+      }
+    },
     "matterRuns": {
       "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
       "waitsOn": {
@@ -3411,6 +3429,11 @@
       "sharepointNotFound": "Šios svetainės, bibliotekos ar failo nebėra arba jis su jumis nebendrinamas.",
       "sharepointReconnectRequired": "Jūsų Microsoft prisijungimas nebegalioja. Iš naujo prijunkite SharePoint ir OneDrive.",
       "sharepointThrottled": "Microsoft riboja užklausas. Netrukus bandykite dar kartą.",
+      "skillFromChatAnonymizedThread": "Iš anonimizuoto pokalbio įgūdžio kol kas sukurti negalima.",
+      "skillFromChatEmptyThread": "Šiame pokalbyje dar nėra nieko, iš ko būtų galima sukurti įgūdį.",
+      "skillFromChatLocalRunThread": "Šis pokalbis vyksta jūsų kompiuteryje, todėl iš jo įgūdis debesyje nekuriamas.",
+      "skillFromChatThreadNotFound": "Šio pokalbio rasti nepavyko.",
+      "skillFromChatWithdrawn": "Šio pokalbio turinys buvo atšauktas, todėl iš jo negalima sukurti įgūdžio.",
       "skillSourceUnreachable": "Nepavyko įkelti įgūdžio šaltinio. Patikrinkite, ar nuoroda veda į viešą „GitHub“ saugyklą, arba bandykite vėliau.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
