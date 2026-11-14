@@ -1749,10 +1749,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
-  // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
+  // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
+  // and the clock and busy windows file the coverage check reads (fixtures pin them).
+  "JOURNEY_BUSY_WINDOWS_FILE",
   "JOURNEY_CLI_URL",
   "JOURNEY_MAIN_REF",
   "JOURNEY_MCP_URL",
+  "JOURNEY_NOW_EPOCH",
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_PROBE_RUN_SECONDS",
   "JOURNEY_PROBE_SLOT",

@@ -3,6 +3,9 @@ import { panic, Result } from "better-result";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { Temporal } from "@stll/time";
 
+// JSON so that tooling outside TypeScript (the journey canary) reads the same windows.
+import defaultBusyWindows from "./default-busy-windows.json" with { type: "json" };
+
 export type VerdictKind = "normal" | "degraded" | "stop" | "unknown";
 export type HealthSignalKind = VerdictKind | "not_configured";
 export type WorkKind = "index_build" | "backfill_batch";
@@ -74,7 +77,7 @@ export const defaultConfig = {
   maxStalenessMs: 15 * 60_000,
   readTimeoutMs: 5000,
   longTxMaxAgeMs: 5 * 60_000,
-  busyWindows: [{ start: "06:30", end: "08:00", timeZone: "Europe/Prague" }],
+  busyWindows: defaultBusyWindows,
   targetDurationMs: 1000,
   batchStatementTimeoutMs: 60_000,
   batchLockTimeoutMs: 1000,
