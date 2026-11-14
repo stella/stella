@@ -258,6 +258,12 @@
     "wave": "stored-document-objects-dry-run"
   },
   {
+    "source": "cz-uohs",
+    "parserVersion": 16,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
     "source": "pl-kis",
     "parserVersion": 33,
     "type": "pending-enrolment-wave",
