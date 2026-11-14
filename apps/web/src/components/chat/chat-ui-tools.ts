@@ -763,9 +763,7 @@ export const getChatWorkAwaitedAtOpen = (
   return {
     approvalIds: new Set(
       parts.flatMap((part) =>
-        part.type === "tool-call" &&
-        part.state === "approval-requested" &&
-        part.approval !== undefined
+        isApprovalPart(part) && part.state === "approval-requested"
           ? [part.approval.id]
           : [],
       ),

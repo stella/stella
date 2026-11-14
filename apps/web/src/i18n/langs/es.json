@@ -2380,7 +2380,7 @@
     },
     "turnPaused": {
       "continue": "Continuar",
-      "status": "En pausa tras {count, plural, one {# paso} other {# pasos}}"
+      "status": "En pausa tras {count, plural, one {# paso} many {# pasos} other {# pasos}}"
     },
     "turnStatus": {
       "answerFailed": "No se pudo terminar la respuesta",
