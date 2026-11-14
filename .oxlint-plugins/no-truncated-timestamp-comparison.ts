@@ -1742,7 +1742,10 @@ export default eslintCompatPlugin({
             return next(node.consequent) || next(node.alternate);
           }
           if (node.type === "LogicalExpression") {
-            return next(node.left) || next(node.right);
+            // `a && b` yields `a` only when it is falsy, never as a Date.
+            return (
+              (node.operator !== "&&" && next(node.left)) || next(node.right)
+            );
           }
           if (node.type === "Identifier") {
             return next(constInitializer(node));
@@ -1756,6 +1759,30 @@ export default eslintCompatPlugin({
           }
           const owner = timestampColumnOwner(node);
           return owner === undefined || !isTableOwner(owner);
+        };
+
+        // A `Date` rendered to text or rebuilt, directly or one `const` away.
+        const isDateRendering = (node: unknown): boolean => {
+          const unwrapped = unwrapExpression(node);
+          return (
+            dateRenderingSource(
+              unwrapped?.type === "Identifier"
+                ? constInitializer(unwrapped)
+                : unwrapped,
+            ) !== undefined
+          );
+        };
+
+        // One parameter on both sides is a table handed to this function and
+        // compared with itself. A local object does not count: it can group
+        // a column with a row's Date.
+        const sharesParameterOwner = (left: unknown, right: unknown) => {
+          const leftOwner = timestampColumnOwner(left);
+          return (
+            leftOwner !== undefined &&
+            leftOwner.name === timestampColumnOwner(right)?.name &&
+            isParameter(leftOwner)
+          );
         };
 
         const report = (node: AstNode) => {
@@ -1800,23 +1827,15 @@ export default eslintCompatPlugin({
               const leftIndex = tuple
                 ? leftTupleFirstIndex(quasis, index)
                 : index - 1;
-              // One parameter on both sides is a table handed to this
-              // function and compared with itself. A local object does not
-              // count: it can group a column with a row's Date.
-              const leftOwner =
-                leftIndex === undefined
-                  ? undefined
-                  : timestampColumnOwner(expressions[leftIndex]);
               if (
-                leftOwner !== undefined &&
-                leftOwner.name === timestampColumnOwner(expression)?.name &&
-                isParameter(leftOwner)
+                leftIndex !== undefined &&
+                sharesParameterOwner(expressions[leftIndex], expression)
               ) {
                 continue;
               }
               if (
                 isStoredTimestampRead(expression) ||
-                (tuple && dateRenderingSource(expression) !== undefined)
+                (tuple && isDateRendering(expression))
               ) {
                 report(expression);
               }
@@ -1836,11 +1855,11 @@ export default eslintCompatPlugin({
               return;
             }
             const [left, right] = args;
-            const operand = isTimestampColumnExpression(left)
-              ? right
+            const [column, operand] = isTimestampColumnExpression(left)
+              ? [left, right]
               : isTimestampColumnExpression(right)
-                ? left
-                : undefined;
+                ? [right, left]
+                : [undefined, undefined];
             if (!isSqlTaggedTemplate(operand) || !isAstNode(operand)) {
               return;
             }
@@ -1856,6 +1875,7 @@ export default eslintCompatPlugin({
               if (
                 isAstNode(expression) &&
                 isCast(quasis[index + 1]) &&
+                !sharesParameterOwner(column, expression) &&
                 isStoredTimestampRead(expression)
               ) {
                 report(expression);

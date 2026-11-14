@@ -202,9 +202,11 @@ test("rejects any Date rendering in a keyset tuple under an explicit cast", asyn
       `import {sql} from "drizzle-orm";
 import {events} from "./schema";
 sql\`(\${events.createdAt}, \${events.id}) > (\${afterTime.toISOString()}::timestamptz, \${afterId}::uuid)\`;
-sql\`(\${events.createdAt}, \${events.id}) < (\${new Date(after)}::timestamptz, \${afterId}::uuid)\`;`,
+sql\`(\${events.createdAt}, \${events.id}) < (\${new Date(after)}::timestamptz, \${afterId}::uuid)\`;
+const rendered = afterTime.toISOString();
+sql\`(\${events.createdAt}, \${events.id}) > (\${rendered}::timestamptz, \${afterId}::uuid)\`;`,
     ),
-  ).toEqual([3, 4]);
+  ).toEqual([3, 4, 6]);
 });
 
 test("rejects a row's Date grouped with a column under one local owner", async () => {
@@ -232,6 +234,8 @@ sql\`\${chatTurns.createdAt} <= \${cutoff.toISOString()}::timestamptz\`;
 sql\`\${chatTurns.settledAt} >= \${chatTurns.createdAt}::timestamptz\`;
 sql\`\${local.settledAt} >= \${local.createdAt}::timestamptz\`;
 const live = (table = session) => sql\`\${table.expiresAt} > \${table.lastSeenAt}::timestamptz\`;
+const liveCall = (table = session) => gt(table.expiresAt, sql\`\${table.lastSeenAt}::timestamptz\`);
+sql\`\${chatTurns.createdAt} > \${cursor.createdAt && cursor.createdAtToken}::timestamptz\`;
 sql\`UPDATE chat_turns SET settled_at = \${row.settledAt}::timestamptz\`;
 gt(chatTurns.createdAt, sql\`\${cutoff}::timestamptz\`);
 sql\`\${chatTurns.createdAt} > \${row.createdAt}\`;`,
