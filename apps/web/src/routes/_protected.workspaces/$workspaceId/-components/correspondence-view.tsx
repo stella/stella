@@ -4,13 +4,16 @@ import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import type { DataBoxDirectionBasis } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import {
   CORRESPONDENCE_PAGE_SIZE,
@@ -29,6 +32,21 @@ import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
+
+// An incoming message is the default and needs no label.
+const DIRECTION_LABEL_KEYS = {
+  organization_sender: "correspondence.dataBox.sent",
+  organization_recipient: null,
+  unknown: "correspondence.dataBox.directionUnknown",
+} as const satisfies Record<DataBoxDirectionBasis, TranslationKey | null>;
+
+const DataBoxDirectionLabel = ({ basis }: { basis: DataBoxDirectionBasis }) => {
+  const t = useTranslations();
+  const label = DIRECTION_LABEL_KEYS[basis];
+  return label === null ? null : (
+    <span className="text-muted-foreground text-xs">{t(label)}</span>
+  );
+};
 
 /**
  * Body of a matter's correspondence view: the matter's inbound address, the
@@ -123,7 +141,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
       </div>
       <div className="flex flex-wrap gap-2">
         {address && (
-          <CopyActionButton
+          <CopyControl
             className="min-h-11"
             iconClassName="size-4"
             size="sm"
@@ -198,25 +216,51 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
             <span className="min-w-0 flex-1">
               <CorrespondenceProvenance record={item} />
               <span className="mt-2 block">
-                <AssertedHeadersLabel record={item} />
+                {item.channel === "email" && (
+                  <AssertedHeadersLabel record={item} />
+                )}
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="truncate text-sm font-medium">
+                  <TruncatedText className="text-sm font-medium">
                     <bdi dir="auto">
                       {item.subject || t("emailViewer.noSubject")}
                     </bdi>
-                  </span>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {t(CORRESPONDENCE_STATE_LABEL_KEYS[item.handlingState])}
                   </span>
-                </span>
-                <span className="text-muted-foreground mt-1 block truncate text-xs">
-                  {t(
-                    correspondenceProvenancePresentation(item)
-                      .originalSenderLabel,
+                  {item.channel === "data_box" && (
+                    <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-xs">
+                      {t("correspondence.dataBox.channel")}
+                    </span>
                   )}
-                  : <bdi dir="ltr">{item.from.address}</bdi>
+                  {item.channel === "data_box" && (
+                    <DataBoxDirectionLabel
+                      basis={item.dataBox.directionBasis}
+                    />
+                  )}
                 </span>
-                <span className="text-muted-foreground mt-1 block truncate text-xs">
+                {item.channel === "data_box" ? (
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
+                    {t("emailViewer.from")}:{" "}
+                    {item.from.name && (
+                      <bdi className="me-1" dir="auto">
+                        {item.from.name}
+                      </bdi>
+                    )}
+                    <bdi className="font-mono" dir="ltr">
+                      {item.from.address}
+                    </bdi>
+                  </TruncatedText>
+                ) : (
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
+                    {t(
+                      correspondenceProvenancePresentation(item)
+                        .originalSenderLabel,
+                    )}
+                    : <bdi dir="ltr">{item.from.address}</bdi>
+                  </TruncatedText>
+                )}
+                <TruncatedText className="text-muted-foreground mt-1 text-xs">
                   {t("emailViewer.to")}:{" "}
                   {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
                     <bdi
@@ -227,7 +271,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                       {recipient.name ?? recipient.address}
                     </bdi>
                   ))}
-                </span>
+                </TruncatedText>
               </span>
             </span>
             <time className="text-muted-foreground shrink-0 text-xs tabular-nums">

@@ -22,6 +22,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
+  buildMessageLocale,
   bundledEnglishMessages,
   synchronizeFormatterTimeZone,
   useI18nStore,
@@ -40,6 +41,7 @@ const DialogTranslations = ({ children }: PropsWithChildren) => {
       labels={{
         close: t("common.close"),
         unsavedChanges: t("common.unsavedChangesEscape"),
+        unsavedChangesClose: t("common.unsavedChangesClose"),
       }}
     >
       {children}
@@ -116,7 +118,16 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
         weekStart,
       });
 
-  const messageLocale = preHydrationEnglish ? "en" : locale;
+  // Messages render in the UI language with the reader's digits, so a
+  // plural's `#` matches every number formatted with format.number.
+  const messageLocale = preHydrationEnglish
+    ? "en"
+    : buildMessageLocale({
+        lang: locale,
+        region,
+        regionalFormat,
+        numberingSystem,
+      });
   // The provider can finish hydrating while a nested Suspense boundary still
   // holds server markup. Remount the context subtree when browser formatting
   // becomes active so that deferred descendants mount from one coherent

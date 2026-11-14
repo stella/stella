@@ -29,7 +29,7 @@ services:
 
   rustfs:
     profiles: [dev]
-    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    image: rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
     command: /data
     environment:
       RUSTFS_ACCESS_KEY: stella-rustfs-dev
@@ -58,7 +58,7 @@ services:
     # One-shot bucket bootstrap over RustFS's S3 API. The AWS CLI is the
     # maintained generic client; the MinIO client it replaces is no longer
     # published.
-    image: amazon/aws-cli:2.37.12@sha256:ce44b800602264c12298bbf3399055a4cefdb9ed4a098abe564afe26e7071bce
+    image: amazon/aws-cli:2.39.3@sha256:d557b3524475d70dd3104cf44d96568ee3188897b73a6ece2b37aa50e1af362f
     depends_on:
       rustfs:
         condition: service_healthy
@@ -80,7 +80,7 @@ services:
 
   valkey:
     profiles: [dev]
-    image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+    image: valkey/valkey:9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
     ports:
       - "127.0.0.1:${STELLA_VALKEY_HOST_PORT:-6379}:6379"
     healthcheck:
@@ -91,7 +91,7 @@ services:
 
   gotenberg:
     profiles: [dev]
-    image: gotenberg/gotenberg:8.37.0@sha256:f29984bd1e226bf1b93ba90af06000afa8b315853e99d27b9aaa41b93f15c769
+    image: gotenberg/gotenberg:8.39.0@sha256:13672f317b443c793e972b1bd2155ec62a3e7b6891b411e8196442cc053ee5f5
     # If you see "context deadline exceeded" or multi-threading errors, add
     # command: ["gotenberg", "--libreoffice-restart-after=1"]. See
     # https://github.com/gotenberg/gotenberg/issues/1452.
@@ -130,7 +130,7 @@ services:
 
   quickwit09:
     profiles: [quickwit09]
-    image: quickwit/quickwit:0.9.1@sha256:3e0f079eb57dd5563f36a457e9a7a2963ff882316d6c77e3180ac3c59767a68f
+    image: quickwit/quickwit:0.9.3@sha256:7c3f5061ea7c00921205c295833f152871d057ec1a9e4c9b1d36131dacc420bd
     command: run
     environment:
       QW_CLUSTER_ID: stella-local-q09

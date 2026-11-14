@@ -1,0 +1,262 @@
+// Generated from parser-entries/*.json by scripts/generate-parser-registry.ts.
+import type { ParserVersionScopes } from "./parser-reparse-scopes";
+
+export const ADAPTER_KEYS = {
+  AT_ASYLGH: "at-asylgh",
+
+  AT_BKS: "at-bks",
+
+  AT_BVWG: "at-bvwg",
+
+  AT_COURTS: "at-courts",
+
+  AT_FINDOK: "at-findok",
+
+  AT_LVWG: "at-lvwg",
+
+  AT_UBAS: "at-ubas",
+
+  AT_UMSE: "at-umse",
+
+  AT_UVS: "at-uvs",
+
+  AT_VERG: "at-verg",
+
+  AT_VFGH: "at-vfgh",
+
+  AT_VWGH: "at-vwgh",
+
+  CZ_NS: "cz-ns",
+
+  CZ_NSS: "cz-nss",
+
+  CZ_REGIONAL: "cz-regional",
+
+  CZ_UOHS: "cz-uohs",
+
+  CZ_US: "cz-us",
+
+  EU_ECJ: "eu-ecj",
+
+  HU_BHGY: "hu-bhgy",
+
+  PL_COURTS: "pl-courts",
+
+  PL_KIO: "pl-kio",
+
+  PL_KIS: "pl-kis",
+
+  PL_NCOURT: "pl-ncourt",
+
+  PL_NSA: "pl-nsa",
+
+  PL_SN: "pl-sn",
+
+  PL_TK: "pl-tk",
+
+  PL_UODO: "pl-uodo",
+
+  PL_UOKIK: "pl-uokik",
+
+  SK_COURTS: "sk-courts",
+
+  SK_US: "sk-us",
+
+  UK_FCL: "uk-fcl",
+} as const;
+export const IMPORT_SOURCE_KEYS = {
+  COURTLISTENER: "us-courtlistener",
+} as const;
+export const PARSER_VERSIONS = {
+  [ADAPTER_KEYS.AT_ASYLGH]: 12,
+
+  [ADAPTER_KEYS.AT_BKS]: 12,
+
+  [ADAPTER_KEYS.AT_BVWG]: 12,
+
+  [ADAPTER_KEYS.AT_COURTS]: 12,
+
+  [ADAPTER_KEYS.AT_FINDOK]: 14,
+
+  [ADAPTER_KEYS.AT_LVWG]: 12,
+
+  [ADAPTER_KEYS.AT_UBAS]: 12,
+
+  [ADAPTER_KEYS.AT_UMSE]: 12,
+
+  [ADAPTER_KEYS.AT_UVS]: 12,
+
+  [ADAPTER_KEYS.AT_VERG]: 12,
+
+  [ADAPTER_KEYS.AT_VFGH]: 12,
+
+  [ADAPTER_KEYS.AT_VWGH]: 12,
+
+  [ADAPTER_KEYS.CZ_NS]: 31,
+
+  [ADAPTER_KEYS.CZ_NSS]: 38,
+
+  [ADAPTER_KEYS.CZ_REGIONAL]: 26,
+
+  [ADAPTER_KEYS.CZ_UOHS]: 15,
+
+  [ADAPTER_KEYS.CZ_US]: 43,
+
+  [ADAPTER_KEYS.EU_ECJ]: 26,
+
+  [ADAPTER_KEYS.HU_BHGY]: 30,
+
+  [ADAPTER_KEYS.PL_COURTS]: 37,
+
+  [ADAPTER_KEYS.PL_KIO]: 31,
+
+  [ADAPTER_KEYS.PL_KIS]: 34,
+
+  [ADAPTER_KEYS.PL_NCOURT]: 38,
+
+  [ADAPTER_KEYS.PL_NSA]: 11,
+
+  [ADAPTER_KEYS.PL_SN]: 31,
+
+  [ADAPTER_KEYS.PL_TK]: 13,
+
+  [ADAPTER_KEYS.PL_UODO]: 20,
+
+  [ADAPTER_KEYS.PL_UOKIK]: 36,
+
+  [ADAPTER_KEYS.SK_COURTS]: 32,
+
+  [ADAPTER_KEYS.SK_US]: 28,
+
+  [ADAPTER_KEYS.UK_FCL]: 6,
+} as const satisfies Record<AdapterKey, number>;
+export const SOURCE_FINGERPRINT_VERSIONS = {
+  [ADAPTER_KEYS.AT_ASYLGH]: 0,
+
+  [ADAPTER_KEYS.AT_BKS]: 0,
+
+  [ADAPTER_KEYS.AT_BVWG]: 0,
+
+  [ADAPTER_KEYS.AT_COURTS]: 0,
+
+  [ADAPTER_KEYS.AT_FINDOK]: 0,
+
+  [ADAPTER_KEYS.AT_LVWG]: 0,
+
+  [ADAPTER_KEYS.AT_UBAS]: 0,
+
+  [ADAPTER_KEYS.AT_UMSE]: 0,
+
+  [ADAPTER_KEYS.AT_UVS]: 0,
+
+  [ADAPTER_KEYS.AT_VERG]: 0,
+
+  [ADAPTER_KEYS.AT_VFGH]: 0,
+
+  [ADAPTER_KEYS.AT_VWGH]: 0,
+
+  [ADAPTER_KEYS.CZ_NS]: 0,
+
+  [ADAPTER_KEYS.CZ_NSS]: 0,
+
+  [ADAPTER_KEYS.CZ_REGIONAL]: 0,
+
+  [ADAPTER_KEYS.CZ_UOHS]: 0,
+
+  [ADAPTER_KEYS.CZ_US]: 0,
+
+  [ADAPTER_KEYS.EU_ECJ]: 0,
+
+  [ADAPTER_KEYS.HU_BHGY]: 0,
+
+  [ADAPTER_KEYS.PL_COURTS]: 0,
+
+  [ADAPTER_KEYS.PL_KIO]: 0,
+
+  [ADAPTER_KEYS.PL_KIS]: 0,
+
+  [ADAPTER_KEYS.PL_NCOURT]: 0,
+
+  [ADAPTER_KEYS.PL_NSA]: 0,
+
+  [ADAPTER_KEYS.PL_SN]: 0,
+
+  [ADAPTER_KEYS.PL_TK]: 0,
+
+  [ADAPTER_KEYS.PL_UODO]: 0,
+
+  [ADAPTER_KEYS.PL_UOKIK]: 0,
+
+  [ADAPTER_KEYS.SK_COURTS]: 0,
+
+  [ADAPTER_KEYS.SK_US]: 0,
+
+  [ADAPTER_KEYS.UK_FCL]: 0,
+
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: 0,
+} as const satisfies Record<AdapterKey | ImportSourceKey, number>;
+export const PARSER_VERSION_SCOPES = {
+  [ADAPTER_KEYS.AT_ASYLGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_ASYLGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_BKS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BKS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_BVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BVWG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_COURTS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_FINDOK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_LVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_LVWG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_UBAS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UBAS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_UMSE]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UMSE], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_UVS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UVS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_VERG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VERG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_VFGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VFGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_VWGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VWGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Recompute the signing judge's name from the stored print page: a letter-spaced surname is now joined, and the name has no feature storage of its own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own. Roles are recomputed from the stored print page: the judge signs above the office's certification of the copy (Za správnost vyhotovení), which carries no role, and the bench recital that leads in the ruling is intro. Roles have no feature storage of their own. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. Roles are recomputed from stored raw: a bench recital printed before a takto: of its own line (Ústavní soud České republiky / v senátě rozhodl ve věci …) is intro, through the one shared Czech recital rule. Roles have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Read inline style declarations with CSS cascade semantics. Re-read reporter and matched registry fields from captured publisher responses; missing historical captures require a re-crawl. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own. A separate-opinion heading that ends on the docket it names opens that opinion, whose paragraph numbers are its own; a bare name under the closing signs. Roles are recomputed from the stored page: a name printed with its academic degrees under the closing signs the decision beside the office it is signed under. Roles have no feature storage of their own. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own. Recompute publisher field occurrences, table tuples and references from every held detail page; document-only legacy raw retains its existing metadata."} },
+
+  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Recompute the instructions from stored raw so the court's own Poučení label, alone or opening the first instruction, is printed once under the synthesized heading; AST blocks have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own. Spell the docket's registry as the row's own ECLI spells it (14 Co, not 14 CO) for the stored docket and the listing identity alike; the case number has no separate feature storage. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. A line break typed inside a paragraph, which the structured entries split and the plain text marks with a carriage return, is read as a space; paragraph text and boundaries are recomputed from stored raw and have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_UOHS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Re-read the body and footnotes from stored PDF bytes through the shared PDF band reader: running headers, barcodes and page numbers leave the body by their shape, footnotes are read off each page's foot with their raised references as linked superscripts, and printed lines join into paragraphs across page breaks; the AST has no separate feature storage. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-derive the file number with its year from the export record (older rows state only the serial), the issue date from the reference-number letterhead line, and the decision type from the printed title, typing its absence when none is printed; the identifiers and the case number have no separate feature storage. Roles are recomputed from stored PDF bytes through the shared Czech grammar of an authority's decision: the head matter up to the lead-in (rozhodl takto:, ROZHODNUTÍ:) is intro, the operative part after it is holding, the reasons from their heading carry no ruling role, the document barcode is apparatus and the head of the Office signs under its office; the title, the reasons and instruction headings and the reasons' Roman section titles are headings. Roles and headings have no feature storage of their own. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. the plenary ruling roles, the formula lines, the takto lead-in and the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Ruling roles also open after an SbNU nález caption and end at the signatures, the closing line and the instruction; they have no feature storage of their own. A bare signatory name directly under a closing or another signature line, the way the Court's judges sign a separate opinion, is a signature; signature roles are recomputed from the stored page and have no feature storage of their own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. In a typewriter-wrapped decision a list item no longer opens after a word its number belongs to, and a line set deeper than the one above goes on in its paragraph where the sentence runs into it; paragraph text and boundaries are recomputed from stored raw and have no feature storage of their own. Roles are recomputed from stored raw: a bench recital printed before a takto: of its own line (Ústavní soud České republiky / v senátě rozhodl ve věci …) is intro, through the one shared Czech recital rule. Roles have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.EU_ECJ]: { version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ], scope: {"type":"all","reason":"The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs. Derive the case number from every case-law CELEX document form by its court letter, so a Civil Service Tribunal order (62013FO0060) reads F-60/13 instead of the raw CELEX; the case number has no separate feature storage. A bare number after a dash in the keyword chain closes a range inside the keyword before it instead of standing as a keyword of its own; keywords have no separate feature storage. Retain the publisher's excluded notice fields in the stored notice instead of naming them as exclusions. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-read stored CJEU documents: a title set over several lines (an opinion's author and delivery line, a judgment's chamber and date) is one decision-title heading, and each footnote-list entry is a footnote note keyed by its anchor; headings and notes have no separate feature storage. Read the converter's table of contents after the signatures (coj-NTOCn entries) as publisher notes instead of continuing the operative part; roles have no separate feature storage."} },
+
+  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST. Read the publisher citation restriction from retained raw records into decision metadata; null or absent restrictions remain absent. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-mark anonymisation placeholders from stored Hungarian documents: a placeholder's number and field word end the token, so amounts, years and longer words beside a party label stay text; inline anonymisation marks have no separate feature storage. Read the titles a court prints inside its reasons (short, capitalised, unnumbered lines with no closing punctuation under Indokolás that head the court's next numbered paragraph or the closing place and date, on a line of their own or before a soft break) as level-2 headings instead of argumentation paragraphs; after a paragraph without closing punctuation only a title set in bold qualifies. AST roles and the outline have no separate feature storage. Read a character an RTF writes in a double-byte font as one lead and trail byte (\"§\" in a Japanese font), a byte the code page leaves undefined as U+FFFD with a reader warning rather than a C1 control character, and the Latin-1 stand-ins \"õ\" and \"û\" as the Hungarian \"ő\" and \"ű\", in block and full text; characters have no separate feature storage."} },
+
+  [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions. Read a parliamentary answer's question (TRESC_INTERP_ZAPYT) before its text, and a newsletter's own text (TRESC_NEWS), into the document. Drop lines that only link back within the document, and join a footnote's line its sentence runs across."} },
+
+  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
+
+  [ADAPTER_KEYS.PL_NSA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA], scope: {"type":"all","reason":"Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_SN]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN], scope: {"type":"all","reason":"Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read inline style declarations with CSS cascade semantics. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. The operative branch's legal basis and recital, printed as unmarked units before its first point, are read as intro, and the titled reasons branch as argumentation, recomputed from the stored decision XML; roles have no feature storage of their own. Paragraph numbers are recomputed from stored raw: a number the court prints at the start of its reasons' paragraphs moves into the paragraph's number where the reasons read as one numbering, and the data-protection authority's paragraph unit placed straight in a chapter of its reasons gives its paragraph that unit's number; a numbered unit nested in another unit stays a list item. Paragraph numbers have no feature storage of their own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
+
+  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. Classify attached footnote regions before repeated furniture, using their measured line pitch and a page body-height fallback. These values have no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read `Ŝ`, which a common Polish font encoding prints for `ż`, as `ż` in body, note and ruling text; the letter has no feature storage of its own. Drop a running header or footer set in body type and the first page's letterhead footer by their shape from stored PDF text, and read a footnote reference raised right after a number when the foot of the page opens that note; these have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Paragraph roles are recomputed from stored raw through the shared Polish role grammar on letter-spacing-collapsed text: a bench's names or a signing label with its blank under the ruling sign it, and a letter-spaced reasons heading opens the reasons; roles have no feature storage of their own. A ruling opens at its first point or its operative verb, read through letter spacing; a line that only looks marked or a list the recital announces stays in the recital, recomputed from stored raw; roles have no feature storage of their own. A document titled by its own declared type keeps that title and its reasons heading as a section, a ruling sentence that opens on its legal basis is the holding, a point whose number runs on to its verb opens the ruling, the bench opens on either wording of its composition line, and the holding ends where the bench signs; recomputed from stored raw, roles have no feature storage of their own. A printed table of contents is apparatus, a block of marks alone (a lone dash or dot) carries no body role, and in the competition authority's PDFs a short line set wholly in bold between paragraphs of the reasons is a subheading; recomputed from stored raw, roles and headings have no feature storage of their own. Roles are recomputed from stored raw: a docket line printed again inside the decision (Sygn. akt. I C 155/19, or set as a heading by the layout) is case-number, not a ruling point or a section heading. Roles have no feature storage of their own. Roles are recomputed from stored raw: the instruction on the remedy against the decision (Na orzeczenie … przysługuje skarga, od niniejszej decyzji przysługuje odwołanie), where the remedy is filed, and every line under the instructions' heading (Pouczenie) carry no role; the heading is a section heading. Roles have no feature storage of their own. Roles are recomputed from stored raw: a head-matter line a layout sets as a heading (the decision's date, who sat on the bench) is intro, not a section heading. Roles have no feature storage of their own. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. Headings are recomputed from stored raw: in a competition authority's PDF a short line set wholly in bold heads its part of the reasons also when it is numbered in the outline (1. Status przedsiębiorcy) or numbers itself (Przykład nr 12), while a ruling point, a table row with amounts or currency and an abbreviation (a/a) stay paragraphs. Headings have no feature storage of their own. Roles are recomputed from stored raw: an authority's decision titled by its docket alone (DECYZJA RGD - 1/2026) has that title instead of a supplied one, and a numbered ruling point under the authority's numbered title opens the holding. Roles and headings have no feature storage of their own. Roles are recomputed from stored raw: a paragraph that opens on the recital and rules in its last clause (po przeprowadzeniu postępowania …, uznaje się, że …) is the recital, then the ruling, and the ruling's legal basis read before it is intro; the printed text is unchanged. Roles have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
+
+  [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Preserve PDF paragraph gaps, lettered items and the bounded first-page metadata table when rebuilding document text and block boundaries from captured PDF bytes. Rows without captured PDF bytes yield a metadata-only replay outcome and retain their applied parser version; populated historical rows require an explicit PDF capture refresh. Metadata-derived titles require extracted document blocks. Paragraph-gap thresholds derive from font metrics rather than the frequency of observed gaps. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Read words the court sets letter-spaced as words, keeping the wider gap between two of them as the word boundary; paragraph text has no separate feature storage. Paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving first-line and hanging indentation, line pitch and short final lines; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. The formula a court decides under (V MENE SLOVENSKEJ REPUBLIKY), set in the title's type, is read apart from the title as an opening paragraph from the stored PDF bytes; the AST has no separate feature storage. Every row of the portal's metadata box printed above the decision is front matter. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage. Multiline preamble titles and document-unique block anchors are rebuilt from stored markup, alongside paragraph text, paragraph numbers and anonymization markers before whitespace trimming, including unpainted non-breaking-space redaction runs and uneven letter-spaced chunks witnessed by intact words; none has feature storage of its own. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read files that set word gaps as no-break spaces at their text-layer seams: a plain space inside a word joins it, and one after a finished sentence before a numbered point restores the lost line break; paragraph AST has no separate feature storage. In files with plain word gaps too, the court's next numbered point or a part marker run onto a finished sentence opens its own line again, so ruling points and the reasoning are read apart; paragraph roles have no separate feature storage. A page that ends a part before a separate opinion opens a fresh page with the docket may be short, so the page numbers around it leave the text; paragraph text has no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Printed paragraph labels are read by one grammar: a label opens a paragraph except inside a date wrapped after its day or after a word its number belongs to, sub-paragraphs (`5.5.`) open their own and count as items beside the court's numbering, and positioned-line paragraphs are read by the one line-join owner; block text, boundaries and numbers are recomputed from stored raw and have no feature storage of their own. A paragraph whose last parenthesis a page break leaves open goes on onto the next page; paragraph boundaries are recomputed from stored raw and have no feature storage of their own. Court paragraph numbers are re-read from stored raw: a run that counts up by one from its start to within a closing line of the reasoning's end is numbered however much unnumbered text lies between its numbers, the lead-in before the first number is counted from the end of the operative part, and the one paragraph that opens the reasoning before a printed 2 is numbered 1; paragraph numbers have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Date a tribunal decision by its decision date, so a document named a decision is read rather than refused. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own."} },
+} as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;
+export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
+export type ImportSourceKey = (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];

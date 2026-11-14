@@ -2,15 +2,15 @@
  * The identity of what a finding actually says, used to decide whether a
  * re-run reached the same conclusion about the same text.
  *
- * A reviewer's decision is a judgment about evidence, not about a row, so it
- * survives a re-run exactly as far as the evidence does: same verdict over the
- * same quoted passages means the decision still applies, anything else means
- * the reviewer has to look again.
+ * A reviewer's decision is a judgment about evidence, not about a row, so a new
+ * verdict or different quoted passages mean the reviewer has to look again. The
+ * same verdict over the same passages is necessary but not sufficient:
+ * `decision-carry-over.ts` also requires the position's rules to be unchanged.
  *
  * What the fingerprint covers, and why only this:
  *
  *  - the stored outcome — a changed verdict is by definition a new judgment;
- *  - the extracted value and the text it was read from;
+ *  - the text the extracted value was read from;
  *  - the literal excerpts of every verified citation, on the document's side
  *    and on the standard's, per cited document.
  *
@@ -23,6 +23,9 @@
  *  - model prose (rationale, explanation, recommendation, fix) and the delta's
  *    typing. Two runs phrase the same conclusion differently; treating that as
  *    new evidence would make carry-over almost never fire.
+ *  - the extracted value itself. For a tier match it is a summary in the
+ *    model's words, and its text holds the cited passages instead. For every
+ *    other answer the text is rendered from the value, so it already covers it.
  *
  * Excerpts are whitespace-normalized before comparison: re-extraction can
  * differ in wrapping without differing in content.
@@ -57,7 +60,6 @@ const citationExcerpts = (
 /** The evidence a finding rests on: what the document said, and what it was
  *  measured against. */
 type FindingEvidence = {
-  extractedValue: string | null;
   extractedText: string | null;
   citations: readonly string[];
   standardCitations: readonly {
@@ -72,8 +74,6 @@ const findingEvidence = (
   const { finding } = payload;
   const extracted = finding.extracted;
   return {
-    extractedValue:
-      extracted === null ? null : normalizeExcerpt(extracted.value),
     extractedText: extracted === null ? null : normalizeExcerpt(extracted.text),
     citations: citationExcerpts(finding.citations),
     // Evidence from a different reference document is different evidence, so

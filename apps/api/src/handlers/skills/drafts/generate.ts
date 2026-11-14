@@ -27,7 +27,9 @@ const FEEDBACK_MAX_CHARS = 2000;
 const PREVIOUS_DRAFT_MAX_CHARS = LIMITS.agentSkillBodyMaxChars;
 const PREVIOUS_RESOURCES_MAX = 24;
 const PREVIOUS_RESOURCE_PATH_MAX = 256;
-const PREVIOUS_RESOURCE_CONTENT_MAX = LIMITS.agentSkillResourceMaxChars;
+// Resources pass through the model whole: previous ones in the prompt,
+// generated ones in its answer.
+const RESOURCE_CONTENT_MAX = LIMITS.agentSkillResourceModelContextMaxChars;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
 const AI_RESOURCES_MAX = 8;
@@ -41,7 +43,7 @@ const previousResourceSchema = v.object({
     v.minLength(1),
     v.maxLength(PREVIOUS_RESOURCE_PATH_MAX),
   ),
-  content: v.pipe(v.string(), v.maxLength(PREVIOUS_RESOURCE_CONTENT_MAX)),
+  content: v.pipe(v.string(), v.maxLength(RESOURCE_CONTENT_MAX)),
 });
 
 const generateDraftBodySchema = v.object({
@@ -132,7 +134,7 @@ const generateSkillDraft = createSafeRootHandler(
     user,
   }) {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     yield* requireTanStackAIAvailableForTask({
@@ -231,10 +233,7 @@ const sanitizeResources = (
       continue;
     }
     const content = item.content;
-    if (
-      content.length === 0 ||
-      content.length > PREVIOUS_RESOURCE_CONTENT_MAX
-    ) {
+    if (content.length === 0 || content.length > RESOURCE_CONTENT_MAX) {
       continue;
     }
     seen.add(path);

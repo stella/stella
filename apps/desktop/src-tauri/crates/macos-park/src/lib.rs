@@ -13,7 +13,7 @@ mod focused_window;
 #[cfg(target_os = "macos")]
 pub use focused_window::{
   FocusedWindowDetails, accessibility_trusted, focused_window_details,
-  request_accessibility_permission,
+  request_accessibility_permission, text_before_cursor,
 };
 
 #[cfg(target_os = "macos")]
@@ -30,14 +30,42 @@ pub use microphone::microphone_input_bundle_ids;
 mod system_permissions;
 #[cfg(target_os = "macos")]
 pub use system_permissions::{
-  LoginItemApproval, NotificationAuthorization, login_item_approval,
-  notification_authorization, request_notification_authorization,
+  LoginItemApproval, MicrophoneAuthorization, NotificationAuthorization,
+  login_item_approval, microphone_authorization, notification_authorization,
+  request_microphone_permission, request_notification_authorization,
 };
+
+#[cfg(target_os = "macos")]
+mod text_input;
+#[cfg(target_os = "macos")]
+pub use text_input::{FormattingKey, TypeTextError, press_key, type_text};
+
+#[cfg(target_os = "macos")]
+mod user_languages;
+#[cfg(target_os = "macos")]
+pub use user_languages::{keyboard_languages, preferred_languages};
+
+#[cfg(target_os = "macos")]
+mod work_priority;
+#[cfg(target_os = "macos")]
+pub use work_priority::prefer_user_initiated;
+
+#[cfg(target_os = "windows")]
+mod windows_languages;
+#[cfg(target_os = "windows")]
+pub use windows_languages::{keyboard_languages, preferred_languages};
 
 #[cfg(target_os = "macos")]
 mod window_bounds;
 #[cfg(target_os = "macos")]
-pub use window_bounds::{WindowBounds, largest_window_bounds};
+pub use window_bounds::{WindowBounds, frontmost_window_number, largest_window_bounds};
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod process_identity;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub use process_identity::parent_process_id;
+#[cfg(target_os = "windows")]
+pub use process_identity::{create_owner_only_pipe, named_pipe_client_process_id};
 
 #[cfg(target_os = "windows")]
 mod windows_window;

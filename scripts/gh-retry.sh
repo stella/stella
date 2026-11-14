@@ -4,6 +4,10 @@ set -euo pipefail
 # GitHub response traces stay in a private directory: they contain credentials
 # and payloads. Only HTTP status/retry metadata may leave that directory.
 # bash 3.2 is required by macOS and Windows release runners.
+#
+# When GH_RETRY_STATUS_FILE is set, a failed command writes that metadata to it
+# as "<HTTP status, 0 without a response> <Retry-After seconds or -1>", so a
+# caller can reconcile a write that is not safe to repeat blindly.
 
 if (($# == 0)); then
   echo 'usage: gh-retry.sh <gh subcommand> [args...]' >&2
@@ -46,6 +50,9 @@ cleanup() {
   trap - EXIT
   stop_owned_jobs
   rm -rf "$scratch"
+}
+report_status() {
+  [[ -z "${GH_RETRY_STATUS_FILE:-}" ]] || printf '%s %s\n' "$1" "$2" > "$GH_RETRY_STATUS_FILE"
 }
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT
@@ -207,6 +214,7 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   fi
   if [[ -e "$scratch/deadline" ]]; then
     echo "GitHub retry budget exhausted on attempt $attempt/4" >&2
+    report_status 0 -1
     exit 124
   fi
   if ((status == 0)); then
@@ -292,13 +300,34 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   fi
   failure="HTTP $http"
   transient=false
+  forward_output=false
   if ((permanent == 0 && (http >= 500 && http <= 599 || http == 429 || http == 403 && retry_after >= 0))); then
     transient=true
   elif ((http >= 200 && http <= 299)); then
     if [[ "$response_retryable" == true ]]; then
-      # gh can fail while decoding a successful response, including a later
-      # page of a paginated read. Repeating a read cannot duplicate a write.
-      transient=true
+      # Classify the response that made gh fail, not stdout from earlier pages.
+      # Typed GraphQL errors are definitive refusals and reach the caller;
+      # decoding failures and other incomplete diagnostics remain retryable.
+      if awk '
+        { body = body $0 "\n" }
+        END {
+          if (body ~ /"errors"[[:space:]]*:/ &&
+              (body ~ /"type"[[:space:]]*:/ ||
+               body ~ /"extensions"[[:space:]]*:[[:space:]]*\{[^}]*"code"[[:space:]]*:/)) exit 1
+          compact = body
+          gsub(/[[:space:]]/, "", compact)
+          if (compact == "" || compact !~ /^(\{.*\}|\[.*\])$/) exit 0
+          lower = tolower(body)
+          transient = lower ~ /(internal server error|service unavailable|bad gateway|gateway timeout|timed out|timeout|couldn.t respond to your request in time|something went wrong while executing your query)/
+          exit !transient
+        }
+      ' "$scratch/trace"; then
+        # gh can fail while decoding a successful response, including a later
+        # page of a paginated read. Repeating a read cannot duplicate a write.
+        transient=true
+      else
+        forward_output=true
+      fi
     else
       failure="HTTP $http (operation is not safe to retry)"
     fi
@@ -321,12 +350,15 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
   if [[ "$retryable" != true || "$transient" != true ]] || ((attempt == 4)); then
     # Traces are never forwarded: URLs, request bodies and even native error
     # messages can contain credentials. Exit codes and status remain observable.
+    [[ "$forward_output" != true ]] || cat "$scratch/output"
+    report_status "$http" "$retry_after"
     exit "$status"
   fi
   delay=$((2 ** (attempt - 1) + RANDOM % 3))
   ((retry_after <= delay)) || delay=$retry_after
   if ((SECONDS - started + delay >= 60)); then
     echo 'GitHub retry budget exhausted' >&2
+    report_status "$http" "$retry_after"
     exit "$status"
   fi
   echo "Retrying GitHub $failure after attempt $attempt/4 in ${delay}s" >&2

@@ -12,9 +12,18 @@ import {
   measureWebHandoff,
 } from "@/api/tests/read-scaling/handoff";
 
+import { measureCourtCatalogTool } from "./case-law-courts";
+import { measureCreateOrganizationTool } from "./organization-create";
+import { measureReadGuidanceTool, measureSearchGuidanceTool } from "./soft-law";
+
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
 export const mcpScalingScenarios = [
+  {
+    name: "create_organization" satisfies McpToolName,
+    kind: "account-create" as const,
+    measure: measureCreateOrganizationTool,
+  },
   {
     name: "list_documents" satisfies McpToolName,
     kind: "database-page" as const,
@@ -53,6 +62,21 @@ export const mcpScalingScenarios = [
           rows: response.payload["documents"].length,
         };
       }),
+  },
+  {
+    name: "search_guidance" satisfies McpToolName,
+    kind: "database-page" as const,
+    measure: measureSearchGuidanceTool,
+  },
+  {
+    name: "read_guidance" satisfies McpToolName,
+    kind: "database-read" as const,
+    measure: measureReadGuidanceTool,
+  },
+  {
+    name: "list_case_law_courts" satisfies McpToolName,
+    kind: "database-page" as const,
+    measure: measureCourtCatalogTool,
   },
   {
     name: "mint_web_handoff" satisfies McpToolName,

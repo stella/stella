@@ -3,12 +3,40 @@ import { describe, expect, test } from "bun:test";
 import {
   AI_FAILURE_CODES,
   API_VALIDATION_ERROR_CODE,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import messages from "@/i18n/langs/en.json";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 
-import { isDisplayableAPIError, toAPIError } from "./api";
+import {
+  isDisplayableAPIError,
+  isPreviewUnavailableError,
+  toAPIError,
+} from "./api";
+
+describe("files with no preview", () => {
+  test("the wire code reads back as that state, with its own message", () => {
+    const error = toAPIError({
+      status: 400,
+      value: {
+        code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+        message: "Server wording",
+      },
+    });
+
+    expect(isPreviewUnavailableError(error)).toBe(true);
+    expect(error.message).toBe(messages.search.previewUnavailable);
+  });
+
+  test("any other refusal does not", () => {
+    expect(
+      isPreviewUnavailableError(toAPIError({ status: 400, value: "Bad" })),
+    ).toBe(false);
+    expect(isPreviewUnavailableError(new TypeError("Bad"))).toBe(false);
+  });
+});
 
 describe("AI API failures", () => {
   test.each(Object.values(AI_FAILURE_CODES))(
@@ -82,6 +110,29 @@ describe("server errors outside AI", () => {
   });
 });
 
+describe("transport failures", () => {
+  test.each([
+    ["network", messages.common.networkError],
+    ["timeout", messages.transportErrors.timeout],
+  ] as const)("localizes %s failures", (kind, expectedMessage) => {
+    const error = toAPIError({ status: 0, value: null, kind });
+
+    expect(error.message).toBe(expectedMessage);
+  });
+
+  test("keeps an aborted request distinct from a network failure", () => {
+    const error = toAPIError({
+      status: 0,
+      value: null,
+      kind: "aborted",
+      cause: new DOMException("Cancelled", "AbortError"),
+    });
+
+    expect(error.transportKind).toBe("aborted");
+    expect(error.message).not.toBe(messages.common.networkError);
+  });
+});
+
 describe("validation API failures", () => {
   test.each([
     [302, messages.errors.api.unknown],
@@ -100,5 +151,84 @@ describe("validation API failures", () => {
     expect(error.message).toBe(
       expectedMessage.replace("{limit, number}", "256"),
     );
+  });
+});
+
+describe("a refusal of who is asking", () => {
+  test.each([
+    {
+      name: "an expired session",
+      status: 401,
+      code: "permission_denied",
+      shown: messages.errors.api.unauthorized,
+    },
+    {
+      name: "a role that does not allow the action",
+      status: 403,
+      code: "permission_denied",
+      shown: messages.errors.api.forbidden,
+    },
+    {
+      name: "a session the auth server refused",
+      status: 401,
+      code: "UNAUTHORIZED",
+      shown: messages.errors.api.unauthorized,
+    },
+    {
+      name: "a bare 401",
+      status: 401,
+      code: undefined,
+      shown: messages.errors.api.unauthorized,
+    },
+  ])("$name shows the status message", ({ status, code, shown }) => {
+    const value = { code, message: "Raw refusal" };
+
+    expect(userErrorMessage({ status, value }, "Generic fallback")).toBe(shown);
+  });
+
+  test("401 and 403 never read the same", () => {
+    expect(messages.errors.api.unauthorized).not.toBe(
+      messages.errors.api.forbidden,
+    );
+  });
+
+  test.each([
+    { status: 401, code: "INVALID_EMAIL_OR_PASSWORD" },
+    { status: 403, code: "EMAIL_NOT_VERIFIED" },
+    { status: 400, code: "permission_denied" },
+  ])("$code on $status keeps the caller's wording", ({ status, code }) => {
+    const value = { code, message: "Raw refusal" };
+
+    expect(userErrorMessage({ status, value }, "Generic fallback")).toBe(
+      "Generic fallback",
+    );
+  });
+});
+
+describe("organization run caps", () => {
+  test("a refusal reads the same wherever it surfaces, whichever feature's run was refused", () => {
+    const expected = {
+      [MODEL_RUN_CAP_CODES.active]:
+        messages.errors.apiCodes.runActiveLimitReached,
+      [MODEL_RUN_CAP_CODES.daily]:
+        messages.errors.apiCodes.runDailyLimitReached,
+    };
+    for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
+      // The server names its own runs; the surface says what to do next.
+      for (const serverMessage of [
+        "This organization has reached its daily limit of document reviews.",
+        "This organization has reached its limit of list AI runs in progress (verifications and fact extractions).",
+      ]) {
+        const response = {
+          status: 429,
+          value: { code, message: serverMessage, retryable: true },
+        };
+        // The document review panel's message and the toast AVT raises.
+        expect(userErrorMessage(response, "Generic failure")).toBe(
+          expected[code],
+        );
+        expect(toAPIError(response).message).toBe(expected[code]);
+      }
+    }
   });
 });

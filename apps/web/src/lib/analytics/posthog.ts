@@ -12,6 +12,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
@@ -42,6 +43,11 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
+import { APIError, isCancellation, isTypedCodeRefusal } from "@/lib/errors/api";
+import {
+  isNativeFetchFailure,
+  isNativeFetchTimeout,
+} from "@/lib/errors/native-fetch-failure";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -148,10 +154,12 @@ const CANCELLED_REQUEST_CLASS = "AbortError";
 // Errors whose type names an expected outcome, handled where it happens: no
 // desktop app running, a public-law source down, a signed-out session, a
 // model provider's failure the chat shows with its setup guidance (the API
-// reports the provider failures it does not classify itself).
+// reports the provider failures it does not classify itself), a coding agent
+// on the member's computer at its usage limit.
 const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
   "AuthClientError",
   "DesktopBridgeUnavailableError",
+  "LocalRunLimitError",
   "ProviderDiagnosticError",
   "PublicLawUnavailableError",
 ]);
@@ -169,18 +177,29 @@ const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
 
 // API answers the UI already turns into a state (sign in, no access, not
 // found, a rejected provider key or continuation, a provider key that needs
-// more setup, a file the upload scan refused). Other 4xx and every 5xx stay
+// more setup, a file the upload scan refused, a turn for the member's
+// computer that its runner cannot take now). Other 4xx and every 5xx stay
 // reported.
 const API_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ApiError",
   "StreamReadError",
 ]);
+// The member's computer answers for these as it is at send time: the composer
+// keeps a turn on the computer and names its state rather than moving it.
+const LOCAL_RUN_STATE_REFUSAL_CODES = [
+  CHAT_LOCAL_RUN_REFUSAL.noComputer,
+  CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable,
+  CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
+  CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
+  CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
+] as const;
 const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
   ...Object.values(PROVIDER_SETUP_ERROR_CODE),
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  ...LOCAL_RUN_STATE_REFUSAL_CODES,
 ]);
 
 const hasExtensionFrame = (entry: unknown): boolean => {
@@ -388,6 +407,11 @@ const sanitizeExceptionEntry = (
   };
 };
 
+// The same finite dimensions the fingerprint carries, kept readable so an
+// issue's events can be filtered by them.
+const exceptionFieldsProperty = (fields: Record<string, string>) =>
+  Object.keys(fields).length === 0 ? undefined : { exception_fields: fields };
+
 type RouteTemplateHistory = Map<string, string>;
 
 type TemplateUrl = { url: string; pathname: string };
@@ -496,6 +520,7 @@ export const sanitizeExceptionEvent = (
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
+      ...exceptionFieldsProperty(fields),
       ...(properties["exception_identity_status"] === "read_failed"
         ? { exception_identity_status: "read_failed" }
         : {}),
@@ -798,10 +823,43 @@ const registerBuildProperties = () => {
   });
 };
 
+// Clients outside the API client (the auth client) reject with the native
+// fetch error or deadline reason. It must be classified here, before redaction
+// blanks the message that tells it apart from a TypeError of ours.
+const transportFailureKind = (error: unknown): APIError["transportKind"] => {
+  if (APIError.is(error)) {
+    return error.transportKind;
+  }
+  if (isNativeFetchFailure(error)) {
+    return "network";
+  }
+  return isNativeFetchTimeout(error) ? "timeout" : undefined;
+};
+
 const captureError: Analytics["captureError"] = (
   error,
   { fingerprintKey, scope, context },
 ) => {
+  // Transport failures have no HTTP response and describe client connectivity,
+  // not an application exception. Keep the fixed query owner and kind only:
+  // neither a resolved URL nor request/user content belongs in this signal.
+  const transportKind = transportFailureKind(error);
+  if (transportKind !== undefined) {
+    posthog.capture(WEB_ANALYTICS_EVENTS.clientTransient, {
+      query_owner: fingerprintKey,
+      transport_kind: transportKind,
+    });
+    return;
+  }
+  // A cancelled request is expected control flow, not an operational failure.
+  if (isCancellation(error)) {
+    return;
+  }
+  // A mistyped or expired code is the form's to answer, wherever it is captured:
+  // the status and code the tracker keeps cannot tell this 400 from a defect.
+  if (isTypedCodeRefusal(error)) {
+    return;
+  }
   // Cheap guards before the SDK call: a stray `captureError(null)`
   // or `captureError(undefined)` would otherwise reach PostHog as
   // `Error: "undefined"` noise that the `before_send` filter then
@@ -948,7 +1006,7 @@ export const createPostHogAnalytics = ({
       if (import.meta.env.DEV && !localDebugEnabled) {
         return null;
       }
-      if (!event || !isWebAnalyticsEvent(event.event)) {
+      if (!isWebAnalyticsEvent(event.event)) {
         return null;
       }
       switch (event.event) {
@@ -984,6 +1042,7 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.followupShown:
         case WEB_ANALYTICS_EVENTS.followupSelected:
         case WEB_ANALYTICS_EVENTS.keyActionTimed:
+        case WEB_ANALYTICS_EVENTS.clientTransient:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;

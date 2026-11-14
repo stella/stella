@@ -1,46 +1,15 @@
 {
-  "accessOff": {
-    "message": "Piekļuve vietnēm ir izslēgta. Piešķiriet to vienreiz, lai stella varētu izmantot vietnes, kurās esat pieteicies."
-  },
-  "accessReady": {
-    "message": "Gatavs. stella var izmantot atsevišķu cilni, kamēr jūsu pieteikšanās paliek aktīva."
-  },
   "accessUpdateFailed": {
     "message": "Chrome neizdevās mainīt piekļuvi vietnēm."
-  },
-  "adoptTab": {
-    "message": "Izmantot šo cilni ar stella"
   },
   "adoptUnsupported": {
     "message": "Ar stella var izmantot tikai publiskas HTTPS lapas."
   },
-  "adoptedTab": {
-    "message": "stella tagad var lasīt $ORIGIN$ šajā cilnē. Jautājiet par to tērzēšanā.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Pārbauda piekļuvi vietnēm…"
-  },
-  "connectTab": {
-    "message": "Savienot pašreizējo stella cilni"
-  },
-  "controllerReady": {
-    "message": "Savienots ar $ORIGIN$. Katra darbība joprojām jāapstiprina stellā.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Atvienot cilni"
+  "usingTabs": {
+    "message": "Izmanto:"
   },
   "downloadKept": {
-    "message": "Lejupielādes, kas pabeidzās, kamēr stella vadīja cilni, un tika saglabātas: $COUNT$. Pirms atvēršanas pārbaudiet, no kurienes tās ir.",
+    "message": "Saglabātās lejupielādes: $COUNT$, pirms atvēršanas pārbaudiet",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -48,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Lejupielādes, ko stella apturēja, vadot cilni: $COUNT$.",
+    "message": "Apturētās lejupielādes: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -56,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Kamēr stella vadīja cilni: apturētās lejupielādes: $STOPPED$. Pabeigtās un saglabātās lejupielādes (pirms atvēršanas pārbaudiet, no kurienes tās ir): $KEPT$.",
+    "message": "Apturētās lejupielādes: $STOPPED$ · saglabātās: $KEPT$, pirms atvēršanas pārbaudiet",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -72,13 +41,61 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Atļaut visas vietnes"
-  },
-  "revokeAccess": {
-    "message": "Noņemt piekļuvi vietnēm"
-  },
   "unsupportedTab": {
     "message": "Atveriet stella lietotnes cilni un mēģiniet vēlreiz."
+  },
+  "connectionPurpose": {
+    "message": "Atver un lasa vietnes tērzēšanai, izmantojot jūsu pieteikšanās sesijas."
+  },
+  "statusConnected": {
+    "message": "Savienots"
+  },
+  "statusNotConnected": {
+    "message": "Nav savienots"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Nepieciešama piekļuve vietnēm"
+  },
+  "statusOpenStella": {
+    "message": "Lai savienotu, atveriet stella"
+  },
+  "allowAndConnect": {
+    "message": "Atļaut piekļuvi un savienot"
+  },
+  "allowWebsiteAccess": {
+    "message": "Atļaut piekļuvi vietnēm"
+  },
+  "connectStella": {
+    "message": "Savienot stella"
+  },
+  "adoptTab": {
+    "message": "Izmantot šo cilni ar stella"
+  },
+  "disconnectTab": {
+    "message": "Atvienot"
+  },
+  "revokeAccess": {
+    "message": "Noņemt piekļuvi"
+  },
+  "checkingAccess": {
+    "message": "Pārbauda savienojumu…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Savienots citur"
+  },
+  "connectStellaInstead": {
+    "message": "Tā vietā savienot stella šeit"
+  },
+  "allowDesktop": {
+    "message": "Lietot ar stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop savienots"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop nedarbojas"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Atjauniniet stella desktop un šo paplašinājumu"
   }
 }

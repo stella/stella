@@ -51,7 +51,7 @@ describe("decision language identity", () => {
         decisionLanguageIdentityOf(country) ===
         DECISION_LANGUAGE_IDENTITY.ECLI_OR_DOCKET,
     );
-    // Every declared jurisdiction but the one keyed by document, and an
+    // Every declared jurisdiction but those keyed by document, and an
     // undeclared stored code.
     expect(docketJurisdictions).toEqual([
       "AUT",
@@ -102,17 +102,17 @@ describe("decision language identity", () => {
       documentAst: {},
     });
     expect(
-      sanitizeResult({ ...decision, sourceDocumentId: "cluster-1" })
+      sanitizeResult({ ...decision, sourceDocumentId: "cluster-1" }).unwrap()
         .sourceDocumentId,
     ).toBe("cluster-1");
-    const error = refusal(() => sanitizeResult(decision));
+    const error = refusal(() => sanitizeResult(decision).unwrap());
     expect(error).toBeInstanceOf(UnpersistableDecisionFieldError);
     expect(error).toMatchObject({
       field: UNPERSISTABLE_DECISION_FIELDS.SOURCE_DOCUMENT_ID,
     });
     // A docket-keyed jurisdiction still takes a result without one.
     expect(
-      sanitizeResult({ ...decision, country: "CZE" }).sourceDocumentId,
+      sanitizeResult({ ...decision, country: "CZE" }).unwrap().sourceDocumentId,
     ).toBeUndefined();
   });
 });

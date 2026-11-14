@@ -1,14 +1,24 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import * as cheerio from "cheerio";
 
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
+import {
+  hasInlineChildren,
+  headMatterPrecedesBody,
+} from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent as uncheckedParsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -36,6 +46,9 @@ const baseInput = (
 const findByRole = (blocks: Block[], role: string) =>
   blocks.find((block) => "role" in block && block.role === role);
 
+const roleOfBlock = (block: Block) =>
+  "role" in block ? block.role : undefined;
+
 const flattenInlineText = (inlines: Inline[]): string =>
   inlines
     .map((inline) => {
@@ -54,6 +67,328 @@ const flattenInlineText = (inlines: Inline[]): string =>
     .join("");
 
 describe("parsePlDecisionContent", () => {
+  test.each([
+    [
+      "Sąd Apelacyjny w Szczecinie III Wydział Pracy i Ubezpieczeń Społecznych w osobie sędziego SA Urszuli Iwanowskiej, po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block">A. N.</span>',
+    ],
+    [
+      "po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block"> (...) DRUKARNIA spółki z ograniczoną odpowiedzialnością</span> w <span class="anon-block">S.</span>',
+    ],
+  ])(
+    "a common-court opening recital stays whole across its printed lines",
+    (opening, continuation) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>${opening}</p><p>${continuation}</p>`, {
+          markup: PL_DECISION_MARKUP.COMMON_COURT,
+        }),
+      );
+      const recital = documentAst.blocks.find((block) =>
+        block.plainText.startsWith(opening),
+      );
+      expect(recital?.plainText).toBe(
+        `${opening} ${load(continuation).text()}`.replace(/\s+/gu, " "),
+      );
+      expect(
+        documentAst.blocks.some((block) =>
+          block.plainText.startsWith("sprawy z odwołania"),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test("keeps a Polish court's printed order and assigns roles from its text", () => {
+    const content = `
+      <p><strong>II CSKP 1456/22</strong></p>
+      <p><strong>WYROK</strong></p>
+      <p><strong>W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ</strong></p>
+      <p>9 maja 2024 r. Sąd Najwyższy w Izbie Cywilnej w składzie:</p>
+      <p><strong>SSN Dariusz Dończyk (przewodniczący)</strong></p>
+      <p><strong>SSN Marta Romańska (sprawozdawca)</strong></p>
+      <p><strong>SSN Monika Koba</strong></p>
+      <p><strong>po rozpoznaniu skargi kasacyjnej.</strong></p>
+      <p><strong>1) oddala skargę kasacyjną;</strong></p>
+      <p>A.W.</p>
+      <p>[ms]</p>
+      <p>Monika Koba Dariusz Dończyk Marta Romańska [SOP]</p>
+    `;
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(content, { caseNumber: "II CSKP 1456/22" }),
+    );
+    const blocks = documentAst.blocks;
+
+    expect(
+      blocks.slice(0, 8).map((block) => [block.plainText, roleOfBlock(block)]),
+    ).toEqual([
+      ["II CSKP 1456/22", "case-number"],
+      ["WYROK", "decision-title"],
+      ["W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ", "intro"],
+      ["9 maja 2024 r. Sąd Najwyższy w Izbie Cywilnej w składzie:", "intro"],
+      ["SSN Dariusz Dończyk (przewodniczący)", "panel"],
+      ["SSN Marta Romańska (sprawozdawca)", "panel"],
+      ["SSN Monika Koba", "panel"],
+      ["po rozpoznaniu skargi kasacyjnej.", "intro"],
+    ]);
+    expect(blocks.at(8)).toMatchObject({ role: "holding" });
+    expect(blocks.slice(9).map(roleOfBlock)).toEqual([
+      "publisher-note",
+      "publisher-note",
+      "signature",
+    ]);
+  });
+
+  test.each(["", "<p>UZASADNIENIE</p><p>Treść uzasadnienia.</p>"])(
+    "uses an inferred decision title only when the source has none: %s",
+    (reasons) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(
+          `<p>II CSKP 1456/22</p><p>W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ</p>${reasons}`,
+          { caseNumber: "II CSKP 1456/22" },
+        ),
+      );
+
+      expect(
+        documentAst.blocks
+          .slice(0, 3)
+          .map((block) => [block.plainText, roleOfBlock(block)]),
+      ).toEqual([
+        ["WYROK", "decision-title"],
+        ["II CSKP 1456/22", "case-number"],
+        ["W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ", "intro"],
+      ]);
+    },
+  );
+
+  test.each([
+    "oddala powództwo",
+    "uchylić zaskarżony wyrok",
+    "odmawia przyjęcia skargi kasacyjnej",
+  ])("uses generated operative forms for unnumbered clauses: %s", (text) => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(`<p>${text}</p>`, { decisionType: undefined }),
+    );
+    expect(documentAst.blocks.at(0)).toMatchObject({ role: "holding" });
+  });
+
+  test("numbered infinitive rulings follow a decision title independently of the verb lexicon", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>POSTANOWIENIE</p><p>1. uchylić zaskarżone postanowienie.</p><p>2. zasądzić koszty.</p>",
+        { decisionType: "postanowienie" },
+      ),
+    );
+    expect(
+      documentAst.blocks.map((block) => [block.plainText, roleOfBlock(block)]),
+    ).toEqual([
+      ["POSTANOWIENIE", "decision-title"],
+      ["1. uchylić zaskarżone postanowienie.", "holding"],
+      ["2. zasądzić koszty.", "holding"],
+    ]);
+  });
+
+  test.each([
+    {
+      name: "finite numbered points",
+      items: "<p>1) oddala apelację.</p><p>2) zasądza koszty.</p>",
+    },
+    {
+      name: "lettered points outside the lexicon",
+      items:
+        "<p>a) zobowiązać pozwaną do zapłaty.</p><p>b) ustanowić kuratora.</p>",
+    },
+    {
+      name: "HTML counters outside the lexicon",
+      items:
+        "<ol><li>zobowiązać pozwaną do zapłaty.</li><li>ustanowić kuratora.</li></ol>",
+    },
+  ])("the recital opens $name before the reasons", ({ items }) => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        `<p>WYROK</p><p>po rozpoznaniu sprawy o zapłatę,</p>${items}<h2>UZASADNIENIE</h2><p>1. Ustalenia faktyczne.</p>`,
+      ),
+    );
+    expect(
+      documentAst.blocks.filter((block) => roleOfBlock(block) === "holding"),
+    ).toHaveLength(2);
+    expect(documentAst.blocks.at(1)).toMatchObject({ role: "intro" });
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "argumentation" });
+  });
+
+  test("plain-text numbered rulings use the same structural region", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "POSTANOWIENIE\n\npo rozpoznaniu sprawy,\n\n1. zobowiązać pozwaną do zapłaty.\n\n2. ustanowić kuratora.\n\nUZASADNIENIE\n\n1. Ustalenia faktyczne.",
+        { decisionType: "postanowienie" },
+      ),
+    );
+    expect(
+      documentAst.blocks.filter((block) => roleOfBlock(block) === "holding"),
+    ).toHaveLength(2);
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "argumentation" });
+  });
+
+  test("a numeric decision date after the title is opening matter", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>WYROK</p><p>09.05.2024 r.</p><p>po rozpoznaniu sprawy,</p><p>1. uchylić postanowienie.</p>",
+      ),
+    );
+    expect(documentAst.blocks.at(1)).toMatchObject({
+      role: "intro",
+      plainText: "09.05.2024 r.",
+    });
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "holding" });
+  });
+
+  test("numbered bench members remain panel before the operative part", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>POSTANOWIENIE</p><p>Sąd Najwyższy w składzie:</p><p>1. SSN Anna Nowak</p><p>po rozpoznaniu sprawy,</p><p>1. uchylić postanowienie.</p><p>Anna Nowak</p>",
+        { decisionType: "postanowienie" },
+      ),
+    );
+    expect(documentAst.blocks.at(2)).toMatchObject({ role: "panel" });
+    expect(documentAst.blocks.at(4)).toMatchObject({ role: "holding" });
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "signature" });
+  });
+
+  test("a quoted ruling marker in the reasons does not reopen the operative part", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>WYROK</p><p>oddala apelację.</p><h2>UZASADNIENIE</h2><p>postanawia:</p><p>1. uchylić wcześniejsze postanowienie.</p>",
+      ),
+    );
+    expect(documentAst.blocks.slice(-2).map(roleOfBlock)).toEqual([
+      "argumentation",
+      "argumentation",
+    ]);
+  });
+
+  test("does not classify a party's account of an operative verb as holding", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p>Powód twierdzi, że sąd oddala apelację.</p>", {
+        decisionType: undefined,
+      }),
+    );
+
+    expect(documentAst.blocks.at(0)).toMatchObject({ role: "intro" });
+  });
+
+  test.each(["postanowił", "uchwalił:"])(
+    "opens the holding section at a printed %s heading",
+    (heading) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>${heading}</p><p>1. oddalić skargę.</p>`, {
+          decisionType: undefined,
+        }),
+      );
+
+      expect(documentAst.blocks).toMatchObject([
+        { type: "heading", role: "section-heading", plainText: heading },
+        { type: "paragraph", role: "holding", plainText: "1. oddalić skargę." },
+      ]);
+    },
+  );
+
+  test.each(["SSN Anna Nowak", "Anna Nowak (ławnik Sądu Najwyższego)"])(
+    "recognizes an individual signature by an already read panel member: %s",
+    (member) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>${member}</p><p>Uzasadnienie</p><p>Anna Nowak</p>`, {
+          decisionType: undefined,
+        }),
+      );
+
+      expect(documentAst.blocks.at(-1)).toMatchObject({
+        plainText: "Anna Nowak",
+        role: "signature",
+      });
+    },
+  );
+
+  test.each(["[J.J.]", "[a.ł]", "[ms]"])(
+    "keeps a terminal clerk mark out of the operative part: %s",
+    (mark) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(
+          `<p>POSTANOWIENIE</p><p>1) oddala skargę.</p><p>${mark}</p>`,
+          {
+            decisionType: undefined,
+          },
+        ),
+      );
+      expect(documentAst.blocks.at(1)).toMatchObject({ role: "holding" });
+      expect(documentAst.blocks.at(-1)).toMatchObject({
+        role: "publisher-note",
+      });
+    },
+  );
+
+  test.each([
+    { mark: "[A]", after: "" },
+    { mark: "[J.J.]", after: "<p>Dalsze ustalenia.</p>" },
+  ])(
+    "retains a party marker or a nonterminal initials block in reasoning: $mark",
+    ({ mark, after }) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>UZASADNIENIE</p><p>${mark}</p>${after}`),
+      );
+      expect(
+        documentAst.blocks.find((block) => block.plainText === mark),
+      ).toMatchObject({
+        role: "argumentation",
+      });
+    },
+  );
+
+  test("preserves reasoning when the supplied decision type is uzasadnienie", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p>Treść uzasadnienia.</p>", {
+        decisionType: "uzasadnienie",
+      }),
+    );
+
+    expect(documentAst.blocks).toMatchObject([
+      { type: "heading", role: "decision-title", plainText: "UZASADNIENIE" },
+      {
+        type: "paragraph",
+        role: "argumentation",
+        plainText: "Treść uzasadnienia.",
+      },
+    ]);
+  });
+
+  test("reads UOKiK decision basis points in the supplied decision section", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        `<p>RGD.430.13.2022</p><p>DECYZJA NR RGD-16/2024</p><p>I. Na podstawie art. 106 ustawy...</p><p>― Prezes Urzędu ― nakłada karę.</p><p>II. Na podstawie art. 77 ustawy...</p><h2>UZASADNIENIE</h2><p>Ustalono okoliczności sprawy.</p>`,
+        { caseNumber: "RGD-16/2024", decisionType: "decyzja" },
+      ),
+    );
+
+    expect(documentAst.blocks.slice(0, 6).map(roleOfBlock)).toEqual([
+      "intro",
+      "decision-title",
+      "holding",
+      "holding",
+      "holding",
+      "section-heading",
+    ]);
+    expect(documentAst.blocks.at(1)?.plainText).toBe("DECYZJA NR RGD-16/2024");
+    expect(documentAst.blocks.at(-1)).toMatchObject({ role: "argumentation" });
+  });
+
+  test("classifies a court's `przyjmuje` operative clause as holding", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p>przyjmuje skargę kasacyjną do rozpoznania.</p>", {
+        decisionType: undefined,
+      }),
+    );
+
+    expect(documentAst.blocks.at(0)).toMatchObject({ role: "holding" });
+  });
+
   test.each(["x\n\nx\n\nx\n\nx", "x\r\n\r\nx\r\n\r\nx\r\n\r\nx"])(
     "rejects bounded plaintext %j before constructing paragraph strings",
     (content) => {
@@ -310,7 +645,7 @@ describe("markup whitespace", () => {
       const html = await gunzipText(name);
       // The capture reaches the fault: a paragraph whose markup puts a line
       // break or a run of spaces between two of its words.
-      const $ = cheerio.load(html);
+      const $ = load(html);
       expect(
         $("p")
           .toArray()
@@ -395,6 +730,25 @@ describe("markup whitespace", () => {
     });
   });
 
+  test("a printed blank line inside an inline element splits its formatting", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p><b>First<br> \n <br>Second</b></p>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "First",
+      "Second",
+    ]);
+    expect(
+      documentAst.blocks.map((block) =>
+        "inlines" in block ? block.inlines.at(0)?.type : undefined,
+      ),
+    ).toEqual(["bold", "bold"]);
+  });
+
   test("paragraphs inside one cell stay apart, a line each", () => {
     // Captured KIO markup: each paragraph ends in a space and the next
     // follows with nothing between them.
@@ -471,6 +825,15 @@ describe("ordered list items print the number a browser gives them", () => {
       ["1. Parent", "a. Child", "2. Next"],
     ],
     [
+      "<ol><li><div>Parent<ol><li>Child</li></ol></div></li></ol>",
+      ["1. Parent", "1. Child"],
+    ],
+    ["<ol><li><div><p></p></div>Actual text</li></ol>", ["1. Actual text"]],
+    [
+      "<ol><li><div><span>Parent<ol><li><div>Child<ol><li>Grandchild</li></ol></div></li></ol> tail</span></div></li></ol>",
+      ["1. Parent", "1. Child", "1. Grandchild", "tail"],
+    ],
+    [
       '<ol reversed><li>P<ol><li value="5">C1</li><li>C2</li></ol> tail</li><li>Q</li></ol>',
       ["2. P", "5. C1", "6. C2", "tail", "1. Q"],
     ],
@@ -484,6 +847,20 @@ describe("ordered list items print the number a browser gives them", () => {
     expect(itemsOf(html)).toEqual(expected);
   });
 
+  test("a numbered first paragraph keeps a printed blank line", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<ol><li><p>First<br> \n <br>Second</p></li></ol>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "1. First",
+      "Second",
+    ]);
+  });
+
   test("reading an item's runs around its blocks costs work linear in the item", () => {
     // Every inline walk lists an element's children once; the total listed
     // is the work. Copying the item per run made it quadratic.
@@ -493,7 +870,7 @@ describe("ordered list items print the number a browser gives them", () => {
       value !== null &&
       Object.hasOwn(value, "contents");
     // The prototype cheerio defines `contents` on, above each load's class.
-    let contentsOwner: unknown = cheerio.load("<p></p>").root();
+    let contentsOwner: unknown = load("<p></p>").root();
     while (contentsOwner !== null && !ownsContents(contentsOwner)) {
       contentsOwner = Object.getPrototypeOf(contentsOwner);
     }
@@ -526,6 +903,41 @@ describe("ordered list items print the number a browser gives them", () => {
     const large = listed(400);
     // Four times the runs: about four times the work, never sixteen.
     expect(large / small).toBeLessThan(5);
+  });
+
+  test("numbering sibling list items takes linear work", () => {
+    const attributeReads = (count: number) => {
+      let reads = 0;
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<ol>${"<li>Treść punktu</li>".repeat(count)}</ol>`, {
+          decisionType: undefined,
+          loadHtml: (html) => {
+            const $ = load(html);
+            $("li").each((_, element) => {
+              if (!isTag(element)) {
+                return;
+              }
+              const attributes = element.attribs;
+              Object.defineProperty(element, "attribs", {
+                get: () => {
+                  reads += 1;
+                  return attributes;
+                },
+              });
+            });
+            return $;
+          },
+        }),
+      );
+      expect(documentAst.blocks).toHaveLength(count);
+      expect(documentAst.blocks.at(-1)?.plainText).toBe(
+        `${count}. Treść punktu`,
+      );
+      return reads;
+    };
+    const small = attributeReads(100);
+    const large = attributeReads(1000);
+    expect(large).toBeLessThanOrEqual(small * 11);
   });
 
   test("the number does not decide the item's role", () => {
@@ -589,4 +1001,244 @@ test("retains nested table text only in its owning outer cell", () => {
   expect(fulltext.match(/Inner/gu)).toHaveLength(1);
   expect(fulltext).toContain("Header");
   expect(fulltext).toContain("Footer");
+});
+
+const parsedLinkHrefs = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => [
+    ...(inline.type === "link" ? [inline.href] : []),
+    ...(hasInlineChildren(inline) ? parsedLinkHrefs(inline.children) : []),
+  ]);
+
+const footnoteLinksOf = (content: string, footnoteIds?: readonly string[]) => {
+  const result = parsePlDecisionContent(baseInput(content, { footnoteIds }));
+  return result.documentAst.blocks.flatMap((block) =>
+    "inlines" in block ? parsedLinkHrefs(block.inlines) : [],
+  );
+};
+
+test("only exact footnotes from the current document extend the URL policy", async () => {
+  const html = await Bun.file(
+    new URL("__fixtures__/pl-footnote-fragments.html", import.meta.url),
+  ).text();
+  expect(footnoteLinksOf(html)).toEqual(["https://example.test/source"]);
+  expect(footnoteLinksOf(html, ["note"])).toEqual([
+    "#note",
+    "https://example.test/source",
+  ]);
+  expect(
+    footnoteLinksOf(
+      '<p>Other <a href="#note">source</a> <a href="#other-document-note">note</a></p>',
+      ["other-document-note"],
+    ),
+  ).toEqual(["#other-document-note"]);
+});
+
+describe("an authority's ruling points on their legal basis", () => {
+  // The layout of RGD-1/2026 (Prezes UOKiK, Gdańsk): the letterhead lines
+  // follow the title, and the ruling points open on their legal basis with
+  // no line naming the ruling's verb before them.
+  test("each point that rules on its basis is the holding, after any letterhead", () => {
+    const html = [
+      "<p>PREZES</p>",
+      "<p>URZĘDU OCHRONY KONKURENCJI I KONSUMENTÓW</p>",
+      "<p>Gdańsk, dnia 16 lutego 2026 r.</p>",
+      "<p>RGD-2.610.3.2026.AG</p>",
+      "<p>DECYZJA RGD - 1/2026</p>",
+      "<p>I. Na podstawie art. 27 ust. 1 i 2 ustawy o ochronie konkurencji i konsumentów uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p>",
+      "<p>II. Na podstawie art. 106 ust. 1 pkt 4 tej ustawy nakłada się na spółkę karę pieniężną.</p>",
+      "<p>UZASADNIENIE</p>",
+      "<p>[1] Prezes Urzędu wszczął postępowanie.</p>",
+    ].join("");
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+      }),
+    );
+    const roles = documentAst.blocks.flatMap((block) =>
+      block.type === "paragraph"
+        ? [`${block.role ?? "-"} ${block.plainText.slice(0, 20)}`]
+        : [],
+    );
+
+    expect(roles).toEqual([
+      "intro PREZES",
+      "intro URZĘDU OCHRONY KONKU",
+      "intro Gdańsk, dnia 16 lute",
+      "intro RGD-2.610.3.2026.AG",
+      "holding I. Na podstawie art.",
+      "holding II. Na podstawie art",
+      "argumentation [1] Prezes Urzędu ws",
+    ]);
+    // The docket the decision is printed under is its title, once.
+    expect(
+      documentAst.blocks.flatMap((block) =>
+        block.type === "heading" && block.role === "decision-title"
+          ? [block.plainText]
+          : [],
+      ),
+    ).toEqual(["DECYZJA RGD - 1/2026"]);
+  });
+});
+
+describe("navigation, subheadings and stray marks in an authority's PDF", () => {
+  // The layouts of DOZIK-5/2024 and RGD-1/2026 (Prezes UOKiK), as the PDF
+  // reader hands them on: a lone mark above the letterhead, a printed table
+  // of contents, and subheadings set as short bold lines.
+  const html = [
+    "<p>-</p>",
+    "<p>DECYZJA nr DOZIK-5/2024</p>",
+    "<p>I. Na podstawie art. 26 ust. 1 ustawy o ochronie konkurencji i konsumentów uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p>",
+    "<p>UZASADNIENIE</p>",
+    "<p>Prezes Urzędu ustalił następujący stan faktyczny .......................................... 9</p>",
+    "<p>1. Sprzedawca Amazon EU SARL ................................................ 9</p>",
+    "<p>2. Proces zakupowy ........................................ 10 2.1. Katalog produktów ................. 11</p>",
+    "<p>[1] Prezes Urzędu wszczął postępowanie.</p>",
+    "<p><b>Platforma i jej uczestnicy</b></p>",
+    "<p>[2] Spółka prowadziła platformę.</p>",
+    "<p><b>2.1. Katalog produktów</b></p>",
+    "<p><b>Elite Pack 149,00 USD 99,99 USD</b></p>",
+    "<p><b>Sąd zważył, co następuje:</b></p>",
+  ].join("");
+  const read = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst.blocks.map(
+      (block) =>
+        `${block.type === "heading" ? "heading" : (roleOfBlock(block) ?? "-")} ${block.plainText.slice(0, 26)}`,
+    );
+  const ast = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst;
+
+  test("the contents after the ruling are a publisher's note, the subheadings headings, the lone mark no text", () => {
+    expect(read(true)).toEqual([
+      "- -",
+      "heading DECYZJA nr DOZIK-5/2024",
+      "holding I. Na podstawie art. 26 us",
+      "heading UZASADNIENIE",
+      "publisher-note Prezes Urzędu ustalił nast",
+      "publisher-note 1. Sprzedawca Amazon EU SA",
+      "publisher-note 2. Proces zakupowy .......",
+      "argumentation [1] Prezes Urzędu wszczął ",
+      "heading Platforma i jej uczestnicy",
+      "argumentation [2] Spółka prowadziła plat",
+      "heading 2.1. Katalog produktów",
+      "argumentation Elite Pack 149,00 USD 99,9",
+      "argumentation Sąd zważył, co następuje:",
+    ]);
+  });
+
+  test("the contents keep head matter ahead of the body", () => {
+    expect(headMatterPrecedesBody(ast(true).blocks)).toBe(true);
+  });
+
+  test("contents printed before the body are apparatus", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>Spis treści ............................................ 2</p><p>WYROK</p><p>1. oddala powództwo.</p>",
+      ),
+    );
+    const contents = documentAst.blocks.find((block) =>
+      block.plainText.startsWith("Spis treści"),
+    );
+    expect(contents === undefined ? undefined : roleOfBlock(contents)).toBe(
+      "apparatus",
+    );
+    expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
+  });
+
+  test("a publisher's markup keeps its bold lines as paragraphs", () => {
+    const blocks = read(false);
+    expect(blocks).toContain("argumentation Platforma i jej uczestnicy");
+    expect(blocks).toContain("argumentation 2.1. Katalog produktów");
+  });
+});
+
+describe("head matter a layout sets as headings", () => {
+  test("a date and the bench set as headings are head matter, before or after the title, and open no ruling", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<h2>Oddala, dnia 1 marca 2020 r.</h2><p>WYROK</p><h3>Przewodniczący: Ewa Sikorska</h3><h3>Prokurator: zarzuty wobec oskarżonego</h3><p>orzeka:</p><p>1. oddala apelację,</p>",
+      ),
+    );
+
+    expect(
+      documentAst.blocks.map(
+        (block) =>
+          `${block.type} ${"role" in block ? (block.role ?? "-") : "-"} ${block.plainText}`,
+      ),
+    ).toEqual([
+      "paragraph intro Oddala, dnia 1 marca 2020 r.",
+      "heading decision-title WYROK",
+      "paragraph intro Przewodniczący: Ewa Sikorska",
+      "heading section-heading Prokurator: zarzuty wobec oskarżonego",
+      "heading section-heading orzeka:",
+      "paragraph holding 1. oddala apelację,",
+    ]);
+  });
+});
+
+describe("an authority's reasons led in by its office", () => {
+  test("a sentence opening on the office and ending on a colon is the reasons, not a signature", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>DECYZJA nr DOZIK-5/2024</p><p>I. Na podstawie art. 26 ust. 1 ustawy uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p><p>UZASADNIENIE</p><p>Prezes Urzędu ustalił następujący stan faktyczny:</p><p>Spółka prowadzi sprzedaż w serwisie internetowym.</p><p>Prezes Urzędu Ochrony Konkurencji i Konsumentów</p>",
+        {
+          decisionType: "decyzja",
+          court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        },
+      ),
+    );
+    const roleOf = (text: string) =>
+      documentAst.blocks.find((block) => block.plainText === text);
+
+    expect(
+      roleOf("Prezes Urzędu ustalił następujący stan faktyczny:"),
+    ).toMatchObject({
+      type: "paragraph",
+      role: "argumentation",
+    });
+    expect(
+      roleOf("Prezes Urzędu Ochrony Konkurencji i Konsumentów"),
+    ).toMatchObject({
+      type: "paragraph",
+      role: "signature",
+    });
+  });
+});
+
+describe("an authority's numbered title and its ruling", () => {
+  test("a date printed between the numbered title and the first point leaves the point the ruling", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        [
+          "<p>DECYZJA</p>",
+          "<p>DECYZJA NR RBG - 11/2018</p>",
+          "<p>Bydgoszcz, dnia 27 sierpnia 2018 r.</p>",
+          "<p>I. Na podstawie art. 27 ust. 1 i 2 ustawy o ochronie konkurencji i konsumentów</p>",
+          "<p>- w imieniu Prezesa Urzędu – uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie banku.</p>",
+        ].join(""),
+        {
+          decisionType: "decyzja",
+          court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        },
+      ),
+    );
+
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      )?.plainText,
+    ).toStartWith("I. Na podstawie art. 27");
+  });
 });

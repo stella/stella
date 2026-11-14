@@ -12,6 +12,7 @@ import {
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { clientVisibleChatPart } from "@/api/handlers/chat/client-visible-chat-part";
 import type {
   ChatMessageMetadata,
   ChatMessageRole,
@@ -20,7 +21,9 @@ import type {
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -109,6 +112,48 @@ export type ChatMessagePage = {
   lastActivityAt: string | null;
 };
 
+/** A thread's newest turn and the answer it wrote, if it wrote one yet. */
+export type NewestChatTurn = {
+  id: SafeId<"chatTurn">;
+  assistantMessageId: SafeId<"chatMessage"> | null;
+};
+
+/**
+ * The member's newest turn of the thread: the one whose file changes on
+ * their computer the page may offer to undo, since only the newest turn can
+ * be undone.
+ */
+export const readNewestChatTurnOnTx = async ({
+  tx,
+  organizationId,
+  threadId,
+  userId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+}): Promise<NewestChatTurn | null> => {
+  const [turn] = await tx
+    .select({
+      id: chatTurns.id,
+      assistantMessageId: chatTurns.assistantMessageId,
+    })
+    .from(chatTurns)
+    // Leads with the member's turns of the thread, newest first
+    // (`chat_turns_org_user_thread_created_idx`), so one index row answers.
+    .where(
+      and(
+        eq(chatTurns.organizationId, organizationId),
+        eq(chatTurns.userId, userId),
+        eq(chatTurns.threadId, threadId),
+      ),
+    )
+    .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+    .limit(1);
+  return turn ?? null;
+};
+
 /**
  * Core query, callable directly against an already-open transaction so
  * callers sharing one scoped tx (e.g. get-messages.ts) can run it without
@@ -174,7 +219,12 @@ const loadChatMessagePageOnTx = async ({
 
   return {
     activeTurnId: activeTurn?.id ?? null,
-    messages: await projectPageRowsOnTx({ rows: pageAscending, tx, userId }),
+    messages: await projectPageRowsOnTx({
+      rows: pageAscending,
+      tx,
+      userId,
+      threadId,
+    }),
     olderCursor,
     lastActivityAt,
   };
@@ -189,13 +239,38 @@ export const projectPageRowsOnTx = async ({
   rows,
   tx,
   userId,
+  threadId,
+  withdrawal,
 }: {
+  threadId: SafeId<"chatThread">;
+  withdrawal?: WithdrawnCopyProjection;
   rows: readonly ChatMessagePageRow[];
   tx: Transaction;
   userId: SafeId<"user">;
 }): Promise<ClientMessage[]> => {
-  const placeholderById = await loadPlaceholdersOnTx({ rows, tx, userId });
-  return rows.map((row) => clientMessageFromPageRow(row, placeholderById));
+  const read =
+    withdrawal === undefined
+      ? await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: rows,
+        })
+      : {
+          projection: withdrawal,
+          subjectByThread: new Map<
+            SafeId<"chatThread">,
+            SafeId<"caseLawDecision"> | null
+          >(),
+        };
+  const masked = rows.map((row) =>
+    read.projection.chat(row, read.subjectByThread.get(threadId)),
+  );
+  const placeholderById = await loadPlaceholdersOnTx({
+    rows: masked,
+    tx,
+    userId,
+  });
+  return masked.map((row) => clientMessageFromPageRow(row, placeholderById));
 };
 
 /**
@@ -255,7 +330,7 @@ export const loadClientMessages = async ({
       )
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
       .limit(messageIds.length);
-    return await projectPageRowsOnTx({ rows, tx, userId });
+    return await projectPageRowsOnTx({ rows, tx, userId, threadId });
   });
 };
 
@@ -287,7 +362,9 @@ export const clientMessageFromPageRow = (
     ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
     revision: row.revision,
-    parts: attachPlaceholders(message.parts, placeholderById),
+    parts: attachPlaceholders(message.parts, placeholderById).map(
+      clientVisibleChatPart,
+    ),
   };
 };
 

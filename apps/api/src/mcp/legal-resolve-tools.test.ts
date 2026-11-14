@@ -5,10 +5,11 @@ import * as v from "valibot";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
+import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -82,18 +83,7 @@ const responses = {
       status: "resolved",
       document: {
         ...identity,
-        text: {
-          status: "readable",
-          blocks: [{ type: "paragraph", text: "Synthetic excerpt" }],
-          extent: { type: "partial", returnedChars: 17, totalChars: 10_000 },
-        },
-      },
-    },
-    {
-      status: "resolved",
-      document: {
-        ...identity,
-        text: { status: "readable", blocks: [], extent: { type: "complete" } },
+        text: { status: "readable", charCount: 10_000 },
       },
     },
     {
@@ -125,7 +115,28 @@ const responses = {
     },
   ],
   not_found: [
+    {
+      status: "not_found",
+      reason: "not_at_this_court",
+      otherCourtCandidates: [
+        {
+          decisionId: identity.decisionId,
+          identifier: "52 A 6/2023",
+          label: "Krajský soud v Hradci Králové, rozsudek, 2023-06-01",
+          readerUrl: identity.readerUrl,
+          court: "Krajský soud v Hradci Králové",
+          decisionDate: "2023-06-01",
+          decisionType: "rozsudek",
+          subjectSummary: "Synthetic classification",
+        },
+      ],
+    },
     { status: "not_found", reason: "unknown_document" },
+    {
+      status: "not_found",
+      reason: "unknown_document",
+      hint: "Use collection Zb. for 513/1991.",
+    },
     { status: "not_found", reason: "unknown_section" },
     { status: "not_found", reason: "no_exact_identity" },
   ],
@@ -183,12 +194,16 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
             v.parse(legalResolveResponseSchema, response),
           );
           expect(wire.content).toEqual([
-            { type: "text", text: JSON.stringify(response) },
+            {
+              type: "text",
+              text: JSON.stringify(
+                v.parse(legalResolveResponseSchema, response),
+              ),
+            },
           ]);
           if (
             response.status === "resolved" &&
-            response.document.kind === "decision" &&
-            response.document.text.status === "withheld"
+            response.document.kind === "decision"
           ) {
             expect(wire.structuredContent).not.toHaveProperty(
               "document.blocks",
@@ -420,4 +435,101 @@ describe("legal resolve organization admission", () => {
       },
     );
   }
+});
+
+/**
+ * The tool's description promises that a court in the identifier constrains
+ * it and that other courts' holders come back only as otherCourtCandidates.
+ * Driven through the MCP handler and boundary normalization with the real
+ * resolver over a fixture lookup, so the promise is checked where a model
+ * reads it.
+ */
+describe("resolve_case_law_decision keeps its court promise", () => {
+  const holder = (court: string, ecliCode: string, caseNumber: string) =>
+    ({
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber,
+      caseNumberType: "case-number",
+      country: "CZE",
+      court,
+      courtAbbreviation: "OS",
+      decisionDate: "2025-03-04",
+      decisionType: "rozsudek",
+      ecli: `ECLI:CZ:${ecliCode}:2025:1`,
+      identifiers: [],
+      language: "cs",
+      languageAlternates: [],
+      slug: "/case/example",
+    }) satisfies DecisionIdentityRow;
+  const callTool = async (
+    identifier: string,
+    rows: readonly DecisionIdentityRow[],
+  ) => {
+    const definition =
+      LEGAL_RESOLVE_TOOL_SET.definitions.find(
+        ({ name }) => name === "resolve_case_law_decision",
+      ) ?? panic("resolve_case_law_decision is not registered");
+    const normalized = normalizeObjectInputAtBoundary({
+      access: "read",
+      schema: definition.inputSchema,
+      value: { country: "CZE", identifier },
+    });
+    if (!normalized.ok) {
+      return panic("The fixture call was rejected at the boundary");
+    }
+    return unwrapInternalResult(
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision({
+        args: normalized.value,
+        context: contextWith({
+          resolveDecision: async (options) =>
+            await resolveDecision({
+              ...options,
+              dependencies: {
+                lookup: async () => [...rows],
+                read: async () => null,
+              },
+            }),
+        }),
+      }),
+    );
+  };
+  test.each([
+    "8 C 123/2024 Obvodní soud pro Prahu 6",
+    "8 C 123/2024 OS Praha 6",
+  ])(
+    "a docket held only at another court is not_at_this_court: %s",
+    async (identifier) => {
+      const kladno = holder("Okresní soud v Kladně", "OSKD", "8 C 123/2024");
+      expect(await callTool(identifier, [kladno])).toEqual({
+        status: "success",
+        data: {
+          status: "not_found",
+          reason: "not_at_this_court",
+          otherCourtCandidates: [
+            expect.objectContaining({
+              decisionId: kladno.id,
+              court: "Okresní soud v Kladně",
+            }),
+          ],
+        },
+      });
+    },
+  );
+  test("the named court's holder resolves and the other court's is a candidate", async () => {
+    const prague = holder("Obvodní soud pro Prahu 6", "OSPH06", "20 C 45/2026");
+    const olomouc = holder("Okresní soud v Olomouci", "OSOL", "20 C 45/2026");
+    expect(
+      await callTool("20 C 45/2026 Obvodní soud pro Prahu 6", [
+        olomouc,
+        prague,
+      ]),
+    ).toMatchObject({
+      status: "success",
+      data: {
+        status: "resolved",
+        document: { decisionId: prague.id, court: "Obvodní soud pro Prahu 6" },
+        otherCourtCandidates: [{ decisionId: olomouc.id }],
+      },
+    });
+  });
 });

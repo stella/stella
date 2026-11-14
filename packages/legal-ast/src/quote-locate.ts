@@ -8,49 +8,11 @@
  * other difference is a misquote and is not.
  */
 
+import { foldQuoteText } from "./quote-fold";
+
 type Span = { start: number; end: number };
 
-const EQUIVALENT_CHARACTERS: Readonly<Record<string, string>> = {
-  "‘": "'",
-  "’": "'",
-  "‚": "'",
-  "‛": "'",
-  "“": '"',
-  "”": '"',
-  "„": '"',
-  "‟": '"',
-  "«": '"',
-  "»": '"',
-  "‹": "'",
-  "›": "'",
-  "–": "-",
-  "—": "-",
-  "−": "-",
-};
-
-const WHITESPACE = /\s/u;
-
-/** The folded text plus, per folded character, its index in the original. */
-const fold = (text: string): { folded: string; origin: number[] } => {
-  let folded = "";
-  const origin: number[] = [];
-  let previousWasSpace = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text.charAt(index);
-    if (WHITESPACE.test(character)) {
-      if (!previousWasSpace) {
-        folded += " ";
-        origin.push(index);
-      }
-      previousWasSpace = true;
-      continue;
-    }
-    previousWasSpace = false;
-    folded += EQUIVALENT_CHARACTERS[character] ?? character;
-    origin.push(index);
-  }
-  return { folded, origin };
-};
+const fold = (text: string) => foldQuoteText(text, "collapse");
 
 /**
  * The span of `quote` in `text`, preferring the first occurrence at or after

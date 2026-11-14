@@ -50,7 +50,7 @@ type MatterClientDropTarget = {
 // `move` reassigns a client matter; `promote` attaches the first client to a
 // personal matter, which shares it with the team and cannot be undone.
 export type AcceptedMatterClientDrop =
-  | ({ type: "move" } & MatterClientDropTarget)
+  | ({ type: "move"; previousClientId: string } & MatterClientDropTarget)
   | ({ type: "promote" } & MatterClientDropTarget);
 
 export type MatterClientDrop = AcceptedMatterClientDrop | { type: "rejected" };
@@ -89,7 +89,7 @@ export const resolveMatterClientDrop = ({
     case "client":
       return source.origin.clientId === group.clientId
         ? REJECTED_DROP
-        : { type: "move", ...target };
+        : { type: "move", previousClientId: source.origin.clientId, ...target };
     default:
       source.origin satisfies never;
       return panic(`Unhandled matter origin: ${String(source.origin)}`);

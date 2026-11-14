@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import repositoryPackage from "../../../package.json";
-import { validateWorkspaceRoot } from "./workspace-hygiene";
+import {
+  regenerateInstallOwnedIgnoredGeneratedOutputs,
+  validateWorkspaceRoot,
+} from "./workspace-hygiene";
 
 // The temporary roots have no Git history; a pinned local environment keeps
 // the app-boundary baseline out of these checks wherever the tests run.
@@ -21,6 +30,61 @@ afterEach(() => {
 });
 
 describe("workspace hygiene", () => {
+  test("postinstall regenerates a stale ignored API test partition", () => {
+    const rootDir = mkdtempSync(
+      path.join(tmpdir(), "stella-hygiene-generated-"),
+    );
+    tempRoots.push(rootDir);
+    const outputs = ["roots", "src", "tests"].map((name) =>
+      path.join(rootDir, `apps/api/.cache/typecheck-declarations/${name}.json`),
+    );
+    for (const output of outputs) {
+      mkdirSync(path.dirname(output), { recursive: true });
+      writeFileSync(output, '{"stale":true}\n');
+    }
+
+    const status = regenerateInstallOwnedIgnoredGeneratedOutputs(
+      rootDir,
+      (command, cwd) => {
+        expect(command).toEqual([
+          "bun",
+          "packages/scripts/src/api-typecheck-partition.ts",
+          "--write",
+        ]);
+        expect(cwd).toBe(rootDir);
+        for (const output of outputs) {
+          writeFileSync(output, '{"stale":false}\n');
+        }
+        return 0;
+      },
+    );
+
+    expect(status).toBe(0);
+    expect(outputs.map((output) => readFileSync(output, "utf-8"))).toEqual([
+      '{"stale":false}\n',
+      '{"stale":false}\n',
+      '{"stale":false}\n',
+    ]);
+  });
+
+  test("postinstall hygiene still rejects a stale tracked file", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          "@stll/oxlint-config": "0.6.0",
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: { name: "@stll/web" },
+    });
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message:
+        "devDependencies.@stll/oxlint-config must be an exact version of major 4 or later; found 0.6.0",
+      path: "package.json",
+    });
+  });
+
   test("rejects alternate test runners and their types", async () => {
     const deniedNames = [
       "jest",
@@ -696,6 +760,89 @@ describe("workspace hygiene", () => {
     });
   });
 
+  test("rejects lint scripts that run oxlint directly", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: { turbo: "2.10.3" },
+        scripts: {
+          "lint:profile": "bun --bun oxlint -c oxlint.config.ts apps/web",
+        },
+      },
+      webPackageJson: {
+        name: "@stll/web",
+        scripts: {
+          lint: "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware apps/web",
+          "lint:fix":
+            "cd ../.. && ./node_modules/.bin/oxlint -c oxlint.config.ts --fix apps/web",
+          "lint:rules": "bunx oxlint --rules",
+        },
+      },
+    });
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
+      expect.arrayContaining([
+        {
+          message:
+            "scripts.lint:profile runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "package.json",
+        },
+        {
+          message:
+            "scripts.lint runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint:fix runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint:rules runs oxlint directly; lint through `bun scripts/lint.ts <paths>` from the repository root",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint must lint through `bun scripts/lint.ts <paths>`; found cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware apps/web",
+          path: "apps/web/package.json",
+        },
+        {
+          message:
+            "scripts.lint:fix must lint through `bun scripts/lint.ts --fix <paths>`; found cd ../.. && ./node_modules/.bin/oxlint -c oxlint.config.ts --fix apps/web",
+          path: "apps/web/package.json",
+        },
+      ]),
+    );
+  });
+
+  test("accepts lint scripts that go through the lint entry script", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: { turbo: "2.10.3" },
+        scripts: {
+          "check:docs": "bun scripts/lint.ts --no-type-aware docs.ts",
+          "typecheck:plugins":
+            "bun check --no-pretty --all --project=tsconfig.oxlint-plugins.json",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+        scripts: {
+          lint: 'cd ../.. && ([ -n "$TURBO_HASH" ] || bun run generate) && bun scripts/lint.ts apps/web',
+          "lint:fix": "cd ../.. && bun scripts/lint.ts --fix apps/web",
+          "test:rules": "bun test .oxlint-plugins/__tests__",
+        },
+      },
+    });
+
+    expect(
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter(({ message }) =>
+        message.includes("lint"),
+      ),
+    ).toEqual([]);
+  });
+
   test("rejects a stale centralized lint configuration", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
@@ -712,9 +859,66 @@ describe("workspace hygiene", () => {
     });
 
     expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
-      message: `devDependencies.@stll/oxlint-config must be ${repositoryPackage.devDependencies["@stll/oxlint-config"]}; found 0.6.0`,
+      message:
+        "devDependencies.@stll/oxlint-config must be an exact version of major 4 or later; found 0.6.0",
       path: "package.json",
     });
+  });
+
+  test("takes toolchain versions from the root manifest alone", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          "@stll/oxlint-config": "5.0.0",
+          "oxlint-tsgolint": "8.1.0",
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: { name: "@stll/web" },
+    });
+
+    expect(
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter(({ message }) =>
+        /oxlint|tsrs|typescript/u.test(message),
+      ),
+    ).toEqual([]);
+  });
+
+  test("rejects ranged toolchain pins and mismatched TypeScript builds", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          "@stll/oxlint-config": "^4.0.0",
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: { name: "@stll/web" },
+    });
+    const manifestPath = path.join(rootDir, "package.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    manifest.catalog.tsrs = "0.20.1";
+    manifest.catalog.typescript6 = "npm:typescript@6.0.4";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
+      expect.arrayContaining([
+        {
+          message:
+            "devDependencies.@stll/oxlint-config must be an exact version of major 4 or later; found ^4.0.0",
+          path: "package.json",
+        },
+        {
+          message:
+            "catalog.tsrs must be an exact tsrs build of TypeScript 7; found 0.20.1",
+          path: "package.json",
+        },
+        {
+          message:
+            "catalogs.ts6.typescript must match catalog.typescript6 (6.0.4); found 6.0.3",
+          path: "package.json",
+        },
+      ]),
+    );
   });
 
   test("rejects deprecated Oxc and non-Bun typecheck scripts", async () => {
@@ -740,7 +944,7 @@ describe("workspace hygiene", () => {
       expect.arrayContaining([
         {
           message:
-            "devDependencies.oxlint-tsgolint must be 7.0.2003; found 0.25.0",
+            "devDependencies.oxlint-tsgolint must be an exact version of major 7 or later; found 0.25.0",
           path: "package.json",
         },
         {
@@ -755,10 +959,41 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
           path: "apps/web/package.json",
         },
       ]),
+    );
+  });
+
+  test("rejects the TypeScript 6 compiler API in apps/api", async () => {
+    const apiTypecheck = "bun ../../packages/scripts/src/api-typecheck.ts";
+    const declaring = createWorkspaceRoot({
+      apiPackageJson: {
+        devDependencies: { typescript6: "catalog:" },
+        name: "@stll/api",
+        scripts: { typecheck: apiTypecheck },
+      },
+      rootPackageJson: {},
+      webPackageJson: { name: "@stll/web" },
+    });
+    expect(await validateWorkspaceRoot(declaring, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
+      path: "apps/api/package.json",
+    });
+
+    const clean = createWorkspaceRoot({
+      apiPackageJson: {
+        devDependencies: { tsrs: "catalog:" },
+        name: "@stll/api",
+        scripts: { typecheck: apiTypecheck },
+      },
+      rootPackageJson: {},
+      webPackageJson: { name: "@stll/web" },
+    });
+    expect(await validateWorkspaceRoot(clean, LOCAL)).not.toContainEqual(
+      expect.objectContaining({ path: "apps/api/package.json" }),
     );
   });
 
@@ -783,13 +1018,40 @@ describe("workspace hygiene", () => {
 
     expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
-        "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
+      path: "packages/scripts/package.json",
+    });
+  });
+
+  test("the TypeScript 6 root-only check sees an npm alias", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {},
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+    writeFileSync(
+      path.join(rootDir, "packages/scripts/package.json"),
+      JSON.stringify({
+        dependencies: { compiler: "npm:typescript@6.0.3" },
+        name: "@stll/scripts",
+        scripts: {
+          typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+        },
+      }),
+    );
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
       path: "packages/scripts/package.json",
     });
   });
 });
 
 type CreateWorkspaceRootOptions = {
+  apiPackageJson?: Record<string, unknown>;
   mobilePackageJson?: Record<string, unknown>;
   rootPackageJson: Record<string, unknown>;
   webPackageJson: Record<string, unknown>;
@@ -799,6 +1061,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const createWorkspaceRoot = ({
+  apiPackageJson,
   mobilePackageJson,
   rootPackageJson,
   webPackageJson,
@@ -824,7 +1087,7 @@ const createWorkspaceRoot = ({
       "@stll/oxlint-config":
         repositoryPackage.devDependencies["@stll/oxlint-config"],
       typescript6: "catalog:",
-      "oxlint-tsgolint": "7.0.2003",
+      "oxlint-tsgolint": repositoryPackage.devDependencies["oxlint-tsgolint"],
       tsrs: "catalog:",
       ...rootDevDependencies,
     },
@@ -837,7 +1100,7 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "apps/api/package.json"),
     JSON.stringify({
-      devDependencies: { typescript6: "catalog:" },
+      devDependencies: { tsrs: "catalog:" },
       name: "@stll/api",
       scripts: {
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",
@@ -856,7 +1119,7 @@ const createWorkspaceRoot = ({
     path.join(rootDir, "apps/landing/package.json"),
     JSON.stringify({
       devDependencies: {
-        "@astrojs/check": "^0.9.9",
+        "@astrojs/check": "^0.9.12",
         typescript: "catalog:ts6",
       },
       name: "@stll/landing",
@@ -875,6 +1138,13 @@ const createWorkspaceRoot = ({
       },
     }),
   );
+
+  if (apiPackageJson) {
+    writeFileSync(
+      path.join(rootDir, "apps/api/package.json"),
+      JSON.stringify(apiPackageJson),
+    );
+  }
 
   if (mobilePackageJson) {
     mkdirSync(path.join(rootDir, "apps/mobile"), { recursive: true });

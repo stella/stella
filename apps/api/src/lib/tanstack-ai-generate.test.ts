@@ -1,6 +1,6 @@
 import { convertSchemaToJsonSchema, EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
-import { Panic, TaggedError, UnhandledException } from "better-result";
+import { Panic, Result, TaggedError, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -14,12 +14,14 @@ import {
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
@@ -31,6 +33,7 @@ import {
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
   ModelRunError,
+  ModelRunUnfinishedError,
   PROVIDER_CALL_ERROR_MESSAGE,
   PROVIDER_ERROR_CODE,
   ProviderCallError,
@@ -49,6 +52,7 @@ import {
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
+  DispatchRefusedError,
   generateTanStackObjectForTask,
   generateTanStackTextForTask,
   mergeGenerationOptions,
@@ -76,7 +80,6 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -374,6 +377,20 @@ const testModel = {
 } as ResolvedTanStackTextModel;
 
 const resolveTextModel = () => testModel;
+
+/** A dispatch check that allows its first `allowed` requests and refuses
+ * the next one, recording how many requests had left at each call. */
+const refusingAfter = (allowed: number) => {
+  const refusal = new Error("Consent withdrawn");
+  const sentAtCheck: number[] = [];
+  const check = async () => {
+    sentAtCheck.push(providerRequests.length);
+    return await Promise.resolve(
+      sentAtCheck.length > allowed ? Result.err(refusal) : Result.ok(undefined),
+    );
+  };
+  return { check, refusal, sentAtCheck };
+};
 const generateTextForTestModel = async (
   options: Parameters<typeof generateTanStackTextForTask>[0],
 ) => await generateTanStackTextForTask({ ...options, resolveTextModel });
@@ -771,13 +788,13 @@ describe("TanStack AI structured output generation", () => {
   test("keeps call-site temperature out of fixed-sampling Anthropic requests", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-opus-4-8",
       modelOptions: {},
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -799,13 +816,13 @@ describe("TanStack AI structured output generation", () => {
     // caller's value on top of `thinking`.
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-sonnet-4-6",
       modelOptions: { thinking: { type: "adaptive" } },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -830,13 +847,13 @@ describe("TanStack AI structured output generation", () => {
     // the budget, describes a request Anthropic cannot serve.
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-haiku-4-5-20251001",
       modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -855,13 +872,13 @@ describe("TanStack AI structured output generation", () => {
 
   test("keeps a chat turn's whole Anthropic request within the model's output limit", () => {
     // SAFETY: the helpers read only provider/modelOptions/modelId.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-haiku-4-5-20251001",
       modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -882,13 +899,13 @@ describe("TanStack AI structured output generation", () => {
 
   test("leaves a model the catalog does not list to the provider's output default", () => {
     // SAFETY: the helpers read only provider/modelOptions/modelId.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "a-deployment-override-no-catalog-lists",
       modelOptions: {},
       provider: "openai",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -906,6 +923,7 @@ describe("TanStack AI structured output generation", () => {
 
   test("clamps and reports a thinking budget that leaves no room for the reply", () => {
     // SAFETY: the helpers read only provider/modelOptions/modelId.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
@@ -914,7 +932,6 @@ describe("TanStack AI structured output generation", () => {
         thinking: { type: "enabled", budget_tokens: 1_000_000 },
       },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
     const limit = getOutputTokenLimit(model.modelId);
     // The fixture must reach the fault: the budget exceeds the model's limit.
@@ -951,13 +968,13 @@ describe("TanStack AI structured output generation", () => {
   test("enables OpenAI prompt caching without sending a model-specific retention value", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge regression test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "gpt-5.5",
       modelOptions: {},
       provider: "openai",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -987,13 +1004,13 @@ describe("TanStack AI structured output generation", () => {
   test("maps OpenRouter controls to the Chat Completions request shape", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge regression test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "google/gemini-3.5-flash",
       modelOptions: { temperature: 0 },
       provider: "openrouter",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -1137,6 +1154,7 @@ describe("TanStack AI structured output generation", () => {
   test("forwards deferred service tiers to Gemini requests", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
@@ -1145,7 +1163,6 @@ describe("TanStack AI structured output generation", () => {
       modelId: "gemini-3.1-pro-preview",
       modelOptions: { temperature: 0 },
       provider: "google",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -1198,6 +1215,40 @@ describe("TanStack AI structured output generation", () => {
     expect(providerRequests[1]?.modelOptions).toMatchObject({
       service_tier: "default",
     });
+  });
+
+  test("a dispatch check refusing the standard-tier retry sends nothing more and keeps its own error", async () => {
+    const apiError = Object.assign(new Error("OpenAI flex tier unavailable"), {
+      isRetryable: true,
+      statusCode: 429,
+    });
+    queueRun(throwingRun(apiError));
+    queueRun(objectRun({ answer: "ok" }));
+    const gate = refusingAfter(1);
+
+    const caught = await generateObjectForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      userId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      task: "chat",
+      serviceTier: "flex",
+      tenantWorkspaceIds: [],
+      beforeEachDispatch: gate.check,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal: gate.refusal });
+    expect(gate.sentAtCheck).toEqual([0, 1]);
+    expect(providerRequests).toHaveLength(1);
   });
 
   test("rejects a cancelled object run as a cancelled generation", async () => {
@@ -1451,11 +1502,11 @@ describe("TanStack AI model-ingress guard", () => {
   const publicDecisionId = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
 
   test("redacts tenant ids out of the dispatched messages", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1485,12 +1536,56 @@ describe("TanStack AI model-ingress guard", () => {
     ]);
   });
 
+  test("a text request runs the caller's dispatch check first and a refusal sends nothing", async () => {
+    const options = {
+      caching: noCaching,
+      finishPolicy: "require-complete" as const,
+      organizationId: null,
+      userId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer" as const,
+      managedAIResidency: "eu" as const,
+      orgAIConfig: null,
+      prompt: "Summarize.",
+      task: "chat" as const,
+      serviceTier: "standard" as const,
+      tenantWorkspaceIds: [],
+    };
+    queueRun(textRun(["ok"], "stop"));
+    const sentBeforeCheck: number[] = [];
+    expect(
+      await generateTextForTestModel({
+        ...options,
+        beforeEachDispatch: async () => {
+          sentBeforeCheck.push(providerRequests.length);
+          return await Promise.resolve(Result.ok(undefined));
+        },
+      }),
+    ).toBe("ok");
+    expect(sentBeforeCheck).toEqual([0]);
+
+    resetProvider();
+    queueRun(textRun(["ok"], "stop"));
+    const refusal = new Error("Consent withdrawn");
+    const caught = await generateTextForTestModel({
+      ...options,
+      beforeEachDispatch: async () =>
+        await Promise.resolve(Result.err(refusal)),
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    // The run may wrap what the check threw; nothing reached the provider.
+    expect(caught).toBeInstanceOf(Error);
+    expect(providerRequests).toEqual([]);
+  });
+
   test("leaves a request without tenant ids untouched and silent", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1515,11 +1610,11 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1551,10 +1646,10 @@ describe("TanStack AI model-ingress guard", () => {
     ]);
 
     resetProvider();
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
     const serverBuiltFailure = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1593,7 +1688,7 @@ describe("model dispatch within its admitted action", () => {
   const organizationId = toSafeId<"organization">("org_dispatch_lifetime");
   const dispatchOptions = {
     caching: noCaching,
-    finishPolicy: "allow-incomplete",
+    finishPolicy: "require-complete",
     organizationId,
     userId: null,
     dataClass: "customer",
@@ -1693,33 +1788,6 @@ describe("TanStack AI text generation", () => {
   // one adapter, and `testModel` is not the provider that shape was first seen
   // on: normalizing only the adapters named for it leaves the same truncated
   // answer returned on one provider and raised as a failure on the next.
-  test("returns the text a ceiling stop produced whichever adapter reports it", async () => {
-    queueRun(
-      runErrorRun({
-        code: "max_tokens",
-        deltas: ["as far as it got"],
-        message: "The response hit the output ceiling.",
-      }),
-    );
-
-    expect(
-      await generateTextForTestModel({
-        caching: noCaching,
-        finishPolicy: "allow-incomplete",
-        organizationId: null,
-        userId: null,
-        admission: NO_ORGANIZATION_MODEL_DISPATCH,
-        dataClass: "customer",
-        managedAIResidency: "eu",
-        orgAIConfig: null,
-        prompt: "Recap it.",
-        task: "chat",
-        serviceTier: "standard",
-        tenantWorkspaceIds: [],
-      }),
-    ).toBe("as far as it got");
-  });
-
   test("accepts a ceiling stop as the length finish an output-ceiling caller allows", async () => {
     queueRun(
       runErrorRun({
@@ -1788,14 +1856,14 @@ describe("TanStack AI text generation", () => {
     );
   });
 
-  test("rejects a cancelled run instead of returning its truncated text", async () => {
+  test("names a cancelled run as cancelled, not as an unfinished answer", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["half an ans"], controller));
 
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1835,7 +1903,7 @@ describe("TanStack AI text generation", () => {
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1862,7 +1930,7 @@ describe("TanStack AI text generation", () => {
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1878,14 +1946,16 @@ describe("TanStack AI text generation", () => {
     expect(output).toBe("a whole answer");
   });
 
-  test("keeps the output of a run that finished without a reason before the cancellation", async () => {
+  // A reported finish, even one without a reason, means the run completed
+  // before the signal fired: it is graded on that finish, never as cancelled.
+  test("grades a run that finished without a reason before the cancellation on its finish", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["a whole answer"], controller, "unreasoned"));
 
-    const output = await generateTextForTestModel({
+    const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1896,17 +1966,24 @@ describe("TanStack AI text generation", () => {
       task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
-    });
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
 
-    expect(output).toBe("a whole answer");
+    expect(controller.signal.aborted).toBe(true);
+    expect(caught).toBeInstanceOf(ModelRunUnfinishedError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).not.toBe(
+      "generation_cancelled",
+    );
   });
 
   test("collects text through the error-aware streaming boundary", async () => {
-    queueRun(textRun(["hello", " world"]));
+    queueRun(textRun(["hello", " world"], "stop"));
 
     const output = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1935,7 +2012,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1965,7 +2042,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2005,7 +2082,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2030,7 +2107,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2125,6 +2202,29 @@ describe("prompt caching at the layer boundaries", () => {
     modelOf("bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
     modelOf("mistral", "mistral-medium-latest"),
   ];
+
+  test("organization instructions preserve enabled and disabled caching decisions", () => {
+    const system = {
+      ...layered,
+      turn: `\n\n${buildOrganizationAIInstructionsPrompt("Use numbered paragraphs.")}${layered.turn}`,
+    };
+    for (const model of markerModels) {
+      expect(systemPromptsPatch({ caching, model, system })).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          { content: layered.organization, metadata: marker },
+          system.turn,
+        ],
+      });
+      expect(systemPromptsPatch({ caching: noCaching, model, system })).toEqual(
+        {
+          systemPrompts: [
+            `${system.static}${system.organization}${system.turn}`,
+          ],
+        },
+      );
+    }
+  });
 
   test("marks the static and organization layers where the provider caches at markers", () => {
     for (const model of markerModels) {
@@ -2618,6 +2718,50 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     ]);
   });
 
+  test("the caller's dispatch check runs before every request, the repair turn included", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const sentBeforeCheck: number[] = [];
+
+    const object = await generateObjectForTestModel({
+      ...objectOptions,
+      beforeEachDispatch: async () => {
+        sentBeforeCheck.push(providerRequests.length);
+        return await Promise.resolve(Result.ok(undefined));
+      },
+    });
+
+    expect(object).toEqual({ answer: "ok", page: 3 });
+    expect(sentBeforeCheck).toEqual([0, 1]);
+  });
+
+  test("a dispatch check that refuses before the repair turn sends no repair", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    let checks = 0;
+
+    const refusal = new Error("Consent withdrawn");
+    const caught = await generateObjectForTestModel({
+      ...objectOptions,
+      beforeEachDispatch: async () => {
+        checks += 1;
+        return await Promise.resolve(
+          checks > 1 ? Result.err(refusal) : Result.ok(undefined),
+        );
+      },
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // The caller's own refusal, untouched, and no repair outcome recorded.
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal });
+    expect(checks).toBe(2);
+    expect(providerRequests).toHaveLength(1);
+    expect(outcomeLogs()).toEqual([]);
+  });
+
   test("a repair that still breaks the schema fails as invalid output after one turn", async () => {
     queueRun(objectRun({ answer: "ok", page: "three" }));
     queueRun(objectRun({ answer: "ok", page: "3" }));
@@ -2895,6 +3039,57 @@ describe("an unrepaired structured answer falls back once within the approved se
     expect(providerRequests[3]?.messages).toEqual(
       providerRequests[0]?.messages,
     );
+  });
+
+  test("a dispatch check runs before the fallback model's request, and its refusal sends nothing and records no fallback", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const gate = refusingAfter(2);
+
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+        beforeEachDispatch: gate.check,
+      }),
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal: gate.refusal });
+    expect(gate.sentAtCheck).toEqual([0, 1, 2]);
+    expect(providerRequests).toHaveLength(2);
+    expect(fallbackOutcome()).toBeUndefined();
+  });
+
+  test("a dispatch check runs before a retry after the provider's delay, and its refusal sends nothing", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun({
+      type: "throw",
+      error: Object.assign(
+        new Error("Rate limit exceeded. Please retry in 1ms."),
+        {
+          status: 429,
+          headers: new Headers({ "retry-after-ms": "1" }),
+        },
+      ),
+    });
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const gate = refusingAfter(3);
+
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+        beforeEachDispatch: gate.check,
+      }),
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(gate.sentAtCheck).toEqual([0, 1, 2, 3]);
+    expect(providerRequests).toHaveLength(3);
+    expect(fallbackOutcome()).toBeUndefined();
   });
 
   test("a repair rejected as invalid structured output still reaches the approved fallback", async () => {

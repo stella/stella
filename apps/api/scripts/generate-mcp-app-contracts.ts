@@ -9,6 +9,7 @@ import { jsonSchemaToType } from "../src/lib/json-schema/json-schema-to-type";
 import { toJsonSchema } from "../src/lib/json-schema/valibot-to-json-schema";
 import {
   APP_CITATION_PAGE_SCHEMA,
+  APP_COURT_CATALOG_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
   APP_OPEN_DECISION_SCHEMA,
   APP_PROVISION_HISTORY_SCHEMA,
@@ -19,6 +20,7 @@ import {
 import { MCP_APP_OUTPUT_CONTRACTS } from "../src/mcp/app-contracts";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
 import { advertisedMcpOutputSchema } from "../src/mcp/write-result-omission";
+import { mcpAppInputArtifacts } from "./lib/mcp-app-inputs";
 
 const outputRoot = path.resolve(
   import.meta.dirname,
@@ -63,6 +65,7 @@ const header =
 
 const frontendContracts = {
   APP_CITATION_PAGE_SCHEMA,
+  APP_COURT_CATALOG_SCHEMA,
   APP_PROVISION_HISTORY_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
   APP_OPEN_DECISION_SCHEMA,
@@ -72,6 +75,7 @@ const frontendContracts = {
 };
 const frontendContractTypeNames = {
   APP_CITATION_PAGE_SCHEMA: "CitationPage",
+  APP_COURT_CATALOG_SCHEMA: "CourtCatalog",
   APP_PROVISION_HISTORY_SCHEMA: "ProvisionHistory",
   APP_SEARCH_SCHEMA: "SearchResults",
   APP_RESOLVE_SCHEMA: "ResolveResults",
@@ -106,6 +110,7 @@ const artifacts = await formattedArtifactsLikeRepository([
     path: path.join(outputRoot, "contracts.d.ts"),
     contents: `${header}import type * as v from "valibot";\nimport type { Block } from "@stll/legal-ast/document-ast";\n\n${declarations.join("\n\n")}\n`,
   },
+  ...mcpAppInputArtifacts(outputRoot),
 ]);
 await Promise.all(
   artifacts.map(

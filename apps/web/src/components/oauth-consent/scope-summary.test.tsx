@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { createTranslator, IntlProvider } from "use-intl";
 
 import {
+  ACCOUNT_EXPORT_SCOPES,
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
@@ -18,6 +19,21 @@ import {
 } from "@/lib/oauth-scopes";
 
 describe("concise consent permissions", () => {
+  test("account export consent discloses both grants without claiming deletion", () => {
+    const scopes = Object.values(ACCOUNT_EXPORT_SCOPES);
+    const markup = renderToStaticMarkup(
+      <IntlProvider locale="en" messages={en} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <ScopeSummary scopes={scopes} />
+        </FormattingProvider>
+      </IntlProvider>,
+    );
+    expect(markup).not.toContain('data-slot="consent-sensitive-access"');
+    expect(markup).toContain(en.consent.scopeAccountExportRead);
+    expect(markup).toContain(en.consent.scopeAccountExportWrite);
+    expect(markup.match(/data-slot="consent-summary-line"/gu)).toHaveLength(2);
+  });
+
   test.each(["stella:feedback", "stella:onboarding"])(
     "describes %s without claiming document editing",
     (scope) => {
@@ -28,8 +44,11 @@ describe("concise consent permissions", () => {
           </FormattingProvider>
         </IntlProvider>,
       );
-      expect(markup).toContain("<details");
-      const summary = markup.slice(0, markup.indexOf("<details"));
+      expect(markup).toContain('data-slot="consent-permissions"');
+      const summary = markup.slice(
+        0,
+        markup.indexOf('data-slot="consent-permissions"'),
+      );
       expect(summary).not.toContain("Create and edit:");
       expect(summary).toContain(
         renderToStaticMarkup(

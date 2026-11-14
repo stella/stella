@@ -4,6 +4,10 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
+import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 
 import {
   createProvisionCitationGrammar,
@@ -23,6 +27,7 @@ type GrammarFixture = {
 /** One real sentence per grammar; a jurisdiction without a grammar has none. */
 const FIXTURES = {
   AUT: null,
+  BRA: null,
   CZE: {
     anchors: ["par_46-odst_1-pism_a", "par_60-odst_3", "par_120"],
     gazette: ["https://www.e-sbirka.cz/eli/cz/sb/2005/485"],
@@ -63,7 +68,7 @@ const testGrammar = (
       canonicalAbbreviation: "test.",
       ...entry,
     })),
-    anchorSeparator: "-",
+    anchors: E_SBIRKA_ANCHORS,
     connectors: [","],
     gazette: {
       eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -76,13 +81,28 @@ const testGrammar = (
         key: "section",
         marker: "§",
         value: String.raw`\d+`,
-        anchorMarker: "par_",
       },
     ],
     unit: "section",
   });
 
 /** An article-based style, to show the chain shape is not the Czech one. */
+const ARTICLE_ANCHORS = {
+  type: "listed",
+  kinds: {
+    section: "par",
+    article: "art",
+    subsection: "ust",
+    letter: "lit",
+    point: "pkt",
+  },
+  kindSeparator: "_",
+  listKinds: {},
+  restatementSuffix: null,
+  segmentSeparator: "-",
+  unnumberedAnchor: null,
+} as const satisfies StatuteAnchorScheme;
+
 const articleGrammar = createProvisionCitationGrammar({
   abbreviations: [
     {
@@ -91,7 +111,7 @@ const articleGrammar = createProvisionCitationGrammar({
       patternSource: String.raw`k\.p\.c\.`,
     },
   ],
-  anchorSeparator: "-",
+  anchors: ARTICLE_ANCHORS,
   connectors: [",", String.raw`i(?=\s)`, String.raw`oraz(?=\s)`],
   gazette: {
     eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -104,19 +124,16 @@ const articleGrammar = createProvisionCitationGrammar({
       key: "section",
       marker: String.raw`art\.`,
       value: String.raw`\d+[a-z]?`,
-      anchorMarker: "art_",
     },
     {
       key: "subsection",
       marker: String.raw`ust\.`,
       value: String.raw`\d+`,
-      anchorMarker: "ust_",
     },
     {
       key: "point",
       marker: "pkt",
       value: String.raw`\d+`,
-      anchorMarker: "pkt_",
     },
   ],
   unit: "article",
@@ -154,6 +171,43 @@ describe("provision citation grammars", () => {
       ).toEqual([...fixture.gazette]);
     },
   );
+
+  test("a minted anchor nests on its country's scheme, under its section's anchor", () => {
+    const cut: string[] = [];
+    for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+      const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+      const fixture = FIXTURES[jurisdiction];
+      if (grammar.status === "unsupported" || fixture === null) {
+        continue;
+      }
+      const nesting = statuteAnchorNestingFor(jurisdiction);
+      for (const { anchor, reference } of grammar.locateAbbreviatedProvisions(
+        fixture.text,
+      )) {
+        const heading = provisionHeadingAnchor(anchor, nesting);
+        expect({ anchor, heading }).toEqual({
+          anchor,
+          heading: grammar.anchor({
+            ...reference,
+            letter: null,
+            point: null,
+            subsection: null,
+          }),
+        });
+        if (heading !== anchor) {
+          cut.push(jurisdiction);
+        }
+      }
+    }
+    // Every grammar's fixture cites a subdivision, so each scheme is exercised.
+    expect(new Set(cut)).toEqual(
+      new Set(
+        CASE_LAW_JURISDICTIONS.filter(
+          (jurisdiction) => FIXTURES[jurisdiction] !== null,
+        ),
+      ),
+    );
+  });
 
   test("a decision readers can open links only to legislation they can open", () => {
     for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
@@ -393,6 +447,18 @@ test("work normalization uses the selected grammar's gazette", () => {
   });
 });
 
+test("Czech citations keep a sentence and a slash-closed letter", () => {
+  const citations = czech.locateAbbreviatedProvisions(
+    "§ 103 odst. 1 věta druhá s. ř. s. a § 5 písm. b/ s. ř. s.",
+  );
+  expect(
+    citations.map(({ anchor, reference }) => [anchor, reference.sentence]),
+  ).toEqual([
+    ["par_103-odst_1", "2"],
+    ["par_5-pism_b", null],
+  ]);
+});
+
 describe("Slovak reader citations", () => {
   const slovak = PROVISION_CITATION_GRAMMARS.SVK;
   const sspEli = "https://www.slov-lex.sk/eli/sk/zz/2015/162";
@@ -454,6 +520,45 @@ describe("Slovak reader citations", () => {
         .locateAbbreviatedProvisions("§439 ods.2 písm.d) bod1 SSP")
         .map(({ anchor }) => anchor),
     ).toEqual(["paragraf-439.odsek-2.pismeno-d.bod-1"]);
+  });
+
+  test("a letter closed by a slash keeps the act", () => {
+    const text = "(§ 439 ods. 2 písm. d/ SSP)";
+    const citations = slovak.locateAbbreviatedProvisions(text);
+    expect(citations.map(({ anchor }) => anchor)).toEqual([
+      "paragraf-439.odsek-2.pismeno-d",
+    ]);
+    expect(printed(text, citations)).toEqual(["§ 439 ods. 2 písm. d/"]);
+  });
+
+  test.each([
+    ["§ 18 ods. 2 prvá veta SSP", "1"],
+    ["§ 18 ods. 2 veta prvá SSP", "1"],
+    ["§ 18 ods. 2 veta 2 SSP", "2"],
+  ])(
+    "%s records the sentence on the provision it refines",
+    (text, sentence) => {
+      const citations = slovak.locateAbbreviatedProvisions(text);
+      expect(
+        citations.map(({ anchor, reference }) => ({
+          anchor,
+          sentence: reference.sentence,
+        })),
+      ).toEqual([{ anchor: "paragraf-18.odsek-2", sentence }]);
+      expect(printed(text, citations)).toEqual(["§ 18 ods. 2"]);
+    },
+  );
+
+  test("a sentence refines only the last coordinated provision", () => {
+    const citations = slovak.locateAbbreviatedProvisions(
+      "§ 9 ods. 1 a § 18 ods. 2 prvá veta SSP",
+    );
+    expect(
+      citations.map(({ anchor, reference }) => [anchor, reference.sentence]),
+    ).toEqual([
+      ["paragraf-9.odsek-1", null],
+      ["paragraf-18.odsek-2", "1"],
+    ]);
   });
 
   test.each([

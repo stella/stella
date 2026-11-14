@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { encodeRfc3986Component } from "./rfc3986";
 
@@ -45,23 +45,25 @@ describe("RFC 3986 component encoding", () => {
   });
 
   test("round-trips Unicode components and emits only unreserved characters or escapes", () => {
-    fc.assert(
+    assertProperty(
+      "round-trips Unicode components and emits only unreserved characters or escapes",
       fc.property(componentWithExtraCharacter, (component) => {
         const encoded = encodeRfc3986Component(component);
 
         expect(encoded).toMatch(RFC3986_ENCODED_COMPONENT);
         expect(decodeURIComponent(encoded)).toBe(component);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("leaves arbitrary unreserved components unchanged", () => {
-    fc.assert(
+    assertProperty(
+      "leaves arbitrary unreserved components unchanged",
       fc.property(unreservedComponent, (component) => {
         expect(encodeRfc3986Component(component)).toBe(component);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

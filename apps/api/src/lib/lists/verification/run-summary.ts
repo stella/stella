@@ -1,24 +1,40 @@
 /**
  * The per-run summary both verification listings answer with: status, why it
  * failed, the list it checked against, and claim counts per verdict state.
+ * A claim is counted as its reviewers see it (`reviewedView`), the same state
+ * the verification view counts it under, so a re-checked, reopened or
+ * resolved claim moves in every summary as it moves in the view.
  */
 
 import { Result } from "better-result";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   fields,
+  legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
-import type { ClaimState } from "@/api/lib/lists/verification/contract";
+import {
+  CLAIM_STATE,
+  VERIFICATION_LIMITS,
+} from "@/api/lib/lists/verification/contract";
+import type {
+  ClaimState,
+  VerificationScope,
+} from "@/api/lib/lists/verification/contract";
 import { verificationRunListIdColumn } from "@/api/lib/lists/verification/read-run";
+import {
+  foldClaimReview,
+  REVIEWED_VIEW_EVENT_KINDS,
+  reviewedView,
+} from "@/api/lib/lists/verification/review-fold";
 import { createCursorPage } from "@/api/lib/pagination";
 import type { Page } from "@/api/lib/pagination";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
@@ -26,7 +42,9 @@ import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundarie
 const stateFilterCount = (state: ClaimState): SQL<number> =>
   sql<number>`count(${legalListClaims.id}) filter (where ${legalListClaims.state} = ${state})::int`;
 
-/** Total over the claim states, so a new state cannot go uncounted. */
+/** Total over the claim states, so a new state cannot go uncounted. These
+ *  count each claim by the state its run wrote; `countAsReviewed` then moves
+ *  the claims whose reviewers changed what that state reads as. */
 export const CLAIM_COUNT_COLUMNS = {
   supported: stateFilterCount(CLAIM_STATE.SUPPORTED),
   tension: stateFilterCount(CLAIM_STATE.TENSION),
@@ -44,6 +62,7 @@ export const RUN_SUMMARY_COLUMNS = {
   status: legalListVerificationRuns.status,
   errorCode: legalListVerificationRuns.errorCode,
   entityVersionId: legalListVerificationRuns.entityVersionId,
+  scope: legalListVerificationRuns.scope,
   listId: verificationRunListIdColumn,
   createdAt: legalListVerificationRuns.createdAt,
   finishedAt: legalListVerificationRuns.finishedAt,
@@ -56,10 +75,109 @@ type RunSummaryRow = {
   status: (typeof legalListVerificationRuns.$inferSelect)["status"];
   errorCode: (typeof legalListVerificationRuns.$inferSelect)["errorCode"];
   entityVersionId: SafeId<"entityVersion">;
+  scope: VerificationScope;
   listId: SafeId<"legalList">;
   createdAt: Date;
   finishedAt: Date | null;
 } & Record<ClaimState, number>;
+
+type ClaimCounts = Record<ClaimState, number>;
+
+type CountedRun = { id: SafeId<"legalListVerificationRun"> } & ClaimCounts;
+
+type CountAsReviewedArgs<Run extends CountedRun> = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runs: readonly Run[];
+};
+
+/**
+ * Each run's claim counts as its reviewers see them. The counts arrive by the
+ * state each run wrote; a claim moves only through an event `reviewedView`
+ * reads, so only the claims with such an event are read and folded, and each
+ * moves from its written state to its reviewed one. A listing stays one
+ * aggregate plus the few claims reviewers re-checked, reopened or resolved.
+ */
+const countAsReviewed = async <Run extends CountedRun>({
+  tx,
+  workspaceId,
+  runs,
+}: CountAsReviewedArgs<Run>): Promise<Run[]> => {
+  if (runs.length === 0) {
+    return [];
+  }
+  const runIds = runs.map((run) => run.id);
+  const viewEvents = and(
+    eq(legalListClaimReviewEvents.workspaceId, workspaceId),
+    inArray(legalListClaimReviewEvents.runId, runIds),
+    inArray(legalListClaimReviewEvents.kind, [...REVIEWED_VIEW_EVENT_KINDS]),
+  );
+  const events = await tx
+    .select({
+      claimId: legalListClaimReviewEvents.claimId,
+      payload: legalListClaimReviewEvents.payload,
+      actorId: legalListClaimReviewEvents.actorId,
+      createdAt: legalListClaimReviewEvents.createdAt,
+    })
+    .from(legalListClaimReviewEvents)
+    .where(viewEvents)
+    .orderBy(
+      asc(legalListClaimReviewEvents.createdAt),
+      asc(legalListClaimReviewEvents.id),
+    )
+    // Bounded by the caps the writers enforce: claims per run and actions
+    // per claim.
+    .limit(
+      runIds.length *
+        VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX *
+        VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX,
+    );
+  if (events.length === 0) {
+    return [...runs];
+  }
+  const eventsByClaim = Map.groupBy(events, (event) => event.claimId);
+  const claims = await tx
+    .select({
+      id: legalListClaims.id,
+      runId: legalListClaims.runId,
+      state: legalListClaims.state,
+      refs: legalListClaims.refs,
+      recordConflict: legalListClaims.recordConflict,
+    })
+    .from(legalListClaims)
+    .where(
+      and(
+        eq(legalListClaims.workspaceId, workspaceId),
+        inArray(legalListClaims.runId, runIds),
+        // The reviewed claims as a subquery, not one parameter per claim: a
+        // page of runs can hold more reviewed claims than a statement takes
+        // parameters.
+        inArray(
+          legalListClaims.id,
+          tx
+            .select({ claimId: legalListClaimReviewEvents.claimId })
+            .from(legalListClaimReviewEvents)
+            .where(viewEvents),
+        ),
+      ),
+    )
+    // Bounded by the runs' claims, not by the events read above: a review
+    // committed between the two reads may add a claim the subquery sees, and
+    // the loop skips any claim without events read.
+    .limit(runIds.length * VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX);
+  const countsByRun = new Map(runs.map((run) => [run.id, { ...run }] as const));
+  for (const claim of claims) {
+    const counts = countsByRun.get(claim.runId);
+    const claimEvents = eventsByClaim.get(claim.id);
+    if (counts === undefined || claimEvents === undefined) {
+      continue;
+    }
+    const reviewed = reviewedView(claim, foldClaimReview(claimEvents)).state;
+    counts[claim.state] -= 1;
+    counts[reviewed] += 1;
+  }
+  return runs.map((run) => countsByRun.get(run.id) ?? run);
+};
 
 export const serializeRunSummary = (run: RunSummaryRow) => ({
   id: run.id,
@@ -68,6 +186,7 @@ export const serializeRunSummary = (run: RunSummaryRow) => ({
   status: run.status,
   errorCode: run.errorCode,
   entityVersionId: run.entityVersionId,
+  scope: run.scope,
   listId: run.listId,
   createdAt: run.createdAt.toISOString(),
   finishedAt: run.finishedAt?.toISOString() ?? null,
@@ -146,8 +265,8 @@ export const listRunSummaries = async ({
           direction: "descending",
         });
 
-  const result = await safeDb((tx) =>
-    tx
+  const result = await safeDb(async (tx) => {
+    const rows = await tx
       .select({
         ...RUN_SUMMARY_COLUMNS,
         createdAtCursor: runCursor.cursorValue.as("created_at_cursor"),
@@ -201,8 +320,9 @@ export const listRunSummaries = async ({
         desc(legalListVerificationRuns.createdAt),
         desc(legalListVerificationRuns.id),
       )
-      .limit(limit + 1),
-  );
+      .limit(limit + 1);
+    return countAsReviewed({ tx, workspaceId, runs: rows });
+  });
 
   return result.map((rows) => {
     const page = createCursorPage({
@@ -284,9 +404,9 @@ export const listLatestRunSummaries = async ({
       .groupBy(legalListClaims.runId)
       .limit(latest.length);
     const countsByRun = new Map(counts.map((row) => [row.runId, row]));
-    return latest.map((run) => {
+    const written = latest.map((run) => {
       const count = countsByRun.get(run.id);
-      return serializeRunSummary({
+      return {
         ...run,
         supported: count?.supported ?? 0,
         tension: count?.tension ?? 0,
@@ -294,7 +414,9 @@ export const listLatestRunSummaries = async ({
         nocover: count?.nocover ?? 0,
         notverifiable: count?.notverifiable ?? 0,
         recordconflict: count?.recordconflict ?? 0,
-      });
+      };
     });
+    const reviewed = await countAsReviewed({ tx, workspaceId, runs: written });
+    return reviewed.map(serializeRunSummary);
   });
 };

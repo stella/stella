@@ -11,6 +11,7 @@ import {
   arrayFromQuery,
   booleanFromString,
 } from "@stll/api-contract/http-input";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { listSkillMetadata } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
@@ -114,7 +115,7 @@ export const createListUnavailableChatSkills = ({
       user,
     }) {
       if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-        return Result.err(storedAIConfigUnreadableError(undefined));
+        return Result.err(storedAIConfigUnreadableError());
       }
 
       const switches = [
@@ -142,6 +143,7 @@ export const createListUnavailableChatSkills = ({
       let chatContext: ChatSkillContext | undefined;
       if (asksAboutChat) {
         const scope = yield* resolveChatScope({
+          admitted: "active-or-archived",
           getWorkspaceAccess,
           workspaceId: query.workspaceId,
         });
@@ -157,7 +159,7 @@ export const createListUnavailableChatSkills = ({
                     async () => await getAccessibleWorkspaces(),
                   ),
                 )).flatMap((workspace) =>
-                  workspace.status === "deleting" ? [] : [workspace.id],
+                  workspaceIsVisible(workspace.status) ? [workspace.id] : [],
                 ),
               );
         // A send refuses pinned matters the caller cannot use; so does this.

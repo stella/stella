@@ -11,7 +11,10 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { reportErrorOnce } from "@/lib/analytics/reported-error";
+import {
+  leaveErrorToBoundary,
+  reportErrorOnce,
+} from "@/lib/analytics/reported-error";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { publicLawFailureDisposition } from "@/lib/public-law-api";
@@ -50,6 +53,7 @@ export const PublicLawResultsBoundary = ({
     key={searchKey}
     getResetKey={() => resetKeyOf(resetOn)}
     errorComponent={PublicLawListFailure}
+    onCatch={leaveErrorToBoundary}
   >
     {children}
   </CatchBoundary>
@@ -89,7 +93,11 @@ export function PublicLawListFailure({
       className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
       message={
         <>
-          <span>{userErrorFromThrown(error, fallback)}</span>
+          <span>
+            {disposition === "retryable"
+              ? fallback
+              : userErrorFromThrown(error, fallback)}
+          </span>
           {disposition === "retryable" && description !== undefined && (
             <span className="text-foreground-strong-muted mt-1 block text-xs">
               {description}

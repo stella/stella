@@ -25,6 +25,13 @@ const cases = [
     sourcePath: "apps/web/src/hooks/use-invalidate-session.ts",
   },
   {
+    title: "allows the route error page's loader retry",
+    source:
+      'import { useRouter } from "@tanstack/react-router";\nconst router = useRouter();\nrouter.invalidate({ filter: (match) => match.status === "error" });',
+    lines: [],
+    sourcePath: "apps/web/src/components/route-components.tsx",
+  },
+  {
     title: "allows query cache refresh",
     source: 'queryClient.invalidateQueries({ queryKey: ["records"] });',
     lines: [],

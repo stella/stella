@@ -6,11 +6,11 @@ import {
   FOLIO_COLLAB_SEED_PREPARING_CODE,
   toFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { roles } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -24,6 +24,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BUFFER_INTENT_STALE_MS } from "@/api/lib/buffer-intent-reconciliation";
@@ -120,7 +121,7 @@ const canStillEditWorkspace = async ({
   const membership = memberships.at(0);
   if (
     !membership ||
-    membership.workspaceStatus !== "active" ||
+    !workspaceAcceptsWrites(membership.workspaceStatus) ||
     !isMemberRole(membership.organizationRole)
   ) {
     return false;

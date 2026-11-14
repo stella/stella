@@ -10,9 +10,10 @@ import {
   runLedgerMembershipGuard,
 } from "./ledger-membership";
 
-// The shared shrink-only guard, run against a real repository: an older
-// commit that the base already contains adds nothing, even after the base
-// shrank its ledger, while a change on top of any commit is still reported.
+// The shared shrink-only guard, run against a real repository: a branch
+// answers only for entries it adds on top of its fork point, so a later
+// shrink on the base never fails it, while a change on top of any commit is
+// still reported.
 
 const directories: string[] = [];
 afterEach(() => {
@@ -95,7 +96,7 @@ test("an entry added on top of a contained commit is still reported", () => {
   ]);
 });
 
-test("a commit the base does not contain is compared with the base tip", () => {
+test("an entry a diverged branch adds is reported while the base grew too", () => {
   const { git, commit, check, errors } = fixture();
   const older = commit(["a::x"], "older");
   const base = commit(["a::x", "a::w"], "base");
@@ -105,6 +106,36 @@ test("a commit the base does not contain is compared with the base tip", () => {
   expect(errors.filter((line) => line.trim().startsWith("a::"))).toEqual([
     "  a::z",
   ]);
+});
+
+test("a diverged branch passes after the base shrank its ledger past the fork", () => {
+  const { git, commit, check, errors } = fixture();
+  const fork = commit(["a::x", "a::y"], "fork");
+  const shrunk = commit(["a::x"], "base shrinks");
+  git("checkout", "--quiet", "--detach", fork);
+  git("commit", "--quiet", "--allow-empty", "--no-verify", "-m", "branch work");
+  expect(check(shrunk), errors.join("\n")).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test("a diverged branch still reports what it adds after the base shrank", () => {
+  const { git, commit, check, errors } = fixture();
+  const fork = commit(["a::x", "a::y"], "fork");
+  const shrunk = commit(["a::x"], "base shrinks");
+  git("checkout", "--quiet", "--detach", fork);
+  commit(["a::x", "a::y", "a::z"], "branch grows");
+  expect(check(shrunk)).toBe(1);
+  expect(errors.filter((line) => line.trim().startsWith("a::"))).toEqual([
+    "  a::z",
+  ]);
+});
+
+test("a base without shared history fails closed instead of comparing with its tip", () => {
+  const { git, commit, check } = fixture();
+  const unrelated = commit(["a::x"], "unrelated");
+  git("checkout", "--quiet", "--orphan", "other");
+  commit(["a::x", "a::y"], "orphan");
+  expect(() => check(unrelated)).toThrow("requires a fetched");
 });
 
 test("an exported GIT_DIR never redirects the guard away from its repository", () => {

@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
@@ -14,8 +15,14 @@ const { searchGlobal: searchGlobalWithDatabase } =
   await import("@/api/lib/search/index-global");
 const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 const searchGlobal = async (
-  query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => await searchGlobalWithDatabase(query, { scopedDb });
+  query: Omit<Parameters<typeof searchGlobalWithDatabase>[0], "grantedScopes">,
+) =>
+  (
+    await searchGlobalWithDatabase(
+      { ...query, grantedScopes: undefined },
+      { scopedDb },
+    )
+  ).unwrap();
 
 beforeEach(() => {
   clearRootDbMocks();
@@ -84,7 +91,7 @@ test("skips alternative corpus counts for an upper-bound-only search", async () 
   expect(caseLawQueries).toHaveLength(0);
 });
 
-test("caps alternative case-law counts for an old lower bound", async () => {
+test("counts no case law beside an old lower bound", async () => {
   await searchGlobal({
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
     editedByUserIds: [],
@@ -105,9 +112,9 @@ test("caps alternative case-law counts for an old lower bound", async () => {
       query.includes("FROM case_law_search_documents"),
     );
 
-  expect(caseLawQueries).toHaveLength(1);
-  expect(caseLawQueries.at(0)?.sql).toContain("bounded_case_law");
-  expect(caseLawQueries.at(0)?.params).toContain(1000);
+  // The type facet offers no case-law bucket: the palette's case-law
+  // section is answered by the corpus search engine, not here.
+  expect(caseLawQueries).toHaveLength(0);
 });
 
 test("normalizes numeric-offset filters to UTC before binding SQL", async () => {
@@ -133,35 +140,47 @@ test("normalizes numeric-offset filters to UTC before binding SQL", async () => 
   expect(params).not.toContain("2026-07-29T12:00:00+02:00");
 });
 
-test("orders filter-only chat hits on the tenant-leading thread key", async () => {
-  await searchGlobal({
-    accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-    editedByUserIds: [],
-    limit: 10,
-    mimeTypes: [],
-    organizationId: toSafeId<"organization">("org_1"),
-    query: "",
-    selectedWorkspaceIds: [],
-    types: ["chat"],
-    userId: toSafeId<"user">("user_1"),
-  });
+test.each([1, 17, 100])(
+  "pages filter-only chat hits on the tenant-leading thread key at limit %s",
+  async (limit) => {
+    const cursorId = "chat:00000000-0000-4000-8000-000000000001";
+    await searchGlobal({
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      editedByUserIds: [],
+      limit,
+      mimeTypes: [],
+      organizationId: toSafeId<"organization">("org_1"),
+      query: "",
+      selectedWorkspaceIds: [],
+      types: ["chat"],
+      userId: toSafeId<"user">("user_1"),
+      cursor: encodeGlobalSearchCursor({
+        id: cursorId,
+        tier: 0,
+        score: 1,
+        seen: limit,
+      }),
+    });
 
-  const dialect = new PgDialect();
-  const hitQuery = rootDbExecuteMock.mock.calls
-    .map(([query]) => dialect.sqlToQuery(query).sql)
-    .find(
-      (query) =>
-        query.includes("FROM chat_thread_search_documents") &&
-        query.includes("cst.title"),
-    );
+    const dialect = new PgDialect();
+    const hitQuery = rootDbExecuteMock.mock.calls
+      .map(([query]) => dialect.sqlToQuery(query))
+      .find(
+        ({ sql: query }) =>
+          query.includes("FROM chat_thread_search_documents") &&
+          query.includes("t.title"),
+      );
 
-  expect(hitQuery).toContain("t.user_id =");
-  expect(hitQuery).toContain("t.organization_id =");
-  expect(hitQuery).toContain("ORDER BY t.updated_at DESC, t.id DESC");
-});
+    expect(hitQuery?.sql).toContain("t.user_id =");
+    expect(hitQuery?.sql).toContain("t.organization_id =");
+    expect(hitQuery?.sql).toContain("ORDER BY t.updated_at DESC, t.id DESC");
+    expect(hitQuery?.params).toContain(cursorId);
+    expect(hitQuery?.params.at(-1)).toBe(limit + 1);
+  },
+);
 
-test("uses authoritative decision timestamps for filter-only case law", async () => {
-  await searchGlobal({
+test("filter-only case law reads no case law", async () => {
+  const result = await searchGlobal({
     accessibleWorkspaceIds: [],
     editedByUserIds: [],
     limit: 10,
@@ -177,50 +196,11 @@ test("uses authoritative decision timestamps for filter-only case law", async ()
   const dialect = new PgDialect();
   const caseLawQueries = rootDbExecuteMock.mock.calls
     .map(([query]) => dialect.sqlToQuery(query).sql)
-    .filter((query) => query.includes("FROM case_law_search_documents clsd"));
+    .filter((query) => query.includes("case_law_"));
 
-  expect(caseLawQueries).toHaveLength(2);
-  for (const query of caseLawQueries) {
-    expect(query).toContain(
-      "JOIN case_law_published_decisions d ON d.id = clsd.decision_id",
-    );
-    expect(query).toContain("d.updated_at >=");
-    expect(query).not.toContain("clsd.updated_at >=");
-  }
-
-  const hitQuery = caseLawQueries.find((query) =>
-    query.includes("clsd.decision_id AS id"),
-  );
-  const countQuery = caseLawQueries.find((query) =>
-    query.includes("bounded_case_law"),
-  );
-  expect(hitQuery).toContain("d.updated_at");
-  expect(hitQuery).toContain(
-    "ORDER BY d.updated_at DESC, clsd.decision_id DESC",
-  );
-  expect(countQuery).toContain("LIMIT");
-});
-
-test("caps corpus-wide case-law counts at the pagination horizon", async () => {
-  await searchGlobal({
-    accessibleWorkspaceIds: [],
-    editedByUserIds: [],
-    limit: 10,
-    mimeTypes: [],
-    organizationId: toSafeId<"organization">("org_1"),
-    query: "",
-    selectedWorkspaceIds: [],
-    types: ["case-law"],
-    userId: toSafeId<"user">("user_1"),
-  });
-
-  const dialect = new PgDialect();
-  const boundedCountQuery = rootDbExecuteMock.mock.calls
-    .map(([query]) => dialect.sqlToQuery(query))
-    .find(({ sql: query }) => query.includes("bounded_case_law"));
-
-  expect(boundedCountQuery?.sql).toContain("LIMIT");
-  expect(boundedCountQuery?.params).toContain(1000);
+  expect(caseLawQueries).toEqual([]);
+  expect(result.hits).toEqual([]);
+  expect(result.totalCount).toBe(0);
 });
 
 test("sorts filter-only hits newest first across result types", async () => {
@@ -239,6 +219,7 @@ test("sorts filter-only hits newest first across result types", async () => {
           last_edited_by_name: null,
           mime_type: null,
           score: 0,
+          tier: 0,
           title: "Older document",
           type: "document",
           updated_at: new Date("2026-04-01T08:00:00.000Z"),
@@ -257,6 +238,7 @@ test("sorts filter-only hits newest first across result types", async () => {
           headline: null,
           id: "ws_1",
           score: 0,
+          tier: 0,
           title: "Newest matter",
           updated_at: new Date("2026-04-02T08:00:00.000Z"),
         },

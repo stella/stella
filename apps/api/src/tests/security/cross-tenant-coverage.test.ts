@@ -2,19 +2,23 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-// Meta-test: the cross-tenant isolation matrix
-// (`cross-tenant-handlers.test.ts`) hand-enumerates read/list handlers and
-// proves workspace A cannot reach workspace/org B's resources. Nothing stopped
+// Meta-test: the cross-tenant isolation matrices enumerate handlers and prove
+// workspace A cannot reach or mutate workspace/org B's resources. Nothing stopped
 // a *new* handler domain from landing without ever being added to that matrix.
 // This guard fails when a `handlers/<domain>/` directory is neither exercised
 // by the matrix nor carries an explicit, reasoned waiver, so a new domain is a
 // deliberate decision rather than a silent gap.
 
 const handlersDir = path.resolve(import.meta.dir, "../../handlers");
-const crossTenantMatrixPath = path.resolve(
-  import.meta.dir,
-  "cross-tenant-handlers.test.ts",
-);
+const crossTenantMatrixPaths = [
+  path.resolve(import.meta.dir, "cross-tenant-handlers.test.ts"),
+  // Organization mutations cross Better Auth's session boundary and use real
+  // Postgres; their route matrix cannot run through the scoped PGlite fixture.
+  path.resolve(
+    import.meta.dir,
+    "../../handlers/organizations/slug-update.postgres.test.ts",
+  ),
+];
 
 /**
  * Reason a handler domain is intentionally absent from the cross-tenant
@@ -71,10 +75,21 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // The runner socket reads and writes through the gateway's root connection;
+  // every row it touches is bound to the account, organization, installation
+  // and device key the upgrade proved. The binding and the refusal of another
+  // device's proof are covered by `lib/desktop-runner/gateway.db.test.ts`.
+  "desktop-runner": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
   catalogue: WAIVER_REASON.preExistingGap,
+  // Caller-supplied audio is transient; optional matter access is authorized
+  // through MemberCaller and covered by dictation/transcribe.test.ts.
+  dictation: WAIVER_REASON.noTenantReadSurface,
+  // The Outlook add-in's email helpers answer from the email text in the
+  // request body and read no stored record.
+  ai: WAIVER_REASON.noTenantReadSurface,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,
@@ -186,7 +201,6 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
  * otherwise mark the whole domain covered and hide a new route beside it.
  */
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
-  "desktop-time-entries": {},
   chat: {
     // Authenticated public-host icon bytes contain no tenant-owned records.
     "link-icons/get": WAIVER_REASON.noTenantReadSurface,
@@ -194,6 +208,19 @@ const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
     "get-model-options": WAIVER_REASON.noTenantReadSurface,
+    // The caller's own computers, read on the owner connection by account and
+    // organization; gateway.db.test.ts covers that one member never reads or
+    // answers another's runs.
+    "local-runners": WAIVER_REASON.isolatedOutsideRlsHarness,
+    // Approves a folder on the caller's own computer, written on the owner
+    // connection only where account, organization and computer match;
+    // linked-folder-approval.db.test.ts covers that another member or
+    // organization records nothing.
+    "local-folder-approval": WAIVER_REASON.isolatedOutsideRlsHarness,
+    // A grant to read one of the caller's own runs' outputs on their computer,
+    // read on the owner connection by account and organization;
+    // gateway.db.test.ts covers that a grant reads only the owner's one run.
+    "local-run-step-output-grant": WAIVER_REASON.isolatedOutsideRlsHarness,
     // Rewrites the prompt text in the request body; reads no stored record.
     "improve-prompt": WAIVER_REASON.noTenantReadSurface,
     // Plans a chart from the table in the request body; reads no stored record.
@@ -206,11 +233,13 @@ const handlerDomains = readdirSync(handlersDir, { withFileTypes: true })
   .map((entry) => entry.name)
   .toSorted();
 
-// A domain is "covered" iff the matrix imports a handler from it. Parsing the
-// import specifiers keeps this in lockstep with the real matrix: a new case
+// A domain is "covered" iff a matrix imports a handler from it. Parsing the
+// import specifiers keeps this in lockstep with the real matrices: a new case
 // drags its `@/api/handlers/<domain>/...` import along, and this set updates
 // with no second list to maintain.
-const matrixSource = readFileSync(crossTenantMatrixPath, "utf-8");
+const matrixSource = crossTenantMatrixPaths
+  .map((matrixPath) => readFileSync(matrixPath, "utf-8"))
+  .join("\n");
 
 const coveredDomains = new Set(
   [...matrixSource.matchAll(/@\/api\/handlers\/([^/"]+)\//gu)]

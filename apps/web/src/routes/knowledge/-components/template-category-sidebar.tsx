@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/utils";
+import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -121,19 +122,16 @@ export const TemplateCategorySidebar = ({
             {t("templates.tags")}
           </div>
           {tags.map((tag) => (
-            <button
-              className={cn(
-                "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
-                selectedTag === tag
-                  ? "bg-muted font-medium"
-                  : "hover:bg-muted/50",
-              )}
+            <Button
+              aria-pressed={selectedTag === tag}
               key={tag}
               onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
-              type="button"
+              selected={selectedTag === tag}
+              size="row"
+              variant="ghost"
             >
-              {tag}
-            </button>
+              <TruncatedText>{tag}</TruncatedText>
+            </Button>
           ))}
         </>
       )}

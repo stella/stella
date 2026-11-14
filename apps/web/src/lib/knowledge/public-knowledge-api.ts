@@ -46,6 +46,9 @@ export function unwrapPublicKnowledge<T>(
   action: string,
 ): Exclude<T, DisabledData> | null {
   if (response.error) {
+    if (response.error.kind !== undefined) {
+      return unwrapApiResponse(response);
+    }
     const { status, value } = response.error;
     if (isDisabledData(value)) {
       return unwrapApiResponse(failedRead(catalogueOff(action)));

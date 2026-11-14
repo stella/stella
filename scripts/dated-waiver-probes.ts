@@ -1,28 +1,26 @@
 import { panic, Result } from "better-result";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import * as v from "valibot";
 
 import {
   type CallExpression,
   type Node,
-  type ObjectExpression,
   type ParsedSource,
-  parseSource,
-  type VariableDeclarator,
   walk,
 } from "../packages/scripts/src/syntax-tree";
+import { DOC_SOURCE_FILE, ZERO_AGE_OVERRIDE } from "./dated-waiver-core";
 import {
-  type DatedWaiver,
-  DOC_SOURCE_FILE,
-  type ProbeKind,
-  ZERO_AGE_OVERRIDE,
-} from "./dated-waivers";
+  parseOwner,
+  readAuditAcceptanceOwner,
+  readDocumentationOwner,
+} from "./dated-waiver-owners";
+import type { DatedWaiver, ProbeKind } from "./dated-waivers";
 import {
   parseRegistry,
   serializeRegistry,
   splitTestId,
 } from "./flaky-test-quarantine";
+import { guardRolloutSource } from "./guard-rollout-policy.ts";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -33,6 +31,7 @@ import { parseLedger } from "./suppression-waivers";
 export type RemovalChange = { source: string; before: string; after: string };
 
 export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "guard-rollout": true,
   "no-llms-txt": true,
   "release-age-exclusion": true,
   "release-age-exception": true,
@@ -42,9 +41,6 @@ export const AUTOMATIC_REMOVAL_ALLOWED = {
   "suppression-waiver": true,
   "pending-contract-migration": false,
 } as const satisfies Record<ProbeKind, boolean>;
-
-// Offsets must come from a parseable owner, never from regex over source text.
-const parseOwner = (source: string, file: string) => parseSource(file, source);
 
 const nextTokenOffset = (ast: ParsedSource, offset: number): number => {
   let next = offset;
@@ -73,59 +69,9 @@ const removeNode = (source: string, ast: ParsedSource, node: Node): string => {
 };
 
 const removeDocumentation = (source: string, entry: DatedWaiver): string => {
-  const ast = parseOwner(source, DOC_SOURCE_FILE);
-  let owner: VariableDeclarator | undefined;
-  let registry: ObjectExpression | undefined;
-  walk(ast.program, (node) => {
-    if (node.type !== "VariableDeclarator" || node.id.type !== "Identifier") {
-      return;
-    }
-    if (node.id.name === "DOC_SOURCE_EXCLUSIONS") {
-      owner = node;
-    }
-    if (node.id.name === "DOC_SOURCES" && node.init) {
-      let value = node.init;
-      while (
-        value.type === "TSSatisfiesExpression" ||
-        value.type === "TSAsExpression"
-      ) {
-        value = value.expression;
-      }
-      if (value.type === "ObjectExpression") {
-        registry = value;
-      }
-    }
-  });
-  if (!owner || !registry) {
-    panic("Documentation waiver owner missing");
-  }
-  const matches: Node[] = [];
-  walk(owner, (node) => {
-    if (
-      node.type === "ObjectExpression" &&
-      node.properties.some(
-        (property) =>
-          property.type === "Property" &&
-          !property.method &&
-          !property.shorthand &&
-          source.slice(property.key.start, property.key.end) === "dependency" &&
-          property.value.type === "Literal" &&
-          property.value.value === entry.id,
-      )
-    ) {
-      matches.push(node);
-      return "skip-children";
-    }
-    if (node.type === "ArrayExpression") {
-      for (const element of node.elements) {
-        if (element?.type === "Literal" && element.value === entry.id) {
-          matches.push(element);
-        }
-      }
-    }
-    return undefined;
-  });
-  const target = matches.at(0);
+  const { ast, registry, sites } = readDocumentationOwner(source);
+  const matches = sites.filter(({ dependency }) => dependency === entry.id);
+  const target = matches.at(0)?.node;
   if (matches.length !== 1 || !target) {
     panic(`Documentation waiver anchor is not unique: ${entry.id}`);
   }
@@ -147,11 +93,8 @@ const removeDocumentation = (source: string, entry: DatedWaiver): string => {
   return updated;
 };
 
-const baselineSchema = v.looseObject({
-  accepted: v.array(v.looseObject({ id: v.string() })),
-});
 const removeAcceptance = (source: string, entry: DatedWaiver): string => {
-  const baseline = v.parse(baselineSchema, JSON.parse(source));
+  const baseline = readAuditAcceptanceOwner(source);
   if (baseline.accepted.filter(({ id }) => id === entry.id).length !== 1) {
     panic(`Audit acceptance anchor is not unique: ${entry.id}`);
   }
@@ -207,6 +150,29 @@ const leadingComments = (ast: ParsedSource, node: Node) =>
       ),
   );
 
+const removeGuardRollout = (source: string, entry: DatedWaiver): string => {
+  if (entry.source !== guardRolloutSource(entry.id)) {
+    panic(
+      `Guard rollout heals only in its own file: ${entry.source} (${entry.id})`,
+    );
+  }
+  const rollout: unknown = JSON.parse(source);
+  if (
+    typeof rollout !== "object" ||
+    rollout === null ||
+    !("id" in rollout) ||
+    rollout.id !== entry.id ||
+    !("type" in rollout) ||
+    rollout.type !== "changed-lines" ||
+    !("expiresAt" in rollout) ||
+    rollout.expiresAt !== entry.expiresAt
+  ) {
+    panic(`Guard rollout scope or expiry changed: ${entry.id}`);
+  }
+  const { expiresAt, ...fields } = rollout;
+  return `${JSON.stringify({ ...fields, type: "full" }, null, 2)}\n`;
+};
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
@@ -217,6 +183,9 @@ export const removeWaiver = (
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
+    case "guard-rollout":
+      after = removeGuardRollout(before, entry);
+      break;
     case "no-llms-txt":
       after = removeDocumentation(before, entry);
       break;
@@ -407,6 +376,17 @@ export const removeWaiver = (
 
 export type ProbeResult = { passed: boolean; output: string };
 
+// 404 and 410 confirm the llms.txt is still absent. Network failures, redirects,
+// rate limits and server errors say nothing about it.
+const DOC_ABSENT_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+const docEndpointReceipt = (status: number): string =>
+  `Documentation endpoint returned HTTP ${status}.`;
+/** Whether one probe sample's whole output is an absence receipt. */
+export const isDocAbsentReceipt = (output: string): boolean =>
+  [...DOC_ABSENT_STATUSES].some(
+    (status) => output.trim() === docEndpointReceipt(status),
+  );
+
 export const PROBE_PHASE_BUDGET_MS = 45 * 60_000;
 export const PROBE_TIMEOUT_MS = 10 * 60_000;
 const BUDGET_EXHAUSTED_OUTPUT =
@@ -469,6 +449,7 @@ const receiptSelector = (
         panic(`Invalid flaky-test quarantine id: ${entry.id}`);
       return (name) => name === expected;
     }
+    case "guard-rollout":
     case "no-llms-txt":
     case "release-age-exclusion":
     case "release-age-exception":
@@ -529,9 +510,23 @@ export const runWaiverProbe = async (
     });
   }
   const passed = results.filter((result) => result.passed).length;
+  // Only a documentation waiver can confirm its own premise, and only when
+  // every sample got the exact absence receipt: an error, timeout or any
+  // other status stays red, so it reports instead of renewing.
+  const absent =
+    entry.kind === "no-llms-txt" &&
+    results.length === entry.probe.attempts &&
+    results.every(
+      (result) => !result.passed && isDocAbsentReceipt(result.output),
+    );
+  let status: "green" | "absent" | "red" = "red";
+  if (passed === entry.probe.attempts) {
+    status = "green";
+  } else if (absent) {
+    status = "absent";
+  }
   return {
-    status:
-      passed === entry.probe.attempts ? ("green" as const) : ("red" as const),
+    status,
     attempts: entry.probe.attempts,
     passed,
     command: entry.probe.command,
@@ -561,7 +556,7 @@ export const probeDocUrl = async (
   await result.value.body?.cancel();
   return {
     passed: result.value.status === 200,
-    output: `Documentation endpoint returned HTTP ${result.value.status}.`,
+    output: docEndpointReceipt(result.value.status),
   };
 };
 

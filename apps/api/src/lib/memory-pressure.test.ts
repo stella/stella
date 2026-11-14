@@ -75,4 +75,11 @@ describe("memory pressure gate", () => {
     setRss(999);
     expect(instance.read().cause).toBeNull();
   });
+
+  test("admission includes the incoming job bytes", () => {
+    const { instance } = gate({ rss: 900 });
+
+    expect(instance.read(99).cause).toBeNull();
+    expect(instance.read(100)).toEqual({ cause: "rss", rssBytes: 900 });
+  });
 });

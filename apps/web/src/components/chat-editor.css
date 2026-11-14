@@ -26,7 +26,7 @@
 /* Round-tripped anonymization spans inside the live editor.
    Mirrors the look of <AnonymizedSpan> on rendered messages. */
 .chat-editor .tiptap .stll-anon-highlight {
-  background-color: rgb(from var(--color-info) r g b / 0.12);
+  background-color: color-mix(in srgb, var(--color-info) 12%, transparent);
   color: var(--color-info);
   border-radius: 0.25rem;
   padding-inline: 0.125rem;

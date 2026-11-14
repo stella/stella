@@ -205,7 +205,7 @@ const organizeSuggestionsHandler = async function* ({
   userId,
 }: OrganizeSuggestionsHandlerProps) {
   if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
 
   yield* requireTanStackAIAvailableForTask({
@@ -1152,7 +1152,7 @@ const organizeSuggestions = createSafeHandler(
     user,
   }) {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     return yield* organizeSuggestionsHandler({

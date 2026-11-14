@@ -12,6 +12,7 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:data-export-maintenance": ["checkpointedJobs"],
   "system:monitoring-session-revoke": [
     "revokedControls",
     "deletedSessions",
@@ -36,11 +37,13 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "held",
     "failed",
   ],
-  "system:case-law-sitemap-refresh": ["shards", "pages"],
+  "system:case-law-sitemap-refresh": ["months", "shards"],
   "system:statute-sitemap-refresh": ["shards"],
-  "system:case-law-coverage-refresh": ["summaries", "countries"],
-  "system:case-law-browse-facet-refresh": ["buckets"],
+  "system:case-law-coverage-refresh": ["summaries", "countries", "unreadParts"],
+  "system:case-law-population-fold": ["deltas"],
+  "system:case-law-population-seed": ["projectedDecisions"],
   "system:legislation-facet-refresh": ["buckets"],
+  "system:legislation-version-changes": ["summaries"],
   "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
     "sweptPrefixes",
@@ -58,9 +61,17 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "budgets",
   ],
   "system:usage-webhook-retention": ["redactedEvents"],
+  "system:hosted-customer-erasure": [
+    "claimed",
+    "erased",
+    "failed",
+    "terminalFailures",
+  ],
   "system:file-comparison-sweep": ["sweptUploads"],
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
+  "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
+  "system:search-history-country-repair": ["classified", "unclassifiable"],
   "system:audit-retention": ["deletedRuns"],
   "system:case-law-background-replay": [
     "attempted",
@@ -120,6 +131,7 @@ export const TENANT_SYSTEM_ACTOR = {
   memoryCurator: "system:memory-curator",
   memoryExtractor: "system:memory-extractor",
   usageProvider: "system:usage-provider",
+  uploadedMail: "system:uploaded-mail",
 } as const;
 
 /** The shape the database CHECK enforces on `system_audit_runs.actor`. */

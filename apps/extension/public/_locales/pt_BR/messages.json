@@ -1,46 +1,15 @@
 {
-  "accessOff": {
-    "message": "O acesso a sites está desativado. Conceda-o uma vez para que a stella use os sites nos quais você já entrou."
-  },
-  "accessReady": {
-    "message": "Pronto. A stella pode usar uma guia dedicada enquanto você permanece conectado aos sites."
-  },
   "accessUpdateFailed": {
     "message": "O Chrome não conseguiu alterar o acesso a sites."
-  },
-  "adoptTab": {
-    "message": "Usar esta aba com a stella"
   },
   "adoptUnsupported": {
     "message": "Com a stella só é possível usar páginas HTTPS públicas."
   },
-  "adoptedTab": {
-    "message": "A stella agora pode ler $ORIGIN$ nesta aba. Pergunte sobre ela no chat.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Verificando o acesso a sites…"
-  },
-  "connectTab": {
-    "message": "Conectar a guia atual da stella"
-  },
-  "controllerReady": {
-    "message": "Conectado a $ORIGIN$. Cada ação ainda precisa de aprovação na stella.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Desconectar guia"
+  "usingTabs": {
+    "message": "Em uso:"
   },
   "downloadKept": {
-    "message": "Downloads concluídos enquanto o stella controlava uma aba e mantidos: $COUNT$. Verifique a origem antes de abri-los.",
+    "message": "Downloads mantidos: $COUNT$, verifique antes de abrir",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -48,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Downloads que o stella interrompeu enquanto controlava uma aba: $COUNT$.",
+    "message": "Downloads interrompidos: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -56,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Enquanto o stella controlava uma aba: downloads interrompidos: $STOPPED$. Downloads concluídos e mantidos (verifique a origem antes de abri-los): $KEPT$.",
+    "message": "Downloads interrompidos: $STOPPED$ · mantidos: $KEPT$, verifique antes de abrir",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -72,13 +41,61 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Permitir todos os sites"
-  },
-  "revokeAccess": {
-    "message": "Remover acesso a sites"
-  },
   "unsupportedTab": {
     "message": "Abra uma guia do aplicativo stella e tente novamente."
+  },
+  "connectionPurpose": {
+    "message": "Abre e lê sites para o chat usando suas sessões iniciadas."
+  },
+  "statusConnected": {
+    "message": "Conectada"
+  },
+  "statusNotConnected": {
+    "message": "Não conectada"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "É necessário acessar sites"
+  },
+  "statusOpenStella": {
+    "message": "Abra a stella para conectar"
+  },
+  "allowAndConnect": {
+    "message": "Permitir acesso e conectar"
+  },
+  "allowWebsiteAccess": {
+    "message": "Permitir acesso a sites"
+  },
+  "connectStella": {
+    "message": "Conectar o stella"
+  },
+  "adoptTab": {
+    "message": "Usar esta guia com a stella"
+  },
+  "disconnectTab": {
+    "message": "Desconectar"
+  },
+  "revokeAccess": {
+    "message": "Remover acesso"
+  },
+  "checkingAccess": {
+    "message": "Verificando a conexão…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Conectada em outro lugar"
+  },
+  "connectStellaInstead": {
+    "message": "Conectar o stella aqui no lugar"
+  },
+  "allowDesktop": {
+    "message": "Usar com o stella desktop"
+  },
+  "desktopConnected": {
+    "message": "stella desktop conectado"
+  },
+  "desktopNotRunning": {
+    "message": "stella desktop não está em execução"
+  },
+  "desktopUpdateNeeded": {
+    "message": "Atualize o stella desktop e esta extensão"
   }
 }

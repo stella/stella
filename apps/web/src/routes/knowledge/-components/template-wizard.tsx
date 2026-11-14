@@ -18,6 +18,7 @@ import {
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -26,6 +27,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -121,7 +123,7 @@ const ValueTypeLabel = ({
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };
@@ -177,23 +179,25 @@ const OptionsTagInput = ({
           <Tooltip
             content={t("common.remove")}
             render={
-              <button
+              <Button
                 aria-label={t("common.remove")}
-                className="h-full shrink-0 cursor-pointer px-1.5 opacity-80 hover:opacity-100"
+                className="h-full"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeOption(i);
                 }}
-                type="button"
+                variant="plain"
               >
-                <XIcon className="size-3.5" />
-              </button>
+                <span className="flex h-full items-center px-1.5 opacity-80 hover:opacity-100">
+                  <XIcon className="size-3.5" />
+                </span>
+              </Button>
             }
           />
         </span>
       ))}
-      <input
-        className="placeholder:text-muted-foreground min-w-24 flex-1 bg-transparent px-1 outline-none"
+      <Input
+        className="min-w-24 flex-1"
         dir={contentDir(draft)}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -201,7 +205,9 @@ const OptionsTagInput = ({
           options.length === 0 ? t("templates.fieldOptionsPlaceholder") : ""
         }
         ref={inputRef}
+        size="sm"
         type="text"
+        unstyled
         value={draft}
       />
     </div>
@@ -525,13 +531,9 @@ const LookupTokenChip = ({
   onInsert: (name: string) => void;
 }) => {
   const button = (
-    <button
-      className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
-      onClick={() => onInsert(name)}
-      type="button"
-    >
+    <Button onClick={() => onInsert(name)} size="xs" variant="secondary">
       [{name}]
-    </button>
+    </Button>
   );
   if (example === undefined) {
     return button;
@@ -640,7 +642,7 @@ const FormatMarkerHint = ({
     return (
       <p className="text-muted-foreground text-xs">
         {t("templates.fieldLookupFormatDefaultMarker")}
-        <code className="bg-muted ms-1 rounded px-1 py-0.5">
+        <code className="bg-muted ms-1 rounded-sm px-1 py-0.5">
           {`{{${fieldPath}}}`}
         </code>
       </p>
@@ -652,7 +654,7 @@ const FormatMarkerHint = ({
   return (
     <p className="text-muted-foreground text-xs">
       {t("templates.fieldLookupFormatMarker")}
-      <code className="bg-muted ms-1 rounded px-1 py-0.5">
+      <code className="bg-muted ms-1 rounded-sm px-1 py-0.5">
         {`{{${fieldPath}.${trimmedKey}}}`}
       </code>
     </p>
@@ -1116,7 +1118,7 @@ export const FieldConfigEditor = ({
       )}
     >
       {!embedded && (
-        <p className="bg-muted/60 text-muted-foreground rounded px-3 py-2 text-xs leading-relaxed">
+        <p className="bg-muted/60 text-muted-foreground rounded-sm px-3 py-2 text-xs leading-relaxed">
           <code>{field.path}</code>
         </p>
       )}
@@ -1125,7 +1127,7 @@ export const FieldConfigEditor = ({
         <div className="flex items-center justify-between gap-2">
           <FieldLabel>{t("templates.fieldLabel")}</FieldLabel>
           {isFormula || hideRequired ? null : (
-            <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+            <Label variant="muted">
               <Checkbox
                 checked={field.required}
                 onCheckedChange={(checked) => onUpdate({ required: checked })}
@@ -1134,7 +1136,7 @@ export const FieldConfigEditor = ({
               <span aria-hidden className="text-destructive">
                 *
               </span>
-            </label>
+            </Label>
           )}
         </div>
         <FieldControl

@@ -9,12 +9,12 @@ import {
 } from "@stll/api-contract/organization-ai-availability";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { isOrganizationManagementRole, roles } from "@stll/permissions";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 
@@ -397,7 +397,7 @@ test("a provider under another provider reuses the outer gate", async () => {
 });
 
 const { AIProviderSettingsBoundary } =
-  await import("@/routes/_protected.admin/-components/organization/ai-provider-settings-boundary");
+  await import("@/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary");
 
 const surfaceBoundaries = {
   panel: ({ children }: PropsWithChildren) => (
@@ -533,8 +533,8 @@ test.each(unavailableSurfaceCases)(
     );
     await waitFor(() => {
       expect(
-        screen.queryByText(messages.chat.sendErrorProviderUnavailable),
-      ).toBeNull();
+        screen.queryByText(messages.chat.sendErrorProviderUnavailable) === null,
+      ).toBe(true);
     });
     expect(await gates.get("gate")?.ensureAIAvailable()).toBe(true);
     expect(screen.getByRole("button", { name: messages.common.cancel })).toBe(
@@ -611,8 +611,8 @@ test.each(settingsReadFailures)(
       screen.getByRole("button", { name: messages.common.retry }),
     );
     await waitFor(() => {
-      expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.queryByRole("status")).toBeNull();
+      expect(screen.queryByRole("alert") === null).toBe(true);
+      expect(screen.queryByRole("status") === null).toBe(true);
     });
     expect(
       screen.queryByRole("button", { name: messages.common.cancel }) !== null,
@@ -638,7 +638,7 @@ test("settings admission reports failed refreshes instead of retaining cached ma
   providerConfiguration = "permission_required";
   fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
   await waitFor(() => {
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("alert") === null).toBe(true);
   });
   expect(
     screen.queryByRole("button", { name: messages.common.cancel }),
@@ -673,6 +673,7 @@ const CanaryComposer = ({ controllers, sends }: CanaryComposerProps) => {
       hero={
         <ChatInputSurface
           controller={controller}
+          models={null}
           sendDisabled={availability !== "available"}
           variant="large"
           reservedCommands={{ hasPersistedThread: false }}

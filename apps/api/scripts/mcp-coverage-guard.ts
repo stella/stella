@@ -1,4 +1,4 @@
-// MCP coverage guard (ratcheted).
+// MCP coverage guard.
 //
 // Companion to the required `mcp` disposition on every safe-handler config
 // (`apps/api/src/lib/api-handlers.ts`). The type system already forces every
@@ -12,8 +12,7 @@
 //      `type: "tool"` endpoint, a `type: "covered"` endpoint, or a documented
 //      entry in TOOLS_WITHOUT_ENUMERABLE_ENDPOINT (inline-in-routes or static
 //      tools the module glob cannot reach);
-//   4. a ratcheted baseline of `pending` endpoints that can only shrink. The
-//      baseline is now empty, so any `pending` endpoint fails as a new gap.
+//   4. no endpoint is `pending`: the disposition names a gap, so it fails;
 //   5. a hidden-endpoint invariant: per file, the number of `createSafe*Handler`
 //      factory call sites must equal the number of `{ config, handler }` exports
 //      the guard could enumerate (plus a pinned inline count for allowlisted
@@ -35,15 +34,11 @@
 // TOOLS_WITHOUT_ENUMERABLE_ENDPOINT so the orphan check stays honest.
 //
 // Modes:
-//   bun apps/api/scripts/mcp-coverage-guard.ts                 CI gate (exit 1 on failure)
-//   bun apps/api/scripts/mcp-coverage-guard.ts --write-baseline regenerate the pending baseline
-//   bun apps/api/scripts/mcp-coverage-guard.ts --self-test      prove the ratchet detectors fire
+//   bun apps/api/scripts/mcp-coverage-guard.ts              CI gate (exit 1 on failure)
+//   bun apps/api/scripts/mcp-coverage-guard.ts --self-test  prove the detectors fire
 //
 // CI-only by design (it imports the handler graph): wired into
 // `.github/workflows/ci.yml` and `bun run verify`, not oxlint.
-
-import { panic } from "better-result";
-import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -52,15 +47,10 @@ import {
   discoverSafeHandlers,
   enumerateModuleEndpoints,
   isEndpointModule,
+  isRecord,
   parseExposure,
-  REPO_ROOT,
   toEndpointIdentifier,
 } from "./lib/enumerate-safe-handlers";
-
-const BASELINE_PATH = path.resolve(
-  REPO_ROOT,
-  "apps/api/mcp-coverage-baseline.json",
-);
 
 const EXPOSURE_TYPES = [
   "tool",
@@ -97,8 +87,8 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // Built by a factory so tests can inject the bundled catalogue; all six are
   // internal-only public reads with no MCP tool.
   "apps/api/src/handlers/public-knowledge/endpoints.ts": 6,
-  "apps/api/src/handlers/search/routes.ts": 5,
-  "apps/api/src/handlers/workspaces/routes.ts": 4,
+  "apps/api/src/handlers/search/routes.ts": 3,
+  "apps/api/src/handlers/workspaces/routes.ts": 1,
 };
 
 /**
@@ -112,9 +102,9 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
   mint_web_handoff:
     "no dedicated REST endpoint: app-only link refresh invokes the shared handoff mint service (apps/api/src/mcp/web-handoff-links.ts)",
   search:
-    "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search",
+    "no dedicated endpoint: reads matter knowledge through the search provider (apps/api/src/mcp/compat-tools.ts, getSearchReader); search.results.list is a separate capability",
   search_across_matters:
-    "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search (same backing as `search`)",
+    "no dedicated endpoint: reads matter knowledge through the search provider (apps/api/src/mcp/stella-tools.ts, getSearchReader)",
   search_case_law:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
   case_law_coverage:
@@ -133,6 +123,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: app-only MCP reader page stream over the same public decision read, citations and provision previews (apps/api/src/handlers/case-law/decisions/reader.ts)",
   preview_cited_provision:
     "no dedicated endpoint: app-only MCP preview over the existing consolidated provision preview service (apps/api/src/mcp/decision-reader-tools.ts)",
+  list_case_law_courts:
+    "no dedicated endpoint: app-only MCP court list over the court-filter vocabulary search_case_law already reads (apps/api/src/mcp/case-law-court-filter.ts)",
   read_provision_history:
     "inline endpoint: apps/api/src/handlers/legislation/public-routes.ts GET /law/statutes/:documentId/provisions/:anchor/history",
   read_statute_provisions:
@@ -225,10 +217,13 @@ export const classifyCoverage = ({
       if (!registry.has(exposure.name)) {
         unknownToolNames.push({ id, name: exposure.name });
       }
-    } else if (exposure.type === "covered") {
-      referencedTools.add(exposure.by);
-      if (!registry.has(exposure.by)) {
-        unknownToolNames.push({ id, name: exposure.by });
+    } else if (exposure.type === "covered" || exposure.type === "capability") {
+      const { by } = exposure;
+      if (by !== undefined) {
+        referencedTools.add(by);
+        if (!registry.has(by)) {
+          unknownToolNames.push({ id, name: by });
+        }
       }
     }
   }
@@ -265,34 +260,14 @@ export const classifyCoverage = ({
   };
 };
 
-export type BaselineDiff = {
-  newPending: string[];
-  stalePending: string[];
-};
-
-/**
- * Ratchet diff: `newPending` are `pending` endpoints missing from the baseline
- * (adding a new gap — fails); `stalePending` are baseline entries that are no
- * longer `pending` or no longer exist (the gap closed — the entry must be
- * removed so the baseline can only shrink). The checked-in baseline is empty,
- * which turns this into a zero-pending gate while keeping useful diagnostics if
- * an old or malformed endpoint config still says `pending`.
- */
-export const computeBaselineDiff = ({
-  currentPending,
-  baseline,
-}: {
-  currentPending: readonly string[];
-  baseline: readonly string[];
-}): BaselineDiff => {
-  const currentSet = new Set(currentPending);
-  const baselineSet = new Set(baseline);
-  const newPending = currentPending
-    .filter((id) => !baselineSet.has(id))
+/** Endpoints still declaring the `pending` disposition, sorted. */
+export const findPendingEndpoints = (
+  endpoints: readonly { id: string; exposure: ParsedExposure }[],
+): string[] =>
+  endpoints
+    .filter(({ exposure }) => exposure.type === "pending")
+    .map(({ id }) => id)
     .toSorted();
-  const stalePending = baseline.filter((id) => !currentSet.has(id)).toSorted();
-  return { newPending, stalePending };
-};
 
 export type FileEndpointCount = {
   id: string;
@@ -347,36 +322,12 @@ export const findStaleAllowlistEntries = ({
     .toSorted(compareCodeUnit);
 };
 
-const readBaseline = async (): Promise<string[]> => {
-  const file = Bun.file(BASELINE_PATH);
-  if (!(await file.exists())) {
-    return [];
-  }
-  const parsed: unknown = await file.json();
-  if (!Array.isArray(parsed)) {
-    return panic(
-      `mcp-coverage-guard: ${BASELINE_PATH} must be a JSON array of strings.`,
-    );
-  }
-  const entries: string[] = [];
-  for (const item of parsed) {
-    if (typeof item !== "string") {
-      return panic(
-        `mcp-coverage-guard: ${BASELINE_PATH} must be a JSON array of strings.`,
-      );
-    }
-    entries.push(item);
-  }
-  return entries;
-};
-
-const writeBaseline = async (pending: readonly string[]): Promise<void> => {
-  const sorted = [...pending].toSorted();
-  await Bun.write(BASELINE_PATH, `${JSON.stringify(sorted, null, 2)}\n`);
-};
-
 type Discovered = {
-  endpoints: { id: string; exposure: ParsedExposure }[];
+  endpoints: {
+    id: string;
+    exposure: ParsedExposure;
+    config: Record<string, unknown>;
+  }[];
   importErrors: { id: string; message: string }[];
   files: FileEndpointCount[];
 };
@@ -384,7 +335,11 @@ type Discovered = {
 const discoverEndpoints = async (): Promise<Discovered> => {
   const { endpoints, files, importErrors } = await discoverSafeHandlers();
   return {
-    endpoints: endpoints.map(({ id, exposure }) => ({ id, exposure })),
+    endpoints: endpoints.map(({ id, exposure, config }) => ({
+      id,
+      exposure,
+      config,
+    })),
     importErrors,
     files: files.map(({ id, callCount, enumerableCount }) => ({
       id,
@@ -392,6 +347,86 @@ const discoverEndpoints = async (): Promise<Discovered> => {
       enumerableCount,
     })),
   };
+};
+
+type DeclaredRealtime = { scope: string; resourceTypes?: unknown };
+
+const announcedResourceSets = (realtime: DeclaredRealtime): string[] => {
+  if (realtime.scope === "none") {
+    return [];
+  }
+  const { resourceTypes } = realtime;
+  const types: unknown[] = Array.isArray(resourceTypes)
+    ? resourceTypes
+    : [resourceTypes];
+  return types.map((type) => `${realtime.scope}:${String(type)}`);
+};
+
+type RealtimeEndpoint = {
+  id: string;
+  exposure: ParsedExposure;
+  config: Record<string, unknown>;
+};
+
+const isDeclaredRealtime = (value: unknown): value is DeclaredRealtime =>
+  isRecord(value) && typeof value["scope"] === "string";
+
+const toolOf = ({ exposure }: RealtimeEndpoint): string | undefined => {
+  if (exposure.type === "tool") {
+    return exposure.name;
+  }
+  return exposure.type === "covered" ? exposure.by : undefined;
+};
+
+/**
+ * A tool stands in for its routes, so it announces exactly what they declare.
+ * Fails on a write route whose declaration its tool does not announce, which
+ * is a change other tabs and members never see, and on a tool announcing
+ * something none of its routes declares.
+ */
+export const findRealtimeMismatches = ({
+  endpoints,
+  toolRealtime,
+}: {
+  endpoints: readonly RealtimeEndpoint[];
+  toolRealtime: Readonly<Record<string, readonly DeclaredRealtime[]>>;
+}): string[] => {
+  const declaredByRoutes = new Map<string, Set<string>>();
+  const mismatches: string[] = [];
+  for (const endpoint of endpoints) {
+    const tool = toolOf(endpoint);
+    if (
+      tool === undefined ||
+      !Object.hasOwn(toolRealtime, tool) ||
+      endpoint.config["access"] === "read"
+    ) {
+      continue;
+    }
+    const sets = declaredByRoutes.get(tool) ?? new Set<string>();
+    declaredByRoutes.set(tool, sets);
+    const realtime = endpoint.config["realtime"];
+    if (!isDeclaredRealtime(realtime)) {
+      continue;
+    }
+    const announced = new Set(
+      (toolRealtime[tool] ?? []).flatMap(announcedResourceSets),
+    );
+    for (const set of announcedResourceSets(realtime)) {
+      sets.add(set);
+      if (!announced.has(set)) {
+        mismatches.push(`${endpoint.id}: ${tool} does not announce ${set}`);
+      }
+    }
+  }
+  for (const [tool, declarations] of Object.entries(toolRealtime)) {
+    const routeSets = declaredByRoutes.get(tool) ?? new Set<string>();
+    for (const set of declarations.flatMap(announcedResourceSets)) {
+      if (!routeSets.has(set)) {
+        mismatches.push(`${tool}: no route declares ${set}`);
+      }
+    }
+  }
+  return mismatches.toSorted(compareCodeUnit);
 };
 
 const printIssues = (issues: CoverageIssues): boolean => {
@@ -499,10 +534,12 @@ const runCheck = async (): Promise<number> => {
     return 1;
   }
 
-  const [{ MCP_STATIC_TOOL_NAMES }, { MCP_APPS }] = await Promise.all([
-    import("../src/mcp/static-tool-definitions"),
-    import("@stll/mcp-apps/manifest"),
-  ]);
+  const [{ MCP_STATIC_TOOL_NAMES }, { MCP_APPS }, { WRITE_TOOL_REALTIME }] =
+    await Promise.all([
+      import("../src/mcp/static-tool-definitions"),
+      import("@stll/mcp-apps/manifest"),
+      import("../src/mcp/tool-realtime"),
+    ]);
 
   const issues = classifyCoverage({
     appTools: MCP_APPS.flatMap(({ directory, callableTools }) =>
@@ -514,86 +551,69 @@ const runCheck = async (): Promise<number> => {
   });
   const coverageFailed = printIssues(issues);
 
-  const currentPending = endpoints
-    .filter(({ exposure }) => exposure.type === "pending")
-    .map(({ id }) => id);
-
-  const baseline = await readBaseline();
-  const { newPending, stalePending } = computeBaselineDiff({
-    currentPending,
-    baseline,
+  const realtimeMismatches = findRealtimeMismatches({
+    endpoints,
+    toolRealtime: WRITE_TOOL_REALTIME,
   });
-
-  let ratchetFailed = false;
-  if (newPending.length > 0) {
-    ratchetFailed = true;
+  if (realtimeMismatches.length > 0) {
     console.error(
-      "\nmcp-coverage-guard: these endpoints are `pending` but not in the baseline. The pending baseline can only shrink: give them a real `mcp` disposition (`tool`/`covered`/`internal`), do not add new pending gaps:",
+      "\nmcp-coverage-guard: these write tools and their routes disagree on realtime. Keep WRITE_TOOL_REALTIME in apps/api/src/mcp/tool-realtime.ts equal to the routes' `realtime` declarations:",
     );
-    for (const id of newPending) {
-      console.error(`  ${id}`);
+    for (const mismatch of realtimeMismatches) {
+      console.error(`  ${mismatch}`);
     }
   }
-  if (stalePending.length > 0) {
-    ratchetFailed = true;
+
+  const pending = findPendingEndpoints(endpoints);
+  if (pending.length > 0) {
     console.error(
-      "\nmcp-coverage-guard: these baseline entries are no longer `pending` (or no longer exist). Remove them from apps/api/mcp-coverage-baseline.json to keep the ratchet tight:",
+      "\nmcp-coverage-guard: these endpoints are `pending`. Give them a real `mcp` disposition (`tool`/`covered`/`internal`):",
     );
-    for (const id of stalePending) {
+    for (const id of pending) {
       console.error(`  ${id}`);
     }
   }
 
-  if (coverageFailed || ratchetFailed || hiddenEndpointFailed) {
+  if (
+    coverageFailed ||
+    pending.length > 0 ||
+    hiddenEndpointFailed ||
+    realtimeMismatches.length > 0
+  ) {
     return 1;
   }
 
   console.log(
-    `mcp-coverage-guard: OK. ${endpoints.length} endpoint modules enumerated; ${currentPending.length} pending (baselined); ${MCP_STATIC_TOOL_NAMES.length} static tools, no orphans.`,
+    `mcp-coverage-guard: OK. ${endpoints.length} endpoint modules enumerated, none pending; ${MCP_STATIC_TOOL_NAMES.length} static tools, no orphans.`,
   );
   return 0;
 };
 
-const runWriteBaseline = async (): Promise<number> => {
-  const { endpoints, importErrors } = await discoverEndpoints();
-  if (importErrors.length > 0) {
-    console.error(
-      "mcp-coverage-guard --write-baseline: refusing to write; some modules failed to import:",
-    );
-    for (const { id, message } of importErrors) {
-      console.error(`  ${id}: ${message}`);
-    }
-    return 1;
-  }
-  const pending = endpoints
-    .filter(({ exposure }) => exposure.type === "pending")
-    .map(({ id }) => id);
-  await writeBaseline(pending);
-  console.log(
-    `mcp-coverage-guard --write-baseline: wrote ${pending.length} pending endpoints to apps/api/mcp-coverage-baseline.json`,
-  );
-  return 0;
-};
-
-// Self-test: prove the ratchet detectors fire on synthetic inputs, through the
-// same pure functions the real check uses. A broken detector cannot pass here.
+// Self-test: prove the detectors fire on synthetic inputs, through the same
+// pure functions the real check uses. A broken detector cannot pass here.
 const runSelfTest = (): number => {
   const failures: string[] = [];
 
-  const newGap = computeBaselineDiff({
-    currentPending: ["a", "b"],
-    baseline: ["a"],
-  });
-  if (newGap.newPending.length !== 1 || newGap.newPending[0] !== "b") {
-    failures.push("computeBaselineDiff did not flag a new pending endpoint");
+  const gaps = findPendingEndpoints([
+    { id: "a", exposure: { type: "internal", reason: "webhook" } },
+    { id: "b", exposure: { type: "pending" } },
+  ]);
+  if (gaps.length !== 1 || gaps[0] !== "b") {
+    failures.push("findPendingEndpoints did not flag a pending endpoint");
   }
 
-  const stale = computeBaselineDiff({
-    currentPending: ["a"],
-    baseline: ["a", "gone"],
+  const unannounced = findRealtimeMismatches({
+    endpoints: [
+      {
+        id: "a",
+        exposure: { type: "covered", by: "t" },
+        config: { realtime: { scope: "workspace", resourceTypes: "entity" } },
+      },
+    ],
+    toolRealtime: { t: [] },
   });
-  if (stale.stalePending.length !== 1 || stale.stalePending[0] !== "gone") {
-    failures.push("computeBaselineDiff did not flag a stale baseline entry");
+  if (unannounced.length !== 1) {
+    failures.push("findRealtimeMismatches did not flag an unannounced route");
   }
 
   const orphan = classifyCoverage({
@@ -728,18 +748,10 @@ const runSelfTest = (): number => {
   return 0;
 };
 
-const main = async (): Promise<number> => {
-  if (process.argv.includes("--self-test")) {
-    return runSelfTest();
-  }
-  if (process.argv.includes("--write-baseline")) {
-    return await runWriteBaseline();
-  }
-  return await runCheck();
-};
-
 if (import.meta.main) {
-  process.exit(await main());
+  process.exit(
+    process.argv.includes("--self-test") ? runSelfTest() : await runCheck(),
+  );
 }
 
 // Exported only for the guard's own test suite.

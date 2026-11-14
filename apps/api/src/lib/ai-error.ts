@@ -9,7 +9,11 @@ import { panic, Result } from "better-result";
  * checked against one source.
  */
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { AI_FAILURE_CODES, isAIFailureCode } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  isAIFailureCode,
+} from "@stll/api-contract";
 import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
@@ -21,6 +25,10 @@ import {
   isOutputCeilingStopReport,
 } from "@/api/lib/chat/provider-stream-contract";
 import {
+  CHAT_RUN_LOG_REFUSAL_KIND,
+  ChatRunLogRefusedError,
+} from "@/api/lib/chat/run-log-refusal";
+import {
   ModelDeadlineExceededError,
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
@@ -29,10 +37,12 @@ import {
   PROVIDER_CALL_FAILURE_REASON,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import { isProviderAccountOutOfCredit } from "@/api/lib/errors/provider-error-catalogue";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DocumentTooLargeError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -49,6 +59,7 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
+import { providerErrorBodyOf } from "@/api/lib/observability/provider-error-reason";
 
 export type { AIErrorKind };
 
@@ -69,6 +80,30 @@ const TRANSIENT_PROVIDER_NETWORK_CODES = new Set(
 const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
   INCOMPLETE_STREAM_CODE,
   "incomplete-stream",
+]);
+
+/**
+ * The run error codes a chat turn ends with when its own runtime, not a
+ * provider, names why it stopped, by the kind each names: the computer a local
+ * turn ran on (`local-run-chunks.ts`), or the turn's delivery log
+ * (`ChatDeliveryError`). A model at capacity is the provider's outage,
+ * reported under its own code by the harness (`@stll/agent-engine` stream
+ * chunks).
+ */
+const RUNTIME_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
+  [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
+  [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
+  [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
+  [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
+  [AI_FAILURE_CODES.turn_too_large, "turn_too_large"],
+  [AI_FAILURE_CODES.local_runner_not_reached, "local_runner_not_reached"],
+  [AI_FAILURE_CODES.local_runner_relinked, "local_runner_relinked"],
+  [AI_FAILURE_CODES.local_runner_restoring, "local_runner_restoring"],
+  [
+    AI_FAILURE_CODES.local_runner_folder_unavailable,
+    "local_runner_folder_unavailable",
+  ],
+  [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
 ]);
 
 /**
@@ -305,6 +340,20 @@ const errorCause = (error: unknown): unknown => {
   return error["cause"];
 };
 
+const UNAVAILABLE_MODEL_CODES: ReadonlySet<string> = new Set([
+  "model_not_found",
+]);
+
+const namesUnavailableModel = (source: unknown): boolean =>
+  [
+    providerErrorBodyOf(source),
+    providerErrorBodyOf(providerMessageBody(source)),
+  ]
+    .map((body) => body?.["code"])
+    .some(
+      (code) => typeof code === "string" && UNAVAILABLE_MODEL_CODES.has(code),
+    );
+
 const providerResponseKind = (error: unknown): AIErrorKind | null => {
   const response = selectProviderResponse(error, "classification");
   const statusCode = response?.status ?? null;
@@ -337,8 +386,8 @@ const providerResponseKind = (error: unknown): AIErrorKind | null => {
     // Only a provider status or explicit provider-owned credential marker
     // counts, which is what keeps a 401 this service raised itself out of
     // here: its curated copy would otherwise be replaced by the provider's.
-    // A provider 403 stays unmapped because it is ambiguous (permission,
-    // region, or account state) where a 401 is not.
+    // A provider 403 otherwise stays unmapped because it is ambiguous
+    // (permission, region, or account state) where a 401 is not.
     if (statusCode === 401 || (statusCode === null && credentialsRejected)) {
       return "provider_credentials_rejected";
     }
@@ -346,6 +395,11 @@ const providerResponseKind = (error: unknown): AIErrorKind | null => {
     // serves the configured model (retired or renamed upstream) — a
     // config problem, not a transient outage, so retrying won't help.
     if (statusCode === 404) {
+      return "model_unavailable";
+    }
+    // A 403 whose body names the model as the refused resource is the same
+    // configuration state: the key cannot use the configured model.
+    if (statusCode === 403 && namesUnavailableModel(response?.source)) {
       return "model_unavailable";
     }
     if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
@@ -380,6 +434,9 @@ const classifyAIErrorInternal = (
   if (namedKind !== null) {
     return namedKind;
   }
+  if (ChatRunLogRefusedError.is(error)) {
+    return CHAT_RUN_LOG_REFUSAL_KIND[error.reason];
+  }
   if (isNonNullObject(error)) {
     const structuredKind = structuredOutputFailureKind(error);
     if (structuredKind !== null) {
@@ -387,6 +444,12 @@ const classifyAIErrorInternal = (
     }
   }
 
+  if (isNonNullObject(error) && typeof error["code"] === "string") {
+    const runtimeKind = RUNTIME_KIND_BY_CODE.get(error["code"]);
+    if (runtimeKind !== undefined) {
+      return runtimeKind;
+    }
+  }
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
@@ -406,6 +469,15 @@ const classifyAIErrorInternal = (
   const providerKind = providerResponseKind(error);
   if (providerKind !== null) {
     return providerKind;
+  }
+  // An adapter can forward the provider's error body without its status. The
+  // body still names an account out of credit, which only its owner can fix.
+  const providerBody = providerErrorBodyOf(error);
+  if (
+    providerBody !== undefined &&
+    isProviderAccountOutOfCredit(providerBody)
+  ) {
+    return "provider_billing";
   }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
   // recognised provider cause so a permanent provider response does not look
@@ -699,6 +771,17 @@ const aiKindHandlerError = (
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
+    // A computer's run and a turn's delivery limit end a chat turn, never a
+    // request this maps; the code still names the reason for whoever reads one.
+    case "local_runner_needs_login":
+    case "local_runner_limit_reached":
+    case "local_runner_unavailable":
+    case "local_runner_turn_too_large":
+    case "turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
+    case "local_runner_folder_unavailable":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {
@@ -724,6 +807,15 @@ export const aiHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  // Raised before any model call, so no provider failure kind describes it.
+  if (DocumentTooLargeError.is(error)) {
+    return new HandlerError({
+      code: DOCUMENT_TOO_LARGE_ERROR_CODE,
+      status: 413,
+      message: error.message,
+      cause: error,
+    });
+  }
   const kind = classifyAIBoundaryFailure(error);
   const mapped = aiKindHandlerError(kind, error, fallback);
   const handlerError =

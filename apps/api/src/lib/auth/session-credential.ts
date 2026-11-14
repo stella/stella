@@ -5,8 +5,7 @@
  * Better Auth's `getSession` (cookie cache on) answers `null` before it reads
  * anything when the session cookie is absent, so on a request without a
  * credential the lookup is pure cost; on an anonymous or refused request it
- * dominates the pipeline. Credentials are its session cookie and, through the
- * bearer plugin, an `Authorization` header it turns into that cookie.
+ * dominates the pipeline. The credential is its session cookie.
  */
 
 /** What this check reads from an auth instance. */
@@ -48,13 +47,11 @@ export const skippableSessionCookieOf = async (
 };
 
 /**
- * Whether `headers` carry the session cookie or an `Authorization` header.
+ * Whether `headers` carry the session cookie.
  * The cookie match is deliberately loose: a false positive only costs the
  * lookup, a false negative would refuse a signed-in caller.
  */
 export const carriesSessionCredential = (
   headers: Headers,
   sessionCookie: string,
-): boolean =>
-  headers.has("authorization") ||
-  headers.get("cookie")?.includes(`${sessionCookie}=`) === true;
+): boolean => headers.get("cookie")?.includes(`${sessionCookie}=`) === true;

@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   identityAnswerPage,
@@ -58,7 +58,8 @@ describe("a page with the named decisions pinned above it", () => {
   });
 
   test("keeps every text result, shows each decision once, and the pinned first", () => {
-    fc.assert(
+    assertProperty(
+      "keeps every text result, shows each decision once, and the pinned first",
       fc.property(ids, ids, ids, (pinnedNumbers, extra, rankedNumbers) => {
         const hit = (number: number) => ({ id: `d${String(number)}` });
         const pinned = pinnedNumbers.map(hit);
@@ -76,7 +77,7 @@ describe("a page with the named decisions pinned above it", () => {
           ranked.filter(({ id }) => !pinnedIds.has(id)),
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 

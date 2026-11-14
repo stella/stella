@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { BILLING_STATUS } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
@@ -140,6 +141,7 @@ const rateUpdateFor = async function* ({
   billable,
   changedDateWorked,
   moving,
+  activityCode,
 }: {
   safeDb: SafeDb;
   /** The matter the entry ends up in. */
@@ -149,10 +151,12 @@ const rateUpdateFor = async function* ({
     currency: string;
     dateWorked: string;
     userId: string | null;
+    activityCode: string | null;
   };
   billable: boolean | undefined;
   changedDateWorked: string | null;
   moving: boolean;
+  activityCode: string | null | undefined;
 }) {
   const willBeBillable = billable ?? existing.billable;
   const reprice =
@@ -160,6 +164,8 @@ const rateUpdateFor = async function* ({
     (willBeBillable &&
       (existing.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
         changedDateWorked !== null ||
+        (activityCode !== undefined &&
+          activityCode !== existing.activityCode) ||
         (billable === true && !existing.billable)));
   if (!reprice) {
     const unchanged: ResolvedRateUpdate = { type: "unchanged" };
@@ -173,6 +179,8 @@ const rateUpdateFor = async function* ({
           workspaceId,
           userId: brandPersistedUserId(existing.userId),
           dateWorked: changedDateWorked ?? existing.dateWorked,
+          activityCode:
+            activityCode === undefined ? existing.activityCode : activityCode,
         });
   if (resolved !== null) {
     const priced: ResolvedRateUpdate = {
@@ -185,6 +193,10 @@ const rateUpdateFor = async function* ({
   if (willBeBillable) {
     return new HandlerError({
       status: 400,
+      code:
+        existing.userId === null
+          ? "time_entry_timekeeper_required"
+          : TIME_ENTRY_RATE_REQUIRED_CODE,
       message:
         existing.userId === null
           ? "Billable time entries need an assigned timekeeper"
@@ -329,6 +341,7 @@ export const updateTimeEntryHandler = async function* ({
     workspaceId: targetWorkspaceId,
     existing,
     billable: body.billable,
+    activityCode: body.activityCode,
     changedDateWorked,
     moving,
   });

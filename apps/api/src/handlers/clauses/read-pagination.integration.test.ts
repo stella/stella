@@ -15,6 +15,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { listClausesHandler } from "@/api/handlers/clauses/read";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -135,7 +136,10 @@ describe("clause cursor ordering", () => {
         organizationId: ids.orgA,
         query: {
           categoryId,
-          cursor: "2026-07-10T08:15:30.123456|not-a-uuid",
+          cursor: encodePaginationCursor([
+            "2026-07-10T08:15:30.123456",
+            "not-a-uuid",
+          ]),
         },
       }),
     );

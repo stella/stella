@@ -1,29 +1,22 @@
-import { useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import {
-  DownloadIcon,
-  EllipsisIcon,
-  GitBranchIcon,
-  PanelRightIcon,
-} from "@stll/ui/icons";
+  type EntityAction,
+  EntityActions,
+  EntityActionsButton,
+} from "@stll/ui/entity-actions";
+import { DownloadIcon, GitBranchIcon, PanelRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@stll/ui/menu";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
+import { useLocalFilesUndo } from "@/components/chat/local-files-undo";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
 import {
   SidePanelChatAnnouncer,
@@ -43,16 +36,31 @@ import {
 } from "@/lib/chat-thread-ref";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { formatContextualTimestamp } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 
-type ChatMessageActionsMenuProps = {
+type ChatMessageActionsProps = {
   canExport: boolean;
   canFork: boolean;
+  /** The whole message: right-clicking anywhere in it opens its actions. */
+  children: ReactNode;
   /** The chat's matter scope; the fork carries it, and an inspector tab
    *  must be told it. Defaults to the thread's own matter. */
   contextMatterIds?: readonly string[] | undefined;
   exportArtifact: CreateDocumentDraft | null;
+  /**
+   * The turn this message answered, when it is the newest turn of a chat
+   * that runs on the member's computer: its file changes may be undone.
+   */
+  localFilesUndoTurnId?: string | null | undefined;
+  /**
+   * Whether a new undo may be asked on this message now: not while a send or
+   * a turn runs, which leaves the turn behind the computer's newest.
+   */
+  localFilesUndoOffered?: boolean | undefined;
+  /** This message's turn had its file changes undone: it keeps the marker. */
+  localFilesUndone?: boolean | undefined;
   message: PersistedChatMessage;
   threadRef: ChatThreadRef;
 };
@@ -78,27 +86,48 @@ const FORK_DESTINATION_ICONS = {
 /** No matters beyond the thread's own: the fork keeps just that scope. */
 const NO_EXTRA_CONTEXT_MATTERS: readonly string[] = [];
 
-export const ChatMessageActionsMenu = ({
+type ChatMessageActionsRow = {
+  extras: ReactNode;
+  /** Registers the "…" button, which the export menu anchors to. */
+  setTrigger: (trigger: HTMLButtonElement | null) => void;
+};
+
+const ChatMessageActionsRowContext =
+  createContext<ChatMessageActionsRow | null>(null);
+
+/** One message's actions: its right-click menu and its "…" button's list. */
+const ChatMessageActions = ({
   canExport,
   canFork,
+  children,
   contextMatterIds = NO_EXTRA_CONTEXT_MATTERS,
   exportArtifact,
+  localFilesUndoTurnId = null,
+  localFilesUndoOffered = false,
+  localFilesUndone = false,
   message,
   threadRef,
-}: ChatMessageActionsMenuProps) => {
+}: ChatMessageActionsProps) => {
   const t = useTranslations();
+  const localFilesUndo = useLocalFilesUndo({
+    threadId: threadRef.threadId,
+    turnId: localFilesUndoTurnId,
+    offered: localFilesUndoOffered,
+    undone: localFilesUndone,
+  });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // A fork to the side panel confirms on this action row: the menu closes
   // on click, so the row is where the eye still is.
   const sidePanelChat = useSidePanelChat();
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
   const pendingForkThreadId = useRef<ChatThreadId | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const workspaceId =
     threadRef.scope === "workspace" ? threadRef.workspaceId : undefined;
 
-  const fork = useMutation({
+  const fork = useIdempotentMutation({
+    idempotencyScope: `chat.${threadRef.threadId}.${message.id}.fork`,
     mutationFn: async (_destination: ForkDestination) => {
       if (pendingForkThreadId.current === null) {
         pendingForkThreadId.current = createChatThreadId();
@@ -156,77 +185,123 @@ export const ChatMessageActionsMenu = ({
       })
     : null;
 
+  // One list for the message's "…" button and its right-click menu.
+  const forkActions: EntityAction[] = canFork
+    ? FORK_DESTINATIONS.map((destination) => {
+        const forking = fork.isPending && fork.variables === destination;
+        const Icon = FORK_DESTINATION_ICONS[destination];
+        return {
+          disabled: fork.isPending,
+          icon: forking ? (
+            <Loader label={t("chat.forkingThread")} size="sm" />
+          ) : (
+            <Icon aria-hidden="true" />
+          ),
+          label: forking
+            ? t("chat.forkingThread")
+            : t(FORK_DESTINATION_LABELS[destination]),
+          onClick: () => {
+            fork.mutate(destination);
+          },
+        };
+      })
+    : [];
+  const exportActions: EntityAction[] = canExport
+    ? [
+        {
+          icon: <DownloadIcon aria-hidden="true" />,
+          label: t("common.export.title"),
+          onClick: () => setExportOpen(true),
+        },
+      ]
+    : [];
+  // A message still generating offers nothing, and right-click stays native.
+  const actions = canFork
+    ? [...forkActions, ...exportActions, ...localFilesUndo.actions]
+    : [];
+
+  // The "…" button sits in the message's action row; the row's status note
+  // and the export menu anchored to the button go with it.
+  const row: ChatMessageActionsRow = {
+    setTrigger,
+    extras: (
+      <>
+        <SidePanelChatNote status={sidePanelChat.status} />
+        <SidePanelChatAnnouncer status={sidePanelChat.status} />
+        {localFilesUndo.extras}
+        {canExport && (
+          <MessageExportMenu
+            anchor={trigger}
+            artifact={exportArtifact ?? undefined}
+            key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
+            message={message}
+            onOpenChange={setExportOpen}
+            open={exportOpen}
+            threadRef={threadRef}
+          />
+        )}
+      </>
+    ),
+  };
+
+  return (
+    <ChatMessageActionsRowContext value={row}>
+      <EntityActions
+        actions={actions}
+        heading={timestamp ?? undefined}
+        label={t("common.actions")}
+      >
+        {children}
+      </EntityActions>
+    </ChatMessageActionsRowContext>
+  );
+};
+
+type ChatMessageActionsScopeProps = Omit<
+  ChatMessageActionsProps,
+  "threadRef"
+> & {
+  /** Absent on embedded surfaces, which offer no message actions. */
+  threadRef?: ChatThreadRef | undefined;
+};
+
+/**
+ * Wraps a whole message (its content and its action row) in its actions
+ * when the surface offers them, so right-clicking the message opens what its
+ * "…" button opens. On a surface without actions the message renders as it is.
+ *
+ * The wrapper stays for the message's whole life, whatever `canFork` says.
+ * `canFork` turns true when generation ends, and a wrapper arriving then would
+ * remount everything inside: a question card would lose the answer being typed.
+ */
+export const ChatMessageActionsScope = ({
+  children,
+  threadRef,
+  ...props
+}: ChatMessageActionsScopeProps): ReactNode =>
+  // Explicit ReactNode: returning bare `children` would infer React 19's
+  // Promise member, which promise-function-async flags on a sync component.
+  threadRef === undefined ? (
+    children
+  ) : (
+    <ChatMessageActions threadRef={threadRef} {...props}>
+      {children}
+    </ChatMessageActions>
+  );
+
+/** The message's "…" button, inside the `ChatMessageActionsScope` around it. */
+export const ChatMessageActionsButton = () => {
+  const row = use(ChatMessageActionsRowContext);
+  if (row === null) {
+    panic(
+      "ChatMessageActionsButton renders inside ChatMessageActionsScope, which owns its actions",
+    );
+  }
+  const { extras, setTrigger } = row;
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          ref={triggerRef}
-          render={
-            <Button
-              aria-label={t("common.actions")}
-              className="size-6"
-              size="icon-xs"
-              variant="muted"
-            >
-              <EllipsisIcon aria-hidden="true" className="size-3.5" />
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="start" className="min-w-56" side="top">
-          {timestamp !== null && (
-            <>
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="font-normal">
-                  {timestamp}
-                </DropdownMenuLabel>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          {canFork &&
-            FORK_DESTINATIONS.map((destination) => {
-              const forking = fork.isPending && fork.variables === destination;
-              const Icon = FORK_DESTINATION_ICONS[destination];
-              return (
-                <DropdownMenuItem
-                  disabled={fork.isPending}
-                  key={destination}
-                  onClick={() => {
-                    fork.mutate(destination);
-                  }}
-                >
-                  {forking ? (
-                    <Loader label={t("chat.forkingThread")} size="sm" />
-                  ) : (
-                    <Icon aria-hidden="true" />
-                  )}
-                  {forking
-                    ? t("chat.forkingThread")
-                    : t(FORK_DESTINATION_LABELS[destination])}
-                </DropdownMenuItem>
-              );
-            })}
-          {canExport && (
-            <DropdownMenuItem onClick={() => setExportOpen(true)}>
-              <DownloadIcon aria-hidden="true" />
-              {t("common.export.title")}
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <SidePanelChatNote status={sidePanelChat.status} />
-      <SidePanelChatAnnouncer status={sidePanelChat.status} />
-      {canExport && (
-        <MessageExportMenu
-          anchor={triggerRef}
-          artifact={exportArtifact ?? undefined}
-          key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
-          message={message}
-          onOpenChange={setExportOpen}
-          open={exportOpen}
-          threadRef={threadRef}
-        />
-      )}
+      <EntityActionsButton align="start" ref={setTrigger} side="top" />
+      {extras}
     </>
   );
 };

@@ -2,6 +2,15 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
 import type { ReviewDelta } from "@/components/ai-suggestions/review-delta";
@@ -12,7 +21,7 @@ import { ColumnHeader } from "@/components/ai-suggestions/review-term-row";
  *  word at a time. */
 const MARK_COLUMN_WIDTH = "5rem";
 
-const CELL_CLASS = "py-1.5 text-sm leading-6";
+const CELL_CLASS = "text-sm leading-6";
 
 type EnumerationDelta = Extract<ReviewDelta, { kind: "enumeration" }>;
 type PresenceDelta = Extract<ReviewDelta, { kind: "presence" }>;
@@ -49,44 +58,39 @@ export const ReviewPresenceMatrix = ({
   );
 
   return (
-    <table className="w-full table-fixed border-collapse">
+    <Table className="table-fixed border-collapse" density="compact">
       <colgroup>
         <col />
         <col style={{ width: MARK_COLUMN_WIDTH }} />
         <col style={{ width: MARK_COLUMN_WIDTH }} />
       </colgroup>
-      <thead>
-        <tr className="border-border border-b">
-          <th scope="col" />
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col" />
           <ColumnHeader label={targetLabel} />
           <ColumnHeader label={standardLabel} />
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((row) => (
-          <tr
-            className={cn(
-              "border-border border-b last:border-b-0",
-              !row.inTarget && "text-foreground font-medium",
-            )}
-            key={row.key}
-          >
-            <th
-              className={cn(CELL_CLASS, "min-w-0 pe-3 text-start font-normal")}
-              scope="row"
-            >
-              <RowLabel
-                citation={row.citation}
-                label={row.label}
-                onShowInDocument={row.inTarget ? onShowInDocument : undefined}
-              />
-            </th>
-            <PresenceCell present={row.inTarget} />
-            <PresenceCell present={row.inStandard} />
-          </tr>
+          <TableRow key={row.key}>
+            <TableHead className="min-w-0 text-start" scope="row">
+              {/* The row header stays regular weight; only the marks of a
+                  row missing from the target carry the emphasis. */}
+              <span className={cn(!row.inTarget && "text-foreground")}>
+                <RowLabel
+                  citation={row.citation}
+                  label={row.label}
+                  onShowInDocument={row.inTarget ? onShowInDocument : undefined}
+                />
+              </span>
+            </TableHead>
+            <PresenceCell emphasis={!row.inTarget} present={row.inTarget} />
+            <PresenceCell emphasis={!row.inTarget} present={row.inStandard} />
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 };
 
@@ -130,32 +134,44 @@ const RowLabel = ({ label, citation, onShowInDocument }: RowLabelProps) => {
     return <BidiText as="span">{label}</BidiText>;
   }
   return (
-    <button
+    <Button
       aria-label={t("inspector.review.showInDocument")}
-      className="hover:text-foreground underline decoration-dotted underline-offset-2"
       onClick={() => onShowInDocument(citation.blockId)}
-      type="button"
+      variant="plain"
     >
-      <BidiText as="span">{label}</BidiText>
-    </button>
+      <BidiText
+        as="span"
+        className="hover:text-foreground underline decoration-dotted underline-offset-2"
+      >
+        {label}
+      </BidiText>
+    </Button>
   );
 };
 
 /** Presence in words. A reviewer should not have to work out that a hollow
  *  circle means the item is missing. */
-const PresenceCell = ({ present }: { present: boolean }) => {
+const PresenceCell = ({
+  present,
+  emphasis,
+}: {
+  present: boolean;
+  emphasis: boolean;
+}) => {
   const t = useTranslations();
   return (
-    <td
-      className={cn(
-        CELL_CLASS,
-        "text-center whitespace-nowrap",
-        present ? "text-foreground" : "text-muted-foreground",
-      )}
-    >
-      {present
-        ? t("inspector.review.presence.present")
-        : t("inspector.review.presence.absent")}
-    </td>
+    <TableCell className="text-center whitespace-nowrap">
+      <span
+        className={cn(
+          CELL_CLASS,
+          present ? "text-foreground" : "text-muted-foreground",
+          emphasis && "font-medium",
+        )}
+      >
+        {present
+          ? t("inspector.review.presence.present")
+          : t("inspector.review.presence.absent")}
+      </span>
+    </TableCell>
   );
 };

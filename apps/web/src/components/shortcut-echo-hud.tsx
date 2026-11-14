@@ -56,7 +56,7 @@ export const ShortcutEchoHud = () => {
         )}
         key={echo.at}
       >
-        <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+        <kbd className="border-border bg-muted text-muted-foreground rounded-sm border px-1.5 py-0.5 text-xs">
           {formatShortcutBinding(active.binding, hotkeyPlatform)}
         </kbd>
         <span className="text-foreground text-sm">·</span>

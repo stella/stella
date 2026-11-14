@@ -22,9 +22,37 @@ const anchor = {
 };
 
 describe("reader answer evidence", () => {
+  test.each(["sk", "cs", "pl"])(
+    "uses document language %s when no answer preference is supplied",
+    (language) => {
+      const decision = {
+        decisionId,
+        language,
+        court: null,
+        decisionDate: null,
+        paragraphs: [{ paragraphId: anchor.paragraphId, text: anchor.quote }],
+      };
+      const prompt = buildReaderAnswerPrompt({
+        decision,
+        anchor: [anchor],
+        locale: undefined,
+      });
+      expect(prompt.system).toContain(`Respond in locale ${language}.`);
+      expect(prompt.system).toContain("regardless of the interface language");
+      const explicit = buildReaderAnswerPrompt({
+        decision,
+        anchor: [anchor],
+        locale: "en",
+      });
+      expect(explicit.system).toContain("Respond in locale en.");
+      expect(explicit.system).toContain("overrides the document language");
+    },
+  );
+
   test("uses the caller locale and the selected passage's decision context", () => {
     const prompt = buildReaderAnswerPrompt({
       decision: {
+        language: "cs",
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
@@ -63,6 +91,7 @@ describe("reader answer evidence", () => {
   test("prioritizes the selected paragraph when the decision exceeds the context bound", () => {
     const prompt = buildReaderAnswerPrompt({
       decision: {
+        language: "cs",
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
@@ -90,6 +119,7 @@ describe("reader answer evidence", () => {
     ] as const;
     const prompt = buildReaderAnswerPrompt({
       decision: {
+        language: "cs",
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
@@ -140,6 +170,7 @@ describe("reader answer evidence", () => {
     };
     const prompt = buildReaderAnswerPrompt({
       decision: {
+        language: "cs",
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
@@ -186,6 +217,7 @@ describe("reader answer evidence", () => {
       };
       const prompt = buildReaderAnswerPrompt({
         decision: {
+          language: "cs",
           decisionId,
           court: "Test court",
           decisionDate: "2026-01-01",
@@ -240,6 +272,7 @@ describe("reader answer evidence", () => {
     ] as const;
     const prompt = buildReaderAnswerPrompt({
       decision: {
+        language: "cs",
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",

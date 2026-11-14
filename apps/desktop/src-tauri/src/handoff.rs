@@ -1745,8 +1745,8 @@ mod tests {
           crate::account::LinkOutcome::Linked
         );
         assert_eq!(
-          store.link_fixture(live_b.clone()).await.unwrap_err(),
-          "Disconnect the current desktop account before connecting another"
+          store.link_fixture(live_b.clone()).await.unwrap_err().reason,
+          crate::types::DesktopLinkFailure::AccountConflict
         );
         drop(store);
       }

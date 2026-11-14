@@ -10,6 +10,7 @@ const validCitation = {
   citationId: "synthetic-citation",
   citationText: "Synthetic citation text",
   textWithheldReason: null,
+  extractionWarnings: [],
   polarity: "unclassified",
   doctrine: null,
   decision: null,

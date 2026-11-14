@@ -214,7 +214,7 @@ const AWAIT_SCHEMA_GATE = `SELECT pg_advisory_xact_lock(${String(SCHEMA_GATE_KEY
 const HOLD_SCHEMA_GATE = `SELECT pg_advisory_lock(${String(SCHEMA_GATE_KEY)})`;
 const RELEASE_SCHEMA_GATE = `SELECT pg_advisory_unlock_all()`;
 
-const backendPid = async (connection: SQL) => {
+const backendPid = async (connection: Pick<SQL, "unsafe">) => {
   const [row] = await connection.unsafe<{ pid: number }[]>(
     "SELECT pg_backend_pid() AS pid",
   );
@@ -244,19 +244,25 @@ const waitUntilBlocked = async (observer: SQL, pid: number) => {
   });
 };
 
+const LOCK_PROBE_HOLDER_APPLICATION = "lock-probe-holder";
+
 type LockProbeHolder = {
-  held: Promise<undefined>;
+  /** Resolves with the holding backend's pid once the lock is granted. */
+  held: Promise<number>;
   /** Ends the holding transaction; resolves once it has committed. */
   release: () => Promise<void>;
 };
 
 /** A second session holding a lock the ALTER in `ALTER_LOCK_PROBE` conflicts with. */
-const holdLockProbe = (client: SQL): LockProbeHolder => {
-  const held = Promise.withResolvers<undefined>();
+const holdLockProbe = (client: SQL, table = "lock_probe"): LockProbeHolder => {
+  const held = Promise.withResolvers<number>();
   const release = Promise.withResolvers<undefined>();
   const done = client.begin(async (tx) => {
-    await tx.unsafe("LOCK TABLE lock_probe IN ACCESS SHARE MODE");
-    held.resolve(undefined);
+    await tx.unsafe(
+      `SET LOCAL application_name = '${LOCK_PROBE_HOLDER_APPLICATION}'`,
+    );
+    await tx.unsafe(`LOCK TABLE ${table} IN ACCESS SHARE MODE`);
+    held.resolve(await backendPid(tx));
     await release.promise;
   });
   // A holder that fails before locking fails the test waiting on `held`;
@@ -666,9 +672,27 @@ if (!runPostgresTests || databaseUrl === undefined) {
             });
             expect(records).toEqual([
               {
+                event: "migrate.schema_step",
+                step: "preflight",
+                migrations: [],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
+                event: "migrate.schema_step",
+                step: "apply",
+                migrations: [A],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
                 event: "migrate.phase_duration",
                 phase: "schema",
-                durationMs: 20,
+                durationMs: 60,
                 retriesSpent: 0,
                 outcome: "applied",
                 laneWaitMs: 10,
@@ -700,9 +724,41 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   }),
               ),
             ).toBe(failure);
-            expect(records).toMatchObject([
-              { phase: "schema", outcome: "applied", appliedCount: 0 },
-              { phase: "online", outcome: "failed" },
+            expect(records).toEqual([
+              {
+                event: "migrate.schema_step",
+                step: "preflight",
+                migrations: [],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
+                event: "migrate.schema_step",
+                step: "apply",
+                migrations: [],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
+                event: "migrate.phase_duration",
+                phase: "schema",
+                durationMs: 60,
+                retriesSpent: 0,
+                outcome: "applied",
+                laneWaitMs: 10,
+                appliedCount: 0,
+              },
+              {
+                event: "migrate.phase_duration",
+                phase: "online",
+                durationMs: 10,
+                retriesSpent: 0,
+                outcome: "failed",
+              },
             ]);
           } finally {
             await connection.release();
@@ -1022,23 +1078,34 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         mismatchCount: 1,
                         mismatchedNames: [A],
                       });
-                      // The no-op event, then the schema phase's duration.
+                      // Preflight completes before the no-op decision and schema duration.
                       const phaseCalls = stdout.mock.calls.filter(
                         (call) =>
                           !String(call.at(0)).includes(
                             '"event":"migrate.lock_attempt"',
                           ),
                       );
-                      expect(phaseCalls).toHaveLength(2);
+                      expect(phaseCalls).toHaveLength(3);
                       expect(
-                        JSON.parse(String(phaseCalls.at(1)?.at(0))),
+                        JSON.parse(String(phaseCalls.at(0)?.at(0))),
+                      ).toEqual({
+                        event: "migrate.schema_step",
+                        step: "preflight",
+                        migrations: [],
+                        durationMs: expect.any(Number),
+                        attempts: 1,
+                        retriesSpent: 0,
+                        outcome: "done",
+                      });
+                      expect(
+                        JSON.parse(String(phaseCalls.at(2)?.at(0))),
                       ).toMatchObject({
                         event: "migrate.phase_duration",
                         phase: "schema",
                         outcome: "stale_bundle_noop",
                         appliedCount: 0,
                       });
-                      const noopLine = String(phaseCalls.at(0)?.at(0));
+                      const noopLine = String(phaseCalls.at(1)?.at(0));
                       expect(noopLine.endsWith("\n")).toBe(true);
                       expect(JSON.parse(noopLine)).toEqual({
                         event: "migrate.stale_bundle_noop",
@@ -1146,6 +1213,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const holder = holdLockProbe(openClient());
             const connection = await openClient().reserve();
             const sleeps: number[] = [];
+            const timings: MigrationTimingRecord[] = [];
             let onlineLockTimeout: unknown;
             const stdout = spyOn(process.stdout, "write").mockImplementation(
               () => true,
@@ -1157,6 +1225,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 databaseUrl: scratchUrl,
                 ebs: DISABLED_EBS,
                 migrationsFolder: folder,
+                timing: {
+                  clock: () => performance.now(),
+                  emit: (record) => {
+                    timings.push(record);
+                  },
+                },
                 runOnline: async (pool) => {
                   const onlineConnection = await pool.reserve();
                   onlineLockTimeout = await onlineConnection.query(
@@ -1180,6 +1254,19 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 },
               });
               expect(sleeps).toEqual([10]);
+              expect(
+                timings.find(
+                  (record) =>
+                    record.event === "migrate.schema_step" &&
+                    record.step === "apply",
+                ),
+              ).toMatchObject({
+                step: "apply",
+                migrations: [A, B],
+                outcome: "done",
+                attempts: 2,
+                retriesSpent: 1,
+              });
               expect(result).toMatchObject({
                 status: "applied",
                 predictedNames: [A, B],
@@ -1223,7 +1310,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 () => true,
               );
               try {
-                await holder.held;
+                const holderPid = await holder.held;
                 const rejection = await rejectionOf(
                   async () =>
                     await runMigrations({
@@ -1239,7 +1326,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         },
                       },
                       lockWaitRetry: {
-                        lockTimeoutsMs: [10, 20, 30],
+                        // Waits long enough for the observer to sample the holder.
+                        lockTimeoutsMs: [250, 300],
                         pauseBaseMs: 10,
                         pauseCapMs: 10,
                         random: () => 1,
@@ -1255,19 +1343,45 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 expect(MigrationLockWaitError.is(rejection)).toBe(true);
                 expect(rejection).toMatchObject({
                   reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
-                  attempts: 3,
-                  lockTimeoutMs: 30,
+                  attempts: 2,
+                  lockTimeoutMs: 300,
+                  blockers: [
+                    expect.objectContaining({
+                      pid: holderPid,
+                      state: "idle in transaction",
+                      applicationName: LOCK_PROBE_HOLDER_APPLICATION,
+                    }),
+                  ],
+                });
+                expect(rejection).toMatchObject({
+                  message: expect.stringContaining(`pid ${String(holderPid)}`),
                 });
                 expect(isPgError(rejection, PG_ERROR.LOCK_NOT_AVAILABLE)).toBe(
                   true,
                 );
-                expect(sleeps).toEqual([10, 10]);
-                expect(timings).toHaveLength(1);
+                expect(sleeps).toEqual([10]);
+                expect(timings).toHaveLength(3);
                 expect(timings.at(0)).toMatchObject({
+                  event: "migrate.schema_step",
+                  step: "preflight",
+                  migrations: [],
+                  outcome: "done",
+                  attempts: 1,
+                  retriesSpent: 0,
+                });
+                expect(timings.at(1)).toMatchObject({
+                  event: "migrate.schema_step",
+                  step: "apply",
+                  migrations: [A, B],
+                  outcome: "failed",
+                  attempts: 2,
+                  retriesSpent: 1,
+                });
+                expect(timings.at(2)).toMatchObject({
                   event: "migrate.phase_duration",
                   phase: "schema",
                   outcome: "failed",
-                  retriesSpent: 2,
+                  retriesSpent: 1,
                 });
                 expect([...(await ledgerRows(observer))]).toEqual([]);
 
@@ -1290,6 +1404,137 @@ if (!runPostgresTests || databaseUrl === undefined) {
           );
         },
       );
+    });
+
+    const LEDGER = "drizzle.__drizzle_migrations";
+
+    test("a preflight that loses its ledger lock retries in a fresh transaction and succeeds", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, openClient, run, scratchUrl }) => {
+          await run(folder);
+          const holder = holdLockProbe(openClient(), LEDGER);
+          const connection = await openClient().reserve();
+          const timings: MigrationTimingRecord[] = [];
+          const stdout = spyOn(process.stdout, "write").mockImplementation(
+            () => true,
+          );
+          try {
+            await holder.held;
+            const result = await runMigrations({
+              connection,
+              databaseUrl: scratchUrl,
+              ebs: DISABLED_EBS,
+              migrationsFolder: folder,
+              runOnline: async () => ONLINE_COMPLETE,
+              timing: {
+                clock: () => performance.now(),
+                emit: (record) => {
+                  timings.push(record);
+                },
+              },
+              lockWaitRetry: {
+                lockTimeoutsMs: [50, 100],
+                pauseBaseMs: 10,
+                pauseCapMs: 10,
+                random: () => 1,
+                budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                now: () => performance.now(),
+                sleep: async () => {
+                  await holder.release();
+                },
+              },
+            });
+            expect(result).toMatchObject({ status: "applied" });
+            expect(
+              timings.find(
+                (record) =>
+                  record.event === "migrate.schema_step" &&
+                  record.step === "preflight",
+              ),
+            ).toMatchObject({ outcome: "done", attempts: 2, retriesSpent: 1 });
+            expect(
+              timings.find(
+                (record) =>
+                  record.event === "migrate.schema_step" &&
+                  record.step === "apply",
+              ),
+            ).toMatchObject({ outcome: "done", attempts: 1, retriesSpent: 0 });
+          } finally {
+            stdout.mockRestore();
+            await holder.release();
+            await connection.release();
+          }
+          expect(await laneHolders(observer)).toBe(0);
+        });
+      });
+    });
+
+    test("a preflight held past the budget fails naming the ledger holder", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, openClient, run, scratchUrl }) => {
+          await run(folder);
+          const holder = holdLockProbe(openClient(), LEDGER);
+          const connection = await openClient().reserve();
+          const timings: MigrationTimingRecord[] = [];
+          const stdout = spyOn(process.stdout, "write").mockImplementation(
+            () => true,
+          );
+          try {
+            const holderPid = await holder.held;
+            const rejection = await rejectionOf(
+              async () =>
+                await runMigrations({
+                  connection,
+                  databaseUrl: scratchUrl,
+                  ebs: DISABLED_EBS,
+                  migrationsFolder: folder,
+                  runOnline: async () => ONLINE_COMPLETE,
+                  timing: {
+                    clock: () => performance.now(),
+                    emit: (record) => {
+                      timings.push(record);
+                    },
+                  },
+                  lockWaitRetry: {
+                    // Waits long enough for the observer to sample the holder.
+                    lockTimeoutsMs: [250, 300],
+                    pauseBaseMs: 10,
+                    pauseCapMs: 10,
+                    random: () => 1,
+                    budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+                    now: () => performance.now(),
+                    sleep: async () => await Promise.resolve(),
+                  },
+                }),
+            );
+            expect(MigrationLockWaitError.is(rejection)).toBe(true);
+            expect(rejection).toMatchObject({
+              reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
+              attempts: 2,
+              message: expect.stringContaining("Migration preflight"),
+              blockers: [
+                expect.objectContaining({
+                  pid: holderPid,
+                  state: "idle in transaction",
+                  applicationName: LOCK_PROBE_HOLDER_APPLICATION,
+                }),
+              ],
+            });
+            expect(
+              timings.find(
+                (record) =>
+                  record.event === "migrate.schema_step" &&
+                  record.step === "preflight",
+              ),
+            ).toMatchObject({ outcome: "failed", attempts: 2 });
+          } finally {
+            stdout.mockRestore();
+            await holder.release();
+            await connection.release();
+          }
+          expect(await laneHolders(observer)).toBe(0);
+        });
+      });
     });
 
     test("new receipts equal the preflight prediction in file order", async () => {

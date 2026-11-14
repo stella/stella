@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import {
+  SOFT_LAW_SERVING_SETTINGS,
+  softLawDescriptorFlags,
+} from "@/api/lib/legal-search/soft-law-serving";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawAdapterConfiguration,
@@ -10,15 +14,15 @@ import type {
 
 import { bfdiAdapter } from "./bfdi";
 import { edpbAdapter } from "./edpb";
+import { suipAdapter } from "./suip";
+import { uoouCzAdapter } from "./uoou-cz";
+import { uoouSkAdapter } from "./uoou-sk";
 import { wp29Adapter } from "./wp29";
 
 type SourceRegistration<Authority extends SoftLawAuthority> = {
   state: "registered";
   adapter: SoftLawSourceAdapter & { authority: Authority };
-  descriptor: CorpusSourceDescriptor & {
-    allowsRedistribution: false;
-    allowsDerivedAi: false;
-  };
+  descriptor: CorpusSourceDescriptor;
   reuseNotice: string;
 };
 
@@ -42,7 +46,7 @@ const held = {
   reason: "Pending source-specific admission",
 } as const;
 
-/** These sources are ingestion-only; this registry confers no public-read permission. */
+/** Registration decides what a sync may acquire; serving is decided in `soft-law-serving.ts`. */
 export const SOFT_LAW_ADMISSIONS = {
   "eu-edpb": {
     state: "registered",
@@ -51,8 +55,7 @@ export const SOFT_LAW_ADMISSIONS = {
       license: "permitted-redistribution",
       attribution:
         "European Data Protection Board; https://www.edpb.europa.eu/copyright_en",
-      allowsRedistribution: false,
-      allowsDerivedAi: false,
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["eu-edpb"]),
     },
     reuseNotice: "https://www.edpb.europa.eu/copyright_en",
   },
@@ -62,12 +65,32 @@ export const SOFT_LAW_ADMISSIONS = {
     descriptor: {
       license: "restricted",
       attribution: "Article 29 Working Party; European Commission archive",
-      allowsRedistribution: false,
-      allowsDerivedAi: false,
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["eu-wp29"]),
     },
     reuseNotice: "https://commission.europa.eu/legal-notice_en",
   },
-  "cz-uoou": held,
+  "cz-uoou": {
+    state: "registered",
+    adapter: uoouCzAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Úřad pro ochranu osobních údajů; https://uoou.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-uoou"]),
+    },
+    // The site states no reuse terms beyond its copyright footer.
+    reuseNotice: "https://uoou.gov.cz/",
+  },
+  "cz-suip": {
+    state: "registered",
+    adapter: suipAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Státní úřad inspekce práce; https://suip.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-suip"]),
+    },
+    // The site states no reuse terms beyond its copyright footer.
+    reuseNotice: "https://suip.gov.cz/",
+  },
   "at-dsb": unverified,
   "be-apd": unverified,
   "bg-cpdp": unverified,
@@ -83,8 +106,7 @@ export const SOFT_LAW_ADMISSIONS = {
     descriptor: {
       license: "restricted",
       attribution: "BfDI; https://www.bfdi.bund.de",
-      allowsRedistribution: false,
-      allowsDerivedAi: false,
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["de-bfdi"]),
     },
     reuseNotice: "https://www.bfdi.bund.de",
   },
@@ -103,7 +125,19 @@ export const SOFT_LAW_ADMISSIONS = {
   "pl-uodo": unverified,
   "pt-cnpd": unverified,
   "ro-anspdcp": unverified,
-  "sk-uoou": unverified,
+  "sk-uoou": {
+    state: "registered",
+    adapter: uoouSkAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution:
+        "Úrad na ochranu osobných údajov Slovenskej republiky; https://dataprotection.gov.sk",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["sk-uoou"]),
+    },
+    // The site states no reuse terms; its home page asks reusers of
+    // published documents to limit any personal data they contain.
+    reuseNotice: "https://dataprotection.gov.sk/sk/",
+  },
   "si-ip": unverified,
   "es-aepd": held,
   "se-imy": unverified,

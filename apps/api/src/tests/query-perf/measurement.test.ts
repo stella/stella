@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
-import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 
 import {
   budgetProblem,
@@ -8,12 +9,422 @@ import {
   median,
   metricsFromPlan,
   scaleViolations,
+  scheduledJobBudgetProblems,
   shapeViolations,
+  sharedBlockSampleProblem,
+  summarize,
   sumMetrics,
+  writeScaleViolations,
 } from "./measurement";
+import { analyzePlan } from "./plan-analyzer";
+import { PLAN_EXCEPTIONS } from "./plan-exceptions";
+import { classifyMeasuredStatement } from "./scheduled-run";
+
+const plan = (Plan: Record<string, unknown>, executionTime = 1) => ({
+  Plan,
+  "Execution Time": executionTime,
+});
+
+const insertPlan = (rows: number) => ({
+  "Node Type": "ModifyTable",
+  Operation: "Insert",
+  "Actual Rows": 0,
+  Plans: [
+    {
+      "Node Type": "Values Scan",
+      "Parent Relationship": "Outer",
+      "Actual Rows": rows,
+      "Actual Loops": 1,
+    },
+  ],
+});
+
+test("measured statements use one read/write classifier", () => {
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT 1",
+      plan: { "Node Type": "Result" },
+    }),
+  ).toEqual({ kind: "read", writtenRows: 0 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "INSERT INTO fixture SELECT * FROM source",
+      plan: insertPlan(7),
+    }),
+  ).toEqual({ kind: "write", writtenRows: 7 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT ensure_case_law_provision_extraction_state($1)",
+      plan: { "Node Type": "Result" },
+      nestedPlans: [insertPlan(50)],
+    }),
+  ).toEqual({ kind: "write", writtenRows: 50 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT lower($1)",
+      plan: { "Node Type": "Result" },
+    }),
+  ).toEqual({ kind: "read", writtenRows: 0 });
+});
+
+test("scheduled write budgets fail closed and enforce both write limits", () => {
+  const measured = (writtenRows: number, writePages: number) => ({
+    readMetrics: { sharedBlocks: 1, executionTimeMs: 1 },
+    writeMetrics: { sharedBlocks: writePages, executionTimeMs: 1 },
+    writtenRows,
+  });
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(1, 1),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(0, 0),
+    ),
+  ).toEqual([]);
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(0, 20_001),
+    ).join("\n"),
+  ).toContain("20001 write pages per run");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(1000, 20_000),
+    ).join("\n"),
+  ).toContain("20001 combined pages per run");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(1, 0),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(0, 1),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.backfillProvisionState",
+      measured(10, 301),
+    ).join("\n"),
+  ).toContain("30.1 write pages per row");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.backfillProvisionState",
+      measured(10_000, 300_001),
+    ).join("\n"),
+  ).toContain("300001 write pages per run");
+});
+
+test("write pages per written row hold across corpus sizes", () => {
+  const run = (writtenRows: number, sharedBlocks: number) => ({
+    writeMetrics: { sharedBlocks, executionTimeMs: 1 },
+    writtenRows,
+  });
+  expect(writeScaleViolations({ size: run(0, 0), double: run(0, 0) })).toEqual(
+    [],
+  );
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(200, 2000) }),
+  ).toEqual([]);
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(100, 1164) }),
+  ).toEqual([]);
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(100, 1165) }).join(
+      "\n",
+    ),
+  ).toContain("write pages per written row grow with the corpus");
+  expect(
+    writeScaleViolations({ size: run(0, 0), double: run(5, 50) }).join("\n"),
+  ).toContain("writes appear at only one size");
+});
+
+test("a sequential scan on a large table fails while a declared small table passes", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Seq Scan", "Relation Name": "entities" }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select * from entities",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Seq Scan",
+        "Relation Name": "legislation_sources",
+      }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select * from legislation_sources",
+    }),
+  ).toEqual([]);
+});
+
+test("only a verified zero-work coverage delta queue bypasses the large-scan guard", () => {
+  const emptyQueue = {
+    "Node Type": "Seq Scan",
+    "Relation Name": "case_law_population_deltas",
+    "Actual Rows": 0,
+    "Rows Removed by Filter": 0,
+    "Shared Hit Blocks": 0,
+    "Shared Read Blocks": 0,
+  };
+  const analyze = (node: Record<string, unknown>, owner: string) =>
+    analyzePlan({
+      document: plan(node),
+      owner,
+      ownerDeadlineMs: 30_000,
+      profileId: "corpus",
+      statement: "select maintained coverage",
+    }).map(({ kind }) => kind);
+  expect(analyze(emptyQueue, SCHEDULER_BACKFILL_IDS.coverage)).toEqual([]);
+  for (const field of [
+    "Actual Rows",
+    "Rows Removed by Filter",
+    "Shared Hit Blocks",
+    "Shared Read Blocks",
+  ]) {
+    expect(
+      analyze({ ...emptyQueue, [field]: 1 }, SCHEDULER_BACKFILL_IDS.coverage),
+    ).toEqual(["large-scan"]);
+  }
+  expect(analyze(emptyQueue, "statement.otherOwner")).toEqual(["large-scan"]);
+  expect(
+    analyze(
+      { ...emptyQueue, "Relation Name": "unregistered_table" },
+      SCHEDULER_BACKFILL_IDS.coverage,
+    ),
+  ).toEqual(["large-scan"]);
+  expect(
+    analyze(
+      { ...emptyQueue, "Shared Hit Blocks": undefined },
+      SCHEDULER_BACKFILL_IDS.coverage,
+    ),
+  ).toEqual(["large-scan"]);
+});
+
+test("a health-signal scan of pg_database passes while another catalog still counts as large", () => {
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Seq Scan",
+        "Relation Name": "pg_database",
+      }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select datname from pg_database",
+    }),
+  ).toEqual([]);
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Seq Scan", "Relation Name": "pg_class" }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select relname from pg_class",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
+});
+
+test("a lossy bitmap heap scan fails even without rows removed by recheck", () => {
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Bitmap Heap Scan",
+        "Relation Name": "entities",
+        "Lossy Heap Blocks": 1,
+        "Rows Removed by Index Recheck": 0,
+      }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select * from entities",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
+});
+
+test("an unbounded nested-loop outer side fails while a limit-bound side passes", () => {
+  const analyzeOuter = (outer: Record<string, unknown>) =>
+    analyzePlan({
+      document: plan({
+        "Node Type": "Nested Loop",
+        Plans: [
+          outer,
+          { "Node Type": "Index Scan", "Relation Name": "entities" },
+        ],
+      }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select joined rows",
+    }).map(({ kind }) => kind);
+  expect(analyzeOuter({ "Node Type": "Result", "Actual Rows": 1001 })).toEqual([
+    "unbounded-nested-loop",
+  ]);
+  expect(
+    analyzeOuter({
+      "Node Type": "Limit",
+      "Actual Rows": 1001,
+      Plans: [{ "Node Type": "Result" }],
+    }),
+  ).toEqual([]);
+  expect(
+    analyzeOuter({
+      "Node Type": "Append",
+      "Actual Rows": 1001,
+      Plans: [
+        { "Node Type": "Limit", Plans: [{ "Node Type": "Result" }] },
+        { "Node Type": "Result" },
+      ],
+    }),
+  ).toEqual(["unbounded-nested-loop"]);
+  expect(
+    analyzeOuter({
+      "Node Type": "Hash Join",
+      "Actual Rows": 1001,
+      Plans: [
+        {
+          "Node Type": "Index Scan",
+          "Index Cond": "(id > 1)",
+        },
+        { "Node Type": "Hash" },
+      ],
+    }),
+  ).toEqual(["unbounded-nested-loop"]);
+});
+
+test("an external sort fails the spill rule", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Sort", "Sort Method": "external merge" }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select ordered rows",
+    }).map(({ kind }) => kind),
+  ).toEqual(["spill"]);
+});
+
+test("a hashed aggregate that uses multiple batches or disk fails the spill rule", () => {
+  for (const spill of [{ "HashAgg Batches": 2 }, { "Disk Usage": 1 }]) {
+    expect(
+      analyzePlan({
+        document: plan({
+          "Node Type": "Aggregate",
+          Strategy: "Hashed",
+          ...spill,
+        }),
+        owner: "statement.owner",
+        ownerDeadlineMs: 30_000,
+        profileId: "small",
+        statement: "select grouped rows",
+      }).map(({ kind }) => kind),
+    ).toEqual(["spill"]);
+  }
+});
+
+test("every execution plan contributes findings, including an earlier execution", () => {
+  const result = summarize(
+    [
+      { sharedBlocks: 1, executionTimeMs: 1 },
+      { sharedBlocks: 1, executionTimeMs: 1 },
+    ],
+    [
+      plan({ "Node Type": "Seq Scan", "Relation Name": "entities" }),
+      plan({ "Node Type": "Index Scan", "Relation Name": "entities" }),
+    ],
+    "statement.owner",
+    30_000,
+    "select * from entities",
+    "growth",
+  );
+  expect(result.planViolations.map(({ kind }) => kind)).toEqual(["large-scan"]);
+});
+
+test("a plan exception recorded for one profile does not hide another profile", () => {
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Seq Scan",
+        "Relation Name": "search_documents",
+      }),
+      owner: "statement.documents.searchHits",
+      ownerDeadlineMs: 30_000,
+      profileId: "growth",
+      statement: "select * from search_documents",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
+});
+
+test("scaled execution time is checked against the owner's deadline", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Result" }, 20),
+      owner: "statement.owner",
+      ownerDeadlineMs: 5000,
+      profileId: "small",
+      statement: "select 1",
+    }).map(({ kind }) => kind),
+  ).toEqual(["scaled-time"]);
+});
+
+test("an owner without a statement deadline yields a typed finding", () => {
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Result" }),
+      owner: "statement.withoutDeadline",
+      ownerDeadlineMs: undefined,
+      profileId: "small",
+      statement: "select 1",
+    }).map(({ kind }) => kind),
+  ).toEqual(["deadline-missing"]);
+});
+
+test("the owner-named plan exception ledger only contains reviewed existing debt", () => {
+  expect(
+    PLAN_EXCEPTIONS.map(
+      ({ kind, owner, profileId, ...entry }) =>
+        `${profileId}:${owner}:${kind}:${"relation" in entry ? entry.relation : "owner"}`,
+    ).toSorted(),
+  ).toEqual([
+    "corpus:caseLaw.reportFreshness.fiveMinute:deadline-missing:owner",
+    "growth:statement.documents.searchHits:deadline-missing:owner",
+    "growth:statement.documents.searchHits:large-scan:member",
+    "growth:statement.documents.searchHits:large-scan:workspace_members",
+    "growth:statement.documents.searchHits:large-scan:workspaces",
+    "small:statement.documents.searchHits:deadline-missing:owner",
+    "small:statement.documents.searchHits:large-scan:entities",
+    "small:statement.documents.searchHits:large-scan:entity_versions",
+    "small:statement.documents.searchHits:large-scan:member",
+    "small:statement.documents.searchHits:large-scan:search_documents",
+    "small:statement.documents.searchHits:large-scan:workspace_members",
+    "small:statement.documents.searchHits:large-scan:workspaces",
+  ]);
+  expect(PLAN_EXCEPTIONS.every(({ reason }) => reason.length > 0)).toBe(true);
+});
 
 test("an absolute budget accepts its own page count and rejects one page more", () => {
-  for (const { pages } of Object.values(READ_BUDGETS)) {
+  for (const budget of Object.values(READ_BUDGETS)) {
+    const pages =
+      budget.surface === "scheduled-job" ? budget.reads.pages : budget.pages;
     expect(
       budgetViolations({ sharedBlocks: pages, executionTimeMs: 1 }, pages),
     ).toEqual([]);
@@ -107,6 +518,26 @@ test("median supports odd and even samples and rejects malformed measurements", 
   );
 });
 
+test("shared-block sample failures name the owner and every sample", () => {
+  const samples = [
+    { sharedBlocks: 142, executionTimeMs: 1 },
+    { sharedBlocks: 158, executionTimeMs: 2 },
+    { sharedBlocks: 159, executionTimeMs: 3 },
+    { sharedBlocks: 173, executionTimeMs: 4 },
+  ];
+  expect(
+    sharedBlockSampleProblem("scheduled.caseLaw.refreshCoverage", samples),
+  ).toBe(
+    "scheduled.caseLaw.refreshCoverage produced non-deterministic shared-block samples: 142, 158, 159, 173",
+  );
+  expect(
+    sharedBlockSampleProblem(
+      "stable",
+      samples.map((sample) => ({ ...sample, sharedBlocks: 142 })),
+    ),
+  ).toBeUndefined();
+});
+
 test("scheduled runs retain execution time and reject a slow statement within the page budget", () => {
   const id = "scheduled.caseLaw.reportFreshness";
   for (const statements of [
@@ -117,11 +548,18 @@ test("scheduled runs retain execution time and reject a slow statement within th
     ],
   ]) {
     const metrics = sumMetrics(statements);
-    expect(metrics.sharedBlocks).toBeLessThan(READ_BUDGETS[id].pages);
+    expect(metrics.sharedBlocks).toBeLessThan(readBudgetPages(id));
     expect(metrics.executionTimeMs).toBe(10_001);
     expect(budgetProblem(id, metrics)).toContain(
       "execution time hang guard exceeded",
     );
+    expect(
+      scheduledJobBudgetProblems(id, {
+        readMetrics: { sharedBlocks: 1, executionTimeMs: 5000 },
+        writeMetrics: { sharedBlocks: 1, executionTimeMs: 5001 },
+        writtenRows: 1,
+      }).join("\n"),
+    ).toContain("execution time hang guard exceeded");
   }
   expect(
     budgetProblem(

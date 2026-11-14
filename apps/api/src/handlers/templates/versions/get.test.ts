@@ -82,10 +82,10 @@ const makeScopedDb = (scenario: LookupScenario = "found") => {
 
   // SAFETY: test stub; the fake tx implements exactly the query surface
   // `getTemplateVersionHandler` touches.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
   const scopedDb = (async (fn: (value: typeof tx) => unknown) => {
     transactionCount += 1;
     return await fn(tx);
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
   }) as unknown as ScopedDb;
 
   return {

@@ -1,0 +1,27 @@
+stella je open-source právní pracoviště pro spisy, dokumenty, revize a práci s pomocí AI. Aplikace přináší stellu vaší kanceláře do iPhonu a iPadu.
+
+ZEPTEJTE SE STELLY
+Ptejte se stelly na spis nebo na právo. Odpovědi vycházejí z dokumentů spisu a z judikatury a každá konverzace zůstává ve svém spisu.
+
+VAŠE SPISY
+Procházejte spisy podle klientů, otevírejte jejich dokumenty a položky a přidejte úkol nebo sken, ať jste kdekoli.
+
+SKENOVÁNÍ DO SPISU
+Namiřte fotoaparát na dopis nebo podání. stella stránky narovná, uloží je jako PDF a založí do spisu, který vyberete.
+
+ÚKOLY
+Mějte přehled, co je na řadě dnes, tento týden a později, přidejte úkol ke spisu a označte ho jako hotový.
+
+MĚŘENÍ ČASU
+Spusťte časovač, když začnete, pozastavte ho kvůli hovoru a uložte jako časový záznam, až skončíte. Běžící časovač zůstává na zamčené obrazovce a v Dynamic Islandu.
+
+JUDIKATURA
+Čtěte rozhodnutí v prohlížeči určeném pro dlouhé právní texty.
+
+PRO IPAD
+Na iPadu máte seznam a otevřenou položku vedle sebe. S klávesnicí otevře ⌘K paletu příkazů a zkratky přepínají mezi záložkami.
+
+SOUKROMÍ OD ZÁKLADU
+stella nesbírá analytiku a nikoho nesleduje. Oznámení říkají jen, že se něco stalo, nikdy jméno klienta ani název spisu.
+
+stella vyžaduje účet v pracovišti stella. Přihlaste se pracovním e-mailem, přes Apple, Google nebo Microsoft.

@@ -5,7 +5,6 @@ import {
   eq,
   inArray,
   isNotNull,
-  lte,
   notInArray,
   or,
   type SQL,
@@ -16,11 +15,11 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { corpusProjectionReservationQueue } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -36,10 +35,11 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
-  corpusIndexUnknownAppendBarrierAt,
+  type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionAppendPublishBarrier,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
@@ -51,7 +51,6 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   corpusIndexProjectionIntentIsOutstanding,
-  corpusIndexProjectionNeedsWork,
   corpusIndexProjectionProducesAppend,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
@@ -131,108 +130,6 @@ const readPostgresClock = async (tx: Transaction): Promise<Date> => {
     return panic("PostgreSQL did not return the projection clock");
   }
   return value;
-};
-
-const pendingDesiredState = corpusIndexProjectionNeedsWork(
-  corpusIndexProjectionStates,
-);
-
-const noOutstandingIntent = sql`NOT EXISTS (
-      SELECT 1
-      FROM ${corpusIndexProjectionIntents} outstanding
-      WHERE outstanding.family = ${corpusIndexProjectionStates.family}
-        AND outstanding.generation = ${corpusIndexProjectionStates.generation}
-        AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
-        AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
-    )`;
-
-type CorpusProjectionReservationQueueOptions = {
-  family: CorpusFamily;
-  generation: string;
-  limit: number;
-  eligibilityAt: Date;
-  scopedEntityIds: readonly string[] | null;
-  scopedIndexId: string | null;
-  /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
-  excludedIndexIds: readonly string[];
-};
-
-/**
- * The reservation queue read. Exported so the plan guard explains the exact
- * statement the append cycle issues rather than a copy of it.
- */
-export const corpusProjectionReservationQueue = (
-  tx: Transaction,
-  {
-    family,
-    generation,
-    limit,
-    eligibilityAt,
-    scopedEntityIds,
-    scopedIndexId,
-    excludedIndexIds,
-  }: CorpusProjectionReservationQueueOptions,
-) => {
-  const runnableAt = sql<Date>`coalesce(
-    ${corpusIndexProjectionStates.retryNotBefore},
-    ${corpusIndexProjectionStates.updatedAt}
-  )`;
-  return tx
-    .select({
-      entityId: corpusIndexProjectionStates.entityId,
-      epoch: corpusIndexProjectionStates.desiredEpoch,
-      fingerprint: corpusIndexProjectionStates.desiredFingerprint,
-      indexId: corpusIndexProjectionStates.desiredIndexId,
-      failureAttempts: corpusIndexProjectionStates.failureAttempts,
-      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
-      appendMode: corpusIndexProjectionStates.appendMode,
-    })
-    .from(corpusIndexProjectionStates)
-    .innerJoin(
-      corpusIndexGenerations,
-      and(
-        eq(corpusIndexGenerations.family, corpusIndexProjectionStates.family),
-        eq(
-          corpusIndexGenerations.generation,
-          corpusIndexProjectionStates.generation,
-        ),
-      ),
-    )
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, family),
-        eq(corpusIndexProjectionStates.generation, generation),
-        scopedEntityIds === null
-          ? undefined
-          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
-        scopedIndexId === null
-          ? undefined
-          : eq(corpusIndexProjectionStates.desiredIndexId, scopedIndexId),
-        // An unattested group's desired state stays eligible and waits here:
-        // it is appended once the group is attested, never before.
-        excludedIndexIds.length === 0
-          ? undefined
-          : notInArray(corpusIndexProjectionStates.desiredIndexId, [
-              ...excludedIndexIds,
-            ]),
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        inArray(corpusIndexProjectionStates.workStatus, [
-          "eligible",
-          "retry_scheduled",
-          "repair_scheduled",
-        ]),
-        lte(runnableAt, eligibilityAt),
-        inArray(corpusIndexGenerations.status, ["building", "serving"]),
-        pendingDesiredState,
-        noOutstandingIntent,
-      ),
-    )
-    .orderBy(asc(runnableAt), asc(corpusIndexProjectionStates.entityId))
-    .limit(limit)
-    .for("update", {
-      of: corpusIndexProjectionStates,
-      skipLocked: true,
-    });
 };
 
 /**
@@ -1061,8 +958,8 @@ export const abandonCorpusProjectionAppendTx = async (
   if (intent.appendStartedAt === null) {
     return panic(`Started projection intent has no start time: ${intent.id}`);
   }
-  const barrier = corpusIndexUnknownAppendBarrierAt(
-    intent.appendStartedAt,
+  const barrier = corpusProjectionAppendPublishBarrier(
+    { type: "unknown", appendStartedAt: intent.appendStartedAt },
     manifest,
   );
   const transitionAt = testNow ?? (await readPostgresClock(tx));
@@ -1228,9 +1125,9 @@ export const unparkCorpusProjectionAppendTx = async (
 };
 
 type CommitCorpusProjectionAppendOptions = {
-  intentId: ProjectionIntentId;
+  /** Names the revision and the exact document count the census found. */
+  proof: CorpusProjectionPresenceProof;
   leaseToken: string;
-  documentCount: number;
   testNow?: Date;
 };
 
@@ -1240,23 +1137,17 @@ export type CommitCorpusProjectionAppendResult =
   | { status: "lease_lost" };
 
 /**
- * Finalize a published, presence-confirmed append and its authoritative state
- * in one transaction. The executor confirms outside this transaction.
+ * Finalize a published append and its authoritative state in one
+ * transaction. Only presence evidence reaches it: the census that constructs
+ * the proof runs outside this transaction.
  * A desired-state race cannot publish: the exact new revision is redirected to
  * cleanup instead, behind the barrier that makes that cleanup exact.
  */
 export const commitCorpusProjectionAppendTx = async (
   tx: Transaction,
-  {
-    intentId,
-    leaseToken,
-    documentCount,
-    testNow,
-  }: CommitCorpusProjectionAppendOptions,
+  { proof, leaseToken, testNow }: CommitCorpusProjectionAppendOptions,
 ): Promise<CommitCorpusProjectionAppendResult> => {
-  if (!Number.isSafeInteger(documentCount) || documentCount < 1) {
-    return panic("Projection append document count must be a positive integer");
-  }
+  const { revision: intentId, documentCount } = proof;
   const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
@@ -1297,6 +1188,9 @@ export const commitCorpusProjectionAppendTx = async (
   const intent = intents.at(0);
   if (intent === undefined) {
     return { status: "lease_lost" };
+  }
+  if (intent.indexId !== proof.indexId) {
+    return panic(`Projection presence proof names another index: ${intent.id}`);
   }
   if (
     intent.expectedDocumentCount !== null &&

@@ -13,6 +13,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const read = (name: string) =>
@@ -153,7 +154,7 @@ describe("screenshot regeneration trust boundary", () => {
     // The dispatch on main runs no branch code: it only starts the capture.
     for (const step of stepsOf(updateWorkflow, "update")) {
       expect(step.uses?.startsWith("./") ?? false).toBe(false);
-      expect(step.uses?.startsWith("actions/checkout@") ?? false).toBe(false);
+      expect(isRepositoryCheckoutAction(step.uses)).toBe(false);
     }
     // The comparison workflow no longer regenerates anything.
     expect(Object.keys(jobsOf(reusable))).toEqual(["check"]);
@@ -184,7 +185,7 @@ describe("screenshot regeneration trust boundary", () => {
       ],
       [
         "Push regenerated baselines",
-        "stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8",
+        "stella/.github/.github/actions/signed-commit@fc5f380b18234429cb60682ccfe1537561311e61",
       ],
     ]);
     for (const step of publish) {
@@ -197,7 +198,7 @@ describe("screenshot regeneration trust boundary", () => {
       }
     }
     const checkout = publish.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(step.uses),
     );
     expect(checkout?.with?.["persist-credentials"]).toBe(false);
     expect(checkout?.with?.["submodules"]).toBeUndefined();

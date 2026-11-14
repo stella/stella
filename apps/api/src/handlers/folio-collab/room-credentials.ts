@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { VerifyCaller } from "@/api/lib/api-handlers";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {

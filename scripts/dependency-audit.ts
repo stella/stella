@@ -50,20 +50,31 @@ import {
   expiringAcceptances,
   type LapsedAcceptance,
   lapsedAcceptances,
+  patchedAcceptanceWindows,
 } from "./dependency-audit-acceptance";
 import {
   assessAdvisories,
   AuditAssessmentError,
+  type InstallableRelease,
   printAssessments,
-  readInstallableVersions,
+  readInstallableReleases,
+  readRegistryDocument,
   readReleaseAgePolicy,
+  readReleaseAgeReleases,
 } from "./dependency-audit-assessment";
+import {
+  type DependencyAuditRemediationPlan,
+  updatedResolutionEntries,
+  verifyDependencyAuditRemediation,
+} from "./dependency-audit-remediation";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_PATHS.dependencyAudit);
 const GATED_SEVERITIES = new Set(["high", "critical"]);
+const REMEDIATION_SUMMARY =
+  "Pins available patched releases, adds temporary release-age exclusions when a security fix is still quarantined, drafts dated acceptances for remaining upstream blockers, and removes stale acceptances.";
 
 // Flags read by the workflow's remediation job.
 const markOutput = (name: "advisory_failure" | "stale_acceptance"): void => {
@@ -71,6 +82,115 @@ const markOutput = (name: "advisory_failure" | "stale_acceptance"): void => {
   if (output !== undefined && output !== "") {
     appendFileSync(output, `${name}=true\n`);
   }
+};
+
+const writeOutput = (name: string, value: string): void => {
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output !== undefined && output !== "") {
+    appendFileSync(output, `${name}<<EOF\n${value}\nEOF\n`);
+  }
+};
+
+const writeScalarOutput = (name: string, value: string): void => {
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output !== undefined && output !== "") {
+    appendFileSync(output, `${name}=${value}\n`);
+  }
+};
+
+const registryText = (value: unknown): string | undefined =>
+  typeof value === "string" && value !== "" ? value : undefined;
+
+// `bun info <name>@<version> --json` returns that version's manifest: its
+// `_npmUser`, `maintainers` and the package-wide `time` map.
+const versionManifest = async (
+  readManifest: (spec: string) => Promise<unknown>,
+  spec: string,
+): Promise<Record<string, unknown>> => {
+  const manifest = await readManifest(spec);
+  if (!isRecord(manifest)) {
+    return panic(`Registry manifest for ${spec} is not an object`);
+  }
+  return manifest;
+};
+
+export const quarantinedRemediationBody = async (
+  plan: DependencyAuditRemediationPlan,
+  readManifest: (spec: string) => Promise<unknown> = readRegistryDocument,
+): Promise<string> => {
+  if (plan.quarantineExclusions.length === 0) {
+    return REMEDIATION_SUMMARY;
+  }
+  const rows = await Promise.all(
+    plan.quarantineExclusions.map(async (exclusion) => {
+      const spec = `${exclusion.package}@${exclusion.version}`;
+      const pinned = await versionManifest(readManifest, spec);
+      const times = pinned["time"];
+      const npmUser = pinned["_npmUser"];
+      const publisher = isRecord(npmUser)
+        ? registryText(npmUser["name"])
+        : undefined;
+      const published = isRecord(times)
+        ? registryText(times[exclusion.version])
+        : undefined;
+      if (
+        !isRecord(times) ||
+        publisher === undefined ||
+        published === undefined
+      ) {
+        return panic(
+          `Registry manifest for ${spec} lacks _npmUser.name or its publish time`,
+        );
+      }
+      const previousVersion = Object.entries(times)
+        .flatMap(([version, time]) => {
+          const timestamp = registryText(time);
+          return version !== "created" &&
+            version !== "modified" &&
+            timestamp !== undefined &&
+            Date.parse(timestamp) < Date.parse(published)
+            ? [{ version, timestamp }]
+            : [];
+        })
+        .toSorted(
+          (left, right) =>
+            Date.parse(right.timestamp) - Date.parse(left.timestamp),
+        )
+        .at(0)?.version;
+      let known = "unknown";
+      if (previousVersion !== undefined) {
+        const previous = await versionManifest(
+          readManifest,
+          `${exclusion.package}@${previousVersion}`,
+        );
+        const maintainers = previous["maintainers"];
+        if (Array.isArray(maintainers)) {
+          known = maintainers.some(
+            (maintainer) =>
+              isRecord(maintainer) &&
+              registryText(maintainer["name"]) === publisher,
+          )
+            ? "yes"
+            : "no";
+        }
+      }
+      return `| ${exclusion.package} | ${exclusion.version} | ${published} | ${publisher} | ${known} |`;
+    }),
+  );
+  return `${REMEDIATION_SUMMARY}\n\n| Package | Pinned version | npm publish time | npm publisher | Publisher maintained previous version |\n| --- | --- | --- | --- | --- |\n${rows.join("\n")}`;
+};
+
+export const remediationOutputs = async (
+  plan: DependencyAuditRemediationPlan,
+  readManifest: (spec: string) => Promise<unknown> = readRegistryDocument,
+): Promise<{ quarantined: "true" | "false"; prBody?: string }> => {
+  if (plan.quarantineExclusions.length === 0) {
+    return { quarantined: "false" };
+  }
+  return {
+    quarantined: "true",
+    prBody: await quarantinedRemediationBody(plan, readManifest),
+  };
 };
 
 export type Advisory = {
@@ -369,7 +489,7 @@ const formatAcceptanceTerm = (acceptance: BaselineEntry): string => {
   return acceptance.untilPatched === true ? "until patched" : "accepted";
 };
 
-const assessCurrent = async (advisories: Advisory[]): Promise<void> => {
+const assessCurrent = async (advisories: Advisory[]) => {
   const [baseline, lockfile, manifest, policy] = await Promise.all([
     readBaseline(),
     Bun.file(path.resolve(REPO_ROOT, "bun.lock")).text(),
@@ -377,23 +497,43 @@ const assessCurrent = async (advisories: Advisory[]): Promise<void> => {
     readRootReleaseAgePolicy(),
   ]);
   const now = new Date();
-  const versions = new Map(
+  const releases = new Map(
     await Promise.all(
       [...new Set(advisories.map(({ package: name }) => name))].map(
         async (name) =>
-          [name, await readInstallableVersions(name, policy, now)] as const,
+          [name, await readReleaseAgeReleases(name, policy)] as const,
       ),
     ),
   );
-  printAssessments(
-    assessAdvisories({
-      advisories,
-      accepted: baseline.accepted,
-      lockfile,
-      manifest,
-      versions,
-    }),
+  const versions = new Map(
+    [...releases].map(([name, entries]) => [
+      name,
+      entries
+        .filter(
+          ({ installableSince }) =>
+            Date.parse(installableSince) <= now.getTime(),
+        )
+        .map(({ version }) => version),
+    ]),
   );
+  const quarantinedReleases = new Map(
+    [...releases].map(([name, entries]) => [
+      name,
+      entries.filter(
+        ({ installableSince }) => Date.parse(installableSince) > now.getTime(),
+      ),
+    ]),
+  );
+  const assessments = assessAdvisories({
+    advisories,
+    accepted: baseline.accepted,
+    lockfile,
+    manifest,
+    versions,
+    quarantinedReleases,
+  });
+  printAssessments(assessments);
+  return assessments;
 };
 
 const saveBaseline = async (
@@ -401,6 +541,163 @@ const saveBaseline = async (
   baselinePath: string = BASELINE_PATH,
 ): Promise<void> => {
   await Bun.write(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+};
+
+const applyRemediationProposal = async (
+  plan: DependencyAuditRemediationPlan,
+): Promise<void> => {
+  const manifestPath = path.resolve(REPO_ROOT, "package.json");
+  const manifest: unknown = await Bun.file(manifestPath).json();
+  if (!isRecord(manifest)) {
+    panic("Dependency remediation requires a package.json object");
+  }
+  const currentResolutions = manifest["resolutions"];
+  const resolutions = updatedResolutionEntries(
+    isRecord(currentResolutions) ? currentResolutions : {},
+    plan.pins,
+  );
+  if (plan.pins.size > 0) {
+    await Bun.write(
+      manifestPath,
+      `${JSON.stringify({ ...manifest, resolutions }, null, 2)}\n`,
+    );
+  }
+
+  if (plan.quarantineExclusions.length > 0) {
+    const bunfigPath = path.resolve(REPO_ROOT, "bunfig.toml");
+    let bunfig = await Bun.file(bunfigPath).text();
+    for (const exclusion of plan.quarantineExclusions) {
+      const entry = `  "${exclusion.package}", # quarantine-expires: ${exclusion.quarantineExpires}`;
+      if (!bunfig.includes(`"${exclusion.package}"`)) {
+        bunfig = addQuarantineExclusion(bunfig, entry);
+      }
+    }
+    await Bun.write(bunfigPath, bunfig);
+  }
+};
+
+const EXCLUDES_KEY = "minimumReleaseAgeExcludes";
+
+// The text after `[` on the key's line: `]` closes an empty inline array, and
+// only whitespace or a comment may follow either bracket.
+const commentOnly = (text: string) => {
+  const rest = text.trim();
+  return rest === "" || rest.startsWith("#");
+};
+
+export const addQuarantineExclusion = (
+  bunfig: string,
+  entry: string,
+): string => {
+  const lines = bunfig.split("\n");
+  const index = lines.findIndex((line) => {
+    const [key, value] = line.split("=", 2);
+    return key?.trim() === EXCLUDES_KEY && value?.trim().startsWith("[");
+  });
+  const line = lines[index];
+  if (line === undefined) {
+    return panic(`bunfig.toml has no ${EXCLUDES_KEY} array`);
+  }
+  const open = line.indexOf("[");
+  const afterOpen = line.slice(open + 1);
+  const closing = afterOpen.trimStart();
+  // Entries carry trailing comments, so they can only go into an empty or a
+  // multi-line array; any other form is refused rather than rewritten into
+  // invalid TOML.
+  if (closing.startsWith("]") && commentOnly(closing.slice(1))) {
+    lines.splice(
+      index,
+      1,
+      `${line.slice(0, open)}[`,
+      entry,
+      `]${closing.slice(1)}`,
+    );
+    return lines.join("\n");
+  }
+  if (!commentOnly(afterOpen)) {
+    return panic(
+      `bunfig.toml ${EXCLUDES_KEY} must be an empty or multi-line array to add a quarantine exclusion`,
+    );
+  }
+  lines.splice(index + 1, 0, entry);
+  return lines.join("\n");
+};
+
+const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
+  const assessments = await assessCurrent(advisories);
+  const transactionPaths = [
+    path.resolve(REPO_ROOT, "package.json"),
+    path.resolve(REPO_ROOT, "bunfig.toml"),
+    path.resolve(REPO_ROOT, "bun.lock"),
+  ];
+  const plan = await verifyDependencyAuditRemediation({
+    assessments,
+    now: new Date(),
+    resolve: async (proposal) => {
+      const snapshot = await Promise.all(
+        transactionPaths.map(
+          async (file) => [file, await Bun.file(file).text()] as const,
+        ),
+      );
+      const revert = async (): Promise<void> => {
+        await Promise.all(
+          snapshot.map(async ([file, contents]) => Bun.write(file, contents)),
+        );
+      };
+      try {
+        await applyRemediationProposal(proposal);
+        const process = Bun.spawn(
+          ["bun", "--no-env-file", "install", "--lockfile-only"],
+          {
+            cwd: REPO_ROOT,
+            stdout: "inherit",
+            stderr: "inherit",
+          },
+        );
+        const exitCode = await process.exited;
+        if (exitCode !== 0) {
+          throw new AuditCommandError(
+            `bun install --lockfile-only failed with exit code ${exitCode}`,
+          );
+        }
+        const current = await collectGatedAdvisories();
+        return {
+          assessments: current.length === 0 ? [] : await assessCurrent(current),
+          beforeLockfile:
+            snapshot.at(2)?.at(1) ?? panic("Missing lockfile snapshot"),
+          afterLockfile: await Bun.file(
+            transactionPaths.at(2) ?? panic("Missing lockfile path"),
+          ).text(),
+          revert,
+        };
+      } catch (error) {
+        await revert();
+        throw error;
+      }
+    },
+  });
+
+  const outputs = await remediationOutputs(plan);
+  writeScalarOutput("quarantined", outputs.quarantined);
+  if (outputs.prBody !== undefined) {
+    writeOutput("pr_body", outputs.prBody);
+  }
+
+  if (plan.acceptanceDrafts.length > 0) {
+    const baseline = await readBaseline();
+    const existing = new Set(
+      baseline.accepted.map(({ id, package: name }) => `${id}/${name}`),
+    );
+    await saveBaseline({
+      ...baseline,
+      accepted: [
+        ...baseline.accepted,
+        ...plan.acceptanceDrafts.filter(
+          ({ id, package: name }) => !existing.has(`${id}/${name}`),
+        ),
+      ],
+    });
+  }
 };
 
 // Drops only the acceptances whose advisory is no longer reported; it never
@@ -492,45 +789,52 @@ const readRootReleaseAgePolicy = async () =>
     await Bun.file(path.resolve(REPO_ROOT, "bunfig.toml")).text(),
   );
 
-// The newest stable release Bun would install now, or undefined when the
+// The stable releases Bun would install now, or undefined when the
 // lookup fails; an `untilPatched` acceptance then lapses (fail closed). A
 // patch still in quarantine is not installable, so it lapses nothing yet.
-const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
+const fetchInstallableReleases = async (
+  pkg: string,
+  now: Date,
+): Promise<readonly InstallableRelease[] | undefined> => {
   const installable = await Result.tryPromise(async () =>
-    readInstallableVersions(pkg, await readRootReleaseAgePolicy(), new Date()),
+    readInstallableReleases(pkg, await readRootReleaseAgePolicy(), now),
   );
   if (Result.isError(installable)) {
     return undefined;
   }
-  return installable.value
-    .filter((version) => !version.includes("-"))
-    .toSorted(Bun.semver.order)
-    .at(-1);
+  return installable.value.filter(({ version }) => !version.includes("-"));
 };
 
 type CheckLapsedAcceptancesOptions = {
   advisories: Advisory[];
   baseline: Baseline;
   today: string;
+  now: Date;
   enforceDateExpiry: boolean;
-  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
+  releasesForPackage?:
+    | ((
+        pkg: string,
+        now: Date,
+      ) => Promise<readonly InstallableRelease[] | undefined>)
+    | undefined;
 };
 const checkLapsedAcceptances = async ({
   advisories,
   baseline,
   today,
+  now,
   enforceDateExpiry,
-  latestVersion = fetchLatestVersion,
+  releasesForPackage = fetchInstallableReleases,
 }: CheckLapsedAcceptancesOptions): Promise<LapsedAcceptance[]> => {
   const packages = new Set(
     baseline.accepted
       .filter(({ untilPatched }) => untilPatched === true)
       .map((entry) => entry.package),
   );
-  const latest = new Map(
+  const releases = new Map(
     await Promise.all(
       [...packages].map(
-        async (pkg) => [pkg, await latestVersion(pkg)] as const,
+        async (pkg) => [pkg, await releasesForPackage(pkg, now)] as const,
       ),
     ),
   );
@@ -539,8 +843,19 @@ const checkLapsedAcceptances = async ({
     current: advisories,
     today,
     enforceDateExpiry,
-    latestVersion: (pkg) => latest.get(pkg),
+    releasesForPackage: (pkg) => releases.get(pkg),
+    now,
   });
+  const windows = patchedAcceptanceWindows({
+    accepted: baseline.accepted,
+    current: advisories,
+    releasesForPackage: (pkg) => releases.get(pkg),
+  });
+  for (const window of windows) {
+    console.info(
+      `${window.id} for ${window.package}: patch installable since ${window.installableSince}, lapses at ${window.lapsesAt}`,
+    );
+  }
   if (lapsed.length === 0) {
     return [];
   }
@@ -602,7 +917,10 @@ type CheckOptions = {
   baseline?: Baseline;
   /** Defaults to true for API callers; scheduled CLI audits opt out. */
   enforceDateExpiry?: boolean;
-  latestVersion?: (pkg: string) => Promise<string | undefined>;
+  releasesForPackage?: (
+    pkg: string,
+    now: Date,
+  ) => Promise<readonly InstallableRelease[] | undefined>;
   now?: () => Date;
   packages?: ReadonlySet<string>;
   /** Defaults to GitHub annotations inside GitHub Actions. */
@@ -635,7 +953,8 @@ const checkResult = async (
     baseline,
   );
   // UTC calendar date; an acceptance holds through its expiresOn day.
-  const today = (options.now?.() ?? new Date()).toISOString().slice(0, 10);
+  const now = options.now?.() ?? new Date();
+  const today = now.toISOString().slice(0, 10);
   const warningFormat =
     options.warningFormat ??
     (process.env["GITHUB_ACTIONS"] === "true" ? "github" : "plain");
@@ -644,8 +963,9 @@ const checkResult = async (
     advisories,
     baseline,
     today,
+    now,
     enforceDateExpiry: options.enforceDateExpiry ?? true,
-    latestVersion: options.latestVersion,
+    releasesForPackage: options.releasesForPackage,
   });
   const lapsedKeys = new Set(lapsed.map(advisoryKey));
 
@@ -995,6 +1315,11 @@ const main = async (): Promise<number> => {
   }
 
   const advisories = await collectGatedAdvisories();
+
+  if (arg === "--prepare-remediation") {
+    await prepareRemediation(advisories);
+    return 0;
+  }
 
   await assessCurrent(advisories);
   if (arg === "--check" || arg === "--assess") {

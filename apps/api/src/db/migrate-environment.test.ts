@@ -1,7 +1,9 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
 import nodeOs from "node:os";
 import nodePath from "node:path";
+
+import { stageMigrateEntrypoint } from "./migrate-entrypoint.test-helpers";
 
 /**
  * The migrate entrypoint runs with a database-only environment.
@@ -56,33 +58,40 @@ const MIGRATION_MODULE_LOADED = "migration module loaded";
 
 setDefaultTimeout(60_000);
 
-test("the migration module imports with only DATABASE_URL", async () => {
-  await Bun.write(EMPTY_ENV_FILE, "");
-  const modulePath = nodePath.join(import.meta.dir, "migration-runner.ts");
-  const child = Bun.spawn({
-    cmd: [
-      "bun",
-      `--env-file=${EMPTY_ENV_FILE}`,
-      "--eval",
-      `await import(${JSON.stringify(modulePath)}); console.log(${JSON.stringify(MIGRATION_MODULE_LOADED)});`,
-    ],
-    env: {
-      DATABASE_URL: UNREACHABLE_DATABASE_URL,
-      PATH: process.env["PATH"] ?? "",
-    },
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-  const [stderr, stdout, exitCode] = await Promise.all([
-    new Response(child.stderr).text(),
-    new Response(child.stdout).text(),
-    child.exited,
-  ]);
+test.each(["migration-runner.ts", "online-migrations.ts"])(
+  "%s imports all registered repairs with only DATABASE_URL",
+  async (moduleName) => {
+    await Bun.write(EMPTY_ENV_FILE, "");
+    const modulePath = nodePath.join(import.meta.dir, moduleName);
+    const child = Bun.spawn({
+      cmd: [
+        "bun",
+        `--env-file=${EMPTY_ENV_FILE}`,
+        "--eval",
+        `const loaded = await import(${JSON.stringify(modulePath)}); console.log(${JSON.stringify(MIGRATION_MODULE_LOADED)}); if (loaded.ONLINE_MIGRATION_REPAIRS) console.log(loaded.ONLINE_MIGRATION_REPAIRS.map(({ name }) => name).join("\\n"));`,
+      ],
+      env: {
+        DATABASE_URL: UNREACHABLE_DATABASE_URL,
+        PATH: process.env["PATH"] ?? "",
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stderr, stdout, exitCode] = await Promise.all([
+      new Response(child.stderr).text(),
+      new Response(child.stdout).text(),
+      child.exited,
+    ]);
 
-  expect(stderr).not.toContain(ENVIRONMENT_VALIDATION_MESSAGE);
-  expect(exitCode).toBe(0);
-  expect(stdout.trim()).toBe(MIGRATION_MODULE_LOADED);
-});
+    expect(stderr).not.toContain(ENVIRONMENT_VALIDATION_MESSAGE);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(MIGRATION_MODULE_LOADED);
+    if (moduleName === "online-migrations.ts") {
+      expect(stdout).toContain("invoice-sent-at");
+      expect(stdout).toContain("invoice-legacy-payments");
+    }
+  },
+);
 
 const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   await Bun.write(EMPTY_ENV_FILE, "");
@@ -91,31 +100,16 @@ const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   const directory = await mkdtemp(
     nodePath.join(nodeOs.tmpdir(), "migrate-env-"),
   );
-  await mkdir(nodePath.join(directory, "src/db"), { recursive: true });
-  await mkdir(nodePath.join(directory, "scripts"));
-  const entrypoint = nodePath.join(directory, "src/db/migrate.ts");
-  await copyFile(nodePath.join(API_ROOT, "src/db/migrate.ts"), entrypoint);
-  await Bun.write(
-    nodePath.join(directory, ".env.test"),
-    "NODE_ENV=test\nDATABASE_URL=postgres://wrong-test-database.invalid/cloud_test\nREDIS_URL=redis://127.0.0.1:16379\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n",
-  );
-  for (const dependency of ["db-url.ts", "env-db-load-gate.ts", "lib"]) {
-    await symlink(
-      nodePath.join(API_ROOT, "src", dependency),
-      nodePath.join(directory, "src", dependency),
-    );
-  }
-  for (const module of ["migration-runner.ts", "sql-client.ts"]) {
-    await symlink(
-      nodePath.join(API_ROOT, "src/db", module),
-      nodePath.join(directory, "src/db", module),
-    );
-  }
-  await symlink(
-    nodePath.join(API_ROOT, "../../node_modules"),
-    nodePath.join(directory, "node_modules"),
-  );
   try {
+    const entrypoint = await stageMigrateEntrypoint(directory);
+    await Bun.write(
+      nodePath.join(directory, ".env.test"),
+      "NODE_ENV=test\nDATABASE_URL=postgres://wrong-test-database.invalid/cloud_test\nREDIS_URL=redis://127.0.0.1:16379\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n",
+    );
+    await symlink(
+      nodePath.join(API_ROOT, "../../node_modules"),
+      nodePath.join(directory, "node_modules"),
+    );
     const migrate = Bun.spawn({
       cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, entrypoint],
       env: {

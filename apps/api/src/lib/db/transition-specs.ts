@@ -3,7 +3,9 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 import {
   accountExports,
   caseLawDecisionCitationStatsState,
+  caseLawPopulationSeedState,
   caseLawReplayBatches,
+  caseLawSitemapDrainProgress,
   desktopEditSessions,
   desktopTimeEntryBatches,
   EU_COMPLETION_STATUSES,
@@ -11,6 +13,8 @@ import {
   euCompletionControls,
   euCompletionReceipts,
   folioCollabRooms,
+  hostedCustomerErasures,
+  invoices,
   legalReaderAnswerMessages,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
@@ -21,6 +25,7 @@ import {
   timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
   FLOW_RUN_STEP_TRANSITIONS_V1,
   FLOW_RUN_TRANSITIONS_V1,
@@ -44,6 +49,12 @@ import type {
   ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import {
+  DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+  DESKTOP_RUNNER_RUN_TRANSITIONS,
+} from "@/api/lib/desktop-runner/run-transitions";
+import { PROVIDER_WEBHOOK_RESULT_TRANSITIONS } from "@/api/lib/hosted-usage-provider/webhook-result-transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
@@ -103,6 +114,22 @@ const TIME_ENTRY_TRANSITIONS = defineTransitions(
   { terminal: [] },
 );
 
+// An invoice's lifecycle. Recorded payments move a finalized or sent invoice
+// to paid and back (`lib/billing/invoice-payments`) through this spec;
+// finalize, send, revert and void are still direct writes of the transition
+// handler in the shrinking ledger.
+const INVOICE_TRANSITIONS = defineTransitions(
+  invoices,
+  {
+    draft: ["finalized"],
+    finalized: ["draft", "sent", "paid", "void"],
+    sent: ["paid", "void"],
+    paid: ["finalized", "sent", "void"],
+    void: [],
+  },
+  { terminal: ["void"] },
+);
+
 // A failed attempt retries until its budget is spent; a ready archive expires.
 const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
   accountExports,
@@ -133,6 +160,40 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   key: "decisionId",
   edges: { pending: ["exact"], exact: [] },
   options: { terminal: ["exact"] },
+});
+
+export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
+  tableName: "caseLawSitemapDrainProgress",
+  key: "country",
+  scope: ["year", "month"],
+  stateColumn: "phase",
+} as const;
+
+const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
+  table: caseLawSitemapDrainProgress,
+  key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
+  scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
+  stateColumn: SITEMAP_DRAIN_TRANSITION_IDENTITY.stateColumn,
+  edges: {
+    draining: ["awaiting_visibility"],
+    awaiting_visibility: ["draining"],
+  },
+  initial: ["draining"],
+});
+
+// The population seed scans every source, folds its queued deltas, then
+// completes; one call may finish the scan and the fold together.
+const CASE_LAW_POPULATION_SEED_TRANSITIONS = defineScopedTransitions({
+  table: caseLawPopulationSeedState,
+  key: "slot",
+  scope: [],
+  stateColumn: "phase",
+  edges: {
+    scan: ["fold", "complete"],
+    fold: ["complete"],
+    complete: [],
+  },
+  initial: ["scan"],
 });
 
 // Readmission and recovery move the attempt and receipt status atomically.
@@ -188,6 +249,16 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
   pdfSigningSessions,
   { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
   { terminal: ["finalized", "cancelled"] },
+);
+
+export const HOSTED_CUSTOMER_ERASURE_TRANSITIONS = defineTransitions(
+  hostedCustomerErasures,
+  {
+    pending: ["erased", "failed"],
+    failed: ["erased", "failed"],
+    erased: [],
+  },
+  { terminal: ["erased"] },
 );
 
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
@@ -392,6 +463,7 @@ export const TRANSITIONS = {
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawPopulationSeedState: CASE_LAW_POPULATION_SEED_TRANSITIONS,
   caseLawProvisionCitations: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -399,6 +471,7 @@ export const TRANSITIONS = {
   caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawSitemapDrainProgress: SITEMAP_DRAIN_TRANSITIONS,
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -410,6 +483,8 @@ export const TRANSITIONS = {
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
+  desktopRunnerFolderRestores: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+  desktopRunnerRuns: DESKTOP_RUNNER_RUN_TRANSITIONS,
   desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
@@ -429,8 +504,10 @@ export const TRANSITIONS = {
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
+  hostedCustomerErasures: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
+  hostedUsageWebhookEvents: PROVIDER_WEBHOOK_RESULT_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  invoices: INVOICE_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -449,6 +526,7 @@ export const TRANSITIONS = {
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
   organizationAccessStates: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationDataExports: DATA_EXPORT_TRANSITIONS,
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
@@ -456,6 +534,7 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {
     scoped: {
       state: MATCH_MEMBERSHIP_TRANSITIONS,
