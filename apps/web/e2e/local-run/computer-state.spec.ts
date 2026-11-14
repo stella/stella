@@ -179,10 +179,6 @@ test("the first send of a new chat while no computer is connected says why and k
 }) => {
   // The browser logs the refused send, and the development build echoes its
   // failed stream read.
-  test.fail(
-    true,
-    "The reason shows, but the message leaves the transcript once the new chat has read its thread.",
-  );
   browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
   browserErrors.expectCaptured(/Stream response body read failed/u);
   await openNewChat(page);
@@ -268,11 +264,11 @@ test("a send refused because no computer is connected says why, keeps the messag
 test("Open stella desktop on a refused send sends it again once a computer is back", async ({
   page,
   request,
+  browserErrors,
 }) => {
-  test.fail(
-    true,
-    "The resend is a regeneration of a message the refused send never stored: the API answers 400 (truncation target not found) and the chat asks to check the request.",
-  );
+  // The refused send, as above; the resend logs nothing.
+  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
+  browserErrors.expectCaptured(/Stream response body read failed/u);
   await refusedSend(page, request);
 
   await transcript(page).getByRole("button", { name: OPEN_DESKTOP }).click();
