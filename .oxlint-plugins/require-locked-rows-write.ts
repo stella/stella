@@ -619,11 +619,7 @@ const writeSite = (call: AstNode): WriteSite | null => {
   let returning = false;
   let current = call;
   let parent = parentOf(current);
-  while (
-    parent &&
-    parent.type === "MemberExpression" &&
-    parent.object === current
-  ) {
+  while (parent?.type === "MemberExpression" && parent.object === current) {
     const outer = parentOf(parent);
     if (!outer || outer.type !== "CallExpression" || outer.callee !== parent) {
       break;
