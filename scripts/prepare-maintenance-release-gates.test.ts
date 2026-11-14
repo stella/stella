@@ -415,7 +415,7 @@ describe("the maintenance cut checks the tag gates first", () => {
     write(
       root,
       "apps/landing/src/data/changelog-release-dates.json",
-      '{\n  "v1.2.3": "2026-02-01T00:00:00Z"\n}\n',
+      '{\n  "v1.2.2": "2026-01-01T00:00:00Z",\n  "v1.2.3": "2026-02-01T00:00:00Z"\n}\n',
     );
 
     const run = await runCut(root, {}, [], [], { kind: "superseded" });
