@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/lib/desktop-runner/step-contents.ts",
-  "delta": 1,
-  "reason": "Copying a fork's step content runs one INSERT ... SELECT per 200 steps: each statement carries its batch's step keys and message ids as parameters, so one statement for a fork of thousands of steps would pass the parameter limit, and the rows themselves never leave the database."
-}

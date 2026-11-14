@@ -739,7 +739,6 @@ export const copyStepContents = async (
         ),
       );
     // audit: skip - copied history belongs to the fork's own thread create event
-    // db-await-in-loop: one bounded statement per batch of steps
     const inserted = await db
       .insert(contents)
       .select(rows)
