@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub(crate) const PROTOCOL: u32 = 1;
+pub(crate) const PROTOCOL: u32 = 2;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Sequenced messages one run may store; the API refuses more.
@@ -154,6 +154,30 @@ wire_values!(RejectReason {
   AtCapacity => "at_capacity",
   RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
+  FolderBusy => "folder_busy",
+  FolderUnlinked => "folder_unlinked",
+  FolderOffline => "folder_offline",
+  FolderMoved => "folder_moved",
+  FolderProtected => "folder_protected",
+  FolderUnreadable => "folder_unreadable",
+});
+
+// How a folder linked on the computer stands, as `hello` and
+// `linked_folders.status` report it.
+wire_values!(LinkedFolderState {
+  Available => "available",
+  Offline => "offline",
+  Moved => "moved",
+  Protected => "protected",
+  Unreadable => "unreadable",
+});
+
+wire_values!(FolderRestoreOutcome {
+  Restored => "restored",
+  NoCheckpoint => "no_checkpoint",
+  NotNewest => "not_newest",
+  FolderBusy => "folder_busy",
+  Failed => "failed",
 });
 
 wire_values!(HarnessUnavailableReason {
@@ -188,11 +212,24 @@ wire_values!(NetworkPolicy { Open => "open" });
 
 wire_values!(FsPolicy { Workspace => "workspace" });
 
-// How much a run asks before it acts; `Ask` is every harness's default.
+// How much a run asks before it acts, from the mode that does least on its
+// own; `Ask` is every harness's default.
 wire_values!(ApprovalMode {
+  Plan => "plan",
   Ask => "ask",
   Auto => "auto",
   FullAuto => "full_auto",
+});
+
+// The effort a run asks the model for, weakest first.
+wire_values!(ReasoningEffort {
+  None => "none",
+  Minimal => "minimal",
+  Low => "low",
+  Medium => "medium",
+  High => "high",
+  Xhigh => "xhigh",
+  Max => "max",
 });
 
 /// A run-scoped MCP token. `Debug` never prints it.
@@ -203,6 +240,18 @@ pub(crate) struct McpToken(pub(crate) String);
 impl std::fmt::Debug for McpToken {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     formatter.write_str("McpToken(..)")
+  }
+}
+
+/// The key a run's step outputs are read with: the desktop checks a page's
+/// grant against it, so `Debug` never prints it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct OutputKey(pub(crate) String);
+
+impl std::fmt::Debug for OutputKey {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter.write_str("OutputKey(..)")
   }
 }
 
@@ -258,9 +307,16 @@ impl std::fmt::Debug for QuestionAnswers {
 pub(crate) type JsonObject = Map<String, Value>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct HarnessModel {
   pub(crate) id: String,
   pub(crate) label: String,
+  /// The model the harness runs when none is named; the chat offers it
+  /// first as the recommended one. Sent only when set.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub(crate) is_default: bool,
+  /// The efforts a run of this model may ask for; empty when there is no choice.
+  pub(crate) reasoning_efforts: Vec<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -332,6 +388,23 @@ pub(crate) struct Hello {
   pub(crate) sidecar_version: String,
   pub(crate) harnesses: Vec<HarnessReport>,
   pub(crate) active_runs: Vec<ActiveRun>,
+  #[serde(default)]
+  pub(crate) linked_folders: Vec<LinkedFolderReport>,
+}
+
+/// A folder the member linked on this computer, as the API knows it: its id
+/// and name, never its path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFolderReport {
+  pub(crate) id: FolderId,
+  pub(crate) name: String,
+  pub(crate) state: LinkedFolderState,
+}
+
+/// Every linked folder, sent whenever the list or a folder's state changed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LinkedFoldersStatus {
+  pub(crate) folders: Vec<LinkedFolderReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -379,6 +452,24 @@ pub(crate) struct RunFinished {
   pub(crate) harness_session_id: Option<String>,
 }
 
+/// How many tasks the harness process a finished run left behind keeps
+/// running in the background; 0 once none. Not sequenced: the latest count
+/// holds, and every live one is sent again after each `welcome`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunBackground {
+  pub(crate) run_id: String,
+  pub(crate) count: u32,
+}
+
+/// How a folder restore ended; it names no file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestored {
+  pub(crate) restore_id: String,
+  pub(crate) outcome: FolderRestoreOutcome,
+}
+
 wire_union!(DesktopMessage tagged "type" {
   Hello(Hello) => "hello",
   HarnessStatus(HarnessStatus) => "harness.status",
@@ -387,6 +478,9 @@ wire_union!(DesktopMessage tagged "type" {
   RunEvent(RunEvent) => "run.event",
   RunApprovalRequest(RunApprovalRequest) => "run.approval_request",
   RunFinished(RunFinished) => "run.finished",
+  FolderRestored(FolderRestored) => "folder.restored",
+  LinkedFoldersStatus(LinkedFoldersStatus) => "linked_folders.status",
+  RunBackground(RunBackground) => "run.background",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -437,14 +531,34 @@ pub(crate) struct RunStart {
   pub(crate) run_id: String,
   /// The folder the run works in; a chat's runs share one.
   pub(crate) folder_id: String,
+  /// A folder the member linked on this computer, worked in instead of the
+  /// chat's own; the chat's folder still keeps its cache.
+  pub(crate) linked_folder_id: Option<FolderId>,
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
+  /// An effort the desktop reported for the model; `None` leaves it to the harness.
+  pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) harness_session_id: Option<String>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
+  /// Files the sidecar copies into the run's folder before the harness starts.
+  #[serde(default)]
+  pub(crate) attachments: Vec<RunAttachment>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
+  /// The key a page's grant to read the run's step outputs derives from. An
+  /// API from before step outputs sends none, and its runs' outputs are kept
+  /// but never served.
+  #[serde(default)]
+  pub(crate) output_key: Option<OutputKey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunAttachment {
+  pub(crate) path: String,
+  pub(crate) url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -488,11 +602,49 @@ pub(crate) struct Ack {
   pub(crate) seq: NonZeroU32,
 }
 
+/// A chat folder's id. Only a UUID names a folder, so no path rides in it;
+/// anything else fails to parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub(crate) struct FolderId(uuid::Uuid);
+
+impl FolderId {
+  pub(crate) const fn uuid(self) -> uuid::Uuid {
+    self.0
+  }
+}
+
+impl TryFrom<String> for FolderId {
+  type Error = uuid::Error;
+
+  fn try_from(id: String) -> Result<Self, Self::Error> {
+    uuid::Uuid::parse_str(&id).map(Self)
+  }
+}
+
+impl From<FolderId> for String {
+  fn from(id: FolderId) -> Self {
+    id.0.to_string()
+  }
+}
+
+/// Put a chat's folder back as it was before the run, from the checkpoint the
+/// run took. Sent again on a new socket until it is answered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestore {
+  pub(crate) restore_id: String,
+  pub(crate) folder_id: FolderId,
+  /// The linked folder the run worked in, when it worked in one.
+  pub(crate) linked_folder_id: Option<FolderId>,
+  pub(crate) run_id: String,
+}
+
 wire_union!(ServerMessage tagged "type" {
   Welcome(Welcome) => "welcome",
   UpgradeRequired(UpgradeRequired) => "upgrade_required",
   Reconnect(Reconnect) => "reconnect",
-  RunStart(RunStart) => "run.start",
+  RunStart(Box<RunStart>) => "run.start",
   RunInput(RunInput) => "run.input",
   RunApproval(RunApproval) => "run.approval",
   RunAnswer(RunAnswer) => "run.answer",
@@ -500,6 +652,7 @@ wire_union!(ServerMessage tagged "type" {
   RunCancel(RunRef) => "run.cancel",
   RunToken(RunTokenRefresh) => "run.token",
   Ack(Ack) => "ack",
+  FolderRestore(FolderRestore) => "folder.restore",
 });
 
 #[cfg(test)]
@@ -615,6 +768,18 @@ mod tests {
         names(RunOutcome::ALL.iter().map(|value| value.wire_name())),
       ),
       (
+        "folderRestoreOutcomes",
+        names(
+          FolderRestoreOutcome::ALL
+            .iter()
+            .map(|value| value.wire_name()),
+        ),
+      ),
+      (
+        "linkedFolderStates",
+        names(LinkedFolderState::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
         "networkPolicies",
         names(NetworkPolicy::ALL.iter().map(|value| value.wire_name())),
       ),
@@ -625,6 +790,10 @@ mod tests {
       (
         "approvalModes",
         names(ApprovalMode::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "reasoningEfforts",
+        names(ReasoningEffort::ALL.iter().map(|value| value.wire_name())),
       ),
       ("harnessStates", names(HarnessReport::TAGS.iter().copied())),
       (
@@ -783,6 +952,9 @@ mod tests {
       let debug = format!("{parsed:?}");
       for token in ["run-token-1", "run-token-2"] {
         assert!(!debug.contains(token), "{debug}");
+      }
+      if let Some(key) = message["outputKey"].as_str() {
+        assert!(!debug.contains(key), "{debug}");
       }
     }
   }

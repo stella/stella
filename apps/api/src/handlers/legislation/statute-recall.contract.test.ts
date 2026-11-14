@@ -88,7 +88,7 @@ const baselineSchema = v.strictObject({
   ),
 });
 const baseline = v.parse(baselineSchema, fixtureBaseline);
-export const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
+const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
 const fixtureFingerprint = hashSha256Hex(
   JSON.stringify([fixtureQueries, fixtureDocuments]),
 );

@@ -76,6 +76,7 @@ const syntheticProperty = (index: number): AIBatchProperty => {
   return {
     id: brandDerivedPropertyId(`budget-edge-probe-${index}`),
     status: "stale",
+    answerShape: "value",
     content: contentForKind(kind),
     dependencies: [],
     tool: {

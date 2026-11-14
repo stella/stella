@@ -38,6 +38,7 @@ import {
 } from "@/api/lib/mcp-upstream/url-safety";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const OAUTH_SINK = failureSink({ event: "test.mcp_oauth", expected: [] });
@@ -626,6 +627,55 @@ describe("a third party's answer at its OAuth endpoints", () => {
         panic("Expected a contract failure");
       }
       expect(result.error.code).toBe("internal_error");
+    });
+  }
+
+  for (const [failure, error, code] of [
+    [
+      "a URL the outbound policy rejects",
+      new SafeOutboundFetchError({ message: "URL host is not allowed" }),
+      "internal_error",
+    ],
+    [
+      "a response over the size limit",
+      new SafeOutboundFetchError({
+        message: "Response body exceeded size limit",
+      }),
+      "internal_error",
+    ],
+    [
+      "a request that timed out",
+      new SafeOutboundFetchError({ message: "Request timed out" }),
+      "upstream_unavailable",
+    ],
+    [
+      "a transport failure",
+      new SafeOutboundFetchError({
+        message: "Outbound request failed",
+        cause: new Error("connection reset"),
+      }),
+      "upstream_unavailable",
+    ],
+  ] as const) {
+    test(`${failure} at the token endpoint answers ${code}`, async () => {
+      const result = await exchangeAuthorizationCode({
+        metadata: await dynamicClientMetadata(),
+        permit: outboundPermit,
+        dependencies: {
+          ...discoveryTransport().dependencies,
+          safeOutboundFetchBytes: async () => Result.err(error),
+        },
+        clientId: "client",
+        clientSecret: null,
+        code: "code",
+        codeVerifier: "verifier",
+        responseIssuer: undefined,
+        redirectUri: "https://app.example.com/callback",
+      });
+      if (!Result.isError(result)) {
+        panic("Expected a failure");
+      }
+      expect(result.error.code).toBe(code);
     });
   }
 

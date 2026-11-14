@@ -21,6 +21,11 @@ export default {
           "Applies the credential policy to desktop sessions and handoffs.",
       },
       {
+        path: "apps/api/src/lib/push/timer-activity-devices.ts",
+        reason:
+          "Applies the credential policy to Lock Screen timer keys before issuing one.",
+      },
+      {
         path: "apps/api/src/lib/files/pdf-signing/sessions.ts",
         reason:
           "Applies the credential policy to signing sessions and handoffs.",

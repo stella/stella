@@ -22,7 +22,8 @@ use tokio::sync::{Mutex, mpsc};
 use super::protocol::{ProbeFailure, ProbedModel};
 use super::*;
 use crate::runner_protocol::{
-  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, RunPolicy,
+  FsPolicy, HarnessCapability, McpBinding, McpToken, NetworkPolicy, ReasoningEffort,
+  RunPolicy,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -111,6 +112,7 @@ impl Fixture {
         initial: Duration::from_millis(20),
         max: Duration::from_millis(100),
       },
+      retired_dirs: Vec::new(),
     }
   }
 
@@ -124,6 +126,27 @@ impl Fixture {
 
   fn sidecar(&self) -> HarnessSidecar {
     self.sidecar_at(VERSION)
+  }
+
+  /// Replace the supervisor's connection to the holder of `version` with
+  /// another one, as a dropped link does; keep the stream to keep it open.
+  pub(crate) fn replace_holder_connection(
+    &self,
+    version: &str,
+  ) -> std::os::unix::net::UnixStream {
+    let dir = self.holders().join(version);
+    let mut intruder =
+      std::os::unix::net::UnixStream::connect(self.endpoint(version)).unwrap();
+    let hello = json!({
+      "type": "hello",
+      "protocol": SIDECAR_PROTOCOL,
+      "secret": read_secret(&dir).unwrap().0,
+      "appVersion": "1.4.0",
+      "apiOrigin": "https://api.example.test",
+      "resume": [],
+    });
+    writeln!(intruder, "{hello}").unwrap();
+    intruder
   }
 
   /// Every line a stand-in read, parsed.
@@ -190,7 +213,10 @@ fn run_start(model: &str) -> SidecarRunStart {
     launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
     cache_dir: "/data/agent-package-cache".to_owned(),
+    unreadable_paths: vec!["/data/runs".to_owned(), "/data".to_owned()],
+    step_output_dir: "/data/runs/1.step-outputs".to_owned(),
     model: model.to_owned(),
+    reasoning_effort: None,
     instructions: String::new(),
     messages: vec![
       json!({ "role": "user", "content": "Find the lease decision." })
@@ -198,6 +224,9 @@ fn run_start(model: &str) -> SidecarRunStart {
         .unwrap()
         .clone(),
     ],
+    attachments: Vec::new(),
+    skill_folders: Vec::new(),
+    tool_path: Vec::new(),
     harness_session_id: None,
     policy: RunPolicy {
       network: NetworkPolicy::Open,
@@ -613,6 +642,113 @@ fn a_dropped_connection_resumes_after_the_last_delivered_message() {
 }
 
 #[test]
+fn a_restore_outlives_a_dropped_connection_and_is_asked_again_on_the_next() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let restoring = {
+      let sidecar = sidecar.clone();
+      tokio::spawn(async move {
+        sidecar
+          .restore_folder(SidecarFolderRestore {
+            request_id: REQUEST_ID.to_owned(),
+            workspace_dir: "/tmp/stand-in-folder".to_owned(),
+            run_id: uuid::Uuid::new_v4().to_string(),
+          })
+          .await
+      })
+    };
+    until("the holder got the restore", || {
+      fixture
+        .received()
+        .iter()
+        .any(|message| message["type"] == "folder.restore")
+    })
+    .await;
+    // Another connection replaces this one while the holder still writes
+    // the folder: the restore waits through the reconnect, is asked again
+    // by the same request, and ends with the holder's answer.
+    let _intruder = fixture.replace_holder_connection(VERSION);
+    let answered = tokio::time::timeout(WAIT, restoring)
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(answered, Ok(RestoreOutcome::Restored));
+    sidecar.shutdown().await;
+  });
+  let asked: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| message["type"] == "folder.restore")
+    .collect();
+  assert_eq!(asked.len(), 2);
+  assert!(
+    asked
+      .iter()
+      .all(|message| message["requestId"] == REQUEST_ID)
+  );
+}
+
+#[test]
+fn a_restore_outlives_a_link_that_broke_and_is_asked_again_on_the_next() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let restore = |request_id: &str| SidecarFolderRestore {
+      request_id: request_id.to_owned(),
+      workspace_dir: "/tmp/stand-in-folder".to_owned(),
+      run_id: uuid::Uuid::new_v4().to_string(),
+    };
+    let restoring = {
+      let sidecar = sidecar.clone();
+      let first = restore(REQUEST_ID);
+      tokio::spawn(async move { sidecar.restore_folder(first).await })
+    };
+    until("the holder got the restore", || {
+      fixture
+        .received()
+        .iter()
+        .any(|message| message["type"] == "folder.restore")
+    })
+    .await;
+    // The holder breaks the protocol: its runs fail and its link is dropped
+    // with no reconnect, but the restore it may still be writing stays.
+    let mut broken = sidecar.start_run(run_start("garbage")).unwrap();
+    assert_eq!(finish(&mut broken).await, vec![ended(RunOutcome::Failed)]);
+    // The next call that needs the holder connects again, and the connection
+    // asks for the pending restore again by the same request.
+    let later = {
+      let sidecar = sidecar.clone();
+      let next = restore("7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6");
+      tokio::spawn(async move { sidecar.restore_folder(next).await })
+    };
+    let answered = tokio::time::timeout(WAIT, restoring)
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(answered, Ok(RestoreOutcome::Restored));
+    sidecar.shutdown().await;
+    // The later restore was asked once and the stand-in never answers a first
+    // ask; stopping the supervisor ends it.
+    assert!(
+      tokio::time::timeout(WAIT, later)
+        .await
+        .unwrap()
+        .unwrap()
+        .is_err()
+    );
+  });
+  let asked: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| {
+      message["type"] == "folder.restore" && message["requestId"] == REQUEST_ID
+    })
+    .collect();
+  assert_eq!(asked.len(), 2);
+}
+
+#[test]
 fn a_new_version_drains_the_old_holder_and_removes_its_folder() {
   let fixture = Fixture::new();
   with_children(async {
@@ -686,6 +822,73 @@ fn a_holder_that_dies_fails_its_runs_and_the_next_run_starts_a_new_one() {
     sidecar.shutdown().await;
   });
   assert_eq!(fixture.starts(), 2, "a new holder was started");
+}
+
+#[test]
+fn a_holder_that_dies_reports_its_background_work_ended() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut counts = sidecar.watch_background().unwrap();
+    let mut crashed = sidecar.start_run(run_start("background-crash")).unwrap();
+    let _delivered = deliveries(&mut crashed).await;
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    // The holder's kept processes went with it: nothing keeps showing them.
+    let ended = counts.recv().await.unwrap();
+    assert_eq!(
+      (ended.run_id.as_str(), ended.count),
+      (reported.run_id.as_str(), 0)
+    );
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
+fn a_background_count_reported_before_the_watcher_reaches_it() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut waiting = sidecar.start_run(run_start("background-wait")).unwrap();
+    // The holder reported the count before this event, on the same line.
+    let _event = next(&mut waiting).await;
+    let mut counts = sidecar.watch_background().unwrap();
+    let reported = counts.recv().await.unwrap();
+    assert_eq!(reported.count, 2);
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
+fn a_run_start_the_holder_finds_invalid_fails_that_run_and_no_other() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut running = sidecar.start_run(run_start("wait")).unwrap();
+    let _first = next(&mut running).await;
+    let mut refused = sidecar.start_run(run_start("refuse-invalid")).unwrap();
+    assert_eq!(finish(&mut refused).await, vec![ended(RunOutcome::Failed)]);
+    let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert!(matches!(
+      finish(&mut after).await.last(),
+      Some(SidecarRunOutput::Finished {
+        outcome: RunOutcome::Completed,
+        ..
+      })
+    ));
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
+fn a_run_start_the_holder_refuses_without_naming_it_still_ends_the_run() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut refused = sidecar.start_run(run_start("refuse-unnamed")).unwrap();
+    assert_eq!(finish(&mut refused).await, vec![ended(RunOutcome::Failed)]);
+    sidecar.shutdown().await;
+  });
 }
 
 #[test]
@@ -987,11 +1190,17 @@ fn probe_outcomes_become_runner_reports() {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
         is_default: true,
+        reasoning_efforts: vec![
+          ReasoningEffort::High,
+          ReasoningEffort::Low,
+          ReasoningEffort::High,
+        ],
       },
       ProbedModel {
         id: "gpt-test".to_owned(),
         label: "Again".to_owned(),
         is_default: false,
+        reasoning_efforts: Vec::new(),
       },
     ],
   };
@@ -1005,6 +1214,8 @@ fn probe_outcomes_become_runner_reports() {
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
+        is_default: true,
+        reasoning_efforts: vec![ReasoningEffort::Low, ReasoningEffort::High],
       }],
     })
   );
@@ -1145,6 +1356,10 @@ fn stand_in_holder() {
 /// - `flood`: 300 events at once;
 /// - `flood-later`: an event, then 300 more on the first approval;
 /// - `crash`: an event, then the process exits without cleaning up;
+/// - `background-crash`: an event and a background task count of 2, then
+///   the process exits without cleaning up;
+/// - `background-wait`: a background task count of 2, then an event, then
+///   nothing until it is cancelled;
 /// - `garbage`: a line that is not JSON.
 ///
 /// A launch with `processGrant` first reports the stand-in's own process id
@@ -1181,6 +1396,9 @@ mod stand_in {
     runs: HashMap<String, StandInRun>,
     /// Probes that wait for their process grant.
     probes: HashMap<String, Value>,
+    /// Folder restores asked once: the first ask is still "writing" and gets
+    /// no answer; the same request asked again is answered `restored`.
+    restores: HashSet<String>,
     current: Option<Connection>,
   }
 
@@ -1217,6 +1435,7 @@ mod stand_in {
       draining: false,
       runs: HashMap::new(),
       probes: HashMap::new(),
+      restores: HashSet::new(),
       current: None,
     }));
     let mut next_id = 0;
@@ -1414,6 +1633,17 @@ mod stand_in {
         emit(held, run_id, event).await;
         std::process::exit(3);
       }
+      "background-wait" => {
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
+        emit(held, run_id, event).await;
+      }
+      "background-crash" => {
+        emit(held, run_id, event).await;
+        let count = json!({ "type": "background.tasks", "runId": run_id, "count": 2 });
+        write(held, &count.to_string()).await;
+        std::process::exit(3);
+      }
       _ => {
         emit(held, run_id, event).await;
         emit(held, run_id, request).await;
@@ -1455,6 +1685,16 @@ mod stand_in {
     match message["type"].as_str().unwrap_or_default() {
       "run.start" => {
         let model = message["model"].as_str().unwrap_or_default().to_owned();
+        if matches!(model.as_str(), "refuse-invalid" | "refuse-unnamed") {
+          let rejected = json!({
+            "type": "rejected",
+            "reason": "invalid",
+            "messageType": "run.start",
+            "runId": (model == "refuse-invalid").then_some(run_id.as_str()),
+          });
+          write(held, &format!("{rejected}\n")).await;
+          return;
+        }
         held.runs.insert(
           run_id.clone(),
           StandInRun {
@@ -1553,6 +1793,17 @@ mod stand_in {
       "run.cancel" => {
         if held.runs.get(&run_id).is_some_and(|run| !run.finished) {
           emit(held, &run_id, finished(&run_id, "cancelled", None)).await;
+        }
+      }
+      "folder.restore" => {
+        let request_id = message["requestId"].as_str().unwrap_or_default().to_owned();
+        if !held.restores.insert(request_id.clone()) {
+          let restored = json!({
+            "type": "folder.restored",
+            "requestId": request_id,
+            "outcome": "restored",
+          });
+          write(held, &format!("{restored}\n")).await;
         }
       }
       "harness.probe" => {

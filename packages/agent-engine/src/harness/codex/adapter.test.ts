@@ -25,9 +25,12 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -36,8 +39,13 @@ import * as v from "valibot";
 import { createDetached } from "@stll/errors";
 
 import {
+  FAKE_CONTEXT_WINDOW,
+  FAKE_FUTURE_RESET,
+  FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
+  FAKE_PRIVATE_TEXT,
   FAKE_RESUMED_THREAD_ID,
+  FAKE_TEXT_ONLY_MODEL,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../../scripts/fake-codex-app-server";
@@ -47,6 +55,7 @@ import {
   FAKE_STELLA_SERVER,
   FAKE_STELLA_STEPS,
 } from "../../../scripts/fake-stella-turn";
+import { PROTOCOL_LOG_OFF } from "../../protocol-log";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
@@ -59,7 +68,7 @@ import {
   CODEX_SERVER_REQUESTS,
   InitializeResponseSchema,
 } from "./protocol";
-import { CODEX_APPROVAL_OPTIONS } from "./turn";
+import { CODEX_APPROVAL_OPTIONS, type CodexCapacityRetry } from "./turn";
 
 const FAKE_SERVER = path.join(
   import.meta.dir,
@@ -78,11 +87,26 @@ afterEach(() => {
   }
 });
 
-const FAST_CAPACITY_RETRY = { maxAttempts: 5, baseDelayMs: 5, maxDelayMs: 20 };
+/** Continues a turn at capacity at once, recording each delay it skipped. */
+const capacityRetryRecording = () => {
+  const delays: number[] = [];
+  const capacityRetry: CodexCapacityRetry = {
+    maxAttempts: 5,
+    baseDelayMs: 10,
+    maxDelayMs: 50,
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
+  };
+  return { delays, capacityRetry };
+};
+
+const FAST_CAPACITY_RETRY = capacityRetryRecording().capacityRetry;
 
 const harnessFor = (
   scenario: FakeScenario,
   capacityRetry = FAST_CAPACITY_RETRY,
+  environment: Readonly<Record<string, string>> = {},
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-codex-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
@@ -93,8 +117,13 @@ const harnessFor = (
   mkdirSync(workspaceDir);
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
+    protocolLog: PROTOCOL_LOG_OFF,
     codexHome,
-    environment: { FAKE_HARNESS_LOG: logPath, PATH: process.env["PATH"] ?? "" },
+    environment: {
+      ...environment,
+      FAKE_HARNESS_LOG: logPath,
+      PATH: process.env["PATH"] ?? "",
+    },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
@@ -136,6 +165,7 @@ const turnInput = (
   threadId: "stella-thread-1",
   workspaceDir,
   model: "gpt-test",
+  reasoningEffort: null,
   instructions: "Use the stella MCP server.",
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
@@ -143,9 +173,15 @@ const turnInput = (
     url: "https://mcp.example.test/mcp",
     token: MCP_TOKEN,
   },
+  browser: null,
   transcript,
+  inputFiles: [],
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
+  skillFolders: [],
+  networkHosts: [],
+  toolPath: [],
+  unreadablePaths: [],
   ...overrides,
 });
 
@@ -198,6 +234,8 @@ const run = async (
 
 const terminal = (events: readonly HarnessEvent[]) => events.at(-1);
 
+const FUTURE_RESET_ISO = new Date(FAKE_FUTURE_RESET * 1000).toISOString();
+
 describe("Codex adapter over a stdio app-server", () => {
   test("runs with the stella-owned CODEX_HOME in the workspace and sends the MCP bearer only over stdio", async () => {
     const { events, received, startup, codexHome, workspaceDir } =
@@ -212,10 +250,13 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(threadStart?.params).toMatchObject({
       model: "gpt-test",
       cwd: workspaceDir,
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
       config: {
-        "sandbox_workspace_write.network_access": true,
+        // At Ask Codex cannot pause a search for approval, so its web
+        // search is off.
+        web_search: "disabled",
+        "sandbox_workspace_write.network_access": false,
         "sandbox_workspace_write.writable_roots": [CACHE_DIR],
         "sandbox_workspace_write.exclude_tmpdir_env_var": false,
         "sandbox_workspace_write.exclude_slash_tmp": false,
@@ -225,47 +266,321 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       },
     });
+    // Usage sums the turn's two requests; the context is the last one's,
+    // against the window Codex reported.
     expect(terminal(events)).toEqual({
       type: "turn.completed",
       usage: {
-        inputTokens: 120,
+        inputTokens: 170,
         cachedInputTokens: 20,
-        outputTokens: 30,
+        outputTokens: 40,
         reasoningOutputTokens: 5,
+        context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
     });
   });
 
-  test("its one approval mode runs in the workspace sandbox, asks before leaving it, and writes caches to the package cache", async () => {
-    const { received, startup } = await run("tool_calls");
-    const threadStart = received().find(
-      ({ method }) => method === "thread/start",
-    );
-    expect(threadStart?.params).toMatchObject({
-      approvalPolicy: "on-request",
-      sandbox: "workspace-write",
-      config: {
-        "sandbox_workspace_write.writable_roots": [CACHE_DIR],
-        "sandbox_workspace_write.exclude_tmpdir_env_var": false,
-        "sandbox_workspace_write.exclude_slash_tmp": false,
-      },
-    });
-    expect(startup().packageCache).toEqual(packageCacheEnvironment(CACHE_DIR));
-  });
-
-  test("an approval mode it does not offer refuses the turn before the harness starts", async () => {
-    for (const approvals of ["auto", "full_auto"] as const) {
-      const harness = harnessFor("tool_calls");
-      const started = await harness.adapter.startTurn(
-        turnInput(harness.workspaceDir, {
+  test.each([
+    ["ask", "untrusted", false, "disabled"],
+    ["auto", "untrusted", true, "live"],
+    ["full_auto", "on-request", true, "live"],
+  ] as const)(
+    "at %s it runs in the workspace sandbox with Codex's %s policy (network %s, web search %s), asks before leaving it, and writes caches to the package cache",
+    async (approvals, approvalPolicy, networkAccess, webSearch) => {
+      const { received, startup } = await run("tool_calls", {
+        overrides: {
           policy: { network: "open", fs: "workspace", approvals },
-        }),
+        },
+      });
+      const threadStart = received().find(
+        ({ method }) => method === "thread/start",
       );
+      expect(threadStart?.params).toMatchObject({
+        approvalPolicy,
+        sandbox: "workspace-write",
+        config: {
+          web_search: webSearch,
+          "sandbox_workspace_write.network_access": networkAccess,
+          "sandbox_workspace_write.writable_roots": [CACHE_DIR],
+          "sandbox_workspace_write.exclude_tmpdir_env_var": false,
+          "sandbox_workspace_write.exclude_slash_tmp": false,
+        },
+      });
+      expect(startup().packageCache).toEqual(
+        packageCacheEnvironment(CACHE_DIR),
+      );
+    },
+  );
+
+  test("the levels are strictly ordered: each starts Codex differently, and Auto keeps the command gate", async () => {
+    const settingsAt = async (
+      approvals: HarnessTurnInput["policy"]["approvals"],
+    ) => {
+      const { received } = await run("tool_calls", {
+        overrides: {
+          policy: { network: "open", fs: "workspace", approvals },
+        },
+      });
+      const fields = (value: unknown): Record<string, unknown> =>
+        typeof value === "object" && value !== null
+          ? Object.fromEntries(Object.entries(value))
+          : {};
+      const params = fields(
+        received().find(({ method }) => method === "thread/start")?.params,
+      );
+      return JSON.stringify([
+        params["approvalPolicy"],
+        fields(params["config"])["sandbox_workspace_write.network_access"],
+      ]);
+    };
+    const ask = await settingsAt("ask");
+    const auto = await settingsAt("auto");
+    const fullAuto = await settingsAt("full_auto");
+    expect(new Set([ask, auto, fullAuto]).size).toBe(3);
+    // A ceiling at Auto never starts Codex with Full auto's policy.
+    expect(auto).toBe(JSON.stringify(["untrusted", true]));
+  });
+
+  test("asks the model for the run's reasoning effort on turn/start, and for none when the run leaves it to the harness", async () => {
+    const turnStart = (
+      received: readonly { method?: string; params?: unknown }[],
+    ) => received.find(({ method }) => method === "turn/start")?.params;
+    const chosen = await run("tool_calls", {
+      overrides: { reasoningEffort: "high" },
+    });
+    expect(turnStart(chosen.received())).toMatchObject({ effort: "high" });
+    const left = await run("tool_calls");
+    expect(turnStart(left.received())).not.toHaveProperty("effort");
+  });
+
+  test("a managed tool comes first on the server's PATH and the inherited PATH stays", async () => {
+    const toolDir = path.join(tmpdir(), "stella-managed-bun", "bin");
+    const withTool = await run("tool_calls", {
+      overrides: { toolPath: [toolDir] },
+    });
+    expect(withTool.startup().path).toBe(
+      `${toolDir}${path.delimiter}${process.env["PATH"] ?? ""}`,
+    );
+    const without = await run("tool_calls");
+    expect(without.startup().path).toBe(process.env["PATH"]);
+  });
+
+  describe("skill folders", () => {
+    /** A real skill folder, outside the harness's own directories. */
+    const skillFolder = (name: string) => {
+      const root = mkdtempSync(path.join(tmpdir(), "stella-skill-folder-"));
+      cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+      const folder = path.join(root, name);
+      mkdirSync(folder);
+      writeFileSync(
+        path.join(folder, "SKILL.md"),
+        `---\nname: ${name}\ndescription: An invented skill.\n---\nBody.\n`,
+      );
+      return { name, path: folder };
+    };
+
+    /** Runs a turn in a workspace `prepare` may fill first. */
+    const runIn = async (
+      scenario: FakeScenario,
+      overrides: Partial<HarnessTurnInput>,
+      prepare: (workspaceDir: string) => void = () => undefined,
+      environment: Readonly<Record<string, string>> = {},
+    ) => {
+      const harness = harnessFor(scenario, FAST_CAPACITY_RETRY, environment);
+      prepare(harness.workspaceDir);
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir, overrides),
+      );
+      const events: HarnessEvent[] = [];
+      if (Result.isOk(started)) {
+        for await (const event of started.value.events) {
+          events.push(event);
+        }
+        await started.value.dispose();
+      }
+      return { ...harness, started, events };
+    };
+
+    const paramsOf = (
+      received: readonly { method?: string; params?: unknown }[],
+      method: string,
+    ) => received.find((message) => message.method === method)?.params;
+
+    const plantSkill = (workspaceDir: string) => {
+      const planted = path.join(workspaceDir, ".agents", "skills", "planted");
+      mkdirSync(planted, { recursive: true });
+      writeFileSync(
+        path.join(planted, "SKILL.md"),
+        "---\nname: planted\ndescription: x\n---\nx\n",
+      );
+      return path.join(planted, "SKILL.md");
+    };
+
+    test("a listed folder is a root for this process, read-only, and writes nothing to the home", async () => {
+      const skill = skillFolder("fixture-skill");
+      const { received, codexHome } = await runIn("tool_calls", {
+        skillFolders: [skill],
+      });
+      expect(paramsOf(received(), "skills/extraRoots/set")).toEqual({
+        extraRoots: [skill.path],
+      });
+      expect(
+        received().findIndex(
+          ({ method }) => method === "skills/extraRoots/set",
+        ),
+      ).toBeLessThan(
+        received().findIndex(({ method }) => method === "thread/start"),
+      );
+      expect(paramsOf(received(), "thread/start")).toMatchObject({
+        config: { "sandbox_workspace_write.writable_roots": [CACHE_DIR] },
+      });
+      expect(
+        JSON.stringify(paramsOf(received(), "thread/start")),
+      ).not.toContain(skill.path);
+      expect(readdirSync(codexHome)).toEqual([]);
+    });
+
+    test("without skill folders no root is set", async () => {
+      const { received } = await runIn("tool_calls", {});
+      expect(paramsOf(received(), "skills/extraRoots/set")).toBeUndefined();
+      expect(paramsOf(received(), "thread/start")).not.toMatchObject({
+        config: { "skills.config": expect.anything() },
+      });
+    });
+
+    test("a folder that vanished, holds no SKILL.md or is a link is left out", async () => {
+      const good = skillFolder("good-skill");
+      const vanished = skillFolder("vanished-skill");
+      rmSync(vanished.path, { recursive: true });
+      const empty = skillFolder("empty-skill");
+      rmSync(path.join(empty.path, "SKILL.md"));
+      const target = skillFolder("linked-skill");
+      const linked = { name: "linked", path: `${target.path}-link` };
+      symlinkSync(target.path, linked.path);
+      cleanups.push(() => rmSync(linked.path, { force: true }));
+
+      const { received } = await runIn("tool_calls", {
+        skillFolders: [vanished, empty, linked, good],
+      });
+      expect(paramsOf(received(), "skills/extraRoots/set")).toEqual({
+        extraRoots: [good.path],
+      });
+    });
+
+    test("a skill the workspace brings in is switched off, a listed one is not", async () => {
+      const skill = skillFolder("fixture-skill");
+      let planted = "";
+      const { received } = await runIn(
+        "tool_calls",
+        { skillFolders: [skill] },
+        (workspaceDir) => {
+          planted = plantSkill(workspaceDir);
+        },
+      );
+      expect(paramsOf(received(), "thread/start")).toMatchObject({
+        config: { "skills.config": [{ path: planted, enabled: false }] },
+      });
+    });
+
+    test("a resumed thread switches a workspace's skill off too", async () => {
+      let planted = "";
+      const { received } = await runIn(
+        "resume_ok",
+        {
+          continuation: {
+            type: "resume",
+            sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+          },
+        },
+        (workspaceDir) => {
+          planted = plantSkill(workspaceDir);
+        },
+      );
+      expect(paramsOf(received(), "thread/resume")).toMatchObject({
+        config: { "skills.config": [{ path: planted, enabled: false }] },
+      });
+    });
+
+    test("only a listed folder's own SKILL.md stays on: not the member's, nothing nested, nothing through a link", async () => {
+      const skill = skillFolder("fixture-skill");
+      const home = skillFolder("home-holder");
+      const member = path.join(home.path, ".agents", "skills", "member-skill");
+      mkdirSync(member, { recursive: true });
+      writeFileSync(path.join(member, "SKILL.md"), "x");
+      const nested = path.join(skill.path, "vendor", "nested-skill");
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(path.join(nested, "SKILL.md"), "x");
+      const elsewhere = skillFolder("elsewhere-skill");
+      const linked = path.join(skill.path, "linked");
+      symlinkSync(elsewhere.path, linked);
+
+      const { received } = await runIn(
+        "tool_calls",
+        { skillFolders: [skill] },
+        () => undefined,
+        { HOME: home.path },
+      );
+
+      const config = paramsOf(received(), "thread/start");
+      const disabled = v
+        .parse(
+          v.object({
+            config: v.object({
+              "skills.config": v.array(
+                v.object({ path: v.string(), enabled: v.boolean() }),
+              ),
+            }),
+          }),
+          config,
+        )
+        .config["skills.config"].map(({ path: file, enabled }) => {
+          expect(enabled).toBe(false);
+          return file;
+        });
+      expect(disabled.toSorted()).toEqual(
+        [
+          path.join(member, "SKILL.md"),
+          path.join(nested, "SKILL.md"),
+          path.join(linked, "SKILL.md"),
+        ].toSorted(),
+      );
+    });
+
+    test("a read of a skill reaches stella by name and status, an unrelated call unchanged", async () => {
+      const skill = skillFolder("fixture-skill");
+      const { events } = await runIn(
+        "reads_skill",
+        { skillFolders: [skill] },
+        () => undefined,
+        { FAKE_SKILL_PATH: skill.path },
+      );
+      expect(JSON.stringify(events)).not.toContain(skill.path);
+      expect(JSON.stringify(events)).not.toContain("Licensed");
+      const completed = events.flatMap((event) =>
+        event.type === "tool.completed" ? [event] : [],
+      );
+      expect(completed[0]?.toolCall.input).toEqual({
+        command: `cat <skill:${skill.name}>/SKILL.md`,
+      });
+      expect(completed[0]?.result).toEqual({
+        content: JSON.stringify({ status: "completed" }),
+        status: "succeeded",
+      });
+      // An unrelated command keeps its own result, which never carries its
+      // output.
+      expect(completed[1]?.result.content).not.toContain("notes.md");
+      expect(JSON.parse(completed[1]?.result.content ?? "")).toMatchObject({
+        status: "completed",
+      });
+    });
+
+    test("a turn whose skills cannot be established does not run", async () => {
+      const { received, started } = await runIn("skills_refused", {});
       expect(Result.isError(started) && started.error.reason).toBe(
         "start_rejected",
       );
-      expect(existsSync(harness.logPath)).toBe(false);
-    }
+      expect(paramsOf(received(), "thread/start")).toBeUndefined();
+    });
   });
 
   test("a local turn persists the same message as the cloud translator for the same native turn", async () => {
@@ -292,6 +607,7 @@ describe("Codex adapter over a stdio app-server", () => {
       model: "gpt-test",
       runId: "run-1",
       threadId: "stella-thread-1",
+      workspaceDir: "/workspace",
       generateId: counter(),
       now: () => 0,
     })) {
@@ -377,7 +693,8 @@ describe("Codex adapter over a stdio app-server", () => {
     }
     const stored = fold(cloud);
     expect(stored.flatMap(({ parts }) => parts).length).toBeGreaterThan(4);
-    expect(fold(local)).toEqual(stored);
+    expect(withoutCommandOutput(stored)).toEqual(fold(local));
+    expect(JSON.stringify(local)).not.toContain("aggregated_output");
   });
 
   test("an approval offers the native decisions and replies with the chosen one verbatim", async () => {
@@ -527,11 +844,12 @@ describe("Codex adapter over a stdio app-server", () => {
     const log = path.join(root, "fake.log");
     const exits: { exitCode: number | null; signal: string | null }[] = [];
     const ready = Promise.withResolvers<undefined>();
-    const client = startAppServer({
+    const started = startAppServer({
       launch: {
         executable: process.execPath,
         args: [FAKE_SERVER, "unresponsive"],
       },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         backgroundErrors.push(error);
       }),
@@ -551,6 +869,9 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       },
     });
+    const client = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
     // The deadline runs from the request: wait until the server is up, so a
     // slow start is never mistaken for silence.
     await ready.promise;
@@ -629,6 +950,49 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(prompt).toContain("Search both.");
   });
 
+  test("the turn's images open turn/start as data URLs; a PDF stays the path the text names", async () => {
+    const { events, received } = await run("tool_calls", {
+      overrides: {
+        inputFiles: [
+          { type: "image", mediaType: "image/webp", base64: "UklGRg==" },
+          { type: "pdf", base64: "JVBERi0x" },
+        ],
+      },
+    });
+    // The fake ends with code 96 on input the app-server would refuse.
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(
+      received().find(({ method }) => method === "turn/start")?.params,
+    ).toEqual({
+      threadId: FAKE_THREAD_ID,
+      input: [
+        { type: "image", url: "data:image/webp;base64,UklGRg==" },
+        {
+          type: "text",
+          text: expect.stringContaining("Search both."),
+          text_elements: [],
+        },
+      ],
+    });
+  });
+
+  test("a model that reads no images gets the turn's images as the paths its text names", async () => {
+    const { events, received } = await run("tool_calls", {
+      overrides: {
+        model: FAKE_TEXT_ONLY_MODEL,
+        inputFiles: [
+          { type: "image", mediaType: "image/png", base64: "iVBORw0K" },
+        ],
+      },
+    });
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(
+      received().find(({ method }) => method === "turn/start")?.params,
+    ).toMatchObject({
+      input: [{ type: "text", text: expect.stringContaining("Search both.") }],
+    });
+  });
+
   test("a resumed session gets only the new message", async () => {
     const { events, received } = await run("resume_ok", {
       overrides: {
@@ -666,9 +1030,27 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(
       received()
         .map(({ method }) => method)
-        .filter((m) => m?.startsWith("thread/")),
+        .filter(
+          (m) =>
+            m?.startsWith("thread/") === true &&
+            !m.startsWith("thread/backgroundTerminals/"),
+        ),
     ).toEqual(["thread/resume", "thread/unarchive", "thread/resume"]);
     expect(events[0]).toMatchObject({ continuation: { type: "resumed" } });
+  });
+
+  test("Codex never offers plan, and a plan turn is refused before Codex starts", async () => {
+    const harness = harnessFor("tool_calls");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        policy: { network: "open", fs: "workspace", approvals: "plan" },
+      }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    // The fake app-server writes its log as it starts: it never started.
+    expect(existsSync(harness.logPath)).toBe(false);
   });
 
   test("a signed-out harness refuses the turn before any session starts", async () => {
@@ -698,52 +1080,144 @@ describe("Codex adapter over a stdio app-server", () => {
       type: "retrying",
       message: "Reconnecting",
     });
+    // A usage limit is the member's allowance, not the model's capacity: the
+    // turn is not continued.
+    expect(
+      limited.received().filter(({ method }) => method === "turn/start"),
+    ).toHaveLength(1);
     expect(terminal(limited.events)).toEqual({
       type: "turn.failed",
       failure: {
         type: "usage_limit",
         message: "You've hit your usage limit.",
-        resetsAt: "2026-10-28T14:00:00.000Z",
+        resetsAt: FUTURE_RESET_ISO,
+      },
+    });
+    // The update before the failure timed the reset; nothing more is read.
+    expect(
+      limited
+        .received()
+        .filter(({ method }) => method === "account/rateLimits/read"),
+    ).toEqual([]);
+  });
+
+  test("a limit hit before Codex sent its limits reads them for the reset time", async () => {
+    const limited = await run("usage_limit_unannounced");
+    expect(terminal(limited.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "usage_limit",
+        message: "You've hit your usage limit.",
+        resetsAt: FUTURE_RESET_ISO,
+      },
+    });
+    const reads = limited
+      .received()
+      .filter(({ method }) => method === "account/rateLimits/read");
+    expect(reads).toHaveLength(1);
+    expect(reads.at(0)?.params).toBeUndefined();
+  });
+
+  test("a limit whose limits cannot be read still fails as a usage limit, its reset unknown", async () => {
+    const limited = await run("usage_limit_read_fails");
+    expect(terminal(limited.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "usage_limit",
+        message: "You've hit your usage limit.",
+        resetsAt: null,
       },
     });
   });
 
-  test("a turn the model's capacity ended continues on the same thread with empty input", async () => {
-    const { events, received } = await run("capacity_retry");
+  test("stella's MCP server failing to start fails the turn; a member's own does not", async () => {
+    const failed = await run("stella_mcp_failed");
+    expect(terminal(failed.events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
+      },
+    });
+    const theirs = await run("other_mcp_failed");
+    expect(terminal(theirs.events)?.type).toBe("turn.completed");
+  });
+
+  /** Runs a scenario whose continuations record their delays. */
+  const runRecordingDelays = async (scenario: FakeScenario) => {
+    const { delays, capacityRetry } = capacityRetryRecording();
+    const harness = harnessFor(scenario, capacityRetry);
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const collected = collect(started.value);
+    await collected.done;
+    await started.value.dispose();
+    const starts = harness
+      .received()
+      .filter(({ method }) => method === "turn/start");
+    return { events: collected.events, delays, starts };
+  };
+
+  test("a turn the model's capacity ended continues on the same thread with empty input, repeating nothing", async () => {
+    const { events, delays, starts } =
+      await runRecordingDelays("capacity_retry");
     expect(events).toContainEqual({
       type: "retrying",
       message: "Selected model is at capacity. Please try a different model.",
     });
-    expect(events).toContainEqual(
-      expect.objectContaining({ type: "text.completed", text: "Recovered." }),
-    );
+    // The message completed before the failure stays in the thread; the
+    // continuation writes only what follows it.
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ? [event.text] : [],
+      ),
+    ).toEqual(["Reading.", "Recovered."]);
     expect(terminal(events)).toMatchObject({ type: "turn.completed" });
-    const starts = received().filter(({ method }) => method === "turn/start");
+    expect(delays).toEqual([10]);
     expect(starts).toHaveLength(2);
     expect(starts[1]?.params).toEqual({ threadId: FAKE_THREAD_ID, input: [] });
   });
 
-  test("a turn still at capacity after five continuations fails with the native code", async () => {
-    const { events, received } = await run("capacity_exhausted");
+  test("a turn still at capacity after five continuations, each waiting twice as long up to the cap, fails as the model at capacity", async () => {
+    const { events, delays, starts } =
+      await runRecordingDelays("capacity_exhausted");
     expect(events.filter(({ type }) => type === "retrying")).toHaveLength(5);
+    expect(delays).toEqual([10, 20, 40, 50, 50]);
     expect(terminal(events)).toEqual({
       type: "turn.failed",
       failure: {
-        type: "provider_error",
+        type: "model_at_capacity",
         message: "Selected model is at capacity. Please try a different model.",
-        code: "serverOverloaded",
       },
     });
-    expect(
-      received().filter(({ method }) => method === "turn/start"),
-    ).toHaveLength(6);
+    expect(starts).toHaveLength(6);
+  });
+
+  test("a turn at capacity while a message streams in part fails instead of writing it again", async () => {
+    const { events, delays, starts } = await runRecordingDelays(
+      "capacity_mid_message",
+    );
+    expect(events.map(({ type }) => type)).not.toContain("retrying");
+    expect(delays).toEqual([]);
+    expect(terminal(events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "model_at_capacity",
+        message: "Selected model is at capacity. Please try a different model.",
+      },
+    });
+    expect(starts).toHaveLength(1);
   });
 
   test("stopping a turn while it waits to continue ends it as interrupted", async () => {
+    const wait = Promise.withResolvers<undefined>();
     const harness = harnessFor("capacity_retry", {
-      maxAttempts: 5,
-      baseDelayMs: 60_000,
-      maxDelayMs: 60_000,
+      ...FAST_CAPACITY_RETRY,
+      sleep: async () => wait.promise,
     });
     const started = await harness.adapter.startTurn(
       turnInput(harness.workspaceDir),
@@ -758,6 +1232,8 @@ describe("Codex adapter over a stdio app-server", () => {
       }
     });
     await collected.done;
+    // The wait ends after the stop; the stopped turn does not continue.
+    wait.resolve(undefined);
     await turn.dispose();
     expect(terminal(collected.events)).toEqual({ type: "turn.interrupted" });
     const methods = harness.received().map(({ method }) => method);
@@ -807,7 +1283,7 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
-  test("a probe reports version, account, visible models and capabilities without a session", async () => {
+  test("a probe reports version, account, visible models with the efforts stella knows, and capabilities without a session", async () => {
     const harness = harnessFor("probe");
     const probed = await harness.adapter.probe();
     if (Result.isError(probed)) {
@@ -821,15 +1297,17 @@ describe("Codex adapter over a stdio app-server", () => {
           id: "gpt-test",
           displayName: "GPT Test",
           isDefault: true,
-          reasoningEfforts: ["medium"],
+          reasoningEfforts: ["medium", "high"],
           inputModalities: ["text", "image"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume"],
-      approvalModes: ["ask"],
+      capabilities: ["approvals", "interrupt", "resume", "image_input"],
+      approvalModes: ["ask", "auto", "full_auto"],
+      // The plan's main window is at 40 %.
       usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);
+    expect(methods).toContain("account/rateLimits/read");
     expect(methods).not.toContain("thread/start");
     expect(methods).not.toContain("turn/start");
     expect(
@@ -842,10 +1320,42 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
+  test("a probe of a Codex out of usage reports when its plan's limit resets", async () => {
+    const probed = await harnessFor("probe_out_of_usage").adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.usageLimit).toEqual({ resetsAt: FUTURE_RESET_ISO });
+  });
+
+  test("a probe of a spent plan with credits left stays ready", async () => {
+    const probed = await harnessFor(
+      "probe_out_of_usage_with_credits",
+    ).adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.usageLimit).toBeNull();
+  });
+
+  test("a probe whose limits cannot be read stays ready, its limit unknown", async () => {
+    const harness = harnessFor("probe_limits_unreadable");
+    const probed = await harness.adapter.probe();
+    if (Result.isError(probed)) {
+      throw probed.error;
+    }
+    expect(probed.value.auth.type).toBe("signed_in");
+    expect(probed.value.usageLimit).toBeNull();
+    expect(harness.received().map(({ method }) => method)).toContain(
+      "account/rateLimits/read",
+    );
+  });
+
   test("refuses a CODEX_HOME that is the user's own", () => {
     expect(() =>
       createCodexHarnessAdapter({
         launch: { executable: process.execPath, args: [] },
+        protocolLog: PROTOCOL_LOG_OFF,
         codexHome: path.join(process.env["HOME"] ?? "/", ".codex"),
         environment: {},
         clientVersion: "0.0.1",
@@ -858,6 +1368,35 @@ describe("Codex adapter over a stdio app-server", () => {
 });
 
 /** Fold chunks the way persistence does and return what would be stored. */
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
+};
+
 const storedMessages = (chunks: readonly StreamChunk[]) => {
   const processor = new StreamProcessor({ initialMessages: [] });
   for (const chunk of chunks) {
@@ -877,6 +1416,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: "gpt-test",
     runId: "run-1",
     threadId: "stella-thread-1",
+    workspaceDir: "/workspace",
     generateId: () => `result-${(next += 1)}`,
     now: () => 0,
   })) {
@@ -1024,6 +1564,73 @@ describe("Codex items as chat parts", () => {
     ).toEqual([FAKE_STELLA_ANSWER]);
   });
 
+  test("a native step shows its command, file names and plan titles, and never the text it carries", async () => {
+    const { events } = await run("native_tools");
+    const parts = storedMessages(await localChunks(events)).flatMap(
+      ({ parts: stored }) => stored,
+    );
+    const calls = parts.flatMap((part) =>
+      part.type === "tool-call"
+        ? [{ id: part.id, name: part.name, input: part.input }]
+        : [],
+    );
+    const plan = (items: string[]) => ({
+      tool: "update_plan",
+      detail: { kind: "plan", items },
+    });
+    expect(calls).toEqual([
+      {
+        id: "turn-1:plan:1",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+      // A heredoc shows the line that runs it, never the lines it writes.
+      {
+        id: "call-heredoc",
+        name: "command_execution",
+        input: { command: `/bin/zsh -lc "cat > notes.md <<'EOF'…` },
+      },
+      {
+        id: "call-long",
+        name: "command_execution",
+        input: { command: `${FAKE_LONG_COMMAND.slice(0, 299)}…` },
+      },
+      {
+        id: "call-edit",
+        name: "file_change",
+        input: {
+          changes: [
+            { path: "drafts/lease.md", kind: "update" },
+            { path: "drafts/notice.md", kind: "add" },
+          ],
+        },
+      },
+      {
+        id: "turn-1:plan:2",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+    ]);
+    // A command's exit status stays on its result.
+    expect(
+      parts.find(
+        (part) => part.type === "tool-call" && part.id === "call-heredoc",
+      ),
+    ).toMatchObject({ output: { exit_code: 1, status: "failed" } });
+    // A command's output never leaves, in its call, its result or the part.
+    expect(JSON.stringify(parts)).not.toContain("permission denied");
+    expect(JSON.stringify(parts)).not.toContain("aggregated_output");
+    const callText = JSON.stringify(
+      parts
+        .filter((part) => part.type === "tool-call")
+        .map(({ input }) => input),
+    );
+    for (const text of Object.values(FAKE_PRIVATE_TEXT)) {
+      expect(callText).not.toContain(text);
+    }
+    expect(callText).not.toContain("y".repeat(300));
+  });
+
   test("harness-native items become generic activity and never carry the native payload", async () => {
     const { events } = await run("harness_items");
     const tools = events.flatMap((event) =>
@@ -1076,6 +1683,217 @@ describe("Codex items as chat parts", () => {
     expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
   });
 
+  test("a subagent is a step that ends with the subagent, the steps it takes are its steps, and what it was told, wrote and reported stays on the computer", async () => {
+    const approvals: HarnessEvent[] = [];
+    const { events } = await run("subagent", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "approval.requested") {
+          return;
+        }
+        approvals.push(event);
+        const approved = await turn.respond({
+          type: "approval",
+          requestId: event.request.requestId,
+          decision: "approve",
+        });
+        expect(Result.isOk(approved)).toBe(true);
+      },
+    });
+    const subagent = {
+      tool: "spawnAgent",
+      detail: { kind: "subagent", description: "" },
+    };
+    const inSubagent = { parentCallId: "call-spawn" };
+    const followupStep = "call-followup:thread-subagent";
+    // The spawn call ends at once; the step stays open until the subagent
+    // is reported ended, once.
+    expect(
+      events.flatMap((event) =>
+        event.type === "tool.started" || event.type === "tool.completed"
+          ? [
+              {
+                type: event.type,
+                id: event.toolCall.id,
+                name: event.toolCall.name,
+                input: event.toolCall.input,
+                ...(event.toolCall.parentCallId === undefined
+                  ? {}
+                  : { parentCallId: event.toolCall.parentCallId }),
+                ...(event.type === "tool.completed"
+                  ? { status: event.result.status }
+                  : {}),
+              },
+            ]
+          : [],
+      ),
+    ).toEqual([
+      {
+        type: "tool.started",
+        id: "call-spawn",
+        name: "harness_native_tool",
+        input: subagent,
+      },
+      {
+        type: "tool.started",
+        id: "sub-rm",
+        name: "command_execution",
+        input: { command: "rm draft.md" },
+        ...inSubagent,
+      },
+      {
+        type: "tool.completed",
+        id: "sub-rm",
+        name: "command_execution",
+        input: { command: "rm draft.md" },
+        ...inSubagent,
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: "sub-image",
+        name: "harness_native_tool",
+        input: {
+          tool: "view_image",
+          detail: { kind: "image", path: "/workspace/scans/Lease Page 1.png" },
+        },
+        ...inSubagent,
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: "call-image",
+        name: "harness_native_tool",
+        input: {
+          tool: "view_image",
+          detail: { kind: "image", path: "/workspace/scans/cover.png" },
+        },
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: "call-spawn",
+        name: "harness_native_tool",
+        input: subagent,
+        status: "succeeded",
+      },
+      // Given more work after it ended, the subagent is a new step, opened
+      // by the call that reports it at work; what it does next and how that
+      // ends belong to that step.
+      {
+        type: "tool.started",
+        id: followupStep,
+        name: "harness_native_tool",
+        input: { ...subagent, tool: "followupTask" },
+      },
+      {
+        type: "tool.completed",
+        id: "sub-ls",
+        name: "command_execution",
+        input: { command: "ls" },
+        parentCallId: followupStep,
+        status: "succeeded",
+      },
+      {
+        type: "tool.completed",
+        id: followupStep,
+        name: "harness_native_tool",
+        input: { ...subagent, tool: "followupTask" },
+        status: "failed",
+      },
+      {
+        type: "tool.started",
+        id: "call-spawn-failed",
+        name: "harness_native_tool",
+        input: subagent,
+      },
+      {
+        type: "tool.completed",
+        id: "call-spawn-failed",
+        name: "harness_native_tool",
+        input: subagent,
+        status: "failed",
+      },
+      {
+        type: "tool.started",
+        id: "call-spawn-open",
+        name: "harness_native_tool",
+        input: subagent,
+      },
+    ]);
+    // An approval a subagent's step asks for reaches the member on that step.
+    expect(approvals).toMatchObject([
+      {
+        request: {
+          kind: "command",
+          toolCall: {
+            id: "sub-rm",
+            input: { command: "rm draft.md" },
+            ...inSubagent,
+          },
+        },
+      },
+    ]);
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ||
+        event.type === "text.delta" ||
+        event.type === "reasoning.completed"
+          ? [event]
+          : [],
+      ),
+    ).toMatchObject([
+      { type: "text.completed", text: "The lease caps arrears." },
+    ]);
+    // What a subagent was told, wrote and reported, and the image a step
+    // viewed, are held for this computer alone: on the step's result, which
+    // the sidecar keeps, never in what the turn reports.
+    const heldOf = (id: string) =>
+      events.flatMap((event) =>
+        event.type === "tool.completed" && event.toolCall.id === id
+          ? [event.result.localOutput]
+          : [],
+      );
+    expect(heldOf("call-spawn")).toEqual([
+      {
+        type: "conversation",
+        entries: [
+          { role: "prompt", text: FAKE_PRIVATE_TEXT.subagentPrompt },
+          { role: "report", text: FAKE_PRIVATE_TEXT.subagentReport },
+          { role: "message", text: FAKE_PRIVATE_TEXT.subagentText },
+        ],
+        droppedBytes: 0,
+      },
+    ]);
+    expect(heldOf("sub-image")).toEqual([
+      { type: "image", path: "/workspace/scans/Lease Page 1.png" },
+    ]);
+    // A spawn that failed started no subagent: it holds no conversation.
+    expect(heldOf("call-spawn-failed")).toEqual([undefined]);
+    const stored = storedMessages(await localChunks(events));
+    const storedText = JSON.stringify(stored);
+    for (const text of [
+      FAKE_PRIVATE_TEXT.subagentPrompt,
+      FAKE_PRIVATE_TEXT.subagentText,
+      FAKE_PRIVATE_TEXT.subagentThinking,
+      FAKE_PRIVATE_TEXT.subagentReport,
+    ]) {
+      expect(storedText).not.toContain(text);
+    }
+    // A subagent still at work when the turn ends is closed with the turn.
+    const parts = stored.flatMap(({ parts: kept }) => kept);
+    expect(
+      parts.flatMap((part) =>
+        part.type === "tool-call" && part.id.startsWith("call-spawn")
+          ? [{ id: part.id, output: part.output }]
+          : [],
+      ),
+    ).toEqual([
+      { id: "call-spawn", output: { status: "completed" } },
+      { id: "call-spawn-failed", output: { status: "failed" } },
+      { id: "call-spawn-open", output: { status: "interrupted" } },
+    ]);
+  });
+
   test("a failed stella call stores its error envelope as a failed result", async () => {
     const { events } = await run("harness_items");
     const parts = storedMessages(await localChunks(events)).flatMap(
@@ -1097,6 +1915,124 @@ describe("Codex items as chat parts", () => {
   });
 });
 
+describe("Codex background terminals after a turn", () => {
+  const completedTurn = async (scenario: FakeScenario) => {
+    const started = await start(scenario);
+    const collected = collect(started.turn);
+    await collected.done;
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    return started;
+  };
+
+  test("keep the process, and the chat's next turn runs on the same thread in it", async () => {
+    const { adapter, workspaceDir, received, logPath, turn } =
+      await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    expect(live.harness).toBe("codex");
+    expect(live.sessionId).toBe(harnessSessionId(FAKE_THREAD_ID));
+    expect(live.backgroundTasks).toBe(1);
+
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const collected = collect(next.value);
+    await collected.done;
+    expect(collected.events[0]).toEqual({
+      type: "session.started",
+      sessionId: harnessSessionId(FAKE_THREAD_ID),
+      continuation: { type: "resumed" },
+    });
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    // Its server exited during the turn: nothing is kept any more.
+    expect(await next.value.release()).toBeNull();
+
+    const startups = readFileSync(logPath, "utf-8")
+      .split("\n")
+      .filter((line) => line.includes('"startup"'));
+    expect(startups).toHaveLength(1);
+    const methods = received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "initialize")).toHaveLength(1);
+    expect(methods).not.toContain("thread/resume");
+    const turnStarts = received().filter(
+      ({ method }) => method === "turn/start",
+    );
+    expect(turnStarts).toHaveLength(2);
+    expect(turnStarts[1]?.params).toMatchObject({ threadId: FAKE_THREAD_ID });
+    expect(methods).toContain("thread/backgroundTerminals/clean");
+  });
+
+  test("a kept process ends by itself once its last background command exits", async () => {
+    const { turn, received } = await completedTurn("background_terminal_exits");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const counts: number[] = [];
+    live.watch((count) => {
+      counts.push(count);
+    });
+    await live.ended;
+    expect(counts).toEqual([0]);
+    expect(live.backgroundTasks).toBe(0);
+    expect(received().map(({ method }) => method)).toContain(
+      "thread/backgroundTerminals/clean",
+    );
+  });
+
+  test("ending a kept process cleans its terminals before it closes", async () => {
+    const { turn, logPath } = await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    await live.end();
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      JSON.stringify({ cleaned: ["call-serve"] }),
+    );
+  });
+
+  test("a failed terminal list is reported and keeps the commands the turn left running", async () => {
+    const { turn } = await completedTurn("background_terminal_list_fails");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    // Not read as an empty inventory: the started command still counts.
+    expect(live.backgroundTasks).toBe(1);
+    expect(backgroundErrors.splice(0)).toEqual([
+      expect.objectContaining({
+        _tag: "CodexTerminalListError",
+        reason: "failed",
+      }),
+    ]);
+    await live.end();
+  });
+
+  test("a release without the terminal list keeps nothing past the turn", async () => {
+    const { turn } = await completedTurn(
+      "background_terminal_list_unsupported",
+    );
+    expect(await turn.release()).toBeNull();
+  });
+
+  test("a turn without background work closes its process as before", async () => {
+    const { turn } = await completedTurn("tool_calls");
+    expect(await turn.release()).toBeNull();
+  });
+});
+
 /**
  * Checks against a real `codex` CLI when one is installed. Nothing here
  * signs in or sends a prompt: the handshake is `initialize` only, and the
@@ -1111,12 +2047,19 @@ const codex = Bun.which("codex");
 const CLIENT_METHODS = [
   "initialize",
   "account/read",
+  "account/rateLimits/read",
   "model/list",
   "thread/start",
   "thread/resume",
   "thread/unarchive",
   "turn/start",
   "turn/interrupt",
+] as const;
+
+/** Experimental client methods the adapter calls; `initialize` opts in. */
+const EXPERIMENTAL_CLIENT_METHODS = [
+  "thread/backgroundTerminals/list",
+  "thread/backgroundTerminals/clean",
 ] as const;
 
 const OneOfMethods = v.object({
@@ -1154,6 +2097,12 @@ const ThreadItemTypes = v.object({
   }),
 });
 
+const UserInputVariants = v.object({
+  definitions: v.object({
+    UserInput: v.object({ oneOf: v.array(v.looseObject({})) }),
+  }),
+});
+
 const readJson = async (directory: string, file: string): Promise<unknown> =>
   Bun.file(path.join(directory, file)).json();
 
@@ -1180,8 +2129,9 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     const codexHome = path.join(root, "home");
     const cliErrors: unknown[] = [];
     mkdirSync(codexHome);
-    const client = startAppServer({
+    const started = startAppServer({
       launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
       detached: createDetached((error) => {
         cliErrors.push(error);
       }),
@@ -1199,6 +2149,9 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
         exit: () => undefined,
       },
     });
+    const client = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
     const initialized = await client.request("initialize", {
       clientInfo: { name: "stella", title: "stella", version: "0.0.0" },
       capabilities: { experimentalApi: true, requestAttestation: false },
@@ -1240,6 +2193,22 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     for (const method of CLIENT_METHODS) {
       expect(clientMethods.has(method)).toBe(true);
     }
+    const experimentalOut = path.join(root, "experimental-schema");
+    const experimental = Bun.spawnSync([
+      codex ?? "",
+      "app-server",
+      "generate-json-schema",
+      "--experimental",
+      "--out",
+      experimentalOut,
+    ]);
+    expect(experimental.exitCode).toBe(0);
+    const experimentalMethods = new Set(
+      await methodsIn(experimentalOut, "ClientRequest.json"),
+    );
+    for (const method of EXPERIMENTAL_CLIENT_METHODS) {
+      expect(experimentalMethods.has(method)).toBe(true);
+    }
 
     const itemTypes = v
       .parse(
@@ -1250,6 +2219,20 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
         ({ properties }) => properties.type.enum[0],
       );
     expect(new Set(itemTypes)).toEqual(new Set(CODEX_ITEM_TYPES));
+
+    // `turn/start` takes an image as a URL, which a data URL is.
+    const userInputs = v.parse(
+      UserInputVariants,
+      await readJson(out, "codex_app_server_protocol.v2.schemas.json"),
+    ).definitions.UserInput.oneOf;
+    expect(userInputs).toContainEqual(
+      expect.objectContaining({
+        title: "ImageUserInput",
+        anyOf: expect.arrayContaining([
+          expect.objectContaining({ title: "UrlUserInput", required: ["url"] }),
+        ]),
+      }),
+    );
 
     const commandDecisions = await decisionsIn(
       out,

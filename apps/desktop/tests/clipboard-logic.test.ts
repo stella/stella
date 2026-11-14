@@ -29,6 +29,7 @@ import {
   hasClipboardPrimaryModifier,
   highlightClipboardText,
   isClipboardCopyShortcut,
+  isClipboardDictation,
   isClipboardNameInput,
   isClipboardSearchConfirm,
   NO_CLIPBOARD_PASTE_PREVIEW,
@@ -1080,7 +1081,7 @@ describe("clipboardItemLink", () => {
 });
 
 describe("clipboardUntitledName", () => {
-  const KIND_LABELS = { image: "Image", text: "Text" };
+  const KIND_LABELS = { dictation: "Dictation", image: "Image", text: "Text" };
   const BROWSER_SOURCE = {
     identifier: "com.google.Chrome",
     name: "Google Chrome",
@@ -1122,6 +1123,19 @@ describe("clipboardUntitledName", () => {
         KIND_LABELS,
       ),
     ).toBe("Text");
+  });
+
+  test("labels a dictation as one, whatever its text looks like", () => {
+    const dictation = {
+      ...TEXT_ITEM,
+      name: null,
+      origin: "dictation",
+      plainText: "https://court.example/decision",
+    } satisfies ClipboardItem;
+    expect(isClipboardDictation(dictation)).toBe(true);
+    expect(clipboardUntitledName(dictation, KIND_LABELS)).toBe("Dictation");
+    expect(isClipboardDictation(TEXT_ITEM)).toBe(false);
+    expect(isClipboardDictation(IMAGE_ITEM)).toBe(false);
   });
 });
 

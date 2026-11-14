@@ -120,7 +120,7 @@ checks:
   - name: Test remaining repository scripts
     env:
       CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Aggregate dynamically discovers tests; conservatively retain fresh execution for contextual or undeclared environmental dependencies."
+      CI_CHECK_CONTEXT: "Selects tests from the merge-base diff, static import closures, and declared data inputs and runs them untraced; the nightly script-test-declarations job verifies declarations."
     id: remaining_scripts
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
@@ -754,8 +754,7 @@ checks:
     # TanStack's own converters; a hand-written snapshot only agrees with
     # the engine until it changes. The guard rejects a snapshot literal in
     # a chat test outside that owner and outside `unsafeFixture(reason,
-    # ...)`, with a shrink-only ledger of the files that predate the
-    # builders. The --self-test run first proves the detector still fires.
+    # ...)`. The --self-test run first proves the detector still fires.
     run: |
       bun scripts/chat-fixture-guard.ts --self-test
       bun scripts/chat-fixture-guard.ts
@@ -821,13 +820,8 @@ checks:
     id: static_check_053
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Capability description ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_053 != 'true') }}
     # A capability's `description` is what an MCP client reads before
-    # deciding whether to call it, so every capability still missing one is
-    # listed by exact id in apps/api/capability-description-ledger.json. A
-    # capability missing prose that is not in the ledger fails (no new
-    # debt); a ledger entry whose capability now has prose, or no longer
-    # exists, fails as stale — so authoring a description means deleting its
-    # ledger line in the same change and the list can only shrink. The
-    # --self-test run first proves the detectors still fire, so a broken
+    # deciding whether to call it, so a capability without one fails. The
+    # --self-test run first proves the detector still fires, so a broken
     # guard cannot pass silently.
     run: |
       bun apps/api/scripts/capability-description-guard.ts --self-test
@@ -843,9 +837,9 @@ checks:
     # typecheck-enforced McpExposure). This guard imports every handler
     # module, verifies each disposition is well-formed, that every
     # tool/covered reference names a real static MCP tool, that no registry
-    # tool is orphaned, and that the `pending` baseline only ever shrinks
-    # (a new pending endpoint fails). The --self-test run first proves the
-    # ratchet detectors still fire, so a broken guard cannot pass silently.
+    # tool is orphaned, and that no endpoint is `pending`. The --self-test
+    # run first proves the detectors still fire, so a broken guard cannot
+    # pass silently.
     run: |
       bun apps/api/scripts/mcp-coverage-guard.ts --self-test
       bun apps/api/scripts/mcp-coverage-guard.ts
@@ -1282,6 +1276,17 @@ checks:
       STELLA_VERIFY: check
     run: bun test scripts/verify.test.ts scripts/verify-workflow.test.ts scripts/prepare-typecheck-base.test.ts
 
+  # Fork pull requests get no CI autofix; their contributors run these
+  # commands locally, so run them here in a fresh worktree of this commit.
+  - name: Run fork contributor commands
+    id: fork_contributor_commands
+    if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Run fork contributor commands')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_fork_contributor_commands != 'true') }}
+    timeout-minutes: 20
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    run: bash scripts/fork-contributor-commands.sh
+
   - name: Typecheck cache contract
     id: static_check_098
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Typecheck cache contract')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_098 != 'true') }}
@@ -1514,6 +1519,16 @@ checks:
     run: |
       bun run check:office-fixture-metadata
       bun --filter @stll/docx-utils test:office-fixture-metadata
+
+  - name: Tailwind sources cover class-shipping dependencies
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_130
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tailwind sources cover class-shipping dependencies')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_130 != 'true') }}
+    run: |
+      bun test scripts/check-tailwind-sources.test.ts
+      bun run check:tailwind-sources
 
   # Fail PRs that change the desktop bridge surface without
   # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.

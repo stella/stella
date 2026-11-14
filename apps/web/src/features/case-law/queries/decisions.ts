@@ -19,6 +19,10 @@ import {
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
 import { defaultCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
+import {
+  shouldRetrySearch,
+  withRetryAfterDetail,
+} from "@/features/case-law/search-busy.logic";
 import { api } from "@/lib/api";
 import {
   APIError,
@@ -291,7 +295,7 @@ export const caseLawCoverageOptions = () =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export type DecisionsPageOptionsInput = {
+type DecisionsPageOptionsInput = {
   filters: DecisionListFilters;
   /** One-based; at most `caseLawDeepestPage(pageSize)`. */
   page: number;
@@ -375,7 +379,12 @@ export const decisionsPageOptions = ({
         );
 
         const data = unwrapPublicLawResponse(
-          response,
+          response.error === null
+            ? response
+            : {
+                ...response,
+                error: withRetryAfterDetail(response.error, response.headers),
+              },
           "searchPublicCaseLawDecisions",
         );
 
@@ -477,7 +486,7 @@ export const decisionsPageOptions = ({
       };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
-    retry: shouldRetryAPIRequest,
+    retry: shouldRetrySearch,
   });
 
 type UsePrefetchedDecisionPageInput = Omit<

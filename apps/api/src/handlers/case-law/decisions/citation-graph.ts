@@ -1,5 +1,15 @@
 import { panic } from "better-result";
-import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import * as v from "valibot";
@@ -50,17 +60,13 @@ import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistributi
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
-import { logger } from "@/api/lib/observability/logger";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
-import {
-  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
-  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-} from "@/api/lib/public-law-relations";
+import { DOCTRINE_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
@@ -77,7 +83,10 @@ export const treatmentOf = (polarity: string | null): CitationTreatment => {
   return polarity === POLARITY.UNKNOWN ? "unclassified" : polarity;
 };
 
-/** Expand release permits these columns; a following release grants them. */
+/**
+ * False only on a database that has not yet applied the doctrine grant
+ * migration, which a rolling deploy and a self-hosted upgrade both pass through.
+ */
 const canReadCitationDoctrine = async (tx: CaseLawPublicReadTransaction) => {
   const predicates = Object.entries(DOCTRINE_COLUMN_GRANTS_BY_RELATION).flatMap(
     ([relation, columns]) =>
@@ -646,6 +655,8 @@ export const decisionCitationPageQuery = ({
     .limit(limit + 1)
     .as("citation_graph_candidates");
   const relatedDecision = relatedDecisionLookup(tx, candidates.relatedId);
+  // Every lookup row carries its id, so joining on it matches the same rows
+  // as `true` and proves `decision` matched whenever its id is not NULL.
   return tx
     .select({
       id: candidates.id,
@@ -681,7 +692,7 @@ export const decisionCitationPageQuery = ({
       },
     })
     .from(candidates)
-    .leftJoinLateral(relatedDecision, sql`true`)
+    .leftJoinLateral(relatedDecision, isNotNull(relatedDecision.id))
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
     .limit(limit + 1);
@@ -748,39 +759,6 @@ export const decisionCitationStatsStateQuery = ({
     .where(eq(caseLawDecisionCitationStatsState.decisionId, decisionId))
     .limit(1);
 
-/**
- * Deploy safety: older API releases attest against their own column maps and
- * reject grants on these new relations as excess privilege. Keep the migration
- * grant-free until #4962 is deployed. Remove this probe in the following
- * citation-stats-reader-grant release, together with its column-grant migration.
- */
-const canReadDecisionCitationStats = async (
-  tx: CaseLawPublicReadTransaction,
-) => {
-  const permissions = [
-    [
-      "case_law_decision_citation_stats",
-      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_decision_citation_stats,
-    ],
-    [
-      "case_law_decision_citation_stats_state",
-      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_decision_citation_stats_state,
-    ],
-  ] as const;
-  const predicates = permissions.flatMap(([relation, columns]) =>
-    Object.keys(columns).map(
-      (column) =>
-        sql`has_column_privilege(current_user, ${`public.${relation}`}, ${column}, 'SELECT')`,
-    ),
-  );
-  const rows = await tx
-    .select({ available: sql<boolean>`${sql.join(predicates, sql` AND `)}` })
-    .from(sql`(SELECT 1) AS citation_stats_permission_probe`);
-  return (
-    rows.at(0) ?? panic("Citation stats permission query returned no result")
-  ).available;
-};
-
 /** Incoming years plus undated incoming/outgoing, each with a stored polarity. */
 export const EXACT_CITATION_SUMMARY_MAX_ROWS =
   (CITATION_TIMELINE_MAX_YEARS + 2) * POLARITIES.length;
@@ -844,14 +822,7 @@ export const summarizeDecisionCitationsHandler = async ({
 }: SummarizeDecisionCitationsOptions) => {
   const { id: decisionId, countries, tx } = subject;
   const work = await decisionWorkOf(subject);
-  const projectable = isSingleManifestationWork(work);
-  const canReadStats = projectable && (await canReadDecisionCitationStats(tx));
-  if (projectable && !canReadStats) {
-    logger.warn("case_law.citation_stats.bounded_fallback", {
-      reason: "reader_grant_pending",
-    });
-  }
-  const state = canReadStats
+  const state = isSingleManifestationWork(work)
     ? await decisionCitationStatsStateQuery({ tx, decisionId })
     : [];
   const isExact = state.at(0)?.status === "exact";

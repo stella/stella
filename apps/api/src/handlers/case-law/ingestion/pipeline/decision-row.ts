@@ -14,6 +14,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -174,7 +175,11 @@ const finishInsertedRowTx = async (
   } = write;
   await writeDecisionJudges(tx, write, insertedId);
 
-  await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
+  // The row and its identifiers are stored, so the citations that were
+  // waiting for this decision are answered here rather than by the walk.
+  await settleReopenedCitations(tx, [
+    await announceDecisionIdentifiers(tx, write, insertedId, identifierRows),
+  ]);
 
   switch (citations.disposition) {
     case "annotation-only":
@@ -227,7 +232,7 @@ const writeDecisionRow = async (
       composition,
       composedSupplements,
       shape: { preservesExistingDetail },
-      plan: { payloadColumns, storedPayloadUnchanged },
+      plan: { payloadColumns, replacedBlockAnchors, storedPayloadUnchanged },
       inputProvenance,
     } = write;
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
@@ -286,7 +291,9 @@ const writeDecisionRow = async (
         // against.
         return await lostRowWriteStatus(tx, write, existing.id, {
           payloadFenced:
-            storedPayloadUnchanged || inputProvenance.type === "stored",
+            storedPayloadUnchanged ||
+            replacedBlockAnchors !== null ||
+            inputProvenance.type === "stored",
         });
       }
 

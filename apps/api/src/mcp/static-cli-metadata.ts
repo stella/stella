@@ -396,6 +396,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    search_guidance: {
+      command: ["guidance", "search"],
+      scope: "search",
+      itemsKey: "results",
+    },
+    // No windowedText: the attribution must stay with the text in every output.
+    read_guidance: {
+      command: ["guidance", "read"],
+      scope: "read",
+    },
     read_statute: {
       command: ["legislation", "read"],
       scope: "read",
@@ -441,11 +451,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
 
     add_matter_member: {
       command: ["matter", "add-member"],
-      scope: "admin_write",
+      scope: "matters_write",
     },
     remove_matter_member: {
       command: ["matter", "remove-member"],
-      scope: "admin_write",
+      scope: "matters_write",
     },
     create_organization: {
       confirmPassthrough: true,

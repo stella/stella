@@ -18,7 +18,10 @@ import {
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
-import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
+import {
+  loadChatMessagePage,
+  readNewestChatTurnOnTx,
+} from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import {
   EMPTY_CHAT_THREAD_ATTACHED_FILES,
@@ -33,10 +36,12 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-provenance";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import {
   chatRunTargetOf,
   localRunTargetField,
+  reportedLocalRunContext,
 } from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -318,6 +323,17 @@ const getMessages = createSafeRootHandler(
           threadId,
           tx,
         });
+        // A thread whose turns run on the member's computer offers to undo
+        // its newest turn's file changes; the page names that turn.
+        const newestLocalTurn =
+          chatRunTargetOf(thread.chatLocalRunTarget).kind === "local"
+            ? await readNewestChatTurnOnTx({
+                tx,
+                organizationId: session.activeOrganizationId,
+                threadId,
+                userId: user.id,
+              })
+            : null;
 
         // Estimate the model context the next send would carry, mirroring the
         // send path: the active compaction summary plus the same windowed
@@ -339,6 +355,7 @@ const getMessages = createSafeRootHandler(
                 id: true,
                 title: true,
                 titleSource: true,
+                ...THREAD_ARTEFACT_PROVENANCE_COLUMNS,
                 subjectDecisionId: true,
                 workspaceId: true,
               },
@@ -372,10 +389,15 @@ const getMessages = createSafeRootHandler(
         const maskedParent =
           parent === undefined
             ? undefined
-            : { ...parent, title: parentWithdrawal.thread(parent).title };
+            : {
+                id: parent.id,
+                title: parentWithdrawal.thread(parent).title,
+                workspaceId: parent.workspaceId,
+              };
         return {
           kind: "ok" as const,
           attachedFiles,
+          newestLocalTurn,
           webSearchAvailable,
           modelTier,
           thread,
@@ -393,6 +415,7 @@ const getMessages = createSafeRootHandler(
         return Result.ok({
           activeSkill: null,
           activeTurnId: null,
+          newestLocalTurn: null,
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
@@ -462,12 +485,15 @@ const getMessages = createSafeRootHandler(
     // path applies (provider availability and the thread's opt-in), and (unlike
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
-    const context = buildNextSendContext({
+    const persistedMessages = windowedMessages.map((message) =>
+      chatMessageFromPersisted(message),
+    );
+    const estimate = buildNextSendContext({
       revisionNoteTokens,
-      messages: windowedMessages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        parts: chatMessageFromPersisted(message).parts,
+      messages: persistedMessages.map(({ id, role, parts }) => ({
+        id,
+        role,
+        parts,
       })),
       summary: checkpoint
         ? {
@@ -479,10 +505,24 @@ const getMessages = createSafeRootHandler(
       webResearch: webSearchAvailable && thread.webSearchEnabled,
       modelTier,
     });
+    // A thread whose turns run on the member's computer shows what its
+    // harness reported: the harness manages that context, not stella.
+    const reported = reportedLocalRunContext({
+      target: chatRunTargetOf(thread.chatLocalRunTarget),
+      messages: persistedMessages,
+    });
+    const context: ThreadContextUsage =
+      reported === undefined ? estimate : { ...estimate, reported };
 
     return Result.ok({
       activeSkill: thread.activeSkill,
       activeTurnId: page.activeTurnId,
+      /**
+       * The member's newest turn of a thread whose turns run on their
+       * computer, whose file changes the page may offer to undo; null for a
+       * cloud thread.
+       */
+      newestLocalTurn: reads.newestLocalTurn,
       attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,

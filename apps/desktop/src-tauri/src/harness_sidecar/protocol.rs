@@ -14,14 +14,18 @@ use serde_json::Value;
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
-  RunAnswer, RunApproval, RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
+  ReasoningEffort, RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy,
+  RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 6;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
 pub(crate) const MAX_HELD_RUNS: usize = 1000;
+/// Beside a run's folder, the sidecar's checkpoints live under the folder's
+/// name with this suffix; removing a folder removes them too.
+pub(crate) const CHECKPOINT_STORE_SUFFIX: &str = ".checkpoints";
 /// Hex characters of the holder's secret.
 pub(crate) const SECRET_HEX_LENGTH: usize = 64;
 
@@ -65,6 +69,14 @@ wire_values!(Rejection {
   Draining => "draining",
   AtCapacity => "at_capacity",
   OriginMismatch => "origin_mismatch",
+});
+
+wire_values!(RestoreOutcome {
+  Restored => "restored",
+  NoCheckpoint => "no_checkpoint",
+  NotNewest => "not_newest",
+  FolderBusy => "folder_busy",
+  Failed => "failed",
 });
 
 wire_values!(HolderMode {
@@ -178,6 +190,13 @@ pub(crate) struct HarnessProcess {
   pub(crate) pid: NonZeroU32,
 }
 
+/// A skill folder a run may load: the skill's name and its absolute path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SkillFolderRef {
+  pub(crate) name: String,
+  pub(crate) path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SidecarRunStart {
@@ -188,14 +207,39 @@ pub(crate) struct SidecarRunStart {
   pub(crate) config_dir: String,
   pub(crate) launch: HarnessLaunchSettings,
   pub(crate) workspace_dir: String,
-  /// The computer's package-manager cache, writable in every sandbox.
+  /// The chat's own cache folder, writable in every sandbox.
   pub(crate) cache_dir: String,
+  /// What the run's sandboxed commands may not read, apart from the paths
+  /// the run itself is handed: every chat's folder, the app's own data and
+  /// the member's credential stores.
+  pub(crate) unreadable_paths: Vec<String>,
+  /// Where the sidecar keeps each step's output (`<runId>/<stepKey>`: a
+  /// `{"bytes":<n>}` header line, then the step's kept bytes): beside the
+  /// chat's own folder, whatever folder `workspace_dir` names.
+  pub(crate) step_output_dir: String,
   pub(crate) model: String,
+  pub(crate) reasoning_effort: Option<ReasoningEffort>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   pub(crate) harness_session_id: Option<String>,
+  /// Files to copy into `workspace_dir` before the harness starts.
+  pub(crate) attachments: Vec<RunAttachment>,
+  /// The skill folders listed on this computer; never known to the API.
+  pub(crate) skill_folders: Vec<SkillFolderRef>,
+  /// Directories of managed tools; the adapter puts them first on `PATH`.
+  pub(crate) tool_path: Vec<String>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
+}
+
+/// Put a run's folder back as it was before the run, from the checkpoint the
+/// run took; answered by [`SidecarMessage::FolderRestored`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestore {
+  pub(crate) request_id: String,
+  pub(crate) workspace_dir: String,
+  pub(crate) run_id: String,
 }
 
 /// What the desktop writes to the holder.
@@ -225,6 +269,8 @@ pub(crate) enum HostMessage {
   Resume(ResumePoint),
   #[serde(rename = "harness.process_granted")]
   HarnessProcessGranted(ProcessRef),
+  #[serde(rename = "folder.restore")]
+  FolderRestore(FolderRestore),
   #[serde(rename = "drain")]
   Drain,
   #[serde(rename = "shutdown")]
@@ -232,7 +278,6 @@ pub(crate) enum HostMessage {
 }
 
 impl HostMessage {
-  #[cfg(test)]
   pub(crate) const TAGS: &[&str] = &[
     "hello",
     "harness.probe",
@@ -245,9 +290,23 @@ impl HostMessage {
     "ack",
     "resume",
     "harness.process_granted",
+    "folder.restore",
     "drain",
     "shutdown",
   ];
+
+  /// The type a holder's rejection names, as the log shows it: one of
+  /// `TAGS`, or `other` for anything else the refused line called its type.
+  pub(crate) fn logged_tag(tag: Option<&str>) -> &'static str {
+    match tag {
+      None => "",
+      Some(tag) => Self::TAGS
+        .iter()
+        .copied()
+        .find(|known| *known == tag)
+        .unwrap_or("other"),
+    }
+  }
 }
 
 /// A run the holder holds: running, or finished and not yet acked.
@@ -275,6 +334,7 @@ pub(crate) struct ProbedModel {
   pub(crate) id: String,
   pub(crate) label: String,
   pub(crate) is_default: bool,
+  pub(crate) reasoning_efforts: Vec<ReasoningEffort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -361,6 +421,24 @@ pub(crate) struct SidecarRunFinished {
   pub(crate) harness_session_id: Option<String>,
 }
 
+/// The answer to a folder restore; it names no file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestored {
+  pub(crate) request_id: String,
+  pub(crate) outcome: RestoreOutcome,
+}
+
+/// How many tasks the harness process a finished run's completed turn kept
+/// runs in the background, while its chat waits for the next turn; 0 once
+/// there are none. The latest count per run is what holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BackgroundTasks {
+  pub(crate) run_id: String,
+  pub(crate) count: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Rejected {
@@ -385,6 +463,10 @@ pub(crate) enum SidecarMessage {
   RunApprovalRequest(SidecarApprovalRequest),
   #[serde(rename = "run.finished")]
   RunFinished(SidecarRunFinished),
+  #[serde(rename = "folder.restored")]
+  FolderRestored(FolderRestored),
+  #[serde(rename = "background.tasks")]
+  BackgroundTasks(BackgroundTasks),
   #[serde(rename = "rejected")]
   Rejected(Rejected),
 }
@@ -398,6 +480,8 @@ impl SidecarMessage {
     "run.event",
     "run.approval_request",
     "run.finished",
+    "folder.restored",
+    "background.tasks",
     "rejected",
   ];
 }
@@ -483,6 +567,10 @@ mod tests {
         "holderModes",
         names(HolderMode::ALL.iter().map(|value| value.wire_name())),
       ),
+      (
+        "restoreOutcomes",
+        names(RestoreOutcome::ALL.iter().map(|value| value.wire_name())),
+      ),
     ];
     for (name, rust) in cases {
       assert_eq!(rust, listed(&fixtures, name), "{name}");
@@ -517,6 +605,10 @@ mod tests {
       fixtures["vocabulary"]["maxHeldRuns"].as_u64(),
       u64::try_from(MAX_HELD_RUNS).ok()
     );
+    assert_eq!(
+      fixtures["vocabulary"]["checkpointStoreSuffix"].as_str(),
+      Some(CHECKPOINT_STORE_SUFFIX)
+    );
   }
 
   #[test]
@@ -547,5 +639,17 @@ mod tests {
     ] {
       assert_eq!(HolderSecret::parse(&refused), None, "{refused}");
     }
+  }
+
+  #[test]
+  fn a_rejection_is_logged_with_a_known_message_type_only() {
+    for &tag in HostMessage::TAGS {
+      assert_eq!(HostMessage::logged_tag(Some(tag)), tag);
+    }
+    assert_eq!(
+      HostMessage::logged_tag(Some("Summarise the lease")),
+      "other"
+    );
+    assert_eq!(HostMessage::logged_tag(None), "");
   }
 }

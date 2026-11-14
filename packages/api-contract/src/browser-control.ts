@@ -14,8 +14,18 @@ export const PRODUCTION_STELLA_ORIGINS = [
   "https://my.stll.app",
 ] as const;
 
+/** The Chrome Web Store id of the stella extension. */
+export const BROWSER_EXTENSION_ID = "hdjfdkknlahegaifklbelmafmpooakmi" as const;
+
 export const BROWSER_EXTENSION_STORE_URL =
-  "https://chromewebstore.google.com/detail/hdjfdkknlahegaifklbelmafmpooakmi" as const;
+  `https://chromewebstore.google.com/detail/${BROWSER_EXTENSION_ID}` as const;
+
+/**
+ * The name Chrome knows stella desktop's native messaging host by. The
+ * extension reaches a coding agent on the member's computer through it; what
+ * passes there never goes through stella's servers.
+ */
+export const STELLA_DESKTOP_NATIVE_HOST = "app.stll.browser" as const;
 
 export const BROWSER_CONTROL_CONTENT_TRUST = {
   untrustedWebContent: "untrusted-web-content",
@@ -83,6 +93,16 @@ export const BROWSER_CONTROL_LIMITS = {
   turnNavigations: 15,
   urlChars: 4096,
   valueChars: 10_000,
+  /**
+   * The largest file a stella desktop chat's tab may download. The
+   * extension stops a larger one it can see coming; stella desktop
+   * refuses whatever is larger once it is saved.
+   */
+  downloadBytes: 100 * 1024 * 1024,
+  /** The file name a page suggests for a download, as reported. */
+  downloadNameChars: 255,
+  /** Where Chrome saved a download, as reported. */
+  downloadPathChars: 4096,
 } as const;
 
 const boundedIdSchema = v.pipe(
@@ -357,6 +377,15 @@ export const BROWSER_CONTROL_ERROR_CODE = {
   executionFailed: "execution-failed",
   invalidCommand: "invalid-command",
   navigationFailed: "navigation-failed",
+  /**
+   * The page asks for a sign-in (a password or one-time-code field, or an
+   * identity provider's page). The member signs in themselves; nothing on
+   * that page was read, typed or clicked. After a click or fill it names
+   * the page the action led to: the action itself ran. Only commands from
+   * stella desktop get it so far; a web connection reads such a page with
+   * its secret fields withheld.
+   */
+  needsMember: "needs-member",
   noControlledTab: "no-controlled-tab",
   /**
    * The command reached the page but its outcome was not observed (timeout,
@@ -408,7 +437,76 @@ export type BrowserControlResult = v.InferOutput<
   typeof browserControlResultSchema
 >;
 
+/**
+ * Read in place of a page snapshot a later one replaced: the snapshot's text
+ * and refs are gone and its refs are stale.
+ */
+export const SUPERSEDED_BROWSER_SNAPSHOT_NOTE =
+  "Superseded by a later page read: this page's text and element refs are no longer in context and its refs are stale. Call `snapshot` (on its tab) to read it again.";
+
+/**
+ * A successful result whose page snapshot a later result replaced, as chat
+ * keeps it: the page it was on, without its text or elements. Chat stores,
+ * streams and shows the model this in place of every page but the newest
+ * (see `chat-tool-result-retention`).
+ */
+const browserControlSupersededSchema = v.strictObject({
+  note: v.pipe(v.string(), v.maxLength(1000)),
+  page: v.strictObject({
+    contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
+    tabId: tabIdSchema,
+    textTotalChars: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
+    url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
+  }),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  status: v.literal("superseded"),
+});
+
+/**
+ * Every output chat keeps for a `use-browser` call: what the extension
+ * returned, or its superseded projection. The extension never returns the
+ * projection; `parseBrowserControlResult` rejects it.
+ */
+export const browserControlRetainedResultSchema = v.variant("status", [
+  browserControlSuccessSchema,
+  browserControlErrorSchema,
+  browserControlSupersededSchema,
+]);
+
+export type BrowserControlRetainedResult = v.InferOutput<
+  typeof browserControlRetainedResultSchema
+>;
+
+/**
+ * The projection of a result a later page read replaced, or `null` for one
+ * that carries no page (an error, or a result already projected).
+ */
+export const supersedeBrowserControlResult = (
+  output: unknown,
+): BrowserControlRetainedResult | null => {
+  const result = v.safeParse(browserControlSuccessSchema, output);
+  if (!result.success) {
+    return null;
+  }
+  const { snapshot } = result.output;
+  return {
+    note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
+    page: {
+      contentTrust: snapshot.contentTrust,
+      tabId: snapshot.tabId,
+      textTotalChars: snapshot.textTotalChars,
+      title: snapshot.title,
+      url: snapshot.url,
+    },
+    protocolVersion: result.output.protocolVersion,
+    status: "superseded",
+  };
+};
+
 export const BROWSER_EXTENSION_MESSAGE_SOURCE = {
+  /** stella desktop, through the native messaging host. */
+  desktop: "stella-desktop",
   extension: "stella-browser-extension",
   web: "stella-web",
 } as const;
@@ -604,6 +702,184 @@ export const parseBrowserExtensionPeerVersion = (
 
 export const parseBrowserExtensionResponse = (input: unknown) => {
   const result = v.safeParse(browserExtensionResponseSchema, input);
+  if (!result.success) {
+    return null;
+  }
+  if (
+    result.output.type === "command-result" &&
+    parseBrowserControlResult(result.output.result) === null
+  ) {
+    return null;
+  }
+  return result.output;
+};
+
+/**
+ * A command from a coding agent on the member's computer, relayed by stella
+ * desktop's native messaging host. `controllerId` names the chat the agent
+ * runs in; the extension keeps it apart from every web connection's id.
+ */
+const desktopCommandRequestSchema = v.strictObject({
+  command: browserControlCommandSchema,
+  controllerId: controllerIdSchema,
+  observedTab: v.nullable(observedTabSchema),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  requestId: requestIdSchema,
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.desktop),
+  toolCallId: toolCallIdSchema,
+  /** The agent's run; per-turn budgets count by it. */
+  turnId: boundedIdSchema,
+  type: v.literal("command"),
+});
+
+/** Stops the queued or running command of one run, as a web cancel does. */
+const desktopCancelRequestSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.desktop),
+  turnId: boundedIdSchema,
+  type: v.literal("cancel"),
+});
+
+/**
+ * stella desktop's first message once it reaches the extension; the
+ * extension answers with its own `hello`. Either side may speak another
+ * protocol version, so the version is read whatever it is.
+ */
+const desktopHelloRequestSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.desktop),
+  type: v.literal("hello"),
+});
+
+const browserDesktopRequestSchema = v.variant("type", [
+  desktopHelloRequestSchema,
+  desktopCommandRequestSchema,
+  desktopCancelRequestSchema,
+]);
+
+export type BrowserDesktopRequest = v.InferOutput<
+  typeof browserDesktopRequestSchema
+>;
+
+export const parseBrowserDesktopRequest = (
+  input: unknown,
+): BrowserDesktopRequest | null => {
+  const result = v.safeParse(browserDesktopRequestSchema, input);
+  return result.success ? result.output : null;
+};
+
+/**
+ * The extension's answer to stella desktop's `hello`: the protocol it
+ * speaks, so stella desktop can tell an outdated extension apart from one
+ * that never answers.
+ */
+const desktopHelloResponseSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  type: v.literal("hello"),
+});
+
+/**
+ * The folder, inside Chrome's download folder, where the extension has
+ * Chrome save a PDF a stella desktop chat's tab downloads. stella desktop
+ * moves it from there into the chat's folder.
+ */
+export const BROWSER_DOWNLOAD_STAGING_FOLDER = "stella-downloads" as const;
+
+/** A staged file's name: a fresh UUID, so no page chooses it and none collides. */
+export const BROWSER_DOWNLOAD_STAGED_NAME_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/u;
+
+/** The path, relative to Chrome's download folder, Chrome saves a staged file at. */
+export const browserDownloadStagedPath = (uuid: string): string =>
+  `${BROWSER_DOWNLOAD_STAGING_FOLDER}/${uuid}.pdf`;
+
+/** Why the extension stopped a download a stella desktop chat's tab started. */
+export const BROWSER_DOWNLOAD_STOP_REASON = {
+  /** Neither its type nor its name says PDF. */
+  notPdf: "not-pdf",
+  /** Chrome said it is larger than `BROWSER_CONTROL_LIMITS.downloadBytes`. */
+  tooLarge: "too-large",
+  /** Too many of the chat's downloads were still running. */
+  tooMany: "too-many",
+  /** Chrome could not finish it. */
+  interrupted: "interrupted",
+} as const;
+
+type DownloadStopReasons = typeof BROWSER_DOWNLOAD_STOP_REASON;
+
+export type BrowserDownloadStopReason =
+  DownloadStopReasons[keyof DownloadStopReasons];
+
+const downloadNameSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.downloadNameChars),
+);
+
+/** The address a download came from; clipped, so a long `data:` URL still reports. */
+const downloadSourceUrlSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
+);
+
+const browserDownloadSchema = v.variant("outcome", [
+  v.strictObject({
+    outcome: v.literal("saved"),
+    /** Bytes Chrome wrote; stella desktop checks the file itself. */
+    bytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    mime: v.pipe(v.string(), v.maxLength(255)),
+    /** Where Chrome saved the file, as Chrome reports it. */
+    path: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(BROWSER_CONTROL_LIMITS.downloadPathChars),
+    ),
+    sourceUrl: downloadSourceUrlSchema,
+    /** The file name the page or server suggested. */
+    suggestedName: downloadNameSchema,
+  }),
+  v.strictObject({
+    outcome: v.literal("stopped"),
+    reason: v.picklist(Object.values(BROWSER_DOWNLOAD_STOP_REASON)),
+    sourceUrl: downloadSourceUrlSchema,
+    suggestedName: downloadNameSchema,
+  }),
+]);
+
+export type BrowserDownload = v.InferOutput<typeof browserDownloadSchema>;
+
+/**
+ * A download a stella desktop chat's tab started, once Chrome finished or
+ * the extension stopped it. Sent unasked; `controllerId` is the chat's id
+ * as stella desktop sent it with the chat's commands.
+ */
+const desktopDownloadResponseSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  download: browserDownloadSchema,
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  type: v.literal("download"),
+});
+
+export type BrowserDesktopDownload = v.InferOutput<
+  typeof desktopDownloadResponseSchema
+>;
+
+const browserDesktopResponseSchema = v.variant("type", [
+  desktopHelloResponseSchema,
+  browserExtensionCommandResponseSchema,
+  desktopDownloadResponseSchema,
+]);
+
+export type BrowserDesktopResponse = v.InferOutput<
+  typeof browserDesktopResponseSchema
+>;
+
+export const parseBrowserDesktopResponse = (
+  input: unknown,
+): BrowserDesktopResponse | null => {
+  const result = v.safeParse(browserDesktopResponseSchema, input);
   if (!result.success) {
     return null;
   }

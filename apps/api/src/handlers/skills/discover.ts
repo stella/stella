@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -34,6 +35,7 @@ const discoverSkillUrl = createSafeRootHandler(
     const discovery = yield* Result.await(
       discoverSkillPackagesFromUrl({
         permit: grantThirdPartyOutboundPermit(),
+        publicGithubToken: env.SKILL_IMPORT_GITHUB_TOKEN,
         rawUrl: body.url,
       }),
     );

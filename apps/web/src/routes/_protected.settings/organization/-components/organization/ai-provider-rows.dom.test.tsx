@@ -167,7 +167,9 @@ describe("BYOK provider rows", () => {
     fireEvent.click(
       screen.getByRole("button", { name: messages.common.confirm }),
     );
-    await waitFor(() => expect(screen.queryByText(MASKED_KEY)).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByText(MASKED_KEY) === null).toBe(true),
+    );
     expect(removed.at(0)?.provider).toBe("openrouter");
     expect(removed).toHaveLength(1);
   });

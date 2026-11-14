@@ -1,0 +1,5 @@
+{
+  "metric": "nullish-array-fallback",
+  "delta": 1,
+  "reason": "The dictation cleanup prompt (apps/api/src/handlers/dictation/cleanup-model.ts) states the speaker's languages as an empty list when the desktop sends none: the request field is optional by contract, so the fallback defaults an absent input rather than hiding a structural invariant."
+}

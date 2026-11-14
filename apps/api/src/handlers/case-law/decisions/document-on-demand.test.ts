@@ -12,7 +12,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
-  gradedDocumentFetchBudget,
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
   recordDocumentPacingOutcome,
@@ -30,6 +29,7 @@ import {
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { gradedDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 import type {
   BackfilledDocument,
   PendingDocument,
@@ -498,6 +498,33 @@ describe("deferral reporting", () => {
             });
             budget.throwIfAborted();
             return panic("The budget has expired");
+          },
+        },
+        recordDemand: false,
+      }),
+    ).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
+  test("a fetch the request's own deadline aborts is not captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            // The request scope's signal, ungraded, ends before the read budget.
+            const requestDeadline = AbortSignal.timeout(1);
+            await new Promise<void>((resolve) => {
+              requestDeadline.addEventListener("abort", () => {
+                resolve();
+              });
+            });
+            requestDeadline.throwIfAborted();
+            return panic("The request deadline has passed");
           },
         },
         recordDemand: false,

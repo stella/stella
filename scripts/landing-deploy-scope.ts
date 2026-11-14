@@ -1,24 +1,25 @@
 #!/usr/bin/env bun
 
-// Decides whether a range of commits changes anything the landing build reads,
-// so a push to main that cannot change the site does not start a deploy.
+// Decides whether a range of commits changes anything a deployed workspace
+// package's build reads, so a push to main that cannot change the deployed
+// site does not start a deploy. The landing and the Outlook add-in use it.
 //
-//   bun scripts/landing-deploy-scope.ts --base <rev> [--head <rev>]
+//   bun scripts/landing-deploy-scope.ts --package <name> --base <rev> [--head <rev>]
 //
-// Prints `true` when the landing is affected and `false` when it is not, with
-// the reason on stderr. The landing reads:
+// Prints `true` when the package is affected and `false` when it is not, with
+// the reason on stderr. The package's build reads:
 //   - its own workspace and every workspace it depends on, transitively, as
 //     the lockfile's workspace graph records them;
 //   - the external packages that graph resolves to, so a lockfile change
 //     counts only when it moves one of them;
 //   - the files turbo.json declares as `$TURBO_ROOT$` inputs of
-//     `@stll/landing#build`, which is where a new read from outside the
-//     workspace graph has to be declared.
-// Anything the check cannot resolve counts as affected. The script imports
-// nothing outside the runtime so it runs before an install.
+//     `<name>#build`, which is where a new read from outside the workspace
+//     graph has to be declared.
+// Anything the check cannot resolve counts as affected, and a command without
+// `--package` fails. The script imports nothing outside the runtime so it runs
+// before an install.
 
-const LANDING_PACKAGE = "@stll/landing";
-const LANDING_BUILD_TASK = `${LANDING_PACKAGE}#build`;
+export const LANDING_PACKAGE = "@stll/landing";
 const TURBO_CONFIG = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
 const RECURSIVE_GLOB_SUFFIX = "/**";
@@ -96,17 +97,17 @@ const resolveKey = (
   return undefined;
 };
 
-export type LandingClosure = {
-  /** Workspace directories the landing builds from, its own included. */
+export type WorkspaceClosure = {
+  /** Workspace directories the package builds from, its own included. */
   readonly workspaceDirectories: ReadonlySet<string>;
-  /** Lockfile package keys the landing's graph resolves to. */
+  /** Lockfile package keys the package's graph resolves to. */
   readonly packageKeys: ReadonlySet<string>;
 };
 
 export const workspaceClosure = (
   lock: Lockfile,
   workspaceName: string,
-): LandingClosure | undefined => {
+): WorkspaceClosure | undefined => {
   const startingWorkspace = Object.entries(lock.workspaces).find(
     ([, workspace]) => workspace["name"] === workspaceName,
   );
@@ -167,25 +168,24 @@ export const workspaceClosure = (
   return { workspaceDirectories, packageKeys };
 };
 
-export const landingClosure = (lock: Lockfile): LandingClosure | undefined =>
-  workspaceClosure(lock, LANDING_PACKAGE);
-
 /**
- * Everything the install gives the landing: its workspace manifests, every
+ * Everything the install gives the package: its workspace manifests, every
  * resolved package with its version and integrity, and the patches and
  * install-script trust that apply to those packages. `patchContents` returns
  * the text of a patch file at the same revision as the lockfile.
  */
 export const installFingerprint = ({
   lock,
+  packageName,
   packageManager,
   patchContents,
 }: {
   readonly lock: Lockfile;
+  readonly packageName: string;
   readonly packageManager: unknown;
   readonly patchContents: (patchPath: string) => string | undefined;
 }): string | undefined => {
-  const closure = landingClosure(lock);
+  const closure = workspaceClosure(lock, packageName);
   if (closure === undefined) {
     return undefined;
   }
@@ -227,11 +227,14 @@ export const matchesRootInput = (file: string, input: string): boolean => {
   return file.startsWith(`${directory}/`);
 };
 
-export const landingBuildRootInputs = (
+const buildTask = (packageName: string) => `${packageName}#build`;
+
+export const buildRootInputs = (
   turboConfig: unknown,
+  packageName: string,
 ): readonly string[] => {
   const tasks = isRecord(turboConfig) ? turboConfig["tasks"] : undefined;
-  const task = isRecord(tasks) ? tasks[LANDING_BUILD_TASK] : undefined;
+  const task = isRecord(tasks) ? tasks[buildTask(packageName)] : undefined;
   const inputs = isRecord(task) ? task["inputs"] : undefined;
   if (!Array.isArray(inputs)) {
     return [];
@@ -256,20 +259,25 @@ export type Revision = {
 };
 
 export const decide = ({
+  packageName,
   changedFiles,
   rootInputs,
   base,
   head,
 }: {
+  readonly packageName: string;
   readonly changedFiles: readonly string[];
   readonly rootInputs: readonly string[];
   readonly base: Revision;
   readonly head: Revision;
 }): Decision => {
-  const baseClosure = base.lock && landingClosure(base.lock);
-  const headClosure = head.lock && landingClosure(head.lock);
+  const baseClosure = base.lock && workspaceClosure(base.lock, packageName);
+  const headClosure = head.lock && workspaceClosure(head.lock, packageName);
   if (baseClosure === undefined || headClosure === undefined) {
-    return { affected: true, reason: "the landing workspace graph is unknown" };
+    return {
+      affected: true,
+      reason: `the ${packageName} workspace graph is unknown`,
+    };
   }
   const directories = new Set([
     ...baseClosure.workspaceDirectories,
@@ -288,7 +296,7 @@ export const decide = ({
     if (input !== undefined) {
       return {
         affected: true,
-        reason: `${file} is a declared input of ${LANDING_BUILD_TASK}`,
+        reason: `${file} is a declared input of ${buildTask(packageName)}`,
       };
     }
     if (INSTALL_SETTINGS.has(file)) {
@@ -297,16 +305,21 @@ export const decide = ({
     installChanged ||= isInstallInput(file);
   }
   if (!installChanged) {
-    return { affected: false, reason: "no landing input changed" };
+    return { affected: false, reason: `no ${packageName} input changed` };
   }
-  const before = base.lock && installFingerprint({ ...base, lock: base.lock });
-  const after = head.lock && installFingerprint({ ...head, lock: head.lock });
+  const before =
+    base.lock && installFingerprint({ ...base, lock: base.lock, packageName });
+  const after =
+    head.lock && installFingerprint({ ...head, lock: head.lock, packageName });
   return before === after
     ? {
         affected: false,
-        reason: "the landing's resolved packages are unchanged",
+        reason: `the resolved packages of ${packageName} are unchanged`,
       }
-    : { affected: true, reason: "the landing's resolved packages changed" };
+    : {
+        affected: true,
+        reason: `the resolved packages of ${packageName} changed`,
+      };
 };
 
 const git = (args: readonly string[]): string | undefined => {
@@ -380,14 +393,20 @@ const readArgument = (
   return index === -1 ? undefined : args[index + 1];
 };
 
-type LandingRange = { readonly base: string; readonly head: string };
+export type DeployRange = { readonly base: string; readonly head: string };
 
-const resolveDecision = ({ base, head }: LandingRange): Decision => {
+type DeployScope = DeployRange & { readonly packageName: string };
+
+const resolveDecision = ({
+  packageName,
+  base,
+  head,
+}: DeployScope): Decision => {
   if (base === "" || EMPTY_REVISION.test(base)) {
     return { affected: true, reason: "there is no base revision to compare" };
   }
   // Without rename detection a moved file lists both paths, so a file moved
-  // out of a landing input still counts.
+  // out of a package input still counts.
   const changed = git([
     "diff",
     "--name-only",
@@ -401,28 +420,36 @@ const resolveDecision = ({ base, head }: LandingRange): Decision => {
     return { affected: true, reason: `cannot compare ${base} with ${head}` };
   }
   return decide({
+    packageName,
     changedFiles: changed.split("\0").filter((file) => file !== ""),
-    rootInputs: landingBuildRootInputs(
+    rootInputs: buildRootInputs(
       parseJsonc(showFile(head, TURBO_CONFIG)),
+      packageName,
     ),
     base: readRevision(base),
     head: readRevision(head),
   });
 };
 
-export const landingDeployAffected = (range: LandingRange): boolean => {
-  const decision = resolveDecision(range);
+export const deployAffected = (scope: DeployScope): boolean => {
+  const decision = resolveDecision(scope);
   console.error(
-    `${LANDING_PACKAGE} ${decision.affected ? "affected" : "unaffected"}: ${decision.reason}`,
+    `${scope.packageName} ${decision.affected ? "affected" : "unaffected"}: ${decision.reason}`,
   );
   return decision.affected;
 };
 
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
+  const packageName = readArgument(args, "--package");
+  if (packageName === undefined || packageName === "") {
+    console.error("usage: --package <name> --base <rev> [--head <rev>]");
+    process.exit(2);
+  }
   console.log(
     String(
-      landingDeployAffected({
+      deployAffected({
+        packageName,
         base: readArgument(args, "--base") ?? "",
         head: readArgument(args, "--head") ?? "HEAD",
       }),

@@ -195,7 +195,12 @@ export const splitPropertiesForSystemOne = (
   const systemOne: AIBatchProperty[] = [];
   const generative: AIBatchProperty[] = [];
   for (const property of properties) {
-    if (isSystemOneAnswerable(property.content)) {
+    // System One cites one block, and a graded clause needs every block that
+    // qualifies it.
+    if (
+      property.answerShape === "value" &&
+      isSystemOneAnswerable(property.content)
+    ) {
       systemOne.push(property);
       continue;
     }

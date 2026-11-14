@@ -13,20 +13,6 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-beforeEach(() => {
-  executeMock.mockReset();
-  executeMock.mockImplementation(executeDefault);
-  findFirstMock.mockReset();
-  selectLimitMock.mockReset();
-  selectMock.mockClear();
-  syncWorkspaceSearchActivityMock.mockReset();
-  syncWorkspaceSearchActivityMock.mockImplementation(
-    syncWorkspaceSearchActivityDefault,
-  );
-  transactionMock.mockClear();
-  versionsFindManyMock.mockClear();
-});
-
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
@@ -186,6 +172,17 @@ const upsertSearchDocument = async (entityId: SafeId<"entity">) =>
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  executeMock.mockReset();
+  executeMock.mockImplementation(executeDefault);
+  findFirstMock.mockReset();
+  selectLimitMock.mockReset();
+  selectMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockReset();
+  syncWorkspaceSearchActivityMock.mockImplementation(
+    syncWorkspaceSearchActivityDefault,
+  );
+  transactionMock.mockClear();
+  versionsFindManyMock.mockClear();
   analytics = installRecordingAnalytics();
   executeMock.mockClear();
   selectMock.mockClear();

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import type { AIErrorKind } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -803,6 +804,7 @@ export const persistTerminalAssistantTurn = async ({
  */
 export const persistFailedChatTurn = async ({
   code,
+  error = "unknown",
   execution,
   indexThread,
   recordAuditEvent,
@@ -814,6 +816,8 @@ export const persistFailedChatTurn = async ({
   workspaceId,
 }: {
   code: ChatTurnFailureCode;
+  /** What the turn tells the member; a failure nothing explained is unknown. */
+  error?: AIErrorKind | undefined;
   execution: ChatTurnExecution;
   indexThread: PersistMessageProps["indexThread"];
   recordAuditEvent: AuditRecorder;
@@ -824,7 +828,7 @@ export const persistFailedChatTurn = async ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
-  const outcome = { type: "failed", error: "unknown" } as const;
+  const outcome = { type: "failed", error } as const;
   return await persistTerminalAssistantTurn({
     execution,
     failure: { code, retryable },

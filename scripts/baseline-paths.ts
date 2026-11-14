@@ -17,6 +17,9 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
+  /** scripts/check-mutation-query-invalidation.ts */
+  mutationQueryInvalidation:
+    "scripts/mutation-query-invalidation-baseline.json",
   /** scripts/check-actionlint-baseline.ts */
   actionlint: ".github/actionlint-baseline.json",
   /** scripts/check-test-state-baseline.ts */
@@ -31,6 +34,9 @@ export const BASELINE_PATHS = {
   rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
+  /** .oxlint-plugins/no-variable-arity-values.ts */
+  noVariableArityValues:
+    ".oxlint-plugins/no-variable-arity-values-baseline.json",
   /** scripts/check-write-contracts.ts */
   writeContracts: "scripts/write-contract-routes-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
@@ -69,8 +75,6 @@ export const BASELINE_PATHS = {
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** scripts/render-phase-update-baseline.ts */
   renderPhaseUpdate: ".oxlint-plugins/no-render-phase-update-baseline.json",
-  /** apps/api/scripts/mcp-coverage-guard.ts */
-  mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
   /** apps/api/scripts/deployment-feature-guard.ts */

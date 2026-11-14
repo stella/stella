@@ -119,6 +119,46 @@ const PLAN_ENV_BUDGET_BYTES = 64 * 1024;
 // measure selector cases rather than charging its cold scan to the first case.
 markdownReaders();
 
+// Every job the desktop release's completion check waits for, with every
+// output it declares set, so the whole needs context is at its largest.
+const desktopReleaseCompleteNeeds = () => {
+  const release = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          needs: v.optional(v.union([v.string(), v.array(v.string())])),
+          outputs: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/release-desktop.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const needs = [
+    release.jobs["release-complete"]?.needs ??
+      panic("Missing desktop release completion"),
+  ].flat();
+  return Object.fromEntries(
+    needs.map((job) => [
+      job,
+      {
+        result: "success",
+        outputs: Object.fromEntries(
+          Object.keys(release.jobs[job]?.outputs ?? {}).map((name) => [
+            name,
+            "x".repeat(256),
+          ]),
+        ),
+      },
+    ]),
+  );
+};
+
 const publishReleaseSummaryNeeds = () => {
   const publish = v.parse(
     v.object({
@@ -235,6 +275,7 @@ test("whole workflow contexts stay below the per-variable environment budget", (
     ),
     // Every release job of the npm workflow, with pack selecting every one.
     "publish-npm release-summary needs": publishReleaseSummaryNeeds(),
+    "release-desktop release-complete needs": desktopReleaseCompleteNeeds(),
     API_TEST_FILES_ENCODED: plan["api_test_files_encoded"],
   };
   for (const name of new Set(
@@ -914,6 +955,8 @@ type EvaluateResultOptions = {
     | "red"
     | "missing"
     | "other-head"
+    | "fork-green"
+    | "other-fork"
     | "running-green"
     | "queued-green"
     | "planned-green"
@@ -937,6 +980,22 @@ const firstCodeRunStage: Partial<Record<MetadataCodeRun, CodeRunStage>> = {
   "planned-green": "planned",
 };
 
+// The fork the pull request's head comes from, as the outcome step reads it.
+const PULL_REQUEST_HEAD = { repoId: 456, ref: "fork-branch" } as const;
+
+// GitHub links no pull request to a run from a fork: such a run carries only
+// the repository and branch it ran.
+const metadataCodeRunLink = (state: MetadataCodeRun | undefined) =>
+  state === "fork-green" || state === "other-fork"
+    ? {
+        pull_requests: [],
+        head_repository: {
+          id: state === "fork-green" ? PULL_REQUEST_HEAD.repoId : 999,
+        },
+        head_branch: PULL_REQUEST_HEAD.ref,
+      }
+    : { pull_requests: [{ number: Number(PULL_REQUEST.number) }] };
+
 const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
   const head = state === "other-head" ? "b".repeat(40) : "a".repeat(40);
   const runStatus =
@@ -953,7 +1012,7 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
             run_number: 99,
             head_sha: head,
             status: runStatus,
-            pull_requests: [{ number: Number(PULL_REQUEST.number) }],
+            ...metadataCodeRunLink(state),
           },
         ];
   const conclusion = state === "red" ? "failure" : "success";
@@ -1309,6 +1368,8 @@ const resultGateCase = ({
       PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
       REPO: PULL_REQUEST.repo,
       HEAD_SHA: "a".repeat(40),
+      HEAD_REPO_ID: String(PULL_REQUEST_HEAD.repoId),
+      HEAD_REF: PULL_REQUEST_HEAD.ref,
       METADATA_ONLY: codeRun.enabled,
       RUN_REQUIRED: codeRun.runRequired,
       PLAN_RESULT: needs["ci-plan"]?.result ?? "",
@@ -3502,6 +3563,12 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
     { state: "missing", exitCode: 1, message: "no code run exists" },
     { state: "other-head", exitCode: 1, message: "no code run exists" },
     {
+      state: "fork-green",
+      exitCode: 0,
+      message: "evaluated every required job of head",
+    },
+    { state: "other-fork", exitCode: 1, message: "no code run exists" },
+    {
       state: "completed-without-result",
       exitCode: 1,
       message: "completed without a ci-result job",
@@ -4171,6 +4238,99 @@ test("marketing screenshots are planned only for ready same-repository releases 
   }
 });
 
+test("a merge group trusts a fork pull request only when its head passed a pull request run", () => {
+  const plan = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({ name: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  );
+  const command = v.parse(
+    v.string(),
+    plan.steps.find(({ name }) => name === "Check if PR is trusted")?.run,
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "merge-group-trust-"));
+  const output = nodePath.join(directory, "output");
+  const retry = nodePath.join(directory, "gh-retry.sh");
+  // Pull request 7 comes from this repository, 8 and 9 from a fork; only the
+  // fork head of 8 has a successful pull_request run.
+  writeFileSync(
+    retry,
+    [
+      "set -euo pipefail",
+      'echo "$*" >> "$(dirname "$0")/calls"',
+      'case "$2" in',
+      '  repos/stella/stella/pulls/7) echo "stella/stella aaa7" ;;',
+      '  repos/stella/stella/pulls/8) echo "contributor/stella bbb8" ;;',
+      '  repos/stella/stella/pulls/9) echo "contributor/stella ccc9" ;;',
+      '  "repos/stella/stella/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=bbb8") echo 1 ;;',
+      '  "repos/stella/stella/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=ccc9") echo 0 ;;',
+      "  *) exit 3 ;;",
+      "esac",
+    ].join("\n"),
+  );
+  const cases = [
+    { event: "pull_request", head: "", trusted: true, calls: 0 },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/no-pull-request",
+      trusted: false,
+      calls: 0,
+    },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      trusted: true,
+      calls: 1,
+    },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      trusted: true,
+      calls: 2,
+    },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/pr-9-abcdef",
+      trusted: false,
+      calls: 2,
+    },
+  ] as const;
+  try {
+    for (const { event, head, trusted, calls } of cases) {
+      writeFileSync(output, "");
+      rmSync(nodePath.join(directory, "calls"), { force: true });
+      const result = Bun.spawnSync(["bash", "-eu", "-c", command], {
+        cwd: nodePath.resolve(import.meta.dir, ".."),
+        env: {
+          PATH: Bun.env["PATH"] ?? "",
+          EVENT_NAME: event,
+          BASE_REPO: "stella/stella",
+          MERGE_GROUP_HEAD_REF: head,
+          GH_RETRY_SCRIPT: retry,
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+      expect(readFileSync(output, "utf-8"), `${event} ${head}`).toBe(
+        `trusted=${String(trusted)}\n`,
+      );
+      const made = existsSync(nodePath.join(directory, "calls"))
+        ? readFileSync(nodePath.join(directory, "calls"), "utf-8")
+            .split("\n")
+            .filter(Boolean)
+        : [];
+      expect(made.length, `${event} ${head}`).toBe(calls);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("spec-tree PRs plan production shards and their web build at fast depth", () => {
   for (const file of [
     "apps/web/e2e/specs/new.spec.ts",
@@ -4586,12 +4746,14 @@ test("a selected leg planned only for a hosted browser suite skips the web run",
   const runs = (mode: string, specs: string, suiteSpecs: string) =>
     evaluate(step?.if ?? panic("Missing Playwright shard condition"), {
       values: {
+        "steps.checkout.outcome": "success",
         "steps.e2e-stack.outcome": "success",
         "matrix.shard": 1,
         "needs.ci-plan.outputs.e2e_production_mode": mode,
         "needs.ci-plan.outputs.e2e_production_specs": specs,
         "needs.ci-plan.outputs.e2e_production_suite_specs": suiteSpecs,
       },
+      status: { cancelled: false },
     });
   const suite = JSON.stringify(["apps/api/e2e/citation-graph.spec.mts"]);
   const web = JSON.stringify(["apps/web/e2e/specs/guides.spec.ts"]);
@@ -5228,10 +5390,9 @@ test("split service suites preserve their scopes and independent verdicts", () =
       expect(suite.if).toBe(`\${{ !cancelled() && ${predicate} }}`);
       continue;
     }
+    // A suite runs after an earlier failure, once its checkout succeeded.
     expect(suite.if).toBe(
-      scope === "postgres_suites_required"
-        ? `${predicate} && ${nonCorpusGate}`
-        : `\${{ !cancelled() && ${predicate} && ${nonCorpusGate} }}`,
+      `\${{ !cancelled() && steps.checkout.outcome == 'success' && (${predicate} && ${nonCorpusGate}) }}`,
     );
   }
   const collab = suites.find(({ run }) => run?.includes("@stll/collab"));
@@ -6002,7 +6163,7 @@ test("each split service step follows its own dependency scope and execution dep
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
   expect(collaboration?.if).toBe(
-    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
+    `\${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}`,
   );
   const planned = Object.fromEntries(
     scopes.map((scope, index) => [scope, packagePlan.at(index)]),
@@ -6020,6 +6181,7 @@ test("each split service step follows its own dependency scope and execution dep
           ]),
         ),
         "github.event_name": EVENT.mergeGroup,
+        "steps.checkout.outcome": "success",
         "vars.CI_POSTGRES_PR_SELECTION": "off",
         "needs.ci-plan.outputs.queue_depth": "full",
         "needs.ci-plan.outputs.suite_depth": "full",
@@ -6084,6 +6246,7 @@ test("corpus bypasses non-corpus service depth and PR opt-in gates", () => {
     ]),
   );
   const commonValues = {
+    "steps.checkout.outcome": "success",
     "needs.ci-plan.outputs.postgres_suites_required": "true",
     "needs.ci-plan.outputs.corpus_suites_required": "true",
     "needs.ci-plan.outputs.valkey_suites_required": "true",
@@ -7667,9 +7830,12 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
             status: { cancelled: false },
           }),
         ).toBe(event !== EVENT.pullRequest || enabled);
-        expect(evaluate(runner?.if ?? "false", { values })).toBe(
-          event !== EVENT.pullRequest || prSwitch === "on",
-        );
+        expect(
+          evaluate(runner?.if ?? "false", {
+            values: { ...values, "steps.checkout.outcome": "success" },
+            status: { cancelled: false },
+          }),
+        ).toBe(event !== EVENT.pullRequest || prSwitch === "on");
         expect(evaluate(runnerSelection, { values })).toBe(
           event === EVENT.mergeGroup || enabled ? selection : "",
         );

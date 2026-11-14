@@ -134,8 +134,9 @@ fn ensure_default_store() -> Result<(), String> {
   }
 
   set_default_store()?;
-  let _ = KEYRING_INIT.set(());
-  Ok(())
+  KEYRING_INIT
+    .set(())
+    .map_err(|()| "keychain store was initialized twice".to_string())
 }
 
 fn set_default_store() -> Result<(), String> {

@@ -13,7 +13,11 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
+import {
+  DOCUMENT_REVIEW_LIMITS,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  REVIEW_FLAGS,
+} from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
@@ -61,6 +65,7 @@ import { TextSeparator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
@@ -99,7 +104,6 @@ import {
   saveRunAsPlaybook,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
-  DecidedReviewDecision,
   DocumentReviewDecision,
   DocumentReviewFindingRow,
   DocumentReviewRunStatus,
@@ -111,12 +115,14 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
+  resolveTableRunNotice,
   restoredRunId,
   restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
   reviewSkeletonCardCount,
+  withheldTextShare,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PinnedPosition,
@@ -124,6 +130,8 @@ import type {
   RestoredReviewFinding,
   ReviewPlaybookFreshness,
   ReviewRunFreshness,
+  ReviewRunWithheldSource,
+  TableRunNotice,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
   reviewSessionKey,
@@ -202,6 +210,7 @@ import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
   buildRunSummarySentence,
+  decisionLabel,
   firstSentence,
   isReviewDeviation,
   isUndecidedDeviation,
@@ -477,6 +486,7 @@ export const PlaybookFacet = ({
         entityId,
         fileFieldId,
         unexpectedErrorMessage: t("common.unexpectedError"),
+        documentsTooLargeMessage: t("inspector.review.documentsTooLarge"),
         startMode,
         seededPositions,
       }),
@@ -1404,7 +1414,11 @@ const ReviewRunPanel = ({
     return (
       <ErrorState
         detail={run.errorCode}
-        message={t("inspector.review.failed")}
+        message={t(
+          run.errorCode === DOCUMENT_TOO_LARGE_ERROR_CODE
+            ? "inspector.review.documentTooLarge"
+            : "inspector.review.failed",
+        )}
         onChangeBasis={onReviewAgain}
         onRetry={() => onRetry(restored.basis)}
       />
@@ -1467,8 +1481,15 @@ const ReviewRunPanel = ({
       runId={run.id}
       saveAsPlaybookPending={saveAsPlaybook.isPending}
       suggestions={suggestions}
+      fixesWithheld={run.status === "completed" ? run.fixesWithheld : 0}
+      tableRunNotice={resolveTableRunNotice({
+        shownRun: run,
+        runs: history.runs,
+        currentEntityVersionId,
+      })}
       targetFileFieldId={targetFileFieldId}
       targetName={reviewedVersion?.file?.fileName ?? ""}
+      withheldSources={run.withheldSources}
       targetVersionNumber={reviewedVersion?.versionNumber ?? null}
       workspaceId={workspaceId}
     />
@@ -2031,26 +2052,26 @@ const LaunchBasisSummary = ({
   const t = useTranslations();
   if (playbookName.length > 0 && referenceCount > 0) {
     return (
-      <p className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
         {t("inspector.review.basisCombined", {
           name: playbookName,
           count: referenceCount,
         })}
-      </p>
+      </TruncatedText>
     );
   }
   if (playbookName.length > 0) {
     return (
-      <p className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
         {t("inspector.review.basisPlaybook", { name: playbookName })}
-      </p>
+      </TruncatedText>
     );
   }
   if (referenceCount > 0) {
     return (
-      <p className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
         {t("inspector.review.basisReferences", { count: referenceCount })}
-      </p>
+      </TruncatedText>
     );
   }
   return null;
@@ -2127,9 +2148,12 @@ const PlaybookPicker = ({
                   >
                     <ClipboardCheckIcon className="text-muted-foreground size-3.5 shrink-0" />
                     {/* Menu rows name their item in regular weight. */}
-                    <BidiText className="min-w-0 flex-1 truncate font-normal">
+                    <TruncatedText
+                      className="flex-1 font-normal"
+                      render={<BidiText />}
+                    >
                       {playbook.name}
-                    </BidiText>
+                    </TruncatedText>
                     <PlaybookStatusBadge status={playbook.status} />
                     <CheckIcon
                       aria-hidden="true"
@@ -2233,14 +2257,17 @@ const ReferenceFilePicker = ({
                 className="size-3.5 shrink-0"
                 mimeType={DOCX_MIME}
               />
-              <BidiText className="min-w-0 flex-1 truncate text-xs">
+              <TruncatedText className="flex-1 text-xs" render={<BidiText />}>
                 {reference.name}
-              </BidiText>
+              </TruncatedText>
               {reference.workspaceId !== workspaceId &&
                 reference.workspaceName !== null && (
-                  <BidiText className="text-muted-foreground text-2xs max-w-28 shrink-0 truncate">
+                  <TruncatedText
+                    className="text-muted-foreground text-2xs max-w-28 shrink-0"
+                    render={<BidiText />}
+                  >
                     {reference.workspaceName}
-                  </BidiText>
+                  </TruncatedText>
                 )}
               <Button
                 aria-label={t("inspector.review.removeReference", {
@@ -2320,9 +2347,12 @@ const ReferenceFilePicker = ({
                       className="size-3.5 shrink-0"
                       mimeType={DOCX_MIME}
                     />
-                    <BidiText className="min-w-0 flex-1 truncate text-xs">
+                    <TruncatedText
+                      className="flex-1 text-xs"
+                      render={<BidiText />}
+                    >
                       {source.name}
-                    </BidiText>
+                    </TruncatedText>
                     <PlusIcon className="text-muted-foreground size-3.5 shrink-0 opacity-60 transition-opacity duration-150 group-hover:opacity-100" />
                   </span>
                 </Button>
@@ -2479,7 +2509,7 @@ const ProposalStreamView = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <div className="flex min-h-11 shrink-0 items-center gap-2 border-b px-4">
-        <span className="text-muted-foreground truncate text-xs tabular-nums">
+        <TruncatedText className="text-muted-foreground text-xs tabular-nums">
           {streaming
             ? t("inspector.review.proposing", {
                 count: proposal.positions.length,
@@ -2487,7 +2517,7 @@ const ProposalStreamView = ({
             : t("knowledge.playbooks.starters.positionCount", {
                 count: proposal.positions.length,
               })}
-        </span>
+        </TruncatedText>
         {!streaming && proposal.skipped.length > 0 && (
           <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
             {SUMMARY_SEPARATOR}
@@ -2744,6 +2774,10 @@ type ResultsViewProps = {
   decisionCounts: Parameters<typeof reviewDecisionProgress>[0];
   decisionPending: boolean;
   freshness: ReviewRunFreshness;
+  tableRunNotice: TableRunNotice;
+  withheldSources: readonly ReviewRunWithheldSource[];
+  /** Fixes the run left unstaged because a reference matter was unavailable. */
+  fixesWithheld: number;
   history: ReviewRunHistoryView;
   /** Set while the worker is still committing findings; `null` once the run
    *  has settled. */
@@ -2802,6 +2836,9 @@ const ResultsView = ({
   decisionCounts,
   decisionPending,
   freshness,
+  tableRunNotice,
+  withheldSources,
+  fixesWithheld,
   history,
   progress: runProgress,
   readOnly,
@@ -3029,6 +3066,20 @@ const ResultsView = ({
 
       <ReviewHistorySection history={history} />
 
+      <DocumentCutNotice documentName={targetName} sources={withheldSources} />
+
+      <TableRunNoticeSection
+        notice={tableRunNotice}
+        onOpenRun={history.onSelect}
+        onReviewAgain={onReviewAgain}
+      />
+
+      {fixesWithheld > 0 && (
+        <p className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-xs">
+          {t("inspector.review.fixesWithheldNotice")}
+        </p>
+      )}
+
       {resultsBody}
     </div>
   );
@@ -3174,6 +3225,17 @@ const ReviewHistorySection = ({
   );
 };
 
+/** What the History row says about where a run came from. A panel review is
+ *  the default kind and says nothing; a table run says so, because its
+ *  findings carry no citations or proposed changes. */
+const RUN_ORIGIN_LABEL_KEY = {
+  worker: null,
+  table: "inspector.review.history.fromTable",
+} as const satisfies Record<
+  DocumentReviewRunSummary["executor"],
+  TranslationKey | null
+>;
+
 const ReviewHistoryRow = ({
   run,
   shown,
@@ -3187,7 +3249,9 @@ const ReviewHistoryRow = ({
   const format = useFormatter();
   const runBasisLabels = useRunBasisLabels();
   const decisions = reviewDecisionProgress(run.decisionCounts);
+  const originKey = RUN_ORIGIN_LABEL_KEY[run.executor];
   const basis = buildRunHistoryBasisSentence({
+    originLabel: originKey === null ? null : t(originKey),
     playbookName: run.basis.playbookName,
     playbookProposed: run.basis.playbookProvenance === "ephemeral",
     references:
@@ -3214,12 +3278,12 @@ const ReviewHistoryRow = ({
           <span className="text-foreground shrink-0 text-xs tabular-nums">
             {format.dateTime(new Date(run.createdAt), HISTORY_RUN_DATE_FORMAT)}
           </span>
-          <BidiText
-            as="span"
-            className="text-muted-foreground min-w-0 flex-1 truncate text-xs"
+          <TruncatedText
+            className="text-muted-foreground flex-1 text-xs"
+            render={<BidiText as="span" />}
           >
             {basis}
-          </BidiText>
+          </TruncatedText>
           <span className="text-muted-foreground shrink-0 text-xs">
             {t(RUN_STATUS_LABEL_KEYS[run.status])}
           </span>
@@ -3400,6 +3464,127 @@ const ReviewFreshnessNotice = ({
         </Button>
       )}
     </div>
+  );
+};
+
+const TableRunNextStep = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: Exclude<TableRunNotice, { type: "none" | "explanation-only" }>;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  switch (notice.type) {
+    case "open-full-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.openFullReview", {
+            link: (chunks) => (
+              <Button
+                onClick={() => onOpenRun(notice.runId)}
+                size="inline"
+                variant="link"
+              >
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    case "run-another-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.runAnotherReview", {
+            label: t("inspector.review.reviewAgain"),
+            action: (chunks) => (
+              <Button onClick={onReviewAgain} size="inline" variant="link">
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    default:
+      notice satisfies never;
+      return panic("Unhandled table run notice");
+  }
+};
+
+/**
+ * Says the findings rest on part of the document. It sits with the table-run
+ * notice so the margin layout shows it too.
+ */
+const DocumentCutNotice = ({
+  documentName,
+  sources,
+}: {
+  documentName: string;
+  sources: readonly ReviewRunWithheldSource[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const share = withheldTextShare(sources);
+  if (share === null) {
+    return null;
+  }
+  return (
+    <section
+      className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-xs"
+      role="note"
+    >
+      <p>
+        {t.rich("inspector.review.documentCutNotice", {
+          documentName,
+          percent: format.number(share, { style: "percent" }),
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+    </section>
+  );
+};
+
+/**
+ * Why these findings have no links or proposed changes. It sits outside the
+ * findings list so the margin layout shows it too: that is where findings with
+ * nothing to pin to are most puzzling.
+ */
+const TableRunNoticeSection = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: TableRunNotice;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  if (notice.type === "none") {
+    return null;
+  }
+  return (
+    <section className="text-muted-foreground shrink-0 space-y-1 border-b px-3 py-1.5 text-xs">
+      <p>
+        {t.rich("inspector.review.tableRunNotice.origin", {
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+      {notice.type !== "explanation-only" && (
+        <p>
+          <TableRunNextStep
+            notice={notice}
+            onOpenRun={onOpenRun}
+            onReviewAgain={onReviewAgain}
+          />
+        </p>
+      )}
+    </section>
   );
 };
 
@@ -3905,7 +4090,7 @@ const ReviewResultCard = ({
                 />
                 {item.decision !== REVIEW_DECISION.OPEN && (
                   <span className={POSITION_HEADER_META_CLASS}>
-                    {t(DECISION_LABEL[item.decision])}
+                    {t(decisionLabel(item.decision))}
                   </span>
                 )}
                 <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
@@ -4134,14 +4319,6 @@ const WhyDisclosure = ({
     </div>
   );
 };
-
-/** How a recorded decision reads on the card. Total over the decisions a
- *  reviewer can take, so a new disposition must state its label here rather
- *  than rendering as nothing. */
-const DECISION_LABEL = {
-  accepted: "inspector.review.decisions.accepted",
-  dismissed: "inspector.review.decisions.dismissed",
-} as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
 type ReviewCardActionsProps = {
   item: ReviewResultItem;
@@ -4373,8 +4550,8 @@ const FindingResolution = ({
       />
     );
   }
-  // The run staged a redline for this finding, but the document has not been
-  // opened in this session yet, so the suggestion it lives on is not loaded.
+  // The run staged a redline for this finding, but the suggestion it lives on
+  // is not loaded: the document's editor is not open, or not ready to build it.
   // Deciding here would answer the finding without touching the change it
   // stands for; the reviewer opens the document and resolves it there.
   return (
@@ -4417,7 +4594,7 @@ const FindingDecisionButtons = ({
         size="sm"
       >
         <CheckIcon className="me-1 size-3.5" />
-        {t("common.accept")}
+        {t("inspector.review.acceptFinding")}
       </Button>
       <Button
         className="h-7 px-2.5"
@@ -4427,7 +4604,7 @@ const FindingDecisionButtons = ({
         variant="ghost"
       >
         <XIcon className="me-1 size-3.5" />
-        {t("inspector.review.noChangeNeeded")}
+        {t("inspector.review.dismissFinding")}
       </Button>
     </>
   );
@@ -4482,7 +4659,7 @@ const SuggestionButtons = ({
               : { tooltip: t("inspector.review.noEditor") })}
           >
             <CheckIcon className="me-1 size-3.5" />
-            {t("common.accept")}
+            {t("inspector.review.acceptChange")}
           </Button>
           <Button
             className="h-7 px-2.5"

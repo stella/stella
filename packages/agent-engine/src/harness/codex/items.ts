@@ -1,8 +1,17 @@
 import { panic } from "better-result";
 
+import { chatLocalRunToolResultContent } from "@stll/api-contract/chat-local-run-tool";
+
 import type { HarnessToolCall, HarnessToolResult } from "../events";
-import { HARNESS_TOOL_NAMES, mcpToolCallName } from "../tool-parts";
-import { type CodexItem, type CodexItemType, isMcpTextBlock } from "./protocol";
+import { type HarnessStepOutput, wholeFileDiff } from "../step-output";
+import { HARNESS_TOOL_NAMES, mcpToolCall, nativeToolCall } from "../tool-parts";
+import {
+  type CodexAgentOutcome,
+  type CodexItem,
+  type CodexItemType,
+  type CodexPlanUpdate,
+  isMcpTextBlock,
+} from "./protocol";
 
 /**
  * Codex thread items as harness events. Text is the agent's markdown, passed
@@ -13,7 +22,7 @@ import { type CodexItem, type CodexItemType, isMcpTextBlock } from "./protocol";
  * here; the native item itself is never forwarded.
  */
 
-type CodexItemHandling = "text" | "reasoning" | "tool" | "ignore";
+type CodexItemHandling = "text" | "reasoning" | "tool" | "subagent" | "ignore";
 
 /** What stella shows for each pinned item kind. */
 export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
@@ -26,7 +35,12 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
     case "fileChange":
     case "mcpToolCall":
     case "webSearch":
+    case "imageView":
       return "tool";
+    case "collabAgentToolCall":
+    case "subAgentActivity":
+      // A subagent the agent started, and how it ended (`subagentCall`).
+      return "subagent";
     // Each kind below is dropped on purpose.
     case "userMessage":
       // The user's own message is already the last transcript entry.
@@ -38,18 +52,11 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
       // The harness's record of a tool output it already reported as an item.
       return "ignore";
     case "plan":
-      // The harness's working plan; the answer text states what was done.
+      // A plan proposal's text; the steps of the working plan arrive as
+      // `turn/plan/updated` and are shown by title (`planUpdateStep`).
       return "ignore";
     case "dynamicToolCall":
       // stella registers no dynamic tools and declines `item/tool/call`.
-      return "ignore";
-    case "collabAgentToolCall":
-    case "subAgentActivity":
-      // Sub-agents run inside the harness and their own tool calls are not
-      // reported on this turn, so a summary would show nothing to open.
-      return "ignore";
-    case "imageView":
-      // A local image the harness viewed; its path means nothing in chat.
       return "ignore";
     case "sleep":
       // Harness scheduling, not activity.
@@ -70,9 +77,31 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
   }
 };
 
+/**
+ * The kinds that only add to what chat shows of a turn: a subagent, how it
+ * ended, an image the agent viewed. Nothing the turn does depends on reading
+ * them, so one the adapter cannot read is shown as an unsupported item and
+ * never ends the turn as a protocol violation.
+ */
+const PRESENTATION_ONLY_ITEMS: ReadonlySet<CodexItemType> = new Set([
+  "collabAgentToolCall",
+  "subAgentActivity",
+  "imageView",
+]);
+
+export const isPresentationOnlyItem = (kind: CodexItemType): boolean =>
+  PRESENTATION_ONLY_ITEMS.has(kind);
+
 type CodexToolItem = Extract<
   CodexItem,
-  { type: "commandExecution" | "fileChange" | "mcpToolCall" | "webSearch" }
+  {
+    type:
+      | "commandExecution"
+      | "fileChange"
+      | "mcpToolCall"
+      | "webSearch"
+      | "imageView";
+  }
 >;
 
 export const isToolItem = (item: CodexItem): item is CodexToolItem =>
@@ -89,6 +118,33 @@ const EXEC_STATUS = {
 const fileChanges = (item: Extract<CodexItem, { type: "fileChange" }>) =>
   item.changes.map(({ path, kind }) => ({ path, kind: kind.type }));
 
+/**
+ * What a step produced, kept on the computer: a command's output once it ran,
+ * and each changed file's diff. Codex reports an added or deleted file's text,
+ * which reads as its added or removed lines.
+ */
+const localOutputOf = (
+  item: Extract<CodexItem, { type: "commandExecution" | "fileChange" }>,
+): { localOutput: HarnessStepOutput } | Record<string, never> => {
+  if (item.type === "commandExecution") {
+    return typeof item.aggregatedOutput === "string"
+      ? { localOutput: { type: "command", output: item.aggregatedOutput } }
+      : {};
+  }
+  const files = item.changes.flatMap(({ path, kind, diff }) => {
+    if (diff === null || diff === undefined) {
+      return [];
+    }
+    return [
+      {
+        path,
+        diff: kind.type === "update" ? diff : wholeFileDiff(diff, kind.type),
+      },
+    ];
+  });
+  return files.length === 0 ? {} : { localOutput: { type: "diff", files } };
+};
+
 /** `stellaServer` is the server name the stella MCP binding is under. */
 export const toolCallForItem = (
   item: CodexToolItem,
@@ -96,38 +152,100 @@ export const toolCallForItem = (
 ): HarnessToolCall => {
   switch (item.type) {
     case "commandExecution":
-      return {
-        id: item.id,
+      return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.commandExecution,
         input: { command: item.command },
-      };
+      });
     case "fileChange":
-      return {
-        id: item.id,
+      return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.fileChange,
         input: { changes: fileChanges(item) },
-      };
+      });
     case "mcpToolCall":
-      return {
+      return mcpToolCall({
         id: item.id,
-        name: mcpToolCallName({
-          server: item.server,
-          tool: item.tool,
-          stellaServer,
-        }),
         input: item.arguments ?? {},
-      };
+        server: item.server,
+        stellaServer,
+        tool: item.tool,
+      });
     case "webSearch":
-      return {
-        id: item.id,
+      return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.webSearch,
         input: { query: item.query },
-      };
+      });
+    case "imageView":
+      // The file's name; the image itself stays here.
+      return nativeToolCall(item.id, {
+        name: HARNESS_TOOL_NAMES.nativeTool,
+        input: {
+          tool: IMAGE_VIEW_TOOL,
+          detail: { kind: "image", path: item.path },
+        },
+      });
     default:
       item satisfies never;
       return panic("Unhandled Codex tool item");
   }
 };
+
+/** Codex's own name for the tool that views a local image. */
+const IMAGE_VIEW_TOOL = "view_image";
+
+/**
+ * The step of a subagent a spawn call started. Codex reports the prompt and
+ * the model it asked for, and neither a description nor a kind of agent, so
+ * the step names nothing beyond being a subagent; the prompt stays here.
+ */
+export const subagentCall = (
+  item: Extract<CodexItem, { type: "collabAgentToolCall" }>,
+): HarnessToolCall =>
+  nativeToolCall(item.id, {
+    name: HARNESS_TOOL_NAMES.nativeTool,
+    input: { tool: item.tool, detail: { kind: "subagent", description: "" } },
+  });
+
+/** How a subagent's step ended; what the subagent reported stays here. */
+export const subagentResult = (
+  outcome: CodexAgentOutcome,
+): HarnessToolResult => ({
+  content: chatLocalRunToolResultContent({
+    name: HARNESS_TOOL_NAMES.nativeTool,
+    result: { status: outcome === "failed" ? "failed" : "completed" },
+  }),
+  status: outcome,
+});
+
+/**
+ * Codex's own name for the tool that updates its plan, as a Claude
+ * `TodoWrite` is named after the tool.
+ */
+const PLAN_TOOL = "update_plan";
+
+/**
+ * A plan update as a completed step: its steps' titles, never their
+ * statuses or the explanation around them. Each update is its own step, so
+ * `sequence` (the update's number in the turn) keeps the ids apart.
+ */
+export const planUpdateStep = (
+  update: CodexPlanUpdate,
+  sequence: number,
+): { toolCall: HarnessToolCall; result: HarnessToolResult } => ({
+  toolCall: nativeToolCall(`${update.turnId}:plan:${String(sequence)}`, {
+    name: HARNESS_TOOL_NAMES.nativeTool,
+    input: {
+      tool: PLAN_TOOL,
+      detail: { kind: "plan", items: update.plan.map(({ step }) => step) },
+    },
+  }),
+  result: {
+    content: chatLocalRunToolResultContent({
+      name: HARNESS_TOOL_NAMES.nativeTool,
+      result: { status: "completed" },
+    }),
+    status: "succeeded",
+  },
+});
 
 const status = (failed: boolean): HarnessToolResult["status"] =>
   failed ? "failed" : "succeeded";
@@ -163,30 +281,51 @@ const mcpResult = (
 export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
   switch (item.type) {
     case "commandExecution":
+      // The exit code and status only; the command's output stays here.
       return {
-        content: JSON.stringify({
-          aggregated_output: item.aggregatedOutput ?? "",
-          ...(typeof item.exitCode === "number"
-            ? { exit_code: item.exitCode }
-            : {}),
-          status: EXEC_STATUS[item.status],
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.commandExecution,
+          result: {
+            status: EXEC_STATUS[item.status],
+            ...(typeof item.exitCode === "number"
+              ? { exit_code: item.exitCode }
+              : {}),
+          },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
+        ...localOutputOf(item),
       };
     case "fileChange":
       return {
-        content: JSON.stringify({
-          changes: fileChanges(item),
-          status: EXEC_STATUS[item.status],
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.fileChange,
+          result: {
+            changes: fileChanges(item),
+            status: EXEC_STATUS[item.status],
+          },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
+        ...localOutputOf(item),
       };
     case "mcpToolCall":
       return mcpResult(item);
     case "webSearch":
       return {
-        content: JSON.stringify({ status: "completed" }),
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.webSearch,
+          result: { status: "completed" },
+        }),
         status: "succeeded",
+      };
+    case "imageView":
+      return {
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.nativeTool,
+          result: { status: "completed" },
+        }),
+        status: "succeeded",
+        // The file it viewed, for the member to open on this computer.
+        localOutput: { type: "image", path: item.path },
       };
     default:
       item satisfies never;

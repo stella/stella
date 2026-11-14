@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
+  DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_LIMITS,
@@ -13,19 +14,32 @@ import {
   type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
+  type DesktopRunnerLinkedFolder,
+  type DesktopRunnerReasoningEffort,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
 
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
+import {
+  type FolderRestoreView,
+  readTurnFolderRestore,
+  type RequestedFolderRestore,
+  requestFolderRestore,
+  type TurnFolderRestore,
+} from "@/api/lib/desktop-runner/folder-restores";
+import { openRunOutputKey } from "@/api/lib/desktop-runner/output-keys";
 import {
   type RunAnswerMessage,
   sealRunAnswer,
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
   type AnsweredRequest,
+  approveLinkedFolder,
   type ChatRunBinding,
   type ChatRunForRequest,
   type DesktopRunnerDb,
@@ -38,8 +52,12 @@ import {
   readChatRunSession,
   readConnectedRunners,
   readMemberRunners,
+  readOpenRunChatThread,
   readRun,
+  readRunOutputFile,
+  readRunOutputKey,
   readStoredRunEvents,
+  readThreadBackgroundTasks,
   recordChatReadSeq,
   type RunOwner,
   type StoredRunEvent,
@@ -74,7 +92,14 @@ type RunApproval = Extract<
 
 /** Which of a member's computers can take a run of `harness`. */
 export type PickedDesktop =
-  | { type: "available"; desktopId: string; harness: ReadyHarnessReport }
+  | {
+      type: "available";
+      desktopId: string;
+      harness: ReadyHarnessReport;
+      /** The computer's linked folders, and those runs may work in. */
+      linkedFolders: readonly DesktopRunnerLinkedFolder[];
+      approvedFolderIds: readonly string[];
+    }
   /** No computer of the member has an open runner socket. */
   | { type: "no_computer" }
   /** The most recently seen computer cannot run the harness now. */
@@ -84,21 +109,39 @@ export type PickedDesktop =
       report: DesktopRunnerHarnessReport | null;
     };
 
+/** A file a run copies: where it lands and which stored file it is. */
+export type LocalRunAttachment = {
+  path: string;
+  fileId: string;
+  fileName: string;
+  s3Key: string;
+};
+
 export type StartLocalRunInput = {
   owner: RunOwner;
   desktopId: string;
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  /** The effort the run asks the model for; the computer must report it. */
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** How much the run asks before it acts; the computer must report it. */
   approvals: DesktopRunnerApprovalMode;
   harnessSessionId: string | null;
   instructions: string;
   messages: RunStart["messages"];
+  /** Files to copy into the run's folder; each link is signed on every send. */
+  attachments: readonly LocalRunAttachment[];
   /** Where the run reaches the workspace; its token is minted on every send. */
   mcp: Omit<RunStart["mcp"], "token" | "expiresAt">;
   /** Workspaces already authorized for this member and run. */
   workspaceIds: readonly SafeId<"workspace">[];
+  /**
+   * A folder linked on the computer for the run to work in, which the
+   * computer must report available and the member must have let runs use;
+   * `null` for the chat's own folder.
+   */
+  linkedFolderId: string | null;
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
 };
@@ -112,7 +155,12 @@ export type StartLocalRunOutcome =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "reasoning_effort_unavailable" }
   | { type: "approvals_unavailable" }
+  /** The chat's folder is being restored on its computer. */
+  | { type: "folder_busy" }
+  /** The linked folder is not available, or runs may not work in it yet. */
+  | { type: "folder_unavailable" }
   /** The message would not fit one frame, even with the longest token. */
   | { type: "too_large" };
 
@@ -133,12 +181,23 @@ export type DesktopRunnerEventPage = {
  * with it fits a frame with any token.
  */
 const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
+const ATTACHMENT_LINK_SHAPE = `https://${"l".repeat(
+  DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH - "https://".length,
+)}`;
+/** A run's output key, derived when the command is sent. */
+const OUTPUT_KEY_SHAPE = "0".repeat(64);
 
 /** Whether `message`, as sent, fits one frame. */
 const fitsOneFrame = (message: unknown) =>
   Buffer.byteLength(JSON.stringify(message)) <= DESKTOP_RUNNER_MAX_FRAME_BYTES;
 const MAX_EVENT_PAGE = 500;
 const MAX_CANDIDATE_RUNNERS = 10;
+/**
+ * How long an undo waits for its computer's socket to take it. A computer that
+ * is away is refused at once; this only covers a socket that drops in between,
+ * so the files never change long after the member asked.
+ */
+const FOLDER_RESTORE_WAIT_MS = 2 * 60_000;
 
 type ControlOptions = {
   db: DesktopRunnerDb;
@@ -173,13 +232,18 @@ const invalid = (
 const seenSince = ({ now, timing }: ControlDeps) =>
   new Date(now().getTime() - timing.runnerFreshnessMs);
 
-type PickDesktopOptions = { owner: RunOwner; harness: AgentHarness };
+type PickDesktopOptions = {
+  owner: RunOwner;
+  harness: AgentHarness;
+  /** Only this computer, as a turn in a folder linked on it needs. */
+  desktopId?: string;
+};
 
 const pickDesktop = async (
   deps: ControlDeps,
-  { owner, harness }: PickDesktopOptions,
+  { owner, harness, desktopId }: PickDesktopOptions,
 ): Promise<Result<PickedDesktop, DatabaseError>> => {
-  const runners = await Result.tryPromise({
+  const read = await Result.tryPromise({
     try: async () =>
       await readConnectedRunners(deps.db, {
         ...owner,
@@ -188,10 +252,14 @@ const pickDesktop = async (
       }),
     catch: toDatabaseError,
   });
-  if (runners.isErr()) {
-    return runners;
+  if (read.isErr()) {
+    return read;
   }
-  for (const runner of runners.value) {
+  const runners =
+    desktopId === undefined
+      ? read.value
+      : read.value.filter((runner) => runner.desktopId === desktopId);
+  for (const runner of runners) {
     const report = runner.harnesses.find(({ id }) => id === harness);
     // Only what the computer reports `ready` is routed to.
     if (report?.state === DESKTOP_RUNNER_HARNESS_STATE.ready) {
@@ -199,10 +267,12 @@ const pickDesktop = async (
         type: "available",
         desktopId: runner.desktopId,
         harness: report,
+        linkedFolders: runner.linkedFolders,
+        approvedFolderIds: runner.approvedFolderIds,
       });
     }
   }
-  const latest = runners.value.at(0);
+  const latest = runners.at(0);
   return Result.ok(
     latest === undefined
       ? { type: "no_computer" }
@@ -214,32 +284,74 @@ const pickDesktop = async (
   );
 };
 
+/**
+ * What a run is told when its chat's folder was put back since the last run:
+ * written by the server, so the harness knows its earlier edits are gone.
+ */
+export const FOLDER_RESTORED_NOTE =
+  "Note from stella: the member undid the file changes of an earlier reply, so the working folder is as it was before that reply. Read files again before relying on what you saw or wrote earlier.";
+
+/** The messages with the note added to the newest member message. */
+const withRestoredNote = (
+  messages: RunStart["messages"],
+): RunStart["messages"] => {
+  const note = { type: "text", content: FOLDER_RESTORED_NOTE };
+  const last = messages.at(-1);
+  if (last?.role !== "user") {
+    return [...messages, { role: "user", content: [note] }];
+  }
+  const content: unknown = last["content"];
+  let parts: readonly unknown[] = [];
+  if (typeof content === "string") {
+    parts = [{ type: "text", content }];
+  } else if (Array.isArray(content)) {
+    parts = content;
+  }
+  return [...messages.slice(0, -1), { ...last, content: [...parts, note] }];
+};
+
 const startRun = async (
   deps: ControlDeps,
   input: StartLocalRunInput,
 ): Promise<Result<StartLocalRunOutcome, DesktopRunnerControlError>> => {
+  const chat = input.chat ?? null;
   const runId = Bun.randomUUIDv7();
   const message = {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runStart,
     runId,
     // A chat's turns share a folder; a run outside a chat keeps its own.
     folderId: input.chat?.threadId ?? runId,
+    linkedFolderId: input.linkedFolderId,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,
+    reasoningEffort: input.reasoningEffort,
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
     messages: input.messages,
+    attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
     policy: { network: "open", fs: "workspace", approvals: input.approvals },
     mcp: input.mcp,
   } as const;
+  // A chat's run tells about a restore of its folder when one is not told yet;
+  // the admission picks which is stored. The noted one is the larger, so its
+  // check covers both.
+  const withNote =
+    chat === null
+      ? message
+      : { ...message, messages: withRestoredNote(input.messages) };
   const checked = v.safeParse(desktopRunnerServerMessageSchema, {
-    ...message,
+    ...withNote,
+    attachments: input.attachments.map(({ path }) => ({
+      path,
+      url: ATTACHMENT_LINK_SHAPE,
+    })),
     mcp: {
       ...message.mcp,
       token: TOKEN_SHAPE,
       expiresAt: deps.now().toISOString(),
     },
+    outputKey: OUTPUT_KEY_SHAPE,
   });
   if (!checked.success) {
     return Result.err(invalid(message.type, checked.issues));
@@ -256,10 +368,12 @@ const startRun = async (
         harness: input.harness,
         harnessVersion: input.harnessVersion,
         model: input.model,
+        reasoningEffort: input.reasoningEffort,
         approvals: input.approvals,
         workspaceIds: input.workspaceIds,
-        chat: input.chat ?? null,
-        payload: message,
+        linkedFolderId: input.linkedFolderId,
+        chat,
+        payload: { plain: message, withNote },
         now: deps.now(),
         leaseMs: deps.timing.leaseMs,
         seenSince: seenSince(deps),
@@ -395,6 +509,55 @@ const queue = async (
   return Result.ok({ type: "queued" });
 };
 
+type TurnRestoreOptions = {
+  owner: RunOwner;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+};
+
+export type RequestFolderRestoreOutcome =
+  | { type: "accepted"; restore: FolderRestoreView }
+  | Extract<RequestedFolderRestore, { type: "refused" }>;
+
+/**
+ * Ask the run's computer to put the chat's folder back as it was before the
+ * turn; the restore id is minted here. A repeat answers the turn's restore
+ * that is still going or done.
+ */
+const requestRestore = async (
+  deps: ControlDeps,
+  options: TurnRestoreOptions,
+): Promise<Result<RequestFolderRestoreOutcome, DatabaseError>> => {
+  const requested = await Result.tryPromise({
+    try: async () =>
+      await requestFolderRestore(deps.db, {
+        ...options,
+        restoreId: Bun.randomUUIDv7(),
+        now: deps.now(),
+        seenSince: seenSince(deps),
+        expiresInMs: FOLDER_RESTORE_WAIT_MS,
+      }),
+    catch: toDatabaseError,
+  });
+  if (requested.isErr()) {
+    return requested;
+  }
+  const outcome = requested.value;
+  switch (outcome.type) {
+    case "queued":
+      deps.doorbell.ring(outcome.holder);
+      return Result.ok({ type: "accepted", restore: outcome.restore });
+    case "existing":
+      return Result.ok({ type: "accepted", restore: outcome.restore });
+    case "refused":
+      return Result.ok(outcome);
+    default: {
+      outcome satisfies never;
+      return panic("Unknown folder restore outcome");
+    }
+  }
+};
+
 type RunOptions = { owner: RunOwner; runId: string };
 type ReadEventsOptions = RunOptions & { afterSeq: number; limit: number };
 
@@ -423,6 +586,25 @@ const readEvents = async (
   });
 };
 
+type BackgroundTasksOptions = {
+  owner: RunOwner;
+  threadId: SafeId<"chatThread">;
+};
+
+const readBackgroundTasks = async (
+  deps: ControlDeps,
+  { owner, threadId }: BackgroundTasksOptions,
+): Promise<Result<number, DatabaseError>> =>
+  await Result.tryPromise({
+    try: async () =>
+      await readThreadBackgroundTasks(deps.db, {
+        owner,
+        threadId,
+        freshSince: seenSince(deps),
+      }),
+    catch: toDatabaseError,
+  });
+
 /**
  * What the rest of the API uses to run work on a member's computer: pick a
  * computer, queue commands for a run, read what the run produced. Commands are
@@ -446,6 +628,21 @@ export const createDesktopRunnerControl = ({
     pickDesktop: async (options: PickDesktopOptions) =>
       await pickDesktop(deps, options),
     startRun: async (input: StartLocalRunInput) => await startRun(deps, input),
+    /**
+     * Let runs work in a folder linked on one of the member's computers,
+     * recording its audit event in the same transaction. `false` when that
+     * computer does not report the folder.
+     */
+    approveLinkedFolder: async (options: {
+      owner: RunOwner;
+      desktopId: string;
+      linkId: string;
+      recordAuditEvent: AuditRecorder;
+    }): Promise<Result<boolean, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await approveLinkedFolder(db, options),
+        catch: toDatabaseError,
+      }),
     /** Add a user message to a running run; idempotent on `inputId`. */
     sendInput: async ({
       owner,
@@ -516,6 +713,58 @@ export const createDesktopRunnerControl = ({
         try: async () => await readRun(db, { owner, runId }),
         catch: toDatabaseError,
       }),
+    /**
+     * The output key of the owner's run, to sign a grant with; `null` for a
+     * run that is not theirs or keeps no key. Never logged or answered.
+     */
+    readRunOutputKey: async ({
+      owner,
+      runId,
+    }: RunOptions): Promise<Result<string | null, DatabaseError>> => {
+      const stored = await Result.tryPromise({
+        try: async () => await readRunOutputKey(db, { owner, runId }),
+        catch: toDatabaseError,
+      });
+      if (stored.isErr()) {
+        return Result.err(stored.error);
+      }
+      if (stored.value === null) {
+        return Result.ok(null);
+      }
+      const opened = await openRunOutputKey(
+        owner.organizationId,
+        stored.value.sealedOutputKey,
+      );
+      return Result.ok(opened.type === "opened" ? opened.outputKey : null);
+    },
+    /** The chat thread of the owner's run that is still going. */
+    readOpenRunChatThread: async (
+      options: RunOptions,
+    ): Promise<Result<SafeId<"chatThread"> | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readOpenRunChatThread(db, options),
+        catch: toDatabaseError,
+      }),
+    /** A file a run reported, if it is the owner's and in this thread. */
+    readRunOutputFile: async (
+      options: Parameters<typeof readRunOutputFile>[1],
+    ) =>
+      await Result.tryPromise({
+        try: async () => await readRunOutputFile(db, options),
+        catch: toDatabaseError,
+      }),
+    /** Record what the server answered the run for a tool an app presents. */
+    recordAppCall: async (options: Parameters<typeof recordAppCall>[1]) =>
+      await Result.tryPromise({
+        try: async () => await recordAppCall(db, options),
+        catch: toDatabaseError,
+      }),
+    /** The server's answer for a call the run reported, paired with it once. */
+    pairAppCall: async (options: Parameters<typeof pairAppCall>[1]) =>
+      await Result.tryPromise({
+        try: async () => await pairAppCall(db, options),
+        catch: toDatabaseError,
+      }),
     /** The run's stored messages after `afterSeq`, in sequence order. */
     readEvents: async (options: ReadEventsOptions) =>
       await readEvents(deps, options),
@@ -545,6 +794,13 @@ export const createDesktopRunnerControl = ({
         })),
       );
     },
+    /**
+     * What the chat's runs left running in the background on the member's
+     * computers, counted only for a computer whose socket is fresh, the
+     * same rule `readMemberRunners` uses.
+     */
+    readBackgroundTasks: async (options: BackgroundTasksOptions) =>
+      await readBackgroundTasks(deps, options),
     /** The harness session a thread's next turn on this computer resumes. */
     readChatRunSession: async (
       options: Parameters<typeof readChatRunSession>[1],
@@ -559,6 +815,18 @@ export const createDesktopRunnerControl = ({
     ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await readChatRunForRequest(db, options),
+        catch: toDatabaseError,
+      }),
+    /** Undo the file changes of the thread's newest turn on its computer. */
+    requestFolderRestore: async (options: TurnRestoreOptions) =>
+      await requestRestore(deps, options),
+    /** Whether the turn can be undone, and its undo; `null` for another's turn. */
+    readFolderRestore: async (
+      options: TurnRestoreOptions,
+    ): Promise<Result<TurnFolderRestore | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () =>
+          await readTurnFolderRestore(db, { ...options, now: deps.now() }),
         catch: toDatabaseError,
       }),
     /** Record how far a chat turn read the run; it only moves forward. */

@@ -38,11 +38,7 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
-import {
-  classifyFailure,
-  declareFailureClass,
-  type FailureReason,
-} from "@stll/errors";
+import { declareFailureClass, type FailureReason } from "@stll/errors";
 
 import type {
   ImmediatePublisherSlotResult,
@@ -227,31 +223,28 @@ export const recordDocumentPacingOutcome = (
  * under one event per slow read. `Result.tryPromise` reports a rejection
  * as an `UnhandledException` carrying the original as its cause, so the
  * label is read through that wrapper as well as directly.
+ *
+ * The request's public-read scope can run out before this budget does: its
+ * signal then aborts the fetch, or a read that starts after it, with the
+ * signal's own `TimeoutError`. That is the same designed expiry, reached
+ * through the caller's deadline instead of this one.
  */
 const isReadBudgetExpiry = (error: unknown): boolean => {
   const raised = error instanceof UnhandledException ? error.cause : error;
-  return TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL;
+  return (
+    (TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL) ||
+    (raised instanceof DOMException && raised.name === "TimeoutError")
+  );
 };
 
-/**
- * Grades the expiry of a fetch's wall-clock budget. A publisher too slow for
- * the budget is the source's state rather than a fault here: the reader was
- * already answered and the queue keeps the work. The fetch rejects with the
- * budget's own abort reason, so that reason carries the grade, and a failure
- * the budget did not cause keeps its own.
- */
-export const gradedDocumentFetchBudget = (budget: AbortSignal): AbortSignal => {
-  budget.addEventListener(
-    "abort",
-    () => {
-      const reason: unknown = budget.reason;
-      if (typeof reason === "object" && reason !== null) {
-        classifyFailure(reason, "upstream_unavailable");
-      }
-    },
-    { once: true },
-  );
-  return budget;
+/** Record a read-through failure unless it is the read running out of time. */
+const recordReadFailure = (
+  error: unknown,
+  decisionId: SafeId<"caseLawDecision">,
+): void => {
+  if (!isReadBudgetExpiry(error)) {
+    recordFailure(error, decisionId);
+  }
 };
 
 type FetchDeferredDocumentOptions = {
@@ -281,7 +274,7 @@ const runFetch = async ({
         deps.recordPacingOutcome(decision.id, budgeted.status);
         return null;
       case "failed":
-        recordFailure(budgeted.error, decision.id);
+        recordReadFailure(budgeted.error, decision.id);
         return null;
       case "completed":
         if (
@@ -307,7 +300,7 @@ const runFetch = async ({
   });
 
   if (Result.isError(outcome)) {
-    recordFailure(outcome.error, decision.id);
+    recordReadFailure(outcome.error, decision.id);
     return null;
   }
 
@@ -373,7 +366,7 @@ export const readThroughDeferredDocument = async ({
         async () => await deps.recordRequest(decision.id),
       );
       if (Result.isError(recorded)) {
-        recordFailure(recorded.error, decision.id);
+        recordReadFailure(recorded.error, decision.id);
       }
     }
 
@@ -409,9 +402,7 @@ export const readThroughDeferredDocument = async ({
       ),
   );
   if (Result.isError(outcome)) {
-    if (!isReadBudgetExpiry(outcome.error)) {
-      recordFailure(outcome.error, decision.id);
-    }
+    recordReadFailure(outcome.error, decision.id);
     return null;
   }
 

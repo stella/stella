@@ -59,8 +59,9 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
+  BackgroundTasks, CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  SidecarRunStart,
+  RestoreOutcome, SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -69,9 +70,9 @@ use protocol::{
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
-  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
-  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
-  UnavailableHarness, UnsupportedHarness,
+  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, ReasoningEffort,
+  RejectReason, RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh,
+  SignedOutHarness, UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -202,6 +203,9 @@ pub(crate) struct SidecarSettings {
   /// How long `shutdown` waits for the holders to stop their runs.
   pub(crate) shutdown_grace: Duration,
   pub(crate) backoff: ReconnectBackoff,
+  /// Folders only holders of earlier versions may still use, removed once
+  /// none of them is left (see [`remove_retired_dirs_when_alone`]).
+  pub(crate) retired_dirs: Vec<PathBuf>,
 }
 
 /// One thing a run produced, in order; the runner's `RunOutput`.
@@ -257,10 +261,12 @@ pub(crate) enum ResumeError {
 }
 
 type ProbeReply = oneshot::Sender<Result<ProbeOutcome, ProbeError>>;
+type RestoreReply = oneshot::Sender<Result<RestoreOutcome, ProbeError>>;
 
 /// One host message, serialized within the line limit, newline included.
 /// Commands are encoded before they are queued, so the supervisor only ever
 /// writes lines within the limit and a write fails on I/O alone.
+#[derive(Clone)]
 struct HostLine(Vec<u8>);
 
 impl HostLine {
@@ -295,12 +301,18 @@ enum Control {
     line: HostLine,
     reply: ProbeReply,
   },
+  Restore {
+    request_id: String,
+    line: HostLine,
+    reply: RestoreReply,
+  },
   Forward {
     run_id: String,
     line: HostLine,
   },
   Ack(Ack),
   WatchProcesses(mpsc::Sender<HarnessProcess>),
+  WatchBackground(mpsc::UnboundedSender<BackgroundTasks>),
   GrantProcess(String),
   #[cfg_attr(
     not(all(test, unix)),
@@ -345,7 +357,10 @@ impl HarnessSidecar {
         next_link: 0,
         runs: HashMap::new(),
         probes: HashMap::new(),
+        restores: HashMap::new(),
         processes: None,
+        background: None,
+        background_counts: HashMap::new(),
       }
       .run(),
     );
@@ -359,6 +374,18 @@ impl HarnessSidecar {
   ) -> Result<mpsc::Receiver<HarnessProcess>, SidecarUnavailable> {
     let (reports, receiver) = mpsc::channel(PROCESS_QUEUE);
     self.control(Control::WatchProcesses(reports))?;
+    Ok(receiver)
+  }
+
+  /// What each kept harness process runs in the background, from now on; a
+  /// later call replaces the earlier watcher. Unbounded: the watcher keeps
+  /// only the latest count of a run, so a dropped report (a 0 above all)
+  /// would leave it showing work that ended.
+  pub(crate) fn watch_background(
+    &self,
+  ) -> Result<mpsc::UnboundedReceiver<BackgroundTasks>, SidecarUnavailable> {
+    let (reports, receiver) = mpsc::unbounded_channel();
+    self.control(Control::WatchBackground(reports))?;
     Ok(receiver)
   }
 
@@ -491,6 +518,28 @@ impl HarnessSidecar {
     self.control(Control::Forward { run_id, line })
   }
 
+  /// Put a run folder back as the checkpoint of `restore.run_id` saved it.
+  /// The caller makes sure no run uses the folder meanwhile.
+  pub(crate) async fn restore_folder(
+    &self,
+    restore: SidecarFolderRestore,
+  ) -> Result<RestoreOutcome, ProbeError> {
+    let request_id = restore.request_id.clone();
+    let line = HostLine::encode(&HostMessage::FolderRestore(restore))
+      .map_err(ProbeError::Unavailable)?;
+    let (reply, answer) = oneshot::channel();
+    self
+      .control(Control::Restore {
+        request_id,
+        line,
+        reply,
+      })
+      .map_err(ProbeError::Unavailable)?;
+    answer.await.map_err(|_supervisor_gone| {
+      ProbeError::Unavailable(SidecarUnavailable::Stopped)
+    })?
+  }
+
   /// The harness's version, account state and models, without a prompt.
   pub(crate) async fn probe(
     &self,
@@ -554,6 +603,13 @@ pub(crate) fn harness_report(
         .map(|model| HarnessModel {
           id: model.id.clone(),
           label: model.label.clone(),
+          is_default: model.is_default,
+          // Each effort once, in the contract's order.
+          reasoning_efforts: ReasoningEffort::ALL
+            .iter()
+            .copied()
+            .filter(|effort| model.reasoning_efforts.contains(effort))
+            .collect(),
         })
         .collect();
       if models.is_empty() {
@@ -877,6 +933,14 @@ struct Run {
   claim: Option<Claim>,
 }
 
+/// A folder restore sent to a holder and not answered yet.
+struct PendingRestore {
+  holder: PathBuf,
+  /// Sent again as it was on a new connection to the holder.
+  line: HostLine,
+  reply: RestoreReply,
+}
+
 struct Supervisor {
   settings: SidecarSettings,
   /// Where holders listen; an error leaves every holder unreachable.
@@ -888,8 +952,18 @@ struct Supervisor {
   next_link: u64,
   runs: HashMap<String, Run>,
   probes: HashMap<String, (PathBuf, ProbeReply)>,
+  /// Folder restores waiting for their holder's answer. One outlives a dropped
+  /// connection: the holder may still be writing the folder, so it is asked
+  /// again on the next connection and fails only once the holder is gone.
+  restores: HashMap<String, PendingRestore>,
   /// Where reported harness processes go.
   processes: Option<mpsc::Sender<HarnessProcess>>,
+  /// Where background task counts go.
+  background: Option<mpsc::UnboundedSender<BackgroundTasks>>,
+  /// Each count above 0 and the holder it came from, by run id: a watcher
+  /// that comes later hears them, and a holder that is lost takes its kept
+  /// processes with it.
+  background_counts: HashMap<String, (PathBuf, u32)>,
 }
 
 impl Supervisor {
@@ -918,11 +992,15 @@ impl Supervisor {
           Some(Control::Probe { request_id, line, reply }) => {
             self.probe(request_id, &line, reply).await;
           }
+          Some(Control::Restore { request_id, line, reply }) => {
+            self.restore(request_id, line, reply).await;
+          }
           Some(Control::Forward { run_id, line }) => {
             self.forward(&run_id, &line).await;
           }
           Some(Control::Ack(ack)) => self.ack(ack).await,
           Some(Control::WatchProcesses(reports)) => self.processes = Some(reports),
+          Some(Control::WatchBackground(reports)) => self.watch_background(reports),
           Some(Control::GrantProcess(id)) => self.grant_process(id).await,
         },
         Some(event) = self.events.recv() => self.event(event).await,
@@ -964,6 +1042,7 @@ impl Supervisor {
       self.attach(current.clone(), opened, LinkRole::Current);
     }
     let Ok(entries) = std::fs::read_dir(&self.settings.holder_root) else {
+      self.remove_retired_dirs();
       return;
     };
     for entry in entries.flatten() {
@@ -986,6 +1065,16 @@ impl Supervisor {
         Err(OpenError::Failed | OpenError::Incompatible | OpenError::NoEndpoint) => {}
       }
     }
+    self.remove_retired_dirs();
+  }
+
+  /// Remove the retired folders once no older holder is left to use them.
+  fn remove_retired_dirs(&self) {
+    remove_retired_dirs_when_alone(
+      &self.settings.holder_root,
+      &self.current_dir(),
+      &self.settings.retired_dirs,
+    );
   }
 
   /// Where each run this supervisor delivers on `dir` stopped.
@@ -1121,6 +1210,7 @@ impl Supervisor {
     match self.open(&dir).await {
       Ok(opened) => {
         self.attach(dir.clone(), opened, LinkRole::Current);
+        self.resend_restores(&dir).await;
         return Some(dir);
       }
       Err(OpenError::Incompatible) => {
@@ -1149,6 +1239,7 @@ impl Supervisor {
             "harness holder started"
           );
           self.attach(dir.clone(), opened, LinkRole::Current);
+          self.resend_restores(&dir).await;
           return Some(dir);
         }
         Err(OpenError::Incompatible | OpenError::NoEndpoint) => return None,
@@ -1255,6 +1346,38 @@ impl Supervisor {
     self.write_line(&dir, line).await;
   }
 
+  async fn restore(&mut self, request_id: String, line: HostLine, reply: RestoreReply) {
+    let Some(dir) = self.current().await else {
+      let _delivered = reply.send(Err(ProbeError::SidecarDown));
+      return;
+    };
+    self.write_line(&dir, &line).await;
+    self.restores.insert(
+      request_id,
+      PendingRestore {
+        holder: dir,
+        line,
+        reply,
+      },
+    );
+  }
+
+  /// Ask a holder again for the restores it was sent before its connection
+  /// dropped or broke: on every new connection to it, whether a reconnect or
+  /// a later call that opens one. The holder answers one still running when it
+  /// ends, and one it finished as `restored`.
+  async fn resend_restores(&mut self, dir: &Path) {
+    let lines: Vec<HostLine> = self
+      .restores
+      .values()
+      .filter(|pending| pending.holder == dir)
+      .map(|pending| pending.line.clone())
+      .collect();
+    for line in lines {
+      self.write_line(dir, &line).await;
+    }
+  }
+
   async fn forward(&mut self, run_id: &str, line: &HostLine) {
     let Some(run) = self.runs.get(run_id) else {
       tracing::warn!(target: LOG_TARGET, "a command named a run no holder holds");
@@ -1314,7 +1437,7 @@ impl Supervisor {
       return;
     }
     match event {
-      LinkEvent::Message(message) => self.dispatch(message),
+      LinkEvent::Message(message) => self.dispatch(&dir, message),
       LinkEvent::Broken(error) => {
         // The kind only: a line may carry run data.
         let kind = match error {
@@ -1328,6 +1451,8 @@ impl Supervisor {
         };
         tracing::error!(target: LOG_TARGET, kind, "harness holder broke the protocol");
         self.links.remove(&dir);
+        // Its restores stay pending: the holder may still be writing the
+        // folder, and the next connection to it asks for them again.
         self.fail_holder(&dir);
       }
       LinkEvent::Closed => self.lost(&dir, link).await,
@@ -1355,6 +1480,7 @@ impl Supervisor {
           if role == LinkRole::Draining {
             self.write(dir, &HostMessage::Drain).await;
           }
+          self.resend_restores(dir).await;
           return;
         }
         Err(OpenError::Gone) => {
@@ -1369,15 +1495,22 @@ impl Supervisor {
     }
     tracing::warn!(target: LOG_TARGET, "harness holder is unreachable; its runs failed");
     self.fail_holder(dir);
+    // A restore fails only once nothing listens for the holder: one that is
+    // alive but unreachable may still be writing the folder, which stays
+    // held until it answers.
+    if gone {
+      self.fail_restores(dir);
+    }
     // As in `discover`: only a holder nothing listens for any more loses its
     // folder. One that is alive but unreachable keeps its secret and
     // endpoint, so a later app can still reach it and resume its runs.
     if role == LinkRole::Draining && gone {
       remove_holder_dir(dir);
+      self.remove_retired_dirs();
     }
   }
 
-  fn dispatch(&mut self, message: SidecarMessage) {
+  fn dispatch(&mut self, dir: &Path, message: SidecarMessage) {
     match message {
       SidecarMessage::Hello(_) => {
         tracing::warn!(target: LOG_TARGET, "harness holder repeated its hello");
@@ -1424,26 +1557,55 @@ impl Supervisor {
           },
         );
       }
+      SidecarMessage::FolderRestored(restored) => {
+        match self.restores.remove(&restored.request_id) {
+          Some(pending) => {
+            let _delivered = pending.reply.send(Ok(restored.outcome));
+          }
+          None => {
+            tracing::warn!(
+              target: LOG_TARGET,
+              outcome = restored.outcome.wire_name(),
+              "harness holder answered a folder restore nobody waits for"
+            );
+          }
+        }
+      }
+      SidecarMessage::BackgroundTasks(tasks) => {
+        if tasks.count == 0 {
+          self.background_counts.remove(&tasks.run_id);
+        } else {
+          self
+            .background_counts
+            .insert(tasks.run_id.clone(), (dir.to_path_buf(), tasks.count));
+        }
+        self.report_background(tasks);
+      }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
           target: LOG_TARGET,
           reason = rejected.reason.wire_name(),
-          message_type = rejected.message_type.as_deref().unwrap_or(""),
+          message_type = HostMessage::logged_tag(rejected.message_type.as_deref()),
           "harness holder rejected a message"
         );
-        // A run the holder would not take, or no longer holds.
-        let refused_run = matches!(
-          rejected.message_type.as_deref(),
-          Some("run.start" | "resume" | "hello")
-        ) && matches!(
-          rejected.reason,
-          Rejection::Draining
-            | Rejection::AtCapacity
-            | Rejection::DuplicateRun
-            | Rejection::UnknownRun
-        );
-        if let (true, Some(run_id)) = (refused_run, rejected.run_id) {
-          self.fail_run(&run_id);
+        // A run start the holder refused, for any reason, never begins. The
+        // holder names the run when the line named it validly; otherwise it
+        // is among those that have reported nothing yet.
+        let refused_start = rejected.message_type.as_deref() == Some("run.start");
+        // A run the holder no longer holds.
+        let refused_run = refused_start
+          || matches!(rejected.message_type.as_deref(), Some("resume" | "hello"))
+            && matches!(
+              rejected.reason,
+              Rejection::Draining
+                | Rejection::AtCapacity
+                | Rejection::DuplicateRun
+                | Rejection::UnknownRun
+            );
+        match rejected.run_id {
+          Some(run_id) if refused_run => self.fail_run(&run_id),
+          None if refused_start => self.fail_silent_runs(),
+          _ => {}
         }
       }
     }
@@ -1500,6 +1662,26 @@ impl Supervisor {
     }
   }
 
+  /// A refused start that names no run could be any run still waiting for its
+  /// first message, and none of those may wait for a run that will never begin.
+  fn fail_silent_runs(&mut self) {
+    let silent: Vec<String> = self
+      .runs
+      .iter()
+      .filter(|(_run_id, run)| {
+        run.last_seq == 0
+          && run
+            .claim
+            .as_ref()
+            .is_some_and(|claim| claim.outputs.is_some())
+      })
+      .map(|(run_id, _run)| run_id.clone())
+      .collect();
+    for run_id in silent {
+      self.fail_run(&run_id);
+    }
+  }
+
   /// Every run and probe a gone holder held finishes as failed.
   fn fail_holder(&mut self, dir: &Path) {
     let held: Vec<String> = self
@@ -1512,6 +1694,49 @@ impl Supervisor {
       self.fail_run(&run_id);
     }
     self.fail_probes(dir);
+    self.end_background(dir);
+  }
+
+  /// The holder's kept processes went with it: each count it reported above
+  /// 0 is reported as 0, so no chat keeps showing work that no longer runs.
+  fn end_background(&mut self, dir: &Path) {
+    let ended: Vec<String> = self
+      .background_counts
+      .iter()
+      .filter(|(_run_id, (holder, _count))| holder.as_path() == dir)
+      .map(|(run_id, _count)| run_id.clone())
+      .collect();
+    for run_id in ended {
+      self.background_counts.remove(&run_id);
+      self.report_background(BackgroundTasks { run_id, count: 0 });
+    }
+  }
+
+  /// A new watcher hears every count above 0 a holder reported before it
+  /// came: a holder reports a count when it changes, and on hello.
+  fn watch_background(&mut self, reports: mpsc::UnboundedSender<BackgroundTasks>) {
+    self.background = Some(reports);
+    let held: Vec<BackgroundTasks> = self
+      .background_counts
+      .iter()
+      .map(|(run_id, (_holder, count))| BackgroundTasks {
+        run_id: run_id.clone(),
+        count: *count,
+      })
+      .collect();
+    for tasks in held {
+      self.report_background(tasks);
+    }
+  }
+
+  fn report_background(&self, tasks: BackgroundTasks) {
+    let watched = self
+      .background
+      .as_ref()
+      .is_some_and(|reports| reports.send(tasks).is_ok());
+    if !watched {
+      tracing::warn!(target: LOG_TARGET, "a background task count had no watcher");
+    }
   }
 
   fn fail_probes(&mut self, dir: &Path) {
@@ -1524,6 +1749,20 @@ impl Supervisor {
     for request_id in waiting {
       if let Some((_dir, reply)) = self.probes.remove(&request_id) {
         let _delivered = reply.send(Err(ProbeError::SidecarDown));
+      }
+    }
+  }
+
+  fn fail_restores(&mut self, dir: &Path) {
+    let restoring: Vec<String> = self
+      .restores
+      .iter()
+      .filter(|(_request_id, pending)| pending.holder == dir)
+      .map(|(request_id, _pending)| request_id.clone())
+      .collect();
+    for request_id in restoring {
+      if let Some(pending) = self.restores.remove(&request_id) {
+        let _delivered = pending.reply.send(Err(ProbeError::SidecarDown));
       }
     }
   }
@@ -1548,7 +1787,7 @@ impl Supervisor {
         continue;
       }
       match event {
-        LinkEvent::Message(message) => self.dispatch(message),
+        LinkEvent::Message(message) => self.dispatch(&dir, message),
         LinkEvent::Broken(_) | LinkEvent::Closed => {
           self.links.remove(&dir);
         }
@@ -1557,6 +1796,8 @@ impl Supervisor {
     self.links.clear();
     for dir in dirs {
       self.fail_holder(&dir);
+      // The holders were told to exit and the app is quitting.
+      self.fail_restores(&dir);
     }
   }
 }
@@ -1579,6 +1820,40 @@ fn forget_endpoint(dir: &Path, stale: &OsStr) {
   let file = dir.join(endpoint::ENDPOINT_FILE);
   if std::fs::read_to_string(&file).is_ok_and(|text| OsStr::new(&text) == stale) {
     let _removed = std::fs::remove_file(&file);
+  }
+}
+
+/// Remove `retired` once the bundled version's folder is the only holder
+/// folder left under `holder_root`: an older holder keeps running its runs
+/// after an update, with whatever folders its version used, until it drains
+/// and its folder goes. When the holder folders cannot be listed, the retired
+/// ones stay for a later pass.
+pub(crate) fn remove_retired_dirs_when_alone(
+  holder_root: &Path,
+  current: &Path,
+  retired: &[PathBuf],
+) {
+  if retired.is_empty() {
+    return;
+  }
+  let older_left = match std::fs::read_dir(holder_root) {
+    Ok(entries) => entries.flatten().any(|entry| {
+      let dir = entry.path();
+      dir != current && dir.is_dir()
+    }),
+    Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+  };
+  if older_left {
+    return;
+  }
+  for dir in retired {
+    match std::fs::remove_dir_all(dir) {
+      Ok(()) => {}
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+      Err(error) => {
+        tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a retired run folder was not removed");
+      }
+    }
   }
 }
 
@@ -1663,4 +1938,57 @@ async fn read_messages<R: AsyncRead + Unpin>(
     }
   }
   let _delivered = send(LinkEvent::Closed).await;
+}
+
+#[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
+mod retired_dir_tests {
+  use super::*;
+
+  struct Place(PathBuf);
+
+  impl Place {
+    fn new() -> Self {
+      let root =
+        std::env::temp_dir().join(format!("retired-dirs-{}", uuid::Uuid::new_v4()));
+      std::fs::create_dir_all(root.join("holders/1.5.0")).unwrap();
+      std::fs::create_dir_all(root.join("shared-cache/xdg")).unwrap();
+      Self(root)
+    }
+  }
+
+  impl Drop for Place {
+    fn drop(&mut self) {
+      drop(std::fs::remove_dir_all(&self.0));
+    }
+  }
+
+  #[test]
+  fn a_retired_folder_stays_while_an_older_holder_is_left_and_goes_after() {
+    let place = Place::new();
+    let holders = place.0.join("holders");
+    let current = holders.join("1.5.0");
+    let retired = vec![place.0.join("shared-cache")];
+    std::fs::create_dir_all(holders.join("1.4.0")).unwrap();
+    remove_retired_dirs_when_alone(&holders, &current, &retired);
+    assert!(retired[0].join("xdg").is_dir());
+    std::fs::remove_dir_all(holders.join("1.4.0")).unwrap();
+    remove_retired_dirs_when_alone(&holders, &current, &retired);
+    assert!(!retired[0].exists());
+  }
+
+  #[test]
+  fn a_retired_folder_goes_when_no_holder_ever_ran() {
+    let place = Place::new();
+    let retired = vec![place.0.join("shared-cache")];
+    remove_retired_dirs_when_alone(
+      &place.0.join("no-holders"),
+      &place.0.join("no-holders/1.5.0"),
+      &retired,
+    );
+    assert!(!retired[0].exists());
+  }
 }

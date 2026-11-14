@@ -48,6 +48,8 @@ export const BUDGET_NAMES = [
   "organizations.create.user",
   "dictation.user",
   "dictation.organization",
+  "dictation_cleanup.user",
+  "dictation_cleanup.organization",
   "skills.source.user",
   "skills.source.address",
 ] as const;

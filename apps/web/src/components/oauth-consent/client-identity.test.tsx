@@ -107,6 +107,7 @@ describe("consent client identity", () => {
       ["stella", "stella"],
       ["stella_ios", "stella for iOS"],
       ["stella_cli", "stella CLI"],
+      ["stella_outlook", "stella for Outlook"],
     ] as const) {
       const client = { type: "verified", brand } as const;
       expect(resolveConsentClientIdentity(info(client), FALLBACK_NAME)).toEqual(

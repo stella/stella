@@ -65,6 +65,7 @@ const fileField = (id: string): EntityFieldSnapshot => ({
   id: toSafeId<"field">(id),
   content: sharedSourceFile,
   propertyId: filePropertyId,
+  aiSettlement: null,
 });
 
 const documentWith = (

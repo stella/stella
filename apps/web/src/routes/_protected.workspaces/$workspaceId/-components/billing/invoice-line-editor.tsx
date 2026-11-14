@@ -10,19 +10,19 @@ import {
 } from "@stll/api-contract";
 import { quantityText } from "@stll/invoicing";
 import {
-  currencyMinorUnitDigits,
-  toMajorUnits,
-  toMinorUnits,
-  tryToMinorUnits,
+  formatLocaleDecimalInput,
+  formatLocaleMinorUnitsInput,
+  localeInputText,
+  parseLocaleDecimal,
+  parseLocaleMinorUnits,
 } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
-import { NumberInput } from "@stll/ui/number-input";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
-import { useFormatter } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
@@ -60,6 +60,7 @@ export const InvoiceLineEditor = ({
   const isFlatFeeLine = line.billingPurpose === "flat_fee";
   const t = useTranslations();
   const format = useFormatter();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const invalidate = async () => {
     await Promise.all([
@@ -101,18 +102,49 @@ export const InvoiceLineEditor = ({
         ),
         quantity: v.pipe(
           v.string(),
-          v.regex(new RegExp(INVOICE_LINE_QUANTITY_PATTERN, "u")),
+          v.rawTransform(({ dataset, addIssue, NEVER }) => {
+            const parsed = parseLocaleDecimal({
+              amount: dataset.value,
+              locale,
+              maximumFractionDigits: INVOICE_LINE_INPUT_LIMITS.quantityScale,
+            });
+            if (
+              parsed.isErr() ||
+              !new RegExp(INVOICE_LINE_QUANTITY_PATTERN, "u").test(parsed.value)
+            ) {
+              addIssue({ message: t("billing.invalidNumberFormat") });
+              return NEVER;
+            }
+            return parsed.value;
+          }),
         ),
         unitPrice: v.pipe(
-          v.number(),
-          v.minValue(INVOICE_LINE_INPUT_LIMITS.unitPriceMinMinor),
-          v.check((amount) => tryToMinorUnits({ amount, currency }) !== null),
+          v.string(),
+          v.rawTransform(({ dataset, addIssue, NEVER }) => {
+            const parsed = parseLocaleMinorUnits({
+              amount: dataset.value,
+              currency,
+              locale,
+            });
+            if (
+              parsed.isErr() ||
+              parsed.value < INVOICE_LINE_INPUT_LIMITS.unitPriceMinMinor
+            ) {
+              addIssue({ message: t("billing.invalidNumberFormat") });
+              return NEVER;
+            }
+            return parsed.value;
+          }),
         ),
       }),
       defaultValues: {
         description: line.description,
-        quantity: line.quantity,
-        unitPrice: toMajorUnits({ amountCents: line.unitPrice, currency }),
+        quantity: formatLocaleDecimalInput({ amount: line.quantity, locale }),
+        unitPrice: formatLocaleMinorUnitsInput({
+          amountCents: line.unitPrice,
+          currency,
+          locale,
+        }),
       },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -126,14 +158,9 @@ export const InvoiceLineEditor = ({
                 quantityText(value.quantity) !== quantityText(line.quantity)
                   ? { quantity: value.quantity }
                   : {}),
-                ...(!isFlatFeeLine &&
-                value.unitPrice !==
-                  toMajorUnits({ amountCents: line.unitPrice, currency })
+                ...(!isFlatFeeLine && value.unitPrice !== line.unitPrice
                   ? {
-                      unitPriceMinor: toMinorUnits({
-                        amount: value.unitPrice,
-                        currency,
-                      }),
+                      unitPriceMinor: value.unitPrice,
                     }
                   : {}),
               },
@@ -208,7 +235,9 @@ export const InvoiceLineEditor = ({
                   readOnly={isFlatFeeLine}
                   value={field.state.value}
                   onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
+                  onChange={(event) =>
+                    field.handleChange(localeInputText(event.target))
+                  }
                 />
                 <FieldError />
               </Field>
@@ -217,21 +246,15 @@ export const InvoiceLineEditor = ({
           <form.Field name="unitPrice">
             {(field) => (
               <Field name={field.name}>
-                <NumberInput
-                  inputProps={{
-                    "aria-label": t("billing.invoiceComposer.rate"),
-                    onBlur: field.handleBlur,
-                  }}
-                  min={0}
-                  // An emptied field stays NaN, as the native number input
-                  // reported it, so the schema rejects it instead of saving 0.
-                  onValueChange={(next) =>
-                    field.handleChange(next ?? Number.NaN)
-                  }
+                <Input
+                  aria-label={t("billing.invoiceComposer.rate")}
+                  dir="ltr"
+                  inputMode="decimal"
                   readOnly={isFlatFeeLine}
-                  step={10 ** -currencyMinorUnitDigits(currency)}
-                  value={
-                    Number.isNaN(field.state.value) ? null : field.state.value
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) =>
+                    field.handleChange(localeInputText(event.target))
                   }
                 />
                 <FieldError />

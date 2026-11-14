@@ -3,15 +3,22 @@ import { describe, expect, test } from "bun:test";
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_CONTROL_TARGET_METADATA,
+  BROWSER_DOWNLOAD_STAGED_NAME_PATTERN,
+  BROWSER_DOWNLOAD_STAGING_FOLDER,
+  BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
+  browserDownloadStagedPath,
   formatElementReference,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
   parseBrowserControlResult,
+  parseBrowserDesktopRequest,
+  parseBrowserDesktopResponse,
   parseBrowserExtensionPeerVersion,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
@@ -449,5 +456,131 @@ describe("extension peer version", () => {
     ["not an object", "stella-browser-extension"],
   ])("ignores %s", (_name, input) => {
     expect(parseBrowserExtensionPeerVersion(input)).toBeNull();
+  });
+});
+
+describe("stella desktop transport", () => {
+  const command = {
+    command: { action: "snapshot" },
+    controllerId: "thread-1",
+    observedTab: null,
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    requestId: "request-1",
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+    toolCallId: "call-1",
+    turnId: "run-1",
+    type: "command",
+  } as const;
+
+  test("takes commands only from stella desktop, at this protocol", () => {
+    expect(parseBrowserDesktopRequest(command)).toEqual(command);
+    expect(
+      parseBrowserDesktopRequest({
+        ...command,
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserDesktopRequest({
+        ...command,
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeNull();
+  });
+
+  test("reads a hello at any protocol, so a mismatch can be named", () => {
+    for (const protocolVersion of [
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+    ]) {
+      expect(
+        parseBrowserDesktopRequest({
+          protocolVersion,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+          type: "hello",
+        }),
+      ).not.toBeNull();
+      expect(
+        parseBrowserDesktopResponse({
+          protocolVersion,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "hello",
+        }),
+      ).not.toBeNull();
+    }
+  });
+
+  test("carries a sign-in refusal back as a result", () => {
+    const response = {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      requestId: "request-1",
+      result: {
+        code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+        message: "This page asks for a sign-in.",
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "error",
+      },
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "command-result",
+    } as const;
+    expect(parseBrowserDesktopResponse(response)).toEqual(response);
+  });
+
+  test("a download report says where Chrome saved the file, or why it was stopped", () => {
+    const saved = {
+      controllerId: "thread-1",
+      download: {
+        bytes: 2048,
+        mime: "application/pdf",
+        outcome: "saved",
+        path: `/Volumes/Work/Downloads/${browserDownloadStagedPath("1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed")}`,
+        sourceUrl: "https://example.com/file",
+        suggestedName: "Decision.pdf",
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "download",
+    } as const;
+    const stopped = {
+      ...saved,
+      download: {
+        outcome: "stopped",
+        reason: "not-pdf",
+        sourceUrl: "https://example.com/setup",
+        suggestedName: "setup.dmg",
+      },
+    } as const;
+    expect(parseBrowserDesktopResponse(saved)).toEqual(saved);
+    expect(parseBrowserDesktopResponse(stopped)).toEqual(stopped);
+    // A stopped download names no file, and a saved one always does.
+    expect(
+      parseBrowserDesktopResponse({
+        ...stopped,
+        download: { ...stopped.download, path: saved.download.path },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserDesktopResponse({
+        ...saved,
+        download: { ...saved.download, path: "" },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserDesktopResponse({
+        ...saved,
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+      }),
+    ).toBeNull();
+  });
+
+  test("a staged name is a fresh UUID with the PDF extension, nothing a page chose", () => {
+    const staged = browserDownloadStagedPath(crypto.randomUUID());
+    const [folder, name] = staged.split("/");
+    expect(folder).toBe(BROWSER_DOWNLOAD_STAGING_FOLDER);
+    expect(BROWSER_DOWNLOAD_STAGED_NAME_PATTERN.test(name ?? "")).toBe(true);
+    const pageNames = ["Decision.pdf", "../x.pdf", `${"a".repeat(36)}.pdf`];
+    for (const pageName of pageNames) {
+      expect(BROWSER_DOWNLOAD_STAGED_NAME_PATTERN.test(pageName)).toBe(false);
+    }
   });
 });

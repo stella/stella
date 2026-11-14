@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
@@ -13,6 +13,7 @@ import {
   PL_KIS_INCLUDED_CATEGORIES,
   PL_KIS_LISTING_COLUMNS,
   PL_KIS_UNDATED_SLICE,
+  PL_KIS_UNDIVIDED_DOCUMENT,
   plKisAdapter,
   plKisCategoryById,
   plKisCategoryLabel,
@@ -50,7 +51,11 @@ import type {
   StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
-import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  AST_STRUCTURE_DEGRADED,
+  validateAst,
+} from "@/api/lib/legal-search/parsers/validate-ast";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installTestFetch } from "@/api/tests/helpers/test-fetch";
@@ -1678,5 +1683,76 @@ test("publisher listing columns remain a closed schema for exhaustive dispositio
   // @ts-expect-error Widening the publisher column union would silently admit unmapped fields.
   expect(PL_KIS_LISTING_COLUMNS.includes("unmapped-publisher-field")).toBe(
     false,
+  );
+});
+
+describe("a document read as one undivided part", () => {
+  /** The captured detail of a category, its text replaced by `html`. */
+  const detailWithText = async (tag: string, html: string): Promise<string> => {
+    const parsed: unknown = JSON.parse(await readDetailFixture(tag));
+    if (!isRecord(parsed) || !isRecord(parsed["dokument"])) {
+      throw new TypeError(`${tag}: the captured detail has no document`);
+    }
+    const fields = parsed["dokument"]["fields"];
+    return JSON.stringify({
+      ...parsed,
+      dokument: {
+        ...parsed["dokument"],
+        fields: (Array.isArray(fields) ? fields : []).map((field: unknown) =>
+          isRecord(field) && field["key"] === "TRESC_INTERESARIUSZ"
+            ? { ...field, value: html }
+            : field,
+        ),
+      },
+    });
+  };
+
+  const warningsOf = async (tag: string, detail: string) => {
+    const [row] = await readListingFixture(tag);
+    if (row === undefined) {
+      throw new TypeError(`${tag}: the captured listing holds no row`);
+    }
+    const warn = spyOn(logger, "warn");
+    try {
+      const built = await assemblePlKisDecision({
+        row,
+        rawParts: plKisRawPartsOf(row, detail),
+      });
+      expect(built.type).toBe("built");
+      return warn.mock.calls.filter(
+        ([event]) => event === AST_STRUCTURE_DEGRADED,
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  test("is reported with the role its paragraphs share", async () => {
+    const warnings = await warningsOf(
+      "15-opz",
+      await detailWithText(
+        "15-opz",
+        "<p>Pierwszy akapit tekstu.</p><p>Drugi akapit tekstu.</p>",
+      ),
+    );
+    expect(warnings).toEqual([
+      [
+        AST_STRUCTURE_DEGRADED,
+        expect.objectContaining({
+          parser: "pl-kis",
+          codes: PL_KIS_UNDIVIDED_DOCUMENT,
+          role: "intro",
+          category: "14",
+          from: "html",
+        }),
+      ],
+    ]);
+  });
+
+  test.each(["01-ind", "15-opz", "16-opz-odm", "18-opw-odm"])(
+    "%s: the captured document is read in parts and reports nothing",
+    async (tag) => {
+      expect(await warningsOf(tag, await readDetailFixture(tag))).toEqual([]);
+    },
   );
 });

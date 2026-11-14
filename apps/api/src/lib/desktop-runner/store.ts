@@ -4,12 +4,15 @@ import {
   asc,
   desc,
   eq,
+  exists,
   gt,
   inArray,
   isNotNull,
   isNull,
   lt,
   max,
+  ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -19,21 +22,34 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_MAX_BACKGROUND_TASKS,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
+  type DesktopRunnerLinkedFolder,
+  desktopRunnerLinkedFolderSchema,
+  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
 import {
+  chatMessageRevisions,
+  chatMessages,
+  chatThreads,
   chatTurns,
   desktopRunnerCommands,
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
+  userFiles,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
@@ -46,16 +62,36 @@ import {
   transitionLifecycle,
   transitionLifecycleBatch,
 } from "@/api/lib/db/transitions";
-import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
+import {
+  openedSessionOf,
+  questionPauseOf,
+} from "@/api/lib/desktop-runner/chunk";
+import {
+  carryFolderRestoreNotes,
+  expireFolderRestoresOfKeys,
+  hasPendingFolderRestore,
+  hasUnnotedFolderRestore,
+  markFolderRestoreNotesTold,
+} from "@/api/lib/desktop-runner/folder-restores";
+import {
+  mintRunOutputKey,
+  type SealedRunOutputKey,
+  sealRunOutputKey,
+  storedRunOutputKey,
+} from "@/api/lib/desktop-runner/output-keys";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
   DESKTOP_RUNNER_OPEN_RUN_STATES,
   type DesktopRunnerCommandKind,
   type DesktopRunnerEventType,
+  type DesktopRunnerLostReason,
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedChatThreadId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * The gateway's persistence. Postgres is the truth for what a desktop holds:
@@ -136,6 +172,50 @@ const storedHarnessReports = (value: unknown): DesktopRunnerHarnessReport[] => {
     : panic("A stored desktop runner harness report no longer validates");
 };
 
+const linkedFoldersSchema = v.array(desktopRunnerLinkedFolderSchema);
+
+/** Runs of one socket with work in the background, at most; as many as it may hold. */
+const MAX_BACKGROUND_RUNS = MAX_HELD_RUNS;
+
+const backgroundTasksSchema = v.pipe(
+  v.record(
+    v.string(),
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(DESKTOP_RUNNER_MAX_BACKGROUND_TASKS),
+    ),
+  ),
+  v.check(
+    (counts) => Object.keys(counts).length <= MAX_BACKGROUND_RUNS,
+    "Too many runs with background work",
+  ),
+);
+
+const storedBackgroundTasks = (value: unknown): Record<string, number> => {
+  const parsed = v.safeParse(backgroundTasksSchema, value);
+  return parsed.success
+    ? parsed.output
+    : panic("Stored desktop runner background counts no longer validate");
+};
+
+/** Linked folders are validated before they are stored, like reports. */
+const storedLinkedFolders = (value: unknown): DesktopRunnerLinkedFolder[] => {
+  const parsed = v.safeParse(linkedFoldersSchema, value);
+  return parsed.success
+    ? parsed.output
+    : panic("A stored desktop runner linked folder no longer validates");
+};
+
+/**
+ * The approvals a computer's linked folders keep: only of folders it still
+ * reports. A folder unlinked and linked again has a new id and is asked
+ * about again.
+ */
+const keptFolderApprovals = (folders: readonly DesktopRunnerLinkedFolder[]) =>
+  sql`ARRAY(SELECT approved FROM unnest(${runner.approvedFolderIds}) AS approved WHERE approved::text IN (SELECT jsonb_array_elements(${JSON.stringify(folders)}::text::jsonb) ->> 'id'))::uuid[]`;
+
 type HelloMessage = Extract<
   DesktopRunnerDesktopMessage,
   { type: typeof DESKTOP_RUNNER_DESKTOP_MESSAGE.hello }
@@ -163,14 +243,24 @@ type ClaimSessionResult =
       type: "claimed";
       /** The socket this one replaces, to be told it is no longer current. */
       previous: { sessionId: string; instanceId: string } | null;
+      /** Sockets of the keys this claim retired, to be told at once. */
+      retired: RunHolder[];
       /** The runs the desktop listed that are bound to it, after reconciling. */
       held: HeldRun[];
+      /**
+       * The runner held background counts of an earlier socket, which this
+       * claim cleared: the computer reports the live ones again.
+       */
+      clearedBackgroundTasks: boolean;
     }
   /** The account holds its maximum of installations and none could go. */
-  | { type: "too_many_runners" };
+  | { type: "too_many_runners" }
+  /** A newer key of the account replaced this one on the installation. */
+  | { type: "retired" };
 
 type AccountScope = Pick<RunnerBinding, "userId" | "organizationId">;
 
+/** The account's installations; a retired key holds no place. */
 const countRunners = async (tx: Transaction, scope: AccountScope) =>
   (
     await tx
@@ -180,6 +270,7 @@ const countRunners = async (tx: Transaction, scope: AccountScope) =>
         and(
           eq(runner.userId, scope.userId),
           eq(runner.organizationId, scope.organizationId),
+          ne(runner.connection, "retired"),
         ),
       )
   ).at(0)?.count ?? 0;
@@ -219,6 +310,88 @@ const evictIdleRunners = async (
 };
 
 /**
+ * The account's other device keys naming this installation, retired once a
+ * socket claims it under a new key (a relink). A retired key is never routed
+ * to again, its socket is superseded at its next heartbeat, and it can never
+ * claim the installation back. Its open runs end at once: the installation
+ * id is the desktop's own claim, so no run moves to the claiming key, whose
+ * socket would then receive another computer's work. A run no computer
+ * accepted ends as not reached; an accepted one as ended by the relink,
+ * since the new key can never continue it. Its folder restores expire, so
+ * none blocks the thread. Another account naming the installation is never
+ * touched.
+ */
+const retireEarlierDeviceKeys = async (
+  tx: Transaction,
+  binding: RunnerBinding,
+  now: Date,
+): Promise<RunHolder[]> => {
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  const retired = await tx
+    .update(runner)
+    .set({ connection: "retired" })
+    .where(
+      and(
+        eq(runner.userId, binding.userId),
+        eq(runner.organizationId, binding.organizationId),
+        eq(runner.desktopId, binding.desktopId),
+        ne(runner.deviceJkt, binding.deviceJkt),
+        ne(runner.connection, "retired"),
+      ),
+    )
+    .returning({
+      deviceJkt: runner.deviceJkt,
+      sessionId: runner.sessionId,
+      instanceId: runner.instanceId,
+    });
+  if (retired.length === 0) {
+    return [];
+  }
+  const deviceJkts = retired.map(({ deviceJkt }) => deviceJkt);
+  const ofRetired = and(
+    eq(runs.userId, binding.userId),
+    eq(runs.organizationId, binding.organizationId),
+    eq(runs.desktopId, binding.desktopId),
+    inArray(runs.deviceJkt, deviceJkts),
+  );
+  // An account holds few installations and keys, each with few open runs.
+  const open = await tx
+    .select({ runId: runs.runId, deliveredAt: runs.deliveredAt })
+    .from(runs)
+    .where(and(ofRetired, inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES)));
+  // A run written to the old key's socket may have started on the computer
+  // before the relink: sending it again is what the member can do.
+  for (const [lostReason, ids] of [
+    ["not_reached", open.filter(({ deliveredAt }) => deliveredAt === null)],
+    [
+      "computer_relinked",
+      open.filter(({ deliveredAt }) => deliveredAt !== null),
+    ],
+  ] as const) {
+    await transitionLifecycleBatch({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      ids: ids.map(({ runId }) => runId),
+      moves: { state: { from: DESKTOP_RUNNER_OPEN_RUN_STATES, to: "lost" } },
+      guard: guarded(ofRetired),
+      set: { lostReason, updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+  }
+  await expireFolderRestoresOfKeys(tx, {
+    owner: binding,
+    desktopId: binding.desktopId,
+    deviceJkts,
+    now,
+  });
+  // The sockets still open under a retired key, to be told at once.
+  return retired.map(({ sessionId, instanceId }) => ({
+    sessionId,
+    instanceId,
+  }));
+};
+
+/**
  * Make this socket the desktop's current one and reconcile its runs with what
  * the desktop says it holds: a held open run is running again, an unaccepted
  * one it does not hold is offered again, and an accepted one it does not hold
@@ -252,10 +425,16 @@ export const claimRunnerSession = async (
         sessionId: runner.sessionId,
         instanceId: runner.instanceId,
         connection: runner.connection,
+        heldBackgroundTasks: sql<boolean>`${runner.backgroundTasks} <> '{}'::jsonb`,
       })
       .from(runner)
       .where(runnerKey(binding))
       .limit(1);
+    if (existing?.connection === "retired") {
+      return { type: "retired" };
+    }
+    // Before the cap is read: the keys a relink replaces hold no place.
+    const retired = await retireEarlierDeviceKeys(tx, binding, now);
     if (existing === undefined) {
       const registered = await countRunners(tx, binding);
       if (registered >= limits.maxRunnersPerAccount) {
@@ -278,6 +457,10 @@ export const claimRunnerSession = async (
       appVersion: hello.appVersion,
       sidecarVersion: hello.sidecarVersion,
       harnesses: hello.harnesses,
+      linkedFolders: hello.linkedFolders,
+      // What ran in the background before this socket is reported again
+      // after `welcome`; a count the computer no longer holds must not linger.
+      backgroundTasks: {},
       connectedAt: now,
       lastSeenAt: now,
     };
@@ -383,10 +566,12 @@ export const claimRunnerSession = async (
         existing.sessionId === sessionId
           ? null
           : { sessionId: existing.sessionId, instanceId: existing.instanceId },
+      retired,
       held: held.map((row) => ({
         ...row,
         workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
       })),
+      clearedBackgroundTasks: existing?.heldBackgroundTasks === true,
     };
   });
 
@@ -437,6 +622,8 @@ export const releaseRevokedRunners = async (
           ? undefined
           : eq(runner.organizationId, organizationId),
         keyId === undefined ? undefined : eq(runner.keyId, keyId),
+        // A retired key stays retired.
+        ne(runner.connection, "retired"),
       ),
     );
 };
@@ -450,7 +637,14 @@ export const releaseRunnerSession = async (
   await db
     .update(runner)
     .set({ connection: "disconnected" })
-    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)));
+    .where(
+      and(
+        runnerKey(binding),
+        eq(runner.sessionId, sessionId),
+        // A retired key stays retired when its socket closes.
+        eq(runner.connection, "connected"),
+      ),
+    );
 };
 
 type RenewOptions = SessionOptions & { now: Date; leaseMs: number };
@@ -481,10 +675,18 @@ export const renewRunnerSession = async (
 ): Promise<RenewResult> =>
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
+    // A runner retired by a newer device key of its installation is no
+    // longer current, whichever socket holds it.
     const seen = await tx
       .update(runner)
       .set({ lastSeenAt: now })
-      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .where(
+        and(
+          runnerKey(binding),
+          eq(runner.sessionId, sessionId),
+          eq(runner.connection, "connected"),
+        ),
+      )
       .returning({ sessionId: runner.sessionId });
     if (seen.length === 0) {
       return { type: "superseded" };
@@ -543,6 +745,32 @@ export const renewRunnerSession = async (
     };
   });
 
+/** One report the computer makes about itself over its socket. */
+type ComputerReport =
+  | Pick<typeof runner.$inferInsert, "harnesses">
+  | (Pick<typeof runner.$inferInsert, "linkedFolders"> & {
+      approvedFolderIds: SQL;
+    })
+  | Pick<typeof runner.$inferInsert, "backgroundTasks">;
+
+/**
+ * Store a report of the computer on its runner row while this socket holds
+ * it; `false` when the socket is not current.
+ */
+const writeComputerReport = async (
+  tx: Transaction,
+  { binding, sessionId }: SessionOptions,
+  report: ComputerReport,
+): Promise<boolean> => {
+  // audit: skip - runner socket bookkeeping; the row stores the computer's own harness, linked folder and background work reports
+  const updated = await tx
+    .update(runner)
+    .set(report)
+    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+    .returning({ desktopId: runner.desktopId });
+  return updated.length > 0;
+};
+
 type HarnessStatusOptions = SessionOptions & {
   report: DesktopRunnerHarnessReport;
 };
@@ -553,11 +781,10 @@ export const recordHarnessStatus = async (
   { binding, sessionId, report }: HarnessStatusOptions,
 ): Promise<boolean> =>
   await withAggregateTransaction(db, async (tx) => {
-    const current = and(runnerKey(binding), eq(runner.sessionId, sessionId));
     const [row] = await tx
       .select({ harnesses: runner.harnesses })
       .from(runner)
-      .where(current)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
       .limit(1);
     if (row === undefined) {
       return false;
@@ -568,9 +795,133 @@ export const recordHarnessStatus = async (
       ),
       report,
     ];
-    // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    await tx.update(runner).set({ harnesses }).where(current);
+    return await writeComputerReport(tx, { binding, sessionId }, { harnesses });
+  });
+
+type LinkedFoldersOptions = SessionOptions & {
+  folders: readonly DesktopRunnerLinkedFolder[];
+};
+
+/**
+ * Replace the computer's linked folders, dropping approvals of folders it no
+ * longer reports; returns `false` when the socket is not current.
+ */
+export const recordLinkedFolders = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, folders }: LinkedFoldersOptions,
+): Promise<boolean> =>
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await writeComputerReport(
+        tx,
+        { binding, sessionId },
+        {
+          linkedFolders: [...folders],
+          approvedFolderIds: keptFolderApprovals(folders),
+        },
+      ),
+  );
+
+type ApproveLinkedFolderOptions = {
+  owner: RunOwner;
+  desktopId: string;
+  linkId: string;
+  /** Records the approval's audit event, in the approval's transaction. */
+  recordAuditEvent: AuditRecorder;
+};
+
+/**
+ * Record the member's OK for runs to work in a folder linked on one of their
+ * computers, on every device key of that installation that reports it, with
+ * its audit event in the same transaction: an approval whose audit event
+ * cannot be written is not kept. `false` when none of them reports the
+ * folder; nothing is then recorded.
+ */
+export const approveLinkedFolder = async (
+  db: DesktopRunnerDb,
+  { owner, desktopId, linkId, recordAuditEvent }: ApproveLinkedFolderOptions,
+): Promise<boolean> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const updated = await tx
+      .update(runner)
+      .set({
+        approvedFolderIds: sql`CASE WHEN ${linkId}::uuid = ANY(${runner.approvedFolderIds}) THEN ${runner.approvedFolderIds} ELSE array_append(${runner.approvedFolderIds}, ${linkId}::uuid) END`,
+      })
+      .where(
+        and(
+          eq(runner.userId, owner.userId),
+          eq(runner.organizationId, owner.organizationId),
+          eq(runner.desktopId, desktopId),
+          ne(runner.connection, "retired"),
+          sql`${runner.linkedFolders} @> ${JSON.stringify([{ id: linkId }])}::text::jsonb`,
+        ),
+      )
+      .returning({ desktopId: runner.desktopId });
+    if (updated.length === 0) {
+      return false;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL,
+      resourceId: linkId,
+      workspaceId: null,
+      metadata: { desktopId },
+    });
     return true;
+  });
+
+type BackgroundTasksOptions = SessionOptions & {
+  runId: string;
+  count: number;
+};
+
+/**
+ * Store what a run's computer reports running in the background for the
+ * run's chat, on the runner row of the socket that reports it: a claim of a
+ * newer socket replaces that row's counts, so a replaced socket never writes
+ * after it. `not_current` when the socket was replaced, `unknown_run` for a
+ * run that is not this computer's; either changes nothing. `too_many` when
+ * the socket would hold counts of more runs than it may hold.
+ */
+export const recordBackgroundTasks = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, runId, count }: BackgroundTasksOptions,
+): Promise<"applied" | "not_current" | "unknown_run" | "too_many"> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const [row] = await tx
+      .select({ backgroundTasks: runner.backgroundTasks })
+      .from(runner)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .limit(1);
+    if (row === undefined) {
+      return "not_current";
+    }
+    const [run] = await tx
+      .select({ runId: runs.runId })
+      .from(runs)
+      .where(and(boundTo(binding), eq(runs.runId, runId)))
+      .limit(1);
+    if (run === undefined) {
+      return "unknown_run";
+    }
+    // Keyed by the stored id, the form the read joins on.
+    const others = Object.entries(
+      storedBackgroundTasks(row.backgroundTasks),
+    ).filter(([id]) => id !== run.runId);
+    const backgroundTasks = Object.fromEntries(
+      count === 0 ? others : [...others, [run.runId, count]],
+    );
+    if (Object.keys(backgroundTasks).length > MAX_BACKGROUND_RUNS) {
+      return "too_many";
+    }
+    return (await writeComputerReport(
+      tx,
+      { binding, sessionId },
+      { backgroundTasks },
+    ))
+      ? "applied"
+      : "not_current";
   });
 
 type RunTransitionOptions = {
@@ -624,6 +975,9 @@ export const recordRunAccepted = async (
       recordTransitionAuditEvent: skipRunAudit,
     });
     if (accepted.type === "transitioned") {
+      // The run's request reached the harness: any restore note it carried
+      // is told now, and no later run repeats it.
+      await markFolderRestoreNotesTold(tx, { runId, now });
       return { type: "applied" };
     }
     const run = await readBoundRun(tx, binding, runId);
@@ -747,11 +1101,35 @@ const advanceRun = async ({
         set: {
           ...advanced,
           outcome: message.outcome,
-          harnessSessionId: message.harnessSessionId,
+          // A run that ends without naming its session keeps the one it
+          // reported opening.
+          harnessSessionId:
+            message.harnessSessionId ?? sql`${runs.harnessSessionId}`,
         },
         recordTransitionAuditEvent: skipRunAudit,
       });
-    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
+      // The session is recorded as soon as it takes the run's prompt: a run
+      // lost or failed after that may have changed the session, so the
+      // session lookup must see it even without a `run.finished`.
+      const opened = openedSessionOf(message.chunk);
+      return await transitionLifecycle({
+        tx,
+        spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+        id: message.runId,
+        moves: { state: { from: SEQUENCED_RUN_STATES, to: "running" } },
+        guard,
+        set:
+          opened === null
+            ? advanced
+            : {
+                ...advanced,
+                // Only a session of the run's own harness counts.
+                harnessSessionId: sql`case when ${runs.harness} = ${opened.harness} then ${opened.sessionId} else ${runs.harnessSessionId} end`,
+              },
+        recordTransitionAuditEvent: skipRunAudit,
+      });
+    }
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
       return await transitionLifecycle({
         tx,
@@ -965,18 +1343,49 @@ export const expireRunLeases = async (
     },
   });
 
-type ExpireAbandonedOptions = { now: Date; abandonedMs: number; limit: number };
+type ExpireAbandonedOptions = {
+  now: Date;
+  abandonedMs: number;
+  unacceptedMs: number;
+  limit: number;
+};
 
 /**
- * End runs nobody accepted within the abandon window, and runs whose computer
- * has not come back within it, as `lost`. A run is never handed to another
- * computer, so this is how the API ends one its desktop no longer serves.
+ * End runs never written to a socket within the unaccepted window, and the
+ * others whose computer has not taken or come back to them within the
+ * abandon window, as `lost`. A run is never handed to another computer, so
+ * this is how the API ends one its desktop no longer serves. A run never
+ * written is counted from its creation: a heartbeat renews its lease, and
+ * however its delivery failed (a lost ring, a key the computer no longer
+ * connects with), the turn learns in bounded time that its computer did not
+ * pick it up. A run that was written keeps the longer window, since the
+ * desktop starts a run before its acceptance reaches the API.
  */
 export const expireAbandonedRuns = async (
   db: DesktopRunnerDb,
-  { now, abandonedMs, limit }: ExpireAbandonedOptions,
+  { now, abandonedMs, unacceptedMs, limit }: ExpireAbandonedOptions,
 ): Promise<string[]> => {
-  const cutoff = new Date(now.getTime() - abandonedMs);
+  const abandonedBefore = new Date(now.getTime() - abandonedMs);
+  const unacceptedBefore = new Date(now.getTime() - unacceptedMs);
+  const ended = () =>
+    or(
+      // Never written to a socket: no computer can be running it.
+      and(
+        inArray(runs.state, ["assigned", "waiting_for_computer"]),
+        isNull(runs.deliveredAt),
+        sql`${runs.createdAt} <= ${unacceptedBefore}::timestamptz`,
+      ),
+      // Written to a socket but never accepted: its computer may be running
+      // it and lost the connection before the acceptance arrived.
+      and(
+        eq(runs.state, "assigned"),
+        sql`${runs.createdAt} <= ${abandonedBefore}::timestamptz`,
+      ),
+      and(
+        eq(runs.state, "waiting_for_computer"),
+        sql`${runs.updatedAt} <= ${abandonedBefore}::timestamptz`,
+      ),
+    );
   return await withSkipLockedBatch({
     database: db,
     limit,
@@ -984,19 +1393,7 @@ export const expireAbandonedRuns = async (
       tx
         .select({ runId: runs.runId })
         .from(runs)
-        .where(
-          or(
-            // A heartbeat renews an assigned run's lease, so its age counts.
-            and(
-              eq(runs.state, "assigned"),
-              sql`${runs.createdAt} <= ${cutoff}::timestamptz`,
-            ),
-            and(
-              eq(runs.state, "waiting_for_computer"),
-              sql`${runs.updatedAt} <= ${cutoff}::timestamptz`,
-            ),
-          ),
-        )
+        .where(ended())
         .orderBy(asc(runs.updatedAt))
         .limit(limit)
         .$dynamic(),
@@ -1012,18 +1409,7 @@ export const expireAbandonedRuns = async (
         moves: {
           state: { from: ["assigned", "waiting_for_computer"], to: "lost" },
         },
-        guard: guarded(
-          or(
-            and(
-              eq(runs.state, "assigned"),
-              sql`${runs.createdAt} <= ${cutoff}::timestamptz`,
-            ),
-            and(
-              eq(runs.state, "waiting_for_computer"),
-              sql`${runs.updatedAt} <= ${cutoff}::timestamptz`,
-            ),
-          ),
-        ),
+        guard: guarded(ended()),
         set: { updatedAt: now },
         recordTransitionAuditEvent: skipRunAudit,
       });
@@ -1107,6 +1493,8 @@ export type PendingCommand = {
   readonly kind: DesktopRunnerCommandKind;
   readonly payload: unknown;
   readonly workspaceIds: readonly SafeId<"workspace">[];
+  /** The run's output key, which a `run.start` carries; never logged. */
+  readonly sealedOutputKey: SealedRunOutputKey | null;
 };
 
 type PendingCommandsOptions = SessionOptions & {
@@ -1119,15 +1507,21 @@ type PendingCommandsResult =
 
 /**
  * Commands queued after `afterId` for the open runs bound to this socket, in
- * queue order. A socket that is no longer the desktop's current one gets none:
- * the commands are read in the same statement that matches this socket's
- * session on the runner row, so a takeover committed at any point leaves the
- * superseded socket without them.
+ * queue order. A socket that is no longer the desktop's current one, or whose
+ * key a relink retired, gets none: the commands are read in the same
+ * statement that matches this socket's connected session on the runner row,
+ * so a takeover committed at any point leaves the superseded socket without
+ * them.
  */
 export const readPendingCommands = async (
   db: DesktopRunnerDb,
   { binding, sessionId, afterId, limit }: PendingCommandsOptions,
 ): Promise<PendingCommandsResult> => {
+  const current = and(
+    runnerKey(binding),
+    eq(runner.sessionId, sessionId),
+    eq(runner.connection, "connected"),
+  );
   const rows = await db
     .select({
       id: desktopRunnerCommands.id,
@@ -1135,10 +1529,12 @@ export const readPendingCommands = async (
       kind: desktopRunnerCommands.kind,
       payload: desktopRunnerCommands.payload,
       workspaceIds: runs.workspaceIds,
+      outputKeyEncrypted: runs.outputKeyEncrypted,
+      outputKeyIv: runs.outputKeyIv,
     })
     .from(desktopRunnerCommands)
     .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
-    .innerJoin(runner, and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+    .innerJoin(runner, current)
     .where(
       and(
         boundTo(binding),
@@ -1151,22 +1547,121 @@ export const readPendingCommands = async (
   if (rows.length === 0) {
     // No command in a snapshot where this socket was current, or none at all
     // because it was not: the runner row says which.
-    const [current] = await db
+    const [row] = await db
       .select({ sessionId: runner.sessionId })
       .from(runner)
-      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .where(current)
       .limit(1);
-    if (current === undefined) {
+    if (row === undefined) {
       return { type: "superseded" };
     }
   }
   return {
     type: "current",
-    commands: rows.map((row) => ({
-      ...row,
-      workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
-    })),
+    commands: rows.map(
+      ({ outputKeyEncrypted, outputKeyIv, workspaceIds, ...row }) => ({
+        ...row,
+        workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
+        sealedOutputKey: storedRunOutputKey(outputKeyEncrypted, outputKeyIv),
+      }),
+    ),
   };
+};
+
+type StartsSendingOptions = SessionOptions & {
+  runIds: readonly string[];
+  now: Date;
+};
+
+type StartsSending =
+  | { type: "superseded" }
+  /** The runs still open, each now recorded as delivered. */
+  | { type: "current"; open: ReadonlySet<string> };
+
+/**
+ * The send boundary of a page of `run.start`s, checked right before its
+ * frames go out: whether this socket is still its key's connected one (a
+ * relink retires it), and which of the runs are still open. Those runs record
+ * that they are delivered, since their computer may be running them from
+ * then on; the first record is kept.
+ */
+export const markRunStartsSending = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, runIds, now }: StartsSendingOptions,
+): Promise<StartsSending> => {
+  const current = and(
+    runnerKey(binding),
+    eq(runner.sessionId, sessionId),
+    eq(runner.connection, "connected"),
+  );
+  // A page without a start has nothing to fence: its read matched this
+  // socket's connected session already.
+  if (runIds.length === 0) {
+    return { type: "current", open: new Set<string>() };
+  }
+  // A relink ends the run's row in its own transaction; this update waits
+  // for that row and then finds it ended, so no ended run is marked.
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  const marked = await db
+    .update(runs)
+    .set({
+      deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
+    })
+    .where(
+      and(
+        inArray(runs.runId, [...runIds]),
+        boundTo(binding),
+        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(runner)
+            .where(current),
+        ),
+      ),
+    )
+    .returning({ runId: runs.runId });
+  const open = new Set(marked.map(({ runId }) => runId));
+  if (open.size === runIds.length) {
+    return { type: "current", open };
+  }
+  // Some start was not marked: its run ended, or this socket is no longer
+  // current; the runner row says which.
+  const [row] = await db
+    .select({ sessionId: runner.sessionId })
+    .from(runner)
+    .where(current)
+    .limit(1);
+  return row === undefined ? { type: "superseded" } : { type: "current", open };
+};
+
+/**
+ * The runs of a page whose `run.start` was recorded as delivered at `now`
+ * but never went out (the socket closed or filled up first): they are not
+ * delivered, so they keep the short pickup window.
+ */
+export const releaseUnsentRunStarts = async (
+  db: DesktopRunnerDb,
+  {
+    binding,
+    runIds,
+    now,
+  }: { binding: RunnerBinding; runIds: readonly string[]; now: Date },
+) => {
+  if (runIds.length === 0) {
+    return;
+  }
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await db
+    .update(runs)
+    .set({ deliveredAt: null })
+    .where(
+      and(
+        inArray(runs.runId, [...runIds]),
+        boundTo(binding),
+        sql`${runs.deliveredAt} = ${now}::timestamptz`,
+      ),
+    );
 };
 
 type QueuedCommandsOptions = {
@@ -1246,6 +1741,9 @@ export type ConnectedRunner = {
   readonly instanceId: string;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
+  readonly linkedFolders: readonly DesktopRunnerLinkedFolder[];
+  /** Linked folders the member let runs work in. */
+  readonly approvedFolderIds: readonly string[];
 };
 
 /** A member's connected runners seen since `seenSince`, most recent first. */
@@ -1261,6 +1759,8 @@ export const readConnectedRunners = async (
       instanceId: runner.instanceId,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
+      linkedFolders: runner.linkedFolders,
+      approvedFolderIds: runner.approvedFolderIds,
     })
     .from(runner)
     .where(
@@ -1276,6 +1776,7 @@ export const readConnectedRunners = async (
   return rows.map((row) => ({
     ...row,
     harnesses: storedHarnessReports(row.harnesses),
+    linkedFolders: storedLinkedFolders(row.linkedFolders),
   }));
 };
 
@@ -1300,11 +1801,18 @@ type InsertRunOptions = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  reasoningEffort: DesktopRunnerReasoningEffort | null;
   approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
+  /** The folder linked on the computer the run works in, if any. */
+  linkedFolderId: string | null;
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
-  payload: object;
+  /**
+   * The `run.start` as stored: `withNote` when a restore of the chat's folder
+   * was not told to an accepted run yet, chosen inside the admission.
+   */
+  payload: { plain: object; withNote: object };
   now: Date;
   leaseMs: number;
   seenSince: Date;
@@ -1324,26 +1832,48 @@ export type InsertedRun =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
-  | { type: "approvals_unavailable" };
+  | { type: "reasoning_effort_unavailable" }
+  | { type: "approvals_unavailable" }
+  /** The chat's folder is being restored on its computer. */
+  | { type: "folder_busy" }
+  /**
+   * The linked folder is not reported available by the computer, or the
+   * member has not let runs work in it.
+   */
+  | { type: "folder_unavailable" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
  * with the requested model and approval mode. The caller mints the run id, so nothing here
- * answers for a run id another tenant holds.
+ * answers for a run id another tenant holds. The run gets its own output key
+ * (`output-keys.ts`), stored encrypted for its organization.
  */
 export const insertAssignedRun = async (
   db: DesktopRunnerDb,
   options: InsertRunOptions,
-): Promise<InsertedRun> =>
-  await withAggregateTransaction(db, async (tx) => {
+): Promise<InsertedRun> => {
+  const sealedOutputKey = await sealRunOutputKey(
+    options.owner.organizationId,
+    mintRunOutputKey(),
+  );
+  return await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
+    // Serialized with the account's restore requests and settlements, so a
+    // restore is either pending here (refused below) or settled and noted.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: owner.organizationId, userId: owner.userId },
+      tx,
+    });
     const [target] = await tx
       .select({
         deviceJkt: runner.deviceJkt,
         sessionId: runner.sessionId,
         instanceId: runner.instanceId,
         harnesses: runner.harnesses,
+        linkedFolders: runner.linkedFolders,
+        approvedFolderIds: runner.approvedFolderIds,
       })
       .from(runner)
       .where(
@@ -1367,12 +1897,48 @@ export const insertAssignedRun = async (
     if (report?.state !== "ready" || report.version !== harnessVersion) {
       return { type: "harness_unavailable", report };
     }
-    if (!report.models.some(({ id }) => id === options.model)) {
+    const model = report.models.find(({ id }) => id === options.model);
+    if (model === undefined) {
       return { type: "model_unavailable" };
+    }
+    if (
+      options.reasoningEffort !== null &&
+      !model.reasoningEfforts.includes(options.reasoningEffort)
+    ) {
+      return { type: "reasoning_effort_unavailable" };
     }
     if (!report.approvalModes.includes(options.approvals)) {
       return { type: "approvals_unavailable" };
     }
+    const { linkedFolderId } = options;
+    if (
+      linkedFolderId !== null &&
+      (!target.approvedFolderIds.includes(linkedFolderId) ||
+        storedLinkedFolders(target.linkedFolders).find(
+          ({ id }) => id === linkedFolderId,
+        )?.state !== "available")
+    ) {
+      return { type: "folder_unavailable" };
+    }
+    // A restore of the chat's folder that its computer may still act on: the
+    // run would work in files about to change. The computer refuses such a
+    // run too, for a restore asked while this one is stored.
+    const chat = options.chat ?? null;
+    if (
+      chat !== null &&
+      (await hasPendingFolderRestore(tx, {
+        owner,
+        threadId: chat.threadId,
+        desktopId,
+        deviceJkt: target.deviceJkt,
+        now,
+      }))
+    ) {
+      return { type: "folder_busy" };
+    }
+    const noted =
+      chat !== null &&
+      (await hasUnnotedFolderRestore(tx, { owner, threadId: chat.threadId }));
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({
       runId,
@@ -1383,10 +1949,13 @@ export const insertAssignedRun = async (
       harness,
       harnessVersion,
       workspaceIds: [...options.workspaceIds],
+      linkedFolderId,
       chatThreadId: options.chat?.threadId ?? null,
       chatTurnId: options.chat?.turnId ?? null,
       state: "assigned",
       leaseExpiresAt: leaseUntil(now, options.leaseMs),
+      outputKeyEncrypted: sealedOutputKey.ciphertext,
+      outputKeyIv: sealedOutputKey.iv,
       createdAt: now,
       updatedAt: now,
     });
@@ -1394,13 +1963,21 @@ export const insertAssignedRun = async (
       runId,
       kind: "run.start",
       commandKey: runId,
-      payload: options.payload,
+      payload: noted ? options.payload.withNote : options.payload.plain,
     });
+    if (noted) {
+      await carryFolderRestoreNotes(tx, {
+        owner,
+        threadId: chat.threadId,
+        runId,
+      });
+    }
     return {
       type: "assigned",
       holder: { sessionId: target.sessionId, instanceId: target.instanceId },
     };
   });
+};
 
 type InsertCommandOptions = {
   owner: RunOwner;
@@ -1559,6 +2136,13 @@ export type DesktopRunnerRunView = {
   readonly harnessSessionId: string | null;
   readonly ackSeq: number;
   readonly leaseExpiresAt: Date;
+  readonly createdAt: Date;
+  /** When `run.start` was first written to a socket; `null` while never. */
+  readonly deliveredAt: Date | null;
+  /** Why the API ended it as `lost`, where it knows. */
+  readonly lostReason: DesktopRunnerLostReason | null;
+  /** When the computer accepted the run; `null` while none picked it up. */
+  readonly acceptedAt: Date | null;
 };
 
 /** One run of `owner`, or `null` when it has none by that id. */
@@ -1579,6 +2163,10 @@ export const readRun = async (
         harnessSessionId: runs.harnessSessionId,
         ackSeq: runs.ackSeq,
         leaseExpiresAt: runs.leaseExpiresAt,
+        createdAt: runs.createdAt,
+        deliveredAt: runs.deliveredAt,
+        lostReason: runs.lostReason,
+        acceptedAt: runs.acceptedAt,
       })
       .from(runs)
       .where(
@@ -1586,6 +2174,106 @@ export const readRun = async (
           eq(runs.runId, runId),
           eq(runs.userId, owner.userId),
           eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0) ?? null;
+
+/**
+ * The stored output key of one run of `owner`: `null` when it has no run by
+ * that id, a `null` key when the run keeps none. Read apart from `readRun`,
+ * so no view of a run carries it.
+ */
+export const readRunOutputKey = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId }: ReadRunOptions,
+): Promise<{ readonly sealedOutputKey: SealedRunOutputKey | null } | null> => {
+  const row = (
+    await db
+      .select({
+        outputKeyEncrypted: runs.outputKeyEncrypted,
+        outputKeyIv: runs.outputKeyIv,
+      })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.runId, runId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return row === undefined
+    ? null
+    : {
+        sealedOutputKey: storedRunOutputKey(
+          row.outputKeyEncrypted,
+          row.outputKeyIv,
+        ),
+      };
+};
+
+/**
+ * The chat thread of the owner's run that is still going; `null` for a run of
+ * someone else, one that ended, or one no chat started. What a run's token may
+ * write is read from here, never from the request.
+ */
+export const readOpenRunChatThread = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId }: ReadRunOptions,
+): Promise<SafeId<"chatThread"> | null> => {
+  const chatThreadId = (
+    await db
+      .select({ chatThreadId: runs.chatThreadId })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.runId, runId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      )
+      .limit(1)
+  ).at(0)?.chatThreadId;
+  return chatThreadId === null || chatThreadId === undefined
+    ? null
+    : brandPersistedChatThreadId(chatThreadId);
+};
+
+type ReadRunOutputFileOptions = {
+  owner: RunOwner;
+  chatThreadId: SafeId<"chatThread">;
+  fileId: SafeId<"userFile">;
+};
+
+/**
+ * A stored file as a run's chat may show it; `null` unless it is the owner's
+ * and in this thread of the owner's organization. A computer's report names a
+ * file; this decides whether the chat gets one.
+ */
+export const readRunOutputFile = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chatThreadId, fileId }: ReadRunOutputFileOptions,
+) =>
+  (
+    await db
+      .select({
+        id: userFiles.id,
+        fileName: userFiles.fileName,
+        mimeType: userFiles.mimeType,
+        placeholder: userFiles.placeholder,
+      })
+      .from(userFiles)
+      .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
+      .where(
+        and(
+          eq(userFiles.id, fileId),
+          eq(userFiles.userId, owner.userId),
+          eq(userFiles.threadId, chatThreadId),
+          eq(chatThreads.userId, owner.userId),
+          eq(chatThreads.organizationId, owner.organizationId),
         ),
       )
       .limit(1)
@@ -1621,6 +2309,48 @@ export const readStoredRunEvents = async (
     .orderBy(asc(desktopRunnerEvents.seq))
     .limit(limit);
 
+/**
+ * What a chat's runs left running in the background on the member's
+ * computers, as each computer last reported it; only a computer whose socket
+ * is connected and was seen since `freshSince` counts. The database sums the
+ * runs, so the read is one row however many runs the chat holds; the total
+ * stops at `DESKTOP_RUNNER_MAX_BACKGROUND_TASKS`.
+ */
+export const readThreadBackgroundTasks = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    threadId,
+    freshSince,
+  }: { owner: RunOwner; threadId: SafeId<"chatThread">; freshSince: Date },
+): Promise<number> => {
+  const [row] = await db
+    .select({
+      count: sql<number>`least(coalesce(sum((${runner.backgroundTasks} ->> ${runs.runId}::text)::integer), 0), ${DESKTOP_RUNNER_MAX_BACKGROUND_TASKS})::int`,
+    })
+    .from(runs)
+    .innerJoin(
+      runner,
+      and(
+        eq(runner.userId, runs.userId),
+        eq(runner.organizationId, runs.organizationId),
+        eq(runner.desktopId, runs.desktopId),
+        eq(runner.deviceJkt, runs.deviceJkt),
+        eq(runner.connection, "connected"),
+        sql`${runner.lastSeenAt} >= ${freshSince}::timestamptz`,
+      ),
+    )
+    .where(
+      and(
+        eq(runs.chatThreadId, threadId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        sql`${runner.backgroundTasks} ->> ${runs.runId}::text IS NOT NULL`,
+      ),
+    );
+  return row?.count ?? 0;
+};
+
 type MemberRunnersOptions = { owner: RunOwner; limit: number };
 
 export type MemberRunner = {
@@ -1628,6 +2358,9 @@ export type MemberRunner = {
   readonly connected: boolean;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
+  readonly linkedFolders: readonly DesktopRunnerLinkedFolder[];
+  /** Linked folders the member let runs work in. */
+  readonly approvedFolderIds: readonly string[];
 };
 
 /**
@@ -1645,12 +2378,15 @@ export const readMemberRunners = async (
       connection: runner.connection,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
+      linkedFolders: runner.linkedFolders,
+      approvedFolderIds: runner.approvedFolderIds,
     })
     .from(runner)
     .where(
       and(
         eq(runner.userId, owner.userId),
         eq(runner.organizationId, owner.organizationId),
+        ne(runner.connection, "retired"),
       ),
     )
     .orderBy(desc(runner.lastSeenAt), asc(runner.desktopId))
@@ -1673,42 +2409,121 @@ export const readMemberRunners = async (
     connected: row.connection === "connected",
     lastSeenAt: row.lastSeenAt,
     harnesses: storedHarnessReports(row.harnesses),
+    linkedFolders: storedLinkedFolders(row.linkedFolders),
+    approvedFolderIds: row.approvedFolderIds,
   }));
 };
 
 type ChatRunSessionOptions = {
   owner: RunOwner;
-  chatThreadId: SafeId<"chatThread">;
+  /** The thread and the turn about to start on the computer. */
+  chat: ChatRunBinding;
   desktopId: string;
   harness: AgentHarness;
+  /**
+   * The linked folder the turn works in, `null` for the chat's own: a
+   * harness keeps its sessions per working folder, so a session from
+   * another folder is not resumed.
+   */
+  linkedFolderId: string | null;
 };
 
 /**
- * The harness session the thread's newest finished run on this computer and
- * harness left behind, for the next turn to resume; `null` when none did.
+ * The harness session turn `chat.turnId` resumes on this computer and
+ * harness, or `null` when the turn starts a fresh one and hands the harness
+ * the chat's own history.
+ *
+ * A session holds every turn the runs that continued it were given and
+ * answered, so it is resumed only while the chat still holds exactly those:
+ * the newest run of the thread on this computer and harness left it, and its
+ * turn's answer is still the message right before the one this turn answers.
+ * An edit or a regeneration deletes that answer and every later message, and
+ * an answer from the cloud or from another computer or harness takes its
+ * place, so any of them starts fresh; a revision of any message of the thread
+ * since that run's turn began does too, because the session holds the text
+ * it replaced (no revision is accepted while a turn runs). A fork is another
+ * thread and holds no run, so it starts fresh.
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chatThreadId, desktopId, harness }: ChatRunSessionOptions,
-): Promise<string | null> =>
-  (
-    await db
-      .select({ harnessSessionId: runs.harnessSessionId })
-      .from(runs)
-      .where(
-        and(
-          eq(runs.chatThreadId, chatThreadId),
-          eq(runs.desktopId, desktopId),
-          eq(runs.harness, harness),
-          eq(runs.userId, owner.userId),
-          eq(runs.organizationId, owner.organizationId),
-          eq(runs.state, "finished"),
+  { owner, chat, desktopId, harness, linkedFolderId }: ChatRunSessionOptions,
+): Promise<string | null> => {
+  // The run that last wrote the session: a later one resumed it or replaced
+  // it, whatever state it ended in. A run records its session id once the
+  // session takes its prompt. A run without one is passed over only when it
+  // provably never reached the harness: it ended (finished or refused)
+  // without naming a session, or no computer picked it up. Any other run
+  // without one (lost, or still open) may have reached it before its
+  // session id arrived, so it hides the session and the turn starts fresh.
+  const newest = db
+    .select({
+      state: runs.state,
+      harnessSessionId: runs.harnessSessionId,
+      chatTurnId: runs.chatTurnId,
+    })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.chatThreadId, chat.threadId),
+        eq(runs.desktopId, desktopId),
+        eq(runs.harness, harness),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        sql`${runs.linkedFolderId} IS NOT DISTINCT FROM ${linkedFolderId}::uuid`,
+        or(
           isNotNull(runs.harnessSessionId),
+          and(
+            ne(runs.state, "finished"),
+            ne(runs.state, "rejected"),
+            or(isNull(runs.lostReason), ne(runs.lostReason, "not_reached")),
+          ),
         ),
-      )
-      .orderBy(desc(runs.updatedAt))
-      .limit(1)
-  ).at(0)?.harnessSessionId ?? null;
+      ),
+    )
+    .orderBy(desc(runs.createdAt), desc(runs.runId))
+    .limit(1)
+    .as("newest_run");
+  // The message right before the one this turn answers, in the thread's
+  // order: the answer this turn continues. The boundary is the asking
+  // message's own row, read in the database by id.
+  const continued = db
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, chat.threadId),
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`,
+      ),
+    )
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(1);
+  const rows = await db
+    .select({ harnessSessionId: newest.harnessSessionId })
+    .from(newest)
+    .innerJoin(chatTurns, eq(chatTurns.id, newest.chatTurnId))
+    .where(
+      and(
+        eq(newest.state, "finished"),
+        isNotNull(newest.harnessSessionId),
+        eq(chatTurns.threadId, chat.threadId),
+        eq(chatTurns.assistantMessageId, sql`(${continued})`),
+        // Both times are the database's own: the turn's start, read by id.
+        notExists(
+          db
+            .select({ id: chatMessageRevisions.id })
+            .from(chatMessageRevisions)
+            .where(
+              and(
+                eq(chatMessageRevisions.threadId, chat.threadId),
+                sql`${chatMessageRevisions.createdAt} >= (select t.created_at from chat_turns t where t.id = ${newest.chatTurnId})`,
+              ),
+            ),
+        ),
+      ),
+    )
+    .limit(1);
+  return rows.at(0)?.harnessSessionId ?? null;
+};
 
 type ChatRunForRequestOptions = {
   owner: RunOwner;

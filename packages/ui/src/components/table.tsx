@@ -3,6 +3,7 @@ import type * as React from "react";
 import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * How far cells pad their content from the column edges.
@@ -226,26 +227,38 @@ const TableCell = ({
   numeric = false,
   truncate = false,
   flush = false,
+  children,
   ...props
 }: TableCellProps) => {
   const resolvedAlign = resolveTableAlign(align, numeric);
+  const cellClassName = cn(
+    "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
+    flush
+      ? "p-0"
+      : "p-2.5 in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
+    "in-data-[density=compact]:leading-6 in-data-[density=compact]:whitespace-normal",
+    resolvedAlign !== undefined && TABLE_ALIGN_CLASS[resolvedAlign],
+    tone === "muted" && "text-muted-foreground",
+    numeric && "tabular-nums",
+    className,
+  );
+  if (truncate) {
+    // The cell itself is cut, so it stays a table cell rather than the
+    // block TruncatedText makes of a single line.
+    return (
+      <TruncatedText
+        className={cn("table-cell", cellClassName)}
+        data-slot="table-cell"
+        render={<td {...props} />}
+      >
+        {children}
+      </TruncatedText>
+    );
+  }
   return (
-    <td
-      className={cn(
-        "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
-        flush
-          ? "p-0"
-          : "p-2.5 in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
-        "in-data-[density=compact]:leading-6 in-data-[density=compact]:whitespace-normal",
-        resolvedAlign !== undefined && TABLE_ALIGN_CLASS[resolvedAlign],
-        tone === "muted" && "text-muted-foreground",
-        numeric && "tabular-nums",
-        truncate && "truncate",
-        className,
-      )}
-      data-slot="table-cell"
-      {...props}
-    />
+    <td className={cellClassName} data-slot="table-cell" {...props}>
+      {children}
+    </td>
   );
 };
 
@@ -304,15 +317,19 @@ const SortableHead = ({
     >
       <span className="inline-flex items-center gap-1">
         <Button
+          // The button's inline padding equals the head's, and the negative
+          // margin cancels exactly that: the label lines up with the cells and
+          // the button never reaches past the table's edge, where a scrolling
+          // container could not reveal it.
           className={cn(
-            "min-w-0 gap-1",
-            endAligned ? "-me-3 flex-row-reverse" : "-ms-3",
+            "min-w-0 gap-1 px-2.5",
+            endAligned ? "-me-2.5 flex-row-reverse" : "-ms-2.5",
           )}
           onClick={onSort}
           type="button"
           variant="muted"
         >
-          <span className="truncate">{children}</span>
+          <TruncatedText>{children}</TruncatedText>
           <span aria-hidden className="inline-flex w-3 shrink-0 justify-center">
             {sortIcon}
           </span>
