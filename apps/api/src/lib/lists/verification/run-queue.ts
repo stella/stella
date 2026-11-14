@@ -677,8 +677,9 @@ type ExecuteRunArgs = {
   execution?: VerificationExecutionBoundaries;
 };
 
-/** The passages a run checks, or the code it fails with when the pinned file
- *  yields none. */
+/** The passages a run checks with the document blocks they come from (which
+ *  number the claims' paragraphs), or the code it fails with when the pinned
+ *  file yields none. */
 const readRunPassages = async ({
   actor,
   file,
@@ -692,7 +693,13 @@ const readRunPassages = async ({
   readDocument: typeof readVerificationDocument;
   signal: AbortSignal;
 }): Promise<
-  Result<NonNullable<ReturnType<typeof runPassages>>, VerificationRunErrorCode>
+  Result<
+    {
+      blocks: readonly VerificationBlock[];
+      passages: NonNullable<ReturnType<typeof runPassages>>;
+    },
+    VerificationRunErrorCode
+  >
 > => {
   const document = await readDocument({
     organizationId: actor.organizationId,
@@ -709,11 +716,13 @@ const readRunPassages = async ({
     return Result.err("no_text");
   }
   // Still waiting on the document byte budget when the run timed out.
-  const passages =
-    document.type === "busy" ? null : runPassages(document.blocks, scope);
+  if (document.type === "busy") {
+    return Result.err("extraction_failed");
+  }
+  const passages = runPassages(document.blocks, scope);
   return passages === null || passages.length === 0
     ? Result.err("extraction_failed")
-    : Result.ok(passages);
+    : Result.ok({ blocks: document.blocks, passages });
 };
 
 const executeRun = async ({
@@ -743,7 +752,7 @@ const executeRun = async ({
   if (Result.isError(read)) {
     return read.error;
   }
-  const passages = read.value;
+  const { blocks, passages } = read.value;
 
   const configResult = await Result.tryPromise({
     try: async () => {
@@ -879,7 +888,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value, document.blocks);
+  const rows = claimRows(actor, claims, graded.value, blocks);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,
