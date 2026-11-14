@@ -16,6 +16,20 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { menuCommitBenches } from "../-visual-metadata";
 
+export const MenuCommitsPlayground = () => (
+  <div className="flex flex-col gap-6 p-4">
+    {Object.entries(BENCH).map(([bench, menu]) => (
+      <section
+        className="bg-card flex w-60 flex-col items-start gap-2 rounded-lg border p-3"
+        data-playground-section={`menu-commits:${bench}`}
+        key={bench}
+      >
+        {menu}
+      </section>
+    ))}
+  </div>
+);
+
 const rows = (count: number) =>
   Array.from({ length: count }, (_, index) => `Row ${String(index + 1)}`);
 const ROWS = rows(3);
@@ -139,17 +153,3 @@ const BENCH = {
     </Menu>
   ),
 } as const satisfies Record<keyof typeof menuCommitBenches, ReactNode>;
-
-export const MenuCommitsPlayground = () => (
-  <div className="flex flex-col gap-6 p-4">
-    {Object.entries(BENCH).map(([bench, menu]) => (
-      <section
-        className="bg-card flex w-60 flex-col items-start gap-2 rounded-lg border p-3"
-        data-playground-section={`menu-commits:${bench}`}
-        key={bench}
-      >
-        {menu}
-      </section>
-    ))}
-  </div>
-);
