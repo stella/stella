@@ -1,6 +1,6 @@
 import type { OnlineMigrationEntry } from "../online-migration-entry";
 
-const INTRODUCED_BY = "20261114210000_corpus_projection_unserved_indexes";
+const INTRODUCED_BY = "20261115000000_corpus_projection_unserved_indexes";
 
 const DELETE_UNPROVEN_SQL =
   "(status = ANY (ARRAY['cleanup_started'::text, 'cleanup_committed'::text, 'cleanup_stalled'::text])) OR ((status = 'cleanup_pending'::text) AND (cleanup_attempts > 0))";

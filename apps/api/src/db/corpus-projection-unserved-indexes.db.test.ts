@@ -20,7 +20,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import unservedIndexes from "./online-migration-entries/indexes-corpus-projection-unserved-gauge";
 
-const MIGRATION = "20261114210000_corpus_projection_unserved_indexes";
+const MIGRATION = "20261115000000_corpus_projection_unserved_indexes";
 const TARGET = { family: "case_law", generation: "case_law_v5" } as const;
 const INDEX_ID = "case_law_v5_cs_sk";
 
