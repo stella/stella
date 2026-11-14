@@ -595,7 +595,8 @@
       "startFailed": "Az ellenőrzést nem sikerült elindítani",
       "status": {
         "running": "Ellenőrzés folyamatban"
-      }
+      },
+      "unreadParts": "{count, plural, one {Az irat # részét nem sikerült beolvasni, ezért az abban szereplő állításokat nem ellenőriztük.} other {Az irat # részét nem sikerült beolvasni, ezért az azokban szereplő állításokat nem ellenőriztük.}}"
     },
     "save": {
       "failed": "Nincs mentve",
@@ -1673,6 +1674,8 @@
         "actions": {
           "click": "Kattintás",
           "fill": "Szöveg beírása",
+          "find": "Keresés az oldalon",
+          "findHeadings": "Az oldal címsorainak listázása",
           "open": "Webhely megnyitása",
           "openNewTab": "Webhely megnyitása új lapon",
           "pressKey": "Billentyű lenyomása",
@@ -1962,6 +1965,24 @@
       "dismiss": "Elvetés és leállítás",
       "secretAnswer": "Rejtett válasz",
       "secretPlaceholder": "Az Ön válasza rejtve marad"
+    },
+    "makeSkill": {
+      "command": "Készség létrehozása ebből a beszélgetésből",
+      "drafted": "A készség vázlata elkészült. Nézze át, majd kapcsolja be.",
+      "drafting": "Készségvázlat készül ebből a beszélgetésből…",
+      "emptyThread": "Először küldjön egy üzenetet, utána a beszélgetésből készség hozható létre.",
+      "failed": "Ebből a beszélgetésből nem sikerült készséget létrehozni",
+      "review": {
+        "description": "A készség vázlata tartalmazza ezeket a neveket. Bárki láthatja őket, aki hozzáfér ehhez a készséghez.",
+        "replaceHint": "Vegye ki a pipát egy név elől, hogy általános helyőrzőre cserélje.",
+        "role": {
+          "organization": "szervezet neve",
+          "person": "személy neve"
+        },
+        "saveAll": "Az összes megtartása és mentés",
+        "saveReplacing": "A nem jelöltek cseréje és mentés",
+        "title": "Mentsük ezeket a neveket a készségbe?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
@@ -3411,6 +3432,11 @@
       "sharepointNotFound": "Ez a webhely, dokumentumtár vagy fájl már nem létezik, vagy nincs megosztva Önnel.",
       "sharepointReconnectRequired": "A Microsoft-bejelentkezése lejárt. Csatlakoztassa újra a SharePointot és a OneDrive-ot.",
       "sharepointThrottled": "A Microsoft korlátozza a kéréseket. Próbálja újra rövidesen.",
+      "skillFromChatAnonymizedThread": "Anonimizált beszélgetésből egyelőre nem hozható létre készség.",
+      "skillFromChatEmptyThread": "Ebben a beszélgetésben még nincs semmi, amiből készség hozható létre.",
+      "skillFromChatLocalRunThread": "Ez a beszélgetés az Ön számítógépén fut, ezért a felhőben nem készül belőle készség.",
+      "skillFromChatThreadNotFound": "Ez a beszélgetés nem található.",
+      "skillFromChatWithdrawn": "A beszélgetés tartalmát visszavonták, ezért abból nem hozható létre készség.",
       "skillSourceUnreachable": "A készség forrását nem sikerült betölteni. Ellenőrizze, hogy a hivatkozás nyilvános GitHub-tárolóra mutat-e, vagy próbálja újra később.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
