@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import fc from "fast-check";
 
 import { roles } from "@stll/permissions";
@@ -8,7 +8,7 @@ import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -28,6 +28,8 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 /**
  * Differential test: every app-side matter access decision agrees with the
@@ -95,12 +97,14 @@ const insertOrganization = async (
     now: new Date(),
   });
   const clientId = createSafeId<"contact">();
-  await tx.insert(contacts).values({
-    id: clientId,
-    organizationId,
-    type: "person",
-    displayName: "Matter access client",
-  });
+  await insertOwnerContacts(tx, [
+    {
+      id: clientId,
+      organizationId,
+      type: "person",
+      displayName: "Matter access client",
+    },
+  ]);
   return clientId;
 };
 
@@ -236,9 +240,7 @@ const withWorld = async (
     try {
       await check({ db, seeded });
     } finally {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, seeded.organizationId));
+      await deleteOrganizationsForTest(db, [seeded.organizationId]);
       await db.delete(user).where(inArray(user.id, seeded.userIds));
     }
   });

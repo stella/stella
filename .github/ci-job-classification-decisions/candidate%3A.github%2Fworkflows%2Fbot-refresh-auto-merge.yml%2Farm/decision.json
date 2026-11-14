@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Arms auto-merge on bot refresh pull requests with a contents-write app token."
+}

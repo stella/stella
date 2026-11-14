@@ -148,7 +148,8 @@ describe("ask-user clarification card", () => {
     expect(html).toContain("<form");
     expect(html).toContain('type="text"');
     expect(html).toContain('type="submit"');
-    expect(html).toContain(">Submit answers</button>");
+    // A label may sit in the button's cut-to-fit span.
+    expect(html).toMatch(/>Submit answers<\/(?:span><\/)?button>/u);
   });
 
   test("keeps option chips out of form submission semantics", () => {
@@ -167,7 +168,11 @@ describe("ask-user clarification card", () => {
     );
 
     expect(html).toContain('type="submit"');
-    expect(html).toContain('type="button">Czech law</button>');
-    expect(html).toContain('type="button">Spanish law</button>');
+    expect(html).toMatch(
+      /<button[^>]*type="button"[^>]*>(?:<span[^>]*>)?Czech law(?:<\/span>)?<\/button>/u,
+    );
+    expect(html).toMatch(
+      /<button[^>]*type="button"[^>]*>(?:<span[^>]*>)?Spanish law(?:<\/span>)?<\/button>/u,
+    );
   });
 });

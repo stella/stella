@@ -1,5 +1,6 @@
 // parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 /**
  * One field inventory for the eleven tribunals this publisher serves.
  *
@@ -30,12 +31,12 @@ import { panic } from "better-result";
 import type { DecisionTextFieldKey } from "@stll/api-contract/case-law-text-field";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { listRisDocumentContentTypes } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import type {
   SourceFieldDisposition,
   SourceFieldInventory,
   SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { listRisDocumentContentTypes } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The envelope part each payload of a decision is stored under. */

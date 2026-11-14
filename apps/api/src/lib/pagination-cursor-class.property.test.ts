@@ -6,9 +6,9 @@
  *
  * So the encoders are exercised here rather than the predicate restated: each
  * one is given the values it actually emits for, and its output has to be
- * recognizable. `encodeGlobalSearchCursor` is the reason the predicate carries
- * no length rule: it concatenates two base64 payloads around `==`, so no
- * single base64 length class covers it.
+ * recognizable. The global search cursor is the reason the predicate carries
+ * no length rule: one issued behind an offset prefix is two base64 payloads
+ * around `==`, so no single base64 length class covers it.
  *
  * `search_boe_legislation` is deliberately absent: the BOE numbers its own
  * pages, so a decimal offset is what a continuation echoes. That property
@@ -18,7 +18,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { decisionDatePositionOf } from "@/api/lib/case-law/decision-date-order";
 import { encodeDecisionSearchCursor } from "@/api/lib/case-law/decision-search-cursor";
@@ -60,7 +60,8 @@ const timestampArbitrary = fc
 
 describe("every cursor encoder emits a cursor the surface recognizes", () => {
   test("encodePaginationCursor, over the part kinds it accepts", () => {
-    fc.assert(
+    assertProperty(
+      "encodePaginationCursor, over the part kinds it accepts",
       fc.property(
         fc.array(
           fc.oneof(
@@ -77,49 +78,55 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
             isIssuablePaginationCursor(encodePaginationCursor(parts)),
           ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeEntitiesWindowCursor, over the sort values a row carries", () => {
-    fc.assert(
+    assertProperty(
+      "encodeEntitiesWindowCursor, over the sort values a row carries",
       fc.property(fc.array(sortValueArbitrary, { maxLength: 8 }), (values) =>
         expect(
           isIssuablePaginationCursor(encodeEntitiesWindowCursor(values)),
         ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeCursor, the shared (score, id) framing", () => {
-    fc.assert(
+    assertProperty(
+      "encodeCursor, the shared (score, id) framing",
       fc.property(scoreArbitrary, uuidArbitrary, (score, id) =>
         expect(isIssuablePaginationCursor(encodeCursor(score, id))).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
-  test("encodeGlobalSearchCursor, whose dual form carries an inner ==", () => {
-    fc.assert(
+  test("encodeGlobalSearchCursor, alone and behind an offset prefix", () => {
+    assertProperty(
+      "encodeGlobalSearchCursor, alone and behind an offset prefix",
       fc.property(
         scoreArbitrary,
         globalHitIdArbitrary,
         fc.integer({ min: 1, max: 999 }),
-        (score, id, seen) =>
-          expect(
-            isIssuablePaginationCursor(
-              encodeGlobalSearchCursor({ score, id, seen }),
-            ),
-          ).toBe(true),
+        (score, id, seen) => {
+          const cursor = encodeGlobalSearchCursor({ tier: 2, score, id, seen });
+          // The form still read from the release that prefixed the payload:
+          // an unpadded offset cursor, `==`, then the payload.
+          const offset = encodeCursor(seen, "global").replace(/[=]+$/u, "");
+          expect(isIssuablePaginationCursor(cursor)).toBe(true);
+          expect(isIssuablePaginationCursor(`${offset}==${cursor}`)).toBe(true);
+        },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeCorpusSearchCursor, over its window and order segments", () => {
-    fc.assert(
+    assertProperty(
+      "encodeCorpusSearchCursor, over its window and order segments",
       fc.property(
         scoreArbitrary,
         uuidArbitrary,
@@ -139,12 +146,13 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
             ),
           ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeDecisionSearchCursor, in every order", () => {
-    fc.assert(
+    assertProperty(
+      "encodeDecisionSearchCursor, in every order",
       fc.property(
         scoreArbitrary,
         uuidArbitrary,
@@ -164,18 +172,19 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
             ),
           ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("the keyset codecs built on encodePaginationCursor", () => {
-    fc.assert(
+    assertProperty(
+      "the keyset codecs built on encodePaginationCursor",
       fc.property(timestampArbitrary, uuidArbitrary, (timestamp, id) =>
         expect(
           isIssuablePaginationCursor(encodePaginationCursor([timestamp, id])),
         ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 

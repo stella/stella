@@ -56,6 +56,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33232
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35620
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 35862
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36046
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36247
       }
     ],
     "anthropic/extended": [
@@ -114,6 +130,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33722
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36110
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36352
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36535
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36738
       }
     ],
     "bedrock/default": [
@@ -168,6 +200,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33487
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35874
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36122
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36306
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36507
       }
     ],
     "bedrock/extended": [
@@ -222,6 +270,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33975
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36363
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36611
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 36883
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37179
       }
     ],
     "google/default": [
@@ -272,6 +336,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 32597
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 34625
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 34851
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 35035
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 35237
       }
     ],
     "google/extended": [
@@ -318,6 +398,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33075
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35103
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 35329
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 35513
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 35714
       }
     ],
     "mistral/default": [
@@ -372,6 +468,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34781
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37096
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37353
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37637
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37940
       }
     ],
     "mistral/extended": [
@@ -426,6 +538,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35307
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37623
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37879
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38163
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38467
       }
     ],
     "openai/default": [
@@ -480,6 +608,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34363
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36678
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36929
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37213
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37516
       }
     ],
     "openai/extended": [
@@ -534,6 +678,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34878
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37193
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37445
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37728
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38031
       }
     ],
     "openrouter-anthropic/default": [
@@ -588,6 +748,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34609
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37079
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37340
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37925
       }
     ],
     "openrouter-anthropic/extended": [
@@ -642,6 +818,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35120
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37591
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37852
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38436
       }
     ],
     "openrouter/default": [
@@ -696,6 +888,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34609
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37079
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37340
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37925
       }
     ],
     "openrouter/extended": [
@@ -750,6 +958,22 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35120
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37591
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37852
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38436
       }
     ]
   },

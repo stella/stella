@@ -19,6 +19,9 @@ import type { SearchFilters } from "./search-filters.logic";
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
   mock.restore();
+  // Restore any spy installed on the shared search module so a preset
+  // test cannot leak a stubbed clock into the next test.
+  spyOn(search, "presetUpdatedFrom").mockRestore();
 });
 
 const baseFilters = (
@@ -146,12 +149,6 @@ describe("search summary visibility", () => {
       }),
     ).toBe(false);
   });
-});
-
-afterEach(() => {
-  // Restore any spy installed on the shared search module so a preset
-  // test cannot leak a stubbed clock into the next test.
-  spyOn(search, "presetUpdatedFrom").mockRestore();
 });
 
 describe("resolveUpdatedFrom", () => {

@@ -9,25 +9,20 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { getTranslator } from "@/i18n/translator";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
-import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { replaceCachedFileName } from "@/lib/files/queries";
-import { inboxKeys } from "@/lib/inbox/queries";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
-import {
-  invalidateDeletedEntityQueries,
-  invalidateRenamedEntityQueries,
-} from "@/lib/workspaces/mutations/entities.logic";
-import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -40,7 +35,7 @@ type CreateEntitiesVars = {
 export const useCreateEntities = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateEntitiesVars) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -60,6 +55,7 @@ export const useCreateEntities = () => {
         fingerprintKey: "useCreateEntities:failure",
         scope: { type: "handler", handlerId: "useCreateEntities:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -96,6 +92,7 @@ export const useDeleteEntities = () => {
         fingerprintKey: "useDeleteEntities:failure",
         scope: { type: "handler", handlerId: "useDeleteEntities:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -125,6 +122,7 @@ export const useMoveEntity = () => {
         fingerprintKey: "useMoveEntity:failure",
         scope: { type: "handler", handlerId: "useMoveEntity:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -139,13 +137,11 @@ type CreateFolderFromSelectionVars = {
 export const useCreateFolderFromSelection = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      name,
-      parentId,
-      entityIds,
-    }: CreateFolderFromSelectionVars) =>
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, name, parentId, entityIds }: CreateFolderFromSelectionVars,
+      intentRequest,
+    ) =>
       await invokeCapability(
         "entities.folder-from-selection.create",
         async (request) => {
@@ -160,7 +156,10 @@ export const useCreateFolderFromSelection = () => {
                 toSafeId<"entity">(entityId),
               ),
             },
-            request,
+            {
+              ...request,
+              fetch: { headers: intentRequest.headers },
+            },
           );
           return unwrapApiResponse(response);
         },
@@ -173,6 +172,7 @@ export const useCreateFolderFromSelection = () => {
           handlerId: "entities.folder-from-selection.create",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -198,11 +198,10 @@ const renameQueues = new WeakMap<QueryClient, Map<string, Promise<void>>>();
 export const useRenameEntity = (
   inspectorStore?: StoreApi<InspectorTabsStore>,
 ) => {
-  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const reportFailure = (
+  const notifyRenameFailure = (
     error: unknown,
     fingerprintKey: ExceptionFingerprintKey,
   ) => {
@@ -212,6 +211,23 @@ export const useRenameEntity = (
     });
     notifyUserError(error, t("errors.actionFailed"));
   };
+
+  const renameEntityRequest = async ({
+    workspaceId,
+    entityId,
+    name,
+  }: RenameEntityInvocation) => {
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .rename.patch({ entityId: toSafeId<"entity">(entityId), name });
+    return unwrapApiResponse(response);
+  };
+
+  const renameMutation = resourceMutation({
+    mutation: "renameEntity",
+    queryClient,
+    mutationFn: renameEntityRequest,
+  });
 
   const mutation = useMutation({
     onMutate: async ({
@@ -262,16 +278,7 @@ export const useRenameEntity = (
       }
       return optimistic.value;
     },
-    mutationFn: async ({
-      workspaceId,
-      entityId,
-      name,
-    }: RenameEntityInvocation) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .rename.patch({ entityId: toSafeId<"entity">(entityId), name });
-      return unwrapApiResponse(response);
-    },
+    mutationFn: renameMutation,
     onSuccess: (data, { workspaceId, entityId }, context) => {
       const reconciled = Result.try(() => {
         const store = inspectorStore
@@ -309,52 +316,22 @@ export const useRenameEntity = (
         });
       }
       context.release();
-      // Refetches repair caches independently of the committed mutation's settlement.
-      detached(
-        (async () => {
-          await Promise.all([
-            invalidateRenamedEntityQueries({
-              queryClient,
-              workspaceId,
-              entityId,
-            }),
-            queryClient.invalidateQueries({
-              queryKey: entityViewKeys.all(activeOrganizationId, userId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: inboxKeys.all(activeOrganizationId, userId),
-            }),
-            ...(data.file
-              ? [
-                  queryClient.invalidateQueries({
-                    queryKey: fileMetadataByFieldQueryRoot({
-                      workspaceId,
-                      fieldId: data.file.fieldId,
-                    }),
-                  }),
-                ]
-              : []),
-          ]);
-        })(),
-        "entity-rename.refresh",
-      );
     },
     onError: (error, { workspaceId, entityId, name }, context) => {
       const rolledBack = Result.try(() => {
-        if (context?.previousLabel === undefined) {
-          return;
-        }
-        const store = inspectorStore
-          ? inspectorStore.getState()
-          : useInspectorTabsStore.getState();
-        for (const tab of store.tabs) {
-          if (
-            tab.type === "pdf" &&
-            tab.workspaceId === workspaceId &&
-            tab.entityId === entityId &&
-            tab.label === name
-          ) {
-            store.updateLabel(tab.id, context.previousLabel);
+        if (context?.previousLabel !== undefined) {
+          const store = inspectorStore
+            ? inspectorStore.getState()
+            : useInspectorTabsStore.getState();
+          for (const tab of store.tabs) {
+            if (
+              tab.type === "pdf" &&
+              tab.workspaceId === workspaceId &&
+              tab.entityId === entityId &&
+              tab.label === name
+            ) {
+              store.updateLabel(tab.id, context.previousLabel);
+            }
           }
         }
       });
@@ -364,7 +341,7 @@ export const useRenameEntity = (
           scope: { type: "handler", handlerId: "useRenameEntity:failure-2" },
         });
       }
-      reportFailure(error, "useRenameEntity:rename");
+      notifyRenameFailure(error, "useRenameEntity:rename");
     },
     onSettled: (_data, error, { completion }, context) => {
       context?.release();
@@ -376,7 +353,7 @@ export const useRenameEntity = (
         completion?.onSuccess?.();
       });
       if (completed.isErr()) {
-        reportFailure(completed.error, "useRenameEntity:completion");
+        notifyRenameFailure(completed.error, "useRenameEntity:completion");
       }
     },
   });

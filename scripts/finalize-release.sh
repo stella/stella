@@ -28,11 +28,39 @@ if git show-ref --verify --quiet "refs/tags/$final"; then
   fi
   echo "Final tag $final already targets $sha; resuming publication." >&2
 else
+  # Each proof workflow re-enters here when it completes, so while another
+  # proof of this candidate is still queued or running, its own completion
+  # finalizes: this one writes nothing and leaves a notice.
+  for workflow in deploy-staging.yml main-heavy.yml main-pr-depth.yml; do
+    running=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" api \
+      "repos/$repo/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=50" \
+      | jq -r --arg sha "$sha" '[.workflow_runs[] | select(.status != "completed" and (.display_title | endswith(" " + $sha)))] | length')
+    if [[ "$running" != 0 ]]; then
+      echo "::notice::Final tag $final waits for the running $workflow proof of $sha" >&2
+      exit 0
+    fi
+  done
   GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
+  # The final tag starts the production promote, so a proven candidate waits
+  # for the production gate: the newest release/prod-gate status on this exact
+  # commit, set by a person, must be success. Setting it re-runs this
+  # finalization (release-tag.yml `status` trigger); until then nothing is
+  # written.
+  gate=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100" \
+    | jq -r '([.[][] | select(.context == "release/prod-gate")][0]) as $gate
+      | if $gate == null then "missing"
+        elif $gate.creator.type != "User" then "not-a-person"
+        else $gate.state end')
+  if [[ "$gate" != success ]]; then
+    echo "::notice::Final tag $final waits for release/prod-gate=success on $sha (now: $gate)" >&2
+    exit 0
+  fi
   git tag -a "$final" "$rc_sha" -m "$final"
   git push "https://x-access-token:${GH_TOKEN:?}@github.com/$repo.git" "refs/tags/$final"
 fi
-is_draft=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" release view "$rc" --repo "$repo" --json isDraft --jq '.isDraft')
+# The RC release is a draft until published here, and only a token with
+# push access sees a draft, so this read uses the tag token.
+is_draft=$(bash "$gh_retry_script" release view "$rc" --repo "$repo" --json isDraft --jq '.isDraft')
 case "$is_draft" in
   true) bash "$gh_retry_script" release edit "$rc" --repo "$repo" --draft=false --prerelease --latest=false ;;
   false) ;;

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { DATABASE_COMPONENT_KEYS } from "./db-components";
 import { APPLICATION_RLS_ROLE_NAME } from "./db/role-names";
 import {
   isLoopbackHostname,
@@ -15,18 +16,6 @@ import {
  * useful when the password is sourced from a different place than
  * the rest of the connection metadata.
  */
-
-/**
- * The components this helper requires when it assembles a URL. DB_SSLMODE is
- * absent on purpose: it defaults to `require` when unset.
- */
-export const DATABASE_COMPONENT_KEYS = [
-  "DB_HOST",
-  "DB_PORT",
-  "DB_USER",
-  "DB_PASSWORD",
-  "DB_NAME",
-] as const;
 
 // Only TLS-enforcing modes are allowed via DB_SSLMODE. `disable`,
 // `allow`, and `prefer` would silently downgrade transport security

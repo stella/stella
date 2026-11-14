@@ -487,8 +487,8 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           panic("Expected lease-loss refusal");
         }
         expect(lost.error).toMatchObject({
-          reason: "unavailable",
-          code: "action_admission_unavailable",
+          reason: "lease_lost",
+          code: "action_admission_lease_lost",
         });
         expect(
           await withMcpPublicReadAdmission({

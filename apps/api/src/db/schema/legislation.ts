@@ -9,6 +9,7 @@ import {
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
+import type { StoredStatuteVersionChanges } from "@stll/api-contract/statute-version-changes";
 
 import {
   LEGISLATION_AMENDMENT_CHANGE_KINDS,
@@ -31,10 +32,13 @@ import {
   publicLawReaderPolicies,
   pUuid,
   safeUuid,
+  safeWorkspaceId,
   sql,
   stellaPublicLawReader,
   timestamptz,
   tsvector,
+  user,
+  wsPolicies,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -42,6 +46,7 @@ import type {
   DocumentAst,
   EmptyAst,
 } from "./common";
+import { workspaces } from "./contacts";
 import {
   CORPUS_INDEX_JOB_OPERATION_SQL_VALUES,
   CORPUS_INDEX_JOB_STATUS_SQL_VALUES,
@@ -305,6 +310,14 @@ export const legislationDocuments = p.pgTable(
       .bigint("payload_revision", { mode: "bigint" })
       .default(1n)
       .notNull(),
+    /**
+     * What this consolidation changed against the eligible one before it, and
+     * the payload revisions of both it was computed from; null until computed.
+     * Derived state, owned by `legislation-version-changes.ts`: written after
+     * ingestion stores a version and by its backfill, never by the payload
+     * write itself, so it advances no payload revision.
+     */
+    changeSummary: jsonb("change_summary").$type<StoredStatuteVersionChanges>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -502,6 +515,41 @@ export const legislationDocuments = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
     ...corpusSampleReaderPolicies(),
+  ],
+);
+
+/** A reproducible provision version pinned to a tenant matter. */
+export const legislationMatterLinks = p.pgTable(
+  "legislation_matter_links",
+  {
+    id: pUuid<"legislationMatterLink">().primaryKey(),
+    documentId: safeUuid<"legislationDocument">("document_id").notNull(),
+    statuteId: p.varchar("statute_id", { length: 512 }).notNull(),
+    provisionId: p.text("provision_id").notNull(),
+    appliedVersion: p.date("applied_version").notNull(),
+    jurisdiction: p.varchar({ length: 3 }).notNull(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    linkedBy: p
+      .text("linked_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "legislation_matter_links_document_fk",
+        columns: [t.documentId],
+        foreignColumns: [legislationDocuments.id],
+      })
+      .onDelete("restrict"),
+    p
+      .uniqueIndex("legislation_matter_links_provision_ws_idx")
+      .on(t.documentId, t.provisionId, t.workspaceId),
+    p.index("legislation_matter_links_workspace_idx").on(t.workspaceId),
+    ...wsPolicies({ columns: t }),
   ],
 );
 

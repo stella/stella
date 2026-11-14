@@ -3,7 +3,6 @@ import { randomInt } from "node:crypto";
 import {
   appendFileSync,
   chmodSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { GITLEAKS_VERSION } from "./gitleaks-pins";
 
 const SCRIPT = fileURLToPath(
   new URL("check-staged-secrets.ts", import.meta.url),
@@ -62,6 +63,7 @@ writeFileSync(
   `#!/usr/bin/env bun
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
+if (args[0] === "version") { console.log(${JSON.stringify(GITLEAKS_VERSION)}); process.exit(0); }
 appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(args) + "\\n");
 const behavior = JSON.parse(readFileSync(${JSON.stringify(fakeBehavior)}, "utf-8"));
 if (behavior.exit !== undefined) process.exit(behavior.exit);
@@ -94,60 +96,37 @@ process.exit(findings.length > 0 ? Number(option("--exit-code") ?? 1) : 0);
 );
 chmodSync(path.join(fakeBin, "gitleaks"), 0o755);
 
+// Inject only the scanner transport for staged-diff cases. Provisioning and
+// executable attestation are exercised by gitleaks.test.ts and the CLI cases.
+const fakeDriver = path.join(root, "fake-driver.ts");
+writeFileSync(
+  fakeDriver,
+  `import { checkStagedSecrets } from ${JSON.stringify(SCRIPT)};
+process.exit(checkStagedSecrets(${JSON.stringify(path.join(fakeBin, "gitleaks"))}));
+`,
+);
+
 type Scanner = "fake" | "real";
 
 const scan = (repo: string, scanner: Scanner, behavior: FakeBehavior = {}) => {
   writeFileSync(fakeBehavior, JSON.stringify(behavior));
-  const result = Bun.spawnSync([process.execPath, SCRIPT], {
-    cwd: repo,
-    env: {
-      ...baseEnv,
-      ...(scanner === "fake"
-        ? { PATH: `${fakeBin}:${baseEnv["PATH"] ?? ""}` }
-        : {}),
+  const result = Bun.spawnSync(
+    [process.execPath, scanner === "fake" ? fakeDriver : SCRIPT],
+    {
+      cwd: repo,
+      env: {
+        ...baseEnv,
+        ...(scanner === "fake"
+          ? { PATH: `${fakeBin}:${baseEnv["PATH"] ?? ""}` }
+          : {}),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
     },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return {
-    exitCode: result.exitCode,
-    output: `${result.stdout.toString()}${result.stderr.toString()}`,
-  };
-};
-
-const scanWithoutGitleaks = (
-  repo: string,
-  installer: string,
-  hosted: boolean,
-) => {
-  const bin = path.join(repo, "empty-bin");
-  const scripts = path.join(repo, "scripts");
-  const installerLog = path.join(repo, "installer.log");
-  const scanLog = path.join(repo, "scan.log");
-  mkdirSync(bin);
-  mkdirSync(scripts);
-  writeFileSync(
-    path.join(scripts, "cloud-env-secret-scanner-setup.sh"),
-    `#!/bin/bash\necho run >> ${JSON.stringify(installerLog)}\n${installer}\n`,
   );
-  const result = Bun.spawnSync([process.execPath, SCRIPT], {
-    cwd: repo,
-    env: {
-      ...baseEnv,
-      PATH: `${bin}:/usr/bin:/bin`,
-      ...(hosted ? { CLAUDE_CODE_REMOTE: "true" } : {}),
-      TEST_SCAN_LOG: scanLog,
-    },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
   return {
     exitCode: result.exitCode,
-    installerRuns: existsSync(installerLog)
-      ? readFileSync(installerLog, "utf-8").trim().split("\n").length
-      : 0,
     output: `${result.stdout.toString()}${result.stderr.toString()}`,
-    scanInvoked: existsSync(scanLog),
   };
 };
 
@@ -169,65 +148,29 @@ const initRepo = (): string => {
   return dir;
 };
 
-describe("hosted environment scanner setup", () => {
-  // Hosted sessions are Linux only; on any other platform the marker alone never installs.
-  const onLinux = process.platform === "linux";
-
-  test.if(onLinux)(
-    "a hosted session installs a missing scanner once and scans",
-    () => {
-      const repo = initRepo();
-      const result = scanWithoutGitleaks(
-        repo,
-        `cat > empty-bin/gitleaks <<'EOF'\n#!/bin/bash\necho scan >> "$TEST_SCAN_LOG"\nexit 0\nEOF\nchmod +x empty-bin/gitleaks`,
-        true,
-      );
-      expect(result.installerRuns).toBe(1);
-      expect(result.scanInvoked).toBe(true);
-      expect(result.exitCode).toBe(0);
-    },
-  );
-
-  test("a developer machine refuses without running the installer", () => {
+test.each([{}, { CLAUDE_CODE_REMOTE: "true" }, { CODEX_CI: "1" }])(
+  "a corrupt scanner archive refuses on every host: %j",
+  (hostEnv) => {
     const repo = initRepo();
-    const result = scanWithoutGitleaks(repo, "exit 0", false);
-    expect(result.installerRuns).toBe(0);
-    expect(result.output).toContain(
-      "error: gitleaks is required for pre-commit secret scanning.",
+    const archive = path.join(
+      repo,
+      "stella",
+      "gitleaks",
+      GITLEAKS_VERSION,
+      `${process.platform}-${process.arch}`,
     );
+    mkdirSync(archive, { recursive: true });
+    writeFileSync(path.join(archive, "archive.tar.gz"), "corrupted");
+    const result = Bun.spawnSync([process.execPath, SCRIPT], {
+      cwd: repo,
+      env: { ...baseEnv, ...hostEnv, XDG_CACHE_HOME: repo },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     expect(result.exitCode).toBe(1);
-  });
-
-  test.if(onLinux)(
-    "a hosted session preserves the installer failure reason",
-    () => {
-      const repo = initRepo();
-      const result = scanWithoutGitleaks(
-        repo,
-        'echo "gitleaks NOT installed: download failed" >&2',
-        true,
-      );
-      expect(result.installerRuns).toBe(1);
-      expect(result.output).toContain(
-        "gitleaks NOT installed: download failed",
-      );
-      expect(result.exitCode).toBe(1);
-    },
-  );
-
-  test.if(!onLinux)(
-    "a hosted marker off Linux refuses without running the installer",
-    () => {
-      const repo = initRepo();
-      const result = scanWithoutGitleaks(repo, "exit 0", true);
-      expect(result.installerRuns).toBe(0);
-      expect(result.output).toContain(
-        "error: gitleaks is required for pre-commit secret scanning.",
-      );
-      expect(result.exitCode).toBe(1);
-    },
-  );
-});
+    expect(result.stderr.toString()).toContain("checksum mismatch");
+  },
+);
 
 /**
  * A feature branch merging main, where main added a token line after the

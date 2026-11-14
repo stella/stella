@@ -1,0 +1,7 @@
+# Projecting tenant-held decision copies at read time
+
+Generated from `scripts/ownership/case-law-withdrawal-status.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                         | Owner                                           | Enforcement                                                                                                                                | Summary                                                                                                                                                      |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `case-law-withdrawal-status` — Projecting tenant-held decision copies at read time | `apps/api/src/lib/case-law/withdrawn-copies.ts` | custom rule `public-case-law-db-boundary` (Schema imports and SQL reads of the withdrawal view are confined to the copy projection owner.) | One batched public-corpus read resolves withdrawal status for copy projections. The status view exposes decision ids, status and withdrawal timestamps only. |

@@ -1,10 +1,12 @@
-import { PDF } from "@libpdf/core";
+import { PDF, PdfBool, PdfNumber, PdfString } from "@libpdf/core";
+import type { TimestampAuthority } from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { archivalTimestampSize } from "@/api/lib/files/pdf-signing/archival-timestamp";
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 import {
   applySignature,
@@ -19,6 +21,7 @@ import {
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { settled } from "@/api/tests/helpers/settled";
 import { createSignedPdf } from "@/api/tests/helpers/signed-pdf";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import {
   createTestCertificate,
   createTestCrl,
@@ -29,6 +32,8 @@ import {
   createTestTimestampAuthority,
   createTestTimestampCertificate,
 } from "@/api/tests/helpers/timestamp-token";
+
+const testFetchState = createTestFetch();
 
 const keyPool = createTestRsaKeyPool();
 const permit = grantThirdPartyOutboundPermit();
@@ -72,6 +77,58 @@ const buildBasePdf = async () => {
 
 const SIGNING_TIME = new Date("2026-06-01T12:00:00.000Z");
 
+/** Trust in exactly these anchors, nothing shipped. */
+const anchorTrust = (anchors: readonly Uint8Array[]) => ({
+  anchors,
+  pinnedUnits: new Set<string>(),
+});
+
+type ScriptedAuthorityOptions = {
+  /** Answers the first request, the signature's timestamp. */
+  signature: TimestampAuthority;
+  /** Answers every later request, the archival document timestamp. */
+  archival: TimestampAuthority;
+};
+
+/**
+ * An authority that answers the signature's timestamp and the archival
+ * document timestamp from different authorities.
+ */
+const scriptedAuthority = ({
+  signature,
+  archival,
+}: ScriptedAuthorityOptions): TimestampAuthority => {
+  let calls = 0;
+  return {
+    timestamp: async (digest, algorithm) => {
+      calls += 1;
+      return await (calls === 1 ? signature : archival).timestamp(
+        digest,
+        algorithm,
+      );
+    },
+  };
+};
+
+const latin1 = (bytes: Uint8Array) => Buffer.from(bytes).toString("latin1");
+
+/**
+ * The `/ByteRange` of the last document timestamp; LibPDF writes it after
+ * the dictionary's `/Type`.
+ */
+const docTimeStampByteRange = (bytes: Uint8Array) => {
+  const text = latin1(bytes);
+  const at = text.lastIndexOf("/DocTimeStamp");
+  if (at === -1) {
+    return null;
+  }
+  const dictionary = text.slice(at);
+  const match = /\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/u.exec(
+    dictionary,
+  );
+  return match === null ? null : match.slice(1).map(Number);
+};
+
 const digestOf = async (
   invocation: Parameters<typeof captureSigningDigest>[0],
 ) => (await settled(captureSigningDigest(invocation))).digestHex;
@@ -99,7 +156,7 @@ const buildInvocation = async () => {
       signatureAlgorithm: "RSASSA-PKCS1-v1_5" as const,
       signingTime: SIGNING_TIME,
       stamp: null,
-      timestampTrustAnchors: [] as Uint8Array[],
+      timestampTrust: anchorTrust([]),
     },
     privateKey,
   };
@@ -257,13 +314,15 @@ describe("two-phase PDF signing", () => {
           },
           { authority: working, url: "https://tsa-up.example/" },
         ],
-        timestampTrustAnchors: [working.signer.der],
+        timestampTrust: anchorTrust([working.signer.der]),
       }),
     );
 
     // The timestamp is phase 2's alone: adding it did not change the digest
-    // phase 1 published, or the signer above would have refused.
-    expect(working.issued()).toBe(1);
+    // phase 1 published, or the signer above would have refused. The second
+    // token is the archival one, fetched down the same list.
+    expect(working.issued()).toBe(2);
+    expect(applied.level).toBe("B-LTA");
     expect(applied.timestampAuthorityUrl).toBe("https://tsa-up.example/");
     expect(applied.bytes.byteLength).toBeGreaterThan(
       invocation.basePdf.byteLength,
@@ -275,15 +334,23 @@ describe("two-phase PDF signing", () => {
     const ROOT_CRL_URL = "http://crl.example/root.crl";
 
     const signUnderIssuingCa = async ({
+      archivalAuthority,
       chainComplete,
       crlServed = true,
+      extraCrls = {},
       leafRevoked = false,
+      now,
       timestampAnchors,
       timestampSigner,
     }: {
+      /** Answers every timestamp request after the signature's own. */
+      archivalAuthority?: TimestampAuthority;
       chainComplete: boolean;
       crlServed?: boolean;
+      /** More CRLs the revocation fetcher serves, by URL. */
+      extraCrls?: Record<string, Uint8Array>;
       leafRevoked?: boolean;
+      now?: () => number;
       /** Default: pin the timestamp authority's own certificate. */
       timestampAnchors?: (signer: TestCertificate) => Uint8Array[];
       timestampSigner?: TestCertificate;
@@ -320,7 +387,7 @@ describe("two-phase PDF signing", () => {
           if (url === ROOT_CRL_URL) {
             return rootCrl;
           }
-          return url === CRL_URL ? crl : null;
+          return url === CRL_URL ? crl : (extraCrls[url] ?? null);
         },
       });
 
@@ -347,14 +414,16 @@ describe("two-phase PDF signing", () => {
       // reach it, whatever the certificate's URLs name.
       const globalFetch = globalThis.fetch;
       const globalFetches: string[] = [];
-      globalThis.fetch = Object.assign(
-        async (input: Parameters<typeof fetch>[0]) => {
-          globalFetches.push(
-            input instanceof Request ? input.url : input.toString(),
-          );
-          throw new Error("unexpected global fetch");
-        },
-        { preconnect: globalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (input: Parameters<typeof fetch>[0]) => {
+            globalFetches.push(
+              input instanceof Request ? input.url : input.toString(),
+            );
+            throw new Error("unexpected global fetch");
+          },
+          { preconnect: globalFetch.preconnect },
+        ),
       );
       try {
         const applied = await settled(
@@ -366,11 +435,21 @@ describe("two-phase PDF signing", () => {
             revocationProvider,
             signature,
             timestampAuthorities: [
-              { authority: tsa, url: "https://tsa.example/" },
+              {
+                authority:
+                  archivalAuthority === undefined
+                    ? tsa
+                    : scriptedAuthority({
+                        signature: tsa,
+                        archival: archivalAuthority,
+                      }),
+                url: "https://tsa.example/",
+              },
             ],
-            timestampTrustAnchors: (
-              timestampAnchors ?? ((signer) => [signer.der])
-            )(tsa.signer),
+            ...(now !== undefined && { now }),
+            timestampTrust: anchorTrust(
+              (timestampAnchors ?? ((signer) => [signer.der]))(tsa.signer),
+            ),
           }),
         );
         return {
@@ -379,9 +458,10 @@ describe("two-phase PDF signing", () => {
           crl,
           fetched,
           globalFetches,
+          tsa,
         };
       } finally {
-        globalThis.fetch = globalFetch;
+        testFetchState.restore();
       }
     };
 
@@ -397,7 +477,7 @@ describe("two-phase PDF signing", () => {
         ),
       ).toBe(true);
 
-      expect(applied.level).toBe("B-LT");
+      expect(applied.level).toBe("B-LTA");
       expect(applied.warnings).toEqual([]);
       expect(fetched).toContain(CRL_URL);
       expect(globalFetches).toEqual([]);
@@ -445,17 +525,20 @@ describe("two-phase PDF signing", () => {
       );
     });
 
-    test("never counts time from an authority no anchor vouches for", async () => {
+    test("timestamps with an authority no anchor vouches for, and says so", async () => {
+      // A public, non-qualified authority: the level names what the
+      // signature carries; trust is the validator's call, reported here.
       const { applied } = await signUnderIssuingCa({
         chainComplete: true,
         timestampAnchors: () => [],
       });
 
-      expect(applied.level).toBe("B-B");
+      expect(applied.level).toBe("B-LTA");
       expect(applied.timestampAuthorityUrl).toBe("https://tsa.example/");
-      expect(applied.warnings.map(({ code }) => code)).toContain(
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
         "TIMESTAMP_UNTRUSTED",
-      );
+        "ARCHIVE_TIMESTAMP_UNTRUSTED",
+      ]);
     });
 
     test("trusts time whose chain reaches a configured CA", async () => {
@@ -504,10 +587,177 @@ describe("two-phase PDF signing", () => {
         timestampSigner: minted,
       });
 
-      expect(applied.level).toBe("B-B");
-      expect(applied.warnings.map(({ code }) => code)).toContain(
-        "TIMESTAMP_UNTRUSTED",
+      // Its chain cannot be completed either, so no validation data.
+      expect(applied.level).toBe("B-T");
+      expect(applied.warnings.map(({ code }) => code)).toEqual(
+        expect.arrayContaining([
+          "TIMESTAMP_UNTRUSTED",
+          "TIMESTAMP_CHAIN_INCOMPLETE",
+        ]),
       );
+    });
+
+    describe("the archival document timestamp", () => {
+      const ARCHIVE_CRL_URL = "http://crl.example/archive-tsa.crl";
+
+      /** An archival authority issued by its own CA, with a CRL URL. */
+      const archivalAuthorityUnderCa = async () => {
+        const tsaCa = await createTestCertificate({
+          keyPool,
+          commonName: "Archive timestamp CA",
+          isCa: true,
+        });
+        const authority = await createTestTimestampAuthority({
+          signer: await createTestTimestampCertificate({
+            keyPool,
+            crlUrl: ARCHIVE_CRL_URL,
+            issuer: tsaCa,
+          }),
+        });
+        return { authority, crl: await createTestCrl(tsaCa), tsaCa };
+      };
+
+      test("seals the B-LT document with a document timestamp over all of it", async () => {
+        const { applied, basePdf, crl, tsa } = await signUnderIssuingCa({
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LTA");
+        expect(applied.warnings).toEqual([]);
+        expect(tsa.issued()).toBe(2);
+        expect(
+          Buffer.from(applied.bytes.subarray(0, basePdf.byteLength)).equals(
+            Buffer.from(basePdf),
+          ),
+        ).toBe(true);
+        const text = latin1(applied.bytes);
+        expect(text).toContain("/SubFilter /ETSI.RFC3161");
+        // The timestamp covers the whole document before it, the signature's
+        // store included; its authority's data was already in that store,
+        // so nothing follows it.
+        const range = docTimeStampByteRange(applied.bytes);
+        expect(range?.at(0)).toBe(0);
+        expect((range?.at(2) ?? 0) + (range?.at(3) ?? 0)).toBe(
+          applied.bytes.byteLength,
+        );
+        expect(
+          Buffer.from(applied.bytes).indexOf(Buffer.from(crl)),
+        ).toBeLessThan(range?.at(1) ?? 0);
+        expect(await PDF.load(applied.bytes)).toBeDefined();
+      });
+
+      test("adds the archival authority's validation data in one more store", async () => {
+        const archival = await archivalAuthorityUnderCa();
+        const { applied, globalFetches } = await signUnderIssuingCa({
+          archivalAuthority: archival.authority,
+          chainComplete: true,
+          extraCrls: { [ARCHIVE_CRL_URL]: archival.crl },
+          timestampAnchors: (signer) => [signer.der, archival.tsaCa.der],
+        });
+
+        expect(applied.level).toBe("B-LTA");
+        expect(applied.warnings).toEqual([]);
+        expect(globalFetches).toEqual([]);
+        const range = docTimeStampByteRange(applied.bytes);
+        const end = (range?.at(2) ?? 0) + (range?.at(3) ?? 0);
+        // The authority's CRL lands after the timestamp, in its own update.
+        expect(end).toBeLessThan(applied.bytes.byteLength);
+        expect(
+          Buffer.from(applied.bytes).indexOf(Buffer.from(archival.crl)),
+        ).toBeGreaterThan(end);
+      });
+
+      test("stays B-LT, timestamp kept, when the archival authority has no revocation data", async () => {
+        const archival = await archivalAuthorityUnderCa();
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: archival.authority,
+          chainComplete: true,
+          timestampAnchors: (signer) => [signer.der, archival.tsaCa.der],
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_REVOCATION_UNAVAILABLE",
+        ]);
+        expect(docTimeStampByteRange(applied.bytes)).not.toBeNull();
+        expect(await PDF.load(applied.bytes)).toBeDefined();
+      });
+
+      test("reaches B-LTA with an archival authority no anchor vouches for, and says so", async () => {
+        const archival = await createTestTimestampAuthority({ keyPool });
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: archival,
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LTA");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNTRUSTED",
+        ]);
+        // Its certificate is new to the store, so one more update after the
+        // timestamp carries a store again (its streams may be compressed, so
+        // the certificate itself is not searched for).
+        const range = docTimeStampByteRange(applied.bytes);
+        const end = (range?.at(2) ?? 0) + (range?.at(3) ?? 0);
+        expect(end).toBeLessThan(applied.bytes.byteLength);
+        expect(latin1(applied.bytes).lastIndexOf("/DSS")).toBeGreaterThan(end);
+        expect(archival.issued()).toBe(1);
+      });
+
+      test("keeps the B-LT bytes when no authority issues the archival timestamp", async () => {
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: {
+            timestamp: async () => {
+              throw new Error("authority unreachable");
+            },
+          },
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNAVAILABLE",
+        ]);
+        expect(docTimeStampByteRange(applied.bytes)).toBeNull();
+        expect(await PDF.load(applied.bytes)).toBeDefined();
+      });
+
+      test("keeps the B-LT bytes when the archival token outgrows its reservation", async () => {
+        const { applied } = await signUnderIssuingCa({
+          archivalAuthority: await createTestTimestampAuthority({
+            keyPool,
+            misbehaviour: { padding: 60 },
+          }),
+          chainComplete: true,
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNAVAILABLE",
+        ]);
+        expect(docTimeStampByteRange(applied.bytes)).toBeNull();
+      });
+
+      test("skips the archival timestamp when phase 2's budget is spent", async () => {
+        // The first reading starts the budget; the next one finds it spent.
+        const readings = [0, 74_000];
+        const { applied, tsa } = await signUnderIssuingCa({
+          chainComplete: true,
+          now: () => readings.shift() ?? 74_000,
+        });
+
+        expect(applied.level).toBe("B-LT");
+        expect(applied.warnings.map(({ code }) => code)).toEqual([
+          "ARCHIVE_TIMESTAMP_UNAVAILABLE",
+        ]);
+        expect(tsa.issued()).toBe(1);
+      });
+
+      test("reserves room for at least the signature's own token", () => {
+        expect(archivalTimestampSize(0)).toBe(16_384);
+        expect(archivalTimestampSize(30_000)).toBeGreaterThanOrEqual(34_096);
+        expect(archivalTimestampSize(30_000) % 1024).toBe(0);
+      });
     });
 
     test("refuses to embed a signature whose certificate is revoked", async () => {
@@ -603,6 +853,122 @@ describe("two-phase PDF signing", () => {
       }),
     );
     expect(applied.level).toBe("B-B");
+  });
+
+  describe("a form that leaves its appearances to the viewer", () => {
+    const FIELD_VALUE = "Jana Nováková";
+    const DRAWN_TOTAL = "100";
+    const CURRENT_TOTAL = "120";
+
+    /**
+     * What a producer relying on `/NeedAppearances true` writes: field
+     * values, and no appearance for the text field.
+     */
+    const buildNeedAppearancesForm = async () => {
+      const created = PDF.create();
+      const page = created.addPage({ width: 300, height: 400 });
+      const form = created.getOrCreateForm();
+      const name = form.createTextField("name");
+      page.drawField(name, { x: 20, y: 340, width: 200, height: 24 });
+      name.setValue(FIELD_VALUE);
+      const agree = form.createCheckbox("agree");
+      page.drawField(agree, { x: 20, y: 300, width: 16, height: 16 });
+      agree.check();
+      for (const widget of name.getWidgets()) {
+        widget.dict.delete("AP");
+      }
+      // A read-only field whose appearance shows an older value: a viewer
+      // honouring the flag draws the current one.
+      const total = form.createTextField("total");
+      page.drawField(total, { x: 20, y: 260, width: 200, height: 24 });
+      total.setValue(DRAWN_TOTAL);
+      total.acroField().set("Ff", PdfNumber.of(1));
+      total.acroField().set("V", PdfString.fromString(CURRENT_TOTAL));
+      form.acroForm().getDict().set("NeedAppearances", PdfBool.of(true));
+      // LibPDF sets SigFlags on adding a field, as a form with an empty
+      // signature field carries them: that alone is no signature.
+      expect(form.properties.hasSignatures).toBe(true);
+      return await created.save();
+    };
+
+    const revisionCount = (bytes: Uint8Array) =>
+      Buffer.from(bytes).toString("latin1").split("%%EOF").length - 1;
+
+    const signBoth = async (basePdf: Uint8Array) => {
+      const { invocation, privateKey } = await buildInvocation();
+      const withBase = { ...invocation, basePdf };
+      const digestHex = await digestOf(withBase);
+      // Phase 1 run twice, and phase 2 accepting the digest, is the
+      // byte-identity check: the digest covers every prepared byte.
+      expect(await digestOf(withBase)).toBe(digestHex);
+      return await settled(
+        applySignature({
+          ...withBase,
+          permit,
+          certificateChainComplete: true,
+          expectedDigestHex: digestHex,
+          signature: await signDigestLikeAKeychain(privateKey, digestHex),
+          timestampAuthorities: [],
+        }),
+      );
+    };
+
+    test("draws the fields and clears the flag in a revision before the signature", async () => {
+      const basePdf = await buildNeedAppearancesForm();
+      expect(
+        (await PDF.load(basePdf)).getForm()?.properties.needAppearances,
+      ).toBe(true);
+
+      const applied = await signBoth(basePdf);
+
+      expect(
+        Buffer.from(applied.bytes.subarray(0, basePdf.byteLength)),
+      ).toEqual(Buffer.from(basePdf));
+      // One revision for the appearances, one for the signature.
+      expect(revisionCount(applied.bytes)).toBe(revisionCount(basePdf) + 2);
+      const form = (await PDF.load(applied.bytes)).getForm();
+      expect(form?.properties.needAppearances).toBe(false);
+      expect(form?.getTextField("name")?.getValue()).toBe(FIELD_VALUE);
+      expect(form?.getCheckbox("agree")?.isChecked()).toBe(true);
+      expect(
+        form
+          ?.getTextField("name")
+          ?.getWidgets()
+          .every((widget) => widget.hasNormalAppearance()),
+      ).toBe(true);
+      const total = form?.getTextField("total");
+      expect(total?.isReadOnly()).toBe(true);
+      expect(
+        Buffer.from(
+          total?.getWidgets().at(0)?.getNormalAppearance()?.getDecodedData() ??
+            [],
+        ).toString("latin1"),
+      ).toContain(`(${CURRENT_TOTAL})`);
+      expect(applied.warnings.map(({ code }) => code)).toEqual([]);
+    });
+
+    test("leaves an already signed form as it is", async () => {
+      const signed = await PDF.load(await createSignedPdf({ keyPool }));
+      signed
+        .getOrCreateForm()
+        .acroForm()
+        .getDict()
+        .set("NeedAppearances", PdfBool.of(true));
+      const basePdf = await signed.save({ incremental: true });
+
+      const applied = await signBoth(basePdf);
+
+      expect(
+        Buffer.from(applied.bytes.subarray(0, basePdf.byteLength)),
+      ).toEqual(Buffer.from(basePdf));
+      expect(revisionCount(applied.bytes)).toBe(revisionCount(basePdf) + 1);
+      expect(
+        (await PDF.load(applied.bytes)).getForm()?.properties.needAppearances,
+      ).toBe(true);
+      expect(applied.warnings.map(({ code }) => code)).toEqual([
+        "FIELD_APPEARANCES_LEFT_TO_VIEWER",
+      ]);
+    });
   });
 
   describe("the signature placeholder", () => {

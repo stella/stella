@@ -38,6 +38,7 @@ import {
   infraPortsForOffset,
   isWorktreeCheckout,
   loadEnvFile,
+  loadEnvFileWithExampleDefaults,
   MAX_HASH_OFFSET,
   migrateLegacyS3DevCredentials,
   parseDockerComposePsJson,
@@ -1366,8 +1367,12 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
-    expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
+    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts", "pg-fts"]);
+    expect(apiProviders(false)).toEqual([
+      "corpus-index",
+      "corpus-index",
+      "corpus-index",
+    ]);
   });
 
   test("seeded stacks disable scheduled writes while normal dev keeps schedules enabled", () => {
@@ -1390,13 +1395,27 @@ describe("dev env factories", () => {
       primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
     // The API process stays scheduler-disabled after seeding, while the
     // separately started queue worker drains uploaded documents.
-    expect(scheduledJobsModes(true)).toEqual(["disabled", "enabled"]);
-    expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
+    expect(scheduledJobsModes(true)).toEqual([
+      "disabled",
+      "enabled",
+      "enabled",
+    ]);
+    expect(scheduledJobsModes(false)).toEqual([
+      "enabled",
+      "enabled",
+      "enabled",
+    ]);
     expect(primarySteps(true).map((step) => step.label)).toContain(
       "Document processing worker",
     );
     expect(primarySteps(false).map((step) => step.label)).toContain(
       "Document processing worker",
+    );
+    expect(primarySteps(true).map((step) => step.label)).toContain(
+      "File derivative worker",
+    );
+    expect(primarySteps(false).map((step) => step.label)).toContain(
+      "File derivative worker",
     );
   });
 
@@ -1421,6 +1440,9 @@ describe("dev env factories", () => {
     ]);
     expect(primary.map((step) => step.label)).not.toContain(
       "Document processing worker",
+    );
+    expect(primary.map((step) => step.label)).not.toContain(
+      "File derivative worker",
     );
   });
 
@@ -1467,16 +1489,20 @@ describe("dev env factories", () => {
       "API server",
       "Web server",
       "Document processing worker",
+      "File derivative worker",
     ]);
     expect(build("dev:api").primary.map((step) => step.label)).toEqual([
       "API server",
       "Document processing worker",
+      "File derivative worker",
     ]);
     expect(build("dev:web").primary.map((step) => step.label)).toEqual([
       "Web server",
     ]);
 
-    const worker = build("dev").primary.at(-1);
+    const worker = build("dev").primary.find(
+      (step) => step.label === "Document processing worker",
+    );
     expect(worker?.cmd.slice(1)).toEqual([
       "--no-clear-screen",
       "--no-env-file",
@@ -1490,6 +1516,16 @@ describe("dev env factories", () => {
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
       REDIS_URL: "redis://localhost:6389",
     });
+    const derivativeWorker = build("dev").primary.find(
+      (step) => step.label === "File derivative worker",
+    );
+    expect(derivativeWorker?.cmd.slice(0, -1)).toEqual(
+      worker?.cmd.slice(0, -1),
+    );
+    expect(derivativeWorker?.cmd.at(-1)).toBe(
+      "src/scripts/file-derivative-worker.ts",
+    );
+    expect(derivativeWorker?.env).toEqual(worker?.env);
   });
 
   test("only interactive dev watches files; seeded stacks run without --watch", () => {
@@ -1507,8 +1543,8 @@ describe("dev env factories", () => {
         .primary.filter((step) => step.label !== "Web server")
         .map((step) => step.cmd.includes("--watch"));
 
-    expect(watching(false)).toEqual([true, true]);
-    expect(watching(true)).toEqual([false, false]);
+    expect(watching(false)).toEqual([true, true, true]);
+    expect(watching(true)).toEqual([false, false, false]);
   });
 
   test("only a seeded stack preloads the seeded organization's feature grants", () => {
@@ -1638,10 +1674,67 @@ describe("dev env factories", () => {
     });
   });
 
+  test("a worktree stack's browser talks to that stack's object store", () => {
+    const offset = 80;
+    const webEnv = createWebEnv({
+      baseEnv: { VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000" },
+      infraOffset: offset,
+      infraPorts: infraPortsForOffset(offset),
+      ports: portsForOffset(offset),
+    });
+    const apiEnv = createApiEnv({
+      baseEnv: {},
+      infraOffset: offset,
+      infraPorts: infraPortsForOffset(offset),
+      ports: portsForOffset(offset),
+    });
+
+    expect(webEnv.VITE_DOCUMENTS_ENDPOINT).not.toBe("http://localhost:9000");
+    expect(webEnv.VITE_DOCUMENTS_ENDPOINT).toBe(apiEnv.S3_ENDPOINT);
+  });
+
+  test("a variable the example gained later reaches a checkout with an older env file", () => {
+    const root = createTempDir();
+    const envPath = path.resolve(root, ".env");
+    writeFileSync(envPath, 'OWN="mine"\nBOTH="mine"\n');
+    writeFileSync(
+      `${envPath}.example`,
+      'BOTH="example"\nADDED_LATER="example"\n# OPTIONAL="example"\n',
+    );
+    const before = readFileSync(envPath, "utf-8");
+
+    expect(loadEnvFileWithExampleDefaults(envPath)).toEqual({
+      ADDED_LATER: "example",
+      BOTH: "mine",
+      OWN: "mine",
+    });
+    // Worktrees share this file through a link, so it is never rewritten.
+    expect(readFileSync(envPath, "utf-8")).toBe(before);
+  });
+
+  test("a value the shell already sets beats the example's when the env file refers to it", () => {
+    const root = createTempDir();
+    const envPath = path.resolve(root, ".env");
+    writeFileSync(envPath, `REFERS="\${FROM_SHELL}"\nOWN="mine"\n`);
+    writeFileSync(
+      `${envPath}.example`,
+      'FROM_SHELL="example"\nOWN="example"\n',
+    );
+
+    expect(
+      loadEnvFileWithExampleDefaults(envPath, {
+        FROM_SHELL: "shell",
+        OWN: "shell",
+      }),
+    ).toEqual({ FROM_SHELL: "shell", OWN: "mine", REFERS: "shell" });
+  });
+
   test("threads computed ports into the web env", () => {
     expect(
       createWebEnv({
         baseEnv: { KEEP_ME: "1" },
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
         ports: {
           api: 3101,
           desktopBridge: 45_999,
@@ -1668,6 +1761,8 @@ describe("dev env factories", () => {
           VITE_BROWSER_API_URL: "http://localhost:2/api",
           VITE_PUBLIC_APP_URL: "http://localhost:3",
         },
+        infraOffset: offset,
+        infraPorts: infraPortsForOffset(offset),
         ports,
       });
       const browserApi = new URL(webEnv.VITE_BROWSER_API_URL ?? "");
@@ -1685,7 +1780,12 @@ describe("dev env factories", () => {
   test("same-origin API routing requires an explicit opt-in", () => {
     for (const optIn of [undefined, "", "0"]) {
       const baseEnv = { STELLA_DEV_SAME_ORIGIN_API: optIn };
-      const webEnv = createWebEnv({ baseEnv, ports: portsForOffset(10) });
+      const webEnv = createWebEnv({
+        baseEnv,
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
+        ports: portsForOffset(10),
+      });
       expect(webEnv).not.toHaveProperty("DEV_API_PROXY_TARGET");
       expect(webEnv).not.toHaveProperty("VITE_BROWSER_API_URL");
       expect(webEnv).not.toHaveProperty("VITE_PUBLIC_APP_URL");

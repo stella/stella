@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import { eq, isNotNull } from "drizzle-orm";
 
+import {
+  onlineUniqueIndexTarget,
+  PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
+} from "@/api/db/online-unique-indexes";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
@@ -162,10 +166,10 @@ export const createPlaybookDefinitionHandler = async function* ({
                 .insert(playbookDefinitions)
                 .values(values)
                 .onConflictDoNothing({
-                  target: [
-                    playbookDefinitions.organizationId,
-                    playbookDefinitions.starterId,
-                  ],
+                  target: onlineUniqueIndexTarget(
+                    PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
+                    playbookDefinitions,
+                  ),
                   where: isNotNull(playbookDefinitions.starterId),
                 })
                 .returning({ id: playbookDefinitions.id })

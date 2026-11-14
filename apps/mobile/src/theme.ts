@@ -1,3 +1,4 @@
+import { DarkTheme, DefaultTheme } from "expo-router";
 import { useColorScheme } from "react-native";
 
 import { UI_COLORS } from "@/ui-theme.gen";
@@ -23,3 +24,29 @@ const LIGHT = appColors(UI_COLORS.light);
 const DARK = appColors(UI_COLORS.dark);
 
 export const useAppColors = () => (useColorScheme() === "dark" ? DARK : LIGHT);
+
+/** Every web token for the current colour scheme, for props a class cannot reach. */
+export const useUiColors = (): UiColors =>
+  useColorScheme() === "dark" ? UI_COLORS.dark : UI_COLORS.light;
+
+/**
+ * React Navigation's theme in the app's colours. Without it navigation keeps
+ * its light defaults, which show through wherever a screen does not paint its
+ * own: the header of a screen being swiped back reads white in dark mode.
+ */
+export const useNavigationTheme = () => {
+  const dark = useColorScheme() === "dark";
+  const base = dark ? DarkTheme : DefaultTheme;
+  const colors = dark ? DARK : LIGHT;
+  return {
+    ...base,
+    colors: {
+      ...base.colors,
+      background: colors.background,
+      border: colors.border,
+      card: colors.background,
+      primary: colors.accent,
+      text: colors.text,
+    },
+  };
+};

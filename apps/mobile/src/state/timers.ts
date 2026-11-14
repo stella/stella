@@ -1,0 +1,173 @@
+import { Result } from "better-result";
+import * as v from "valibot";
+
+import type { Fetch } from "@/connection/http";
+import type { AccessTokenSource } from "@/connection/session";
+import { requestApi } from "@/state/api-request";
+import type { ApiError } from "@/state/api-request";
+
+/** The person's own timers in the active organization. */
+const TIMERS_PATH = "/v1/time-timers";
+
+/** More running and paused timers than anyone keeps at once. */
+const TIMERS_PAGE_SIZE = 50;
+
+const timerSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1)),
+  matterId: v.nullish(v.string()),
+  description: v.nullish(v.string()),
+  state: v.picklist(["running", "paused"]),
+  /** Seconds counted before the timer last resumed. */
+  accumulatedSeconds: v.number(),
+  /** When a running timer last started counting; null while paused. */
+  lastResumedAt: v.nullish(v.string()),
+});
+
+const timersPageSchema = v.object({ items: v.array(timerSchema) });
+
+export type Timer = v.InferOutput<typeof timerSchema>;
+
+const timerPath = (timerId: string, action?: string) =>
+  `${TIMERS_PATH}/${encodeURIComponent(timerId)}${action === undefined ? "" : `/${action}`}`;
+
+/** The person's running and paused timers. */
+export const listTimers = async ({
+  fetch,
+  source,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+}): Promise<Result<Timer[], ApiError>> =>
+  await Result.gen(async function* () {
+    const page = yield* Result.await(
+      requestApi({
+        fetch,
+        path: `${TIMERS_PATH}?limit=${TIMERS_PAGE_SIZE}`,
+        schema: timersPageSchema,
+        source,
+      }),
+    );
+    return Result.ok(page.items);
+  });
+
+/**
+ * What a matter's own timer action does: pause the timer counting on it,
+ * else resume one paused on it, else start one.
+ */
+export type MatterTimerAction =
+  | { readonly type: "start" }
+  | { readonly type: "pause"; readonly timer: Timer }
+  | { readonly type: "resume"; readonly timer: Timer };
+
+export const matterTimerAction = (
+  timers: readonly Timer[],
+  matterId: string,
+): MatterTimerAction => {
+  const own = timers.filter((timer) => timer.matterId === matterId);
+  const running = own.find((timer) => timer.state === "running");
+  if (running !== undefined) {
+    return { type: "pause", timer: running };
+  }
+  const paused = own.at(0);
+  return paused === undefined
+    ? { type: "start" }
+    : { type: "resume", timer: paused };
+};
+
+/**
+ * Starts a timer, on a matter or none, with what is being worked on. The
+ * server pauses whichever timer was running, so only one ever counts.
+ */
+export const startTimer = async ({
+  description,
+  fetch,
+  matterId,
+  source,
+}: {
+  readonly description: string | null;
+  readonly fetch: Fetch;
+  readonly matterId: string | null;
+  readonly source: AccessTokenSource;
+}): Promise<Result<Timer, ApiError>> =>
+  await requestApi({
+    body: { description, matterId },
+    fetch,
+    path: `${TIMERS_PATH}/start`,
+    schema: timerSchema,
+    source,
+  });
+
+/** Pauses a running timer or resumes a paused one. */
+export const toggleTimer = async ({
+  fetch,
+  source,
+  timer,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly timer: Timer;
+}): Promise<Result<Timer, ApiError>> =>
+  await requestApi({
+    fetch,
+    method: "POST",
+    path: timerPath(timer.id, timer.state === "running" ? "pause" : "resume"),
+    schema: timerSchema,
+    source,
+  });
+
+/**
+ * Turns a timer into a draft time entry, dated in `timeZone`, and removes
+ * it. A timer without a matter is internal work, which bills nothing.
+ */
+export const saveTimer = async ({
+  fetch,
+  source,
+  timeZone,
+  timer,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly timeZone: string;
+  readonly timer: Timer;
+}): Promise<Result<void, ApiError>> =>
+  await Result.gen(async function* () {
+    yield* Result.await(
+      requestApi({
+        body: {
+          timezoneId: timeZone,
+          ...(timer.matterId === null || timer.matterId === undefined
+            ? { activityGroup: "internal" }
+            : {}),
+        },
+        fetch,
+        path: timerPath(timer.id, "confirm"),
+        // Only whether it saved matters; the entry is edited on the web.
+        schema: v.unknown(),
+        source,
+      }),
+    );
+    return Result.ok(undefined);
+  });
+
+/** Throws a timer away without recording its time. */
+export const discardTimer = async ({
+  fetch,
+  source,
+  timer,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly timer: Timer;
+}): Promise<Result<void, ApiError>> =>
+  await Result.gen(async function* () {
+    yield* Result.await(
+      requestApi({
+        fetch,
+        method: "DELETE",
+        path: timerPath(timer.id),
+        schema: v.unknown(),
+        source,
+      }),
+    );
+    return Result.ok(undefined);
+  });

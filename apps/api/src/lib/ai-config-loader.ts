@@ -134,22 +134,31 @@ const readProviderConfig = async ({
   });
   switch (resolution.type) {
     case "unavailable":
-      return Result.err(
-        storedAIConfigUnreadableError(
-          decrypted.status === "corrupt" ? decrypted.error : undefined,
-        ),
-      );
+      return Result.err(storedAIConfigUnreadableError());
     case "orgSettings":
     case "defaultProvider":
       // A configured or absent provider requires a successful decryption read.
       if (decrypted.status === "corrupt") {
-        return Result.err(storedAIConfigUnreadableError(decrypted.error));
+        return Result.err(storedAIConfigUnreadableError());
       }
       return Result.ok(decrypted.config);
     default:
       resolution satisfies never;
       return panic("Unhandled AI provider settings resolution");
   }
+};
+
+let observeDiscardedProviderError: ((error: HandlerError<503>) => void) | null =
+  null;
+
+/** Test seam for the auth-only branch that intentionally disposes this error. */
+export const installDiscardedProviderErrorObserverForTest = (
+  observer: (error: HandlerError<503>) => void,
+): (() => void) => {
+  observeDiscardedProviderError = observer;
+  return () => {
+    observeDiscardedProviderError = null;
+  };
 };
 
 /**
@@ -240,7 +249,7 @@ export const loadOrgAIConfig = async (
   const { organizationId } = checkedReader;
   const settings = await selectAISettingsRow(db, organizationId);
   if (settings.type === "unavailable") {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
   const configResult = await readProviderConfig({ organizationId, settings });
   if (Result.isError(configResult)) {
@@ -286,7 +295,7 @@ export const loadOrgAISettings = async (
   const { organizationId } = checkedReader;
   const settings = await selectAISettingsRow(db, organizationId);
   if (settings.type === "unavailable") {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
   const { row } = settings;
   const configResult = await readProviderConfig({ organizationId, settings });
@@ -345,6 +354,7 @@ export const loadOrgSettingsForAuth = async (
   const { row } = settings;
   const configResult = await readProviderConfig({ organizationId, settings });
   if (Result.isError(configResult)) {
+    observeDiscardedProviderError?.(configResult.error);
     return {
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,

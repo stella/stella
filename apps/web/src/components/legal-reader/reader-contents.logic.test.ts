@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { Block, HeadingLevel } from "@stll/legal-ast/document-ast";
+import { withDesignatorHeadingLevels } from "@stll/legal-ast/heading-designator-levels";
+import { headingTitlesNameSamePart } from "@stll/legal-ast/source-contents";
 import { assertProperty } from "@stll/property-testing";
 
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";
@@ -82,6 +84,8 @@ const titleArbitrary = fc.constantFrom(
   "Odůvodnění:",
   "I.",
   "Outcome",
+  "I. Outcome",
+  "II. Outcome",
   "Reasoning",
   "",
   "ﺍﻟﺤﻜﻢ",
@@ -118,7 +122,35 @@ const headingsOf = (blocks: readonly Block[]) =>
       : [],
   );
 
-/** The first section the model placed at each anchor the document has. */
+/**
+ * The block a section's row stands at: the heading at its anchor; else the
+ * heading of the same title that encloses its block or comes right after it,
+ * walking the blocks outwards to the nearest heading on each side; else its
+ * own block. A section naming a block the document lacks belongs to the first
+ * heading of its title, if any.
+ */
+const sectionRowAnchor = (
+  blocks: readonly Block[],
+  { anchorId, title }: SectionSpec,
+): string => {
+  const same = (block: Block | undefined) =>
+    block?.type === "heading" &&
+    headingTitlesNameSamePart(block.plainText, title);
+  const at = blocks.findIndex((block) => block.anchorId === anchorId);
+  if (at === -1) {
+    return blocks.find((block) => same(block))?.anchorId ?? anchorId;
+  }
+  if (blocks[at]?.type === "heading") {
+    return anchorId;
+  }
+  const before = blocks
+    .slice(0, at)
+    .findLast((block) => block.type === "heading");
+  const after = blocks.slice(at + 1).find((block) => block.type === "heading");
+  return [before, after].find((block) => same(block))?.anchorId ?? anchorId;
+};
+
+/** The first section placed at each row the document has. */
 const placedSections = ({
   blocks,
   sections,
@@ -128,9 +160,10 @@ const placedSections = ({
 }) => {
   const anchors = new Set(blocks.map(({ anchorId }) => anchorId));
   const placed = new Map<string, string>();
-  for (const { anchorId, title } of sections) {
-    if (anchors.has(anchorId) && !placed.has(anchorId)) {
-      placed.set(anchorId, title);
+  for (const section of sections) {
+    const rowAnchor = sectionRowAnchor(blocks, section);
+    if (anchors.has(rowAnchor) && !placed.has(rowAnchor)) {
+      placed.set(rowAnchor, section.title);
     }
   }
   return placed;
@@ -158,7 +191,21 @@ describe("reader contents", () => {
             .map(({ anchorId, title }) => ({ anchorId, title })),
         ).toEqual(headingsOf(blocks));
 
-        const placed = placedSections({ blocks, sections });
+        const headingTitles = new Map(
+          headingsOf(blocks).map(({ anchorId, title }) => [anchorId, title]),
+        );
+        // A section titled as its heading leaves the row the heading alone.
+        const placed = new Map(
+          [...placedSections({ blocks, sections })].filter(
+            ([anchorId, title]) => {
+              const heading = headingTitles.get(anchorId);
+              return (
+                heading === undefined ||
+                !headingTitlesNameSamePart(heading, title)
+              );
+            },
+          ),
+        );
         const shown = new Map(
           rows.flatMap((row) => {
             switch (row.type) {
@@ -320,5 +367,167 @@ describe("reader contents", () => {
         disclosure: "caseLaw",
       },
     ]);
+  });
+
+  test("a section titled as the heading it starts under leaves that heading's row alone", () => {
+    const blocks = documentBlocks([
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "Účastníci řízení" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "Odůvodnění rozsudku" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "Výrok" },
+      { type: "paragraph" },
+    ]);
+    const { rows } = contentsOf({
+      blocks,
+      sections: [
+        // Starts at the first passage under its heading.
+        { anchorId: "b2", title: "ÚČASTNÍCI ŘÍZENÍ" },
+        // Starts at a block the reader does not show (a contents line).
+        { anchorId: "toc-2", title: "Odůvodnění rozsudku" },
+        // Titled as a heading two headings away: it keeps its own row.
+        { anchorId: "b0", title: "Výrok" },
+      ],
+    });
+    expect(rows).toEqual([
+      {
+        type: "analysis",
+        anchorId: "b0",
+        title: "Výrok",
+        disclosure: "caseLaw",
+      },
+      { type: "heading", anchorId: "b1", title: "Účastníci řízení" },
+      { type: "heading", anchorId: "b3", title: "Odůvodnění rozsudku" },
+      { type: "heading", anchorId: "b5", title: "Výrok" },
+    ]);
+  });
+
+  test("a section without the publisher's number merges into the numbered heading", () => {
+    const blocks = documentBlocks([
+      { type: "heading", level: 2, title: "I. Skutkové okolnosti případu" },
+      { type: "paragraph" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "II. Argumentace stěžovatele" },
+      { type: "paragraph" },
+    ]);
+    const { rows } = contentsOf({
+      blocks,
+      sections: [
+        // Starts at the first passage under its heading.
+        { anchorId: "b1", title: "Skutkové okolnosti případu" },
+        // Starts at the last passage before its heading.
+        { anchorId: "b2", title: "Argumentace stěžovatele" },
+      ],
+    });
+    expect(rows).toEqual([
+      {
+        type: "heading",
+        anchorId: "b0",
+        title: "I. Skutkové okolnosti případu",
+      },
+      { type: "heading", anchorId: "b3", title: "II. Argumentace stěžovatele" },
+    ]);
+  });
+
+  test("a section numbered as the next heading goes to it, not to the same words before it", () => {
+    const blocks = documentBlocks([
+      { type: "heading", level: 2, title: "I. Návrh" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "II. Návrh" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "III. Závěr" },
+      { type: "paragraph" },
+    ]);
+    const { rows } = contentsOf({
+      blocks,
+      sections: [
+        { anchorId: "b1", title: "II. Návrh" },
+        // The numbers disagree: this one keeps a row of its own.
+        { anchorId: "b3", title: "IV. Závěr" },
+      ],
+    });
+    expect(rows).toEqual([
+      { type: "heading", anchorId: "b0", title: "I. Návrh" },
+      { type: "heading", anchorId: "b2", title: "II. Návrh" },
+      {
+        type: "analysis",
+        anchorId: "b3",
+        title: "IV. Závěr",
+        disclosure: "caseLaw",
+      },
+      { type: "heading", anchorId: "b4", title: "III. Závěr" },
+    ]);
+  });
+
+  test("a section starting at a heading it does not repeat keeps its second line", () => {
+    const blocks = documentBlocks([
+      { type: "heading", level: 2, title: "II. Argumentace stěžovatele" },
+      { type: "paragraph" },
+    ]);
+    expect(
+      contentsOf({
+        blocks,
+        sections: [{ anchorId: "b0", title: "Námitky proti rozsudku" }],
+      }).rows,
+    ).toEqual([
+      {
+        type: "headingWithAnalysis",
+        anchorId: "b0",
+        title: "II. Argumentace stěžovatele",
+        analysisTitle: "Námitky proti rozsudku",
+        disclosure: "caseLaw",
+      },
+    ]);
+  });
+
+  // The shape the published corpus holds for a Court of Justice appeal: the
+  // same dash-led pair under every ground, stored at the ground's own level.
+  const appeal = () =>
+    withDesignatorHeadingLevels(
+      documentBlocks([
+        { type: "heading", level: 2, title: "The appeal" },
+        { type: "heading", level: 3, title: "Substance" },
+        { type: "heading", level: 4, title: "The first ground of appeal" },
+        { type: "heading", level: 4, title: "– Arguments of the parties" },
+        { type: "paragraph" },
+        { type: "heading", level: 4, title: "– Findings of the Court" },
+        { type: "paragraph" },
+        { type: "heading", level: 4, title: "The second ground of appeal" },
+        { type: "heading", level: 4, title: "– Arguments of the parties" },
+        { type: "paragraph" },
+      ]),
+    );
+
+  test("a subheading repeated under each ground is indented under the ground it answers", () => {
+    const { rows, trails, depths } = contentsOf({
+      blocks: appeal(),
+      sections: undefined,
+    });
+    expect(
+      rows.map(({ anchorId, title }) => [title, depths.get(anchorId)]),
+    ).toEqual([
+      ["The appeal", 0],
+      ["Substance", 1],
+      ["The first ground of appeal", 2],
+      ["– Arguments of the parties", 3],
+      ["– Findings of the Court", 3],
+      ["The second ground of appeal", 2],
+      ["– Arguments of the parties", 3],
+    ]);
+    // No two rows read the same once the heading each sits under is named.
+    const placed = rows.map(
+      ({ anchorId, title }) =>
+        `${trails.get(anchorId)?.segments.at(-2)?.title ?? ""} › ${title}`,
+    );
+    expect(new Set(placed).size).toBe(rows.length);
+  });
+
+  test("a section titled without the dash merges into the subheading it starts under", () => {
+    const { rows } = contentsOf({
+      blocks: appeal(),
+      sections: [{ anchorId: "b9", title: "Arguments of the parties" }],
+    });
+    expect(rows.every(({ type }) => type === "heading")).toBe(true);
   });
 });

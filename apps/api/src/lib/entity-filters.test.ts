@@ -1,21 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
-import fc from "fast-check";
 
 import {
   ENTITY_FIND_TERM_MIN_LENGTH,
   PROPERTY_CONTENT_TYPES,
   PROPERTY_FIND_SUPPORT,
 } from "@stll/api-contract";
-import { compareByLocale } from "@stll/collation";
 import type { BuiltinField, ConditionNode } from "@stll/conditions";
-import { propertyConfig } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   applyFilters,
-  applySorts,
   buildFilterConditions,
   buildFindConditions,
   buildSortExpressions,
@@ -350,18 +346,6 @@ const makeEntity = (
   })),
 });
 
-const makeIntField = (entityId: string, propertyId: string, value: number) => ({
-  id: `field_${propertyId}_${entityId}`,
-  propertyId,
-  entityId,
-  content: {
-    type: "int" as const,
-    version: 1 as const,
-    value,
-    currency: null,
-  },
-});
-
 const propertyCompare = (
   propertyId: string,
   op: "eq" | "neq",
@@ -476,260 +460,6 @@ describe("applyFilters (in-memory)", () => {
       builtinCompare("status", "eq", "open"),
     ]);
     expect(filtered).toHaveLength(2);
-  });
-});
-
-describe("applySorts (in-memory)", () => {
-  test("empty sorts returns the original order", () => {
-    const items = [
-      makeEntity("1", "task", [["p1", "beta"]]),
-      makeEntity("2", "task", [["p1", "alpha"]]),
-    ];
-
-    expect(applySorts(items, [], "en")).toEqual(items);
-  });
-
-  test("sorts string values ascending", () => {
-    const items = [
-      makeEntity("1", "task", [["p1", "beta"]]),
-      makeEntity("2", "task", [["p1", "alpha"]]),
-    ];
-
-    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }], "en");
-
-    expect(sorted.map((item) => item.entityId)).toEqual(["2", "1"]);
-  });
-
-  test("sorts integer values descending", () => {
-    const items = [
-      {
-        entityId: "1",
-        kind: "task" as const,
-        fields: [makeIntField("1", "p1", 2)],
-      },
-      {
-        entityId: "2",
-        kind: "task" as const,
-        fields: [makeIntField("2", "p1", 9)],
-      },
-    ];
-
-    const sorted = applySorts(items, [{ propertyId: "p1", desc: true }], "en");
-
-    expect(sorted.map((item) => item.entityId)).toEqual(["2", "1"]);
-  });
-
-  test("orders ints numerically, not lexicographically (10 after 9)", () => {
-    const items = [
-      {
-        entityId: "ten",
-        kind: "task" as const,
-        fields: [makeIntField("ten", "p1", 10)],
-      },
-      {
-        entityId: "nine",
-        kind: "task" as const,
-        fields: [makeIntField("nine", "p1", 9)],
-      },
-      {
-        entityId: "two",
-        kind: "task" as const,
-        fields: [makeIntField("two", "p1", 2)],
-      },
-    ];
-
-    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }], "en");
-
-    expect(sorted.map((item) => item.entityId)).toEqual(["two", "nine", "ten"]);
-  });
-
-  test("int sort stays numeric when a row is missing the field (missing sorts last)", () => {
-    const items = [
-      {
-        entityId: "ten",
-        kind: "task" as const,
-        fields: [makeIntField("ten", "p1", 10)],
-      },
-      { entityId: "missing", kind: "task" as const, fields: [] },
-      {
-        entityId: "nine",
-        kind: "task" as const,
-        fields: [makeIntField("nine", "p1", 9)],
-      },
-    ];
-
-    const asc = applySorts(items, [{ propertyId: "p1", desc: false }], "en");
-    expect(asc.map((item) => item.entityId)).toEqual([
-      "nine",
-      "ten",
-      "missing",
-    ]);
-
-    // Missing values bucket to the end regardless of direction.
-    const desc = applySorts(items, [{ propertyId: "p1", desc: true }], "en");
-    expect(desc.map((item) => item.entityId)).toEqual([
-      "ten",
-      "nine",
-      "missing",
-    ]);
-  });
-
-  test("int sort treats whitespace-only legacy text as missing", () => {
-    const items = [
-      makeEntity("whitespace", "task", [["p1", "   "]]),
-      {
-        entityId: "negative",
-        kind: "task" as const,
-        fields: [makeIntField("negative", "p1", -1)],
-      },
-      {
-        entityId: "positive",
-        kind: "task" as const,
-        fields: [makeIntField("positive", "p1", 1)],
-      },
-    ];
-
-    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }], "en");
-
-    expect(sorted.map((item) => item.entityId)).toEqual([
-      "negative",
-      "positive",
-      "whitespace",
-    ]);
-  });
-
-  test("int sort parses legacy numeric text values", () => {
-    const items = [
-      {
-        entityId: "twenty",
-        kind: "task" as const,
-        fields: [makeIntField("twenty", "p1", 20)],
-      },
-      makeEntity("ten", "task", [["p1", "10"]]),
-      {
-        entityId: "nine",
-        kind: "task" as const,
-        fields: [makeIntField("nine", "p1", 9)],
-      },
-    ];
-
-    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }], "en");
-
-    expect(sorted.map((item) => item.entityId)).toEqual([
-      "nine",
-      "ten",
-      "twenty",
-    ]);
-  });
-
-  test("property: int sort with missing rows is numerically monotonic", () => {
-    fc.assert(
-      fc.property(
-        fc.array(fc.option(fc.integer(), { nil: undefined }), {
-          minLength: 1,
-          maxLength: 20,
-        }),
-        (values) => {
-          const items = values.map((value, index) =>
-            value === undefined
-              ? { entityId: String(index), kind: "task" as const, fields: [] }
-              : {
-                  entityId: String(index),
-                  kind: "task" as const,
-                  fields: [makeIntField(String(index), "p1", value)],
-                },
-          );
-
-          const sorted = applySorts(
-            items,
-            [{ propertyId: "p1", desc: false }],
-            "en",
-          );
-          const nums = sorted.map((item) => {
-            const c = item.fields[0]?.content;
-            return c?.type === "int" ? c.value : null;
-          });
-
-          // Defined ints appear before any missing, in non-decreasing order.
-          let seenNull = false;
-          let prev = -Infinity;
-          for (const n of nums) {
-            if (n === null) {
-              seenNull = true;
-              continue;
-            }
-            expect(seenNull).toBe(false);
-            expect(n).toBeGreaterThanOrEqual(prev);
-            prev = n;
-          }
-        },
-      ),
-      propertyConfig(),
-    );
-  });
-
-  test("property: ascending string sort is monotonic", () => {
-    fc.assert(
-      fc.property(
-        fc.array(fc.string(), { minLength: 1, maxLength: 20 }),
-        (values) => {
-          const items = values.map((value, index) =>
-            makeEntity(String(index), "task", [["p1", value]]),
-          );
-
-          const sorted = applySorts(
-            items,
-            [{ propertyId: "p1", desc: false }],
-            "en",
-          );
-          const extracted = sorted.map((item) => item.fields[0]?.content.value);
-          // applySorts was called with the "en" locale above; compare with
-          // the same collator so this checks the actual invariant it upholds.
-          const compareText = compareByLocale("en");
-
-          for (const [index, value] of extracted.entries()) {
-            if (value === undefined) {
-              continue;
-            }
-            const next = extracted.at(index + 1);
-            if (next === undefined) {
-              continue;
-            }
-            expect(compareText(value, next)).toBeLessThanOrEqual(0);
-          }
-        },
-      ),
-      propertyConfig(),
-    );
-  });
-
-  test("property: descending int sort is monotonic", () => {
-    fc.assert(
-      fc.property(
-        fc.array(fc.integer(), { minLength: 1, maxLength: 20 }),
-        (values) => {
-          const items = values.map((value, index) => ({
-            entityId: String(index),
-            kind: "task" as const,
-            fields: [makeIntField(String(index), "p1", value)],
-          }));
-
-          const sorted = applySorts(
-            items,
-            [{ propertyId: "p1", desc: true }],
-            "en",
-          );
-          const extracted = sorted.map((item) =>
-            item.fields[0]?.content.type === "int"
-              ? item.fields[0].content.value
-              : Number.NaN,
-          );
-
-          expect(extracted).toEqual([...extracted].toSorted((a, b) => b - a));
-        },
-      ),
-      propertyConfig(),
-    );
   });
 });
 

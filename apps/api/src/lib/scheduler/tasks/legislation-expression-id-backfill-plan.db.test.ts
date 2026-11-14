@@ -36,6 +36,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import type { ScanOccurrence } from "@/api/tests/query-plans/plan-walker";
@@ -51,11 +52,6 @@ const PRIMARY_KEY = "legislation_documents_pkey";
 const WORK_INDEXES: readonly string[] = [
   "legislation_documents_eli_idx",
   "legislation_documents_eli_lang_valid_from_idx",
-];
-const INDEX_SCANS: readonly string[] = [
-  "Index Scan",
-  "Index Only Scan",
-  "Bitmap Heap Scan",
 ];
 /** A probe's seek key: the outer row's work identifier. */
 const WORK_SEEK = `((eli)::text = (${TABLE}.eli)::text)`;
@@ -302,6 +298,7 @@ const documentScans = (root: PlanNode): Map<string | null, ScanOccurrence> => {
   );
   const byAlias = new Map(scans.map((scan) => [scan.alias, scan]));
   expect(byAlias.size).toBe(scans.length);
+  expect(indexedAccessPaths(root, TABLE)).toHaveLength(scans.length);
   return byAlias;
 };
 
@@ -311,7 +308,6 @@ const expectSeek = (
   indexes: readonly string[],
   keys: readonly string[],
 ) => {
-  expect(INDEX_SCANS).toContain(scan?.nodeType ?? "missing");
   expect(indexes).toContain(scan?.index ?? "missing");
   for (const key of keys) {
     expect(scan?.indexCond ?? "").toContain(key);
@@ -355,9 +351,6 @@ const expectPagePlan = async (cursorAt: number | null) => {
     scans.get(TABLE),
     [PRIMARY_KEY],
     cursor === null ? [] : [afterKey(cursor)],
-  );
-  expect(["Index Scan", "Index Only Scan"]).toContain(
-    scans.get(TABLE)?.nodeType ?? "missing",
   );
 };
 

@@ -1,26 +1,50 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   aggregateMutationBaseline,
   checkAggregateMutationCoverage,
   verifyAggregateDeclarations,
 } from "./check-aggregate-mutations";
+import { renderRegistryIndex } from "./db-registry-entries";
+
+const registryDirectory = "apps/api/src/lib/db/aggregate-lock-entries";
+const renderFixtureRegistry = (sources: Map<string, string>) =>
+  renderRegistryIndex(
+    registryDirectory,
+    [...sources.keys()]
+      .filter((file) => path.posix.dirname(file) === registryDirectory)
+      .map((file) => path.posix.basename(file)),
+  );
 
 const routes = "apps/api/src/handlers/example/routes.ts";
 const owner = "apps/api/src/lib/db/aggregate-mutation-declaration.ts";
 const fixture = () =>
   new Map([
     [
-      "apps/api/src/lib/db/aggregate-lock.ts",
-      "export const AGGREGATE_LOCKS = {workspace: {rank: 1}} as const;",
+      "apps/api/src/lib/db/aggregate-lock-entries/workspace.ts",
+      'export default {rank: 1, kind: "row"} as const;',
+    ],
+    [
+      "apps/api/src/lib/api-handlers.ts",
+      readFileSync(
+        new URL("../apps/api/src/lib/api-handlers.ts", import.meta.url),
+        "utf-8",
+      ),
     ],
   ]);
 /** Verifies every declaration site in the fixture; returns how many it found. */
-const verify = (sources: Map<string, string>) =>
-  verifyAggregateDeclarations({
+const verify = (sources: Map<string, string>) => {
+  sources.set(
+    `${registryDirectory}/registry.gen.ts`,
+    renderFixtureRegistry(sources),
+  );
+  return verifyAggregateDeclarations({
     files: [...sources.keys()],
     load: (file) => sources.get(file),
   });
+};
 const legacy = (undeclared: readonly string[]) =>
   aggregateMutationBaseline(undeclared).map((entry) => ({
     ...entry,
@@ -216,6 +240,39 @@ describe("aggregate declaration sites", () => {
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
   });
 
+  test("generated indexes and identity files do not become aggregate entries", () => {
+    const sources = fixture();
+    sources.set(
+      `${registryDirectory}/identities.gen.ts`,
+      "export type AggregateIdentities = {};",
+    );
+    sources.set(routes, `${imports} export const route = ${locked};`);
+    expect(renderFixtureRegistry(sources)).toContain(
+      'import entry0 from "./workspace";',
+    );
+    expect(verify(sources)).toBe(1);
+    for (const name of ["registry.gen", "identities.gen"]) {
+      sources.set(
+        routes,
+        `${imports} export const route = ${locked.replaceAll('"workspace"', () => JSON.stringify(name))};`,
+      );
+      expect(() => verify(sources)).toThrow("Unknown aggregate registry name");
+    }
+  });
+
+  test("an unreadable discovered entry fails explicitly", () => {
+    const sources = fixture();
+    expect(() =>
+      verifyAggregateDeclarations({
+        files: [...sources.keys()],
+        load: (file) =>
+          file === `${registryDirectory}/workspace.ts`
+            ? undefined
+            : sources.get(file),
+      }),
+    ).toThrow("Missing aggregate registry entry");
+  });
+
   test("an unknown aggregate cannot satisfy a declaration", () => {
     const sources = fixture();
     sources.set(
@@ -264,9 +321,41 @@ describe("aggregate declaration sites", () => {
   });
 
   test.each([
+    [
+      "createSafeRootHandler",
+      "{}, CALLBACK, { authorize: async () => undefined }",
+    ],
+    ["createSafeHandler", "{}, CALLBACK, { authorize: async () => undefined }"],
+    [
+      "createSafeSessionHandler",
+      "{}, CALLBACK, { checkAccountOperation: async () => undefined }",
+    ],
+    ["createSafeTokenHandler", "{}, async () => ({}), CALLBACK"],
+  ])(
+    "resolves %s implementations from the owning factory contract",
+    (factory, args) => {
+      const sources = fixture();
+      const declaration = `import { ${factory} as create } from "@/api/lib/api-handlers"; ${imports}`;
+      const body =
+        'async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
+      const endpoint = (callback: string) => `${declaration}
+      const existing = create(${args.replace("CALLBACK", () => callback)});
+      declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]});`;
+      sources.set(routes, endpoint(body));
+      expect(verify(sources)).toBe(1);
+      sources.set(routes, endpoint("async () => {}"));
+      expect(() => verify(sources)).toThrow("must await withAggregateLock");
+    },
+  );
+
+  test.each([
     {
       imported: "withInvoiceMatterLocks as acquire",
       body: "await acquire(tx, ids);",
+    },
+    {
+      imported: "lockInvoiceInStatus as acquire",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
     },
     {
       imported: "withAggregateParentBatch as acquire",
@@ -289,6 +378,41 @@ describe("aggregate declaration sites", () => {
   );
 
   test.each([
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquired'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: null, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, ...other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, [key]: other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "const acquire = async () => {}; await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/fake-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
     {
       module: "@/api/lib/db/aggregate-lock",
       body: "acquire(tx, ids);",
@@ -792,8 +916,8 @@ describe("declared handler locks", () => {
     test("direct and followed locks combine to cover the declaration", () => {
       const sources = setup();
       sources.set(
-        "apps/api/src/lib/db/aggregate-lock.ts",
-        "export const AGGREGATE_LOCKS = {workspace: {rank: 1}, entity: {rank: 2}} as const;",
+        "apps/api/src/lib/db/aggregate-lock-entries/entity.ts",
+        'export default {rank: 2, kind: "row"} as const;',
       );
       const declaration =
         '{type: "aggregate", aggregates: ["workspace", "entity"]}';

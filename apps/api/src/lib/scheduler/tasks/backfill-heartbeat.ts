@@ -10,8 +10,8 @@ import { Temporal } from "@stll/time";
 import { databaseBackfillStates, schedulerJobs } from "@/api/db/schema";
 import {
   emitSchedulerBackfillHeartbeat,
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -81,7 +81,7 @@ export const publishBackfillHeartbeats = ({
         previousHeldSince: heldSince,
         verdict,
         now,
-        config: SCHEDULER_BACKFILL_CONFIG,
+        config: schedulerBackfillConfig(),
       }),
       reason,
     });

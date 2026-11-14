@@ -18,11 +18,11 @@
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/scripts",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/scripts",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/scripts"
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "3.5.20",
+    "@formatjs/icu-messageformat-parser": "3.5.22",
     "@stll/ai-catalog": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/fetch": "workspace:*",
@@ -30,15 +30,15 @@
     "@stll/permissions": "workspace:*",
     "@stll/portable-path": "workspace:*",
     "@stll/sha256": "workspace:*",
-    "@stll/skills": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "better-result": "catalog:",
     "oxc-parser": "catalog:",
     "oxc-transform-react": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
+    "@stll/test-state": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

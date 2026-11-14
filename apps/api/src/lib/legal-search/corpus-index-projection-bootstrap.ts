@@ -29,6 +29,7 @@ import {
   lockActiveCorpusProjectionManifestForMutation,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /**
@@ -522,6 +523,10 @@ const bootstrapCaseLaw = async ({
           jurisdiction,
         })),
       );
+      const rankingSignalsByDecision = await readCaseLawRankingSignals(
+        tx,
+        rows.map(({ documentId }) => documentId),
+      );
       return rows.map((row) =>
         buildCorpusIndexProjectionDesiredStateValues({
           subject: { family: "case_law", entityId: row.documentId },
@@ -557,6 +562,11 @@ const bootstrapCaseLaw = async ({
                 provisionKeysByDecision.get(row.documentId) ??
                 panic(
                   `Corpus projection bootstrap lost provision keys for decision ${row.documentId}`,
+                ),
+              rankingSignals:
+                rankingSignalsByDecision.get(row.documentId) ??
+                panic(
+                  `Corpus projection bootstrap lost ranking signals for decision ${row.documentId}`,
                 ),
               sourceDescriptor: descriptorOf(row.sourceId),
             }),

@@ -5,16 +5,14 @@ import type {
   RequestSecretInput,
   RequestSecretOutput,
 } from "@stll/api-contract/chat-secret";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import type {
   RequestSecretDecision,
   SecretTargetResolution,
 } from "@/components/chat/chat-approval-context";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
-import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
@@ -24,6 +22,12 @@ const { cleanup, fireEvent, render, screen } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+// The card's checkboxes take their accessible names in layout effects, which
+// Base UI disables when it loads before a DOM exists: import after register.
+const { ChatApprovalContext } =
+  await import("@/components/chat/chat-approval-context");
+const { RequestSecretCard } =
+  await import("@/components/chat/request-secret-card");
 
 type RequestSecretPart = Extract<
   RegisteredChatUIToolCallPart,
@@ -410,6 +414,43 @@ describe("request secret card", () => {
     );
 
     expect(submissions).toEqual([{ decision: "decline" }]);
+    queryClient.clear();
+  });
+
+  test("shows a failed submission and lets the user answer again", async () => {
+    const submissions: unknown[] = [];
+    const continuations: RequestSecretOutput[] = [];
+    const { queryClient } = mountCard({
+      handleRequestSecret: async (_toolCallId, decision) => {
+        submissions.push(decision);
+        if (submissions.length === 1) {
+          throw new Error("submission unavailable");
+        }
+        return declineOutput;
+      },
+      continueRequestSecret: async (_toolCallId, receipt) => {
+        continuations.push(receipt);
+      },
+    });
+    const decline = () =>
+      screen.getByRole("button", { name: messages.common.decline });
+
+    await act(async () => fireEvent.click(decline()));
+
+    expect(screen.getByRole("alert").textContent).toBe(
+      messages.chat.requestSecret.error,
+    );
+    expect(decline().hasAttribute("disabled")).toBe(false);
+    expect(continuations).toEqual([]);
+
+    await act(async () => fireEvent.click(decline()));
+
+    expect(submissions).toEqual([
+      { decision: "decline" },
+      { decision: "decline" },
+    ]);
+    expect(continuations).toEqual([declineOutput]);
+    expect(screen.queryByRole("alert")).toBeNull();
     queryClient.clear();
   });
 

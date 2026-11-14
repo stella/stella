@@ -76,6 +76,7 @@ const BASIS: DocumentReviewRunBasis = {
     definitionSnapshot: {
       name: "Reconciler fixture",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   references: [],
@@ -152,14 +153,18 @@ describe("queued document review run reconciliation", () => {
   test("hands a run no job owns back to the queue exactly once", async () => {
     const runId = await seedRun();
 
-    const first = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue,
-    });
-    const second = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue,
-    });
+    const first = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue,
+      })
+    ).unwrap();
+    const second = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue,
+      })
+    ).unwrap();
 
     expect(first).toEqual({ handedOff: 1, scanned: 1, unattributed: 0 });
     // The row is still `queued` — only the worker's claim moves it — so the
@@ -187,10 +192,12 @@ describe("queued document review run reconciliation", () => {
     await seedRun({ status: "running" });
     await seedRun({ executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE });
 
-    const result = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue,
-    });
+    const result = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue,
+      })
+    ).unwrap();
 
     expect(result).toEqual({ handedOff: 0, scanned: 0, unattributed: 0 });
     expect(added).toEqual([]);
@@ -202,10 +209,12 @@ describe("queued document review run reconciliation", () => {
     priorJobs.set(jobIdFor(completedJobRun), "completed");
     priorJobs.set(jobIdFor(failedJobRun), "failed");
 
-    const result = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue,
-    });
+    const result = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue,
+      })
+    ).unwrap();
 
     expect(result.handedOff).toBe(2);
     expect(removedJobIds).toEqual([jobIdFor(completedJobRun)]);
@@ -218,10 +227,12 @@ describe("queued document review run reconciliation", () => {
   test("counts a run whose requester is gone instead of dropping it", async () => {
     await seedRun({ requestedBy: null });
 
-    const result = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue,
-    });
+    const result = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue,
+      })
+    ).unwrap();
 
     expect(result).toEqual({ handedOff: 0, scanned: 1, unattributed: 1 });
     expect(added).toEqual([]);
@@ -240,10 +251,12 @@ describe("queued document review run reconciliation", () => {
     }
     const orphan = await seedRun({ createdAt: new Date(base + 1000) });
 
-    const result = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue,
-    });
+    const result = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue,
+      })
+    ).unwrap();
 
     expect(result).toEqual({ handedOff: 1, scanned: 151, unattributed: 0 });
     expect(added.map(({ jobId }) => jobId)).toEqual([jobIdFor(orphan)]);
@@ -259,10 +272,12 @@ describe("queued document review run reconciliation", () => {
     );
     await testDb.insert(documentReviewRuns).values(orphans);
 
-    const result = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue,
-    });
+    const result = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue,
+      })
+    ).unwrap();
 
     expect(result).toEqual({ handedOff: 50, scanned: 50, unattributed: 0 });
     expect(added).toHaveLength(50);
@@ -283,10 +298,12 @@ describe("queued document review run reconciliation", () => {
         }),
     };
 
-    const result = await reconcileQueuedDocumentReviewRuns({
-      db: testDb,
-      queue: stalled,
-    });
+    const result = (
+      await reconcileQueuedDocumentReviewRuns({
+        db: testDb,
+        queue: stalled,
+      })
+    ).unwrap();
     analytics.restore();
 
     expect(result).toEqual({ handedOff: 0, scanned: 1, unattributed: 0 });

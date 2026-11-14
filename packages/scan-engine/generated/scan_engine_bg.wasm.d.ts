@@ -15,18 +15,21 @@ export const clean_scan_rgba: (
 ) => void;
 export const wasmscanresult_applied_quad: (a: number, b: number) => void;
 export const wasmscanresult_content_box: (a: number, b: number) => void;
+export const wasmscanresult_height: (a: number) => number;
 export const wasmscanresult_pixels: (a: number, b: number) => void;
 export const wasmscanresult_reason: (a: number, b: number) => void;
-export const wasmscanresult_status: (a: number, b: number) => void;
-export const wasmscanresult_height: (a: number) => number;
 export const wasmscanresult_skew_degrees: (a: number) => number;
+export const wasmscanresult_status: (a: number, b: number) => void;
 export const wasmscanresult_width: (a: number) => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_add_to_stack_pointer: (a: number) => number;
 export const __wbindgen_export: (a: number, b: number) => number;
-export const __wbindgen_export2: (
+export const __wbindgen_export2: (a: number, b: number, c: number) => void;
+export const __wbindgen_export3: (
   a: number,
   b: number,
   c: number,
   d: number,
 ) => number;
-export const __wbindgen_export3: (a: number, b: number, c: number) => void;
+export const __wbindgen_export4: (a: number) => void;
+export const __wbindgen_start: () => void;

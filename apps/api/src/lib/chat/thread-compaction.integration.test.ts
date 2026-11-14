@@ -29,6 +29,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-compaction";
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -48,10 +49,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { parseChatCompactionSummary } from "./compaction-summary";
 import type { IncrementalSummaryPrompt } from "./compaction-summary";
-import {
-  estimateTextTokens,
-  MESSAGE_OVERHEAD_TOKENS,
-} from "./compaction-tokens";
+import { MESSAGE_OVERHEAD_TOKENS } from "./compaction-tokens";
 import { chatMessageCursorCodec } from "./message-cursor";
 import {
   CHAT_COMPACTION_DELTA_BATCH_MAX,
@@ -578,7 +576,9 @@ describe("chat thread compaction", () => {
 
     const messageReads = run.queries.filter(
       ({ query }) =>
-        query.includes('from "chat_messages"') && query.startsWith("select"),
+        query.includes('from "chat_messages"') &&
+        !query.includes('from "chat_threads"') &&
+        query.startsWith("select"),
     );
     expect(messageReads.length).toBeGreaterThan(0);
 
@@ -601,7 +601,9 @@ describe("chat thread compaction", () => {
 
     const messageReads = second.queries.filter(
       ({ query }) =>
-        query.includes('from "chat_messages"') && query.startsWith("select"),
+        query.includes('from "chat_messages"') &&
+        !query.includes('from "chat_threads"') &&
+        query.startsWith("select"),
     );
     // The keyset predicate against created_at is what bounds the second run to
     // the delta; without it the read would start at message zero again.

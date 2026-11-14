@@ -28,6 +28,8 @@ import {
 import { DrizzleQueryError } from "drizzle-orm";
 import * as v from "valibot";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+
 import { createHttpApp } from "@/api/http/app";
 import type { HttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
@@ -59,6 +61,7 @@ import {
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
 import type { LogRecord } from "@/api/lib/observability/logger";
+import { ownedMessage } from "@/api/lib/observability/owned-message";
 import { openRequestContext } from "@/api/lib/observability/request-context";
 import {
   errorBoundary,
@@ -71,6 +74,8 @@ import {
 } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { ActionSizeError } from "@/api/lib/rate-limit/action-size-limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { tenantActionAdmission } from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   installRecordingAnalytics,
@@ -258,10 +263,10 @@ const CASES: readonly LifecycleCase[] = [
     status: 502,
     body: '{"code":"upstream_unavailable","message":"The registry is not answering right now."}',
     records: [
-      ["request.failed", "ERROR", shadow("transient", "upstream_unavailable")],
+      ["request.failed", "WARN", shadow("transient", "upstream_unavailable")],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "upstream_unavailable"),
       ],
     ],
@@ -276,12 +281,12 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -289,14 +294,22 @@ const CASES: readonly LifecycleCase[] = [
     metricReasons: ["pg_connection_lifecycle"],
   },
   {
-    name: "a 502 a handler returned itself is counted as unobserved",
+    name: "a 502 a handler built without its cause is enforced as unobserved",
     request: get("/v1/signals/count"),
     status: 502,
     body: '{"message":"Bad gateway"}',
     records: [
-      ["request.completed", "ERROR", shadow("defect", "unobserved_5xx")],
+      [
+        "request.completed",
+        "ERROR",
+        {
+          "failure.grade": "defect",
+          "failure.reason": "unobserved_5xx",
+          "failure.shadow": undefined,
+        },
+      ],
     ],
-    captures: 0,
+    captures: 1,
     metricReasons: [],
   },
   {
@@ -307,7 +320,7 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -404,6 +417,78 @@ describe("the request lifecycle", () => {
     resetMetricLineSinkForTesting();
     resetFailureObservationsForTesting();
   });
+
+  test.each(["limiter", "handler"] as const)(
+    "a %s store failure emits one transient record and preserves request duration",
+    async (surface) => {
+      const context = new RedisRateLimitContext({
+        failurePolicy: "fail_closed",
+        createRedis: () => ({
+          send: async () => {
+            throw Object.assign(new Error("Unavailable"), {
+              code: "ECONNREFUSED",
+            });
+          },
+        }),
+      });
+      const storeFailure = new HandlerError({
+        status: LIMITER_STORE_UNAVAILABLE.status,
+        code: LIMITER_STORE_UNAVAILABLE.code,
+        message: LIMITER_STORE_UNAVAILABLE.message,
+      });
+      const failedHandler = createSafePublicHandler(config, async function* () {
+        return Result.err(storeFailure);
+      });
+      const app = serve(
+        createHttpApp({
+          middleware: [
+            ...LIFECYCLE,
+            ...(surface === "limiter"
+              ? [
+                  rateLimit({
+                    context,
+                    duration: 1000,
+                    max: 1,
+                    generator: () => "limiter-observation",
+                  }),
+                ]
+              : []),
+          ],
+          routes: routes({
+            "/v1/signals/": {
+              GET:
+                surface === "handler"
+                  ? failedHandler
+                  : defineEndpoint.public({}, () => "ok"),
+            },
+          }),
+        }),
+      );
+      try {
+        const response = await app.fetch("http://localhost/v1/signals/");
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({
+          code: LIMITER_STORE_UNAVAILABLE.code,
+        });
+        expect(logs.records).toHaveLength(1);
+        expect(logs.records.at(0)).toMatchObject({
+          message: "limiter_admission.unavailable",
+          severityText: "WARN",
+          attributes: {
+            "failure.grade": "transient",
+            "failure.reason": "limiter_store_unavailable",
+          },
+        });
+        expect(analytics.exceptions()).toHaveLength(0);
+        expect(
+          metricRecords(metricLines, "RequestTransientFailures"),
+        ).toHaveLength(1);
+        expect(metricRecords(metricLines, "RequestDuration")).toHaveLength(1);
+      } finally {
+        context.kill();
+      }
+    },
+  );
 
   test("framework errors retain declared route scope across moved source lines", async () => {
     let sourceLine = 10;
@@ -617,7 +702,7 @@ describe("the request lifecycle", () => {
                 mode === "configuration"
                   ? Result.err(
                       new ActionSizeError({
-                        message: "Unconfigured",
+                        message: ownedMessage("Unconfigured"),
                         reason: "configuration",
                       }),
                     )
@@ -713,10 +798,10 @@ describe("the request lifecycle", () => {
       [
         "request.handler_failed",
         "upstream_unavailable",
-        "log_error_and_capture",
+        "log_warn_and_capture",
         1,
       ],
-      ["request.completed", "unobserved_5xx", "log_error", 1],
+      ["request.completed", "unobserved_5xx", "log_error_and_capture", 1],
     ]);
   });
 
@@ -775,7 +860,7 @@ describe("the request lifecycle", () => {
         "_aws" in record,
       ]),
     ).toEqual([
-      ["/v1/case/decisions/:decisionId/citations/summary", "search", true],
+      ["/v1/case/decisions/:decisionId/citations/summary", "search", false],
       ["/v1/case/sitemap/shards", "batch", false],
     ]);
   });

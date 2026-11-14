@@ -1,124 +1,92 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { Block } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import { collapseLetterSpacing } from "./letter-spacing";
-
-/** Spell words the way the court emphasises them: letters apart, words wider. */
-const spaceOut = (words: readonly string[]): string =>
-  words.map((word) => word.split("").join(" ")).join("   ");
+import { withAttestedLetterSpacing } from "./letter-spacing";
 
 const czechWord = fc.stringMatching(
   /^[A-Za-zÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž]{2,12}$/u,
 );
 
-describe("letter-spaced emphasis", () => {
-  test.each([
-    // Verbatim from Pl. ÚS 36/93, I. ÚS 2/93 and Pl. ÚS 36/93's opinions.
-    ["N á v r h   s e   z a m í t á .", "Návrh se zamítá."],
-    ["Ústavní stížnost se  z a m í t á .", "Ústavní stížnost se zamítá."],
-    [
-      "ze dne 22. dubna 1992, čj. 11 Co 106/92-64, t a k t o :",
-      "ze dne 22. dubna 1992, čj. 11 Co 106/92-64, takto:",
-    ],
-    ["1.  S T A N O V I S K O", "1. STANOVISKO"],
-    ["zrušena, a to z těchto d ů v o d ů :", "zrušena, a to z těchto důvodů:"],
-    [
-      "P o u č e n í : Proti rozhodnutí Ústavního soudu se nelze odvolat.",
-      "Poučení: Proti rozhodnutí Ústavního soudu se nelze odvolat.",
-    ],
-    ["J M É N E M   R E P U B L I K Y", "JMÉNEM REPUBLIKY"],
-    // Punctuation set against the last letter rather than spaced from it.
-    ["N á v r h   s e   z a m í t á.", "Návrh se zamítá."],
-    ["t a k t o:", "takto:"],
-    ["z těchto d ů v o d ů:", "z těchto důvodů:"],
-    ["O d ů v o d n ě n í :", "Odůvodnění:"],
-  ])("reads %j as %j", (spaced, words) => {
-    expect(collapseLetterSpacing(spaced)).toBe(words);
+describe("withAttestedLetterSpacing", () => {
+  const paragraphOf = (plainText: string): Block => ({
+    id: "b1",
+    anchorId: "p-1",
+    type: "paragraph",
+    inlines: [{ type: "text", text: plainText }],
+    plainText,
   });
 
-  test("keeps every word boundary of a spaced phrase", () => {
+  const witness = paragraphOf("Povinný může podat návrh.");
+
+  test("reads a word spaced unevenly inside a sentence as the word the decision prints intact elsewhere", () => {
+    const [spaced] = withAttestedLetterSpacing([
+      paragraphOf("Nesplní-li povinný, m ů že oprávněný podat návrh."),
+      witness,
+    ]);
+    expect(spaced?.plainText).toBe(
+      "Nesplní-li povinný, může oprávněný podat návrh.",
+    );
+    expect(spaced?.type === "paragraph" ? spaced.inlines : []).toEqual([
+      { type: "text", text: "Nesplní-li povinný, může oprávněný podat návrh." },
+    ]);
+  });
+
+  test("leaves the same spacing when the decision never prints the word", () => {
+    const blocks = [paragraphOf("Nesplní-li povinný, m ů že oprávněný.")];
+    expect(withAttestedLetterSpacing(blocks)).toEqual(blocks);
+  });
+
+  test("never changes a character that is not whitespace, and is idempotent", () => {
     assertProperty(
-      "keeps every word boundary of a spaced phrase",
+      "never changes a character that is not whitespace, and is idempotent",
       fc.property(
-        fc.array(czechWord, { minLength: 1, maxLength: 5 }),
-        fc.constantFrom("", ".", " .", ":", " :"),
-        (words, end) => {
-          fc.pre(words.some((word) => word.length >= 4));
-          expect(collapseLetterSpacing(`${spaceOut(words)}${end}`)).toBe(
-            `${words.join(" ")}${end.trim()}`,
+        fc.constantFrom("m ů že", "m ůže", "m ů ž e", "mů ž e", "může"),
+        fc.array(czechWord, { minLength: 0, maxLength: 4 }),
+        fc.array(czechWord, { minLength: 0, maxLength: 4 }),
+        (spelled, before, after) => {
+          const text = [...before, spelled, ...after].join(" ");
+          const blocks = [paragraphOf(text), witness];
+          const once = withAttestedLetterSpacing(blocks);
+          const [first] = once;
+          expect(first?.plainText.replaceAll(/\s/gu, "")).toBe(
+            text.replaceAll(/\s/gu, ""),
           );
+          for (const block of once) {
+            if (block.type === "paragraph") {
+              expect(block.plainText).toBe(plainTextOf(block.inlines).trim());
+            }
+          }
+          expect(withAttestedLetterSpacing(once)).toEqual(once);
         },
       ),
-      { numRuns: 200 },
     );
   });
 
-  test.each([
-    "odst. 1 a 2 písm. a) a b)",
-    "v § 3 a 4 a v čl. 1",
-    "A. M., bytem SRN, a O. M., bytem, SRN",
-    "společnosti s r. o. a a. s.",
-    "Ústavní  soud  České  republiky",
-  ])("leaves ordinary text %j as it is", (text) => {
-    expect(collapseLetterSpacing(text)).toBe(text);
-  });
-
-  test("is idempotent", () => {
-    assertProperty(
-      "is idempotent",
-      fc.property(
-        fc.array(
-          fc.tuple(
-            fc.constantFrom(
-              "a",
-              "b",
-              "č",
-              "ř",
-              "x",
-              "slovo",
-              "Soud",
-              ".",
-              ":",
-              "1",
-              "§",
-            ),
-            fc.constantFrom(" ", "  ", "   "),
-          ),
-          { maxLength: 40 },
-        ),
-        (parts) => {
-          const text = parts.map(([token, gap]) => `${token}${gap}`).join("");
-          const once = collapseLetterSpacing(text);
-          expect(collapseLetterSpacing(once)).toBe(once);
-        },
-      ),
-      { numRuns: 200 },
-    );
-  });
-
-  describe("short words set apart (setApart)", () => {
-    test.each([
-      // Verbatim from PL. ÚS 15/98 and PL. ÚS 1/2021.
-      [
-        "zákonov   n i e   j e   v súlade s čl. 26",
-        "zákonov nie je v súlade s čl. 26",
-      ],
-      ["zákona  n i e  sú   v  súlade", "zákona nie sú   v  súlade"],
-    ])("reads %j as %j", (spaced, words) => {
-      expect(collapseLetterSpacing(spaced, { setApart: true })).toBe(words);
-      // Off by default: the Czech court spaces no word this short alone.
-      expect(collapseLetterSpacing(spaced)).toBe(spaced);
-    });
-
-    test.each([
-      // A row of one-letter words, an initial, an abbreviation.
-      "slobôd  a v  súlade",
-      "úrad   v L.   o podanie",
-      "zákona   a č.   2",
-    ])("leaves %j as it is", (text) => {
-      expect(collapseLetterSpacing(text, { setApart: true })).toBe(text);
-    });
+  // A spaced word split across formatting nodes cannot be read inside one
+  // node; the block's text must then still say what its inlines say.
+  test("derives the block's text from its repaired inlines", () => {
+    const [mixed] = withAttestedLetterSpacing([
+      {
+        id: "b2",
+        anchorId: "p-2",
+        type: "paragraph",
+        inlines: [
+          { type: "text", text: "m ů že a m " },
+          { type: "bold", children: [{ type: "text", text: "ů že" }] },
+        ],
+        plainText: "m ů že a m ů že",
+      },
+      witness,
+    ]);
+    expect(mixed?.type).toBe("paragraph");
+    if (mixed?.type !== "paragraph") {
+      return;
+    }
+    expect(mixed.plainText).toBe(plainTextOf(mixed.inlines).trim());
+    expect(mixed.plainText).toBe("může a m ů že");
   });
 });

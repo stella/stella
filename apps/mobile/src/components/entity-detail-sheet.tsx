@@ -1,15 +1,13 @@
 import { Suspense, use, useState } from "react";
 
 import { Result } from "better-result";
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
+import { screenStyles } from "@/components/empty-state-screen";
+import { TaskStatusControl } from "@/components/task-status-control";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
@@ -50,7 +48,7 @@ export const EntityDetailSheet = ({
           <ActivityIndicator color={colors.accent} style={styles.loading} />
         }
       >
-        <LoadedEntity load={load} />
+        <LoadedEntity load={load} source={source} workspaceId={workspaceId} />
       </Suspense>
     </View>
   );
@@ -58,8 +56,12 @@ export const EntityDetailSheet = ({
 
 const LoadedEntity = ({
   load,
+  source,
+  workspaceId,
 }: {
   load: Promise<Result<EntityDetail, ApiError>>;
+  source: AccessTokenSource;
+  workspaceId: string;
 }) => {
   const t = useTranslations("entity");
   const matter = useTranslations("matter");
@@ -77,60 +79,84 @@ const LoadedEntity = ({
 
   const entity = result.value;
   const { kind } = entity;
-  const facts = [
-    isKnownEntityKind(kind)
-      ? { label: t("type"), value: matter(`kind.${kind}`) }
-      : undefined,
-    entity.currentVersionReference === null ||
-    entity.currentVersionReference === undefined
-      ? undefined
-      : { label: t("reference"), value: entity.currentVersionReference },
-    entity.currentVersionCreatedAt === null ||
-    entity.currentVersionCreatedAt === undefined
-      ? undefined
-      : {
-          label: t("currentVersion"),
-          value: format.dateTime(new Date(entity.currentVersionCreatedAt), {
-            dateStyle: "medium",
-            timeStyle: "short",
-          }),
-        },
-  ].filter((fact) => fact !== undefined);
+  const untitled = entity.name === null || entity.name === "";
+  // A task's status and due date are its facts (TaskStatusControl); its kind
+  // goes without saying, and versions belong to documents.
+  const facts =
+    kind === "task"
+      ? []
+      : [
+          isKnownEntityKind(kind)
+            ? { label: t("type"), value: matter(`kind.${kind}`) }
+            : undefined,
+          entity.currentVersionReference === null ||
+          entity.currentVersionReference === undefined
+            ? undefined
+            : { label: t("reference"), value: entity.currentVersionReference },
+          entity.currentVersionCreatedAt === null ||
+          entity.currentVersionCreatedAt === undefined
+            ? undefined
+            : {
+                label: t("currentVersion"),
+                value: format.dateTime(
+                  new Date(entity.currentVersionCreatedAt),
+                  {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  },
+                ),
+              },
+        ].filter((fact) => fact !== undefined);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView
+      alwaysBounceVertical={false}
+      contentContainerStyle={styles.content}
+    >
       <Text
         accessibilityRole="header"
-        style={[styles.title, { color: colors.text }]}
+        style={[
+          styles.title,
+          { color: untitled ? colors.muted : colors.text },
+          untitled ? styles.untitled : undefined,
+        ]}
       >
-        {entity.name === null || entity.name === ""
-          ? matter("untitled")
-          : entity.name}
+        {untitled ? matter("untitled") : entity.name}
       </Text>
-      <View style={[styles.facts, { borderColor: colors.border }]}>
-        {facts.map((fact) => (
-          <View
-            key={fact.label}
-            style={[styles.fact, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.factLabel, { color: colors.muted }]}>
-              {fact.label}
-            </Text>
-            <Text
-              numberOfLines={2}
-              style={[styles.factValue, { color: colors.text }]}
+      {kind === "task" ? (
+        <TaskStatusControl
+          matterId={workspaceId}
+          source={source}
+          taskId={entity.entityId}
+        />
+      ) : null}
+      {facts.length === 0 ? null : (
+        <View style={[styles.facts, { borderColor: colors.border }]}>
+          {facts.map((fact) => (
+            <View
+              key={fact.label}
+              style={[styles.fact, { borderColor: colors.border }]}
             >
-              {fact.value}
-            </Text>
-          </View>
-        ))}
-      </View>
+              <Text style={[styles.factLabel, { color: colors.muted }]}>
+                {fact.label}
+              </Text>
+              <Text
+                numberOfLines={2}
+                style={[styles.factValue, { color: colors.text }]}
+              >
+                {fact.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   content: {
+    ...screenStyles.readable,
     gap: 20,
     padding: 24,
   },
@@ -166,5 +192,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "700",
+  },
+  untitled: {
+    fontWeight: "500",
   },
 });

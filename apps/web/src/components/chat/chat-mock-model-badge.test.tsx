@@ -50,6 +50,7 @@ const renderDock = async ({
   );
   const dock = (
     <ChatComposerDock
+      models={null}
       status="pending"
       threadRef={{ scope: "global", threadId: toChatThreadId("thread-1") }}
     />

@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, exists, sql } from "drizzle-orm";
 
-import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type {
   ReaderAnswerCitation,
   ReaderAnswerErrorCode,
@@ -31,6 +30,7 @@ import {
 } from "@/api/http/cache";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
@@ -194,10 +194,18 @@ const persistReaderAnswerSettlement = async ({
           .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
           .limit(1)
       ).at(0) ?? panic("A transitioned reader message must exist");
+    const projection = await (scope.readCopies ?? readWithdrawnCopyProjection)({
+      values: saved.citations,
+      decisionIds: [prepared.answer.decisionId],
+    });
+    const projected = projection.answerMessage(
+      { ...saved, role: "assistant" },
+      prepared.answer.decisionId,
+    );
     const evidence = {
-      messageId: saved.id,
-      content: saved.content,
-      citations: saved.citations,
+      messageId: projected.id,
+      content: projected.content,
+      citations: projected.citations,
       invalidCitationCount: saved.invalidCitationCount,
     };
     switch (saved.status) {
@@ -322,8 +330,7 @@ export const streamReaderAnswer = ({
   const encoder = new TextEncoder();
   let partialContent = "";
   let connected = true;
-  let failureCode: ReaderAnswerErrorCode =
-    ACTION_ADMISSION_CODES.admissionUnavailable;
+  let failureCode: ReaderAnswerErrorCode = "internal";
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const emit = (event: ReaderAnswerStreamEvent) => {

@@ -14,10 +14,10 @@ import { writeFileSync } from "node:fs";
 
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
-import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { SOURCE_FINGERPRINT_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
+import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { plCourtsSearchFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
@@ -26,6 +26,9 @@ import {
   SOURCE_FINGERPRINT_DRIVERS,
   sourceFingerprintCensus,
 } from "@/api/tests/helpers/source-fingerprint-census";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const BASELINE = new URL(
   "../../../../../../../scripts/source-fingerprint-baseline.json",
@@ -33,9 +36,8 @@ const BASELINE = new URL(
 );
 const CENSUS_OUT = process.env["SOURCE_FINGERPRINT_CENSUS_OUT"];
 
-const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const recordedDrivers = async (): Promise<string[]> => {

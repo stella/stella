@@ -4,9 +4,9 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/statutes" });
 
@@ -40,7 +40,12 @@ globalThis.fetch = Object.assign(
     }
     // The composer's matter picker: a member with no matters yet.
     if (url.pathname.endsWith("/workspaces/navigation")) {
-      return Response.json({ items: [], nextCursor: null, workspaces: [] });
+      return Response.json({
+        items: [],
+        nextCursor: null,
+        workspaces: [],
+        features: { timeBilling: false },
+      });
     }
     return Response.json({});
   },
@@ -62,6 +67,7 @@ const { AuthenticatedUserProvider } =
 const { useLegalDocumentChatThreads } =
   await import("@/features/chat/legal-document-chat-threads");
 const { LegalReaderAIChat } = await import("./legal-reader-ai-chat");
+await import("@/components/ai-suggestions/file-viewer-with-ai.impl");
 const { askAboutReaderPassage } =
   await import("./annotations/reader-annotation-target");
 const { useInspectorTabsStore } =
@@ -70,9 +76,6 @@ const { DECISION_IDENTIFIER_TYPES } =
   await import("@stll/legal-ast/decision-identifier");
 
 const READER_CONTENT = "Reader content";
-// The overlay host is a lazy chunk; its first load under a busy runner
-// outlasts the default per-test timeout.
-const LAZY_OVERLAY_TEST_TIMEOUT_MS = 30_000;
 
 afterEach(() => {
   cleanup();
@@ -159,18 +162,13 @@ test.each([
     // availability read is the one the overlay host makes for itself, and the
     // composer below registers with the host's own editor. Without either the
     // overlay panics and its boundary shows the error fallback instead.
-    await waitFor(
-      () => {
-        expect(availabilityReads).toBeGreaterThan(0);
-      },
-      { timeout: 15_000 },
-    );
+    await waitFor(() => {
+      expect(availabilityReads).toBeGreaterThan(0);
+    });
     expect(screen.getByText(READER_CONTENT)).toBeDefined();
     expect(screen.queryByText(messages.common.somethingWentWrong)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
-    const composer = await screen.findByRole("textbox", undefined, {
-      timeout: 15_000,
-    });
+    const composer = await screen.findByRole("textbox");
     if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
       panic("Expected the reader overlay's mounted TipTap composer");
     }
@@ -196,7 +194,6 @@ test.each([
     expect(editor.getHTML()).toContain("www.stll.app");
     queryClient.clear();
   },
-  LAZY_OVERLAY_TEST_TIMEOUT_MS,
 );
 
 // The reader's AI action sends a passage to the decision's one conversation
@@ -204,60 +201,53 @@ test.each([
 // composer: the reader floats none over the text rather than showing the same
 // draft a second time, and its own returns, draft included, once the tab
 // leaves the screen.
-// timeout: the overlay host is a lazy chunk whose first load outlasts the default budget
-test(
-  "asking about a passage leaves the docked chat as the only composer",
-  async () => {
-    const inspector = useInspectorTabsStore.getState();
-    const decisionId = "decision-1";
-    const caseNumber = "7 Azs 172/2025";
-    const queryClient = await mountReader({
-      type: "decision",
-      decisionId,
-      caseNumber,
+test("asking about a passage leaves the docked chat as the only composer", async () => {
+  const inspector = useInspectorTabsStore.getState();
+  const decisionId = "decision-1";
+  const caseNumber = "7 Azs 172/2025";
+  const queryClient = await mountReader({
+    type: "decision",
+    decisionId,
+    caseNumber,
+  });
+  await screen.findByRole("textbox", undefined);
+  try {
+    await act(async () => {
+      askAboutReaderPassage({
+        prompt: "Explain the passage",
+        quote: "Reader passage",
+        target: {
+          type: "decision",
+          caseNumber,
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          country: "CZE",
+          court: "Nejvyšší správní soud",
+          decisionDate: null,
+          decisionType: null,
+          ecli: null,
+          id: decisionId,
+          name: null,
+        },
+      });
     });
-    await screen.findByRole("textbox", undefined, { timeout: 15_000 });
-    try {
-      await act(async () => {
-        askAboutReaderPassage({
-          prompt: "Explain the passage",
-          quote: "Reader passage",
-          target: {
-            type: "decision",
-            caseNumber,
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            country: "CZE",
-            court: "Nejvyšší správní soud",
-            decisionDate: null,
-            decisionType: null,
-            ecli: null,
-            id: decisionId,
-            name: null,
-          },
-        });
-      });
-      await waitFor(() => {
-        expect(screen.queryAllByRole("textbox")).toEqual([]);
-      });
-      expect(screen.getByText(READER_CONTENT)).toBeDefined();
-      // Closing the docked chat hands the conversation back to the reader.
-      await act(async () => {
-        useInspectorTabsStore.setState({ minimized: true });
-      });
-      const composer = await screen.findByRole("textbox", undefined, {
-        timeout: 15_000,
-      });
-      if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
-        panic("Expected the reader overlay's mounted TipTap composer");
-      }
-      const editor = composer.editor;
-      await waitFor(() => {
-        expect(JSON.stringify(editor.getJSON())).toContain("Reader passage");
-      });
-    } finally {
-      useInspectorTabsStore.setState(inspector, true);
-      queryClient.clear();
+    await waitFor(() => {
+      expect(screen.queryAllByRole("textbox").length).toBe(0);
+    });
+    expect(screen.getByText(READER_CONTENT)).toBeDefined();
+    // Closing the docked chat hands the conversation back to the reader.
+    await act(async () => {
+      useInspectorTabsStore.setState({ minimized: true });
+    });
+    const composer = await screen.findByRole("textbox");
+    if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
+      panic("Expected the reader overlay's mounted TipTap composer");
     }
-  },
-  LAZY_OVERLAY_TEST_TIMEOUT_MS,
-);
+    const editor = composer.editor;
+    await waitFor(() => {
+      expect(JSON.stringify(editor.getJSON())).toContain("Reader passage");
+    });
+  } finally {
+    useInspectorTabsStore.setState(inspector, true);
+    queryClient.clear();
+  }
+});

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import path from "node:path";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import { isWellFormedXml } from "./soap.js";
 
@@ -73,7 +73,8 @@ describe("SOAP XML well-formedness", () => {
   });
 
   test("keeps the captured acceptance boundary over randomized corpus picks", () => {
-    fc.assert(
+    assertProperty(
+      "keeps the captured acceptance boundary over randomized corpus picks",
       fc.property(
         fc.integer({ min: 0, max: oracleCases.length - 1 }),
         (index) => {
@@ -86,7 +87,7 @@ describe("SOAP XML well-formedness", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 500, seed: propertySeed() }),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 

@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -17,18 +18,19 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
+import { TEMPLATE_ROW_SPACING } from "@/features/knowledge/views/templates/templates-seam";
 import type {
   KnowledgeTemplate,
+  TemplateDensity,
   TemplateRowActions,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { formatRelativeTime } from "@/lib/relative-time";
-
-export type TemplateDensity = "compact" | "comfortable";
 
 type TemplateRowViewProps = {
   template: KnowledgeTemplate;
@@ -109,13 +111,13 @@ const TemplateMonogram = ({
     );
   }
   // CSSProperties has no index signature for CSS custom properties, so widen
-  // the binding rather than cast; --cat-hue feeds the oklch() classes.
+  // the binding rather than cast; --cat-hue feeds the `category-tile` utility.
   const style: CSSProperties & { "--cat-hue": string } = {
     "--cat-hue": String(categoryHue(categoryId)),
   };
   return (
     <div
-      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.94_0.045_var(--cat-hue))] text-sm font-semibold text-[oklch(0.45_0.13_var(--cat-hue))] dark:bg-[oklch(0.32_0.05_var(--cat-hue))] dark:text-[oklch(0.85_0.11_var(--cat-hue))]"
+      className="category-tile flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold"
       style={style}
     >
       {initial}
@@ -132,10 +134,11 @@ export const TemplateRowView = ({
 }: TemplateRowViewProps) => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
+  const nameId = useId();
 
   // Trailing cluster — fixed width so it lines up across rows. `relative z-10`
-  // keeps Use / ⋯ clickable above the row-wide open affordance (the name
-  // button's stretched ::after). Opening the template is the whole-row click,
+  // keeps Use / ⋯ clickable above the row-wide open affordance (the cover
+  // button laid over the row, earlier in the DOM). Opening the template is the whole-row click,
   // mirroring the clause list; Use (fill) stays an explicit CTA.
   const trailing = (
     <div className="relative z-10 flex shrink-0 items-center gap-2">
@@ -189,13 +192,20 @@ export const TemplateRowView = ({
       <ContextMenu actions={actions.menu}>
         <div
           className={cn(
-            density === "compact"
-              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2"
-              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3",
+            "hover:bg-muted/50 relative flex cursor-pointer gap-3 px-4",
+            TEMPLATE_ROW_SPACING[density],
           )}
           draggable={actions.dragStart !== undefined}
           onDragStart={actions.dragStart}
         >
+          {/* Opening the template is the whole-row click: the button covers
+              the row and takes its name from the visible title. */}
+          <Button
+            aria-labelledby={nameId}
+            className="absolute inset-0 z-10"
+            onClick={actions.open}
+            variant="plain"
+          />
           <TemplateMonogram
             categoryId={template.categoryId}
             name={template.name}
@@ -203,37 +213,37 @@ export const TemplateRowView = ({
 
           {density === "compact" ? (
             <>
-              <button
-                className="flex min-w-0 flex-1 items-baseline gap-2 text-start after:absolute after:inset-0"
-                onClick={actions.open}
-                type="button"
-              >
-                <span className="truncate text-sm font-medium" dir="auto">
+              <div className="flex min-w-0 flex-1 items-baseline gap-2 text-start">
+                <TruncatedText
+                  className="text-sm font-medium"
+                  dir="auto"
+                  id={nameId}
+                >
                   {template.name}
-                </span>
+                </TruncatedText>
                 {categoryName !== null && (
-                  <span
-                    className="text-muted-foreground shrink-0 truncate text-xs"
+                  <TruncatedText
+                    className="text-muted-foreground shrink-0 text-xs"
                     dir="auto"
                   >
                     {categoryName}
-                  </span>
+                  </TruncatedText>
                 )}
-              </button>
+              </div>
               {trailing}
             </>
           ) : (
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex items-center gap-3">
-                <button
-                  className="flex min-w-0 flex-1 text-start after:absolute after:inset-0"
-                  onClick={actions.open}
-                  type="button"
-                >
-                  <span className="truncate text-sm font-medium" dir="auto">
+                <div className="flex min-w-0 flex-1 text-start">
+                  <TruncatedText
+                    className="text-sm font-medium"
+                    dir="auto"
+                    id={nameId}
+                  >
                     {template.name}
-                  </span>
-                </button>
+                  </TruncatedText>
+                </div>
                 {trailing}
               </div>
               <RowDescription
@@ -298,7 +308,7 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
           {template.languages.map((tag) => (
             <span
               aria-label={languageDisplayName(tag, lang)}
-              className="bg-muted text-3xs rounded px-1.5 py-0.5 font-medium uppercase"
+              className="bg-muted text-3xs rounded-sm px-1.5 py-0.5 font-medium uppercase"
               key={tag}
               role="group"
             >
@@ -307,7 +317,7 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
           ))}
         </span>
       )}
-      <span className="truncate">{segments.join(" · ")}</span>
+      <TruncatedText>{segments.join(" · ")}</TruncatedText>
     </span>
   );
 };
@@ -337,20 +347,22 @@ const RowDescription = ({
   const detail = (() => {
     if (onDescribe) {
       return (
-        <button
-          className="hover:text-foreground relative z-10 inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
+        <Button
+          className="group/plain relative z-10 flex min-w-0"
           onClick={onDescribe}
-          type="button"
+          variant="plain"
         >
-          <PencilLineIcon className="size-3 shrink-0" />
-          <span className="truncate">
-            {guidance === "" ? t("templates.describeWhenToUse") : guidance}
+          <span className="group-hover/plain:text-foreground inline-flex min-w-0 items-center gap-1 underline-offset-2 group-hover/plain:underline">
+            <PencilLineIcon className="size-3 shrink-0" />
+            <TruncatedText>
+              {guidance === "" ? t("templates.describeWhenToUse") : guidance}
+            </TruncatedText>
           </span>
-        </button>
+        </Button>
       );
     }
     if (guidance !== "") {
-      return <span className="truncate">{guidance}</span>;
+      return <TruncatedText>{guidance}</TruncatedText>;
     }
     return null;
   })();

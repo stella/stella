@@ -92,6 +92,16 @@ incomplete smokes record `failure`. Before each write, the workflow rechecks the
 newest run and status owner, so a superseded proof cannot overwrite its
 replacement's status. The API model-turn smoke remains report-only.
 
+Staging is off between proofs, so data a scheduled job keeps fresh (such as the
+sanctions lists, stale 48 h after their last verification) can be stale when a
+proof starts. A deployed journey that reads such data names itself to
+`/smoke/scheduled-jobs/journey-prerequisites`, which brings the jobs declared
+for it in `apps/api/src/lib/smoke-session/journey-prerequisites.ts` ahead of
+every other due job and reports each one's latest run. The journey waits up to
+10 minutes for those runs and fails with the run's error, or the list's own
+failure code, when a run cannot refresh what the journey reads. The route has
+the same smoke-secret and staging-origin gates as `/smoke/scheduled-jobs`.
+
 Hosted deployment configuration must set `DEPLOY_ENVIRONMENT=staging` on the
 staging API and `DEPLOY_ENVIRONMENT=production` on the production API. The marker
 is independent of the image's build mode. It is optional at API startup: when
@@ -104,8 +114,8 @@ images. Self-hosted and local runtimes can leave it unset.
 
 The repository variable `STAGING_STATE` declares environment prerequisites as
 JSON. Missing keys (or an unset variable) mean on: every check gates. The allowed
-keys are `corpus_index` (`on` or `off`) and `rollout` (`on` or
-`knowledge-web-pending`). Unknown keys, invalid values, and malformed JSON fail
+keys are `corpus_index` (`on` or `off`), `corpus_reads` (`all` or `search-only`)
+and `rollout` (`on` or `knowledge-web-pending`). Unknown keys, invalid values, and malformed JSON fail
 closed. Set it explicitly when a prerequisite is unavailable:
 
 ```sh
@@ -120,7 +130,11 @@ gh variable delete STAGING_STATE --repo stella/stella
 
 Only the public-law hydration check becomes report-only when `corpus_index=off`;
 only Public Knowledge API/web flag consistency becomes report-only when
-`rollout=knowledge-web-pending`. Assertions still run, and failures retain their
+`rollout=knowledge-web-pending`. `corpus_reads=search-only` declares a staging
+environment that serves case-law search but no legislation index or coverage
+snapshot: those two preflight probes still run and report, the case-law search
+probe still gates, and the MCP journeys that need the missing reads do not run.
+Once both probes answer, the MCP journeys run and gate again. Assertions still run, and failures retain their
 Playwright traces and report. Every smoke run logs the dispositions and reasons
 and writes them to the step summary. Other test failures and runner errors gate.
 Visitor route checks are skipped with an explicit reason when the web side is
@@ -142,9 +156,12 @@ by the RC run.
    and `docs/changelog/vX.Y.Z.md`, creates one release commit on
    `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
    open release pull request blocks another cut. The command runs the existing
-   pre-cut heavy, dependency-audit and npm-publish-lag gates before writing.
+   pre-cut heavy, dependency-audit, npm-publish-lag and deploy-env-contract gates before writing.
    The npm gate checks that same newest final tag, regardless of main's
-   `VERSION`.
+   `VERSION`. When `VERSION` is ahead of every final tag, a release pull request
+   merged before its final tag; the cut then takes the next patch after
+   `VERSION` and folds that untagged version's notes into the new changelog.
+   If that version's final tag lands during the cut, the cut refuses; run it again.
    `--allow-unproven-main` permits missing heavy evidence at the cut only;
    dependency waivers require `WAIVE_DEPENDENCY_AUDIT=true` and
    `WAIVER_REASON='<reason>'`. There is no `--refresh` path.
@@ -216,7 +233,13 @@ A pull request that changes `VERSION` or migrations also runs
 `migration-upgrade-rehearsal`: it starts with the schema of the release
 production currently serves, fills registered high-volume tables with
 scale-shaped rows, runs this commit's migration entrypoint under a budget,
-reruns it, and checks schema parity. Its summary records the base release and
+reruns it, and checks schema parity. It then boots that served release's own
+API image against the upgraded database and requires readiness within 120
+seconds: production keeps serving it, and keeps replacing its tasks, until the
+candidate rolls out, so a release's migrations must stay compatible with the
+previous release's startup checks (expand first, contract in a later release).
+A refusal fails the job naming the startup check that refused and the
+migrations this commit applied. Its summary records the base release and
 timings. `scripts/rehearse-migration-upgrade.sh` runs the rehearsal locally
 against an empty database.
 

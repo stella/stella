@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -8,6 +9,7 @@ import { useShallow } from "zustand/shallow";
 
 import type { ContactType } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { getPossibleDuplicateMatters } from "@stll/api-contract/matter-duplicates";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -24,6 +26,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { BuildingIcon, UserIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -31,7 +34,6 @@ import {
   ContactPicker,
 } from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCreateContact } from "@/lib/contacts/mutations";
@@ -40,9 +42,7 @@ import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
-import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
@@ -63,9 +63,12 @@ export const SelectedClient = ({
     ) : (
       <BuildingIcon className="text-muted-foreground size-4" />
     )}
-    <BidiText as="span" className="truncate text-sm font-medium">
+    <TruncatedText
+      className="text-sm font-medium"
+      render={<BidiText as="span" />}
+    >
       {client.displayName}
-    </BidiText>
+    </TruncatedText>
     <Button
       aria-label={clearLabel}
       className="ms-auto"
@@ -87,18 +90,26 @@ const toActionErrorTitle = ({
 }) => userErrorFromThrown(error, fallback);
 
 export const CreateMatterDialog = () => {
-  const { closeDialog, dialog } = useCreateMatterStore(
-    useShallow((s) => ({
-      closeDialog: s.closeDialog,
-      dialog: s.dialog,
-    })),
-  );
+  const { closeDialog, dialog, finishClosing, returnFocus } =
+    useCreateMatterStore(
+      useShallow((s) => ({
+        closeDialog: s.closeDialog,
+        dialog: s.dialog,
+        finishClosing: s.finishClosing,
+        returnFocus: s.returnFocus,
+      })),
+    );
   const isOpen = dialog.status === "open";
-  const draftClient = dialog.status === "open" ? dialog.draftClient : null;
-  const onCreated = dialog.status === "open" ? dialog.onCreated : undefined;
+  const draftClient = dialog.status !== "closed" ? dialog.draftClient : null;
+  const onCreated = dialog.status !== "closed" ? dialog.onCreated : undefined;
 
   return (
     <Dialog
+      onOpenChangeComplete={(open) => {
+        if (!open) {
+          finishClosing();
+        }
+      }}
       onOpenChange={(open) => {
         if (!open) {
           closeDialog();
@@ -106,11 +117,12 @@ export const CreateMatterDialog = () => {
       }}
       open={isOpen}
     >
-      {isOpen ? (
+      {dialog.status !== "closed" ? (
         <CreateMatterDialogBody
           closeDialog={closeDialog}
           draftClient={draftClient}
           key={draftClient?.id ?? "new"}
+          returnFocus={returnFocus}
           {...(onCreated === undefined ? {} : { onCreated })}
         />
       ) : null}
@@ -122,12 +134,14 @@ type CreateMatterDialogBodyProps = {
   closeDialog: () => void;
   draftClient: MatterDraftClient | null;
   onCreated?: (workspaceId: string) => void | Promise<void>;
+  returnFocus: RefObject<HTMLElement | null>;
 };
 
 const CreateMatterDialogBody = ({
   closeDialog,
   draftClient,
   onCreated,
+  returnFocus,
 }: CreateMatterDialogBodyProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -153,12 +167,9 @@ const CreateMatterDialogBody = ({
   };
 
   const handleCreateClient = async (displayName: string, type: ContactType) => {
-    const id = toSafeId<"contact">(createUuid());
-
     const result = await Result.tryPromise(
       async () =>
         await createContact.mutateAsync({
-          id,
           type,
           displayName,
         }),
@@ -180,7 +191,7 @@ const CreateMatterDialogBody = ({
     });
 
     setSelectedClient({
-      id,
+      id: result.value.id,
       displayName,
       type,
     });
@@ -261,7 +272,7 @@ const CreateMatterDialogBody = ({
         });
 
   return (
-    <DialogPopup className="max-w-md">
+    <DialogPopup className="max-w-md" finalFocus={returnFocus}>
       <DialogFormState
         dirty={name !== "" || selectedClient?.id !== draftClient?.id}
         onDiscard={() => {
@@ -349,7 +360,9 @@ const CreateMatterDialogBody = ({
                   className="flex items-center gap-2 text-sm"
                   key={workspace.id}
                 >
-                  <span className="truncate font-medium">{workspace.name}</span>
+                  <TruncatedText className="font-medium">
+                    {workspace.name}
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {workspace.reference}
                   </span>

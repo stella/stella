@@ -33,6 +33,7 @@ import { ChatSendLifecycle } from "@/api/handlers/chat/send-message";
 import { createLazyExternalMcpToolsLoader } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,
@@ -409,7 +410,7 @@ describe("a turn's settlement count", () => {
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       firstWriteMayFail.resolve(undefined);
@@ -470,8 +471,12 @@ describe("a turn's settlement count", () => {
         proposed.push(outcome.type);
         const turnId = await runningTurnOf(threadId);
         unwrap(
-          await safeDb(
-            async (tx) => await stopChatTurnOnTx({ threadId, tx, turnId }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await stopChatTurnOnTx({ pings, threadId, tx, turnId }),
+              ),
           ),
         );
       },
@@ -527,8 +532,12 @@ describe("a turn's settlement count", () => {
           })
           .where(eq(chatTurns.threadId, threadId));
         unwrap(
-          await safeDb(
-            async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
+              ),
           ),
         );
       },
@@ -587,19 +596,22 @@ describe("a turn's settlement count", () => {
         workspaceId: ids.wsA1,
       });
       unwrap(
-        await safeDb(async (tx) => {
-          await tx.insert(chatMessages).values({
-            content: toPersistedChatMessageContentV3({
-              data: [{ content: "Draft it", type: "text" }],
+        await withChatRunPings(
+          async (pings) =>
+            await safeDb(async (tx) => {
+              await tx.insert(chatMessages).values({
+                content: toPersistedChatMessageContentV3({
+                  data: [{ content: "Draft it", type: "text" }],
+                }),
+                id: userMessageId,
+                role: "user",
+                threadId,
+                userId: ids.userA1,
+                workspaceId: ids.wsA1,
+              });
+              await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx });
             }),
-            id: userMessageId,
-            role: "user",
-            threadId,
-            userId: ids.userA1,
-            workspaceId: ids.wsA1,
-          });
-          await insertChatTurnAcceptanceOnTx({ acceptance, tx });
-        }),
+        ),
       );
       const execution =
         unwrap(

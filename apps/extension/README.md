@@ -11,9 +11,17 @@ Stable product tags (`vX.Y.Z`) build a production Chrome ZIP in the existing
 release workflow and attach `stella-extension-chrome-X.Y.Z.zip` to the GitHub
 release. The manifest version comes from the repository `VERSION`, verified
 against the tag; the packaged manifest must trust exactly the production
-origins. Prerelease tags do not produce a store package. Store submission is
-manual. Historical tags predating `scripts/release-zip.sh` skip the extension
-asset when rerun; tags supporting it must pass the packaging checks.
+origins. Prerelease tags do not produce a store package. Historical tags
+predating `scripts/release-zip.sh` skip the extension asset when rerun; tags
+supporting it must pass the packaging checks.
+
+Once the GitHub release is published, the `publish-chrome-extension` job
+submits that ZIP to the Chrome Web Store for review
+(`scripts/publish-store.ts`, Chrome Web Store API V2), and Chrome updates
+installed copies after approval. It signs in to Google without a stored key,
+from the `chrome-web-store` environment only. A rerun leaves a version that is
+already submitted or published alone, and a newer release replaces an older
+submission still in review. A store refusal fails that job, not the release.
 
 `bun --filter @stll/extension zip` builds the same ZIP locally. Development
 and staging builds use the product's numeric version too; `version_name`
@@ -26,7 +34,7 @@ preserves any prerelease label.
 2. Open `chrome://extensions`, enable Developer mode, and choose **Load unpacked**.
 3. Select `apps/extension/.output/chrome-mv3` (or `chrome-mv3-dev`).
 4. Open a stella app tab, then open the extension popup.
-5. Choose **Allow all websites**, then **Connect current stella tab**.
+5. Choose **Allow website access and connect**, or **Connect stella**.
 6. Refresh the stella tab once after installing a new extension build.
 
 ## Trust boundary
@@ -47,7 +55,15 @@ Only development builds (`dev`, `build:dev`) and the Playwright build also
 trust `http://localhost` and `http://127.0.0.1`; `build` checks that the
 release manifest grants nothing on loopback or plain HTTP.
 
-The popup binds one explicit tab and exact origin as the active controller.
+Connecting from the popup on a stella tab makes that tab's exact origin the
+active controller: every stella tab on that origin, open now or later, uses
+the one connection, and no other origin can. It lasts until the user
+disconnects or removes website access, connects stella on another origin,
+the last stella tab on the origin closes, or the browser restarts. The
+extension remembers each stella tab by the document that last messaged it and
+sends connection changes only to that document, so a tab that navigated away
+never hears them. Commands from several stella tabs run one at a time against
+the one controlled tab.
 Website access is optional, HTTPS only, and requested in a user gesture
 together with two optional permissions, and browser commands refuse to run
 without all three:
@@ -58,11 +74,35 @@ without all three:
   page-opened tab stays confined and a download is traced to its frame.
 
 `activeTab` lets the popup read the URL of the stella tab it was opened on
-when pairing.
+when connecting.
 
 Chat reads the controlled tab. That tab is either one stella opened through
 `open`, or a tab the user already has open: open the popup on that page and
 choose **Use this tab with stella**, then ask about it in chat.
+
+## stella desktop
+
+Coding agents that run on the member's computer reach the extension through
+stella desktop's native messaging host (`app.stll.browser`), behind the
+optional `nativeMessaging` permission the popup asks for on its own. The same
+control session, origin policy, containment, budgets and execution ledger
+apply as for a stella tab; results go back through the host and never through
+stella's servers. A desktop chat's commands run under their own controller
+id. One controller holds the browser at a time, and only its commands run:
+another controller can list, switch to or act on none of its tabs. A desktop
+chat takes the browser over only with a page it opens, once nothing refused
+the open; the previous holder then loses its controlled tab and its tabs go
+back to the member, and a stella tab's chat is refused until the member
+connects it again or hands it a tab from the popup.
+
+A page that asks for a sign-in (a visible password or one-time-code field,
+input or text area, in any frame, or an identity provider's page) is the
+member's: a desktop command on it gets `needs-member`, with nothing on the
+page read, typed or clicked and no snapshot stored. Every frame is checked
+before any is read, and the page script checks before it reads any field
+or starts watching the page. A click or fill that leads to such a page has
+run: its `needs-member` says the page it led to is the member's. Commands
+from a stella tab still read such a page with its secret fields withheld.
 
 ## Control and stopping
 

@@ -3,8 +3,8 @@
 # and their tests, run the tests, and lint the regression fixtures under
 # `.oxlint-plugins/__fixtures__`. Each fixture relies on
 # `oxlint-disable-next-line` directives that go unused when the
-# associated custom rule regresses, so we run oxlint with
-# `--report-unused-disable-directives-severity=error` here.
+# associated custom rule regresses, so they go through scripts/lint.ts,
+# whose check reports unused directives as errors.
 #
 # Arguments forwarded by callers (e.g. `--affected` from
 # `bun run lint -- --affected` in CI) are intentionally swallowed:
@@ -15,20 +15,25 @@ set -euo pipefail
 bun scripts/check-swallowed-item-error-ledger.ts --self-test
 bun scripts/check-swallowed-item-error-ledger.ts
 bun scripts/check-test-state-baseline.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-test-state-baseline.ts --kind ambient-time --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-test-state-baseline.ts --kind real-timers --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-test-state-baseline.ts --kind wallclock-assertion --base "${RATCHET_BASE_REF:-origin/main}"
 bun scripts/check-rust-test-determinism.ts --base "${RATCHET_BASE_REF:-origin/main}"
 bun test ./scripts/check-rust-test-determinism.test.ts
 bun scripts/check-concurrency-exceptions.ts
 bun test ./scripts/check-concurrency-exceptions.test.ts
 bun scripts/check-contract-domain-ledger.ts --self-test
 bun scripts/check-contract-domain-ledger.ts
+bun scripts/check-audit-mutation-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 bun scripts/calendar-day-ledger.ts --self-test
 bun scripts/calendar-day-ledger.ts
 bun scripts/fill-diagnostics-ledger.ts --self-test
 bun scripts/test-timing-ledger.ts --self-test
 bun scripts/test-timing-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/refusal-code-ledger.ts --self-test
+bun scripts/refusal-code-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 
 bash scripts/check-oxlint-node-loader.test.sh
-bash scripts/check-oxlint-node-loader.sh
 bash scripts/check-oxlint-node-loader.sh oxlint.design.config.ts
 # Oxlint RuleTester requires Node; Bun does not support its raw AST transfer.
 node scripts/check-oxlint-design-system.ts
@@ -48,11 +53,7 @@ if [[ ${#plugin_sources[@]} -eq 0 ]]; then
   exit 1
 fi
 
-bun --bun oxlint -c oxlint.config.ts \
-  --report-unused-disable-directives-severity=error \
-  --type-aware \
-  --type-check \
-  "${plugin_sources[@]}"
+bun scripts/lint.ts "${plugin_sources[@]}"
 
 bun test ./scripts/oxlint-safe-fixers.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
@@ -67,7 +68,4 @@ bun scripts/check-desktop-section-sign-glyph.ts
 # check then proves each fires exactly as often as its fixture line claims.
 bun scripts/check-oxlint-fixture-counts.ts
 
-exec bun --bun oxlint -c oxlint.config.ts \
-  --report-unused-disable-directives-severity=error \
-  --type-aware \
-  .oxlint-plugins/__fixtures__
+exec bun scripts/lint.ts --no-type-check .oxlint-plugins/__fixtures__

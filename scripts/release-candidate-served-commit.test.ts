@@ -30,9 +30,11 @@ describe("release-candidate commit identity", () => {
       const line = dispatch
         .split("\n")
         .find((candidate) =>
-          candidate.includes(`/workflows/${workflow}/dispatches`),
+          candidate.includes(
+            `gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" ${workflow} main`,
+          ),
         );
-      expect(line, workflow).toContain("inputs[sha]=$SHA");
+      expect(line, workflow).toContain('"sha=$SHA"');
       expect(line, workflow).not.toContain("github.head_ref");
     }
     expect(release).toContain(
@@ -58,11 +60,20 @@ describe("release-candidate commit identity", () => {
     );
     expect(finalCheck).toBeLessThan(record);
     const finalBlock = staging.slice(finalCheck, record);
+    expect(finalBlock).toContain('staging-proof-readiness-cli.ts" finish');
     expect(finalBlock).toContain(
-      `API_DEPLOYMENT_EXPECTED_COMMIT: \${{ needs.resolve.outputs.sha }}`,
+      `STAGING_PROOF_PREFLIGHT: \${{ steps.proof-readiness.outputs.status }}`,
     );
     expect(finalBlock).not.toContain("github.head_ref");
-    expect(staging.slice(record, record + 300)).toContain(
+    const recording = staging.slice(record);
+    expect(recording).toContain(
+      `PROOF_ENVIRONMENT: \${{ steps.candidate-served-after-smokes.outputs.status }}`,
+    );
+    expect(recording).toContain('"$PROOF_ENVIRONMENT" != "ready"');
+    expect(recording).toContain(
+      'description="Staging environment interrupted; rerun proof:',
+    );
+    expect(recording).not.toContain(
       "steps.candidate-served-after-smokes.outcome == 'success'",
     );
   });

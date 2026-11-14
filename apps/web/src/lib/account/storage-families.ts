@@ -7,6 +7,7 @@ import {
   GUEST_ANNOTATIONS_STORAGE_KEY,
   LAW_HISTORY_STORAGE_KEY,
   LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
+  MCP_OAUTH_REQUEST_STORAGE_KEY,
   READER_PROVISION_MODE_STORAGE_KEY,
 } from "@/lib/account/storage-keys";
 
@@ -183,6 +184,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     // The chosen default only; the per-chat modes name one user's chats.
     legacy: { keys: "bare", adopt: keepPersistedFields(["defaultSendMode"]) },
   },
+  // The last Run on choice a new chat starts from: a preference.
+  {
+    area: "local",
+    prefix: "stella.chat.runOnPreference",
+    restoration: "data",
+    owner: "scoped",
+    retention: "kept-for-owner",
+  },
   // The skill each main-area chat runs with: the user's choice per chat.
   {
     area: "local",
@@ -195,6 +204,22 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella.report-exports.active",
+    restoration: "data",
+    owner: "scoped",
+    retention: "cleared",
+  },
+  // Whether the organization offers this user time billing: a fetched decision.
+  {
+    area: "local",
+    prefix: "stella.time-billing-access",
+    restoration: "data",
+    owner: "scoped",
+    retention: "cleared",
+  },
+  // Dismissed connection breaks belong to the signed-in user's integrations.
+  {
+    area: "local",
+    prefix: "stella:mcp-reconnect-dismissed:",
     restoration: "data",
     owner: "scoped",
     retention: "cleared",
@@ -341,6 +366,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "carried",
     retention: "cleared",
   },
+  // One popup's authorization request, consumed when its callback returns.
+  {
+    area: "session",
+    prefix: MCP_OAUTH_REQUEST_STORAGE_KEY,
+    restoration: "data",
+    owner: "carried",
+    retention: "cleared",
+  },
   // Tools approved for one conversation: a grant.
   {
     area: "session",
@@ -353,6 +386,15 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.chat.browserApprovalMode",
+    restoration: "data",
+    owner: "scoped",
+    retention: "cleared",
+  },
+  // Browser commands a website approval answered, with the websites allowed
+  // then, so their result is checked after a reload too.
+  {
+    area: "session",
+    prefix: "stella.chat.browserSiteGrantApprovals",
     restoration: "data",
     owner: "scoped",
     retention: "cleared",

@@ -31,7 +31,7 @@ export type CapabilityReason =
   | "featureUnavailable"
   | "availabilityUnknown";
 const CAPABILITY_SETTINGS_ROUTES = {
-  ai: "/admin/ai",
+  ai: "/settings/organization/ai",
   desktop: "/settings/account/desktop",
   features: "/settings/account/beta",
 } as const satisfies Record<string, NonNullable<LinkProps["to"]>>;
@@ -97,7 +97,11 @@ const availability = (
     return { type: "pending" };
   }
   if (typeof enabled === "object") {
-    return { type: "error" };
+    return {
+      type: "unavailable",
+      reason: "availabilityUnknown",
+      settingsLink,
+    };
   }
   if (enabled) {
     return { type: "available" };

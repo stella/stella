@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+import type { ActivitySettingsSnapshot } from "../../src/activity/activity-types";
 import { ONBOARDING_STEPS } from "../../src/onboarding/onboarding-types";
 import type { OnboardingSnapshot } from "../../src/onboarding/onboarding-types";
 import type {
@@ -13,8 +14,11 @@ import { DESKTOP_WINDOW_SIZES } from "../desktop-window-sizes";
 import type { DesktopWindowSize } from "../desktop-window-sizes";
 import {
   ACCOUNT,
+  ACTIVITY_SETTINGS,
   APP_STATE,
+  DICTATION_READY,
   PERMISSIONS,
+  SETUP_PERMISSIONS,
   SHORTCUT,
 } from "./fixtures/desktop-window-snapshots";
 import {
@@ -61,6 +65,8 @@ export const WINDOW_VARIANTS = [
 const tour = (step: OnboardingSnapshot["step"]): OnboardingSnapshot => ({
   activityAvailable: true,
   activityPermissions: ["accessibility"],
+  dictationAvailable: true,
+  dictationPermissions: ["microphone", "accessibility"],
   documentApp: { iconDataUrl: null, name: "Microsoft Word" },
   linked: false,
   mode: { type: "tour" },
@@ -90,9 +96,16 @@ export const ONBOARDING_SCREENS = [
       mode: { feature: "activityTimeline", type: "introduce" },
     },
   },
+  {
+    name: "introduce-dictation",
+    snapshot: {
+      ...tour("welcome"),
+      mode: { feature: "dictation", type: "introduce" },
+    },
+  },
   // A taskbar along the bottom, with the icon near the clock.
   {
-    name: "07-done-taskbar",
+    name: "08-done-taskbar",
     snapshot: {
       ...tour("done"),
       trayLocation: { along: 0.94, edge: "bottom" },
@@ -100,14 +113,18 @@ export const ONBOARDING_SCREENS = [
   },
   // An icon the OS cannot place, such as one in a hidden overflow area.
   {
-    name: "07-done-unplaced",
+    name: "08-done-unplaced",
     snapshot: { ...tour("done"), trayLocation: null },
   },
 ] as const satisfies readonly { name: string; snapshot: OnboardingSnapshot }[];
 
 type WindowFixture = {
+  /** The activity settings, or null while the feature is off. */
+  activity: ActivitySettingsSnapshot | null;
   account: DesktopAccountSnapshot;
   appState: AppSnapshot;
+  /** The dictation snapshot; settings reads it as off. */
+  dictation: unknown;
   language: string;
   onboarding: OnboardingSnapshot | null;
   permissions: PermissionsSnapshot;
@@ -146,6 +163,13 @@ const openWindow = async (
     handlers: (data) => ({
       account_get_state: () => data.account,
       account_record_use: () => null,
+      // No connection status: the section stays hidden, as with local agents off.
+      chatgpt_auth_get_status: () => null,
+      claude_code_auth_get_status: () => null,
+      // No install status either, read the same as the refusal with local agents off.
+      harness_get_status: () => null,
+      local_skill_folders_get: () => null,
+      local_linked_folders_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,
@@ -165,6 +189,19 @@ const openWindow = async (
       },
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
+      dictation_get_snapshot: () => data.dictation,
+      is_activity_enabled: () => data.activity !== null,
+      activity_get_settings: () => data.activity,
+      // Consent given, so Settings lays out its stella AI drafting rows too.
+      billing_draft_get_settings: () => ({
+        scopeKey: '["org_fixture","user_fixture"]',
+        settings: {
+          revision: "revision-1",
+          effectiveMode: "plain",
+          consent: "granted",
+          preference: null,
+        },
+      }),
     }),
   });
   await page.goto(path);
@@ -179,10 +216,12 @@ export const openOnboardingWindow = async (
   await openWindow(page, {
     fixture: {
       account: { server: ACCOUNT.server, status: "disconnected" },
+      activity: null,
       appState: APP_STATE,
+      dictation: DICTATION_READY,
       language: options.language,
       onboarding: snapshot,
-      permissions: PERMISSIONS,
+      permissions: SETUP_PERMISSIONS,
       requestOutcome: options.requestOutcome ?? "granted",
       shortcut: SHORTCUT,
     },
@@ -196,7 +235,12 @@ export const openOnboardingWindow = async (
   await settle(page);
 };
 
-export const SETTINGS_TABS = ["general", "notifications", "about"] as const;
+export const SETTINGS_TABS = [
+  "general",
+  "activity",
+  "notifications",
+  "about",
+] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
@@ -209,7 +253,10 @@ export const openSettingsWindow = async (
   await openWindow(page, {
     fixture: {
       account: ACCOUNT,
+      // On for every tab, so each one is checked with the Activity tab shown.
+      activity: ACTIVITY_SETTINGS,
       appState: APP_STATE,
+      dictation: { available: false },
       language: options.language,
       onboarding: null,
       permissions: PERMISSIONS,
@@ -228,18 +275,39 @@ export const openSettingsWindow = async (
     await expect(page.getByText(ACCOUNT.account.email)).toBeVisible();
     await expect(page.getByRole("switch").first()).toBeVisible();
   }
+  if (tab === "activity") {
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Example Editor" }),
+    ).toBeVisible();
+  }
   if (tab === "notifications") {
     await expect(page.getByRole("checkbox").first()).toBeEnabled();
   }
   await settle(page);
 };
 
-/** Waits for fonts, the language catalogue and any running animation. */
+/** Waits for fonts, the language catalogue and every animation that ends.
+ * A looping animation, such as a loading skeleton, never finishes; one
+ * cancelled because its element left the page has settled. */
 const settle = async (page: Page) => {
   await page.evaluate(async () => {
     await document.fonts.ready;
     await Promise.all(
-      document.getAnimations().map(async (animation) => animation.finished),
+      document
+        .getAnimations()
+        .filter(
+          (animation) =>
+            animation.effect?.getComputedTiming().endTime !== Infinity,
+        )
+        .map(async (animation) =>
+          animation.finished.catch((error: unknown) => {
+            if (!(
+              error instanceof DOMException && error.name === "AbortError"
+            )) {
+              throw error;
+            }
+          }),
+        ),
     );
   });
 };

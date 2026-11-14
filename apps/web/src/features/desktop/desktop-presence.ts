@@ -1,15 +1,16 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { panic, Result, UnhandledException } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { readQueryResult } from "@/lib/errors/query-result";
+import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
 import { queryView } from "@/lib/query-view.logic";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export type DesktopPresenceType = DesktopPresence["type"];
 
@@ -26,32 +27,38 @@ const desktopPresenceKeys = {
 const DESKTOP_PRESENCE_STALE_TIME_MS = 30_000;
 
 export const desktopPresenceOptions = (key: DesktopPresenceKey) =>
-  queryOptions({
-    queryKey: desktopPresenceKeys.all(key),
-    queryFn: async ({ signal }) => {
-      const result = await Result.tryPromise({
-        try: async () =>
-          unwrapApiResponse(
-            await api.desktop.presence.get({ fetch: { signal } }),
-          ),
-        catch: (cause) =>
-          cause instanceof Error ? cause : new UnhandledException({ cause }),
-      });
-      if (Result.isError(result) && !signal.aborted) {
-        getAnalytics().captureError(result.error, {
-          fingerprintKey: "desktopPresenceOptions.queryFn:failure",
-          scope: {
-            type: "handler",
-            handlerId: "desktopPresenceOptions.queryFn:failure",
-          },
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: desktopPresenceKeys.all(key),
+      queryFn: async ({ signal }) => {
+        const result = await Result.tryPromise({
+          try: async () =>
+            unwrapApiResponse(
+              await api.desktop.presence.get({ fetch: { signal } }),
+            ),
+          catch: (cause) =>
+            cause instanceof Error ? cause : new UnhandledException({ cause }),
         });
-      }
-      return readQueryResult(result);
+        if (Result.isError(result) && !signal.aborted) {
+          captureQueryError(result.error, {
+            fingerprintKey: "desktopPresenceOptions.queryFn:failure",
+            scope: {
+              type: "handler",
+              handlerId: "desktopPresenceOptions.queryFn:failure",
+            },
+          });
+        }
+        return readQueryResult(result);
+      },
+      staleTime: DESKTOP_PRESENCE_STALE_TIME_MS,
+      refetchOnWindowFocus: "always",
+      retry: false,
+    }),
+    {
+      resources: [RESOURCE_TYPE.USER],
+      scope: { type: "organization" },
     },
-    staleTime: DESKTOP_PRESENCE_STALE_TIME_MS,
-    refetchOnWindowFocus: "always",
-    retry: false,
-  });
+  );
 
 const ASSUMED_PRESENCE = {
   type: "current",

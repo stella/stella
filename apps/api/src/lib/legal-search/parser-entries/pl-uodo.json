@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_UODO",
+  "key": "pl-uodo",
+  "parserVersion": 20,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. The operative branch's legal basis and recital, printed as unmarked units before its first point, are read as intro, and the titled reasons branch as argumentation, recomputed from the stored decision XML; roles have no feature storage of their own. Paragraph numbers are recomputed from stored raw: a number the court prints at the start of its reasons' paragraphs moves into the paragraph's number where the reasons read as one numbering, and the data-protection authority's paragraph unit placed straight in a chapter of its reasons gives its paragraph that unit's number; a numbered unit nested in another unit stays a list item. Paragraph numbers have no feature storage of their own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."
+  }
+}

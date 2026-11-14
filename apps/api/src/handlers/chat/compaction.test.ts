@@ -3,6 +3,7 @@ import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { readFailureBrand } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
@@ -36,6 +37,8 @@ import {
   compactModelMessages,
   compactModelMessagesForModel,
   computeThreadContextUsage,
+  isModelCompactionSummaryMessage,
+  MODEL_COMPACTION_CHECKPOINT_NOTE,
   planChatCompaction,
   planModelCompaction,
   renderChatMessagesForCompaction,
@@ -551,6 +554,52 @@ describe("chat history compaction", () => {
       expect(observedSummaryError).toBe(true);
     });
 
+    test("carries the summarizer's failure class onto the reported error", async () => {
+      const reported: unknown[] = [];
+      const deadline = async (): Promise<string> => {
+        throw new ModelDeadlineExceededError({ deadlineMs: 30_000 });
+      };
+      await compactChatMessages({
+        messages: longThread,
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: deadline,
+      });
+      await compactModelMessages({
+        messages: longThread.map((message): ModelMessage => ({
+          role: message.role === "user" ? "user" : "assistant",
+          content: message.parts
+            .map((part) => (part.type === "text" ? part.content : ""))
+            .join(""),
+        })),
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: deadline,
+      });
+      expect(reported.map((error) => readFailureBrand(error)?.reason)).toEqual([
+        "model_deadline_exceeded",
+        "model_deadline_exceeded",
+      ]);
+    });
+
+    test("leaves an unclassified summarizer failure unclassified", async () => {
+      const reported: unknown[] = [];
+      await compactChatMessages({
+        messages: longThread,
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: failures.fails,
+      });
+      expect(reported).toHaveLength(1);
+      expect(readFailureBrand(reported[0])).toBeUndefined();
+    });
+
     test("keeps step history the same way", async () => {
       const compacted = await compactModelMessages({
         messages: longThread.map((message): ModelMessage => ({
@@ -653,8 +702,12 @@ Continue drafting the termination analysis.
       messages: [
         {
           role: "user",
-          content:
-            "Earlier model-step history compacted from 2 message(s).\n\nstep summary",
+          content: [
+            "Earlier model-step history compacted from 2 message(s).",
+            MODEL_COMPACTION_CHECKPOINT_NOTE,
+            "step summary",
+          ].join("\n\n"),
+          metadata: { stellaCompactionSummary: true },
         },
         { role: "user", content: "latest request" },
       ],
@@ -693,8 +746,12 @@ Continue drafting the termination analysis.
     expect(transcriptSeenBySummarizer).toContain("old request");
     expect(compacted.value.messages.at(0)).toEqual({
       role: "user",
-      content:
-        "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
+      content: [
+        "Earlier model-step history compacted from 2 message(s).",
+        MODEL_COMPACTION_CHECKPOINT_NOTE,
+        "tanstack summary",
+      ].join("\n\n"),
+      metadata: { stellaCompactionSummary: true },
     });
   });
 
@@ -909,6 +966,211 @@ Continue drafting the termination analysis.
     ]);
   });
 
+  const agenticTurn = (steps: number): ModelMessage[] => [
+    { role: "user", content: "earlier question" },
+    { role: "assistant", content: "earlier answer" },
+    { role: "user", content: "najdi komentář k § 88" },
+    ...Array.from({ length: steps }, (_, step): ModelMessage[] => [
+      {
+        role: "assistant",
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${step}`,
+            type: "function",
+            function: { name: "use-browser", arguments: "{}" },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: `page ${step} ${"text ".repeat(400)}`,
+        toolCallId: `call_${step}`,
+      },
+    ]).flat(),
+  ];
+
+  const toolResultsFollowTheirCalls = (messages: readonly ModelMessage[]) => {
+    const called = new Set<string>();
+    return messages.every((message) => {
+      for (const call of message.toolCalls ?? []) {
+        called.add(call.id);
+      }
+      return (
+        message.role !== "tool" ||
+        (message.toolCallId !== undefined && called.has(message.toolCallId))
+      );
+    });
+  };
+
+  test("cuts between the steps of one turn that outgrows the budget, keeping its request", async () => {
+    const messages = agenticTurn(6);
+    const request = messages[2];
+
+    const plan = planModelCompaction({
+      messages,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+    expect(plan.requestPinned).toBe(true);
+    expect(plan.recentMessages.at(0)).toBe(request);
+    expect(plan.recentMessages.at(1)?.role).toBe("assistant");
+    expect(plan.messagesToSummarize).not.toContain(request);
+    expect(plan.messagesToSummarize.at(-1)?.role).toBe("tool");
+
+    const result = await compactModelMessages({
+      messages,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async () => "pages 0..3 read",
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const compactedMessages = result.value.messages;
+    expect(compactedMessages.at(0)).toBe(request);
+    expect(compactedMessages.at(1)?.content).toContain("pages 0..3 read");
+    expect(compactedMessages.at(-1)).toBe(messages.at(-1));
+  });
+
+  test("every in-turn cut keeps tool results with their calls and fits the budget", async () => {
+    for (const steps of [1, 2, 5, 12, 40]) {
+      for (const preserveTokens of [1, 500, 1500, 5000]) {
+        const messages = agenticTurn(steps);
+        const result = await compactModelMessages({
+          messages,
+          preserveTokens,
+          triggerTokens: preserveTokens,
+          summarizeTranscript: async () => "summary",
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        const kept = result.value.messages;
+        expect(toolResultsFollowTheirCalls(kept)).toBe(true);
+        expect(kept.at(-1)).toBe(messages.at(-1));
+        expect(kept.some((message) => message === messages[2])).toBe(true);
+        expect(kept.at(0)?.role).toBe("user");
+        const plan = planModelCompaction({
+          messages,
+          preserveTokens,
+          triggerTokens: preserveTokens,
+        });
+        if (plan.type === "compact") {
+          // Over budget only when the newest step alone (with its request)
+          // is bigger than the budget: that step is never cut.
+          // The pinned request rides on top of the step budget.
+          const newestStepOnly = plan.recentMessages.length === 3;
+          const requestTokens = plan.requestPinned
+            ? planModelCompaction({
+                messages: plan.recentMessages.slice(0, 1),
+                triggerTokens: Number.MAX_SAFE_INTEGER,
+              }).totalTokens
+            : 0;
+          expect(
+            newestStepOnly ||
+              plan.preservedTokens - requestTokens <= preserveTokens,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  test("repeated compaction of one turn keeps the member's request, not the checkpoint", async () => {
+    const first = await compactModelMessages({
+      messages: agenticTurn(6),
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async () => "first checkpoint",
+    });
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    const request = agenticTurn(0).at(2);
+    if (request === undefined) {
+      throw new Error("The turn fixture opens with a request");
+    }
+    const continued = [
+      ...first.value.messages,
+      ...agenticTurn(10).slice(3 + 12),
+    ];
+    let transcript = "";
+    const second = await compactModelMessages({
+      messages: continued,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async (text) => {
+        transcript = text;
+        return "second checkpoint";
+      },
+    });
+    if (Result.isError(second)) {
+      throw second.error;
+    }
+
+    expect(second.value.messages.at(0)).toEqual(request);
+    expect(second.value.messages.at(1)?.content).toContain("second checkpoint");
+    expect(
+      isModelCompactionSummaryMessage(second.value.messages.at(1) ?? request),
+    ).toBe(true);
+    expect(transcript).toContain("first checkpoint");
+    expect(
+      second.value.messages.filter(isModelCompactionSummaryMessage),
+    ).toHaveLength(1);
+  });
+
+  test("a large request counts against the step budget it is pinned on top of", () => {
+    const request: ModelMessage = {
+      role: "user",
+      content: `najdi ${"pasted contract text ".repeat(300)}`,
+    };
+    const messages = [request, ...agenticTurn(6).slice(3)];
+    const requestTokens = planModelCompaction({
+      messages: [request],
+      triggerTokens: Number.MAX_SAFE_INTEGER,
+    }).totalTokens;
+    const preserveTokens = requestTokens + 1200;
+
+    const plan = planModelCompaction({
+      messages,
+      preserveTokens,
+      triggerTokens: preserveTokens,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+    expect(plan.requestPinned).toBe(true);
+    expect(plan.recentMessages.at(0)).toBe(request);
+    expect(plan.preservedTokens).toBeLessThanOrEqual(preserveTokens);
+  });
+
+  test("the summarizer sees each step's tool calls next to its text", () => {
+    const transcript = renderModelMessagesForCompaction([
+      {
+        role: "assistant",
+        content: "Opening the commentary",
+        toolCalls: [
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "use-browser", arguments: '{"action":"open"}' },
+          },
+        ],
+      },
+    ]);
+
+    expect(transcript).toContain("Opening the commentary");
+    expect(transcript).toContain("use-browser");
+    expect(transcript).toContain("open");
+  });
+
   test("skips model-message compaction below the token trigger", () => {
     const plan = planModelCompaction({
       messages: [{ role: "user", content: "small" }],
@@ -971,9 +1233,9 @@ describe("thread context usage", () => {
       summary: null,
     });
 
-    // "hello" (5 chars) and "hi there" (8 chars) round up to 2 tokens each,
+    // "hello" (5 bytes) and "hi there" (8 bytes) round up to 2 and 3 tokens,
     // plus the per-message overhead.
-    const expected = 2 * MESSAGE_OVERHEAD_TOKENS + 2 + 2;
+    const expected = 2 * MESSAGE_OVERHEAD_TOKENS + 2 + 3;
     expect(usage.breakdown).toEqual({
       promptTokens: 0,
       toolTokens: 0,
@@ -1034,9 +1296,9 @@ describe("thread context usage", () => {
       summary: null,
     });
 
-    // "see attached" is 12 chars -> 3 tokens, plus the message overhead.
+    // "see attached" is 12 bytes -> 4 tokens, plus the message overhead.
     expect(usage.breakdown.conversationTokens).toBe(
-      MESSAGE_OVERHEAD_TOKENS + 3,
+      MESSAGE_OVERHEAD_TOKENS + 4,
     );
     expect(usage.breakdown.attachmentTokens).toBe(
       2 * FILE_PART_ESTIMATED_TOKENS,

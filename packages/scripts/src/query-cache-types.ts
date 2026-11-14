@@ -1,12 +1,7 @@
 import { panic } from "better-result";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
-import {
-  type Checker,
-  type Program,
-  type Type,
-  TypeFlags,
-} from "tsrs/unstable/async";
+import * as ts from "tsrs/ast";
+import { type Checker, type Program, type Type, TypeFlags } from "tsrs/async";
 
 import { repoRelativePath } from "@stll/portable-path";
 

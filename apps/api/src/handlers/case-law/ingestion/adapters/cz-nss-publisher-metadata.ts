@@ -1,5 +1,5 @@
-import { load } from "cheerio";
-import type { AnyNode } from "domhandler";
+import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 
 import {
   ownTableRows,

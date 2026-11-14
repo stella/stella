@@ -297,6 +297,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   workspace_member: "team",
   workspace_contact: "team",
   case_law_matter_link: "court",
+  legislation_matter_link: "court",
   case_law_decision_annotation: "court",
   statute_annotation: "court",
   case_law_research_column: "court",
@@ -314,6 +315,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   agent_skill_comment: "other",
   agent_skill_proposal: "other",
   ai_memory: "other",
+  conflict_check: "other",
   announcement: "other",
   billing_code: "other",
   chat_file: "other",
@@ -321,6 +323,8 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   chat_thread: "other",
   chat_tool_execution: "other",
   chat_tool_grant: "other",
+  chat_browser_site_grant: "other",
+  chat_local_folder_approval: "other",
   clause: "other",
   clause_category: "other",
   clause_template_link: "other",
@@ -355,6 +359,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   property: "other",
   rate_entry: "other",
   report_export: "other",
+  data_export: "other",
   rate_table: "other",
   saved_search: "other",
   search_history: "other",
@@ -492,7 +497,7 @@ const createOrganizationBackgroundAuditRecorder =
     });
   };
 
-type AccountAuditEvent = {
+export type AccountAuditEvent = {
   type: AccountAuditEventType;
   resourceId: string;
 };

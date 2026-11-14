@@ -6,15 +6,20 @@
 
 import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
 import type { ApiValidationIssue } from "@stll/api-contract";
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 
 import { HTTP_FAILURE, isHttpFailure } from "@/api/http/errors";
 import type { HttpFailureKind } from "@/api/http/errors";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { httpError } from "@/api/lib/errors/http-error";
 import type { FrameworkFailure } from "@/api/lib/observability/failure";
 
 export type HttpFailureAnswer = {
   readonly status: number;
   readonly message: string;
+  readonly code?: string;
+  readonly retryable?: boolean;
+  readonly hint?: string;
   /** Which request fields failed and why; never the rejected values. */
   readonly issues?: readonly ApiValidationIssue[];
   /** Methods the path serves, for a 405 `Allow` header. */
@@ -62,6 +67,9 @@ const ANSWER_BY_KIND = {
 
 /** The status, sanitized message and grading for an error the pipeline caught. */
 export const httpFailureAnswer = (error: unknown): HttpFailureAnswer => {
+  if (resolveHandlerError(error)?.code === LIMITER_STORE_UNAVAILABLE.code) {
+    return LIMITER_STORE_UNAVAILABLE;
+  }
   if (!isHttpFailure(error)) {
     return INTERNAL_ANSWER;
   }
@@ -80,7 +88,18 @@ export const httpFailureAnswer = (error: unknown): HttpFailureAnswer => {
  * when a request failed its schema. Every place that answers a pipeline
  * failure sends this, so the shape cannot drift.
  */
-export const httpFailureBody = ({ message, issues }: HttpFailureAnswer) =>
-  issues !== undefined && issues.length > 0
-    ? { ...httpError(message, API_VALIDATION_ERROR_CODE), issues }
-    : httpError(message);
+export const httpFailureBody = ({
+  message,
+  issues,
+  code,
+  retryable,
+  hint,
+}: HttpFailureAnswer) => {
+  if (code !== undefined) {
+    return { ...httpError(message, code), retryable, hint };
+  }
+  if (issues !== undefined && issues.length > 0) {
+    return { ...httpError(message, API_VALIDATION_ERROR_CODE), issues };
+  }
+  return httpError(message);
+};

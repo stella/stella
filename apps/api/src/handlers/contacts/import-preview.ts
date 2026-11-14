@@ -40,10 +40,11 @@ const previewContactImportHandler = createSafeRootHandler(
     return Result.ok({
       errorCount: preview.errorCount,
       validCount: preview.validCount,
-      rows: preview.rows.map(({ contact, issues, rowNumber }) => ({
+      rows: preview.rows.map(({ contact, issues, rowNumber, warnings }) => ({
         contact,
         issues,
         rowNumber,
+        warnings,
       })),
     });
   },
