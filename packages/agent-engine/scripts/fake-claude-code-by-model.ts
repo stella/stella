@@ -68,24 +68,22 @@ const futureResets = (steps: readonly FakeStep[]): FakeStep[] => {
       return step;
     }
     const info = step.emit.rate_limit_info;
-    const resetsIn =
-      typeof info === "object" &&
-      info !== null &&
-      "rateLimitType" in info &&
-      typeof info.rateLimitType === "string"
-        ? LIMIT_RESETS_IN.get(info.rateLimitType)
-        : undefined;
-    return resetsIn === undefined
-      ? step
-      : {
-          emit: {
-            ...step.emit,
-            rate_limit_info: {
-              ...info,
-              resetsAt: Math.floor(now.add(resetsIn).epochMilliseconds / 1000),
-            },
-          },
-        };
+    if (
+      typeof info !== "object" ||
+      info === null ||
+      !("rateLimitType" in info) ||
+      typeof info.rateLimitType !== "string"
+    ) {
+      return step;
+    }
+    const resetsIn = LIMIT_RESETS_IN.get(info.rateLimitType);
+    if (resetsIn === undefined) {
+      return step;
+    }
+    const resetsAt = Math.floor(now.add(resetsIn).epochMilliseconds / 1000);
+    return {
+      emit: { ...step.emit, rate_limit_info: { ...info, resetsAt } },
+    };
   });
 };
 
