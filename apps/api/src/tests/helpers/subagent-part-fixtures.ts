@@ -23,7 +23,7 @@ export type SubagentStatus = ChatSubagentPart["subagent"]["status"];
 export const SUBAGENT_PARENT_CALL_ID = "call-browse-1";
 
 /** A page snapshot whose text names `label`, so a stored copy is findable. */
-export const pageResult = (label: string): BrowserControlResult =>
+const pageResult = (label: string): BrowserControlResult =>
   v.parse(browserControlResultSchema, {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     snapshot: {
@@ -42,7 +42,7 @@ export const pageResult = (label: string): BrowserControlResult =>
   });
 
 /** Whether `output` is a whole page, rather than its projection. */
-export const isRawPage = (output: unknown): boolean =>
+const isRawPage = (output: unknown): boolean =>
   v.safeParse(browserControlResultSchema, output).success &&
   supersedeBrowserControlResult(output) !== null;
 

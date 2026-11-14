@@ -375,7 +375,7 @@ export type PersistedSubagentHandle = Omit<
  * (canonical tool encoding, result retention, the part budget) holds for a
  * child's parts too.
  */
-export type PersistedSubagentMessage = {
+type PersistedSubagentMessage = {
   content: PersistedChatMessageContentV3;
   id: string;
   role: ChatSubagentPart["subagent"]["messages"][number]["role"];

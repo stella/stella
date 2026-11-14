@@ -56,8 +56,14 @@ const retainSubagentWireResults = (
   const runs = new Map<string, SnapshotMessage[]>();
   for (const message of messages) {
     const runId = snapshotSubagentRunId(message);
-    if (runId !== null) {
-      runs.set(runId, [...(runs.get(runId) ?? []), message]);
+    if (runId === null) {
+      continue;
+    }
+    const run = runs.get(runId);
+    if (run === undefined) {
+      runs.set(runId, [message]);
+    } else {
+      run.push(message);
     }
   }
   const projections = new Map<SnapshotMessage, unknown>();
