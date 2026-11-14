@@ -100,9 +100,11 @@ test("undo removes what the newest turn wrote, and the next turn is told", async
   const file = await writeNotes(page);
   // From the chat as loaded, which reads the newest local turn.
   await page.reload({ waitUntil: "commit" });
+  await expectTurnsFinished(page, 1);
 
   const undoRequest = page.waitForRequest(
     (sent) => sent.method() === "POST" && UNDO_REQUEST.test(sent.url()),
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
   await askToUndo(page);
   const undoUrl = new URL((await undoRequest).url());
@@ -147,9 +149,13 @@ test("undo removes what the newest turn wrote, and the next turn is told", async
 test("undo is refused while the computer is offline, and the file stays", async ({
   page,
   request,
+  browserErrors,
 }) => {
+  // The browser logs the refused undo.
+  browserErrors.expectCaptured(/status of 409 \(Conflict\)/u);
   const file = await writeNotes(page);
   await page.reload({ waitUntil: "commit" });
+  await expectTurnsFinished(page, 1);
   await setComputerOnline(request, false);
 
   await askToUndo(page);
