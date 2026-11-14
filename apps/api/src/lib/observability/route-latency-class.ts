@@ -70,6 +70,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "DELETE /v1/skills/:skillId/proposals/:proposalId": "crud",
   "DELETE /v1/skills/:skillId/resources": "crud",
   "DELETE /v1/style-sets/:styleSetId": "crud",
+  "DELETE /v1/tasks/:workspaceId/:taskId": "crud",
   "DELETE /v1/tasks/:workspaceId/assignees": "crud",
   "DELETE /v1/tasks/:workspaceId/links": "crud",
   "DELETE /v1/template-categories/:categoryId": "crud",

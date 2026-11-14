@@ -151,6 +151,7 @@ describe("which routes an API access token opens", () => {
       ["PUT", "/v1/workspaces"],
       ["PUT", "/v1/tasks/:workspaceId"],
       ["PATCH", "/v1/tasks/:workspaceId"],
+      ["DELETE", "/v1/tasks/:workspaceId/:taskId"],
     ] as const) {
       expect(
         admitApiAccessTokenRoute({ method, route, scopes: readOnly }),
@@ -163,6 +164,23 @@ describe("which routes an API access token opens", () => {
         }),
       ).toEqual({ admitted: true });
     }
+  });
+
+  test("a task is deleted at the tasks consent, never through the entity delete that reaches documents", () => {
+    expect(
+      admitApiAccessTokenRoute({
+        method: "DELETE",
+        route: "/v1/tasks/:workspaceId/:taskId",
+        scopes: ["stella:documents_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    expect(
+      admitApiAccessTokenRoute({
+        method: "DELETE",
+        route: "/v1/entities/:workspaceId",
+        scopes: ["stella:matters_write", "stella:documents_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "route" });
   });
 
   test("the mobile app asks for every scope a listed route requires", () => {
