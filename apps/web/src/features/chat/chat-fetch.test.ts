@@ -165,6 +165,38 @@ describe("chat stream deadlines", () => {
     }
   });
 
+  test("a refusal whose body stalls still reaches the page as its status", async () => {
+    jest.useFakeTimers();
+    const released: unknown[] = [];
+    globalThis.fetch = Object.assign(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            cancel(reason: unknown) {
+              released.push(reason);
+            },
+          }),
+          { status: 503, statusText: "Service Unavailable" },
+        ),
+      { preconnect: originalFetch.preconnect },
+    );
+    const outcome = Result.tryPromise({
+      try: async () => await chatFetchClient("https://example.test/v1/chat/"),
+      catch: (error) => error,
+    });
+    // The refusal is read once the fetch has answered.
+    for (let turn = 0; turn < 16; turn += 1) {
+      await Promise.resolve();
+    }
+    jest.advanceTimersByTime(60 * 60 * 1000);
+    const refused = await outcome;
+    expect(refused.isErr() ? refused.error : undefined).toMatchObject({
+      status: 503,
+    });
+    expect(released).toHaveLength(1);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   test("a stop ends a stream at once, however recently it spoke", async () => {
     jest.useFakeTimers();
     const released = silentStream();

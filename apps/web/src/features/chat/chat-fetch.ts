@@ -2,7 +2,10 @@ import { Result } from "better-result";
 
 import { SSE_SILENCE_BOUND_MS } from "@stll/api-contract/sse-heartbeat";
 import { fetchWithTimeout } from "@stll/fetch";
-import { iterateBodyWithIdleDeadline } from "@stll/fetch/body-reader";
+import {
+  iterateBodyWithIdleDeadline,
+  readBodyJsonWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 
 import { ChatRequestError } from "@/features/chat/chat-request-error";
 import { toAPIError } from "@/lib/errors/api";
@@ -14,6 +17,10 @@ import type { APIError } from "@/lib/errors/api";
 // turn may take is the server's to enforce, and a turn on the member's
 // computer runs for as long as that computer answers.
 const CHAT_HEADERS_TIMEOUT_MS = 600_000;
+
+// How long a refusal's body may stall between chunks. Its status is already
+// known, so a body that never completes costs the envelope, not the refusal.
+const CHAT_REFUSAL_BODY_IDLE_MS = 10_000;
 
 /**
  * The typed error for a chat response the API refused.
@@ -33,11 +40,15 @@ export const chatResponseError = async (
   response: Response,
 ): Promise<APIError> => {
   const body = await Result.tryPromise(
-    async (): Promise<unknown> => await response.json(),
+    async () =>
+      await readBodyJsonWithIdleDeadline(response, {
+        idleMs: CHAT_REFUSAL_BODY_IDLE_MS,
+      }),
   );
   return toAPIError({
     status: response.status,
-    // A refusal from a proxy ahead of the API carries no JSON envelope.
+    // A refusal from a proxy ahead of the API carries no JSON envelope, and
+    // one whose body stalls is read as far as its status.
     value: Result.isOk(body) ? body.value : response.statusText,
   });
 };
