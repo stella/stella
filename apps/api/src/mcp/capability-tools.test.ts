@@ -360,6 +360,10 @@ describe("list verification access grants across MCP tools", () => {
       query: { entityId: resourceId, fileFieldId: resourceId },
     },
     "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.graph.get": {
+      params,
+      query: { listId: resourceId },
+    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
@@ -1077,6 +1081,15 @@ describe("list verification access grants across MCP tools", () => {
           asTestRaw<{ runs: unknown[] }>(parseToolPayload(result)),
         ).toEqual({
           runs: [],
+        });
+      } else if (capability === "lists.verifications.graph.get") {
+        // The fixture's list holds nothing verified yet.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          listId: resourceId,
+          statements: [],
+          claims: [],
+          nextCursor: null,
         });
       } else {
         expect(errorEnvelope(result).code).toBe("not_found");

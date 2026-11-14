@@ -1525,6 +1525,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_HOME",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
+  // The pause between a paced fake Codex scenario's outputs.
+  "FAKE_CODEX_PACE_MS",
+  // The local stack's stand-in computer (`agent:up -- --local-runner`) logs
+  // at the level this filter names.
+  "RUST_LOG",
   // The fixture page the fake harness CLIs' `browse` scenario opens first.
   "FAKE_BROWSER_START",
   // The desktop's stand-in harness holder (a re-run of its own test binary)

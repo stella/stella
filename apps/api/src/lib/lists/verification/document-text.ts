@@ -10,6 +10,7 @@
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { readPdfPageTexts } from "@/api/lib/files/pdf-page-text";
 import type { PdfLineBox } from "@/api/lib/files/pdf-page-text";
@@ -78,7 +79,8 @@ const pdfPageId = (pageNumber: number): string => `P${String(pageNumber)}`;
 export const verificationBlockId = (source: VerificationBlockSource): string =>
   source.type === "docx-block" ? source.blockId : pdfPageId(source.pageNumber);
 
-const readPdfBlocks = async (
+/** A PDF's blocks: one per page with text, in page order. */
+export const pdfVerificationBlocks = async (
   bytes: Uint8Array,
 ): Promise<VerificationBlock[]> => {
   const blocks: VerificationBlock[] = [];
@@ -97,6 +99,24 @@ const readPdfBlocks = async (
   }
   return blocks;
 };
+
+/** A DOCX's blocks as Folio reads them: one per paragraph with text. */
+export const docxVerificationBlocks = async (
+  file: ScannedFile,
+): Promise<VerificationBlock[]> =>
+  (await openScannedDocxReviewer(file))
+    .getContent()
+    .filter((block) => block.text.trim().length > 0)
+    .map((block): VerificationBlock => ({
+      id: block.id,
+      text: block.text,
+      source: { type: "docx-block", blockId: block.id },
+      structure: {
+        type: "docx-paragraph",
+        label: block.displayLabel ?? null,
+        heading: block.headingLevel !== undefined,
+      },
+    }));
 
 /**
  * Reads the document under the process's document byte budget: parsing holds
@@ -135,7 +155,7 @@ const readAdmittedDocument = async ({
     });
     // Bounded and cancellable like the PDF read below, so a stalled read
     // ends at the caller's deadline.
-    const reviewer = await openScannedDocxReviewer(
+    const blocks = await docxVerificationBlocks(
       await readStoredFile({
         key,
         mimeType: DOCX_MIME_TYPE,
@@ -143,19 +163,6 @@ const readAdmittedDocument = async ({
         signal,
       }),
     );
-    const blocks = reviewer
-      .getContent()
-      .filter((block) => block.text.trim().length > 0)
-      .map((block): VerificationBlock => ({
-        id: block.id,
-        text: block.text,
-        source: { type: "docx-block", blockId: block.id },
-        structure: {
-          type: "docx-paragraph",
-          label: block.displayLabel ?? null,
-          heading: block.headingLevel !== undefined,
-        },
-      }));
     return blocks.length === 0 ? { type: "no-text" } : { type: "read", blocks };
   }
 
@@ -172,7 +179,7 @@ const readAdmittedDocument = async ({
   });
   // A rendition is never larger than an upload may be; a bigger object is
   // refused before its body is read.
-  const blocks = await readPdfBlocks(
+  const blocks = await pdfVerificationBlocks(
     await readS3ObjectBounded({
       bucket: envBase.S3_BUCKET,
       key,

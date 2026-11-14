@@ -83,6 +83,13 @@ type NotificationEntityRefByKind = TotalEntityRefMap<{
     entityId: SafeId<"flowRun">;
     workspaceId: SafeId<"workspace">;
   };
+  // The chat the member asked to hear about; a chat outside a matter has no
+  // workspace, and the link opens it from the chat list.
+  [NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET]: {
+    entityType: "chat_thread";
+    entityId: SafeId<"chatThread">;
+    workspaceId: SafeId<"workspace"> | null;
+  };
   [NOTIFICATION_KIND.ANNOUNCEMENT]: {
     entityType: null;
     entityId: null;

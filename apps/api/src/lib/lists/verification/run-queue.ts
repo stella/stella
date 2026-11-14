@@ -61,6 +61,7 @@ import {
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import {
+  claimParagraphNumbers,
   passageContext,
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
@@ -576,13 +577,17 @@ type GradedClaims = {
 };
 
 /** One row per claim in reading order; a set-aside claim is never graded,
- *  so its date is read from its words alone. */
+ *  so its date is read from its words alone. Each claim keeps the printed
+ *  number of the paragraph it sits in, read from the whole document, so a
+ *  range run numbers it as the document does. */
 const claimRows = (
   actor: RunActor,
   claims: readonly ExtractedClaim[],
   { grades, assertedDates }: GradedClaims,
-): ClaimRow[] =>
-  claims.map((claim, position): ClaimRow => {
+  documentBlocks: readonly VerificationBlock[],
+): ClaimRow[] => {
+  const paragraphOf = claimParagraphNumbers(documentBlocks);
+  return claims.map((claim, position): ClaimRow => {
     const base = {
       id: createSafeId<"legalListClaim">(),
       workspaceId: actor.workspaceId,
@@ -596,6 +601,7 @@ const claimRows = (
         assertedDates.get(String(position)) ??
           claimAssertedDate(claim.text, null),
       ),
+      paragraphNumber: paragraphOf(claim.anchor),
     };
     if (claim.type !== "fact") {
       return {
@@ -619,6 +625,7 @@ const claimRows = (
       qualifiers: grade.qualifiers,
     };
   });
+};
 
 const resolveRunningActorAccess = async (
   actor: RunActor,
@@ -872,7 +879,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value);
+  const rows = claimRows(actor, claims, graded.value, document.blocks);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,

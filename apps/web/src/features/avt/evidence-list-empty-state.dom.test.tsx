@@ -56,6 +56,8 @@ const renderEmptyMatter = async (
       <AvtView
         workspaceId={workspaceId}
         runId={undefined}
+        mode={undefined}
+        onModeChange={() => undefined}
         onRunChange={() => undefined}
         view={{
           version: 1,
