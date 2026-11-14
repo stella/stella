@@ -595,7 +595,8 @@
       "startFailed": "Nepavyko pradėti tikrinimo",
       "status": {
         "running": "Tikrinama"
-      }
+      },
+      "unreadParts": "{count, plural, one {Nepavyko perskaityti # dokumento dalies, todėl jos teiginiai nepatikrinti.} few {Nepavyko perskaityti # dokumento dalių, todėl jų teiginiai nepatikrinti.} many {Nepavyko perskaityti # dokumento dalies, todėl jų teiginiai nepatikrinti.} other {Nepavyko perskaityti # dokumento dalių, todėl jų teiginiai nepatikrinti.}}"
     },
     "save": {
       "failed": "Neišsaugota",

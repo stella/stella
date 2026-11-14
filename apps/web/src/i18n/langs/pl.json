@@ -595,7 +595,8 @@
       "startFailed": "Nie udało się rozpocząć weryfikacji",
       "status": {
         "running": "Weryfikowanie"
-      }
+      },
+      "unreadParts": "{count, plural, one {Nie udało się odczytać # części dokumentu, więc jej twierdzenia nie zostały zweryfikowane.} few {Nie udało się odczytać # części dokumentu, więc ich twierdzenia nie zostały zweryfikowane.} many {Nie udało się odczytać # części dokumentu, więc ich twierdzenia nie zostały zweryfikowane.} other {Nie udało się odczytać # części dokumentu, więc ich twierdzenia nie zostały zweryfikowane.}}"
     },
     "save": {
       "failed": "Nie zapisano",

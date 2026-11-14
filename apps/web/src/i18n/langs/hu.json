@@ -595,7 +595,8 @@
       "startFailed": "Az ellenőrzést nem sikerült elindítani",
       "status": {
         "running": "Ellenőrzés folyamatban"
-      }
+      },
+      "unreadParts": "{count, plural, one {Az irat # részét nem sikerült beolvasni, ezért az abban szereplő állításokat nem ellenőriztük.} other {Az irat # részét nem sikerült beolvasni, ezért az azokban szereplő állításokat nem ellenőriztük.}}"
     },
     "save": {
       "failed": "Nincs mentve",

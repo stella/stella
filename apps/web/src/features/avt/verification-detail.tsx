@@ -11,7 +11,7 @@ import { useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ArrowLeftIcon, PlayIcon } from "@stll/ui/icons";
+import { ArrowLeftIcon, PlayIcon, TriangleAlertIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -195,12 +195,37 @@ const RunBody = ({
               checkedAt,
             })}
           </p>
+          {run.unreadParts.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
+              <TriangleAlertIcon
+                aria-hidden="true"
+                className="text-warning size-4 shrink-0"
+              />
+              <span className="min-w-0 flex-1" role="status">
+                {t("avt.runs.unreadParts", { count: run.unreadParts.length })}
+              </span>
+              {listId !== null && currentFileFieldId !== null && (
+                <VerifyAgain
+                  entityId={run.entityId}
+                  fileFieldId={currentFileFieldId}
+                  listId={listId}
+                  onOpenRun={onOpenRun}
+                  paragraphs={scopeParagraphs(run.scope)}
+                  workspaceId={workspaceId}
+                />
+              )}
+            </div>
+          )}
+          {/* "No claims" would overstate a run that left text unread; the
+              line above says what it did not read. */}
           {run.claims.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {run.scope.kind === "whole"
-                ? t("avt.runs.noClaims")
-                : t("avt.scope.noClaims")}
-            </p>
+            run.unreadParts.length === 0 && (
+              <p className="text-muted-foreground text-sm">
+                {run.scope.kind === "whole"
+                  ? t("avt.runs.noClaims")
+                  : t("avt.scope.noClaims")}
+              </p>
+            )
           ) : (
             <VerificationView ref={view} run={run} workspaceId={workspaceId} />
           )}

@@ -595,7 +595,8 @@
       "startFailed": "Ověření se nepodařilo spustit",
       "status": {
         "running": "Ověřování"
-      }
+      },
+      "unreadParts": "{count, plural, one {# část dokumentu se nepodařilo přečíst, její tvrzení proto nebyla ověřena.} few {# části dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.} many {# části dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.} other {# částí dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.}}"
     },
     "save": {
       "failed": "Neuloženo",

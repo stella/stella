@@ -595,7 +595,8 @@
       "startFailed": "Overenie sa nepodarilo spustiť",
       "status": {
         "running": "Overovanie"
-      }
+      },
+      "unreadParts": "{count, plural, one {# časť dokumentu sa nepodarilo prečítať, jej tvrdenia preto neboli overené.} few {# časti dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.} many {# časti dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.} other {# častí dokumentu sa nepodarilo prečítať, ich tvrdenia preto neboli overené.}}"
     },
     "save": {
       "failed": "Neuložené",

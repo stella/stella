@@ -456,6 +456,7 @@
   "avt.runs.noClaims": "No claims were found in this document.",
   "avt.runs.startFailed": "Could not start the verification",
   "avt.runs.status.running": "Verifying",
+  "avt.runs.unreadParts": "{count, plural, one {# part of the document could not be read, so its claims were not checked.} other {# parts of the document could not be read, so their claims were not checked.}}",
   "avt.save.failed": "Not saved",
   "avt.save.failedTitle": "Your change was not saved",
   "avt.scope.checkedDocument": "Checked paragraphs <num>{range}</num> only.",
