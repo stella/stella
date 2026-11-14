@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -24,7 +24,10 @@ import {
  * Usage: `bun scripts/fake-codex-app-server.ts <scenario>`.
  */
 
-type FakeStep =
+/** A notification the client is sent, or a pause. */
+type FakeOutput = { notify: string; params: unknown } | { sleep: number };
+
+export type FakeStep =
   /** Wait for the client's next request with this method and answer it. */
   | {
       expect: string;
@@ -56,6 +59,26 @@ type FakeStep =
    */
   | { terminals: readonly string[] }
   | { exit: number }
+  /**
+   * Send these while watching for `turn/interrupt`: one answers it, ends the
+   * turn `interrupted` and the scenario. No later step may expect a request.
+   */
+  | { untilInterrupted: readonly FakeOutput[] }
+  /**
+   * Play `approved` when the client's answer to the last request approved
+   * it (`accept` or `acceptForSession`), `denied` otherwise.
+   */
+  | {
+      byDecision: {
+        approved: readonly FakeStep[];
+        denied: readonly FakeStep[];
+      };
+    }
+  /**
+   * Write `text` to `file` under the working directory, as an agent's edit
+   * does on disk, and log the path written.
+   */
+  | { writeFile: string; text: string }
   /**
    * Browse the fixture library through the browser and stella MCP servers
    * `thread/start` configured, and report each call and the answer.
@@ -130,7 +153,7 @@ const signedIn = {
   requiresOpenaiAuth: false,
 };
 
-const handshake = (
+export const handshake = (
   account: unknown = signedIn,
   version = "0.166.0",
 ): FakeStep[] => [
@@ -311,9 +334,12 @@ const continuation = (outcome: FakeStep[]): FakeStep[] => [
   ...outcome,
 ];
 
-/** A command the harness asks to run, declined, then the turn's answer. */
-const commandApproval = (reason: string | null): FakeStep[] => [
-  ...freshTurn(),
+/** What the approval scenarios answer once the command ran. */
+const FAKE_APPROVED_ANSWER = "Removed draft.md.";
+const FAKE_DENIED_ANSWER = "Left it in place.";
+
+/** The command the approval scenarios ask to run, and the request for it. */
+const removeDraft = (reason: string | null): FakeStep[] => [
   item("started", {
     ...command("call-rm", "inProgress"),
     command: "rm draft.md",
@@ -331,13 +357,43 @@ const commandApproval = (reason: string | null): FakeStep[] => [
       command: "rm draft.md",
     },
   },
+];
+
+/** The command declined, whatever the client answered. */
+const draftLeft = (): FakeStep[] => [
   item("completed", {
     ...command("call-rm", "declined"),
     command: "rm draft.md",
   }),
-  item("completed", agentMessage("m-2", "Left it in place.")),
+  item("completed", agentMessage("m-2", FAKE_DENIED_ANSWER)),
   completed(),
 ];
+
+/** A command the harness asks to run, declined, then the turn's answer. */
+const commandApproval = (reason: string | null): FakeStep[] => [
+  ...freshTurn(),
+  ...removeDraft(reason),
+  ...draftLeft(),
+];
+
+/** The file `writes_file` adds to its working directory, and its text. */
+const FAKE_WRITTEN_FILE = {
+  path: "notes.md",
+  text: "Rent is due quarterly.\n",
+} as const;
+
+const writtenNotes = (status: string) => ({
+  type: "fileChange",
+  id: "call-write",
+  changes: [
+    {
+      path: FAKE_WRITTEN_FILE.path,
+      kind: { type: "add" },
+      diff: `+${FAKE_WRITTEN_FILE.text}`,
+    },
+  ],
+  status,
+});
 
 /** The context window the fake reports, as Codex does with its token usage. */
 export const FAKE_CONTEXT_WINDOW = 258_400;
@@ -365,6 +421,55 @@ const tokenUsage = (usage: {
 
 const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
+/**
+ * A turn out of its plan's limit: the rate limits Codex reports (the main
+ * window resetting at `resetsAt`, a Unix time in seconds), a retry, then the
+ * failure.
+ */
+export const usageLimitTurn = (resetsAt = FAKE_FUTURE_RESET): FakeStep[] => [
+  ...freshTurn(),
+  {
+    notify: "account/rateLimits/updated",
+    params: { rateLimits: planLimits(100, resetsAt) },
+  },
+  {
+    notify: "error",
+    params: {
+      threadId: FAKE_THREAD_ID,
+      turnId: FAKE_TURN_ID,
+      willRetry: true,
+      error: {
+        message: "Reconnecting",
+        codexErrorInfo: null,
+        additionalDetails: null,
+      },
+    },
+  },
+  completed("failed", usageLimitError),
+];
+
+/** Between paced outputs, in milliseconds. */
+const FAKE_PACE_MS = Number(process.env["FAKE_CODEX_PACE_MS"] ?? "2000");
+
+const SLOW_TEXT_WORDS = [
+  "Lease",
+  " one",
+  " is",
+  " the",
+  " office",
+  " lease;",
+  " lease",
+  " two",
+  " is",
+  " the",
+  " warehouse.",
+];
+
+const textDelta = (itemId: string, delta: string): FakeOutput => ({
+  notify: "item/agentMessage/delta",
+  params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, itemId, delta },
+});
+
 /** A dev server the agent started and left running past its yield. */
 const devServer = (status: string, extra: object = {}) =>
   command("call-serve", status, { command: "bun run dev", ...extra });
@@ -375,7 +480,25 @@ const nextTurnItem = (body: object): FakeStep => ({
   params: { threadId: FAKE_THREAD_ID, turnId: CONTINUED_TURN_ID, item: body },
 });
 
-const FAKE_SCENARIOS = {
+export const FAKE_SCENARIOS = {
+  /** A streamed answer and nothing else. */
+  text: [
+    ...freshTurn(),
+    {
+      notify: "turn/started",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("inProgress") },
+    },
+    textDelta("m-text", "Lease one is the office lease;"),
+    textDelta("m-text", " lease two is the warehouse."),
+    item(
+      "completed",
+      agentMessage(
+        "m-text",
+        "Lease one is the office lease; lease two is the warehouse.",
+      ),
+    ),
+    completed(),
+  ],
   /** The local browser canary: a search, a result, a sign-in, a citation. */
   browse: [...freshTurn(), { browse: true }, completed()],
   /**
@@ -796,6 +919,36 @@ const FAKE_SCENARIOS = {
     completed(),
   ],
   approval: commandApproval("Deletes a file"),
+  /** The command runs when the client approves it and not otherwise. */
+  approval_outcome: [
+    ...freshTurn(),
+    ...removeDraft("Deletes a file"),
+    {
+      byDecision: {
+        approved: [
+          item("completed", {
+            ...command("call-rm", "completed", {
+              aggregatedOutput: "",
+              exitCode: 0,
+            }),
+            command: "rm draft.md",
+          }),
+          item("completed", agentMessage("m-2", FAKE_APPROVED_ANSWER)),
+          completed(),
+        ],
+        denied: draftLeft(),
+      },
+    },
+  ],
+  /** Adds a file to the working directory on disk, as an agent's edit does. */
+  writes_file: [
+    ...freshTurn(),
+    item("started", writtenNotes("inProgress")),
+    { writeFile: FAKE_WRITTEN_FILE.path, text: FAKE_WRITTEN_FILE.text },
+    item("completed", writtenNotes("completed")),
+    item("completed", agentMessage("m-write", "Wrote notes.md.")),
+    completed(),
+  ],
   /** A harness that gives no reason, here as an empty one. */
   approval_without_reason: commandApproval(""),
   blocking_question: [
@@ -1044,26 +1197,25 @@ const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
-  usage_limit: [
+  usage_limit: usageLimitTurn(),
+  /**
+   * An answer streamed a word at a time, `FAKE_CODEX_PACE_MS` apart; an
+   * interrupt ends it where it got to.
+   */
+  slow_text: [
     ...freshTurn(),
     {
-      notify: "account/rateLimits/updated",
-      params: { rateLimits: planLimits(100) },
+      notify: "turn/started",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("inProgress") },
     },
     {
-      notify: "error",
-      params: {
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        willRetry: true,
-        error: {
-          message: "Reconnecting",
-          codexErrorInfo: null,
-          additionalDetails: null,
-        },
-      },
+      untilInterrupted: SLOW_TEXT_WORDS.flatMap((word): FakeOutput[] => [
+        { sleep: FAKE_PACE_MS },
+        textDelta("m-slow", word),
+      ]),
     },
-    completed("failed", usageLimitError),
+    item("completed", agentMessage("m-slow", SLOW_TEXT_WORDS.join(""))),
+    completed(),
   ],
   /** The first limit of a process: no update came before the failure. */
   usage_limit_unannounced: [
@@ -1344,8 +1496,36 @@ const TURN_MODELS = {
 
 export type FakeScenario = keyof typeof FAKE_SCENARIOS;
 
-const isScenario = (name: string): name is FakeScenario =>
+export const isScenario = (name: string): name is FakeScenario =>
   Object.hasOwn(FAKE_SCENARIOS, name);
+
+/** The decision ids that let an approval request's action go ahead. */
+const APPROVING_DECISIONS = ["accept", "acceptForSession"] as const;
+
+const DecisionResultSchema = v.looseObject({ decision: v.string() });
+
+/**
+ * Play a step that needs no client message: the steps a `byDecision` picks
+ * by the client's last response, or a file written on disk (none follow).
+ */
+const playLocally = (
+  step: Extract<FakeStep, { byDecision: unknown } | { writeFile: string }>,
+  lastResponse: Readonly<Record<string, unknown>> | null,
+  log: (entry: object) => void,
+): readonly FakeStep[] => {
+  if ("writeFile" in step) {
+    const written = path.resolve(process.cwd(), step.writeFile);
+    writeFileSync(written, step.text);
+    log({ wrote: written });
+    return [];
+  }
+  const decision = v.safeParse(DecisionResultSchema, lastResponse?.["result"]);
+  const decided = decision.success ? decision.output.decision : null;
+  log({ decision: decided });
+  return APPROVING_DECISIONS.some((id) => id === decided)
+    ? step.byDecision.approved
+    : step.byDecision.denied;
+};
 
 const IncomingSchema = v.looseObject({
   id: v.optional(v.union([v.string(), v.number()])),
@@ -1466,7 +1646,7 @@ const FAKE_SYSTEM_SKILL = "/fake-home/skills/.system/imagegen/SKILL.md";
  * roots this process was given, the member's own `~/.agents/skills`, and
  * whatever the working directory holds in its `.agents/skills`.
  */
-const skillDiscovery = () => {
+export const skillDiscovery = () => {
   const roots: string[] = [];
   const home = process.env["HOME"];
   return {
@@ -1500,11 +1680,9 @@ const skillDiscovery = () => {
   };
 };
 
-const run = async (
-  steps: readonly FakeStep[],
-  log: (entry: object) => void,
-) => {
-  const { reading, take, write } = openFakeHarnessPeer({
+/** The client's requests and its responses to ours, read from stdin. */
+export const openCodexPeer = (log: (entry: object) => void) =>
+  openFakeHarnessPeer({
     schema: IncomingSchema,
     queueOf: (message) => {
       if (message.method === undefined) {
@@ -1516,7 +1694,116 @@ const run = async (
     log,
   });
 
-  const skills = skillDiscovery();
+type CodexPeer = ReturnType<typeof openCodexPeer>;
+
+/**
+ * A real server exits once its client closes stdin. Until then it still
+ * answers what it answers at any time; anything else stays unanswered, as
+ * the script left it.
+ */
+const answerUntilClosed = async (
+  { take, write }: Pick<CodexPeer, "take" | "write">,
+  answer: (method: string | undefined, params: unknown) => object | null,
+) => {
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      return;
+    }
+    if (ALWAYS_ANSWERED.has(message.method ?? "")) {
+      write({
+        id: message.id,
+        result: answer(message.method, message["params"]),
+      });
+    }
+  }
+};
+
+/** Exits when `message` is not the request a step scripted, or is one the
+ *  pinned protocol refuses. */
+const exitUnlessExpected = (
+  message: { method?: string | undefined; [key: string]: unknown },
+  expected: string,
+  log: (entry: object) => void,
+) => {
+  if (message.method !== expected) {
+    log({ unexpected: message.method, wanted: expected });
+    process.exit(97);
+  }
+  if (refusesParams(message.method, message["params"])) {
+    log({ refusedInput: message.method });
+    process.exit(96);
+  }
+};
+
+type PlayBrowseOptions = {
+  /** The `thread/start` params, which configure the MCP servers. */
+  threadStart: unknown;
+  write: CodexPeer["write"];
+  log: (entry: object) => void;
+};
+
+/** The `browse` step: each call the agent made, then its answer. */
+const playBrowse = async ({ threadStart, write, log }: PlayBrowseOptions) => {
+  const browsed = await browseAsAgent({
+    browserServer: FAKE_BROWSER_SERVER,
+    endpoints: codexMcpEndpoints(threadStart),
+    stellaServer: FAKE_STELLA_SERVER,
+  });
+  // Kept on this computer, for the test to see what the agent read.
+  log({ pageCanaries: browsed.read });
+  const notifyItem = (phase: "started" | "completed", body: object) => {
+    write({
+      method: `item/${phase}`,
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: body,
+      },
+    });
+  };
+  for (const call of browsed.steps) {
+    const mcpCall = {
+      type: "mcpToolCall",
+      id: call.id,
+      server: call.server,
+      tool: call.tool,
+      arguments: call.arguments,
+      error: null,
+    };
+    notifyItem("started", {
+      ...mcpCall,
+      status: "inProgress",
+      result: null,
+    });
+    notifyItem("completed", {
+      ...mcpCall,
+      status: call.isError ? "failed" : "completed",
+      result: { content: [{ type: "text", text: call.text }] },
+    });
+  }
+  notifyItem("completed", agentMessage("m-browse", browsed.answer));
+};
+
+/**
+ * Plays `steps` to the client. A caller that answered the start of the
+ * conversation itself passes its `peer` and `skills`, and the `models`
+ * `model/list` answers with from then on.
+ */
+export const run = async (
+  steps: readonly FakeStep[],
+  log: (entry: object) => void,
+  options: {
+    peer?: CodexPeer;
+    skills?: ReturnType<typeof skillDiscovery>;
+    models?: object;
+  } = {},
+) => {
+  const { reading, take, write } = options.peer ?? openCodexPeer(log);
+
+  const skills = options.skills ?? skillDiscovery();
+  const models = options.models ?? TURN_MODELS;
   /** The thread's background terminals, by item id, as the script set them. */
   const terminals: string[] = [];
   /**
@@ -1528,7 +1815,7 @@ const run = async (
     params: unknown,
   ): object | null => {
     if (method === "model/list") {
-      return TURN_MODELS;
+      return models;
     }
     if (method === "thread/backgroundTerminals/list") {
       return { data: terminals.map(backgroundTerminal), nextCursor: null };
@@ -1558,9 +1845,57 @@ const run = async (
       write({ id: message?.id, result: answer });
     }
   };
+  /**
+   * Send `outputs` while watching for `turn/interrupt`, which ends the turn
+   * `interrupted`; how the stretch ended.
+   */
+  const playUntilInterrupted = async (
+    outputs: readonly FakeOutput[],
+  ): Promise<"played" | "interrupted" | "closed"> => {
+    const interrupt = nextRequest("turn/interrupt");
+    const watched: { message: Awaited<typeof interrupt> | undefined } = {
+      message: undefined,
+    };
+    // Registered before any race below, so it has run when one settles.
+    const settled = interrupt.then((message) => {
+      watched.message = message;
+      return message;
+    });
+    for (const output of outputs) {
+      if (watched.message !== undefined) {
+        break;
+      }
+      if ("sleep" in output) {
+        // await-in-loop: the outputs are paced one after another.
+        await Promise.race([Bun.sleep(output.sleep), settled]);
+      } else {
+        write({ method: output.notify, params: output.params });
+      }
+    }
+    const message = watched.message;
+    if (message === undefined) {
+      return "played";
+    }
+    if (message === null) {
+      return "closed";
+    }
+    if (message.method !== "turn/interrupt") {
+      log({ unexpected: message.method, wanted: "turn/interrupt" });
+      process.exit(97);
+    }
+    write({ id: message.id, result: {} });
+    write({
+      method: "turn/completed",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("interrupted") },
+    });
+    return "interrupted";
+  };
   let serverRequestId = 1000;
   let threadStart: unknown = undefined;
-  for (const step of steps) {
+  /** The client's answer to the last request a step sent. */
+  let lastResponse: Awaited<ReturnType<typeof take>> = null;
+  const queue = [...steps];
+  for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
     if ("expect" in step) {
       const message = await nextRequest(step.expect);
       if (message === null) {
@@ -1569,14 +1904,7 @@ const run = async (
       if (message.method === "thread/start") {
         threadStart = message["params"];
       }
-      if (message.method !== step.expect) {
-        log({ unexpected: message.method, wanted: step.expect });
-        process.exit(97);
-      }
-      if (refusesParams(message.method, message["params"])) {
-        log({ refusedInput: message.method });
-        process.exit(96);
-      }
+      exitUnlessExpected(message, step.expect, log);
       write(
         step.error === undefined
           ? { id: message.id, result: step.result ?? {} }
@@ -1591,13 +1919,19 @@ const run = async (
         method: step.request,
         params: step.params,
       });
-      if (step.wait !== false && (await take("responses")) === null) {
-        return;
+      if (step.wait !== false) {
+        lastResponse = await take("responses");
+        if (lastResponse === null) {
+          return;
+        }
       }
     } else if ("awaitResponse" in step) {
-      if ((await take("responses")) === null) {
+      lastResponse = await take("responses");
+      if (lastResponse === null) {
         return;
       }
+    } else if ("byDecision" in step || "writeFile" in step) {
+      queue.unshift(...playLocally(step, lastResponse, log));
     } else if ("ignoreTerm" in step) {
       process.on("SIGTERM", () => {
         log({ ignored: "SIGTERM" });
@@ -1608,67 +1942,23 @@ const run = async (
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
+    } else if ("untilInterrupted" in step) {
+      const played = await playUntilInterrupted(step.untilInterrupted);
+      if (played === "closed") {
+        return;
+      }
+      if (played === "interrupted") {
+        break;
+      }
     } else if ("terminals" in step) {
       terminals.splice(0, terminals.length, ...step.terminals);
     } else if ("browse" in step) {
-      const browsed = await browseAsAgent({
-        browserServer: FAKE_BROWSER_SERVER,
-        endpoints: codexMcpEndpoints(threadStart),
-        stellaServer: FAKE_STELLA_SERVER,
-      });
-      // Kept on this computer, for the test to see what the agent read.
-      log({ pageCanaries: browsed.read });
-      const notifyItem = (phase: "started" | "completed", body: object) => {
-        write({
-          method: `item/${phase}`,
-          params: {
-            threadId: FAKE_THREAD_ID,
-            turnId: FAKE_TURN_ID,
-            item: body,
-          },
-        });
-      };
-      for (const call of browsed.steps) {
-        const mcpCall = {
-          type: "mcpToolCall",
-          id: call.id,
-          server: call.server,
-          tool: call.tool,
-          arguments: call.arguments,
-          error: null,
-        };
-        notifyItem("started", {
-          ...mcpCall,
-          status: "inProgress",
-          result: null,
-        });
-        notifyItem("completed", {
-          ...mcpCall,
-          status: call.isError ? "failed" : "completed",
-          result: { content: [{ type: "text", text: call.text }] },
-        });
-      }
-      notifyItem("completed", agentMessage("m-browse", browsed.answer));
+      await playBrowse({ threadStart, write, log });
     } else {
       process.exit(step.exit);
     }
   }
-  // A real server exits once its client closes stdin. Until then it still
-  // answers what it answers at any time; anything else stays unanswered, as
-  // the script left it.
-  for (;;) {
-    // await-in-loop: one request at a time, in the order they arrived.
-    const message = await take("requests");
-    if (message === null) {
-      break;
-    }
-    if (ALWAYS_ANSWERED.has(message.method ?? "")) {
-      write({
-        id: message.id,
-        result: unscriptedAnswer(message.method, message["params"]),
-      });
-    }
-  }
+  await answerUntilClosed({ take, write }, unscriptedAnswer);
   await reading;
 };
 

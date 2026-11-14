@@ -33,6 +33,7 @@ import {
   caseLawResearchColumns,
   caseLawSources,
   chatBrowserSiteGrants,
+  chatLimitReminders,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -85,6 +86,9 @@ import forkChatThread from "@/api/handlers/chat/fork/create";
 import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import readChatThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
+import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
+import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
+import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
 import getChatMessage from "@/api/handlers/chat/messages/get";
 import listChatMessages from "@/api/handlers/chat/messages/list";
@@ -582,6 +586,17 @@ const chatDecisionThreadB = toSafeId<"chatThread">(
 const chatDecisionB = toSafeId<"caseLawDecision">(
   "22222222-2222-4222-8222-222222222294",
 );
+// Chats whose latest turn stopped on the usage limit of the member's
+// computer, each with the reminder its member asked for. Cancelling gets a
+// chat of its own, so its positive case leaves the others' reminders.
+const chatLimitThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222320",
+);
+const chatLimitCancelThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222324",
+);
+// Far enough ahead to stay a future reset whenever the suite runs.
+const chatLimitResetsAt = new Date("2100-01-01T00:00:00.000Z");
 const chatForkFromA = toSafeId<"chatThread">(
   "11111111-1111-4111-8111-111111111268",
 );
@@ -741,6 +756,15 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
       .from(chatThreads)
       .where(eq(chatThreads.id, threadId))
   ).at(0) ?? null;
+
+const chatLimitRemindersOf = async (threadId: SafeId<"chatThread">) =>
+  await testDb
+    .select({
+      organizationId: chatLimitReminders.organizationId,
+      remindAt: chatLimitReminders.remindAt,
+    })
+    .from(chatLimitReminders)
+    .where(eq(chatLimitReminders.threadId, threadId));
 
 const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
   (
@@ -2987,6 +3011,73 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ count: 0 }),
   },
   {
+    // Another firm's caller reads the chat as missing; its own member reads
+    // the reminder they asked for.
+    name: "chat limit reminder read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ remindAt: chatLimitResetsAt.toISOString() }),
+  },
+  {
+    // Asking again for the same stopped turn keeps the stored reminder, so
+    // the positive case changes nothing either.
+    name: "chat limit reminder set",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(setChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+      reminders: await chatLimitRemindersOf(chatLimitThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(setChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "reminders")).toEqual([
+        { organizationId: ids.orgB, remindAt: chatLimitResetsAt },
+      ]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ remindAt: chatLimitResetsAt.toISOString() }),
+  },
+  {
+    name: "chat limit reminder cancel",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(cancelChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitCancelThreadB },
+        query: {},
+      }),
+      reminders: await chatLimitRemindersOf(chatLimitCancelThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(cancelChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitCancelThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "reminders")).toEqual([
+        { organizationId: ids.orgB, remindAt: chatLimitResetsAt },
+      ]);
+    },
+    expectPositive: (result) => expect(result).toEqual({ remindAt: null }),
+  },
+  {
     name: "chat message send",
     runAAgainstB: async ({ workspaceA }) => {
       streamChatStub.mockClear();
@@ -3791,6 +3882,72 @@ testState.beforeAll(async () => {
     userMessageId: chatTurnUserMessageB,
     workspaceId: null,
   });
+  for (const [threadId, questionId, answerId, turnId] of [
+    [
+      chatLimitThreadB,
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222321"),
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222322"),
+      toSafeId<"chatTurn">("22222222-2222-4222-8222-222222222323"),
+    ],
+    [
+      chatLimitCancelThreadB,
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222325"),
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222326"),
+      toSafeId<"chatTurn">("22222222-2222-4222-8222-222222222327"),
+    ],
+  ] as const) {
+    await testDb.insert(chatThreads).values(chatThreadOfB(threadId));
+    await testDb.insert(chatMessages).values([
+      {
+        id: questionId,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+        role: "user",
+        content: chatText("Draft the reply."),
+        createdAt: chatAskedAt,
+      },
+      {
+        id: answerId,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+        role: "assistant",
+        content: toPersistedChatMessageContentV3({
+          data: [],
+          metadata: {
+            turnOutcome: {
+              type: "failed",
+              error: "local_runner_limit_reached",
+              limitResetsAt: chatLimitResetsAt.toISOString(),
+            },
+          },
+        }),
+        createdAt: new Date(chatAskedAt.getTime() + 1000),
+      },
+    ]);
+    await testDb.insert(chatTurns).values({
+      assistantMessageId: answerId,
+      createdAt: chatAskedAt,
+      failureCode: "provider-error",
+      failureRetryable: false,
+      id: turnId,
+      organizationId: ids.orgB,
+      settledAt: new Date(chatAskedAt.getTime() + 1000),
+      status: "failed",
+      threadId,
+      userId: ids.userA1,
+      userMessageId: questionId,
+      workspaceId: null,
+    });
+    await testDb.insert(chatLimitReminders).values({
+      organizationId: ids.orgB,
+      remindAt: chatLimitResetsAt,
+      threadId,
+      turnId,
+      userId: ids.userA1,
+    });
+  }
   await testDb.insert(chatToolGrants).values([
     {
       id: chatToolGrantAlwaysB,

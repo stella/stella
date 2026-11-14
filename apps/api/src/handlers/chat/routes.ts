@@ -9,6 +9,9 @@ import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
+import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
+import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
 import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
@@ -92,6 +95,11 @@ export const chatRoute = routes(
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
+    "/threads/:threadId/limit-reminder": {
+      GET: getChatLimitReminder,
+      PUT: setChatLimitReminder,
+      DELETE: cancelChatLimitReminder,
+    },
     "/threads/:threadId/read-state": { PATCH: updateChatThreadReadState },
     "/threads/:threadId/pin-state": { PATCH: updateChatThreadPinState },
     "/threads/:threadId/title": { PATCH: renameThread, GET: getThreadTitle },

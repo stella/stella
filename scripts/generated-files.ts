@@ -2708,6 +2708,11 @@ export const GUARD_A_EXCLUSIONS = [
   },
   { glob: "**/eu-ecj-fulltext-*.html", reason: "Upstream fixture" },
   {
+    glob: "apps/api/src/lib/files/pdf-signing/trust/eu-qualified-tsa-*",
+    reason:
+      "Refreshed by hand from the EU trusted lists over the network (apps/api/src/scripts/update-qualified-tsa-trust.ts); CI cannot regenerate it offline",
+  },
+  {
     glob: "packages/sanctions/src/fixtures/un.xml",
     reason: "Upstream fixture",
   },

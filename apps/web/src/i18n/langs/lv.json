@@ -241,6 +241,12 @@
       "showSources": "Rādīt avotus",
       "title": "Enkurfakti"
     },
+    "chronology": {
+      "claims": "{count, plural, zero {# apgalvojumi balstās uz šo faktu} one {# apgalvojums balstās uz šo faktu} other {# apgalvojumi balstās uz šo faktu}}",
+      "empty": "Šajā sarakstā vēl nav faktu.",
+      "moreClaims": "{count, plural, zero {vēl # apgalvojumi} one {vēl # apgalvojums} other {vēl # apgalvojumi}}",
+      "undated": "Bez datuma"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Enkurfakti ir pretrunā",
@@ -405,6 +411,42 @@
       "showNextSteps": "Rādīt nākamos soļus",
       "unlink": "Atsaistīt: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, zero {# apgalvojumi} one {# apgalvojums} other {# apgalvojumi}}",
+      "claimTitle": "Apgalvojums",
+      "columns": {
+        "claims": "Apgalvojumi",
+        "sources": "Avota dokumenti",
+        "statements": "Paziņojumi"
+      },
+      "empty": "Šajā sarakstā vēl nav faktu vai pārbaudītu dokumentu.",
+      "factCount": "{count, plural, zero {# fakti} one {# fakts} other {# fakti}}",
+      "factOverflow": "Rāda pirmos {count} šī saraksta faktus.",
+      "filters": {
+        "allSources": "Visi avoti",
+        "allVerdicts": "Visi slēdzieni",
+        "conflicts": "Pretrunas",
+        "heldFacts": "Aizturētie fakti",
+        "source": "Filtrēt pēc avota",
+        "verdict": "Filtrēt pēc slēdziena"
+      },
+      "held": "Aizturēts",
+      "linkedFacts": "{count, plural, zero {# sasaistīti fakti} one {# sasaistīts fakts} other {# sasaistīti fakti}}",
+      "listLabel": "Grafs kā saraksts",
+      "loadMore": "Ielādēt vairāk dokumentu",
+      "noMatch": "Šiem filtriem nekas neatbilst.",
+      "noStatements": "Pret šo sarakstu vēl nav pārbaudīts neviens dokuments.",
+      "offList": "Vairs nav sarakstā",
+      "relation": {
+        "conflicts": "Ir pretrunā",
+        "governs": "Noteicošais",
+        "record": "Reģistrā",
+        "recordConflict": "Pretrunīgs ieraksts",
+        "supports": "Pamato"
+      },
+      "unlinked": "Fakti, uz kuriem nebalstās neviens apgalvojums",
+      "verifyInReview": "Pārbaudīt dokumentu"
+    },
     "guidance": {
       "escalate": "Nodot tālāk",
       "manualJudgement": "Cilvēka lēmums",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, zero {# atbilstību} one {# atbilstība} other {# atbilstības}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Hronoloģija",
+      "graph": "Grafs",
+      "label": "Rādīt sarakstu kā",
+      "review": "Pārskatīšana"
     },
     "qualifiers": {
       "heading": "Atrunas",
@@ -1873,6 +1921,8 @@
       "folderStateProtected": "Satur pašas stella datus",
       "folderStateUnlinked": "Vairs nav saistīta",
       "folderStateUnreadable": "Nevar nolasīt",
+      "limitReminderNotify": "Paziņot, kad tiks atjaunots",
+      "limitReminderScheduled": "Mēs jums paziņosim pēc {time}.",
       "permissionAboveLimit": "Jūsu organizācija to neatļauj",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
@@ -2108,6 +2158,7 @@
     "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
     "sendErrorTimedOut": "Tērzēšanas pakalpojums neatbildēja laikus. Mēģiniet vēlreiz.",
     "sendErrorToolsUnsupported": "Šis modelis nevar izmantot rīkus, tāpēc nevar atbildēt uz jautājumiem par jūsu lietu. Pārslēdzieties uz modeli, kas atbalsta rīkus.",
+    "sendErrorTurnTooLarge": "Šī atbilde kļuva pārāk liela, lai to piegādātu pilnībā. Lai turpinātu, nosūtiet jaunu ziņu.",
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
@@ -5060,6 +5111,7 @@
       "flowRunAwaitingApproval": "Darbplūsma <bdi>{flowName}</bdi> gaida jūsu apstiprinājumu",
       "flowRunCompleted": "Darbplūsma <bdi>{flowName}</bdi> ir pabeigta",
       "flowRunFailed": "Darbplūsma <bdi>{flowName}</bdi> neizdevās",
+      "localRunLimitReset": "Programmēšanas aģents jūsu datorā var turpināt jūsu tērzēšanu",
       "mention": "<bdi>{actorName}</bdi> pieminēja jūs komentārā",
       "reportExportFailed": "Neizdevās eksportēt pārskatu",
       "reportExportSucceeded": "Jūsu pārskats ir gatavs",
