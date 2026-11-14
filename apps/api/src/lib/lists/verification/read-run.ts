@@ -27,7 +27,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { readFactTiers, readSourceKinds } from "@/api/lib/lists/fact-tiers";
 import { factTier } from "@/api/lib/lists/source-kind";
+import { claimAssertedDate } from "@/api/lib/lists/verification/claim-date";
 import type {
+  ClaimAssertedDate,
   ClaimRef,
   ClaimState,
   ClaimVerdict,
@@ -65,7 +67,9 @@ import {
   foldClaimReview,
   gradeOf,
   linksChangedSinceGrade,
+  needsAttention,
   rejectRecheck,
+  reviewedView,
 } from "@/api/lib/lists/verification/review-fold";
 import {
   citedFactIds,
@@ -85,7 +89,9 @@ export const serializeClaimReview = ({
   review,
   eventCount,
 }: ClaimReviewRecord) => {
-  const { recheck: _onTheClaim, ...wire } = review;
+  // The shared decision is the status read in the shared vocabulary; the
+  // wire states the status itself.
+  const { recheck: _onTheClaim, decision: _sharedReading, ...wire } = review;
   return {
     ...wire,
     linksChanged: linksChangedSinceGrade(review),
@@ -117,10 +123,39 @@ export const readClaimReviews = async ({
   claimIds,
 }: ReadClaimReviewsArgs): Promise<
   Map<SafeId<"legalListClaim">, ClaimReviewRecord>
+> =>
+  await readClaimReviewsOfRuns({
+    tx,
+    workspaceId,
+    runIds: [runId],
+    ...(claimIds === undefined ? {} : { claimIds }),
+  });
+
+type ReadClaimReviewsOfRunsArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runIds: readonly SafeId<"legalListVerificationRun">[];
+  /** Narrow to these claims; omitted reads every claim of the runs. */
+  claimIds?: readonly SafeId<"legalListClaim">[];
+};
+
+/** Current review per claim id across several runs, in one ordered read.
+ *  A claim with no events has no entry. */
+export const readClaimReviewsOfRuns = async ({
+  tx,
+  workspaceId,
+  runIds,
+  claimIds,
+}: ReadClaimReviewsOfRunsArgs): Promise<
+  Map<SafeId<"legalListClaim">, ClaimReviewRecord>
 > => {
+  if (runIds.length === 0 || claimIds?.length === 0) {
+    return new Map();
+  }
   // Bounded by the caps the writers enforce: claims per run and actions per
   // claim.
-  const claimCount = claimIds?.length ?? VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX;
+  const claimCount =
+    claimIds?.length ?? runIds.length * VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX;
   const events = await tx
     .select({
       claimId: legalListClaimReviewEvents.claimId,
@@ -132,7 +167,12 @@ export const readClaimReviews = async ({
     .where(
       and(
         eq(legalListClaimReviewEvents.workspaceId, workspaceId),
-        eq(legalListClaimReviewEvents.runId, runId),
+        runIds.length === 1
+          ? eq(
+              legalListClaimReviewEvents.runId,
+              runIds[0] ?? panic("A review read names no run"),
+            )
+          : inArray(legalListClaimReviewEvents.runId, [...runIds]),
         claimIds === undefined
           ? undefined
           : inArray(legalListClaimReviewEvents.claimId, [...claimIds]),
@@ -277,7 +317,7 @@ export const qualifiersOfClaim = (
  * facts its claims' latest re-checks read that the run did not (or read
  * differently, the later reading kept).
  */
-const factsWithRechecks = (
+export const factsWithRechecks = (
   evidence: VerificationEvidence,
   reviews: ReadonlyMap<SafeId<"legalListClaim">, ClaimReviewRecord>,
 ): VerificationEvidence => {
@@ -322,16 +362,17 @@ export const readRunAttentionInputs = async (args: ReadVerificationRunArgs) => {
   };
 };
 
+type AttentionInputs = NonNullable<
+  Awaited<ReturnType<typeof readRunAttentionInputs>>
+>;
+
 /**
  * The contested facts as a claim's own grade read them: a re-checked
  * claim by the facts its latest re-check read, every other one by the
- * run's pinned facts. The browser's triage reads them the same way.
+ * run's pinned facts.
  */
 export const contestedFactIdsOfClaim = (
-  inputs: Pick<
-    NonNullable<Awaited<ReturnType<typeof readRunAttentionInputs>>>,
-    "pinned" | "contested"
-  >,
+  inputs: Pick<AttentionInputs, "pinned" | "contested">,
   review: ClaimReview,
 ): ReadonlySet<SafeId<"entity">> =>
   review.recheck === null
@@ -340,6 +381,29 @@ export const contestedFactIdsOfClaim = (
         listId: inputs.pinned.listId,
         facts: applyFactChanges(inputs.pinned.facts, review.recheck.facts),
       });
+
+/**
+ * Whether a claim needs a person (`needsAttention`), read as its reviewers
+ * see it: its current grade, a reopening or a governed record conflict, and
+ * the qualifiers the facts it rests on give it now. The one reading of the
+ * rule: the run read serves it on every claim, and bulk acceptance refuses
+ * by it, so the routine claims a reviewer is offered are the ones the
+ * server accepts.
+ */
+export const claimNeedsAttention = (
+  claim: QualifiedClaimRow,
+  review: ClaimReview | null,
+  inputs: AttentionInputs,
+): boolean => {
+  const current = review ?? EMPTY_CLAIM_REVIEW;
+  return needsAttention(
+    {
+      ...reviewedView(claim, current),
+      qualifiers: qualifiersOfClaim(claim, current, inputs.standings),
+    },
+    contestedFactIdsOfClaim(inputs, current),
+  );
+};
 
 type PresentRecheckArgs = {
   claim: QualifiedClaimRow;
@@ -381,7 +445,7 @@ type ReadFactStandingsArgs = {
  * the run pinned: included, with the sources the run read, each of the kind
  * its document has on the list now.
  */
-const readFactStandings = async ({
+export const readFactStandings = async ({
   tx,
   workspaceId,
   evidence,
@@ -446,6 +510,46 @@ const readFactStandings = async ({
   }
   return standings;
 };
+
+type ReadRunsWithEvidenceArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runIds: readonly SafeId<"legalListVerificationRun">[];
+};
+
+/** Several runs with the evidence each pinned and its document's name, in
+ *  one read, for a reader that draws many runs at once (a list's
+ *  verification graph). A run the workspace does not hold is absent. */
+export const readRunsWithEvidence = async ({
+  tx,
+  workspaceId,
+  runIds,
+}: ReadRunsWithEvidenceArgs) =>
+  runIds.length === 0
+    ? []
+    : await tx
+        .select({
+          id: legalListVerificationRuns.id,
+          entityVersionId: legalListVerificationRuns.entityVersionId,
+          evidence: legalListVerificationRuns.evidence,
+          finishedAt: legalListVerificationRuns.finishedAt,
+          documentName: entities.name,
+        })
+        .from(legalListVerificationRuns)
+        .innerJoin(
+          entities,
+          and(
+            eq(entities.id, legalListVerificationRuns.entityId),
+            eq(entities.workspaceId, legalListVerificationRuns.workspaceId),
+          ),
+        )
+        .where(
+          and(
+            eq(legalListVerificationRuns.workspaceId, workspaceId),
+            inArray(legalListVerificationRuns.id, [...runIds]),
+          ),
+        )
+        .limit(runIds.length);
 
 /** How every fact a run's claims can rest on stands now (the run's pinned
  *  facts and its re-checks' facts), keyed by fact. `null` when the
@@ -566,11 +670,53 @@ const stalenessOfClaim = ({
   );
 };
 
+type AssertedDateColumns = Pick<
+  typeof legalListClaims.$inferSelect,
+  "text" | "assertedOn" | "assertedOnPrecision" | "assertedOnSource"
+>;
+
+/**
+ * The date a claim asserts, as its reviewers read it: its latest
+ * re-check's reading, else its run's. A claim written before claims carried
+ * dates is read from its words now, exactly as the backfill stores it.
+ */
+const assertedDateOfClaim = (
+  claim: AssertedDateColumns,
+  review: ClaimReview | null,
+): ClaimAssertedDate => {
+  const rechecked = review?.recheck?.assertedOn ?? null;
+  if (rechecked !== null) {
+    return rechecked;
+  }
+  const source = claim.assertedOnSource;
+  switch (source) {
+    case "pending": {
+      return claimAssertedDate(claim.text, null);
+    }
+    case "none": {
+      return { type: "none" };
+    }
+    case "text":
+    case "grader": {
+      return {
+        type: "dated",
+        source,
+        date: claim.assertedOn ?? panic("A dated claim has no date"),
+        precision:
+          claim.assertedOnPrecision ?? panic("A dated claim has no precision"),
+      };
+    }
+    default: {
+      source satisfies never;
+      return panic(`Unhandled asserted date source: ${String(source)}`);
+    }
+  }
+};
+
 type PresentClaimArgs = {
   claim: typeof legalListClaims.$inferSelect;
   record: ClaimReviewRecord | null;
-  standings: FactStandings;
-  pinned: readonly VerificationEvidenceFact[];
+  inputs: AttentionInputs;
   runPins: GradePins;
   now: ListFactsNow | null;
 };
@@ -580,11 +726,12 @@ type PresentClaimArgs = {
 const presentClaim = ({
   claim,
   record,
-  standings,
-  pinned,
+  inputs,
   runPins,
   now,
 }: PresentClaimArgs) => {
+  const { standings } = inputs;
+  const pinned = inputs.pinned.facts;
   const review = record?.review ?? null;
   const recheck = review?.recheck ?? null;
   const graded = gradeOf(claim, review);
@@ -595,6 +742,7 @@ const presentClaim = ({
     framing: claim.framing,
     verdict: toClaimVerdict(graded),
     qualifiers: qualifiersOfClaim(claim, review, standings),
+    needsAttention: claimNeedsAttention(claim, review, inputs),
     // Only a suggestion: the conflict stays open until a person names the
     // governing record.
     suggestedGoverningFactId: governingSuggestionOfClaim(
@@ -603,7 +751,11 @@ const presentClaim = ({
       standings,
     ),
     text: claim.text,
+    assertedOn: assertedDateOfClaim(claim, review),
     anchor: claim.anchor,
+    // The printed number of the paragraph the claim sits in, as the run
+    // stored it; null when it sits outside any numbered paragraph.
+    paragraph: claim.paragraphNumber,
     refs: graded.refs,
     review: record === null ? null : serializeClaimReview(record),
     recheck:
@@ -663,8 +815,11 @@ export const readVerifiedClaim = async ({
   return presentClaim({
     claim: row.claim,
     record: reviews.get(claimId) ?? null,
-    standings: await readFactStandings({ tx, workspaceId, evidence }),
-    pinned: row.evidence.facts,
+    inputs: {
+      pinned: row.evidence,
+      contested: contestedFactIds(row.evidence),
+      standings: await readFactStandings({ tx, workspaceId, evidence }),
+    },
     runPins: gradePins(row.evidence.facts),
     now: await readListNow({ tx, workspaceId, evidence }),
   });
@@ -833,6 +988,11 @@ export const readVerificationRun = async ({
   const standings = await readFactStandings({ tx, workspaceId, evidence });
   const now = await readListNow({ tx, workspaceId, evidence });
   const runPins = gradePins(run.evidence.facts);
+  const attention: AttentionInputs = {
+    pinned: run.evidence,
+    contested: contestedFactIds(run.evidence),
+    standings,
+  };
 
   return {
     id: run.id,
@@ -862,8 +1022,7 @@ export const readVerificationRun = async ({
       presentClaim({
         claim,
         record: reviews.get(claim.id) ?? null,
-        standings,
-        pinned: run.evidence.facts,
+        inputs: attention,
         runPins,
         now,
       }),

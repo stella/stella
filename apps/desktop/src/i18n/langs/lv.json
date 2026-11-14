@@ -593,7 +593,18 @@
   },
   "dictation": {
     "title": "Diktēšana",
-    "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta.",
+    "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta. Ja MI labošana ir ieslēgta, pārvērstais teksts (ne audio) caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, lai izlabotu kļūdas un formatējumu; stella to nesaglabā.",
+    "cleanup": {
+      "title": "Labot ar MI",
+      "description": "Runa joprojām tiek pārvērsta tekstā šajā datorā, un audio to nekad nepamet. Ja labošana ir ieslēgta, pārvērstais teksts caur stella tiek nosūtīts jūsu organizācijas MI pakalpojumu sniedzējam, kas izlabo atpazīšanas kļūdas un piemēro diktētās pieturzīmes un formatējumu, piemēram, “jauna rinda” vai “treknraksts”. stella to nesaglabā."
+    },
+    "language": {
+      "title": "Diktēšanas valoda",
+      "description": "Runa tiek atpazīta šajā valodā, un labošana saglabā tekstu tajā. Automātiski tiek izmantotas šī datora displeja un tastatūru valodas.",
+      "automatic": "Automātiski",
+      "automaticWith": "Automātiski ({languages})",
+      "noResults": "Valodas netika atrastas"
+    },
     "modelNeeded": "Runas modelis darbojas šajā datorā.",
     "download": "Lejupielādēt ({size} MB)",
     "downloading": "Lejupielādē runas modeli: {percent}%",
@@ -604,7 +615,10 @@
       "accessibility": "Atļaujiet piekļuvi pieejamībai, lai stella varētu rakstīt citās lietotnēs.",
       "microphone": "stella nedzird jūsu mikrofonu. Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos.",
       "modelMissing": "Vispirms lejupielādējiet runas modeli.",
-      "transcription": "Pārveide neizdevās. Mēģiniet vēlreiz."
+      "transcription": "Pārveide neizdevās. Mēģiniet vēlreiz.",
+      "focusChanged": "Jūs pārslēdzāties uz citu lietotni, pirms teksts bija gatavs, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
+      "focusUnconfirmed": "stella nevarēja pārliecināties, kurā lietotnē ir fokuss, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
+      "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz."
     }
   },
   "shortcut": {
@@ -840,6 +854,27 @@
       "missing": "Šī faila vairs nav.",
       "needs_update": "Šis modulis nedarbojas šī Mac procesorā. Instalējiet draivera jaunāko versiju.",
       "not_a_library": "Šis fails nav PKCS #11 modulis."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Saistītās mapes",
+    "description": "Šī datora mapes, kurās var strādāt tērzēšanas aģents. Tērzēšana redz tikai mapes nosaukumu; tās ceļš paliek šajā datorā.",
+    "add": "Saistīt mapi",
+    "remove": "Atsaistīt",
+    "removeFolder": "Atsaistīt {name}",
+    "state": {
+      "offline": "Disks, kurā atrodas šī mape, nav pievienots.",
+      "moved": "Šī mape ir pārvietota, pārdēvēta vai izdzēsta. Atsaistiet to un saistiet vēlreiz.",
+      "protected": "Šajā mapē ir pašas stella dati vai prasmju mape, tāpēc aģents tajā nevar strādāt.",
+      "unreadable": "Šo mapi neizdevās nolasīt."
+    },
+    "notice": {
+      "action_failed": "Neizdevās. Mēģiniet vēlreiz.",
+      "too_many": "Šajā datorā jau ir tik daudz saistīto mapju, cik tas var glabāt. Vispirms atsaistiet vienu.",
+      "not_a_folder": "Izvēlieties mapi.",
+      "network_folder": "Šī mape atrodas tīkla koplietojumā. Saistiet mapi šī datora diskā.",
+      "protected": "Šajā mapē ir pašas stella dati vai prasmju mape, tāpēc aģents tajā nevar strādāt.",
+      "unreadable": "Šo mapi neizdevās nolasīt."
     }
   }
 }

@@ -170,3 +170,24 @@ checks; they do not execute generated HTML or certify visual quality, citations,
 or treemap semantics. The scorer unit tests use explicitly synthetic records
 and prove scoring only. Production model selection and visual quality remain
 NOT COVERED until separately exercised against a live model.
+
+## Dictation cleanup through local harnesses
+
+`dictation-cleanup-local.ts` emits the production dictation cleanup
+instructions, the transcript message and the structured output schema for
+synthetic Czech, Slovak and English dictations: spoken punctuation, line and
+paragraph breaks, bold, a self-correction, a question that must stay a
+question and an instruction that must stay dictated text. It never calls a
+provider. From `apps/api`:
+
+```sh
+bun run eval:dictation-cleanup prompts > /absolute/path/dictation-prompts.jsonl
+bun run eval:dictation-cleanup score /absolute/path/local-results.jsonl
+```
+
+Give each emitted prompt to a local harness and record its answer as JSONL:
+`{caseId, harness, output}`, where `output` is the structured answer. The
+scorer runs each answer through the server's own acceptance (an answer that
+adds content is refused) and compares the rendered text with the case's
+expectation. The scorer unit tests use synthetic answers and prove scoring
+only; model quality stays NOT COVERED until exercised against a live model.

@@ -593,7 +593,18 @@
   },
   "dictation": {
     "title": "Ditado",
-    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
+    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada. Com a revisão por IA ativada, o texto transcrito, não o áudio, é enviado pela stella ao provedor de IA da sua organização para corrigir erros e formatação; a stella não o armazena.",
+    "cleanup": {
+      "title": "Revisar com IA",
+      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena."
+    },
+    "language": {
+      "title": "Idioma do ditado",
+      "description": "A fala é reconhecida neste idioma, e a revisão mantém o texto nele. Automático usa os idiomas da interface e dos teclados deste computador.",
+      "automatic": "Automático",
+      "automaticWith": "Automático ({languages})",
+      "noResults": "Nenhum idioma encontrado"
+    },
     "modelNeeded": "O modelo de voz é executado neste computador.",
     "download": "Baixar ({size} MB)",
     "downloading": "Baixando o modelo de voz: {percent}%",
@@ -604,7 +615,10 @@
       "accessibility": "Permita o acesso à Acessibilidade para que a stella possa digitar em outros aplicativos.",
       "microphone": "A stella não consegue ouvir seu microfone. Verifique o acesso ao microfone nos Ajustes do Sistema.",
       "modelMissing": "Baixe primeiro o modelo de voz.",
-      "transcription": "A transcrição falhou. Tente novamente."
+      "transcription": "A transcrição falhou. Tente novamente.",
+      "focusChanged": "Você mudou para outro aplicativo antes de o texto ficar pronto, então nada foi digitado. Tente novamente.",
+      "focusUnconfirmed": "A stella não conseguiu confirmar qual aplicativo está em foco, então nada foi digitado. Tente novamente.",
+      "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente."
     }
   },
   "shortcut": {
@@ -840,6 +854,27 @@
       "missing": "Este arquivo não existe mais.",
       "needs_update": "Este módulo não funciona no processador deste Mac. Instale a versão atual do driver.",
       "not_a_library": "Este arquivo não é um módulo PKCS #11."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Pastas vinculadas",
+    "description": "Pastas deste computador em que o agente de um chat pode trabalhar. O chat vê só o nome da pasta; o caminho dela fica neste computador.",
+    "add": "Vincular pasta",
+    "remove": "Desvincular",
+    "removeFolder": "Desvincular {name}",
+    "state": {
+      "offline": "A unidade em que esta pasta está não está conectada.",
+      "moved": "Esta pasta foi movida, renomeada ou excluída. Desvincule-a e vincule-a de novo.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
+    },
+    "notice": {
+      "action_failed": "Não funcionou. Tente de novo.",
+      "too_many": "Este computador já tem todas as pastas vinculadas que consegue guardar. Desvincule uma primeiro.",
+      "not_a_folder": "Escolha uma pasta.",
+      "network_folder": "Esta pasta está em um compartilhamento de rede. Vincule uma pasta do disco deste computador.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
     }
   }
 }

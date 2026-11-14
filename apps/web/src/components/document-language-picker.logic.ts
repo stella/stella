@@ -11,7 +11,6 @@ import {
 import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 const DEFAULT_TARGET_LANG: DocumentTranslationTargetLanguageCode = "EN-GB";
-const FALLBACK_SOURCE_LANG: DocumentTranslationTargetLanguageCode = "CS";
 
 /** UI locales whose code differs from the document-language code. */
 const LOCALE_TO_LANGUAGE = {
@@ -39,22 +38,6 @@ const languageForLocale = (
     ? LOCALE_TO_LANGUAGE[locale]
     : locale.toUpperCase();
   return isDocumentTranslationTargetCode(mapped) ? mapped : null;
-};
-
-type DefaultLanguagePair = {
-  source: DocumentTranslationTargetLanguageCode;
-  target: DocumentTranslationTargetLanguageCode;
-};
-
-/**
- * The UI locale is the best guess for the document's language; the target
- * defaults to English unless the source already is.
- */
-export const defaultLanguagePair = (locale: string): DefaultLanguagePair => {
-  const source = languageForLocale(locale) ?? FALLBACK_SOURCE_LANG;
-  const target =
-    source === DEFAULT_TARGET_LANG ? FALLBACK_SOURCE_LANG : DEFAULT_TARGET_LANG;
-  return { source, target };
 };
 
 /** Default a new translation toward the user's UI language when supported. */

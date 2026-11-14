@@ -64,6 +64,7 @@ import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting } from "./DictationSetting";
+import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
@@ -446,6 +447,7 @@ const GeneralPane = ({
   const tSubscriptions = useTranslations("agentSubscriptions");
   const tLocalSkills = useTranslations("localSkills");
   const tSigningDriver = useTranslations("signingDriver");
+  const tLinkedFolders = useTranslations("localLinkedFolders");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -554,6 +556,11 @@ const GeneralPane = ({
       <SigningDriverSection
         renderGroup={(content) => (
           <PanelGroup title={tSigningDriver("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalLinkedFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLinkedFolders("title")}>{content}</PanelGroup>
         )}
       />
       <PanelGroup title={t("permissions")}>

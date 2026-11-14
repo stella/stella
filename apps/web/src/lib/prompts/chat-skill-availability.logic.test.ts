@@ -357,6 +357,7 @@ describe("chatCanUseBrowser", () => {
     harness: "claude-code",
     model: "sonnet",
     approvals: "ask",
+    reasoningEffort: null,
   };
 
   test("a chat on stella can use a connected extension and nothing else", () => {

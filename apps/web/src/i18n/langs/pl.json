@@ -241,6 +241,12 @@
       "showSources": "Pokaż źródła",
       "title": "Fakty referencyjne"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# twierdzenie opiera się na tym fakcie} few {# twierdzenia opierają się na tym fakcie} many {# twierdzeń opiera się na tym fakcie} other {# twierdzenia opiera się na tym fakcie}}",
+      "empty": "Ta lista nie ma jeszcze żadnych faktów.",
+      "moreClaims": "{count, plural, one {# kolejne twierdzenie} few {# kolejne twierdzenia} many {# kolejnych twierdzeń} other {# kolejnego twierdzenia}}",
+      "undated": "Bez daty"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
@@ -405,6 +411,42 @@
       "showNextSteps": "Pokaż kolejne kroki",
       "unlink": "Usuń powiązanie: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# twierdzenie} few {# twierdzenia} many {# twierdzeń} other {# twierdzenia}}",
+      "claimTitle": "Twierdzenie",
+      "columns": {
+        "claims": "Twierdzenia",
+        "sources": "Dokumenty źródłowe",
+        "statements": "Oświadczenia"
+      },
+      "empty": "Ta lista nie ma jeszcze żadnych faktów ani zweryfikowanych dokumentów.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
+      "factOverflow": "Wyświetlane jest pierwszych {count} faktów z tej listy.",
+      "filters": {
+        "allSources": "Wszystkie źródła",
+        "allVerdicts": "Wszystkie rozstrzygnięcia",
+        "conflicts": "Sprzeczności",
+        "heldFacts": "Wstrzymane fakty",
+        "source": "Filtruj według źródła",
+        "verdict": "Filtruj według rozstrzygnięcia"
+      },
+      "held": "Wstrzymany",
+      "linkedFacts": "{count, plural, one {# powiązany fakt} few {# powiązane fakty} many {# powiązanych faktów} other {# powiązanego faktu}}",
+      "listLabel": "Graf w formie listy",
+      "loadMore": "Załaduj więcej dokumentów",
+      "noMatch": "Nic nie pasuje do tych filtrów.",
+      "noStatements": "Żaden dokument nie został jeszcze zweryfikowany względem tej listy.",
+      "offList": "Nie ma go już na liście",
+      "relation": {
+        "conflicts": "Przeczy",
+        "governs": "Nadrzędny",
+        "record": "W rejestrze",
+        "recordConflict": "Sprzeczny wpis",
+        "supports": "Potwierdza"
+      },
+      "unlinked": "Fakty, na których nie opiera się żadne twierdzenie",
+      "verifyInReview": "Zweryfikuj dokument"
+    },
     "guidance": {
       "escalate": "Przekaż dalej",
       "manualJudgement": "Wymaga decyzji",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# trafienie} few {# trafienia} many {# trafień} other {# trafienia}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologia",
+      "graph": "Graf",
+      "label": "Pokaż listę jako",
+      "review": "Weryfikacja"
     },
     "qualifiers": {
       "heading": "Zastrzeżenia",
@@ -643,100 +691,21 @@
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Utwórz wersję dwujęzyczną",
-      "creating": "Tworzenie…",
-      "description": "Tworzy kopię tego dokumentu w dwóch kolumnach: po lewej tekst oryginalny, po prawej kopia do przetłumaczenia z własną numeracją. Kopia zostanie zapisana w tej sprawie jako nowy dokument.",
-      "sameLanguage": "Wybierz dwa różne języki.",
-      "sourceLanguage": "Język źródłowy",
-      "title": "Wersja dwujęzyczna"
-    },
-    "error": {
-      "title": "Nie udało się utworzyć wersji dwujęzycznej"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> jest gotowy, do przetłumaczenia {rowCount, plural, one {jest # wiersz} few {są # wiersze} many {jest # wierszy} other {jest # wiersza}}.",
-      "title": "Utworzono wersję dwujęzyczną"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Uzupełnia kolumnę z tłumaczeniem w tym dwukolumnowym dokumencie. Sprawdź, co stanie się z każdym wierszem i jak oddawane są zdefiniowane pojęcia, a następnie rozpocznij tłumaczenie.",
-      "prepare": "Przygotuj",
-      "preparing": "Odczytywanie dokumentu…",
-      "preparingHint": "Odczytanie całego dokumentu i ocena każdego wiersza trwa do dwóch minut.",
-      "title": "Przetłumacz wersję dwujęzyczną"
+      "prepare": "Przygotuj"
     },
     "dispositions": {
-      "inline": "Oba języki",
       "keep": "Pozostaw bez zmian"
     },
-    "error": {
-      "prepareTitle": "Nie udało się przygotować dokumentu",
-      "startTitle": "Nie udało się rozpocząć tłumaczenia"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Brak dostępnego modelu AI do tłumaczenia.",
-      "applyFailed": "Nie udało się zapisać tłumaczeń z powrotem w dokumencie.",
-      "documentChanged": "Dokument zmienił się w trakcie tłumaczenia. Przygotuj go ponownie.",
-      "documentUnresolved": "Dokument lub jego plik nie jest już dostępny.",
-      "enqueueFailed": "Nie udało się dodać tłumaczenia do kolejki.",
-      "internal": "Tłumaczenie zostało nieoczekiwanie przerwane.",
-      "notBilingual": "Ten dokument nie zawiera tabeli dwujęzycznej.",
-      "translationFailed": "Nie udało się przetłumaczyć partii wierszy.",
-      "unknown": "Tłumaczenie zostało nieoczekiwanie przerwane."
-    },
-    "glossary": {
-      "add": "Dodaj pojęcie",
-      "description": "Te tłumaczenia obowiązują we wszystkich wierszach. Pojęcie bez tłumaczenia trzeba uzupełnić lub usunąć.",
-      "empty": "Nie znaleziono zdefiniowanych pojęć.",
-      "formsHint": "Kolejne formy oddziel przecinkami.",
-      "formsSource": "Inne formy pojęcia",
-      "formsTarget": "Inne formy tłumaczenia",
-      "incomplete": "Uzupełnij brakujące tłumaczenia lub usuń te pojęcia.",
-      "origins": {
-        "detected": "Znalezione",
-        "user": "Własne"
-      },
-      "term": "Pojęcie",
-      "title": "Zdefiniowane pojęcia",
-      "tooManyForms": "Pojęcie może mieć najwyżej {max} innych form.",
-      "translation": "Tłumaczenie"
-    },
     "kinds": {
-      "heading": "Nagłówek",
-      "listItem": "Element listy",
-      "paragraph": "Akapit",
-      "table": "Cała tabela"
-    },
-    "origins": {
-      "default": "Nieocenione",
-      "model": "AI"
+      "paragraph": "Akapit"
     },
     "review": {
-      "droppedRows": "{count, plural, one {Pominięto # wiersz} few {Pominięto # wiersze} many {Pominięto # wierszy} other {Pominięto # wiersza}}: nie zawierają tekstu do przetłumaczenia.",
-      "start": "Rozpocznij tłumaczenie",
       "starting": "Rozpoczynanie…"
     },
     "rows": {
-      "description": "Wybierz, co stanie się z każdym wierszem kolumny z tłumaczeniem.",
-      "ordinal": "#",
-      "sourceText": "Tekst źródłowy",
-      "title": "Wiersze",
-      "whatToDo": "Co zrobić"
-    },
-    "run": {
-      "cancelled": "Tłumaczenie zostało anulowane.",
-      "doneSummary": "{count, plural, one {Przetłumaczono # wiersz} few {Przetłumaczono # wiersze} many {Przetłumaczono # wierszy} other {Przetłumaczono # wiersza}}.",
-      "doneTitle": "Tłumaczenie zakończone",
-      "failedRows": "{count, plural, one {Nie udało się przetłumaczyć # wiersza} few {Nie udało się przetłumaczyć # wierszy} many {Nie udało się przetłumaczyć # wierszy} other {Nie udało się przetłumaczyć # wiersza}}.",
-      "failedTitle": "Tłumaczenie zatrzymane",
-      "hint": "Tłumaczenie działa na serwerze. Zostaw to okno otwarte, aby je śledzić.",
-      "moreRows": "{count, plural, one {jeszcze # wiersz} few {jeszcze # wiersze} many {jeszcze # wierszy} other {jeszcze # wiersza}}",
-      "progress": "Przetłumaczono {completed} z {total} wierszy",
-      "title": "Trwa tłumaczenie…",
-      "warningsTitle": "Wiersze do sprawdzenia"
+      "title": "Wiersze"
     }
   },
   "billing": {
@@ -1249,7 +1218,6 @@
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
       "none": "Nie odnotowano jeszcze żadnych cytowań.",
       "notInStella": "Jeszcze nie ma go w stelli",
-      "openAtCitation": "Otwórz w miejscu cytowania",
       "openDecision": "Otwórz orzeczenie",
       "paragraphLabel": "Punkt {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1933,7 +1901,8 @@
       "restored": "Zmiany w plikach cofnięte"
     },
     "localRun": {
-      "cloud": "Chmura stella",
+      "backgroundTasks": "{count, plural, one {# zadanie działa w tle} few {# zadania działają w tle} many {# zadań działa w tle} other {# zadania działa w tle}}",
+      "errorFolderUnavailable": "Folder powiązany z tym czatem jest niedostępny na Twoim komputerze. Sprawdź go w stella desktop, a potem wyślij to ponownie.",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
       "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
       "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
@@ -1942,26 +1911,41 @@
       "errorRestoring": "Twój komputer wciąż cofa zmiany w plikach. Wyślij to ponownie za chwilę.",
       "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "filesNotShared": "Pliki, których nie udało się udostępnić, pozostają na Twoim komputerze: {fileNames}",
-      "onThisComputer": "{harness} na tym komputerze",
+      "folderApprovalDescription": "Pozwól, aby {harness} pracował w folderze „{folder}” na Twoim komputerze. Może w nim odczytywać, zmieniać i usuwać pliki, a załączone pliki są do niego kopiowane.",
+      "folderApprove": "Zezwól w folderze {folder}",
+      "folderHint": "Foldery swojego komputera połączysz w ustawieniach stella desktop.",
+      "folderOwn": "Własny folder czatu",
+      "folderStateMoved": "Przeniesiony lub usunięty",
+      "folderStateOffline": "Dysk niepodłączony",
+      "folderStatePending": "Czeka na Twoją zgodę",
+      "folderStateProtected": "Zawiera własne dane stelli",
+      "folderStateUnlinked": "Już niepołączony",
+      "folderStateUnreadable": "Nie można odczytać",
+      "limitReminderNotify": "Powiadom mnie po odnowieniu",
+      "limitReminderScheduled": "Powiadomimy Cię po {time}.",
       "permissionAboveLimit": "Twoja organizacja na to nie pozwala",
       "permissionAskDescription": "Sam edytuje pliki w folderze czatu; o wszystko inne pyta.",
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",
       "permissionFullAuto": "W pełni automatycznie",
       "permissionFullAutoDescription": "Nie pyta o nic w folderze czatu; zawsze pyta, zanim zmieni coś na Twoim komputerze.",
+      "permissionPlan": "Planowanie",
+      "permissionPlanDescription": "Najpierw czyta i planuje; pyta przed każdą zmianą, dopóki nie zatwierdzisz planu.",
       "permissionSandboxed": "Działa w piaskownicy; pyta, zanim zmieni coś na Twoim komputerze.",
       "permissionUnavailable": "Niedostępne na tym komputerze",
       "permissions": "Uprawnienia",
       "refusalConflictingRunMode": "To żądanie ma działać jednocześnie z agentem w chmurze i na Twoim komputerze. Wybierz jedno w menu Uruchom na.",
+      "refusalFolderNotApproved": "Najpierw pozwól agentowi programistycznemu pracować w folderze połączonym z tym czatem.",
+      "refusalFolderUnavailable": "Folder połączony z tym czatem jest niedostępny. Sprawdź go w menu Uruchom na lub w stella desktop.",
       "refusalHarnessUnavailable": "Agent programistyczny na Twoim komputerze nie może teraz przyjąć tego żądania. Sprawdź go w stella desktop.",
       "refusalModelUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje już tego modelu. Wybierz inny w menu Uruchom na.",
-      "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
+      "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony.",
       "refusalPermissionAboveLimit": "Twoja organizacja nie pozwala agentowi programistycznemu na Twoim komputerze działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
+      "refusalReasoningEffortUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje tego poziomu rozumowania dla modelu. Wybierz inny w menu Poziom rozumowania.",
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
-      "runOn": "Uruchom na",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "stateLimitUntil": "Limit wyczerpany do {time}",
       "stateModelUnavailable": "Model nie jest już dostępny",
       "stateNeedsLogin": "Wymaga zalogowania",
@@ -2124,6 +2108,25 @@
     "richContentLoading": "Wczytywanie interaktywnej treści…",
     "richContentTitle": "Treść interaktywna",
     "richContentUnavailable": "Nie można bezpiecznie wyświetlić tej treści.",
+    "runOn": {
+      "checkFailed": "Nie udało się sprawdzić Twojego komputera",
+      "chipLabel": "Gdzie działa: {place}",
+      "cloud": "Chmura",
+      "cloudDescription": "Działa w chmurze. Dostępne z każdego miejsca.",
+      "harnessModels": "Modele {harness}",
+      "hintInstall": "Zainstaluj go w stella desktop",
+      "hintOffline": "Otwórz stella desktop na swoim komputerze",
+      "hintSignIn": "Zaloguj się w stella desktop",
+      "hintUpdate": "Zaktualizuj go w stella desktop",
+      "localFolderPlace": "Twój komputer, {harness}, {folder}",
+      "localFolderSelection": "Twój komputer · {harness} · {folder}",
+      "localPlace": "Twój komputer, {harness}",
+      "localSelection": "Twój komputer · {harness}",
+      "modelDefault": "Domyślny (zalecany)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Twój komputer",
+      "yourComputerDescription": "Korzysta z Codex lub Claude Code na Twoim komputerze w ramach Twojej własnej subskrypcji. Może odczytywać i zmieniać pliki w folderze tego czatu; uprawnienia określają, co może zrobić bez pytania."
+    },
     "selection": {
       "askInNewChat": "Zapytaj w nowym czacie",
       "quoteInReply": "Zacytuj w odpowiedzi",
@@ -2155,6 +2158,7 @@
     "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
     "sendErrorTimedOut": "Czat nie odpowiedział na czas. Spróbuj ponownie.",
     "sendErrorToolsUnsupported": "Ten model nie może używać narzędzi, więc nie może odpowiadać na pytania dotyczące Twojej sprawy. Przełącz się na model, który obsługuje narzędzia.",
+    "sendErrorTurnTooLarge": "Ta odpowiedź stała się zbyt duża, aby dostarczyć ją w całości. Wyślij nową wiadomość, aby kontynuować.",
     "sendPrompt": "Wyślij wiadomość",
     "sendQueuedMessageNow": "Wyślij teraz",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
@@ -2318,15 +2322,32 @@
       "field": "Pole",
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
+      "localOutput": {
+        "conversation": "Rozmowa subagenta",
+        "conversationPrompt": "Zadanie",
+        "conversationReport": "Raport",
+        "cut": "Wyświetlono pierwsze {kept} z {total}",
+        "diff": "Zmiany w plikach",
+        "elsewhere": "Otwórz na komputerze, na którym to uruchomiono",
+        "empty": "Brak wyniku",
+        "failed": "Aplikacja desktopowa stella na tym komputerze nie mogła tego wyświetlić.",
+        "imageTooLarge": "Ten obraz ma {total}. Obrazy większe niż {kept} nie są zachowywane na tym komputerze, dlatego nie można go tutaj wyświetlić.",
+        "notKept": "Z tego kroku nic nie zostało zachowane na tym komputerze",
+        "reading": "Odczytywanie z tego komputera"
+      },
       "output": "Wynik",
       "patternInPath": "{pattern} w {path}",
+      "proposedPlan": "Proponowanie planu",
       "readFile": "Czytanie pliku",
       "searchFiles": "Przeszukiwanie plików",
+      "signInToContinue": "Zaloguj się, aby kontynuować",
       "sourceCode": "Kod źródłowy",
       "statusWaiting": "Oczekuje",
+      "subagent": "Uruchamianie subagenta",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}",
-      "updatePlan": "Aktualizowanie planu"
+      "updatePlan": "Aktualizowanie planu",
+      "viewImage": "Wyświetlanie obrazu"
     },
     "turnNotification": {
       "failedBody": "Odpowiedź na czacie w stelli nie została ukończona.",
@@ -2337,6 +2358,8 @@
       "replyReadyTitle": "Odpowiedź gotowa"
     },
     "turnStatus": {
+      "answerFailed": "Nie udało się dokończyć odpowiedzi",
+      "answerReady": "Odpowiedź gotowa",
       "waitingForApproval": "Oczekiwanie na zatwierdzenie",
       "waitingForInput": "Oczekiwanie na dane",
       "writing": "Pisanie"
@@ -2616,6 +2639,7 @@
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Znajdź",
+    "folder": "Folder",
     "formula": "Formuła",
     "goBack": "Wróć",
     "goBackToEditing": "Wróć do edycji",
@@ -3377,6 +3401,8 @@
       "organizationMemberLimitReached": "Ta organizacja osiągnęła limit członków.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
+      "runActiveLimitReached": "Twoja organizacja osiągnęła limit jednocześnie trwających zadań. Poczekaj na zakończenie jednego z nich i spróbuj ponownie.",
+      "runDailyLimitReached": "Twoja organizacja osiągnęła dzienny limit zadań. Spróbuj ponownie po północy (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft odmówił dostępu do tej witryny, biblioteki lub tego pliku.",
       "sharepointFileTooLarge": "Ten plik jest zbyt duży, aby go zaimportować.",
       "sharepointInvalidCursor": "Lista zmieniła się podczas przeglądania. Otwórz folder ponownie.",
@@ -3392,8 +3418,6 @@
       "validationRequired": "Wymagane pole jest puste.",
       "validationTooLong": "Za długie: użyj najwyżej {limit, number} znaków.",
       "validationTooShort": "Za krótkie: użyj co najmniej {limit, number} znaków.",
-      "verificationActiveLimitReached": "Twoja organizacja osiągnęła limit jednoczesnych weryfikacji. Poczekaj na zakończenie jednej z nich i spróbuj ponownie.",
-      "verificationDailyLimitReached": "Twoja organizacja osiągnęła dzienny limit weryfikacji. Spróbuj ponownie po północy (Europe/Prague).",
       "versionConflict": "Ktoś inny zmienił to podczas Twojej edycji. Wczytaj ponownie, aby pobrać aktualną wersję."
     },
     "failedToAcceptInvitation": "Nie udało się przyjąć zaproszenia",
@@ -5086,6 +5110,7 @@
       "flowRunAwaitingApproval": "Przepływ pracy <bdi>{flowName}</bdi> czeka na Twoje zatwierdzenie",
       "flowRunCompleted": "Przepływ pracy <bdi>{flowName}</bdi> został zakończony",
       "flowRunFailed": "Przepływ pracy <bdi>{flowName}</bdi> nie powiódł się",
+      "localRunLimitReset": "Agent programistyczny na Twoim komputerze może kontynuować Twój czat",
       "mention": "<bdi>{actorName}</bdi> wspomniał o Tobie w komentarzu",
       "reportExportFailed": "Eksport raportu nie powiódł się",
       "reportExportSucceeded": "Twój raport jest gotowy",
@@ -5532,7 +5557,6 @@
       "caseLaw": "Orzecznictwo",
       "chat": "Czat",
       "contact": "Kontakt",
-      "folder": "Folder",
       "link": "Link",
       "matter": "Sprawa",
       "message": "Wiadomość",
@@ -5863,6 +5887,7 @@
         "case_law_research_column": "kolumna analizy orzecznictwa",
         "chat_browser_site_grant": "zgoda czatu na witrynę",
         "chat_file": "plik w rozmowie",
+        "chat_local_folder_approval": "zgoda na folder lokalny",
         "chat_message": "wiadomość w rozmowie",
         "chat_thread": "rozmowa",
         "chat_tool_execution": "wykonanie narzędzia w rozmowie",

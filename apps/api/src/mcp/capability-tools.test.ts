@@ -6,8 +6,8 @@ import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -360,6 +360,10 @@ describe("list verification access grants across MCP tools", () => {
       query: { entityId: resourceId, fileFieldId: resourceId },
     },
     "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.graph.get": {
+      params,
+      query: { listId: resourceId },
+    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
@@ -1077,6 +1081,15 @@ describe("list verification access grants across MCP tools", () => {
           asTestRaw<{ runs: unknown[] }>(parseToolPayload(result)),
         ).toEqual({
           runs: [],
+        });
+      } else if (capability === "lists.verifications.graph.get") {
+        // The fixture's list holds nothing verified yet.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          listId: resourceId,
+          statements: [],
+          claims: [],
+          nextCursor: null,
         });
       } else {
         expect(errorEnvelope(result).code).toBe("not_found");
@@ -3413,7 +3426,7 @@ describe("capability executor file-response gate (fix-6)", () => {
   });
 
   test("verification limit refusals preserve codes, recovery metadata and receipts", () => {
-    for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+    for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
       for (const retryable of [true, false]) {
         const refusal = {
           code,

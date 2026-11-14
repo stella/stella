@@ -26,7 +26,10 @@ const config = {
     "it rests on a held fact), the facts it " +
     "rests on, for a record conflict the fact suggested to govern it (the " +
     "document's record over a witness's account; null when neither), and " +
-    "the claim's current review (null while nobody has acted on it). Each " +
+    "the claim's current review (null while nobody has acted on it). A " +
+    "claim's `paragraph` is the printed number of the paragraph it sits in " +
+    "(null when the document's numbering is unclear or the claim is outside " +
+    "a numbered paragraph). Each " +
     "claim's `staleness` says why its grade may no longer stand on the list " +
     "as it is now: a fact the grade cites was edited (`fact-changed`), held " +
     "out of scoring (`fact-held`) or taken off the list (`fact-removed`), or " +
@@ -36,6 +39,10 @@ const config = {
     "words is not detected), null when the list holds more facts than one " +
     "check reads. Nothing is graded again until asked: re-check those " +
     "claims with lists.verifications.claim-rechecks.bulk.create. " +
+    "`assertedOn` is the date the claim's words give (`dated`, with a " +
+    "`day`, `month` or `year` precision stored as its first day and its " +
+    "`source`: the words, or the grader when they name no complete date), " +
+    "or `none`. " +
     "`carryOver` says what the run took from the previous run of the same " +
     "document and list. Notes and fact links follow a claim with the same " +
     "words or with edited words in the same paragraph or page; other " +

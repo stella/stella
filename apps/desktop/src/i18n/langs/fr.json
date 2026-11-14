@@ -593,7 +593,18 @@
   },
   "dictation": {
     "title": "Dictée",
-    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
+    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée. Lorsque la correction par IA est activée, le texte transcrit, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs et la mise en forme ; stella ne le conserve pas.",
+    "cleanup": {
+      "title": "Corriger avec l’IA",
+      "description": "La parole est toujours transcrite sur cet ordinateur et l’audio ne le quitte jamais. Lorsque la correction est activée, le texte transcrit est envoyé via stella au fournisseur d’IA de votre organisation pour corriger les erreurs de reconnaissance et appliquer la ponctuation et la mise en forme dictées, comme « nouvelle ligne » ou « gras ». stella ne le conserve pas."
+    },
+    "language": {
+      "title": "Langue de dictée",
+      "description": "La parole est reconnue dans cette langue et la correction y conserve le texte. Automatique utilise les langues de l’affichage et des claviers de cet ordinateur.",
+      "automatic": "Automatique",
+      "automaticWith": "Automatique ({languages})",
+      "noResults": "Aucune langue trouvée"
+    },
     "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
     "download": "Télécharger ({size} Mo)",
     "downloading": "Téléchargement du modèle vocal : {percent} %",
@@ -604,7 +615,10 @@
       "accessibility": "Autorisez l'accès Accessibilité pour que stella puisse écrire dans d'autres applications.",
       "microphone": "stella n'entend pas votre micro. Vérifiez l'accès au micro dans les Réglages Système.",
       "modelMissing": "Téléchargez d'abord le modèle vocal.",
-      "transcription": "La transcription a échoué. Réessayez."
+      "transcription": "La transcription a échoué. Réessayez.",
+      "focusChanged": "Vous êtes passé à une autre application avant que le texte soit prêt, rien n’a donc été saisi. Réessayez.",
+      "focusUnconfirmed": "stella n’a pas pu confirmer quelle application est au premier plan, rien n’a donc été saisi. Réessayez.",
+      "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez."
     }
   },
   "shortcut": {
@@ -840,6 +854,27 @@
       "missing": "Ce fichier n’existe plus.",
       "needs_update": "Ce module ne fonctionne pas avec le processeur de ce Mac. Installez la version actuelle du pilote.",
       "not_a_library": "Ce fichier n’est pas un module PKCS #11."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Dossiers liés",
+    "description": "Dossiers de cet ordinateur dans lesquels l'agent d'une conversation peut travailler. La conversation ne voit que le nom du dossier ; son chemin reste sur cet ordinateur.",
+    "add": "Lier un dossier",
+    "remove": "Délier",
+    "removeFolder": "Délier {name}",
+    "state": {
+      "offline": "Le disque qui contient ce dossier n'est pas connecté.",
+      "moved": "Ce dossier a été déplacé, renommé ou supprimé. Déliez-le puis liez-le à nouveau.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
+    },
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "too_many": "Cet ordinateur a déjà autant de dossiers liés qu'il peut en garder. Déliez-en un d'abord.",
+      "not_a_folder": "Choisissez un dossier.",
+      "network_folder": "Ce dossier se trouve sur un partage réseau. Liez un dossier du disque de cet ordinateur.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
     }
   }
 }

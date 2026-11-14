@@ -41,6 +41,7 @@ const { openChatThreadDomPage } =
   await import("@/components/chat/chat-thread-dom-page");
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
+const { invalidateChatThread } = await import("@/features/chat/queries");
 const { toSafeId } = await import("@/lib/safe-id");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
 const { getChatThreadKey, toChatThreadId } =
@@ -398,15 +399,21 @@ const EMPTY_PAGE = {
   messages: [],
 };
 
+type ThreadPage = ReturnType<typeof pausedPage> | typeof EMPTY_PAGE;
+
 const serveThread = ({
-  page = pausedPage(),
+  page: firstPage = pausedPage(),
   answers = [],
 }: {
-  page?: ReturnType<typeof pausedPage> | typeof EMPTY_PAGE;
+  page?: ThreadPage;
   answers?: ChatAnswer[];
 } = {}) => {
   const posted: Record<string, unknown>[] = [];
   const unexpected: string[] = [];
+  /** How often the page asked the server where the paused turn stands. */
+  const turnReads: string[] = [];
+  let page = firstPage;
+  let revision = 1;
   routeRequest = async (input, init) => {
     await Promise.resolve();
     const request = input instanceof Request ? input : undefined;
@@ -428,7 +435,7 @@ const serveThread = ({
         forkProvenance: { type: "none" },
         model: null,
         reasoningEffort: null,
-        threadRevision: "revision-1",
+        threadRevision: `revision-${String(revision)}`,
         activeSkill: null,
         threadExists: page.messages.length > 0,
         usedAnonymization: false,
@@ -440,6 +447,7 @@ const serveThread = ({
       method === "GET" &&
       url.pathname === `/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/resume`
     ) {
+      turnReads.push(url.pathname);
       return Response.json({
         type: "transcript",
         turnId: TURN_ID,
@@ -469,7 +477,16 @@ const serveThread = ({
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });
   };
-  return { posted, unexpected };
+  return {
+    posted,
+    unexpected,
+    turnReads,
+    /** The server stores a new state of the thread for the next read. */
+    store: (next: ThreadPage) => {
+      page = next;
+      revision += 1;
+    },
+  };
 };
 
 /** A run on the member's computer that asks its question and pauses. */
@@ -611,6 +628,63 @@ describe("a turn paused on a local run's question", () => {
       ],
     ]);
     await sent;
+    expect(server.unexpected).toEqual([]);
+  });
+
+  test("keeps what the member picked when the thread is read again after the pause", async () => {
+    const server = serveThread({ page: EMPTY_PAGE, answers: [askingRun] });
+    const live = await openChatThreadDomPage({
+      organizationId: ORGANIZATION_ID,
+      threadId: THREAD_ID,
+    });
+    let sent: Promise<void> | undefined;
+    await act(async () => {
+      sent = live.session().sendMessage({
+        content: "Draft the lease",
+        id: toSafeId<"chatMessage">("00000000-0000-7000-8000-0000000000c1"),
+      });
+      await Promise.resolve();
+    });
+    const card = await questionCard(live.view.container);
+    await sent;
+    fireEvent.click(within(card).getByRole("button", { name: "Slovak" }));
+
+    // The read that follows the pause lands after the pick, with the paused
+    // turn as the server stored it.
+    server.store(pausedPage());
+    await act(async () => {
+      await invalidateChatThread({
+        queryClient: live.queryClient,
+        threadRef: { scope: "global", threadId: toChatThreadId(THREAD_ID) },
+      });
+    });
+
+    // The same card, not a fresh one: the pick is still on it.
+    expect(await questionCard(live.view.container)).toBe(card);
+    expect(
+      within(card)
+        .getByRole("button", { name: "Slovak" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    const submit = within(card).getByRole("button", {
+      name: messages.chat.askUser.submit,
+    });
+    expect(isDisabled(submit)).toBe(false);
+    // The paused turn was not read from the server again.
+    expect(server.turnReads).toEqual([]);
+    fireEvent.click(submit);
+    await waitFor(() => {
+      if (server.posted.length < 2) {
+        panic("The answer is not sent yet");
+      }
+    });
+    expect(resumeOf(server.posted.at(1) ?? {})).toEqual([
+      {
+        interruptId: INTERRUPT_ID,
+        payload: { answers: { law: ["Slovak"] } },
+        status: "resolved",
+      },
+    ]);
     expect(server.unexpected).toEqual([]);
   });
 

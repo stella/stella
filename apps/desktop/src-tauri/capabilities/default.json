@@ -25,6 +25,8 @@
     "allow-set-desktop-telemetry-enabled",
     "allow-dictation-get-snapshot",
     "allow-dictation-set-enabled",
+    "allow-dictation-set-cleanup",
+    "allow-dictation-set-language",
     "allow-dictation-download-model",
     "allow-shortcut-get-snapshot",
     "allow-shortcut-check",

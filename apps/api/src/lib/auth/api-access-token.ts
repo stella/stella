@@ -103,6 +103,86 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/create.ts",
   },
+  // A new matter's client and team, as the web's create dialog offers them:
+  // an address-book contact found by name or created on the spot, and the
+  // organization's people to share the matter with.
+  "GET /v1/contacts/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/contacts/search.ts",
+  },
+  "PUT /v1/contacts": {
+    scope: "stella:contacts_write",
+    handler: "apps/api/src/handlers/contacts/create.ts",
+  },
+  "GET /v1/workspaces/member-candidates": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/member-candidates/list.ts",
+  },
+  // The organization's matter-number convention, so a number typed for a
+  // matter is checked against it as the web's hint does. Only the pattern and
+  // its padding; the organization's settings stay closed.
+  "GET /v1/workspaces/matter-numbering": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/matter-numbering/get.ts",
+  },
+  // The caller's own role, which a browser reads from its auth session: the
+  // app leaves out what the role cannot do (`@stll/permissions/role-grants`).
+  // Every request is still decided by the server.
+  "GET /v1/me/role": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/role/get.ts",
+    uncataloged: "auth_plumbing",
+  },
+  // A matter's own settings, as the web's matter info keeps them: its name,
+  // number, client and lead, its archive state, a copy of it, and deleting
+  // it, each under the matter permission a browser session needs.
+  "GET /v1/workspaces/:workspaceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/get.ts",
+  },
+  "POST /v1/workspaces/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/update.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/delete.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/archive": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/archive.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/unarchive": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/unarchive.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/duplicate": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/duplicate.ts",
+  },
+  // Who works on the matter: a matter edit, gated by the same matter update
+  // permission the web's members section needs.
+  "PUT /v1/workspaces/:workspaceId/members": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/members/add.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId/members/:userId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/members/remove.ts",
+  },
+  // The matter's other parties, each a contact in a role.
+  "GET /v1/workspaces/:workspaceId/contacts": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/contacts/list.ts",
+  },
+  "PUT /v1/workspaces/:workspaceId/contacts": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/contacts/create.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId/contacts/:workspaceContactId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/contacts/delete.ts",
+  },
   "PUT /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/create.ts",
@@ -237,6 +317,14 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/runs/list.ts",
     uncataloged: "chat_thread_ui",
   },
+  // A standing approval given from an approval in a conversation: "Allow in
+  // this conversation" or "Always allow" for one tool, as the web's
+  // approval card stores it.
+  "POST /v1/chat/tool-grants": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/tool-grants/create.ts",
+    uncataloged: "chat_thread_ui",
+  },
   // The person's event stream. Its events carry no content (notifications
   // changed, chat runs changed, a resource set changed); the app re-reads
   // through the routes above. It carries more than chat, so it takes the
@@ -332,6 +420,7 @@ export const API_OAUTH_ROUTES = {
      * which has no handler config to carry one.
      */
     uncataloged?:
+      | "auth_plumbing"
       | "realtime_stream"
       | "upload_mechanics"
       | "search_ui"

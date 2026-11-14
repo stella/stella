@@ -1135,6 +1135,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "DELETE /v1/chat/threads/:threadId/limit-reminder",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "DELETE /v1/chat/tool-grants/:grantId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1889,6 +1893,10 @@
     {
       "id": "POST /v1/desktop/billing-drafts",
       "reason": "Returns review-only proposals for at most 20 selected entries and never records time; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
+      "id": "POST /v1/desktop/dictation/cleanup",
+      "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
       "id": "POST /v1/desktop/presence",
@@ -2876,6 +2884,14 @@
     },
     {
       "id": "PUT /v1/case/research/columns/order",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/chat/threads/:threadId/limit-reminder",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

@@ -593,7 +593,18 @@
   },
   "dictation": {
     "title": "Dikteerimine",
-    "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
+    "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata. Kui tehisintellektiga parandamine on sisse lülitatud, saadetakse teisendatud tekst (mitte heli) stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale vigade ja vormingu parandamiseks; stella seda ei salvesta.",
+    "cleanup": {
+      "title": "Paranda tehisintellektiga",
+      "description": "Kõne teisendatakse endiselt selles arvutis ja heli ei lahku sealt kunagi. Kui parandamine on sisse lülitatud, saadetakse teisendatud tekst stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale, kes parandab tuvastusvead ning rakendab dikteeritud kirjavahemärgid ja vormingu, näiteks „uus rida“ või „paks“. stella seda ei salvesta."
+    },
+    "language": {
+      "title": "Dikteerimise keel",
+      "description": "Kõne tuvastatakse selles keeles ja parandamine jätab teksti sellesse keelde. Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli.",
+      "automatic": "Automaatne",
+      "automaticWith": "Automaatne ({languages})",
+      "noResults": "Keeli ei leitud"
+    },
     "modelNeeded": "Kõnemudel töötab selles arvutis.",
     "download": "Laadi alla ({size} MB)",
     "downloading": "Kõnemudeli allalaadimine: {percent}%",
@@ -604,7 +615,10 @@
       "accessibility": "Lubage hõlbustusfunktsioonide juurdepääs, et stella saaks teistesse rakendustesse kirjutada.",
       "microphone": "stella ei kuule teie mikrofoni. Kontrollige mikrofoni juurdepääsu süsteemiseadetes.",
       "modelMissing": "Laadige esmalt alla kõnemudel.",
-      "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti."
+      "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti.",
+      "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti.",
+      "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
+      "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti."
     }
   },
   "shortcut": {
@@ -840,6 +854,27 @@
       "missing": "Seda faili enam pole.",
       "needs_update": "See moodul ei tööta selle Maci protsessoril. Paigaldage draiveri uusim versioon.",
       "not_a_library": "See fail ei ole PKCS #11 moodul."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Lingitud kaustad",
+    "description": "Selle arvuti kaustad, milles vestluse agent saab töötada. Vestlus näeb ainult kausta nime; selle tee jääb sellesse arvutisse.",
+    "add": "Lingi kaust",
+    "remove": "Eemalda link",
+    "removeFolder": "Eemalda kausta {name} link",
+    "state": {
+      "offline": "Ketas, millel see kaust asub, pole ühendatud.",
+      "moved": "See kaust on teisaldatud, ümber nimetatud või kustutatud. Eemaldage link ja linkige kaust uuesti.",
+      "protected": "Selles kaustas on stella enda andmed või oskuste kaust, seega ei saa agent selles töötada.",
+      "unreadable": "Seda kausta ei õnnestunud lugeda."
+    },
+    "notice": {
+      "action_failed": "See ei õnnestunud. Proovige uuesti.",
+      "too_many": "Selles arvutis on juba nii palju lingitud kaustu, kui see hoida saab. Eemaldage kõigepealt üks link.",
+      "not_a_folder": "Valige kaust.",
+      "network_folder": "See kaust asub võrguketta jagatud alal. Linkige kaust selle arvuti enda kettalt.",
+      "protected": "Selles kaustas on stella enda andmed või oskuste kaust, seega ei saa agent selles töötada.",
+      "unreadable": "Seda kausta ei õnnestunud lugeda."
     }
   }
 }

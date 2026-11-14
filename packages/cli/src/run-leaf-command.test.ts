@@ -16,8 +16,8 @@ import { CLI_IDENTITY_SCOPES } from "./auth/constants.js";
 import { parseScopesFlag } from "./auth/scopes.js";
 import type { Context } from "./context.js";
 import {
-  VERIFICATION_RUN_CAP_CODES,
-  type VerificationRunCapCode,
+  MODEL_RUN_CAP_CODES,
+  type ModelRunCapCode,
 } from "./generated/mcp-contract.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -1211,10 +1211,10 @@ describe("toolErrorLines", () => {
 
 test("verification limit envelopes retain recovery metadata and select their exit class", () => {
   const expectedExits = {
-    [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
-    [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
-  } as const satisfies Record<VerificationRunCapCode, number>;
-  for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+    [MODEL_RUN_CAP_CODES.active]: EXIT_CODES.server,
+    [MODEL_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
+  } as const satisfies Record<ModelRunCapCode, number>;
+  for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
     for (const retryable of [true, false]) {
       const error = {
         code,

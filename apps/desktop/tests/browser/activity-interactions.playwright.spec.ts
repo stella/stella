@@ -340,6 +340,7 @@ const installNativeBoundary = async ({
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
         signing_driver_get: () => null,
+        local_linked_folders_get: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&

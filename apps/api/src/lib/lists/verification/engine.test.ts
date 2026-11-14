@@ -37,8 +37,8 @@ import {
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { wholeDocumentPassages } from "@/api/lib/lists/verification/paragraph-scope";
 import { RECHECKS_PER_REQUEST_MAX } from "@/api/lib/lists/verification/recheck";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -370,6 +370,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -410,6 +411,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -459,6 +461,7 @@ describe("gradeClaims", () => {
         grades: [
           {
             claimId: "C1",
+            statedDate: null,
             verdict: "supported",
             score: 91.6,
             refs: [{ factId: "F1", rel: "supports" }],
@@ -467,6 +470,7 @@ describe("gradeClaims", () => {
           },
           {
             claimId: "C2",
+            statedDate: null,
             verdict: "contradicted",
             score: 20,
             refs: [],
@@ -479,6 +483,7 @@ describe("gradeClaims", () => {
         grades: [
           {
             claimId: "C2",
+            statedDate: null,
             verdict: "contradicted",
             score: 20,
             refs: [{ factId: "F2", rel: "conflicts" }],
@@ -513,11 +518,62 @@ describe("gradeClaims", () => {
     }
   });
 
+  test("a claim's words date it; the grader's date counts only where they name none", async () => {
+    const answer = (statedDate: string) => ({
+      grades: ["C1", "C2"].map((claimId) => ({
+        claimId,
+        statedDate,
+        verdict: "nocover",
+        score: null,
+        refs: [],
+        conflict: null,
+        qualifiers: [],
+      })),
+    });
+    answers.push(answer("2020-06"));
+    const result = await gradeClaims({
+      claims,
+      facts: [fact(FACT_A, "Meeting on 9 March 2021")],
+      deps,
+    });
+    const outcome = Result.isOk(result) ? result.value : null;
+    expect(
+      outcome?.type === "graded" ? [...outcome.assertedDates] : null,
+    ).toEqual([
+      [
+        "0",
+        { type: "dated", source: "text", date: "2021-03-09", precision: "day" },
+      ],
+      [
+        "1",
+        {
+          type: "dated",
+          source: "grader",
+          date: "2020-06-01",
+          precision: "month",
+        },
+      ],
+    ]);
+
+    // A grader date that is not a calendar date is no date.
+    answers.push(answer("June 2020"));
+    const unreadable = await gradeClaims({
+      claims,
+      facts: [fact(FACT_A, "Meeting on 9 March 2021")],
+      deps,
+    });
+    const second = Result.isOk(unreadable) ? unreadable.value : null;
+    expect(
+      second?.type === "graded" ? second.assertedDates.get("1") : null,
+    ).toEqual({ type: "none" });
+  });
+
   test("sets aside an uncheckable claim while leaving an uncovered fact checkable", async () => {
     answers.push({
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "notverifiable",
           score: null,
           refs: [{ factId: "F1", rel: "record" }],
@@ -526,6 +582,7 @@ describe("gradeClaims", () => {
         },
         {
           claimId: "C2",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -586,6 +643,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "recordconflict",
           score: null,
           refs: [],
@@ -626,6 +684,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -639,6 +698,7 @@ describe("gradeClaims", () => {
         },
         {
           claimId: "C2",
+          statedDate: null,
           verdict: "tension",
           score: 45,
           refs: [{ factId: "F2", rel: "conflicts" }],
@@ -715,6 +775,7 @@ describe("gradeClaims", () => {
   ])("repairs $rule", async ({ qualifiers, reason }) => {
     const broken = {
       claimId: "C1",
+      statedDate: null,
       verdict: "contradicted",
       score: 10,
       refs: [{ factId: "F1", rel: "conflicts" }],
@@ -750,6 +811,7 @@ describe("gradeClaims", () => {
     expect(Result.isOk(result) ? result.value : null).toEqual({
       type: "incomplete",
       grades: new Map(),
+      assertedDates: new Map(),
       ungraded: 1,
     });
   });
@@ -914,7 +976,8 @@ test("model dispatch requires proofs bound to the requester and organization", a
 
 test("each model request rechecks its run budget before dispatch", async () => {
   let checks = 0;
-  const capError = new ListVerificationRunCapError({
+  const capError = new ModelRunCapError({
+    kind: "list-run",
     reason: "active",
     message: "Verification limit reached",
     hint: "Wait for an active run.",

@@ -16,12 +16,22 @@ type Run = {
   display_title: string;
 };
 
+type GateStatus = {
+  repository: { full_name: string };
+  context: string;
+  state: string;
+  sender: { type: string };
+  sha: string;
+};
+
 type EligibilityOptions = {
   run?: (sha: string) => Partial<Run>;
+  /** A `status` event payload instead of a completed proof run. */
+  status?: (sha: string) => Partial<GateStatus>;
   tags?: (sha: string) => string[];
 };
 
-const decide = ({ run, tags }: EligibilityOptions = {}) => {
+const decide = ({ run, status, tags }: EligibilityOptions = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-finalize-eligible-"));
   const git = (...args: string[]) => {
     const result = Bun.spawnSync(["git", ...args], { cwd: root });
@@ -42,19 +52,32 @@ const decide = ({ run, tags }: EligibilityOptions = {}) => {
       git("tag", "-a", tag, "-m", tag, sha);
     }
     const event = path.join(root, "event.json");
+    const payload =
+      status === undefined
+        ? undefined
+        : {
+            repository: { full_name: REPOSITORY },
+            context: "release/prod-gate",
+            state: "success",
+            sender: { type: "User" },
+            sha,
+            ...status(sha),
+          };
     writeFileSync(
       event,
-      JSON.stringify({
-        workflow_run: {
-          head_repository: { full_name: REPOSITORY },
-          head_branch: "main",
-          event: "workflow_dispatch",
-          path: ".github/workflows/main-heavy.yml",
-          conclusion: "success",
-          display_title: `Main heavy suites ${sha}`,
-          ...run?.(sha),
+      JSON.stringify(
+        payload ?? {
+          workflow_run: {
+            head_repository: { full_name: REPOSITORY },
+            head_branch: "main",
+            event: "workflow_dispatch",
+            path: ".github/workflows/main-heavy.yml",
+            conclusion: "success",
+            display_title: `Main heavy suites ${sha}`,
+            ...run?.(sha),
+          },
         },
-      }),
+      ),
     );
     const result = Bun.spawnSync(["bash", subject, event, REPOSITORY], {
       cwd: root,
@@ -81,7 +104,25 @@ test("a staging run title naming the candidate tag is eligible", () => {
   expect(output).toBe(`sha=${sha}\n`);
 });
 
+test("a person's release/prod-gate success on a tagged candidate is eligible", () => {
+  const { sha, output } = decide({ status: () => ({}) });
+  expect(output).toBe(`sha=${sha}\n`);
+});
+
 const refusals: [string, EligibilityOptions][] = [
+  [
+    "foreign-repository",
+    { status: () => ({ repository: { full_name: "fork/stella" } }) },
+  ],
+  ["not-a-prod-gate", { status: () => ({ context: "main/heavy" }) }],
+  ["prod-gate-not-success", { status: () => ({ state: "pending" }) }],
+  ["prod-gate-not-a-person", { status: () => ({ sender: { type: "Bot" } }) }],
+  ["invalid-status-commit", { status: (sha) => ({ sha: sha.slice(1) }) }],
+  ["untagged-commit", { status: () => ({}), tags: () => [] }],
+  [
+    "already-final",
+    { status: () => ({}), tags: () => ["v1.2.3-rc.2", "v1.2.3"] },
+  ],
   [
     "foreign-repository",
     { run: () => ({ head_repository: { full_name: "fork/stella" } }) },
@@ -137,7 +178,7 @@ test("only the eligibility verdict starts the job that holds the release environ
   const finalize = job("finalize");
   expect(field(finalize, "needs")).toBe("finalize-eligibility");
   expect(field(finalize, "if")).toBe(
-    "github.event_name == 'workflow_run' && needs.finalize-eligibility.outputs.sha != ''",
+    "(github.event_name == 'workflow_run' || github.event_name == 'status') && needs.finalize-eligibility.outputs.sha != ''",
   );
   expect(field(finalize, "environment")).toBe("release-app");
   expect(JSON.stringify(finalize)).toContain(

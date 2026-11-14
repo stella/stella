@@ -336,6 +336,7 @@ const installNativeBoundary = async (
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
         signing_driver_get: () => null,
+        local_linked_folders_get: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
           connectCount += 1;
