@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/chat-local-files-undo";
 import {
   CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
-  CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES,
+  CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES,
 } from "@stll/api-contract/chat-local-run-step-content";
 
 import {
@@ -25,7 +25,7 @@ import {
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
 
-import { chatThreads, chatTurns } from "./chat";
+import { chatMessages, chatThreads, chatTurns } from "./chat";
 import {
   bytea,
   jsonb,
@@ -474,7 +474,8 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
  * the row names.
  *
  * A row lives as long as the answer that shows its step: it goes with the
- * turn that produced it, and so with that turn's messages and its thread. It
+ * turn that produced it, and so with that turn's messages, or, in a forked
+ * thread, with the message it was copied for; and always with its thread. It
  * is keyed by thread, since a forked thread keeps its source's call ids, and
  * names its run without depending on it, since an ended run is pruned long
  * before its conversation.
@@ -491,10 +492,16 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     stepKey: p.varchar("step_key", { length: 64 }).notNull(),
     /** The run whose step this is; its row may be gone. */
     runId: p.uuid("run_id").notNull(),
-    /** The turn that produced the step. */
-    turnId: p.uuid("turn_id").notNull(),
-    kind: p.text().notNull(),
-    /** How the step's content settled: stored, or why it was not. */
+    /** The turn that produced the step; null for a row a fork copied. */
+    turnId: p.uuid("turn_id"),
+    /** The message a fork copied the step for; null for a run's own row. */
+    messageId: p.uuid("message_id"),
+    /** What the step produced; null while the step is awaited. */
+    kind: p.text(),
+    /**
+     * How the step's content settled (stored, or why it was not), or
+     * `awaited` while its run, now over, has still to send it.
+     */
     outcome: p.text().notNull(),
     /** How many bytes the step produced, stored or not. */
     totalBytes: p.bigint("total_bytes", { mode: "number" }).notNull(),
@@ -529,13 +536,21 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
       .onDelete("cascade"),
     p
       .foreignKey({
+        name: "chat_local_run_step_contents_message_fk",
+        columns: [table.messageId, table.threadId],
+        foreignColumns: [chatMessages.id, chatMessages.threadId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         name: "chat_local_run_step_contents_user_file_fk",
         columns: [table.userFileId],
         foreignColumns: [userFiles.id],
       })
       .onDelete("cascade"),
     // Each serves its reference's cascade, so deleting a turn or a file
-    // never reads the whole table.
+    // never reads the whole table. A message's cascade names the thread too
+    // and reads that thread's rows through the primary key.
     p.index("chat_local_run_step_contents_turn_idx").on(table.turnId),
     p
       .index("chat_local_run_step_contents_user_file_idx")
@@ -551,7 +566,16 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     ),
     p.check(
       "chat_local_run_step_contents_outcome_check",
-      sql`${table.outcome} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES)})`,
+      sql`${table.outcome} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES)})`,
+    ),
+    p.check(
+      "chat_local_run_step_contents_owner_check",
+      sql`num_nonnulls(${table.turnId}, ${table.messageId}) = 1`,
+    ),
+    // An awaited step is known by its key alone; a settled one has a kind.
+    p.check(
+      "chat_local_run_step_contents_awaited_check",
+      sql`(${table.kind} IS NULL) = (${table.outcome} = 'awaited')`,
     ),
     p.check(
       "chat_local_run_step_contents_bytes_check",

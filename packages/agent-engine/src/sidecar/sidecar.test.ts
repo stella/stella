@@ -1902,6 +1902,153 @@ describe("harness holder over its socket", () => {
     });
   });
 
+  describe("what a turn's steps produce", () => {
+    /**
+     * A real host and fake harness against a real listener standing in for
+     * the API: what happened in order, the API's requests among the
+     * messages the host sent.
+     */
+    const runWithSteps = async (answer: () => Response) => {
+      const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-steps-"));
+      const configDir = path.join(root, "codex-home");
+      const workspaceDir = path.join(root, "workspace");
+      mkdirSync(configDir);
+      mkdirSync(workspaceDir, { recursive: true });
+      const order: string[] = [];
+      const puts: { path: string; kind: string | null; body: string }[] = [];
+      const api = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: async (request) => {
+          const url = new URL(request.url);
+          puts.push({
+            path: url.pathname,
+            kind: url.searchParams.get("kind"),
+            body: await request.text(),
+          });
+          order.push(`put ${url.pathname.split("/").at(-2) ?? ""}`);
+          return answer();
+        },
+      });
+      const apiOrigin = `http://127.0.0.1:${String(api.port)}`;
+      const { promise: finished, resolve } =
+        Promise.withResolvers<
+          Extract<SidecarHostOutput, { type: "run.finished" }>
+        >();
+      const host = new SidecarHost({
+        send: (message) => {
+          order.push(
+            message.type === "run.event" &&
+              message.chunk.type === "TOOL_CALL_RESULT"
+              ? `result ${String(message.chunk["toolCallId"])}`
+              : message.type,
+          );
+          if (message.type === "run.finished") {
+            resolve(message);
+          }
+          return true;
+        },
+        log: () => {},
+        protocolLog: PROTOCOL_LOG_OFF,
+        environment: {
+          PATH: process.env["PATH"] ?? "",
+          FAKE_HARNESS_LOG: path.join(root, "fake.log"),
+        },
+        processGrantTimeoutMs: WAIT_MS,
+        browser: null,
+      });
+      cleanups.push(async () => {
+        await host.shutdown();
+        await api.stop(true);
+        rmSync(root, { recursive: true, force: true });
+      });
+      host.configure("1.4.0", apiOrigin);
+      const runId = crypto.randomUUID();
+      const stepOutputDir = path.join(root, "runs", "chat.step-outputs");
+      host.handle({
+        type: "run.start",
+        runId,
+        threadId: "thread-1",
+        harness: "codex",
+        executable: fakeCodex(root, "native_tools"),
+        configDir,
+        launch: PLAIN_LAUNCH,
+        workspaceDir,
+        cacheDir: path.join(root, "agent-package-cache"),
+        stepOutputDir,
+        model: "gpt-test",
+        reasoningEffort: null,
+        instructions: "Use the stella MCP server.",
+        messages: [{ role: "user", content: "Run the steps." }],
+        attachments: [],
+        skillFolders: [],
+        toolPath: [],
+        unreadablePaths: [],
+        harnessSessionId: null,
+        policy: { network: "open", fs: "workspace", approvals: "ask" },
+        mcp: {
+          serverName: "stella",
+          url: `${apiOrigin}/mcp`,
+          token: RUN_TOKEN,
+          expiresAt: "2026-10-28T12:00:00.000Z",
+        },
+      });
+      return { finished: await finished, order, puts, runId, stepOutputDir };
+    };
+
+    test("is sent to the API, each step before its result and all before the run's finish", async () => {
+      const { finished, order, puts, runId, stepOutputDir } =
+        await runWithSteps(() => Response.json({ state: "stored" }));
+      expect(finished.outcome).toBe("completed");
+      // Each kept step was put once, under the run's own step path.
+      expect(puts.length).toBeGreaterThan(0);
+      expect(
+        puts.every(({ path: put }) =>
+          put.startsWith(`/v1/chat/local-runs/${runId}/steps/`),
+        ),
+      ).toBe(true);
+      expect(new Set(puts.map(({ path: put }) => put)).size).toBe(puts.length);
+      expect(puts.some(({ body }) => body.includes("permission denied"))).toBe(
+        true,
+      );
+      // A step's content is stored before its result goes to the API, and
+      // nothing is sent once the run has finished.
+      const putAt = (toolCallId: string) =>
+        order.indexOf(
+          `put ${path.basename(stepOutputPath({ stepOutputDir, runId, toolCallId }))}`,
+        );
+      for (const toolCallId of ["call-heredoc", "call-long", "call-edit"]) {
+        expect(putAt(toolCallId)).toBeGreaterThanOrEqual(0);
+        expect(putAt(toolCallId)).toBeLessThan(
+          order.indexOf(`result ${toolCallId}`),
+        );
+      }
+      expect(
+        order.findLastIndex((entry) => entry.startsWith("put ")),
+      ).toBeLessThan(order.indexOf("run.finished"));
+      // Nothing is left waiting, and the kept files are still there.
+      expect(readdirSync(stepOutputDir)).toEqual([runId]);
+    });
+
+    test("an API that cannot take a step at first is asked again before the run's finish", async () => {
+      let asked = 0;
+      const { finished, order, runId, stepOutputDir } = await runWithSteps(
+        () => {
+          asked += 1;
+          return asked === 1
+            ? new Response(null, { status: 503 })
+            : Response.json({ state: "stored" });
+        },
+      );
+      expect(finished.outcome).toBe("completed");
+      expect(order.at(-1)).toBe("run.finished");
+      // The step refused at first was put again, and nothing is left waiting.
+      const puts = order.filter((entry) => entry.startsWith("put "));
+      expect(puts.length).toBeGreaterThan(new Set(puts).size);
+      expect(readdirSync(stepOutputDir)).toEqual([runId]);
+    });
+  });
+
   test("closing the connection keeps runs going; shutdown cancels them and exits", async () => {
     const holder = await spawnHolder();
     const first = await desktop(holder);

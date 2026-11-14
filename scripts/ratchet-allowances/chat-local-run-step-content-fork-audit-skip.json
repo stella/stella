@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Forking a thread copies the stored content of the steps its copied messages show, on the gateway's owner connection that alone writes that table; the copy is part of the fork, whose thread create event the fork handler records."
+}
