@@ -169,8 +169,17 @@ const breaksAtVerdictFormula = (
  * oraz W. Roels, w charakterze pełnomocników,`) or naming the party's agents
  * (`…, by E. Montaguti and F. Wilman, acting as Agents,`).
  */
-const PARTY_LINE_RE =
-  /(?:^[-–—]\s[\s\S]*|acting as Agents?|w charakterze pełnomocnik(?:a|ów))\s*,$/u;
+const DASH_BULLET_RE = /^[-–—]\s/u;
+const AGENTS_ENDING_RE =
+  /(?:acting as Agents?|w charakterze pełnomocnik(?:a|ów))$/u;
+
+const isPartyLine = (text: string): boolean => {
+  if (!text.endsWith(",")) {
+    return false;
+  }
+  const withoutComma = text.slice(0, -1).trimEnd();
+  return DASH_BULLET_RE.test(text) || AGENTS_ENDING_RE.test(withoutComma);
+};
 
 /**
  * The recital the Court of Justice runs on in a paragraph of its own after
@@ -189,7 +198,7 @@ const INTERPRETATION_FORMULA_RE =
 
 /** Whether a paragraph break is a court's own layout, not a cut sentence. */
 const breaksAtCourtLayout = (text: string, nextText: string): boolean =>
-  (PARTY_LINE_RE.test(text) && RECITAL_OPENING_RE.test(nextText)) ||
+  (isPartyLine(text) && RECITAL_OPENING_RE.test(nextText)) ||
   INTERPRETATION_FORMULA_RE.test(nextText);
 
 /**
