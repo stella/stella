@@ -33,6 +33,7 @@ import { readPrintedLabel } from "@stll/legal-ast/printed-paragraph-labels";
 import { readPdfLineJoins } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import type { PdfPrintedLine } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import type {
+  ClaimAnchor,
   ParagraphNumbering,
   VerificationScope,
   VerificationScopeEdge,
@@ -311,6 +312,112 @@ const comesBefore = (a: TextPoint, b: TextPoint): boolean =>
   a.blockIndex < b.blockIndex ||
   (a.blockIndex === b.blockIndex && a.offset < b.offset);
 
+/**
+ * The index of the paragraph that ends the section of the counted paragraph
+ * at `position`: where the next paragraph's section begins, before the
+ * headings that open it, after any unnumbered text of its own. After the
+ * last numbered paragraph, a heading the document styles as one opens a
+ * section the numbering does not reach (an annex, a statement of truth), so
+ * the section closes there. A PDF line shaped like a heading is no such
+ * sign: a paragraph broken across a page reads the same.
+ */
+const sectionEnd = (
+  paragraphs: readonly DocumentParagraph[],
+  counted: readonly CountedParagraph[],
+  position: number,
+): number => {
+  const index = counted[position]?.index ?? -1;
+  const trailingEnd = () => {
+    const trailingHeading = paragraphs.findIndex(
+      ({ styledHeading }, at) => at > index && styledHeading,
+    );
+    return trailingHeading === -1 ? paragraphs.length : trailingHeading;
+  };
+  let end = counted[position + 1]?.index ?? trailingEnd();
+  while (end - 1 > index && paragraphs[end - 1]?.heading === true) {
+    end -= 1;
+  }
+  return end;
+};
+
+/**
+ * The number each of the document's paragraphs belongs to: the one a range
+ * of that number alone reads (`sectionEnd`), so a claim's number and a range
+ * over it never disagree. Text before the first counted paragraph, the
+ * headings that open a section, and a section the numbering does not reach
+ * belong to none.
+ */
+const paragraphNumbersOf = ({
+  paragraphs,
+  counted,
+}: Exclude<ParagraphCount, { numbering: "unclear" }>): (number | null)[] => {
+  const numbers: (number | null)[] = paragraphs.map(() => null);
+  for (const [position, { number, index }] of counted.entries()) {
+    numbers.fill(number, index, sectionEnd(paragraphs, counted, position));
+  }
+  return numbers;
+};
+
+/** The index of the last paragraph starting at or before `point`, or -1. */
+const paragraphAt = (
+  paragraphs: readonly DocumentParagraph[],
+  point: TextPoint,
+): number => {
+  let low = 0;
+  let high = paragraphs.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const paragraph = paragraphs[middle];
+    if (paragraph !== undefined && !comesBefore(point, paragraph.start)) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low - 1;
+};
+
+type BlockLocation =
+  | { type: "docx-block"; blockId: string }
+  | { type: "pdf-page"; pageNumber: number };
+
+const locationKey = (location: BlockLocation): string =>
+  location.type === "docx-block"
+    ? `docx:${location.blockId}`
+    : `pdf:${String(location.pageNumber)}`;
+
+/**
+ * The printed number of the paragraph a claim sits in, read with the one
+ * count a paragraph range resolves against, once per document. Null when
+ * the document's numbering is unclear, when the claim sits before the first
+ * counted paragraph or in the headings between sections, or when its block
+ * is not among those read.
+ */
+export const claimParagraphNumbers = (
+  blocks: readonly VerificationBlock[],
+): ((anchor: ClaimAnchor) => number | null) => {
+  const count = countParagraphs(blocks);
+  if (count.numbering === "unclear") {
+    return () => null;
+  }
+  const numbers = paragraphNumbersOf(count);
+  const blockIndexOf = new Map(
+    blocks.map((block, index) => [locationKey(block.source), index] as const),
+  );
+  return (anchor) => {
+    const blockIndex = blockIndexOf.get(locationKey(anchor));
+    if (blockIndex === undefined) {
+      return null;
+    }
+    const paragraph = paragraphAt(count.paragraphs, {
+      blockIndex,
+      offset: anchor.start,
+    });
+    // Before the first paragraph is no paragraph.
+    return paragraph === -1 ? null : (numbers[paragraph] ?? null);
+  };
+};
+
 /** The text a scope keeps of each block it touches, in reading order. */
 export type VerificationPassage = {
   block: VerificationBlock;
@@ -423,25 +530,7 @@ export const resolveParagraphScope = (
       available: availableRange(counted),
     };
   }
-  const lastIndex = counted[toPosition]?.index ?? -1;
-  // The range closes where the next paragraph's section begins: before the
-  // headings that open it, after any unnumbered text of `to` itself. After
-  // the last numbered paragraph, a heading the document styles as one opens
-  // a section the numbering does not reach (an annex, a statement of truth),
-  // so the range closes there. A PDF line shaped like a heading is no such
-  // sign: a paragraph broken across a page reads the same.
-  const trailingHeading = paragraphs.findIndex(
-    ({ styledHeading }, index) => index > lastIndex && styledHeading,
-  );
-  let nextIndex =
-    counted[toPosition + 1]?.index ??
-    (trailingHeading === -1 ? paragraphs.length : trailingHeading);
-  while (
-    nextIndex - 1 > lastIndex &&
-    paragraphs[nextIndex - 1]?.heading === true
-  ) {
-    nextIndex -= 1;
-  }
+  const nextIndex = sectionEnd(paragraphs, counted, toPosition);
   const lastBlockIndex = blocks.length - 1;
   const documentEnd: TextPoint = {
     blockIndex: lastBlockIndex,

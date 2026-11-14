@@ -1,0 +1,20 @@
+{
+  "id": "no-hand-built-document-run-queue",
+  "rules": [
+    "no-hand-built-document-run-queue/no-hand-built-document-run-queue"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-18T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-hand-built-document-run-queue/no-hand-built-document-run-queue",
+    "apps/api/src"
+  ]
+}

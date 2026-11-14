@@ -285,6 +285,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/lists/:workspaceId/claim-reviews": "crud",
   "GET /v1/lists/:workspaceId/verifications": "crud",
   "GET /v1/lists/:workspaceId/verifications/:runId": "crud",
+  "GET /v1/lists/:workspaceId/verifications/chronology/export": "crud",
+  "GET /v1/lists/:workspaceId/verifications/graph": "crud",
   "GET /v1/mcp/connections": "crud",
   "GET /v1/mcp/connectors": "crud",
   "GET /v1/mcp/oauth/callback": "crud",

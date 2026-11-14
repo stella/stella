@@ -308,6 +308,7 @@ export const AUDIT_DETAIL_POLICY = {
     operations: {
       sample_case_loaded: VERIFICATION_AUDIT_DETAILS,
       sample_case_released: VERIFICATION_AUDIT_DETAILS,
+      verification_chronology_exported: VERIFICATION_AUDIT_DETAILS,
       [SOURCE_KIND_SET_OPERATION]: VERIFICATION_AUDIT_DETAILS,
     },
   },

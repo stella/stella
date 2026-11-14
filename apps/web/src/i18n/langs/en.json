@@ -241,6 +241,12 @@
       "showSources": "Show sources",
       "title": "Anchor facts"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# claim rests on this fact} other {# claims rest on this fact}}",
+      "empty": "This list has no facts yet.",
+      "moreClaims": "{count, plural, one {# more claim} other {# more claims}}",
+      "undated": "Undated"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Anchor facts disagree",
@@ -405,6 +411,42 @@
       "showNextSteps": "Show next steps",
       "unlink": "Unlink {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# claim} other {# claims}}",
+      "claimTitle": "Claim",
+      "columns": {
+        "claims": "Claims",
+        "sources": "Source documents",
+        "statements": "Statements"
+      },
+      "empty": "This list has no facts or verified documents yet.",
+      "factCount": "{count, plural, one {# fact} other {# facts}}",
+      "factOverflow": "Showing the first {count} facts of this list.",
+      "filters": {
+        "allSources": "All sources",
+        "allVerdicts": "All verdicts",
+        "conflicts": "Conflicts",
+        "heldFacts": "Held facts",
+        "source": "Filter by source",
+        "verdict": "Filter by verdict"
+      },
+      "held": "Held",
+      "linkedFacts": "{count, plural, one {# linked fact} other {# linked facts}}",
+      "listLabel": "Graph as a list",
+      "loadMore": "Load more documents",
+      "noMatch": "Nothing matches these filters.",
+      "noStatements": "No document has been verified against this list yet.",
+      "offList": "No longer on the list",
+      "relation": {
+        "conflicts": "Conflicts",
+        "governs": "Governs",
+        "record": "On the record",
+        "recordConflict": "Conflicting record",
+        "supports": "Supports"
+      },
+      "unlinked": "Facts no claim rests on",
+      "verifyInReview": "Verify a document"
+    },
     "guidance": {
       "escalate": "Escalate",
       "manualJudgement": "Manual judgement",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# match} other {# matches}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronology",
+      "graph": "Graph",
+      "label": "Show the list as",
+      "review": "Review"
     },
     "qualifiers": {
       "heading": "Caveats",
@@ -2110,6 +2158,7 @@
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
     "sendErrorTimedOut": "The chat service did not respond in time. Try again.",
     "sendErrorToolsUnsupported": "This model cannot use tools, so it cannot answer questions about your matter. Switch to a model that supports tools.",
+    "sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue.",
     "sendPrompt": "Send message",
     "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",

@@ -30,8 +30,9 @@ pub use microphone::microphone_input_bundle_ids;
 mod system_permissions;
 #[cfg(target_os = "macos")]
 pub use system_permissions::{
-  LoginItemApproval, NotificationAuthorization, login_item_approval,
-  notification_authorization, request_notification_authorization,
+  LoginItemApproval, MicrophoneAuthorization, NotificationAuthorization,
+  login_item_approval, microphone_authorization, notification_authorization,
+  request_microphone_permission, request_notification_authorization,
 };
 
 #[cfg(target_os = "macos")]

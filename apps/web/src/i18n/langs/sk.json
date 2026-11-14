@@ -241,6 +241,12 @@
       "showSources": "Zobraziť zdroje",
       "title": "Referenčné fakty"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# tvrdenie sa opiera o tento fakt} few {# tvrdenia sa opierajú o tento fakt} many {# tvrdenia sa opiera o tento fakt} other {# tvrdení sa opiera o tento fakt}}",
+      "empty": "Tento zoznam zatiaľ nemá žiadne fakty.",
+      "moreClaims": "{count, plural, one {# ďalšie tvrdenie} few {# ďalšie tvrdenia} many {# ďalšieho tvrdenia} other {# ďalších tvrdení}}",
+      "undated": "Bez dátumu"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Referenčné fakty si odporujú",
@@ -405,6 +411,42 @@
       "showNextSteps": "Zobraziť ďalšie kroky",
       "unlink": "Zrušiť prepojenie: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# tvrdenie} few {# tvrdenia} many {# tvrdenia} other {# tvrdení}}",
+      "claimTitle": "Tvrdenie",
+      "columns": {
+        "claims": "Tvrdenia",
+        "sources": "Zdrojové dokumenty",
+        "statements": "Vyhlásenia"
+      },
+      "empty": "Tento zoznam zatiaľ nemá žiadne fakty ani overené dokumenty.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktu} other {# faktov}}",
+      "factOverflow": "Zobrazuje sa prvých {count} faktov tohto zoznamu.",
+      "filters": {
+        "allSources": "Všetky zdroje",
+        "allVerdicts": "Všetky závery",
+        "conflicts": "Rozpory",
+        "heldFacts": "Pozastavené fakty",
+        "source": "Filtrovať podľa zdroja",
+        "verdict": "Filtrovať podľa záveru"
+      },
+      "held": "Pozastavené",
+      "linkedFacts": "{count, plural, one {# prepojený fakt} few {# prepojené fakty} many {# prepojeného faktu} other {# prepojených faktov}}",
+      "listLabel": "Graf ako zoznam",
+      "loadMore": "Načítať ďalšie dokumenty",
+      "noMatch": "Týmto filtrom nič nezodpovedá.",
+      "noStatements": "Voči tomuto zoznamu zatiaľ nebol overený žiadny dokument.",
+      "offList": "Už nie je v zozname",
+      "relation": {
+        "conflicts": "Odporuje",
+        "governs": "Rozhodujúci",
+        "record": "V záznamoch",
+        "recordConflict": "Rozporný záznam",
+        "supports": "Podporuje"
+      },
+      "unlinked": "Fakty, o ktoré sa neopiera žiadne tvrdenie",
+      "verifyInReview": "Overiť dokument"
+    },
     "guidance": {
       "escalate": "Postúpiť ďalej",
       "manualJudgement": "Vyžaduje úsudok",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# zhoda} few {# zhody} many {# zhôd} other {# zhody}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronológia",
+      "graph": "Graf",
+      "label": "Zobraziť zoznam ako",
+      "review": "Kontrola"
     },
     "qualifiers": {
       "heading": "Výhrady",
@@ -2110,6 +2158,7 @@
     "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
     "sendErrorTimedOut": "Chat neodpovedal včas. Skúste to znova.",
     "sendErrorToolsUnsupported": "Tento model nevie používať nástroje, takže nemôže odpovedať na otázky k vášmu spisu. Prepnite na model, ktorý nástroje podporuje.",
+    "sendErrorTurnTooLarge": "Táto odpoveď je príliš veľká na to, aby sa dala doručiť celá. Pokračujte novou správou.",
     "sendPrompt": "Odoslať správu",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",

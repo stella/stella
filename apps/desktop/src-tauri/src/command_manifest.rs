@@ -22,6 +22,7 @@ macro_rules! with_stella_commands {
       commands::takeover_dialog_respond => "takeover_dialog_respond",
       commands::self_host_connect_dialog_respond => "self_host_connect_dialog_respond",
       commands::pdf_sign_respond => "pdf_sign_respond",
+      commands::pdf_sign_identities => "pdf_sign_identities",
       commands::fit_static_dialog => "fit_static_dialog",
       commands::copy_diagnostics => "copy_diagnostics",
       commands::email_support => "email_support",
