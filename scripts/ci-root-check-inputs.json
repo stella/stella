@@ -119,6 +119,7 @@
     "Marketing content check": [
       "@stll/landing",
       "@stll/cli",
+      "@stll/docx-utils",
       "apps/landing/**",
       "packages/cli/**",
       "apps/api/src/handlers/chat/send-message.ts",

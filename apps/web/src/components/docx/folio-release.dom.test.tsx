@@ -73,6 +73,7 @@ test("published editor echoes agent comments and saves applied operations for re
         timeZone="UTC"
       >
         <DocxEditor
+          accessibleName="Test document"
           comments={docxComments}
           document={document}
           onCommentsChange={handleEditorDocxCommentsChange}

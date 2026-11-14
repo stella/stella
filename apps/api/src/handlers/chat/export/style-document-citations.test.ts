@@ -31,11 +31,13 @@ const collectParagraphContent = (
       case "blockCustomXml":
         content.push(...collectParagraphContent(block.content));
         break;
-      // Hold no paragraph content: a bookmark or move range marker is a
-      // position and a preserved block is opaque markup.
+      // Hold no paragraph content: a bookmark, comment or move range marker
+      // is a position and a preserved block is opaque markup.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
       case "moveFromRangeStart":
       case "moveFromRangeEnd":
       case "moveToRangeStart":

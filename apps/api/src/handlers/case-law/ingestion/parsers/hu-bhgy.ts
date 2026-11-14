@@ -227,9 +227,13 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       case "blockSdt":
       case "blockCustomXml":
         return cellParagraphsOf(item.content);
+      // parser-output-unchanged: comment range markers carry no text and
+      // were not block content before folio 0.68.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
       case "moveFromRangeStart":
       case "moveFromRangeEnd":
       case "moveToRangeStart":
@@ -335,6 +339,8 @@ const itemsOf = (
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
       case "moveFromRangeStart":
       case "moveFromRangeEnd":
       case "moveToRangeStart":
