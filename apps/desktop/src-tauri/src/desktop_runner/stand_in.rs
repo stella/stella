@@ -442,7 +442,10 @@ async fn serve(settings: Settings) -> Result<(), String> {
       },
       workspaces: data.join("agent-runs"),
       // As the app: its own data and the credential stores under home.
-      unreadable: super::read_limits::unreadable_paths(&data, dirs::home_dir().as_deref()),
+      unreadable: super::read_limits::unreadable_paths(
+        &data,
+        dirs::home_dir().as_deref(),
+      ),
       probe_interval: super::sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(StandInHarnesses {
