@@ -1,0 +1,8 @@
+{
+  "sourceUrl": "https://publications.europa.eu/resource/celex/02016R0679-20160504",
+  "retrievedAt": "2026-10-16",
+  "sourceSha256": "a681ff22f32f125749af6e96947224369efc132edb8a95b12637e357df1056de",
+  "sha256": "466d56fd945a16a2dd9c7abfee1496b32a0d6c9baa127bd8fdb6cc64861ce6b9",
+  "transformation": "Extracted original publisher art_1 and art_2 elements; removed XML namespace prefixes and wrapped as XHTML.",
+  "originalCapture": "02016R0679-20160504.xhtml"
+}

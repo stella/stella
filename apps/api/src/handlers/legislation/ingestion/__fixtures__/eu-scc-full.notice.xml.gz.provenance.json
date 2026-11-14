@@ -1,0 +1,11 @@
+{
+  "sourceUrl": "https://publications.europa.eu/resource/celex/32021D0914",
+  "retrievedAt": "2026-10-16T19:01:40Z",
+  "requestHeaders": {
+    "Accept": "application/xml; notice=branch",
+    "Accept-Language": "eng"
+  },
+  "sourceSha256": "49e108d223a451e783bda80d8f24a423b3191e9123246de457e7484322800589",
+  "sha256": "61477babbddbcea764af00e7fbe4548ba5d962a2e08b161d00d4e0afbd657c1a",
+  "transformation": "Gzip of complete publisher response; no content edits."
+}

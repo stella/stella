@@ -1,0 +1,12 @@
+{
+  "sourceUrl": "https://publications.europa.eu/resource/celex/32021D0914",
+  "requestHeaders": {
+    "Accept": "application/xml;notice=branch",
+    "Accept-Language": "eng"
+  },
+  "retrievedAt": "2026-10-16",
+  "sourceSha256": "49e108d223a451e783bda80d8f24a423b3191e9123246de457e7484322800589",
+  "sha256": "6f2eb3c7d1779a7fda7008a481a0089f119302a9abb66eaff39d8e12da2fd354",
+  "transformation": "Retained direct WORK identity, sameAs, classification, CELEX, in-force and date properties; retained direct EXPRESSION and one XHTML MANIFESTATION. Removed other Work properties, embedded notices and other manifestations. XML reserialized without changing selected values.",
+  "copyright": "European Union; public legal document, EUR-Lex legal notice reuse conditions apply."
+}
