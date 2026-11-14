@@ -225,6 +225,14 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       RESOURCE_TYPE.MCP_CONNECTOR,
     ],
   },
+  // A skill drafted from a chat is stored as a new private, disabled skill;
+  // the skills lists refresh. Drafting it is a read and stores nothing.
+  saveSkillDraft: {
+    writes: [
+      { type: "handler-route", method: "POST", route: "/skills/save-draft" },
+    ],
+    resources: [RESOURCE_TYPE.AGENT_SKILL],
+  },
   updateNativeTool: {
     writes: [
       {

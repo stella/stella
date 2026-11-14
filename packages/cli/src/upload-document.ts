@@ -14,8 +14,10 @@ import {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_MIN_BYTES_PER_SECOND,
   DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
+  UPLOAD_DOCUMENT_MAX_BYTES,
 } from "./generated/document-version-upload-transport.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import type { CallToolResult, McpClientError } from "./mcp-client.js";
@@ -54,8 +56,8 @@ type DocumentUploadPolicy = {
 };
 
 export const DOCUMENT_UPLOAD_POLICY: DocumentUploadPolicy = {
-  maxBytes: 52_428_800, // 50 MiB
-  minimumBytesPerSecond: 32_768, // 32 KiB/s
+  maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+  minimumBytesPerSecond: DOCUMENT_UPLOAD_MIN_BYTES_PER_SECOND,
   putTimeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
 };
 

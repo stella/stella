@@ -1,0 +1,3 @@
+{
+  "add-constraint": "One CHECK constraint on corpus_index_projection_intents, added NOT VALID in the statement that drops its predecessor, so no row is scanned; catalog-only under 1s lock_timeout and 5s statement_timeout. The online phase validates it."
+}

@@ -1,6 +1,6 @@
 import type { Transaction } from "@/api/db/root";
 import { CorpusProjectionPresenceProof } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { commitCorpusProjectionAppendTx } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { proveAcceptedCorpusProjectionAppendsTx } from "@/api/lib/legal-search/corpus-index-projection-store";
 
 const rejectedAtCompileTime = (outcome: unknown) => outcome;
 
@@ -8,7 +8,6 @@ const rejectedAtCompileTime = (outcome: unknown) => outcome;
 export const presenceProofMistakes = async (
   tx: Transaction,
   proof: CorpusProjectionPresenceProof,
-  leaseToken: string,
 ) => {
   const fields = {
     indexId: proof.indexId,
@@ -16,20 +15,27 @@ export const presenceProofMistakes = async (
     documentCount: proof.documentCount,
   };
   rejectedAtCompileTime(
-    // @ts-expect-error Applying an append requires presence evidence.
-    await commitCorpusProjectionAppendTx(tx, { leaseToken }),
-  );
-  rejectedAtCompileTime(
-    await commitCorpusProjectionAppendTx(tx, {
-      // @ts-expect-error A revision and a count are not presence evidence.
-      intentId: proof.revision,
-      documentCount: proof.documentCount,
-      leaseToken,
+    // @ts-expect-error Applying an append requires a presence census.
+    await proveAcceptedCorpusProjectionAppendsTx(tx, {
+      indexId: proof.indexId,
     }),
   );
   rejectedAtCompileTime(
-    // @ts-expect-error An object literal cannot construct presence evidence.
-    await commitCorpusProjectionAppendTx(tx, { proof: fields, leaseToken }),
+    await proveAcceptedCorpusProjectionAppendsTx(tx, {
+      indexId: proof.indexId,
+      census: {
+        // @ts-expect-error A revision and a count are not presence evidence.
+        proofs: [{ revision: proof.revision, documentCount: 1 }],
+        unproven: [],
+      },
+    }),
+  );
+  rejectedAtCompileTime(
+    await proveAcceptedCorpusProjectionAppendsTx(tx, {
+      indexId: proof.indexId,
+      // @ts-expect-error An object literal cannot construct presence evidence.
+      census: { proofs: [fields], unproven: [] },
+    }),
   );
   // @ts-expect-error A spread copy of evidence is not evidence.
   const copied: CorpusProjectionPresenceProof = { ...proof }; // oxlint-disable-line typescript/no-misused-spread -- a spread copy must not type-check as evidence

@@ -13,7 +13,7 @@ mod focused_window;
 #[cfg(target_os = "macos")]
 pub use focused_window::{
   FocusedWindowDetails, accessibility_trusted, focused_window_details,
-  request_accessibility_permission,
+  request_accessibility_permission, text_before_cursor,
 };
 
 #[cfg(target_os = "macos")]
