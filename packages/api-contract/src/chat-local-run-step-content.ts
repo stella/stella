@@ -6,6 +6,7 @@ import {
   type ChatLocalRunStepKind,
 } from "./chat-local-run-step-output";
 import { chatLocalRunFileSchema } from "./chat-run-target";
+import { DESKTOP_RUNNER_LIMITS } from "./desktop-runner";
 
 /**
  * What a coding agent's step produced on the member's computer (a command's
@@ -86,6 +87,15 @@ export const CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES = [
 ] as const;
 export type ChatLocalRunStepContentStoredState =
   (typeof CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES)[number];
+
+/**
+ * What a stored row may say of its step: how it settled, or `awaited` while
+ * its run, now over, has still to send it (see the announcement below).
+ */
+export const CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES = [
+  ...CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES,
+  "awaited",
+] as const;
 
 /**
  * A step's key: the SHA-256 hex of its chat call id, so a path names no
@@ -241,3 +251,64 @@ export const CHAT_FORK_STEP_CONTENT = {
 } as const;
 export type ChatForkStepContent =
   (typeof CHAT_FORK_STEP_CONTENT)[keyof typeof CHAT_FORK_STEP_CONTENT];
+
+/**
+ * What a run could not send by its end. A run that is over takes nothing
+ * more, with one exception it must name itself while it is still going: just
+ * before its finish it announces the keys of the steps whose content it
+ * still holds, and those steps alone may be sent later.
+ *
+ * The announcement carries keys and nothing of a step's content. Past
+ * `CHAT_LOCAL_RUN_STEPS_AWAITED_MAX` keys it says only how many more there
+ * were; those steps are not awaited and read as not stored.
+ */
+export const CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT = "stella.run-steps-awaited";
+
+export const CHAT_LOCAL_RUN_STEPS_AWAITED_MAX = 2000;
+
+export const chatLocalRunStepsAwaitedSchema = v.strictObject({
+  stepKeys: v.pipe(
+    v.array(chatLocalRunStepKeySchema),
+    v.maxLength(CHAT_LOCAL_RUN_STEPS_AWAITED_MAX),
+  ),
+  /** How many steps past the bound the run still held; they are not awaited. */
+  more: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+});
+export type ChatLocalRunStepsAwaited = v.InferOutput<
+  typeof chatLocalRunStepsAwaitedSchema
+>;
+
+/**
+ * How long after the announcement an awaited step may still be sent: as long
+ * as a run waits for its computer to return. Inside it a reader is told the
+ * step is still arriving; after it, that nothing was stored.
+ */
+export const CHAT_LOCAL_RUN_STEP_AWAITED_MS =
+  DESKTOP_RUNNER_LIMITS.abandonedRunMs;
+
+/**
+ * Where a computer sends an awaited step of a run that is over. The computer
+ * itself is the caller: its linked account's credential with a proof by the
+ * device key, the same installation and key the run ran on.
+ */
+export const chatLocalRunAwaitedStepContentPath = (
+  runId: string,
+  stepKey: string,
+) =>
+  `${STELLA_API_VERSION_PREFIX}/desktop/runner/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepKey)}/content` as const;
+
+/**
+ * Why a step sent after its run's end is refused for good:
+ *
+ * - `step_not_awaited`: the run never announced the step, or it is settled.
+ * - `step_window_closed`: the step was awaited, and its time has passed.
+ * - `run_on_another_computer`: the run ran on another installation or under
+ *   another device key (a computer linked again is another computer).
+ */
+export const CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL = {
+  notAwaited: "step_not_awaited",
+  windowClosed: "step_window_closed",
+  otherComputer: "run_on_another_computer",
+} as const;
+export type ChatLocalRunAwaitedStepRefusal =
+  (typeof CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL)[keyof typeof CHAT_LOCAL_RUN_AWAITED_STEP_REFUSAL];

@@ -915,6 +915,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/contacts/import": "crud",
   "PUT /v1/desktop/billing-drafts/settings": "crud",
   "PUT /v1/desktop/time-entries/:workspaceId": "crud",
+  "PUT /v1/desktop/runner/runs/:runId/steps/:stepKey/content": "crud",
   "PUT /v1/desktop/time-entries/batch": "crud",
   "PUT /v1/desktop/time-entries/batch/status": "crud",
   "PUT /v1/docx-suggestions/:workspaceId/entity/:entityId": "crud",
@@ -959,6 +960,11 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/workspaces/:workspaceId/anonymization-terms": "crud",
   "PUT /v1/workspaces/:workspaceId/contacts": "crud",
   "PUT /v1/workspaces/:workspaceId/members": "crud",
+  "POST /v1/entities/:workspaceId/entity/:entityId/legal-holds": "crud",
+  "POST /v1/entities/:workspaceId/entity/:entityId/legal-holds/:holdId/release":
+    "crud",
+  "POST /v1/workspaces/:workspaceId/legal-holds": "crud",
+  "POST /v1/workspaces/:workspaceId/legal-holds/:holdId/release": "crud",
 } as const satisfies Record<ApiRouteKey, RequestClass>;
 
 const DECLARED_CLASSES = new Map(Object.entries(ROUTE_LATENCY_CLASSES));

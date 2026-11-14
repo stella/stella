@@ -52,12 +52,15 @@ import {
   entities,
   entityVersions,
   fields,
+  folioCollabRooms,
   invoiceLines,
   invoices,
+  legalHolds,
   legislationDocuments,
   organizationDataExports,
   organizationSettings,
   pdfSigningSessions,
+  pendingUploads,
   requestIdempotencyReceipts,
   timeEntries,
   workspaceMembers,
@@ -87,6 +90,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
+import { outsideRetainedMatters } from "@/api/lib/workspaces/legal-holds/retained-matters";
 
 import aggregateChains from "./aggregate-chain-entries/registry.gen";
 import type { AggregateIdentities } from "./aggregate-lock-entries/identities.gen";
@@ -235,6 +239,9 @@ const CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b3;
 const CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b4;
 const ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE = 0x0f_10_cc_b0;
 const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
+// Legal-hold organization fences: a plain two-key namespace taken outside the
+// aggregate history, in organization ID order (see lockLegalHoldOrganizations).
+const LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE = 19_054;
 const BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE = 0x0f_10_cc_b6;
 
 const chatOwnerStoredContentEgressKey = ({
@@ -1201,21 +1208,41 @@ type AggregateEntityBatchOptions = {
   limit: number;
 };
 
-/** Bounded entity snapshots keep one ordered acquisition for a repair batch. */
-export const withAggregateEntityBatch = async ({
+type WorkspaceRowIdentity = { id: string; workspaceId: string };
+
+type WorkspaceRowBatchOptions<
+  Identity extends WorkspaceRowIdentity,
+  Row extends WorkspaceRowIdentity,
+> = {
+  tx: Transaction;
+  /** The batch's name in its panics, e.g. "Aggregate entity batch". */
+  label: string;
+  ids: readonly Identity[];
+  lockOf: (id: Identity) => HeldLock;
+  /** One statement that locks the ordered rows. */
+  select: (ordered: readonly Identity[]) => Promise<Row[]>;
+};
+
+/**
+ * One ordered acquisition of tenant-scoped aggregate rows: every declared
+ * lock is checked against the history first, the rows are locked by one
+ * statement in id order, and each returned row retains its declared lock.
+ */
+const withWorkspaceRowBatch = async <
+  Identity extends WorkspaceRowIdentity,
+  Row extends WorkspaceRowIdentity,
+>({
   tx,
+  label,
   ids,
-  mode,
-  limit,
-}: AggregateEntityBatchOptions) => {
-  if (!Number.isSafeInteger(limit) || limit <= 0) {
-    panic("Aggregate entity batch requires a positive integer limit");
-  }
-  const identities = new Map<string, AggregateIdentities["entity"]>();
+  lockOf,
+  select,
+}: WorkspaceRowBatchOptions<Identity, Row>) => {
+  const identities = new Map<string, Identity>();
   for (const id of ids) {
     const previous = identities.get(id.id);
     if (previous !== undefined && previous.workspaceId !== id.workspaceId) {
-      panic("Aggregate entity batch declares conflicting tenant identities");
+      panic(`${label} declares conflicting tenant identities`);
     }
     identities.set(id.id, id);
   }
@@ -1227,40 +1254,20 @@ export const withAggregateEntityBatch = async ({
   }
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
-  const locks = new Map(
-    ordered.map((id) => [id.id, rowLock({ aggregate: "entity", id }, mode)]),
-  );
+  const locks = new Map(ordered.map((id) => [id.id, lockOf(id)]));
   for (const lock of locks.values()) {
     assertLockOrder(history, lock, "block");
   }
   history.status = "acquiring";
-  const rows = await tx
-    .select({
-      id: entities.id,
-      workspaceId: entities.workspaceId,
-      currentVersionId: entities.currentVersionId,
-      readOnly: entities.readOnly,
-    })
-    .from(entities)
-    .where(
-      or(
-        ...ordered.map((id) =>
-          and(eq(entities.id, id.id), eq(entities.workspaceId, id.workspaceId)),
-        ),
-      ),
-    )
-    .orderBy(sql`${entities.id}::text COLLATE "C"`)
-    .limit(limit)
-    .for(mode);
+  const rows = await select(ordered);
   for (const lock of locks.values()) {
     retainReservation(history, lock);
   }
   for (const row of rows) {
     const identity =
-      identities.get(row.id) ??
-      panic("Aggregate entity batch returned an undeclared row");
+      identities.get(row.id) ?? panic(`${label} returned an undeclared row`);
     if (row.workspaceId !== identity.workspaceId) {
-      panic("Aggregate entity batch returned an undeclared tenant");
+      panic(`${label} returned an undeclared tenant`);
     }
     retainLock(
       history,
@@ -1270,6 +1277,93 @@ export const withAggregateEntityBatch = async ({
   completeAcquisition(history);
   return rows;
 };
+
+/** Bounded entity snapshots keep one ordered acquisition for a repair batch. */
+export const withAggregateEntityBatch = async ({
+  tx,
+  ids,
+  mode,
+  limit,
+}: AggregateEntityBatchOptions) => {
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    panic("Aggregate entity batch requires a positive integer limit");
+  }
+  return await withWorkspaceRowBatch({
+    tx,
+    label: "Aggregate entity batch",
+    ids,
+    lockOf: (id) => rowLock({ aggregate: "entity", id }, mode),
+    select: async (ordered) =>
+      await tx
+        .select({
+          id: entities.id,
+          workspaceId: entities.workspaceId,
+          currentVersionId: entities.currentVersionId,
+          readOnly: entities.readOnly,
+        })
+        .from(entities)
+        .where(
+          or(
+            ...ordered.map((id) =>
+              and(
+                eq(entities.id, id.id),
+                eq(entities.workspaceId, id.workspaceId),
+              ),
+            ),
+          ),
+        )
+        .orderBy(sql`${entities.id}::text COLLATE "C"`)
+        .limit(limit)
+        .for(mode),
+  });
+};
+
+type AggregateFolioCollabRoomBatchOptions = {
+  tx: Transaction;
+  ids: readonly AggregateIdentities["folioCollabRoom"][];
+  mode: RowLockMode;
+};
+
+/**
+ * Lock a set of collaboration rooms in one ordered statement, recorded in the
+ * lock history like one `withAggregateLock` per room, and read the stored
+ * snapshot pointers the deletion records.
+ */
+export const withAggregateFolioCollabRoomBatch = async ({
+  tx,
+  ids,
+  mode,
+}: AggregateFolioCollabRoomBatchOptions) =>
+  await withWorkspaceRowBatch({
+    tx,
+    label: "Aggregate room batch",
+    ids,
+    lockOf: (id) => rowLock({ aggregate: "folioCollabRoom", id }, mode),
+    select: async (ordered) =>
+      await tx
+        .select({
+          docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
+          docxCheckpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          id: folioCollabRooms.id,
+          workspaceId: folioCollabRooms.workspaceId,
+          yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .where(
+          or(
+            ...ordered.map((id) =>
+              and(
+                eq(folioCollabRooms.id, id.id),
+                eq(folioCollabRooms.workspaceId, id.workspaceId),
+              ),
+            ),
+          ),
+        )
+        .orderBy(sql`${folioCollabRooms.id}::text COLLATE "C"`)
+        .limit(ordered.length)
+        .for(mode),
+  });
 
 const rowStatement = (
   options: RowIdentityOptions,
@@ -3472,6 +3566,137 @@ export const lockUnbillableRateCandidates = async (
     })
     .from(timeEntries)
     .where(condition)
+    .for("update");
+
+/** Legal-hold rows are locked after their organization placement fence. */
+export const readLockedLegalHolds = async ({
+  tx,
+  predicate,
+  mode,
+}: {
+  tx: Transaction;
+  predicate: SQL;
+  mode: "share" | "update";
+}) => await tx.select().from(legalHolds).where(predicate).for(mode);
+
+const legalHoldOrganizationRowSchema = v.object({ id: v.string() });
+
+/** Account erasure locks every affected organization in one stable order. */
+export const lockLegalHoldOrganizations = async ({
+  tx,
+  predicate,
+  mode = "update",
+}: {
+  tx: Transaction;
+  predicate: SQL;
+  mode?: RowLockMode;
+}) => {
+  const fence =
+    mode === "share"
+      ? sql`pg_advisory_xact_lock_shared(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))`
+      : sql`pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))`;
+  // One statement reads the organizations and takes their fences in ID order.
+  const rows = executedRows(
+    await tx.execute(
+      sql`SELECT ordered.id FROM (SELECT ${organization.id} AS id FROM ${organization} WHERE ${predicate} ORDER BY ${organization.id} COLLATE "C") ordered CROSS JOIN LATERAL (SELECT ${fence}) fence`,
+    ),
+  ).map((row) => v.parse(legalHoldOrganizationRowSchema, row));
+  return rows;
+};
+
+/**
+ * The organization's object-intent advisory lock key. Writers share it while
+ * reserving storage; a lifecycle (matter or organization teardown) takes it
+ * exclusively.
+ */
+export const organizationObjectIntentLockKey = (
+  organizationId: SafeId<"organization">,
+): string => `buffer-object:${organizationId}`;
+
+// The lifecycle lock is an exclusive transaction-scoped advisory lock, held
+// until the transaction ends: a second take in the same transaction is a no-op
+// and runs no statement.
+const lifecycleLockedOrganizations = new WeakMap<Transaction, Set<string>>();
+
+const noteLifecycleLock = (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) => {
+  const locked = lifecycleLockedOrganizations.get(tx) ?? new Set<string>();
+  locked.add(organizationId);
+  lifecycleLockedOrganizations.set(tx, locked);
+};
+
+/** Close the organization's object intents to writers for a lifecycle. */
+export const lockOrganizationObjectIntentsForLifecycle = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  if (lifecycleLockedOrganizations.get(tx)?.has(organizationId) === true) {
+    return;
+  }
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
+  );
+  noteLifecycleLock(tx, organizationId);
+};
+
+/**
+ * For a transaction that works on a whole organization (the review reset):
+ * lock its row FOR UPDATE, then take the object-intent lifecycle lock and the
+ * exclusive legal-hold fence, in the order every deletion takes them, all in
+ * one statement. Later takes of the lifecycle lock in this transaction are
+ * no-ops. Returns whether the organization exists.
+ */
+export const lockOrganizationRowWithLegalHoldFence = async ({
+  tx,
+  organizationId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+}): Promise<boolean> => {
+  const rows = executedRows(
+    await tx.execute(
+      sql`SELECT ordered.id FROM (SELECT ${organization.id} AS id FROM ${organization} WHERE ${organization.id} = ${organizationId} FOR UPDATE) ordered CROSS JOIN LATERAL (SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)})), pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))) fence`,
+    ),
+  ).map((row) => v.parse(legalHoldOrganizationRowSchema, row));
+  if (rows.length > 0) {
+    noteLifecycleLock(tx, organizationId);
+  }
+  return rows.length > 0;
+};
+
+/** In-flight upload cancellation keeps content belonging to held matters. */
+export const lockAccountDeletionPendingUploads = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: {
+  tx: Transaction;
+  currentUserId: string;
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
+}) =>
+  await tx
+    .select({
+      declaredMime: pendingUploads.declaredMime,
+      id: pendingUploads.id,
+      organizationId: pendingUploads.organizationId,
+      purpose: pendingUploads.purpose,
+      purposeData: pendingUploads.purposeData,
+      status: pendingUploads.status,
+      workspaceId: pendingUploads.workspaceId,
+    })
+    .from(pendingUploads)
+    .where(
+      and(
+        eq(pendingUploads.userId, currentUserId),
+        outsideRetainedMatters(
+          pendingUploads.workspaceId,
+          retainedWorkspaceIds,
+        ),
+        sql`${pendingUploads.status} <> 'finalized'`,
+      ),
+    )
     .for("update");
 
 const caseLawProjectionCanonicalColumns = (

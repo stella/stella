@@ -1604,8 +1604,7 @@ test("a fork copies what its copied steps stored, each owned by the fork's own m
     [later, "after the fork point"],
   ] as const) {
     await storeStepText(runnerDb(), {
-      owner,
-      runId,
+      writer: { type: "run", owner, runId },
       stepKey: step.stepKey,
       kind: "command",
       totalBytes: Buffer.byteLength(text),
@@ -1616,8 +1615,7 @@ test("a fork copies what its copied steps stored, each owned by the fork's own m
   // The image a step viewed is a chat file of the source thread.
   const sourceImage = source.attachment?.fileId ?? panic("seeded no file");
   await storeStepImage(runnerDb(), {
-    owner,
-    runId,
+    writer: { type: "run", owner, runId },
     stepKey: image.stepKey,
     sha256Hex: "a".repeat(64),
     userFileId: sourceImage,
@@ -1694,8 +1692,7 @@ test("a fork whose step content did not copy says so, and the same request again
   const step = stepOf(runId, "call-1");
   await showSteps(messageAt(source, 1), [step.callId]);
   await storeStepText(runnerDb(), {
-    owner,
-    runId,
+    writer: { type: "run", owner, runId },
     stepKey: step.stepKey,
     kind: "command",
     totalBytes: 6,
