@@ -26,27 +26,31 @@ const BENCHES = Object.keys(menuCommitBenches).filter(
 );
 
 /**
- * The most commits each menu may take to open and to close, each measured on
- * a newly loaded page: a menu measured after another inherits its focus and
- * its warm tooltip, and commits differently. The primitive is the floor,
- * which the shared menu adds nothing to. Closing is always by Escape, which
- * returns focus to the trigger.
+ * The commits each menu takes to open and to close today, each measured on a
+ * newly loaded page: a menu measured after another inherits its focus and
+ * its warm tooltip, and commits differently. The counts were the same in the
+ * three projects of the suite, so they are the budget with no headroom; the
+ * one exception is the tooltip menu opened by keyboard, which took 21 in some
+ * projects and 22 in others. The primitive is the floor, which the shared
+ * menu adds nothing to. Closing is always by Escape, which returns focus to
+ * the trigger: there the tooltip opens, and that is the difference between
+ * `tooltip` and `tooltip-quiet-on-focus`.
  */
 const COMMIT_BUDGET = {
   pointer: {
     primitive: { open: 11, close: 6 },
     plain: { open: 11, close: 6 },
     tooltip: { open: 12, close: 15 },
-    "tooltip-quiet-on-focus": { open: 29, close: 7 },
-    radio: { open: 14, close: 8 },
+    "tooltip-quiet-on-focus": { open: 12, close: 7 },
+    radio: { open: 11, close: 6 },
     many: { open: 12, close: 6 },
   },
   keyboard: {
     primitive: { open: 10, close: 6 },
     plain: { open: 10, close: 6 },
-    tooltip: { open: 21, close: 15 },
-    "tooltip-quiet-on-focus": { open: 15, close: 6 },
-    radio: { open: 14, close: 6 },
+    tooltip: { open: 22, close: 15 },
+    "tooltip-quiet-on-focus": { open: 11, close: 6 },
+    radio: { open: 10, close: 6 },
     many: { open: 10, close: 6 },
   },
 } as const satisfies Record<
