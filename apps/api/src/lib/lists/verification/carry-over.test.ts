@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { CarryOutcome } from "@/api/lib/document-review/carry-outcomes";
 import {
   planClaimCarry,
   sameReviewedVerdict,
@@ -19,7 +20,6 @@ import {
   CLAIM_REVIEW_EVENT_KINDS,
 } from "@/api/lib/lists/verification/contract";
 import { foldClaimReview } from "@/api/lib/lists/verification/review-fold";
-import type { CarryOutcome } from "@/api/lib/review/carry-outcomes";
 
 const FACT_A = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
 const FACT_B = toSafeId<"entity">("22222222-2222-4222-8222-222222222222");

@@ -28,6 +28,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 import { readBounded } from "@/api/lib/db/read-bounded";
+import type { CarryOutcome } from "@/api/lib/document-review/carry-outcomes";
+import type { DocumentRunColumns } from "@/api/lib/document-review/carry-over-core";
+import { previousCompletedRunQuery } from "@/api/lib/document-review/carry-over-core";
 import { matchClaims } from "@/api/lib/lists/verification/claim-match";
 import type { MatchableClaim } from "@/api/lib/lists/verification/claim-match";
 import type {
@@ -50,9 +53,6 @@ import {
   gradeOf,
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
-import type { CarryOutcome } from "@/api/lib/review/carry-outcomes";
-import type { DocumentRunColumns } from "@/api/lib/review/carry-over";
-import { previousCompletedRunQuery } from "@/api/lib/review/carry-over";
 
 /** The verdict a decision was taken on: what decides whether it follows. */
 type VerdictTarget = {

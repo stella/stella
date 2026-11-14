@@ -6,6 +6,6 @@
     "bun",
     "--cwd=apps/api",
     "test",
-    "./src/lib/review/carry-over.guard.test.ts"
+    "./src/lib/document-review/carry-over-core.guard.test.ts"
   ]
 }

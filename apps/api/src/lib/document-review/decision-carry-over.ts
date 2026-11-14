@@ -18,7 +18,7 @@
  * round-tripped through the application.
  *
  * The earlier run is found, and what became of each answered prior finding is
- * named, by the review carry-over core (`lib/review/carry-over.ts`), shared
+ * named, by the review carry-over core (`carry-over-core.ts`), shared
  * with list verification. Outcomes are returned, not stored: a finding row
  * keeps its decision and flags, and the run read shows them, so nothing
  * reads an outcome back yet.
@@ -33,6 +33,9 @@ import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
+import type { CarryOutcome } from "@/api/lib/document-review/carry-outcomes";
+import type { DocumentRunColumns } from "@/api/lib/document-review/carry-over-core";
+import { previousCompletedRunQuery } from "@/api/lib/document-review/carry-over-core";
 import { findingFingerprint } from "@/api/lib/document-review/finding-fingerprint";
 import {
   DOCUMENT_REVIEW_DECISION,
@@ -43,9 +46,6 @@ import type {
   DocumentReviewFindingFlag,
   DocumentReviewFindingPayload,
 } from "@/api/lib/document-review/run-contract";
-import type { CarryOutcome } from "@/api/lib/review/carry-outcomes";
-import type { DocumentRunColumns } from "@/api/lib/review/carry-over";
-import { previousCompletedRunQuery } from "@/api/lib/review/carry-over";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import {
   canonicalRulesInput,

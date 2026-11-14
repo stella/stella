@@ -1,3 +1,7 @@
+import {
+  CARRY_OUTCOMES,
+  MATCHED_CARRY_OUTCOMES,
+} from "@/api/lib/document-review/carry-outcomes";
 import { FACT_DATE_PRECISIONS } from "@/api/lib/lists/fact-details";
 import {
   CLAIM_ANCHOR_TYPES,
@@ -27,10 +31,6 @@ import type {
   VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
-import {
-  CARRY_OUTCOMES,
-  MATCHED_CARRY_OUTCOMES,
-} from "@/api/lib/review/carry-outcomes";
 
 import {
   entityFeatureGateChecks,

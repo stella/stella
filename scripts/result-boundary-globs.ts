@@ -160,7 +160,6 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/observability/**/*.ts",
   "apps/api/src/lib/proofs/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
-  "apps/api/src/lib/review/**/*.ts",
   "apps/api/src/lib/review-organization/**/*.ts",
   "apps/api/src/lib/s3/**/*.ts",
   "apps/api/src/lib/skills/**/*.ts",

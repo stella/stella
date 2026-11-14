@@ -9,7 +9,8 @@
  * the earlier run here and report through `CARRY_OUTCOMES`
  * (`carry-outcomes.ts`, free of database code so the schema can name it).
  * A second "previous completed run" query elsewhere is refused by the guard
- * in `carry-over.guard.test.ts`.
+ * in `carry-over-core.guard.test.ts`. It lives with document review, the
+ * older of the two features, so `lib` gains no new top-level directory.
  */
 
 import { and, desc, eq, ne } from "drizzle-orm";

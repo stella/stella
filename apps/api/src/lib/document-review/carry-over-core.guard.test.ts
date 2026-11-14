@@ -12,7 +12,7 @@ import path from "node:path";
 import { guardEnforcesLine } from "../../../../../scripts/guard-rollouts.ts";
 
 const API_SOURCE = path.resolve(import.meta.dir, "../..");
-const OWNER = "lib/review/carry-over.ts";
+const OWNER = "lib/document-review/carry-over-core.ts";
 // Registered in scripts/guard-rollouts: enforced on changed lines first.
 const PREVIOUS_RUN_GUARD = "previous-completed-run-owner";
 
