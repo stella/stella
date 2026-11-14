@@ -189,12 +189,14 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
-  test("the online runner does not rebuild the obsolete docket-only fallback index", () => {
+  test("the expansion keeps the docket-only fallback index until its contract release", () => {
+    // The contract release retires it through an index replacement; until
+    // then the schema still declares it, so the runner keeps it valid.
     expect(
       ONLINE_MIGRATION_INDEXES.some(
         ({ name }) => name === PREVIOUS_FALLBACK_DECISION_INDEX,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       ONLINE_INDEX_REPLACEMENTS.flatMap(
         ({ replacementNames }) => replacementNames,

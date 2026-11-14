@@ -74,7 +74,6 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
-import { PREVIOUS_FALLBACK_DECISION_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
@@ -1016,7 +1015,7 @@ export const caseLawDecisions = p.pgTable(
       .where(isNotNull(t.sourceDocumentId)),
     ...fallbackDecisionIdentityIndexes(t),
     p
-      .uniqueIndex(PREVIOUS_FALLBACK_DECISION_INDEX)
+      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
       .on(t.sourceId, t.caseNumber, t.language)
       .where(isNull(t.sourceDocumentId)),
     p
@@ -1610,9 +1609,7 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
 export const caseLawDecisionFallbackIdentities = p.pgTable(
   "case_law_decision_fallback_identities",
   {
-    sourceId: safeUuid<"caseLawSource">("source_id")
-      .notNull()
-      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
     identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
     // Canonical aliases resolve retired UUIDs, as for publisher identity reservations.
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
@@ -1623,6 +1620,13 @@ export const caseLawDecisionFallbackIdentities = p.pgTable(
       columns: [t.sourceId, t.identityKey],
       name: "case_law_decision_fallback_identities_pk",
     }),
+    p
+      .foreignKey({
+        name: "case_law_decision_fallback_identities_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
     p
       .index("case_law_decision_fallback_identities_decision_idx")
       .on(t.decisionId),

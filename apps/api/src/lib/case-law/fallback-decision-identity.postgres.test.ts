@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
   absentDecisionTextFields,
@@ -18,9 +18,8 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-test.skipIf(!enabled)(
-  "known pre-contract expansion preserves rows while content indexes support the contract cutover",
-  async () => {
+describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
+  test("known pre-contract expansion preserves rows while content indexes support the contract cutover", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
       panic("PostgreSQL URL required for fallback identity test");
@@ -39,7 +38,7 @@ test.skipIf(!enabled)(
         const sourceId = Bun.randomUUIDv7();
         await client.unsafe(
           `INSERT INTO ${table} (id,source_id,case_number,country,court,language,decision_date)
-        VALUES ($1,$2,'104 C 16/2024','CZE','Okresní soud v Chrudimi','cs','2025-01-01')`,
+          VALUES ($1,$2,'104 C 16/2024','CZE','Okresní soud v Chrudimi','cs','2025-01-01')`,
           [Bun.randomUUIDv7(), sourceId],
         );
         const before = await client.unsafe(
@@ -100,7 +99,7 @@ test.skipIf(!enabled)(
         expect(legacyIndex.length).toBe(1);
         const oldIndexName = legacyIndex.at(0)?.["indexname"];
         if (typeof oldIndexName !== "string") {
-          return panic("Fixture has no legacy fallback index");
+          panic("Fixture has no legacy fallback index");
         }
         // Only this isolated fixture models the later contract cutover. The
         // expansion itself leaves the old index installed, as proved above.
@@ -130,7 +129,7 @@ test.skipIf(!enabled)(
           }).columns;
           await client.unsafe(
             `INSERT INTO ${table} (id,source_id,case_number,country,court,language,decision_date,decision_type,fallback_identity_key,fallback_cohort_key,fallback_content_hash)
-            VALUES ($1,$2,'0Pu/1/2025','SVK',$3,'sk',$4,'Uznesenie',$5,$6,$7)`,
+              VALUES ($1,$2,'0Pu/1/2025','SVK',$3,'sk',$4,'Uznesenie',$5,$6,$7)`,
             [
               Bun.randomUUIDv7(),
               sourceId,
@@ -171,5 +170,5 @@ test.skipIf(!enabled)(
         await client.unsafe(`DROP SCHEMA "${schema}" CASCADE`);
       }
     });
-  },
-);
+  });
+});

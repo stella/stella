@@ -168,7 +168,7 @@ test("same-day same-type weak decisions deduplicate by document and preserve dif
   expect(first.type).toBe("content");
   expect(replay).toEqual(first);
   if (first.type !== "content" || sibling.type !== "content") {
-    return expect.unreachable("Weak source evidence must use content identity");
+    expect.unreachable("Weak source evidence must use content identity");
   }
   expect(sibling.cohortKey).toBe(first.cohortKey);
   expect(sibling.contentHash).not.toBe(first.contentHash);
@@ -188,7 +188,7 @@ test("weak metadata changes move the cohort without changing document identity",
     publishedDecision("Rovnaké uznesenie.", "2025-05-28"),
   ).unwrap();
   if (first.type !== "content" || corrected.type !== "content") {
-    return expect.unreachable("Weak source evidence must use content identity");
+    expect.unreachable("Weak source evidence must use content identity");
   }
   expect(first.cohortKey).not.toBe(corrected.cohortKey);
   expect(first.contentHash).toBe(corrected.contentHash);
@@ -225,9 +225,7 @@ test("metadata-only publications retain the different stated records", () => {
     publishedDecision("", "2025-05-28"),
   ).unwrap();
   if (first.type !== "content" || second.type !== "content") {
-    return expect.unreachable(
-      "Weak publication records must use content identity",
-    );
+    expect.unreachable("Weak publication records must use content identity");
   }
   expect(first.contentHash).not.toBe(second.contentHash);
   expect(
@@ -241,9 +239,7 @@ test("publication identity remains stable across document enrichment", () => {
     publishedDecision("Prvé uznesenie."),
   ).unwrap();
   if (metadata.type !== "content" || detail.type !== "content") {
-    return expect.unreachable(
-      "Weak observations must have publication fingerprints",
-    );
+    expect.unreachable("Weak observations must have publication fingerprints");
   }
   expect(metadata.publicationHash).toBe(detail.publicationHash);
   expect(metadata.documentState).toBe("metadata-only");
@@ -265,7 +261,7 @@ test("textless same-cohort publications retain distinct stated metadata", () => 
     }),
   ).unwrap();
   if (first.type !== "content" || second.type !== "content") {
-    return expect.unreachable("Expected weak records");
+    expect.unreachable("Expected weak records");
   }
   expect(first.cohortKey).toBe(second.cohortKey);
   expect(first.contentHash).not.toBe(second.contentHash);

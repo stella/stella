@@ -59,6 +59,11 @@ import {
 import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
+import { fitsDecisionSearchCandidateRow } from "@/api/lib/legal-search/ingestion-normalization";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -141,22 +146,43 @@ const storedInputMatchesDecision = (
     existing.id === input.decisionId &&
     existing.sourceRawS3Key === input.sourceRawS3Key);
 
+/**
+ * A decision without a publisher id whose docket, court and evidence do not
+ * form a storable fallback identity. The same input never forms one, so a
+ * fresh observation is refused into the failure ledger and the cursor moves
+ * on; a stored re-parse is held, since its row already exists.
+ */
 const unresolvedFallbackIdentity = (
   observation: ObservedDecision,
-  sourceId: SafeId<"caseLawSource">,
-): ProcessResult | null => {
-  if (observation.storageIdentity.type === "unkeyable") {
-    logger.warn("case_law.ingestion.fallback_identity_unresolved", {
-      sourceId,
-      identityType: observation.storageIdentity.type,
-    });
-    return {
-      status: PROCESS_DECISION_STATUS.RETRYABLE,
-      inserted: false,
-      reason: PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY,
-    };
+  { sourceId, inputProvenance }: ProcessDecisionAttemptOptions,
+): Result<ProcessResult, UnpersistableDecisionFieldError> | null => {
+  if (observation.storageIdentity.type !== "unkeyable") {
+    return null;
   }
-  return null;
+  logger.warn("case_law.ingestion.fallback_identity_unresolved", {
+    sourceId,
+    identityType: observation.storageIdentity.type,
+  });
+  if (inputProvenance.type === "observation") {
+    // An oversized field is the cause the ledger names, as the write plan
+    // would have named it.
+    return Result.err(
+      fitsDecisionSearchCandidateRow(observation.observed)
+        ? new UnpersistableDecisionFieldError({
+            message: "Decision has no storable fallback identity",
+            field: UNPERSISTABLE_DECISION_FIELDS.FALLBACK_IDENTITY,
+          })
+        : new UnpersistableDecisionFieldError({
+            message: "Decision search candidate exceeds storage byte limits",
+            field: UNPERSISTABLE_DECISION_FIELDS.SEARCH_CANDIDATE_BYTES,
+          }),
+    );
+  }
+  return Result.ok({
+    status: PROCESS_DECISION_STATUS.RETRYABLE,
+    inserted: false,
+    reason: PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY,
+  });
 };
 
 /**
@@ -204,6 +230,10 @@ const runDecisionAttempt = async (
         sourceId,
         statedEcliIdentity,
         proposedDecisionId,
+        storedDecisionId:
+          inputProvenance.type === "stored"
+            ? inputProvenance.decisionId
+            : undefined,
       }),
   );
   const { existing, decisionId, composition } = identity;
@@ -342,6 +372,11 @@ const runDecisionAttempt = async (
     return Result.ok(RECONCILE_CONTENTION);
   }
   const { write, writeStatus } = rowWrite.value;
+  if (writeStatus === DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED) {
+    // A new decision lost its fallback identity to another row: what it
+    // wrote under its own id is left for the sweep, as for a lost insert.
+    await abandonRawWrite();
+  }
 
   const settled = await settleRowWriteStatus({
     scopedDb,
@@ -396,12 +431,9 @@ const processDecisionAttempt = async (
     return observed;
   }
   const observation = observed.value;
-  const fallbackFailure = unresolvedFallbackIdentity(
-    observation,
-    options.sourceId,
-  );
+  const fallbackFailure = unresolvedFallbackIdentity(observation, options);
   if (fallbackFailure !== null) {
-    return Result.ok(fallbackFailure);
+    return fallbackFailure;
   }
   const attempted = await runDecisionAttempt(options, observation);
   if (attempted.isErr()) {

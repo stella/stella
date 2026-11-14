@@ -3,6 +3,7 @@ import { isNotNull, sql } from "drizzle-orm";
 import { index, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import { FALLBACK_DECISION_UNIQUE_INDEXES } from "@/api/db/online-unique-indexes";
 import {
   FALLBACK_DECISION_CONTENT_INDEX,
   FALLBACK_DECISION_IDENTITY_INDEX,
@@ -11,24 +12,7 @@ import {
 import type { IntroducedMigrationIndex } from "@/api/lib/db/migration-history";
 
 export const FALLBACK_DECISION_INDEXES = [
-  {
-    createSql: `CREATE UNIQUE INDEX CONCURRENTLY "${FALLBACK_DECISION_IDENTITY_INDEX}" ON public."case_law_decisions" USING btree ("source_id", "fallback_identity_key") WHERE "source_document_id" IS NULL AND "fallback_identity_key" IS NOT NULL`,
-    definitionBody:
-      "ON public.case_law_decisions USING btree (source_id, fallback_identity_key) WHERE ((source_document_id IS NULL) AND (fallback_identity_key IS NOT NULL))",
-    isUnique: true,
-    name: FALLBACK_DECISION_IDENTITY_INDEX,
-    tableName: "case_law_decisions",
-    introducedBy: FALLBACK_DECISION_IDENTITY_MIGRATION,
-  },
-  {
-    createSql: `CREATE UNIQUE INDEX CONCURRENTLY "${FALLBACK_DECISION_CONTENT_INDEX}" ON public."case_law_decisions" USING btree ("source_id", "fallback_content_hash") WHERE "source_document_id" IS NULL AND "fallback_content_hash" IS NOT NULL`,
-    definitionBody:
-      "ON public.case_law_decisions USING btree (source_id, fallback_content_hash) WHERE ((source_document_id IS NULL) AND (fallback_content_hash IS NOT NULL))",
-    isUnique: true,
-    name: FALLBACK_DECISION_CONTENT_INDEX,
-    tableName: "case_law_decisions",
-    introducedBy: FALLBACK_DECISION_IDENTITY_MIGRATION,
-  },
+  ...FALLBACK_DECISION_UNIQUE_INDEXES,
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_source_fallback_cohort_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_cohort_key") WHERE "fallback_cohort_key" IS NOT NULL',

@@ -118,10 +118,10 @@ export const fallbackDecisionIdentity = (
     court,
     caseNumber,
     evidence: {
-      ecli: ecli || null,
-      sheetNumber: sheetNumber || null,
-      decisionDate: decisionDate || null,
-      decisionType: decisionType || null,
+      ecli: ecli.length > 0 ? ecli : null,
+      sheetNumber: sheetNumber.length > 0 ? sheetNumber : null,
+      decisionDate: decisionDate.length > 0 ? decisionDate : null,
+      decisionType: decisionType.length > 0 ? decisionType : null,
     },
   };
 };

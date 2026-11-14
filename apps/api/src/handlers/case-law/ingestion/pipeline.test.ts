@@ -148,7 +148,10 @@ const cursorOnlyDb =
     const tx = {
       insert: () => ({ values: insertedValues }),
       query: {
-        caseLawDecisions: { findFirst: async () => undefined },
+        caseLawDecisions: {
+          findFirst: async () => undefined,
+          findMany: async () => await Promise.resolve([]),
+        },
       },
       select: () => ({
         from: (table: unknown) => ({
@@ -1175,6 +1178,8 @@ describe("runIngestionPipeline — failure records", () => {
         decisions: [
           plainTextIngestionResult({
             ...baseResult({}),
+            // A publisher id: a full-width docket forms no fallback identity.
+            sourceDocumentId: "failure-record-columns",
             caseNumber,
             language: "sk-SK-x-long",
           }),
@@ -1979,6 +1984,7 @@ describe("processDecision — corpus storage off", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -2086,6 +2092,7 @@ describe("processDecision — the decision's judges", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: () => ({
@@ -2236,6 +2243,7 @@ describe("processDecision — fields on an existing row", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -2393,6 +2401,7 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };
@@ -2483,6 +2492,7 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };
