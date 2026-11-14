@@ -266,14 +266,52 @@ pub(super) fn plan_run(
   })
 }
 
-/// A private regular file's bytes, read without following a link; `None`
-/// when it holds more than `cap`.
-fn read_capped(path: &Path, cap: u64) -> std::io::Result<Option<Vec<u8>>> {
-  let file = local_store::open_private(OpenMode::Read, path)?;
+/// What reading one private file gave.
+enum Capped {
+  Bytes(Vec<u8>),
+  /// Not there, not a regular file of the user's, or more than its cap.
+  Invalid,
+  /// It could not be read now.
+  Unreadable,
+}
+
+/// A private regular file's bytes, read without following a link and never
+/// past `cap`.
+fn read_capped(path: &Path, cap: u64) -> Capped {
+  use std::io::ErrorKind;
+  // Does not follow a link: a link is never a file of the store.
+  match std::fs::symlink_metadata(path) {
+    Ok(metadata) if metadata.is_file() => {}
+    Ok(_) => return Capped::Invalid,
+    Err(error) if error.kind() == ErrorKind::NotFound => return Capped::Invalid,
+    Err(_) => return Capped::Unreadable,
+  }
+  let file = match local_store::open_private(OpenMode::Read, path) {
+    Ok(file) => file,
+    // Gone meanwhile, not a regular file, or another user's.
+    Err(error)
+      if matches!(
+        error.kind(),
+        ErrorKind::NotFound | ErrorKind::InvalidInput | ErrorKind::PermissionDenied
+      ) =>
+    {
+      return Capped::Invalid;
+    }
+    Err(_) => return Capped::Unreadable,
+  };
   let mut bytes = Vec::new();
-  file.take(cap.saturating_add(1)).read_to_end(&mut bytes)?;
-  let within = u64::try_from(bytes.len()).is_ok_and(|length| length <= cap);
-  Ok(within.then_some(bytes))
+  if file
+    .take(cap.saturating_add(1))
+    .read_to_end(&mut bytes)
+    .is_err()
+  {
+    return Capped::Unreadable;
+  }
+  if u64::try_from(bytes.len()).is_ok_and(|length| length <= cap) {
+    Capped::Bytes(bytes)
+  } else {
+    Capped::Invalid
+  }
 }
 
 /// The kind a marker's bytes name.
@@ -308,19 +346,41 @@ pub(super) fn kept_step(kind: &'static str, mut file: Vec<u8>) -> Option<StepUpl
   })
 }
 
-/// What to send for one step of `run`; `None` when its marker or kept file
-/// is missing, is not a regular file of the user's, is too large, or is not
-/// what the sidecar writes. Such a step is never sent.
-pub(super) fn read_step(run: &AwaitedRun, step_key: &str) -> Option<StepUpload> {
+/// What reading one step of a run gave.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum StepRead {
+  Send(StepUpload),
+  /// Its marker or kept file is missing, is not a regular file of the
+  /// user's, is too large, or is not what the sidecar writes: never sent.
+  Invalid,
+  /// A file could not be read now: the step stays for a later try.
+  Unreadable,
+}
+
+/// What to send for one step of `run`.
+pub(super) fn read_step(run: &AwaitedRun, step_key: &str) -> StepRead {
   if !is_hex_key(step_key) {
-    return None;
+    return StepRead::Invalid;
   }
-  let marker = read_capped(&run.awaited.join(step_key), MARKER_MAX_BYTES).ok()??;
-  let kind = marker_kind(&marker)?;
-  let header_and_kept =
-    STEP_KEPT_MAX_BYTES.saturating_add(u64::try_from(STEP_HEADER_MAX_BYTES).ok()?);
-  let file = read_capped(&run.kept.join(step_key), header_and_kept).ok()??;
-  kept_step(kind, file)
+  let marker = match read_capped(&run.awaited.join(step_key), MARKER_MAX_BYTES) {
+    Capped::Bytes(marker) => marker,
+    Capped::Invalid => return StepRead::Invalid,
+    Capped::Unreadable => return StepRead::Unreadable,
+  };
+  let Some(kind) = marker_kind(&marker) else {
+    return StepRead::Invalid;
+  };
+  let Ok(header) = u64::try_from(STEP_HEADER_MAX_BYTES) else {
+    return StepRead::Invalid;
+  };
+  let header_and_kept = STEP_KEPT_MAX_BYTES.saturating_add(header);
+  match read_capped(&run.kept.join(step_key), header_and_kept) {
+    Capped::Bytes(file) => {
+      kept_step(kind, file).map_or(StepRead::Invalid, StepRead::Send)
+    }
+    Capped::Invalid => StepRead::Invalid,
+    Capped::Unreadable => StepRead::Unreadable,
+  }
 }
 
 /// The API's answer as what becomes of the step. A success counts only with
@@ -338,8 +398,12 @@ pub(super) fn answer_of(status: u16, body: &[u8]) -> Answer {
     }
     // The account may not send for this run, or does not know it.
     403 | 404 => Answer::NotThisAccount,
-    401 | 408 | 429 | 500..=599 => Answer::Later,
-    _ => Answer::Settled,
+    // Refused for good: a request the API cannot read, a step that is not
+    // awaited or whose time passed, other content, more than a step holds.
+    400 | 409 | 413 | 422 => Answer::Settled,
+    // Anything else (no credential now, a redirect, a busy or failing API)
+    // settles nothing.
+    _ => Answer::Later,
   }
 }
 
@@ -370,6 +434,9 @@ async fn blocking<T: Send + 'static>(
 enum Drained {
   /// The folder is gone, or left for the time it is kept.
   Done,
+  /// Steps that could not be read now stay; other runs are still sent.
+  Left,
+  /// The API cannot take a step now: nothing more is asked this pass.
   Later,
 }
 
@@ -388,6 +455,8 @@ pub(super) struct AwaitedSteps {
   /// Runs the API said are not this account's: not asked about again while
   /// the connection lasts, so a kept step is not sent over and over.
   not_this_account: Mutex<HashSet<Uuid>>,
+  /// Reads one step from the store.
+  read: fn(&AwaitedRun, &str) -> StepRead,
 }
 
 /// What [`AwaitedSteps::new`] is made of.
@@ -408,6 +477,7 @@ impl AwaitedSteps {
       random: parts.random,
       max_steps_per_listing: MAX_STEPS_PER_LISTING,
       not_this_account: Mutex::default(),
+      read: read_step,
     }
   }
 
@@ -436,9 +506,6 @@ impl AwaitedSteps {
     };
     let mut pass = Pass::Idle;
     for run in runs {
-      if self.is_not_this_account(run.run_id) {
-        continue;
-      }
       if (self.holds)(&run.run_id.to_string()) {
         // Not acknowledged yet: the API may not await the steps so far.
         pass = Pass::Later;
@@ -446,6 +513,7 @@ impl AwaitedSteps {
       }
       match self.drain(run).await {
         Drained::Done => {}
+        Drained::Left => pass = Pass::Later,
         Drained::Later => return Pass::Later,
       }
     }
@@ -473,14 +541,27 @@ impl AwaitedSteps {
           return Drained::Done;
         }
       };
+      // A folder left too long is removed above even when its run is not
+      // asked about again.
+      if self.is_not_this_account(run.run_id) {
+        return Drained::Done;
+      }
+      let mut unreadable = false;
       for step_key in step_keys {
+        let read_step = self.read;
         let read = Arc::clone(&run);
         let key = step_key.clone();
-        let step = blocking(move || read_step(&read, &key)).await.flatten();
+        let step = blocking(move || read_step(&read, &key))
+          .await
+          .unwrap_or(StepRead::Unreadable);
         let answer = match step {
-          Some(step) => self.sender.send(run.run_id, &step_key, step).await,
-          // Nothing that can be sent: the step is dropped.
-          None => Answer::Settled,
+          StepRead::Send(step) => self.sender.send(run.run_id, &step_key, step).await,
+          // Nothing that can ever be sent: the step is dropped.
+          StepRead::Invalid => Answer::Settled,
+          StepRead::Unreadable => {
+            unreadable = true;
+            continue;
+          }
         };
         match answer {
           Answer::Settled => {
@@ -500,6 +581,10 @@ impl AwaitedSteps {
           }
           Answer::Later => return Drained::Later,
         }
+      }
+      if unreadable {
+        // Listing again would only find the same steps.
+        return Drained::Left;
       }
     }
   }
@@ -790,6 +875,15 @@ mod tests {
     SystemTime::UNIX_EPOCH + Duration::from_secs(8_000_000_000)
   }
 
+  /// What is sent for a step; `None` for one that never is.
+  fn sendable(run: &AwaitedRun, step_key: &str) -> Option<StepUpload> {
+    match read_step(run, step_key) {
+      StepRead::Send(step) => Some(step),
+      StepRead::Invalid => None,
+      StepRead::Unreadable => panic!("the step could not be read"),
+    }
+  }
+
   fn plan(run: &AwaitedRun, now: SystemTime) -> RunPlan {
     plan_run(run, now, MAX_STEPS_PER_LISTING).unwrap().sorted()
   }
@@ -856,9 +950,9 @@ mod tests {
       plan(&run, written(&run)),
       RunPlan::Send(vec![key('a'), key('c')])
     );
-    assert!(read_step(&run, &key('a')).is_some());
-    assert_eq!(read_step(&run, &key('b')), None);
-    assert_eq!(read_step(&run, &key('c')), None);
+    assert!(sendable(&run, &key('a')).is_some());
+    assert_eq!(sendable(&run, &key('b')), None);
+    assert_eq!(sendable(&run, &key('c')), None);
     // Removing the folder removes the links, not what they point to.
     forget_run(&run);
     assert!(!run.awaited.exists());
@@ -992,20 +1086,20 @@ mod tests {
       (key('e'), "image", kept(u64::MAX, &vec![0; cap])),
       (key('f'), "image", kept(u64::MAX, &vec![0; cap + 64])),
     ]);
-    assert!(read_step(&run, &key('a')).is_some());
+    assert!(sendable(&run, &key('a')).is_some());
     for refused in ['b', 'c', 'd', 'f'] {
-      assert_eq!(read_step(&run, &key(refused)), None, "step {refused}");
+      assert_eq!(sendable(&run, &key(refused)), None, "step {refused}");
     }
     // The largest kept share is read whole.
     assert_eq!(
-      read_step(&run, &key('e')).unwrap().content.unwrap().len(),
+      sendable(&run, &key('e')).unwrap().content.unwrap().len(),
       cap
     );
     // No marker, no kept file, and a key that is none.
-    assert_eq!(read_step(&run, &key('0')), None);
+    assert_eq!(sendable(&run, &key('0')), None);
     local_store::write_test_fixture(run.awaited.join(key('1')), "command").unwrap();
-    assert_eq!(read_step(&run, &key('1')), None);
-    assert_eq!(read_step(&run, "../key"), None);
+    assert_eq!(sendable(&run, &key('1')), None);
+    assert_eq!(sendable(&run, "../key"), None);
   }
 
   #[test]
@@ -1019,7 +1113,7 @@ mod tests {
     assert_eq!(answer_of(200, br#"{"state":1}"#), Answer::Later);
     // Refused for good: not awaited, its time passed, another computer,
     // other content, a request the API cannot read.
-    for status in [400, 409, 410, 413, 422] {
+    for status in [400, 409, 413, 422] {
       assert_eq!(answer_of(status, b""), Answer::Settled, "status {status}");
     }
     for status in [403, 404] {
@@ -1029,7 +1123,9 @@ mod tests {
         "status {status}"
       );
     }
-    for status in [401, 408, 429, 500, 502, 503, 504] {
+    // No credential now, a redirect, a busy or failing API, and anything
+    // not known to be final.
+    for status in [301, 307, 308, 401, 408, 410, 418, 429, 500, 502, 503, 504] {
       assert_eq!(answer_of(status, b""), Answer::Later, "status {status}");
     }
   }
@@ -1141,6 +1237,54 @@ mod tests {
     assert_eq!(steps.pass().await, Pass::Idle);
     assert_eq!(sender.sent_keys(), vec![key('a'), key('b')]);
     assert!(!held.awaited.exists());
+  }
+
+  #[tokio::test]
+  async fn a_step_that_cannot_be_read_now_stays_and_the_others_are_sent() {
+    let stores = Stores::new();
+    let run = stores.run(&[
+      (key('a'), "command", kept(3, b"out")),
+      (key('b'), "command", kept(3, b"out")),
+    ]);
+    let other = stores.run(&[(key('c'), "command", kept(3, b"out"))]);
+    let sender = Scripted::answering(&[]);
+    let steps = AwaitedSteps {
+      read: |run, step_key| {
+        if step_key.starts_with('a') {
+          StepRead::Unreadable
+        } else {
+          read_step(run, step_key)
+        }
+      },
+      ..steps_of(&stores, &sender)
+    };
+    assert_eq!(steps.pass().await, Pass::Later);
+    assert_eq!(sender.sent_keys(), vec![key('b'), key('c')]);
+    assert_eq!(markers(&run), vec![key('a')]);
+    assert!(!other.awaited.exists());
+    // Readable again: the step is sent and the folder goes.
+    let steps = steps_of(&stores, &sender);
+    assert_eq!(steps.pass().await, Pass::Idle);
+    assert_eq!(sender.sent_keys(), vec![key('a'), key('b'), key('c')]);
+    assert!(!run.awaited.exists());
+  }
+
+  #[tokio::test]
+  async fn a_run_not_asked_about_again_is_still_removed_once_left_too_long() {
+    let stores = Stores::new();
+    let run = stores.run(&[(key('a'), "command", kept(3, b"out"))]);
+    let sender = Scripted::answering(&[Answer::NotThisAccount]);
+    let steps = steps_of(&stores, &sender);
+    assert_eq!(steps.pass().await, Pass::Idle);
+    assert_eq!(markers(&run), vec![key('a')]);
+    // The connection lasts, and the folder's time passes.
+    let steps = AwaitedSteps {
+      now: long_after,
+      ..steps
+    };
+    assert_eq!(steps.pass().await, Pass::Idle);
+    assert_eq!(sender.sent.lock().unwrap().len(), 1);
+    assert!(!run.awaited.exists());
   }
 
   #[tokio::test]
