@@ -8,6 +8,7 @@ import type {
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
@@ -1094,14 +1095,11 @@ const fetchChatLocalRunners = async (signal: AbortSignal) =>
   unwrapApiResponse(await api.chat["local-runners"].get({ fetch: { signal } }));
 
 /**
- * The member's computers and the harnesses a turn can run on. Read when the
- * Models submenu opens, like the model options, and kept briefly: a computer
- * signing in or reaching a limit shows on the next open.
- */
-/**
- * The member's computers and what each can run. They report themselves to
- * the API over their own sockets; no stella mutation changes them, so the
- * read declares itself independent of resource writes.
+ * The member's computers, what each can run and the folders linked on them.
+ * Read when the Models submenu opens, like the model options, and kept
+ * briefly: a computer signing in or reaching a limit shows on the next open.
+ * The computers report themselves over their own sockets; the member's one
+ * write here, allowing a linked folder, refreshes the read.
  */
 export const localRunnersOptions = (activeOrganizationId: string) =>
   resourceQueryOptions(
@@ -1110,7 +1108,7 @@ export const localRunnersOptions = (activeOrganizationId: string) =>
       staleTime: 30_000,
       queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
     }),
-    { type: "independent" },
+    { resources: [RESOURCE_TYPE.USER], scope: { type: "organization" } },
   );
 
 export const groupedChatThreadsOptions = ({

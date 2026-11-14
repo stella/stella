@@ -354,7 +354,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5 font-semibold"
+                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();

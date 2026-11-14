@@ -274,6 +274,7 @@ const PeekPdfViewerContent = ({
       <Suspense fallback={<PeekSuspenseFallback />}>
         <PeekDocxViewer
           buffer={file.buffer}
+          fileName={file.fileName}
           activeSearchMatchIndex={activeSearchMatchIndex}
           fieldId={fieldId}
           fitMode={docxFitMode}
@@ -490,6 +491,7 @@ const PeekDocxViewer = ({
   activeSearchMatchIndex,
   buffer,
   fieldId,
+  fileName,
   fitMode,
   onScrollTopChange,
   onSearchMatchSummaryChange,
@@ -502,6 +504,7 @@ const PeekDocxViewer = ({
   activeSearchMatchIndex: number;
   buffer: ArrayBuffer;
   fieldId: string;
+  fileName: string;
   fitMode: "text-area" | "page";
   plugins: readonly Plugin[] | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
@@ -675,6 +678,7 @@ const PeekDocxViewer = ({
     <div ref={composedContainerRef} className="h-full overflow-auto">
       <DocxEditor
         ref={editorRef}
+        accessibleName={fileName}
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
         documentBuffer={buffer}

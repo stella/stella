@@ -7,6 +7,7 @@ type AnswerContextNotice = NonNullable<ChatMessageMetadata["contextNotice"]>;
 
 const CONTEXT_NOTICE_KEYS = {
   "history-trimmed": "chat.historyTrimmed",
+  "session-not-resumed": "chat.localRun.sessionNotResumed",
 } as const satisfies Record<AnswerContextNotice["type"], TranslationKey>;
 
 /**

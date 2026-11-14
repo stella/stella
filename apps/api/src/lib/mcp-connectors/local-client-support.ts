@@ -1,5 +1,8 @@
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import cliPackage from "@stll/cli/package.json" with { type: "json" };
 import mcpKitPackage from "@stll/mcp-kit/package.json" with { type: "json" };
+
+import desktopSupportFloor from "./desktop-support-floor.json" with { type: "json" };
 
 export const LOCAL_CLIENT_IDENTITY_HEADER = "x-stella-local-client";
 
@@ -20,13 +23,28 @@ type ClientSupport = {
 
 // Release builds stamp the release tag over this version; local builds report
 // the committed value from apps/desktop/src-tauri/Cargo.toml, which
-// local-client-support.test.ts binds this to.
+// local-client-support.test.ts binds this to. No release carries it, so it
+// names a build made from a checkout.
 const DESKTOP_WORKSPACE_VERSION = "0.0.1";
 
 /**
+ * Where a desktop continues an edit session it already holds: status, events,
+ * checkpoint, finalize and takeover answers. A desktop below the floor is
+ * still answered here. Its updater waits for open sessions to end, and a
+ * session ends only on one of these answers, so refusing them would keep both
+ * the unsaved edits and the old build on the device. Opening a session is
+ * refused.
+ */
+const DESKTOP_OPEN_SESSION_PATH_PREFIX = `${STELLA_API_VERSION_PREFIX}/desktop-edit-sessions/`;
+
+/**
  * The server-owned support policy for every locally installed client kind.
- * `latest` is the client version in this tree. `minimum` never exceeds it, so
- * the API always accepts the clients built from the same checkout.
+ * `latest` is the client version in this tree. For the npm clients `minimum`
+ * never exceeds it, so the API always accepts the clients built from the same
+ * checkout. The desktop minimum is the support floor of docs/releases.md
+ * ("Desktop Support"), kept in desktop-support-floor.json, which the release
+ * cut moves. It lies above the desktop's workspace version, so
+ * `clientTooOldError` accepts that one version by name.
  */
 export const LOCAL_CLIENT_SUPPORT = {
   cli: {
@@ -40,7 +58,7 @@ export const LOCAL_CLIENT_SUPPORT = {
     update: { type: "command", command: "npm i @stll/mcp-kit@latest" },
   },
   desktop: {
-    minimum: "0.0.1",
+    minimum: desktopSupportFloor.minimumVersion,
     latest: DESKTOP_WORKSPACE_VERSION,
     update: { type: "desktop_action", action: "check_for_updates" },
   },
@@ -83,6 +101,11 @@ const isBelow = (version: string, minimum: string): boolean => {
 const isClientKind = (value: string): value is LocalClientKind =>
   LOCAL_CLIENT_KINDS.some((kind) => kind === value);
 
+/** The two desktop requests the floor never refuses. */
+const isDesktopFloorExempt = (request: Request, version: string): boolean =>
+  version === DESKTOP_WORKSPACE_VERSION ||
+  new URL(request.url).pathname.startsWith(DESKTOP_OPEN_SESSION_PATH_PREFIX);
+
 export const clientTooOldError = (
   request: Request,
 ): ClientTooOldError | undefined => {
@@ -98,6 +121,9 @@ export const clientTooOldError = (
   }
   const support = LOCAL_CLIENT_SUPPORT[kind];
   if (!isBelow(currentVersion, support.minimum)) {
+    return undefined;
+  }
+  if (kind === "desktop" && isDesktopFloorExempt(request, currentVersion)) {
     return undefined;
   }
   return {

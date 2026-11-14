@@ -283,6 +283,19 @@ pub async fn pdf_sign_respond(
   }
 }
 
+/// The PDF signing dialog re-reads the certificates it offers while it waits
+/// for a choice, so a smart card inserted or removed meanwhile shows up.
+/// Listing reads certificates only and never prompts.
+#[tauri::command]
+pub async fn pdf_sign_identities(
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::DialogListing, String> {
+  if window.label() != crate::pdf_signing::DIALOG_LABEL {
+    return Err("Only the PDF signing dialog lists signing certificates".into());
+  }
+  Ok(crate::pdf_signing::dialog_listing().await)
+}
+
 #[tauri::command]
 pub async fn respond_to_takeover(
   session_id: String,

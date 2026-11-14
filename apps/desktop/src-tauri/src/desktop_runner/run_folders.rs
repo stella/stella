@@ -6,9 +6,10 @@
 //! harness would see it, and rather than read from the folder's own modified
 //! time, which a change deeper in the folder does not move. The checkpoints the
 //! sidecar saves of a folder sit beside it too ([`checkpoint_store`]) and go
-//! with it, and so does the chat's cache ([`chat_cache`]): the one place a run
-//! may write outside its folder, so nothing a run writes is shared with
-//! another chat.
+//! with it, and so do what its runs' steps produced ([`step_output_store`],
+//! kept here even for a run in a folder the member linked) and the chat's
+//! cache ([`chat_cache`]): the one place a run may write outside its folder,
+//! so nothing a run writes is shared with another chat.
 
 use std::{
   collections::HashSet,
@@ -37,6 +38,21 @@ pub(super) fn checkpoint_store(dir: &Path) -> PathBuf {
   PathBuf::from(name)
 }
 
+/// Beside a chat's folder, what its runs' steps produced (a command's output,
+/// a change's diff) and each run's output key: `<runId>/key`, which the
+/// desktop writes, and `<runId>/<stepKey>`, which the sidecar writes where
+/// `run.start` names (`stepOutputDir`).
+pub(super) const STEP_OUTPUT_STORE_SUFFIX: &str = ".step-outputs";
+
+/// A chat folder's step output store: the folder's name with
+/// [`STEP_OUTPUT_STORE_SUFFIX`]. Outside the folder, so the harness never
+/// reads it back, and always beside the chat's own folder, never a linked one.
+pub(super) fn step_output_store(dir: &Path) -> PathBuf {
+  let mut name = OsString::from(dir.as_os_str());
+  name.push(STEP_OUTPUT_STORE_SUFFIX);
+  PathBuf::from(name)
+}
+
 /// Beside a folder, the cache its runs' tools keep (package managers, anything
 /// honouring `XDG_CACHE_HOME`). Outside the folder so checkpoints and restores
 /// leave it alone, and the chat's own so no other chat reads what it holds.
@@ -49,10 +65,18 @@ pub(super) fn chat_cache(dir: &Path) -> PathBuf {
 }
 
 /// What sits beside a folder and goes with it.
-const SIBLING_SUFFIXES: [&str; 2] = [CHECKPOINT_STORE_SUFFIX, CACHE_SUFFIX];
+const SIBLING_SUFFIXES: [&str; 3] = [
+  CHECKPOINT_STORE_SUFFIX,
+  STEP_OUTPUT_STORE_SUFFIX,
+  CACHE_SUFFIX,
+];
 
-fn siblings(dir: &Path) -> [PathBuf; 2] {
-  [checkpoint_store(dir), chat_cache(dir)]
+fn siblings(dir: &Path) -> [PathBuf; 3] {
+  [
+    checkpoint_store(dir),
+    step_output_store(dir),
+    chat_cache(dir),
+  ]
 }
 
 /// A name the sweep removes whatever an earlier pass left of it.
@@ -290,6 +314,35 @@ mod tests {
     remove_idle(&place.0, at(30), &lock);
     assert!(!idle_cache.exists());
     assert!(chat_cache(&recent).is_dir());
+  }
+
+  #[test]
+  fn a_folder_loses_its_step_outputs_with_it() {
+    let place = Place::new();
+    let lock = Mutex::new(HashSet::new());
+    let idle = place.folder();
+    let recent = place.folder();
+    open(&idle, at(0)).unwrap();
+    open(&recent, at(10)).unwrap();
+    let idle_outputs = step_output_store(&idle);
+    assert_eq!(
+      idle_outputs,
+      place.0.join(format!(
+        "{}.step-outputs",
+        idle.file_name().unwrap().to_string_lossy()
+      ))
+    );
+    let run = Uuid::new_v4().to_string();
+    for store in [&idle_outputs, &step_output_store(&recent)] {
+      std::fs::create_dir_all(store.join(&run)).unwrap();
+      std::fs::write(store.join(&run).join("step"), "output").unwrap();
+    }
+    let gone_outputs = step_output_store(&place.folder());
+    std::fs::create_dir_all(gone_outputs.join(&run)).unwrap();
+    remove_idle(&place.0, at(30), &lock);
+    assert!(!idle_outputs.exists());
+    assert!(!gone_outputs.exists());
+    assert!(step_output_store(&recent).join(&run).join("step").is_file());
   }
 
   #[test]

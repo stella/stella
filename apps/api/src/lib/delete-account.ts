@@ -17,6 +17,7 @@ import {
   deleteChatThreadsAndFileLinks,
   deleteConnectedCredentialsAndOAuthState,
   deleteDesktopEditSessionsAndHandoffs,
+  deleteDesktopRunners,
   deleteFileComparisonUploads,
   deletePdfSigningSessions,
   deletePendingUploads,
@@ -355,6 +356,7 @@ export const verifyAndDeleteUser = async (
           await deletePersonalBillingRates(tx, currentUserId);
           await deleteSearchHistory(tx, currentUserId);
           await deletePushDevices(tx, currentUserId);
+          await deleteDesktopRunners(tx, currentUserId);
           await deletePersonalRecords(tx, currentUserId);
 
           await recordAccountDeletionRequest({

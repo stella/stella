@@ -3054,6 +3054,8 @@ describe("approved client tool with an output schema", () => {
     snapshot: {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       elements: [],
+      elementsLeftOut: false,
+      facts: { meta: [] },
       revision: "revision-1",
       tabId: 1,
       tabs: [
@@ -3064,10 +3066,9 @@ describe("approved client tool with an output schema", () => {
         },
       ],
       text: "Example Domain",
-      textOffset: 0,
-      textTotalChars: 14,
       title: "Example Domain",
       url: "https://example.com/",
+      window: { cursor: "r1.window", fromPercent: 0, toPercent: 100 },
     },
     status: "success",
   } as const satisfies BrowserControlResult;

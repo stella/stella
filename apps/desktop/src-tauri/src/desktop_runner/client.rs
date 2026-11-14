@@ -42,8 +42,9 @@ use super::state::{Backoff, RunnerState};
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ActiveRun, CloseCode, DESKTOP_ID_HEADER, DesktopMessage, HELLO_TIMEOUT,
-  HarnessReport, HarnessStatus, Hello, MAX_FRAME_BYTES, PATH, PING_INTERVAL,
-  POLICY_VIOLATION_CODE, PROTOCOL, RunRef, RunRejected, ServerMessage, Welcome,
+  HarnessReport, HarnessStatus, Hello, LinkedFolderReport, LinkedFoldersStatus,
+  MAX_FRAME_BYTES, PATH, PING_INTERVAL, POLICY_VIOLATION_CODE, PROTOCOL, RunRef,
+  RunRejected, ServerMessage, Welcome,
 };
 
 /// How long a connection waits for the first probes before its hello.
@@ -180,6 +181,9 @@ pub(crate) struct Runner {
   report_changes: Option<watch::Receiver<u64>>,
   /// The reports the API last received, in `hello` or `harness.status`.
   sent_reports: Vec<HarnessReport>,
+  /// The linked folders the API last received, in `hello` or
+  /// `linked_folders.status`.
+  sent_linked_folders: Vec<LinkedFolderReport>,
 }
 
 impl Runner {
@@ -194,6 +198,7 @@ impl Runner {
     Self {
       report_changes,
       sent_reports: Vec::new(),
+      sent_linked_folders: Vec::new(),
       config: parts.config,
       auth: parts.auth,
       journals: parts.journals,
@@ -433,6 +438,7 @@ impl Runner {
     }
     let hello = self.hello();
     self.sent_reports.clone_from(&hello.harnesses);
+    self.sent_linked_folders.clone_from(&hello.linked_folders);
     let hello = DesktopMessage::Hello(hello);
     if send(&mut socket, &hello).await.is_err() {
       return Ended::Failed;
@@ -504,6 +510,7 @@ impl Runner {
       sidecar_version: self.host.sidecar_version(),
       harnesses: self.reports.reports(),
       active_runs,
+      linked_folders: self.reports.linked_folders(),
     }
   }
 
@@ -526,7 +533,8 @@ impl Runner {
     }
   }
 
-  /// Send each harness report that changed since the API last received it.
+  /// Send each harness report that changed since the API last received it,
+  /// and the linked folders when they changed.
   async fn send_changed_reports(&mut self, socket: &mut Socket) -> Result<(), ()> {
     let reports = self.reports.reports();
     for report in &reports {
@@ -538,6 +546,14 @@ impl Runner {
       }
     }
     self.sent_reports = reports;
+    let folders = self.reports.linked_folders();
+    if folders != self.sent_linked_folders {
+      let status = DesktopMessage::LinkedFoldersStatus(LinkedFoldersStatus {
+        folders: folders.clone(),
+      });
+      send(socket, &status).await?;
+      self.sent_linked_folders = folders;
+    }
     Ok(())
   }
 
@@ -669,6 +685,11 @@ impl Runner {
       }
     }
     for message in resend {
+      send(socket, &message).await?;
+    }
+    // The API forgot every background count at `hello`; the live ones
+    // count again.
+    for message in self.journal.background_reports() {
       send(socket, &message).await?;
     }
     Ok(())

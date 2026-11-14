@@ -20,10 +20,10 @@ import {
 } from "../lib/access";
 import { browserControlError } from "../lib/browser-control-result";
 import { storedCommandBudget } from "../lib/command-budget";
+import { CONTROL_TRANSPORT } from "../lib/control-holder";
 import {
   admitControl,
   CONTROL_ADMISSION,
-  CONTROL_TRANSPORT,
   takeOverControl,
 } from "../lib/control-owner";
 import { createControlSession } from "../lib/control-session";
@@ -35,6 +35,7 @@ import {
   pairStellaTab,
   readBrowserController,
 } from "../lib/controller";
+import { desktopCommandRefusal } from "../lib/desktop-commands";
 import {
   createDesktopLink,
   DESKTOP_LINK_ALARM,
@@ -48,7 +49,10 @@ import {
   judgeDownload,
   loadDownloadScope,
   noteNavigation,
+  reportDeliveredDownload,
+  setDownloadReporter,
   setDownloadScope,
+  type SuggestFilename,
   takeDownloadNotices,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
@@ -163,7 +167,7 @@ type FilenameEvents = {
   addListener: (
     listener: (
       download: chrome.downloads.DownloadItem,
-      suggest: () => void,
+      suggest: SuggestFilename,
     ) => boolean,
   ) => void;
 };
@@ -191,6 +195,7 @@ const registerOptionalListeners = (): void => {
     });
     chrome.downloads.onChanged.addListener((delta) => {
       enforceStoppedDownload(delta).catch(() => undefined);
+      reportDeliveredDownload(delta).catch(() => undefined);
     });
   }
   if (!navigationTargetsRegistered && Reflect.has(chrome, "webNavigation")) {
@@ -325,18 +330,6 @@ const runCommand = async (
   });
 
 /**
- * What a coding agent on this computer may ask for: its tools open, read,
- * click and type. Switching to another chat's tab, going back, keys and
- * selects are refused.
- */
-const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
-  BROWSER_CONTROL_ACTION.click,
-  BROWSER_CONTROL_ACTION.fill,
-  BROWSER_CONTROL_ACTION.open,
-  BROWSER_CONTROL_ACTION.snapshot,
-]);
-
-/**
  * A command from a coding agent on this computer. Chrome only starts the
  * host for this extension and the member allowed it, so there is no pairing
  * to check. A desktop chat that does not hold the browser may only open a
@@ -348,10 +341,11 @@ const runDesktopCommand = async (
 ): Promise<BrowserControlResult> => {
   const controllerId = desktopControllerId(message.controllerId);
   const { command } = message;
-  if (!DESKTOP_ACTIONS.has(command.action)) {
+  const refusal = desktopCommandRefusal(command);
+  if (refusal !== null) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.invalidCommand,
-      "stella desktop opens, reads, clicks and types only.",
+      refusal,
     );
   }
   const result = await runControlledCommand({
@@ -367,7 +361,10 @@ const runDesktopCommand = async (
         case CONTROL_ADMISSION.takesOver:
           return {
             takeOver: async () => {
-              await takeOverControl(controllerId);
+              await takeOverControl({
+                controllerId,
+                transport: CONTROL_TRANSPORT.desktop,
+              });
             },
             type: "admitted",
           };
@@ -522,7 +519,7 @@ const handlePopupRequest = async (
           })) === CONTROL_ADMISSION.holds
             ? null
             : async () => {
-                await takeOverControl(controllerId);
+                await takeOverControl({ transport: CONTROL_TRANSPORT.web });
               },
         );
         if (adopted.status === "unsupported-page") {
@@ -552,6 +549,7 @@ const handlePopupRequest = async (
 
 export default defineBackground(() => {
   onContainedTabsChanged(setDownloadScope);
+  setDownloadReporter(desktopLink.reportDownload);
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
@@ -566,16 +564,14 @@ export default defineBackground(() => {
     desktopLink.connect().catch(() => undefined);
   });
   chrome.permissions.onRemoved.addListener(() => {
-    hasDesktopLinkAccess()
-      .then(async (allowed) => {
-        if (!allowed) {
-          // A desktop command already running stops and answers on the
-          // still-open link before it closes.
-          await session.change(async () => {
-            await desktopLink.disconnect();
-          });
+    // A desktop command already running stops and answers on the
+    // still-open link before it closes. Access is read once that work has
+    // settled: granted again meanwhile, the open link stays.
+    session
+      .change(async () => {
+        if (!(await hasDesktopLinkAccess())) {
+          await desktopLink.disconnect();
         }
-        return undefined;
       })
       .catch(() => undefined);
   });

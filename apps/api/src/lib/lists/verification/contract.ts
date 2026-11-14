@@ -103,7 +103,7 @@ export const CLAIM_FACT_RELATIONS = [
   "conflicts",
   "record",
 ] as const;
-type ClaimFactRelation = (typeof CLAIM_FACT_RELATIONS)[number];
+export type ClaimFactRelation = (typeof CLAIM_FACT_RELATIONS)[number];
 
 export type ClaimRef = {
   factEntityId: SafeId<"entity">;
@@ -181,6 +181,17 @@ export type ParagraphNumbering = (typeof PARAGRAPH_NUMBERINGS)[number];
 /** A point in the text a run read: a block by the id the run stores it
  *  under, and a UTF-16 offset into that block's text. */
 export type VerificationScopeEdge = { blockId: string; offset: number };
+
+/**
+ * Text a completed run read without finding its claims: a model call kept
+ * failing after its retries. From `start` (inclusive) to `end` (exclusive),
+ * in whole-document coordinates. No claim was looked for inside it, so a
+ * reader says so and offers to verify again.
+ */
+export type VerificationUnreadPart = {
+  start: VerificationScopeEdge;
+  end: VerificationScopeEdge;
+};
 
 /**
  * What a run checks: the whole document, or an inclusive range of its
@@ -513,4 +524,16 @@ export const VERIFICATION_LIMITS = {
   /** Characters of a fact's text, a source quote or a source's document
    *  name pinned on a run. */
   EVIDENCE_TEXT_MAX: 2000,
+  /** Verified documents one page of a list's verification graph reads. */
+  GRAPH_STATEMENTS_PAGE_MAX: 50,
+  /** Claims one page of a list's verification graph carries; a document
+   *  with more continues on the next page. */
+  GRAPH_CLAIMS_PAGE_MAX: 500,
+  /** Facts of the list the first page of its verification graph carries. */
+  GRAPH_FACTS_MAX: 1000,
+  /** Verified documents and claims one chronology export reads, as one
+   *  page of the verification graph; a list verified past them is refused,
+   *  never exported in part. */
+  CHRONOLOGY_EXPORT_DOCUMENTS_MAX: 200,
+  CHRONOLOGY_EXPORT_CLAIMS_MAX: 10_000,
 } as const;

@@ -1407,6 +1407,10 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   // harness and sidecar protocol log to holder.log; unset or `off` (the
   // default) writes none. packages/agent-engine/src/sidecar/env.ts reads it.
   "STELLA_AGENT_PROTOCOL_LOG",
+  // Extension ids besides the store's that may start the harness holder's
+  // browser host (an unpacked development build has its own), separated by
+  // commas. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_BROWSER_EXTENSION_IDS",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
@@ -1506,6 +1510,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
   "APP_VARIANT",
+  // The desktop build script derives the largest editable document from the
+  // API contract's limits and hands it to the crate at compile time.
+  "STELLA_EDITABLE_DOCUMENT_MAX_BYTES",
   "APPLE_TEAM_ID",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
@@ -1518,6 +1525,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_HOME",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
+  // The pause between a paced fake Codex scenario's outputs.
+  "FAKE_CODEX_PACE_MS",
+  // The local stack's stand-in computer (`agent:up -- --local-runner`) logs
+  // at the level this filter names.
+  "RUST_LOG",
+  // The fixture page the fake harness CLIs' `browse` scenario opens first.
+  "FAKE_BROWSER_START",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
@@ -1735,10 +1749,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
-  // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
+  // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
+  // and the clock and busy windows file the coverage check reads (fixtures pin them).
+  "JOURNEY_BUSY_WINDOWS_FILE",
   "JOURNEY_CLI_URL",
   "JOURNEY_MAIN_REF",
   "JOURNEY_MCP_URL",
+  "JOURNEY_NOW_EPOCH",
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_PROBE_RUN_SECONDS",
   "JOURNEY_PROBE_SLOT",

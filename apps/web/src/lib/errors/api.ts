@@ -19,6 +19,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SKILL_FROM_CHAT_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
 import {
@@ -284,6 +285,10 @@ const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
   [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
   [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
     "chat.localRun.refusalConflictingRunMode",
+  [CHAT_LOCAL_RUN_REFUSAL.folderUnavailable]:
+    "chat.localRun.refusalFolderUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.folderNotApproved]:
+    "chat.localRun.refusalFolderNotApproved",
 } as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
 
 /** Why a chat turn was refused before it started, with what the person can do. */
@@ -384,6 +389,16 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.anonymizedThread]:
+    "errors.apiCodes.skillFromChatAnonymizedThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.emptyThread]:
+    "errors.apiCodes.skillFromChatEmptyThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.localRunThread]:
+    "errors.apiCodes.skillFromChatLocalRunThread",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.threadNotFound]:
+    "errors.apiCodes.skillFromChatThreadNotFound",
+  [SKILL_FROM_CHAT_REFUSAL_CODE.withdrawn]:
+    "errors.apiCodes.skillFromChatWithdrawn",
   [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",

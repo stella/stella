@@ -232,6 +232,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: {
+    type: "unresolvable",
+    reason: "The folder's name stays on the member's computer",
+  },
   [AUDIT_RESOURCE_TYPE.CLAUSE]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",

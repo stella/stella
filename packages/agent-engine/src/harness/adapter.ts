@@ -50,7 +50,41 @@ export type HarnessInputFileType = HarnessInputFile["type"];
  * that as `resume_unavailable` on `session.started`.
  */
 export type HarnessContinuationRequest =
-  { type: "fresh" } | { type: "resume"; sessionId: HarnessSessionId };
+  | { type: "fresh" }
+  | { type: "resume"; sessionId: HarnessSessionId }
+  /**
+   * The next turn in the process a completed turn left running (see
+   * `HarnessLiveSession`): the agent sees what it started in the background.
+   * The adapter that made the session continues it, or ends it and fails.
+   */
+  | { type: "live"; session: HarnessLiveSession };
+
+/**
+ * A harness process kept after a completed turn because work its agent
+ * started in the background (a command, a server, a watcher) still runs.
+ * The chat's next turn continues in it, so the agent sees that work through
+ * its own tools; ending it ends that work and the process. It ends by itself
+ * once nothing runs in the background any more, or when the process exits.
+ */
+export type HarnessLiveSession = {
+  readonly harness: AgentHarness;
+  /** The native session the process holds; a later turn resumes it. */
+  readonly sessionId: HarnessSessionId;
+  /** How many background tasks run now; 0 once the session ended. */
+  readonly backgroundTasks: number;
+  /**
+   * Called whenever `backgroundTasks` changes while the session is kept, and
+   * once more with 0 when it ends.
+   */
+  watch: (listener: (backgroundTasks: number) => void) => void;
+  /** Settles once the process and every background task are gone. */
+  readonly ended: Promise<void>;
+  /**
+   * Ends every background task through the harness, then the process and
+   * everything it started. Every call returns the same ending.
+   */
+  end: () => Promise<void>;
+};
 
 /**
  * A skill folder the member listed on this computer. It reaches the turn from
@@ -76,6 +110,14 @@ export type HarnessTurnInput = {
    * inside every harness sandbox and never shared with another chat.
    */
   cacheDir: string;
+  /**
+   * Absolute paths the turn's sandboxed commands may not read: every chat's
+   * folder, the desktop's own data and the member's credential stores, as
+   * the desktop names them. The adapter re-opens inside them only what the
+   * turn itself needs, such as its workspace, cache and tools, where the
+   * harness's sandbox can limit reads.
+   */
+  unreadablePaths: readonly string[];
   /** Skills the harness loads for the turn, through its own mechanism. */
   skillFolders: readonly HarnessSkillFolder[];
   /**
@@ -98,8 +140,13 @@ export type HarnessTurnInput = {
   /** Developer instructions for the harness. */
   instructions: string;
   policy: HarnessRunPolicy;
-  /** Stella workspace access; the only tool surface Stella adds. */
+  /** Stella workspace access. */
   mcp: StellaSandboxMcpBinding;
+  /**
+   * The member's Chrome through the stella extension, served on this
+   * computer; `null` where the holder has no browser bridge.
+   */
+  browser: StellaSandboxMcpBinding | null;
   /**
    * The persisted conversation, ending with the user message that starts
    * this turn. It is the portable context: a conversation may change engine
@@ -149,7 +196,18 @@ export type HarnessTurn = {
   ) => Promise<Result<void, HarnessRespondError>>;
   /** Stops the turn; `events` then ends with `turn.interrupted`. */
   interrupt: () => Promise<void>;
-  /** Releases the harness process; safe to call more than once. */
+  /**
+   * After `events` ended: the harness process as a live session when the
+   * turn completed with work still running in the background, handed to the
+   * caller, who then ends it. Otherwise the process is ended and this
+   * settles with `null` once it is gone. The first call takes the session.
+   */
+  release: () => Promise<HarnessLiveSession | null>;
+  /**
+   * Ends the harness process and everything it started, background work
+   * included, unless `release` already handed it over; safe to call more
+   * than once.
+   */
   dispose: () => Promise<void>;
 };
 

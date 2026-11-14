@@ -825,6 +825,8 @@ describe("protocol log redaction", () => {
           },
           workspaceDir: "/srv/matters/lease-review",
           cacheDir: "/opt/stella/cache",
+          unreadablePaths: ["/opt/stella"],
+          stepOutputDir: "/opt/stella/runs/lease-review.step-outputs",
           model: "gpt-5.1-codex",
           reasoningEffort: "high",
           instructions,

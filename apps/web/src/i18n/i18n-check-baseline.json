@@ -56,6 +56,7 @@
     "appearance.calendar",
     "auth.continueWithEmail",
     "avt.claimTypes.opinion.label",
+    "avt.mode.review",
     "avt.review.status.reviewed",
     "avt.verification.documentView.original",
     "billing.codes.activity",
@@ -167,6 +168,7 @@
     "knowledge.playbooks.review.fixAccepted",
     "knowledge.playbooks.review.playbookLabel",
     "knowledge.playbooks.review.reject",
+    "knowledge.playbooks.review.run",
     "knowledge.playbooks.versions.restoredToast",
     "knowledge.playbooks.versions.versionHistory",
     "knowledge.sections.skills.title",
@@ -321,6 +323,9 @@
     "auth.emailPlaceholder": [
       "ar"
     ],
+    "avt.mode.graph": [
+      "de"
+    ],
     "avt.verification.documentView.original": [
       "de",
       "es",
@@ -435,6 +440,9 @@
     ],
     "common.filter": [
       "et"
+    ],
+    "common.folder": [
+      "pl"
     ],
     "common.formula": [
       "lv"
@@ -771,9 +779,6 @@
     ],
     "search.kinds.contact": [
       "fr"
-    ],
-    "search.kinds.folder": [
-      "pl"
     ],
     "search.kinds.link": [
       "de",

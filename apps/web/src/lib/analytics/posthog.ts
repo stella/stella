@@ -12,6 +12,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
@@ -176,18 +177,29 @@ const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
 
 // API answers the UI already turns into a state (sign in, no access, not
 // found, a rejected provider key or continuation, a provider key that needs
-// more setup, a file the upload scan refused). Other 4xx and every 5xx stay
+// more setup, a file the upload scan refused, a turn for the member's
+// computer that its runner cannot take now). Other 4xx and every 5xx stay
 // reported.
 const API_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ApiError",
   "StreamReadError",
 ]);
+// The member's computer answers for these as it is at send time: the composer
+// keeps a turn on the computer and names its state rather than moving it.
+const LOCAL_RUN_STATE_REFUSAL_CODES = [
+  CHAT_LOCAL_RUN_REFUSAL.noComputer,
+  CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable,
+  CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
+  CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
+  CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
+] as const;
 const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
   ...Object.values(PROVIDER_SETUP_ERROR_CODE),
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  ...LOCAL_RUN_STATE_REFUSAL_CODES,
 ]);
 
 const hasExtensionFrame = (entry: unknown): boolean => {

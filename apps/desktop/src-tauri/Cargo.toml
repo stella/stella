@@ -9,6 +9,12 @@ license = "Apache-2.0"
 name = "local_file_creation_guard"
 required-features = ["local-file-guard-probe"]
 
+# The development stand-in computer `bun run agent:up -- --local-runner`
+# starts; the feature refuses a release build.
+[[example]]
+name = "runner_stand_in"
+required-features = ["dev-runner-stand-in"]
+
 [lib]
 name = "stella_desktop_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -205,6 +211,7 @@ winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
 [features]
 allocation-tests = []
+dev-runner-stand-in = []
 local-file-guard-probe = []
 
 [dev-dependencies]

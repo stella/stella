@@ -2185,10 +2185,11 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   fireEvent.click(save);
   await waitFor(() => expect(sourceWrites).toBe(1));
   await waitFor(() =>
-    expect(within(sheet).getByLabelText(messages.common.fact)).toHaveProperty(
-      "disabled",
-      true,
-    ),
+    expect(
+      within(sheet)
+        .getByLabelText(messages.common.fact)
+        .hasAttribute("disabled"),
+    ).toBe(true),
   );
   // Leaving for another claim and coming back keeps the started fact.
   fireEvent.click(

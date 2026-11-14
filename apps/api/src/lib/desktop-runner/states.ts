@@ -101,6 +101,11 @@ export const DESKTOP_RUNNER_STORED_REJECT_REASONS = [
   "run_too_large",
   "unknown_run",
   "folder_busy",
+  "folder_unlinked",
+  "folder_offline",
+  "folder_moved",
+  "folder_protected",
+  "folder_unreadable",
 ] as const;
 true satisfies Same<
   (typeof DESKTOP_RUNNER_STORED_REJECT_REASONS)[number],

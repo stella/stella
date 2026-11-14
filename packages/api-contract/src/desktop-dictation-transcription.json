@@ -1,0 +1,6 @@
+{
+  "modelsPath": "/v1/desktop/dictation/models",
+  "transcribePath": "/v1/desktop/dictation/transcribe",
+  "maxAudioBytes": 19614813,
+  "maxAudioSeconds": 60
+}

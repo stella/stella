@@ -52,6 +52,7 @@ import {
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
+  openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -104,7 +105,10 @@ import {
   sendThreadChatMessage,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
-import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
+import {
+  resendLatestChatMessage,
+  showStoredChatThread,
+} from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -389,6 +393,7 @@ export const useChatSession = ({
     turnAbandoned,
     computerWait,
     turnSentAt,
+    turnsStarted,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
@@ -905,7 +910,8 @@ export const useChatSession = ({
         return;
       }
 
-      await chat.reload(
+      await resendLatestChatMessage(
+        chat,
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },
@@ -1732,11 +1738,12 @@ export const useChatSession = ({
   // ended: TanStack can report a turn ready while it still loads, and a send
   // then would be refused as busy with no later turn end to retry it on.
   const queueTurnRunning = isGenerating || clientLoading;
-  // A turn paused on the member (an approval or question card, or a
-  // question from the computer) holds the queue until the wait is over.
+  // A turn paused on the member holds the queue until the wait is over.
   const turnAwaitsMember =
-    getAwaitedAssistantMessageId(messages) !== null ||
-    snapshot.localRunQuestion !== null;
+    openMemberWaitKeys({
+      localRunQuestion: snapshot.localRunQuestion,
+      messages,
+    }).length > 0;
   useExternalSyncEffect(() => {
     applySendQueueEvent({
       type: "generation-status-synced",
@@ -1862,6 +1869,7 @@ export const useChatSession = ({
     turnAbandoned,
     computerWait,
     turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,

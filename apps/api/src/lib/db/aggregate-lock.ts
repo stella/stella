@@ -171,6 +171,24 @@ export const lockInvoiceRepairBatch = async ({
     [limit],
   );
 
+/**
+ * The chat turn numbering repair takes each thread's row lock, the one a send
+ * holds while it stores a turn, in id order, and reads the threads' turns in
+ * later statements of its batch transaction. `threadIds` is one joined
+ * string: the migrate connection binds no arrays.
+ */
+export const lockChatThreadsForTurnNumbering = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+  threadIds: string,
+) =>
+  await connection.query(
+    `SELECT id FROM public.chat_threads
+      WHERE id = ANY(string_to_array($1, ',')::uuid[])
+      ORDER BY id
+        FOR UPDATE`,
+    [threadIds],
+  );
+
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = { ...aggregateChains } as const;
 
@@ -3653,6 +3671,49 @@ export const lockCorpusProjectionStatesByAppliedRevision = async (
     )
     .limit(revisionIds.length)
     .for("update");
+
+type CorpusProjectionAcceptedRowsOptions = {
+  family: CorpusFamily;
+  generation: string;
+  entityIds: readonly string[];
+  intentIds: readonly SafeId<"corpusIndexProjectionIntent">[];
+};
+
+/**
+ * The rows that recording or proving an accepted append decides on, state
+ * rows before their revisions as every projection writer takes them.
+ */
+export const lockCorpusProjectionAcceptedRows = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    entityIds,
+    intentIds,
+  }: CorpusProjectionAcceptedRowsOptions,
+) => {
+  const states = await tx
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(corpusIndexProjectionStates.entityId, [...entityIds]),
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionStates.entityId))
+    .limit(entityIds.length)
+    .for("update");
+  const intents = await tx
+    .select()
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]))
+    .orderBy(asc(corpusIndexProjectionIntents.id))
+    .limit(intentIds.length)
+    .for("update");
+  return { states, intents };
+};
 
 /** Canonical rows precede desired-state rows in the projection lock order. */
 export const lockCaseLawProjectionRepairStates = async (

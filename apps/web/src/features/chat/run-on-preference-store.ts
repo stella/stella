@@ -21,13 +21,14 @@ const ORGANIZATION_ID_MAX_LENGTH = 64;
 
 /**
  * Where the member last chose to run turns: stella cloud, or a harness and
- * model on their computer. Never how much a run may do without asking: a
- * permission is granted to one chat, and a new chat asks again. Nor the
- * reasoning effort, which a new chat leaves to the harness.
+ * model on their computer. Never how much a run may do without asking, nor
+ * the folder it works in: both belong to one chat, and a new chat starts in
+ * its own folder with the default permission. Nor the reasoning effort,
+ * which a new chat leaves to the harness.
  */
 const runOnPreferenceSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal(CHAT_RUN_TARGET_KIND.cloud) }),
-  v.omit(chatLocalRunTargetSchema, ["approvals", "reasoningEffort"]),
+  v.omit(chatLocalRunTargetSchema, ["approvals", "folder", "reasoningEffort"]),
 ]);
 type RunOnPreference = v.InferOutput<typeof runOnPreferenceSchema>;
 
@@ -67,8 +68,8 @@ const readPersistedState = (persisted: unknown): PersistedRunOnPreference => {
 };
 
 /**
- * What of a chosen target is remembered: where it runs, not its permission
- * or reasoning effort.
+ * What of a chosen target is remembered: where it runs, not its permission,
+ * reasoning effort or folder.
  */
 const preferenceOf = (target: ChatRunTarget): RunOnPreference =>
   target.kind === "local"

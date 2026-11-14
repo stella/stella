@@ -232,6 +232,31 @@ test.each([
   ["an empty transcript", { transcript: "" }],
   ["audio instead of text", { transcript: "ok", audio: "UklGRg==" }],
   ["a locale that is not a language tag", { transcript: "ok", locale: "a b" }],
+  [
+    "a window title over the limit",
+    {
+      transcript: "ok",
+      context: {
+        appKind: "document",
+        windowTitle: "x".repeat(
+          DESKTOP_DICTATION_CLEANUP_LIMITS.windowTitleLength + 1,
+        ),
+      },
+    },
+  ],
+  [
+    "text before the cursor over the limit",
+    {
+      transcript: "ok",
+      context: {
+        appKind: "document",
+        textBeforeCursor: "x".repeat(
+          DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength + 1,
+        ),
+      },
+    },
+  ],
+  ["an unknown app kind", { transcript: "ok", context: { appKind: "word" } }],
 ])("%s is refused before any model call", async (_case, input) => {
   const { response, generate } = await exercise({ input });
   expect(response.status).toBeGreaterThanOrEqual(400);
@@ -290,4 +315,38 @@ test("a line break or carriage return inside text never reaches the desktop", as
   expect(await response.json()).toEqual({
     segments: [{ type: "text", text: "first second", bold: false }],
   });
+});
+
+test("where the text goes reaches the model as its own field, and the answer is checked against the transcript", async () => {
+  const context = {
+    appKind: "document",
+    windowTitle: "Kupní smlouva – Novák.docx",
+    textBeforeCursor: "Článek 2\nKupní cena\n",
+  } as const;
+  const { response, calls } = await exercise({
+    input: { transcript: TRANSCRIPT, locale: "cs", context },
+  });
+  expect(response.status).toBe(200);
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).toEqual({
+    languages: [],
+    locale: "cs",
+    context,
+    transcript: TRANSCRIPT,
+  });
+  // An answer that repeats the text before the cursor outgrows the
+  // transcript it is measured against.
+  const echoed = await exercise({
+    input: { transcript: "first second", context },
+    answer: () => ({
+      segments: [
+        {
+          type: "text",
+          text: `${context.textBeforeCursor} first second`,
+          bold: false,
+        },
+      ],
+    }),
+  });
+  expect(echoed.response.status).toBe(502);
+  expect(await echoed.response.text()).not.toContain("Kupní cena");
 });

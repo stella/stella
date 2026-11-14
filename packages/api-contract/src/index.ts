@@ -22,12 +22,18 @@ export type {
 export {
   CHAT_SKILL_CONTEXT_NEED,
   CHAT_SKILL_DOCUMENT,
+  SKILL_DRAFT_NAME_KINDS,
+  SKILL_FROM_CHAT_REFUSAL_CODE,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
   SKILL_RESOURCE_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "./agent-skills";
-export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
+export type {
+  ChatSkillContextNeed,
+  ChatSkillDocument,
+  SkillDraftNameKind,
+} from "./agent-skills";
 export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
 export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
@@ -296,6 +302,7 @@ export type {
   EntityFindScopeType,
   PropertyContentType,
 } from "./entity-find";
+export { PROPERTY_SORT_KINDS } from "./property-sort";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
@@ -494,6 +501,7 @@ export type {
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatBackgroundTasksChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
   chatThreadsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
