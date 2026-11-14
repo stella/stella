@@ -45,6 +45,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import { holdsBlocking, requireNoHold } from "./holds";
@@ -458,6 +459,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               organizationId,
               contactId,
               recordAuditEvent,
+              flushWorkspaceSearchRepairs: async () =>
+                await Promise.resolve({ failed: 0, repaired: 0 }),
             }),
           );
           expect(contactDelete.isErr()).toBe(true);
@@ -721,15 +724,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db
             .delete(legalHolds)
             .where(eq(legalHolds.organizationId, organizationId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db
             .delete(legalHolds)
             .where(eq(legalHolds.organizationId, otherOrganizationId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, otherOrganizationId));
+          await deleteOrganizationsForTest(db, [otherOrganizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });
@@ -817,6 +816,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 webSearchEnabled: false,
                 chatModel: null,
                 chatReasoningEffort: null,
+                chatLocalRunTarget: null,
                 messages: [],
                 historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
               },
@@ -842,9 +842,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db
             .delete(legalHolds)
             .where(eq(legalHolds.organizationId, organizationId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });
@@ -970,6 +968,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               organizationId,
               contactId: linkedContactId,
               recordAuditEvent,
+              flushWorkspaceSearchRepairs: async () =>
+                await Promise.resolve({ failed: 0, repaired: 0 }),
             }),
           );
           expect(linkedDelete.isErr()).toBe(true);
@@ -1012,6 +1012,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                         organizationId,
                         contactId: raceContactId,
                         recordAuditEvent,
+                        flushWorkspaceSearchRepairs: async () =>
+                          await Promise.resolve({ failed: 0, repaired: 0 }),
                       }),
                     );
                   },
@@ -1040,9 +1042,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db
             .delete(legalHolds)
             .where(eq(legalHolds.organizationId, organizationId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });
@@ -1157,9 +1157,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db
             .delete(legalHolds)
             .where(eq(legalHolds.organizationId, organizationId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });
@@ -1303,9 +1301,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db
             .delete(legalHolds)
             .where(eq(legalHolds.organizationId, organizationId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });

@@ -1189,21 +1189,41 @@ type AggregateEntityBatchOptions = {
   limit: number;
 };
 
-/** Bounded entity snapshots keep one ordered acquisition for a repair batch. */
-export const withAggregateEntityBatch = async ({
+type WorkspaceRowIdentity = { id: string; workspaceId: string };
+
+type WorkspaceRowBatchOptions<
+  Identity extends WorkspaceRowIdentity,
+  Row extends WorkspaceRowIdentity,
+> = {
+  tx: Transaction;
+  /** The batch's name in its panics, e.g. "Aggregate entity batch". */
+  label: string;
+  ids: readonly Identity[];
+  lockOf: (id: Identity) => HeldLock;
+  /** One statement that locks the ordered rows. */
+  select: (ordered: readonly Identity[]) => Promise<Row[]>;
+};
+
+/**
+ * One ordered acquisition of tenant-scoped aggregate rows: every declared
+ * lock is checked against the history first, the rows are locked by one
+ * statement in id order, and each returned row retains its declared lock.
+ */
+const withWorkspaceRowBatch = async <
+  Identity extends WorkspaceRowIdentity,
+  Row extends WorkspaceRowIdentity,
+>({
   tx,
+  label,
   ids,
-  mode,
-  limit,
-}: AggregateEntityBatchOptions) => {
-  if (!Number.isSafeInteger(limit) || limit <= 0) {
-    panic("Aggregate entity batch requires a positive integer limit");
-  }
-  const identities = new Map<string, AggregateIdentities["entity"]>();
+  lockOf,
+  select,
+}: WorkspaceRowBatchOptions<Identity, Row>) => {
+  const identities = new Map<string, Identity>();
   for (const id of ids) {
     const previous = identities.get(id.id);
     if (previous !== undefined && previous.workspaceId !== id.workspaceId) {
-      panic("Aggregate entity batch declares conflicting tenant identities");
+      panic(`${label} declares conflicting tenant identities`);
     }
     identities.set(id.id, id);
   }
@@ -1215,40 +1235,20 @@ export const withAggregateEntityBatch = async ({
   }
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
-  const locks = new Map(
-    ordered.map((id) => [id.id, rowLock({ aggregate: "entity", id }, mode)]),
-  );
+  const locks = new Map(ordered.map((id) => [id.id, lockOf(id)]));
   for (const lock of locks.values()) {
     assertLockOrder(history, lock, "block");
   }
   history.status = "acquiring";
-  const rows = await tx
-    .select({
-      id: entities.id,
-      workspaceId: entities.workspaceId,
-      currentVersionId: entities.currentVersionId,
-      readOnly: entities.readOnly,
-    })
-    .from(entities)
-    .where(
-      or(
-        ...ordered.map((id) =>
-          and(eq(entities.id, id.id), eq(entities.workspaceId, id.workspaceId)),
-        ),
-      ),
-    )
-    .orderBy(sql`${entities.id}::text COLLATE "C"`)
-    .limit(limit)
-    .for(mode);
+  const rows = await select(ordered);
   for (const lock of locks.values()) {
     retainReservation(history, lock);
   }
   for (const row of rows) {
     const identity =
-      identities.get(row.id) ??
-      panic("Aggregate entity batch returned an undeclared row");
+      identities.get(row.id) ?? panic(`${label} returned an undeclared row`);
     if (row.workspaceId !== identity.workspaceId) {
-      panic("Aggregate entity batch returned an undeclared tenant");
+      panic(`${label} returned an undeclared tenant`);
     }
     retainLock(
       history,
@@ -1257,6 +1257,46 @@ export const withAggregateEntityBatch = async ({
   }
   completeAcquisition(history);
   return rows;
+};
+
+/** Bounded entity snapshots keep one ordered acquisition for a repair batch. */
+export const withAggregateEntityBatch = async ({
+  tx,
+  ids,
+  mode,
+  limit,
+}: AggregateEntityBatchOptions) => {
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    panic("Aggregate entity batch requires a positive integer limit");
+  }
+  return await withWorkspaceRowBatch({
+    tx,
+    label: "Aggregate entity batch",
+    ids,
+    lockOf: (id) => rowLock({ aggregate: "entity", id }, mode),
+    select: async (ordered) =>
+      await tx
+        .select({
+          id: entities.id,
+          workspaceId: entities.workspaceId,
+          currentVersionId: entities.currentVersionId,
+          readOnly: entities.readOnly,
+        })
+        .from(entities)
+        .where(
+          or(
+            ...ordered.map((id) =>
+              and(
+                eq(entities.id, id.id),
+                eq(entities.workspaceId, id.workspaceId),
+              ),
+            ),
+          ),
+        )
+        .orderBy(sql`${entities.id}::text COLLATE "C"`)
+        .limit(limit)
+        .for(mode),
+  });
 };
 
 type AggregateFolioCollabRoomBatchOptions = {
@@ -1274,74 +1314,37 @@ export const withAggregateFolioCollabRoomBatch = async ({
   tx,
   ids,
   mode,
-}: AggregateFolioCollabRoomBatchOptions) => {
-  const identities = new Map<string, AggregateIdentities["folioCollabRoom"]>();
-  for (const id of ids) {
-    const previous = identities.get(id.id);
-    if (previous !== undefined && previous.workspaceId !== id.workspaceId) {
-      panic("Aggregate room batch declares conflicting tenant identities");
-    }
-    identities.set(id.id, id);
-  }
-  const ordered = [...identities.values()].toSorted((left, right) =>
-    compareCodeUnit(left.id, right.id),
-  );
-  if (ordered.length === 0) {
-    return [];
-  }
-  const history = lockHistory(tx);
-  assertAggregateLevelAvailable(history);
-  const locks = new Map(
-    ordered.map((id) => [
-      id.id,
-      rowLock({ aggregate: "folioCollabRoom", id }, mode),
-    ]),
-  );
-  for (const lock of locks.values()) {
-    assertLockOrder(history, lock, "block");
-  }
-  history.status = "acquiring";
-  const rows = await tx
-    .select({
-      docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
-      docxCheckpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
-      id: folioCollabRooms.id,
-      workspaceId: folioCollabRooms.workspaceId,
-      yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-      yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-    })
-    .from(folioCollabRooms)
-    .where(
-      or(
-        ...ordered.map((id) =>
-          and(
-            eq(folioCollabRooms.id, id.id),
-            eq(folioCollabRooms.workspaceId, id.workspaceId),
+}: AggregateFolioCollabRoomBatchOptions) =>
+  await withWorkspaceRowBatch({
+    tx,
+    label: "Aggregate room batch",
+    ids,
+    lockOf: (id) => rowLock({ aggregate: "folioCollabRoom", id }, mode),
+    select: async (ordered) =>
+      await tx
+        .select({
+          docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
+          docxCheckpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          id: folioCollabRooms.id,
+          workspaceId: folioCollabRooms.workspaceId,
+          yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .where(
+          or(
+            ...ordered.map((id) =>
+              and(
+                eq(folioCollabRooms.id, id.id),
+                eq(folioCollabRooms.workspaceId, id.workspaceId),
+              ),
+            ),
           ),
-        ),
-      ),
-    )
-    .orderBy(sql`${folioCollabRooms.id}::text COLLATE "C"`)
-    .limit(ordered.length)
-    .for(mode);
-  for (const lock of locks.values()) {
-    retainReservation(history, lock);
-  }
-  for (const row of rows) {
-    const identity =
-      identities.get(row.id) ??
-      panic("Aggregate room batch returned an undeclared row");
-    if (row.workspaceId !== identity.workspaceId) {
-      panic("Aggregate room batch returned an undeclared tenant");
-    }
-    retainLock(
-      history,
-      locks.get(row.id) ?? panic("Missing aggregate room batch lock"),
-    );
-  }
-  completeAcquisition(history);
-  return rows;
-};
+        )
+        .orderBy(sql`${folioCollabRooms.id}::text COLLATE "C"`)
+        .limit(ordered.length)
+        .for(mode),
+  });
 
 const rowStatement = (
   options: RowIdentityOptions,

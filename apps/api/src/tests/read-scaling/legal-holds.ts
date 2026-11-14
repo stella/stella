@@ -26,6 +26,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 export const seedLegalHoldScaling = async (db: GatedTestDb, size: number) => {
   const organizationId = mintAuthProviderId<"organization">();
@@ -114,7 +115,7 @@ export const seedLegalHoldScaling = async (db: GatedTestDb, size: number) => {
       await db
         .delete(legalHolds)
         .where(eq(legalHolds.organizationId, organizationId));
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     },
   };

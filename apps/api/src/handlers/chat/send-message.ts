@@ -1864,6 +1864,11 @@ type PrepareValidatedIncomingMessageOptions = {
 };
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
+/** An upload a legal hold refused answers with the shared hold refusal. */
+const uploadRefusal = <UploadError>(
+  error: UploadError | LegalHoldActiveError,
+) => (LegalHoldActiveError.is(error) ? legalHoldRefusal(error) : error);
+
 const prepareValidatedIncomingMessage = async ({
   dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
@@ -2267,10 +2272,7 @@ const prepareValidatedIncomingMessage = async ({
       // The upload helper already cleans a partial upload (and a newly
       // created thread) before returning an error.
       lifecycle.releaseSideEffects();
-      if (LegalHoldActiveError.is(uploadResult.error)) {
-        return Result.err(legalHoldRefusal(uploadResult.error));
-      }
-      return Result.err(uploadResult.error);
+      return Result.err(uploadRefusal(uploadResult.error));
     }
     lifecycle.trackUploadedFiles(uploadResult.value.uploadedFiles);
 
