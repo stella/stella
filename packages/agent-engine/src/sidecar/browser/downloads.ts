@@ -164,18 +164,21 @@ const clipUtf8 = (text: string, maxBytes: number): string => {
 const isEdgeFiller = (character: string) =>
   character === "." || character.trim() === "";
 
-/** `text` without dots and whitespace at either end; linear in its length. */
+/**
+ * `text` without dots and whitespace at either end; linear in its length.
+ * Both are single UTF-16 units, so stepping by unit never splits a
+ * character that is kept.
+ */
 const trimEdgeFillers = (text: string): string => {
-  const characters = [...text];
   let start = 0;
-  let end = characters.length;
-  while (start < end && isEdgeFiller(characters[start] ?? "")) {
+  let end = text.length;
+  while (start < end && isEdgeFiller(text.charAt(start))) {
     start += 1;
   }
-  while (end > start && isEdgeFiller(characters[end - 1] ?? "")) {
+  while (end > start && isEdgeFiller(text.charAt(end - 1))) {
     end -= 1;
   }
-  return characters.slice(start, end).join("");
+  return text.slice(start, end);
 };
 
 /**
@@ -377,12 +380,14 @@ const fillTarget = async (
     return Result.err("unwritable");
   }
   const filled = await Result.tryPromise(async () => {
-    const copied = await copyBounded(source, target.handle).catch(
-      async (error: unknown) => {
-        await target.handle.truncate(0);
-        throw error;
-      },
-    );
+    let copied: Copied;
+    try {
+      copied = await copyBounded(source, target.handle);
+    } catch (error) {
+      // Whatever was written goes, through the file's own descriptor.
+      await target.handle.truncate(0);
+      throw error;
+    }
     if (copied.type === "too_large") {
       await target.handle.truncate(0);
     }
