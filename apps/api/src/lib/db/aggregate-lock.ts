@@ -3314,18 +3314,29 @@ export const lockCaseLawReplaySource = async ({
     .where(where)
     .for("update");
 
-/** Serialize fallback publication enrichment through the decision row write, including absent rows. */
-export const lockCaseLawFallbackIdentity = async ({
+/**
+ * Serialize fallback publication enrichment through the decision row write,
+ * including absent rows: several identities of one source in one statement,
+ * in the order given. Callers pass them sorted, so overlapping sets never
+ * wait on each other in inverse order.
+ */
+export const lockCaseLawFallbackIdentities = async ({
   tx,
   sourceId,
-  identityKey,
+  identityKeys,
 }: {
   tx: ExecuteTransaction;
   sourceId: SafeId<"caseLawSource">;
-  identityKey: string;
+  identityKeys: readonly string[];
 }): Promise<void> => {
+  if (identityKeys.length === 0) {
+    return;
+  }
   await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_fallback_identity'), hashtext(${`${sourceId}:${identityKey}`}))`,
+    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_fallback_identity'), hashtext(keys.key)) FROM unnest(ARRAY[${sql.join(
+      identityKeys.map((identityKey) => sql`${`${sourceId}:${identityKey}`}`),
+      sql`, `,
+    )}]::text[]) WITH ORDINALITY AS keys(key, position) ORDER BY keys.position`,
   );
 };
 

@@ -57,7 +57,7 @@ import {
   FALLBACK_DECISION_CONTENT_INDEX,
   FALLBACK_DECISION_IDENTITY_INDEX,
 } from "@/api/lib/case-law/fallback-decision-identity-constants";
-import { lockCaseLawFallbackIdentity } from "@/api/lib/db/aggregate-lock";
+import { lockCaseLawFallbackIdentities } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -295,10 +295,12 @@ const lockFallbackWinnerTx = async (
   | { type: "settled"; existing: DecisionRowWrite["existing"] }
 > => {
   const { sourceId, decisionId, existing } = write;
-  for (const identityKey of decisionStorageLockKeys(write.storageIdentity)) {
-    // db-await-in-loop: sorted strong aliases and weak evidence locks prevent inverse-order deadlocks.
-    await lockCaseLawFallbackIdentity({ tx, sourceId, identityKey });
-  }
+  // Sorted strong aliases and weak evidence locks prevent inverse-order deadlocks.
+  await lockCaseLawFallbackIdentities({
+    tx,
+    sourceId,
+    identityKeys: decisionStorageLockKeys(write.storageIdentity),
+  });
   if (
     write.storageIdentity.type !== "content" &&
     write.storageIdentity.type !== "strong"
