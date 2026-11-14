@@ -88,6 +88,7 @@ const turnInput = (workspaceDir: string, model: string): HarnessTurnInput => ({
   skillFolders: [],
   toolPath: [],
   networkHosts: [],
+  unreadablePaths: [],
 });
 
 /** Every event of a Codex turn on `model`; `onEvent` may interrupt it. */
