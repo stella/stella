@@ -1833,6 +1833,10 @@ const config = defineConfig({
         ],
       },
     ],
+    // The operand the rule above lets through under `::timestamptz`: a
+    // Date is still truncated there. Changed lines only until its rollout
+    // in scripts/guard-rollouts ends.
+    "no-truncated-timestamp-comparison/no-date-under-timestamp-cast": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-facade-imports/no-facade-imports": "error",
     "docs-source-policy/docs-source-policy": "error",
