@@ -241,6 +241,12 @@
       "showSources": "Quellen anzeigen",
       "title": "Ankerfakten"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# Behauptung beruht auf diesem Fakt} other {# Behauptungen beruhen auf diesem Fakt}}",
+      "empty": "Diese Liste enthält noch keine Fakten.",
+      "moreClaims": "{count, plural, one {# weitere Behauptung} other {# weitere Behauptungen}}",
+      "undated": "Ohne Datum"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Ankerfakten widersprechen sich",
@@ -405,6 +411,42 @@
       "showNextSteps": "Nächste Schritte anzeigen",
       "unlink": "Verknüpfung mit {fact} aufheben"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# Behauptung} other {# Behauptungen}}",
+      "claimTitle": "Behauptung",
+      "columns": {
+        "claims": "Behauptungen",
+        "sources": "Quelldokumente",
+        "statements": "Erklärungen"
+      },
+      "empty": "Diese Liste enthält noch keine Fakten oder geprüften Dokumente.",
+      "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
+      "factOverflow": "Die ersten {count} Fakten dieser Liste werden angezeigt.",
+      "filters": {
+        "allSources": "Alle Quellen",
+        "allVerdicts": "Alle Ergebnisse",
+        "conflicts": "Widersprüche",
+        "heldFacts": "Zurückgestellte Fakten",
+        "source": "Nach Quelle filtern",
+        "verdict": "Nach Ergebnis filtern"
+      },
+      "held": "Zurückgestellt",
+      "linkedFacts": "{count, plural, one {# verknüpfter Fakt} other {# verknüpfte Fakten}}",
+      "listLabel": "Graph als Liste",
+      "loadMore": "Weitere Dokumente laden",
+      "noMatch": "Nichts entspricht diesen Filtern.",
+      "noStatements": "Bisher wurde kein Dokument anhand dieser Liste geprüft.",
+      "offList": "Nicht mehr auf der Liste",
+      "relation": {
+        "conflicts": "Widerspricht",
+        "governs": "Maßgeblich",
+        "record": "Im Bestand",
+        "recordConflict": "Widersprüchlicher Eintrag",
+        "supports": "Stützt"
+      },
+      "unlinked": "Fakten, auf denen keine Behauptung beruht",
+      "verifyInReview": "Dokument prüfen"
+    },
     "guidance": {
       "escalate": "Eskalieren",
       "manualJudgement": "Manuelle Entscheidung",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graph",
+      "label": "Liste anzeigen als",
+      "review": "Prüfung"
     },
     "qualifiers": {
       "heading": "Vorbehalte",
@@ -1875,6 +1923,8 @@
       "folderStateProtected": "Enthält stellas eigene Daten",
       "folderStateUnlinked": "Nicht mehr verknüpft",
       "folderStateUnreadable": "Nicht lesbar",
+      "limitReminderNotify": "Benachrichtigen, sobald es zurückgesetzt ist",
+      "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
       "permissionAboveLimit": "Von Ihrer Organisation nicht erlaubt",
       "permissionAskDescription": "Bearbeitet Dateien im Ordner des Chats selbst; fragt vor allem anderen nach.",
       "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
@@ -2110,6 +2160,7 @@
     "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendErrorTimedOut": "Der Chat hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
     "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
+    "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren.",
     "sendPrompt": "Nachricht senden",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
@@ -5065,6 +5116,7 @@
       "flowRunAwaitingApproval": "Workflow <bdi>{flowName}</bdi> wartet auf Ihre Freigabe",
       "flowRunCompleted": "Workflow <bdi>{flowName}</bdi> abgeschlossen",
       "flowRunFailed": "Workflow <bdi>{flowName}</bdi> fehlgeschlagen",
+      "localRunLimitReset": "Der Coding-Agent auf Ihrem Computer kann Ihren Chat fortsetzen",
       "mention": "<bdi>{actorName}</bdi> hat Sie in einem Kommentar erwähnt",
       "reportExportFailed": "Ihr Berichtsexport ist fehlgeschlagen",
       "reportExportSucceeded": "Ihr Bericht ist bereit",

@@ -241,6 +241,12 @@
       "showSources": "Mostrar fontes",
       "title": "Fatos-âncora"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# alegação se baseia neste fato} many {# alegações se baseiam neste fato} other {# alegações se baseiam neste fato}}",
+      "empty": "Esta lista ainda não tem fatos.",
+      "moreClaims": "{count, plural, one {mais # alegação} many {mais # alegações} other {mais # alegações}}",
+      "undated": "Sem data"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Fatos-âncora divergem",
@@ -405,6 +411,42 @@
       "showNextSteps": "Mostrar próximos passos",
       "unlink": "Desvincular {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# alegação} many {# alegações} other {# alegações}}",
+      "claimTitle": "Alegação",
+      "columns": {
+        "claims": "Alegações",
+        "sources": "Documentos de origem",
+        "statements": "Declarações"
+      },
+      "empty": "Esta lista ainda não tem fatos nem documentos verificados.",
+      "factCount": "{count, plural, one {# fato} many {# fatos} other {# fatos}}",
+      "factOverflow": "Mostrando os primeiros {count} fatos desta lista.",
+      "filters": {
+        "allSources": "Todas as fontes",
+        "allVerdicts": "Todos os vereditos",
+        "conflicts": "Conflitos",
+        "heldFacts": "Fatos em espera para revisão",
+        "source": "Filtrar por fonte",
+        "verdict": "Filtrar por veredito"
+      },
+      "held": "Em espera para revisão",
+      "linkedFacts": "{count, plural, one {# fato vinculado} many {# fatos vinculados} other {# fatos vinculados}}",
+      "listLabel": "Grafo em forma de lista",
+      "loadMore": "Carregar mais documentos",
+      "noMatch": "Nada corresponde a estes filtros.",
+      "noStatements": "Ainda nenhum documento foi verificado com base nesta lista.",
+      "offList": "Não está mais na lista",
+      "relation": {
+        "conflicts": "Contradiz",
+        "governs": "Prevalece",
+        "record": "No registro",
+        "recordConflict": "Registro conflitante",
+        "supports": "Sustenta"
+      },
+      "unlinked": "Fatos em que nenhuma alegação se baseia",
+      "verifyInReview": "Verificar um documento"
+    },
     "guidance": {
       "escalate": "Escalar",
       "manualJudgement": "Julgamento manual",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# correspondência} other {# correspondências} many {# correspondências}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Cronologia",
+      "graph": "Grafo",
+      "label": "Mostrar a lista como",
+      "review": "Revisão"
     },
     "qualifiers": {
       "heading": "Ressalvas",
@@ -1875,6 +1923,8 @@
       "folderStateProtected": "Contém dados do próprio stella",
       "folderStateUnlinked": "Não está mais vinculada",
       "folderStateUnreadable": "Não é possível ler",
+      "limitReminderNotify": "Avise-me quando for renovado",
+      "limitReminderScheduled": "Avisaremos você a partir de {time}.",
       "permissionAboveLimit": "Não permitido pela sua organização",
       "permissionAskDescription": "Edita sozinho os arquivos da pasta do chat; pergunta antes de qualquer outra coisa.",
       "permissionAutoDescription": "Faz sozinho o que julga seguro; pergunta sobre o resto.",
@@ -2110,6 +2160,7 @@
     "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
     "sendErrorTimedOut": "O chat não respondeu a tempo. Tente novamente.",
     "sendErrorToolsUnsupported": "Este modelo não pode usar ferramentas, então não consegue responder a perguntas sobre o seu caso. Mude para um modelo que aceite ferramentas.",
+    "sendErrorTurnTooLarge": "Esta resposta ficou grande demais para ser entregue por completo. Envie uma nova mensagem para continuar.",
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
@@ -5065,6 +5116,7 @@
       "flowRunAwaitingApproval": "O fluxo de trabalho <bdi>{flowName}</bdi> aguarda sua aprovação",
       "flowRunCompleted": "O fluxo de trabalho <bdi>{flowName}</bdi> foi concluído",
       "flowRunFailed": "O fluxo de trabalho <bdi>{flowName}</bdi> falhou",
+      "localRunLimitReset": "O agente de programação do seu computador pode continuar sua conversa",
       "mention": "<bdi>{actorName}</bdi> mencionou você em um comentário",
       "reportExportFailed": "Falha ao exportar seu relatório",
       "reportExportSucceeded": "Seu relatório está pronto",

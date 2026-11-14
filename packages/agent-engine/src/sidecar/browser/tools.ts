@@ -28,6 +28,10 @@ import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runne
 
 import { browserBridgeError } from "./bridge";
 import {
+  BROWSER_DOWNLOADS_FOLDER,
+  type BrowserDownloadOutcome,
+} from "./downloads";
+import {
   type LocalBrowserResult,
   readLocalBrowserResult,
 } from "./local-result";
@@ -103,6 +107,8 @@ const INPUT_SCHEMAS = {
   }),
 } as const satisfies Record<ChatLocalRunBrowserAction, v.GenericSchema>;
 
+const DOWNLOADS_NOTE = `A PDF the page downloads is saved into your working folder under ${BROWSER_DOWNLOADS_FOLDER}/; this result or a later one lists it under downloads with its path (relative to your working folder), size and source address, so you can read and cite it with your own file tools. Other files are not saved, and a refused download says why.`;
+
 const REF_PROPERTY = {
   type: "string",
   description:
@@ -120,7 +126,7 @@ const UNTRUSTED_AND_CITING =
 /** `tools/list` as the agent sees it; each schema mirrors `INPUT_SCHEMAS`. */
 const TOOL_DEFINITIONS = {
   open: {
-    description: `Open a public HTTPS page in the member's Chrome, in the tab this chat uses (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in Chrome, then call snapshot.`,
+    description: `Open a public HTTPS page in the member's Chrome, in the tab this chat uses (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in Chrome, then call snapshot. ${DOWNLOADS_NOTE}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -139,7 +145,7 @@ const TOOL_DEFINITIONS = {
     },
   },
   snapshot: {
-    description: `Read the page in this chat's Chrome tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, citation meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>; an element in an embedded frame reads L<frame>.<n>). Use an id as ref for click, type, press_key and select. An element keeps its id while the page stays loaded, but those tools take only ids the latest read listed. When the chat has more than one tab, tabs lists them; switch_tab moves to another. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. ${UNTRUSTED_AND_CITING}`,
+    description: `Read the page in this chat's Chrome tab, one window of up to ${String(BROWSER_CONTROL_LIMITS.pageTextChars)} characters of its visible text at a time (hidden text is left out). The text has one block per line; a heading's line starts with one # per level, and a link's words are followed by [L<n>]. It also returns the address, the title, the page's facts for citing (canonical link, language, citation meta entries) and its elements: the links marked in the text (L<n>, with their full address) and other controls (E<n>; an element in an embedded frame reads L<frame>.<n>). Use an id as ref for click, type, press_key and select. An element keeps its id while the page stays loaded, but those tools take only ids the latest read listed. When the chat has more than one tab, tabs lists them; switch_tab moves to another. Without a cursor it reads from the section in view, which is where a link to a section lands, or else from the top. Pass window.next or window.previous as cursor to read on. In a long document, go to the part you need with find or a link to its section rather than paging from the top. Reading never asks the member and is not counted as a browser step. Lists under downloads any file the tab downloaded since the last result; a download still running shows up in a later one. ${UNTRUSTED_AND_CITING}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -174,8 +180,7 @@ const TOOL_DEFINITIONS = {
     },
   },
   click: {
-    description:
-      "Click an element of the page this chat last read, by its ref, and read the page that follows. Depending on the member's approval setting, the click may wait for the member to allow it in chat; a refusal comes back as declined. A ref from an older read, or a page that changed since, is refused: call snapshot and use a ref from it.",
+    description: `Click an element of the page this chat last read, by its ref, and read the page that follows. Depending on the member's approval setting, the click may wait for the member to allow it in chat; a refusal comes back as declined. A ref from an older read, or a page that changed since, is refused: call snapshot and use a ref from it. ${DOWNLOADS_NOTE}`,
     inputSchema: {
       type: "object",
       properties: { ref: REF_PROPERTY },
@@ -365,16 +370,26 @@ const foundView = (found: BrowserControlFound) => ({
   ...(found.more === undefined ? {} : { more: found.more }),
 });
 
-/** A result as the agent reads it; a sign-in is its own status. */
+/**
+ * A result as the agent reads it; a sign-in is its own status. Downloads
+ * the chat's tab made since the last result ride along, whatever the step's
+ * own outcome: a click may download a file and still fail to read the page.
+ * `knownTabs` are the tabs the chat knew before the step (`tabsView`).
+ */
 const localBrowserToolResult = (
   result: BrowserControlResult,
+  downloads: readonly BrowserDownloadOutcome[],
   knownTabs: ReadonlySet<number> | null,
 ): LocalBrowserToolResult => {
+  const downloaded = downloads.length === 0 ? {} : { downloads };
   if (result.status === "success") {
-    return textResult(pageView(result.snapshot, knownTabs), false);
+    return textResult(
+      { ...pageView(result.snapshot, knownTabs), ...downloaded },
+      false,
+    );
   }
   if (result.status === "found") {
-    return textResult(foundView(result.found), false);
+    return textResult({ ...foundView(result.found), ...downloaded }, false);
   }
   if (result.code === BROWSER_CONTROL_ERROR_CODE.needsMember) {
     return textResult(
@@ -383,6 +398,7 @@ const localBrowserToolResult = (
         code: result.code,
         message: result.message,
         hint: SIGN_IN_HINT,
+        ...downloaded,
       },
       true,
     );
@@ -394,6 +410,7 @@ const localBrowserToolResult = (
       code: result.code,
       message: result.message,
       ...(hint === undefined ? {} : { hint }),
+      ...downloaded,
     },
     true,
   );
@@ -608,6 +625,7 @@ const built = (command: BrowserControlCommand): BuiltCommand => ({
 const invalidInput = (message: string): BuiltCommand => ({
   result: localBrowserToolResult(
     browserBridgeError(BROWSER_CONTROL_ERROR_CODE.invalidCommand, message),
+    [],
     null,
   ),
   type: "refused",
@@ -619,6 +637,7 @@ const unknownRef = (): BuiltCommand => ({
       BROWSER_CONTROL_ERROR_CODE.elementNotFound,
       "No element has this ref in the page this chat last read.",
     ),
+    [],
     null,
   ),
   type: "refused",
@@ -642,6 +661,11 @@ type LocalBrowserCallContext = {
   /** The run's approval mode: which steps wait for the member. */
   approvals: DesktopRunnerApprovalMode;
   approve: ApproveAction;
+  /**
+   * The chat's downloads since its last result, saved into the run's
+   * folder or refused; each is handed out once.
+   */
+  downloads: () => Promise<readonly BrowserDownloadOutcome[]>;
   /** Aborts when the agent's call ends. */
   signal: AbortSignal;
 };
@@ -827,7 +851,7 @@ export const createLocalBrowserSession = () => {
     call: async (
       tool: ChatLocalRunBrowserAction,
       input: unknown,
-      { approvals, approve, send, signal }: LocalBrowserCallContext,
+      { approvals, approve, downloads, send, signal }: LocalBrowserCallContext,
     ): Promise<LocalBrowserToolResult> => {
       const next = command(tool, input);
       if (next.type === "refused") {
@@ -863,7 +887,7 @@ export const createLocalBrowserSession = () => {
           tabs: new Map(snapshot.tabs.map(({ tabId, url }) => [tabId, url])),
         };
       }
-      return localBrowserToolResult(result, knownTabs);
+      return localBrowserToolResult(result, await downloads(), knownTabs);
     },
   };
 };

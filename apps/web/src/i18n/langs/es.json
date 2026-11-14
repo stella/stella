@@ -241,6 +241,12 @@
       "showSources": "Mostrar fuentes",
       "title": "Hechos de referencia"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# afirmación se basa en este hecho} many {# afirmaciones se basan en este hecho} other {# afirmaciones se basan en este hecho}}",
+      "empty": "Esta lista aún no tiene hechos.",
+      "moreClaims": "{count, plural, one {# afirmación más} many {# afirmaciones más} other {# afirmaciones más}}",
+      "undated": "Sin fecha"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Los hechos de referencia discrepan",
@@ -405,6 +411,42 @@
       "showNextSteps": "Mostrar los pasos siguientes",
       "unlink": "Desvincular {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# afirmación} many {# afirmaciones} other {# afirmaciones}}",
+      "claimTitle": "Afirmación",
+      "columns": {
+        "claims": "Afirmaciones",
+        "sources": "Documentos de origen",
+        "statements": "Declaraciones"
+      },
+      "empty": "Esta lista aún no tiene hechos ni documentos verificados.",
+      "factCount": "{count, plural, one {# hecho} many {# hechos} other {# hechos}}",
+      "factOverflow": "Se muestran los primeros {count} hechos de esta lista.",
+      "filters": {
+        "allSources": "Todas las fuentes",
+        "allVerdicts": "Todos los resultados",
+        "conflicts": "Conflictos",
+        "heldFacts": "Hechos pendientes de revisión",
+        "source": "Filtrar por fuente",
+        "verdict": "Filtrar por resultado"
+      },
+      "held": "Pendiente de revisión",
+      "linkedFacts": "{count, plural, one {# hecho vinculado} many {# hechos vinculados} other {# hechos vinculados}}",
+      "listLabel": "Grafo como lista",
+      "loadMore": "Cargar más documentos",
+      "noMatch": "Nada coincide con estos filtros.",
+      "noStatements": "Aún no se ha verificado ningún documento con esta lista.",
+      "offList": "Ya no está en la lista",
+      "relation": {
+        "conflicts": "Contradice",
+        "governs": "Prevalece",
+        "record": "En el registro",
+        "recordConflict": "Registro contradictorio",
+        "supports": "Respalda"
+      },
+      "unlinked": "Hechos en los que no se basa ninguna afirmación",
+      "verifyInReview": "Verificar un documento"
+    },
     "guidance": {
       "escalate": "Remitir",
       "manualJudgement": "Valoración manual",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# coincidencia} other {# coincidencias} many {# coincidencias}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Cronología",
+      "graph": "Grafo",
+      "label": "Mostrar la lista como",
+      "review": "Revisión"
     },
     "qualifiers": {
       "heading": "Salvedades",
@@ -1875,6 +1923,8 @@
       "folderStateProtected": "Contiene datos propios de stella",
       "folderStateUnlinked": "Ya no está vinculada",
       "folderStateUnreadable": "No se puede leer",
+      "limitReminderNotify": "Avísame cuando se restablezca",
+      "limitReminderScheduled": "Te avisaremos a partir del {time}.",
       "permissionAboveLimit": "Tu organización no lo permite",
       "permissionAskDescription": "Edita por su cuenta los archivos de la carpeta del chat; pregunta antes de cualquier otra cosa.",
       "permissionAutoDescription": "Hace por su cuenta lo que considera seguro; pregunta por el resto.",
@@ -2110,6 +2160,7 @@
     "sendErrorStreamIncomplete": "La respuesta de la IA se cortó antes de terminar. Inténtalo de nuevo.",
     "sendErrorTimedOut": "El chat no respondió a tiempo. Inténtelo de nuevo.",
     "sendErrorToolsUnsupported": "Este modelo no puede usar herramientas, por lo que no puede responder preguntas sobre tu asunto. Cambia a un modelo que admita herramientas.",
+    "sendErrorTurnTooLarge": "Esta respuesta se hizo demasiado grande para entregarla completa. Envía un mensaje nuevo para continuar.",
     "sendPrompt": "Enviar mensaje",
     "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
@@ -5065,6 +5116,7 @@
       "flowRunAwaitingApproval": "El flujo de trabajo <bdi>{flowName}</bdi> espera tu aprobación",
       "flowRunCompleted": "El flujo de trabajo <bdi>{flowName}</bdi> ha finalizado",
       "flowRunFailed": "El flujo de trabajo <bdi>{flowName}</bdi> ha fallado",
+      "localRunLimitReset": "El agente de programación de tu ordenador puede continuar tu chat",
       "mention": "<bdi>{actorName}</bdi> te ha mencionado en un comentario",
       "reportExportFailed": "Error al exportar tu informe",
       "reportExportSucceeded": "Tu informe está listo",

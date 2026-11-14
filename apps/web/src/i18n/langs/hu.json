@@ -241,6 +241,12 @@
       "showSources": "Források megjelenítése",
       "title": "Referenciatények"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# állítás alapul ezen a tényen} other {# állítás alapul ezen a tényen}}",
+      "empty": "Ez a lista még nem tartalmaz tényeket.",
+      "moreClaims": "{count, plural, one {még # állítás} other {még # állítás}}",
+      "undated": "Dátum nélkül"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
@@ -405,6 +411,42 @@
       "showNextSteps": "További lépések megjelenítése",
       "unlink": "{fact} leválasztása"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# állítás} other {# állítás}}",
+      "claimTitle": "Állítás",
+      "columns": {
+        "claims": "Állítások",
+        "sources": "Forrásdokumentumok",
+        "statements": "Nyilatkozatok"
+      },
+      "empty": "Ez a lista még nem tartalmaz tényeket vagy ellenőrzött iratokat.",
+      "factCount": "{count, plural, one {# tény} other {# tény}}",
+      "factOverflow": "A lista első {count} ténye látható.",
+      "filters": {
+        "allSources": "Minden forrás",
+        "allVerdicts": "Minden következtetés",
+        "conflicts": "Ellentmondások",
+        "heldFacts": "Visszatartott tények",
+        "source": "Szűrés forrás szerint",
+        "verdict": "Szűrés következtetés szerint"
+      },
+      "held": "Visszatartva",
+      "linkedFacts": "{count, plural, one {# hozzákapcsolt tény} other {# hozzákapcsolt tény}}",
+      "listLabel": "Gráf listaként",
+      "loadMore": "További iratok betöltése",
+      "noMatch": "Semmi sem felel meg ezeknek a szűrőknek.",
+      "noStatements": "Ezzel a listával még egyetlen iratot sem ellenőriztek.",
+      "offList": "Már nincs a listán",
+      "relation": {
+        "conflicts": "Ellentmond",
+        "governs": "Irányadó",
+        "record": "A nyilvántartásban",
+        "recordConflict": "Ellentmondó adat",
+        "supports": "Alátámasztja"
+      },
+      "unlinked": "Tények, amelyeken egyetlen állítás sem alapul",
+      "verifyInReview": "Irat ellenőrzése"
+    },
     "guidance": {
       "escalate": "Továbbítás",
       "manualJudgement": "Emberi mérlegelés",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# találat} other {# találat}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Kronológia",
+      "graph": "Gráf",
+      "label": "A lista megjelenítése",
+      "review": "Ellenőrzés"
     },
     "qualifiers": {
       "heading": "Fenntartások",
@@ -1875,6 +1923,8 @@
       "folderStateProtected": "A stella saját adatait tartalmazza",
       "folderStateUnlinked": "Már nincs csatolva",
       "folderStateUnreadable": "Nem olvasható",
+      "limitReminderNotify": "Értesítsen, amikor visszaáll",
+      "limitReminderScheduled": "{time} után értesítjük.",
       "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
@@ -2110,6 +2160,7 @@
     "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
     "sendErrorTimedOut": "A csevegés nem válaszolt időben. Próbálja újra.",
     "sendErrorToolsUnsupported": "Ez a modell nem tud eszközöket használni, ezért nem tud válaszolni az ügyével kapcsolatos kérdésekre. Váltson olyan modellre, amely támogatja az eszközöket.",
+    "sendErrorTurnTooLarge": "Ez a válasz túl nagyra nőtt ahhoz, hogy teljes egészében megérkezzen. A folytatáshoz küldjön új üzenetet.",
     "sendPrompt": "Üzenet küldése",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
@@ -5065,6 +5116,7 @@
       "flowRunAwaitingApproval": "A(z) <bdi>{flowName}</bdi> munkafolyamat a jóváhagyására vár",
       "flowRunCompleted": "A(z) <bdi>{flowName}</bdi> munkafolyamat befejeződött",
       "flowRunFailed": "A(z) <bdi>{flowName}</bdi> munkafolyamat sikertelen",
+      "localRunLimitReset": "A számítógépén futó kódoló ügynök folytathatja a csevegést",
       "mention": "<bdi>{actorName}</bdi> megemlítette Önt egy hozzászólásban",
       "reportExportFailed": "A jelentés exportálása sikertelen",
       "reportExportSucceeded": "A jelentése elkészült",

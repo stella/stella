@@ -128,6 +128,16 @@ export const BROWSER_CONTROL_LIMITS = {
   turnNavigations: 15,
   urlChars: 4096,
   valueChars: 10_000,
+  /**
+   * The largest file a stella desktop chat's tab may download. The
+   * extension stops a larger one it can see coming; stella desktop
+   * refuses whatever is larger once it is saved.
+   */
+  downloadBytes: 100 * 1024 * 1024,
+  /** The file name a page suggests for a download, as reported. */
+  downloadNameChars: 255,
+  /** Where Chrome saved a download, as reported. */
+  downloadPathChars: 4096,
 } as const;
 
 const boundedIdSchema = v.pipe(
@@ -1024,9 +1034,96 @@ const desktopHelloResponseSchema = v.strictObject({
   type: v.literal("hello"),
 });
 
+/**
+ * The folder, inside Chrome's download folder, where the extension has
+ * Chrome save a PDF a stella desktop chat's tab downloads. stella desktop
+ * moves it from there into the chat's folder.
+ */
+export const BROWSER_DOWNLOAD_STAGING_FOLDER = "stella-downloads" as const;
+
+/** A staged file's name: a fresh UUID, so no page chooses it and none collides. */
+export const BROWSER_DOWNLOAD_STAGED_NAME_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/u;
+
+/** The path, relative to Chrome's download folder, Chrome saves a staged file at. */
+export const browserDownloadStagedPath = (uuid: string): string =>
+  `${BROWSER_DOWNLOAD_STAGING_FOLDER}/${uuid}.pdf`;
+
+/** Why the extension stopped a download a stella desktop chat's tab started. */
+export const BROWSER_DOWNLOAD_STOP_REASON = {
+  /** Neither its type nor its name says PDF. */
+  notPdf: "not-pdf",
+  /** Chrome said it is larger than `BROWSER_CONTROL_LIMITS.downloadBytes`. */
+  tooLarge: "too-large",
+  /** Too many of the chat's downloads were still running. */
+  tooMany: "too-many",
+  /** Chrome could not finish it. */
+  interrupted: "interrupted",
+} as const;
+
+type DownloadStopReasons = typeof BROWSER_DOWNLOAD_STOP_REASON;
+
+export type BrowserDownloadStopReason =
+  DownloadStopReasons[keyof DownloadStopReasons];
+
+const downloadNameSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.downloadNameChars),
+);
+
+/** The address a download came from; clipped, so a long `data:` URL still reports. */
+const downloadSourceUrlSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
+);
+
+const browserDownloadSchema = v.variant("outcome", [
+  v.strictObject({
+    outcome: v.literal("saved"),
+    /** Bytes Chrome wrote; stella desktop checks the file itself. */
+    bytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    mime: v.pipe(v.string(), v.maxLength(255)),
+    /** Where Chrome saved the file, as Chrome reports it. */
+    path: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(BROWSER_CONTROL_LIMITS.downloadPathChars),
+    ),
+    sourceUrl: downloadSourceUrlSchema,
+    /** The file name the page or server suggested. */
+    suggestedName: downloadNameSchema,
+  }),
+  v.strictObject({
+    outcome: v.literal("stopped"),
+    reason: v.picklist(Object.values(BROWSER_DOWNLOAD_STOP_REASON)),
+    sourceUrl: downloadSourceUrlSchema,
+    suggestedName: downloadNameSchema,
+  }),
+]);
+
+export type BrowserDownload = v.InferOutput<typeof browserDownloadSchema>;
+
+/**
+ * A download a stella desktop chat's tab started, once Chrome finished or
+ * the extension stopped it. Sent unasked; `controllerId` is the chat's id
+ * as stella desktop sent it with the chat's commands.
+ */
+const desktopDownloadResponseSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  download: browserDownloadSchema,
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  type: v.literal("download"),
+});
+
+export type BrowserDesktopDownload = v.InferOutput<
+  typeof desktopDownloadResponseSchema
+>;
+
 const browserDesktopResponseSchema = v.variant("type", [
   desktopHelloResponseSchema,
   browserExtensionCommandResponseSchema,
+  desktopDownloadResponseSchema,
 ]);
 
 export type BrowserDesktopResponse = v.InferOutput<

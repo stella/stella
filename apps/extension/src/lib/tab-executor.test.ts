@@ -7,10 +7,10 @@ import {
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
+import { CONTROL_TRANSPORT } from "./control-holder";
 import {
   admitControl,
   CONTROL_ADMISSION,
-  CONTROL_TRANSPORT,
   takeOverControl,
 } from "./control-owner";
 import { SIGN_IN_POLICY, type SignInPolicy } from "./sign-in-policy";

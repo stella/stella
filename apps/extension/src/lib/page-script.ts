@@ -1585,7 +1585,7 @@ export const pageScript = (pageOperation: PageOperation) => {
     };
     const taggedHeadingLevel = (element: Element | null): number => {
       const heading = element?.closest(HEADING_SELECTOR) ?? null;
-      if (heading === null || !root.contains(heading)) {
+      if (heading === null || !renderedWithin(root, heading)) {
         return 0;
       }
       const level = HEADING_LEVELS.get(heading.tagName);
@@ -1962,7 +1962,7 @@ export const pageScript = (pageOperation: PageOperation) => {
         if (
           node === null ||
           element === null ||
-          !root.contains(node) ||
+          !renderedWithin(root, node) ||
           pinnedToViewport(element)
         ) {
           continue;

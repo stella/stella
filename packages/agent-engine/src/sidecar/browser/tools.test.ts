@@ -18,6 +18,7 @@ import {
 } from "@stll/api-contract/chat-local-run-tool";
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
+import type { BrowserDownloadOutcome } from "./downloads";
 import { localBrowserResult } from "./local-result";
 import {
   APPROVAL_DECISION,
@@ -142,9 +143,12 @@ const recorder = (
   {
     approvals = "auto",
     decision = APPROVAL_DECISION.approve,
+    downloads = [],
   }: {
     approvals?: DesktopRunnerApprovalMode;
     decision?: (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+    /** What the chat's tab downloaded before the next result. */
+    downloads?: BrowserDownloadOutcome[];
   } = {},
 ) => {
   const sent: Sent[] = [];
@@ -164,6 +168,8 @@ const recorder = (
         },
       };
     },
+    // Handed out once, as the MCP server's inbox does.
+    downloads: async () => downloads.splice(0),
     send: async (
       command: BrowserControlCommand,
       observedTab: BrowserObservedTab | null,
@@ -173,7 +179,7 @@ const recorder = (
     },
     signal: new AbortController().signal,
   };
-  return { asked, context, finished, send: context.send, sent };
+  return { asked, context, downloads, finished, send: context.send, sent };
 };
 
 const parsed = (result: { content: { text: string }[] }): unknown =>
@@ -184,6 +190,85 @@ describe("the local browser tools", () => {
     expect(localBrowserToolList().map(({ name }) => name)).toEqual([
       ...CHAT_LOCAL_RUN_BROWSER_ACTIONS,
     ]);
+  });
+
+  test("a click that downloaded a file reports it once, saved or refused", async () => {
+    const session = createLocalBrowserSession();
+    const saved: BrowserDownloadOutcome = {
+      bytes: 2048,
+      path: "Downloads/Decision 1.pdf",
+      sourceUrl: "https://fixture-library.test/doc/1/file",
+      status: "saved",
+    };
+    const refused: BrowserDownloadOutcome = {
+      message: "The download is not a PDF; only PDFs are saved.",
+      reason: "not_pdf",
+      sourceUrl: "https://fixture-library.test/doc/1/other",
+      status: "refused",
+    };
+    const browser = recorder([page("r-1"), page("r-2"), page("r-3")]);
+    await session.call("snapshot", {}, browser.context);
+    browser.downloads.push(saved, refused);
+
+    const clicked = await session.call("click", { ref: "L1" }, browser.context);
+    expect(parsed(clicked)).toMatchObject({
+      downloads: [saved, refused],
+      url: "https://fixture-library.test/search",
+    });
+    const again = await session.call("snapshot", {}, browser.context);
+    expect(parsed(again)).not.toHaveProperty("downloads");
+  });
+
+  test("a find result carries the downloads that arrived meanwhile", async () => {
+    const session = createLocalBrowserSession();
+    const saved: BrowserDownloadOutcome = {
+      bytes: 10,
+      path: "Downloads/decision.pdf",
+      sourceUrl: "https://fixture-library.test/file",
+      status: "saved",
+    };
+    const browser = recorder([found()], { downloads: [saved] });
+    const result = await session.call(
+      "find",
+      { query: "notice" },
+      browser.context,
+    );
+    expect(parsed(result)).toMatchObject({
+      downloads: [saved],
+      matches: [{ snippet: "the notice period runs" }],
+    });
+  });
+
+  test("a download rides along when the step itself failed", async () => {
+    const session = createLocalBrowserSession();
+    const saved: BrowserDownloadOutcome = {
+      bytes: 10,
+      path: "Downloads/download.pdf",
+      sourceUrl: "https://fixture-library.test/file",
+      status: "saved",
+    };
+    const browser = recorder(
+      [
+        {
+          code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+          message: "Chrome did not report back in time.",
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status: "error",
+        },
+      ],
+      { downloads: [saved] },
+    );
+
+    const opened = await session.call(
+      "open",
+      { url: "https://fixture-library.test/file" },
+      browser.context,
+    );
+    expect(opened.isError).toBe(true);
+    expect(parsed(opened)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+      downloads: [saved],
+    });
   });
 
   test("click and type address the exact page the chat last read", async () => {

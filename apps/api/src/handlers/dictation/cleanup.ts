@@ -58,7 +58,10 @@ type DictationCleanupEndpointOptions = {
  * Cleans up one desktop dictation: the text the computer transcribed, never
  * its audio, goes to the organization's model, which fixes recognition
  * mistakes and turns spoken punctuation and formatting commands into typed
- * segments. Neither the transcript nor the answer is stored or logged.
+ * segments. The request may say where the text goes (the kind of app, and
+ * when the speaker shares them the window title and the text before the
+ * cursor), which only sets the register. Neither the transcript, its
+ * context nor the answer is stored or logged.
  */
 export const createDictationCleanupEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
