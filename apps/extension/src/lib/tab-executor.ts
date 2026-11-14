@@ -1092,12 +1092,12 @@ const readOutcome = async (
     ) {
       return result;
     }
-    if (result === null || result.status !== "error") {
-      return outcomeUnknown("Chrome could not read the page after the action.");
+    if (result?.status === "error") {
+      return outcomeUnknown(
+        `The page after the action could not be read: ${result.message}`,
+      );
     }
-    return outcomeUnknown(
-      `The page after the action could not be read: ${result.message}`,
-    );
+    return outcomeUnknown("Chrome could not read the page after the action.");
   }
   return outcomeUnknown("The page kept navigating after the action.");
 };
