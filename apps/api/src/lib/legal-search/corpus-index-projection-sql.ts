@@ -3,6 +3,7 @@ import { sql, type SQLWrapper } from "drizzle-orm";
 import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
+  CORPUS_INDEX_UNPROVEN_APPEND_INTENT_STATUSES,
   type CorpusIndexDesiredAction,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 
@@ -71,6 +72,13 @@ export const corpusIndexProjectionIsBlocked = (workStatus: SQLWrapper) =>
 /** One source of truth for the partial append-epoch uniqueness boundary. */
 export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
   sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES)})`;
+
+/**
+ * One source of truth for the unproven-byte budget's sum, the prover's claim
+ * and the partial index that serves both.
+ */
+export const corpusIndexProjectionAppendIsUnproven = (status: SQLWrapper) =>
+  sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_UNPROVEN_APPEND_INTENT_STATUSES)})`;
 
 /**
  * One source of truth for "this entity still owes the index an exact action",

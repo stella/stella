@@ -5,6 +5,8 @@ export type CorpusIndexDesiredAction =
 export const CORPUS_INDEX_INTENT_STATUSES = [
   "reserved",
   "append_started",
+  // Accepted by the engine; publication is proven separately, and only an
+  // exact presence proof moves the revision to `applied`.
   "append_committed",
   "applied",
   "cleanup_pending",
@@ -63,6 +65,16 @@ export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
   "append_started",
   "append_committed",
   "applied",
+] as const satisfies readonly CorpusIndexIntentStatus[];
+
+/**
+ * Append phases whose documents the engine may hold without a proof that they
+ * are published: a request in flight, or one accepted and not yet proven.
+ * Their bytes count against an index's unproven-byte budget.
+ */
+export const CORPUS_INDEX_UNPROVEN_APPEND_INTENT_STATUSES = [
+  "append_started",
+  "append_committed",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
 
 /** Append phases whose published document count must already be known. */

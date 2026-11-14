@@ -33,12 +33,18 @@ import {
 import { CORPUS_INDEX_APPEND_CANCEL_REASON } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
+  CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
+  type CorpusProjectionIntentLease,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+/** A request of these revisions, a byte each: the budget is not under test. */
+const requestOf = (leases: readonly CorpusProjectionIntentLease[]) =>
+  leases.map((lease) => ({ lease, appendBytes: 1 }));
 
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
 const USA = { manifest: MANIFEST, indexGroup: "usa" } as const;
@@ -348,14 +354,18 @@ test("an attestation withdrawn after reservation stops the append at start, and 
   expect(
     await inTx(
       async (tx) =>
-        await startCorpusProjectionAppendBatchTx(tx, { leases: batchLeases }),
+        await startCorpusProjectionAppendBatchTx(tx, {
+          revisions: requestOf(batchLeases),
+          unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
+        }),
     ),
-  ).toEqual(
-    batchLeases.map(({ intentId }) => ({
+  ).toEqual({
+    status: "admitted",
+    starts: batchLeases.map(({ intentId }) => ({
       intentId,
       status: "stale_cancelled",
     })),
-  );
+  });
   const [batchLease] = batchLeases;
   if (batchLease === undefined) {
     throw new Error("the batch start reserved nothing");
@@ -402,9 +412,15 @@ test("an attestation withdrawn after reservation stops the append at start, and 
   expect(
     await inTx(
       async (tx) =>
-        await startCorpusProjectionAppendBatchTx(tx, { leases: started }),
+        await startCorpusProjectionAppendBatchTx(tx, {
+          revisions: requestOf(started),
+          unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
+        }),
     ),
-  ).toEqual(started.map(({ intentId }) => ({ intentId, status: "started" })));
+  ).toEqual({
+    status: "admitted",
+    starts: started.map(({ intentId }) => ({ intentId, status: "started" })),
+  });
 });
 
 test("no append reaches a group before its attestation, and its work waits rather than fails", async () => {

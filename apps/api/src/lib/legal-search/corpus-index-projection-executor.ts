@@ -40,7 +40,6 @@ import {
   type CorpusProjectionAppendCommitMode,
   type CorpusProjectionAppendEntry,
   corpusProjectionAppendIngestBudgetMs,
-  type CorpusProjectionPresenceProof,
   planCorpusProjectionAppendRequests,
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -48,12 +47,18 @@ import {
   type CorpusProjectionMaterial,
   readReservedCorpusProjectionMaterialsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
-import type { CorpusProjectionAppendScopedWorkSelection } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import {
+  type CorpusProjectionProofCycleResult,
+  executeCorpusProjectionProofCycle,
+} from "@/api/lib/legal-search/corpus-index-projection-prover";
+import {
+  type CorpusProjectionAppendScopedWorkSelection,
+  indexIdForCorpusProjectionWorkScope,
+} from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   abandonCorpusProjectionAppendTx,
   cancelCorpusProjectionReservationTx,
   classifyCorpusProjectionReservationFailureTx,
-  commitCorpusProjectionAppendTx,
   continueCorpusProjectionAppendPartTx,
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   CORPUS_PROJECTION_LEASE_MAX_MS,
@@ -63,12 +68,18 @@ import {
   CORPUS_PROJECTION_RETRY_MAX_MS,
   CORPUS_PROJECTION_RETRY_MIN_MS,
   type CorpusProjectionAppendAbandonResult,
+  type CorpusProjectionAppendBatchStart,
   type CorpusProjectionIntentLease,
   type CorpusProjectionReservationFailure,
   prepareCorpusProjectionReplacementsTx,
+  proveAcceptedCorpusProjectionAppendsTx,
+  readBackpressuredCorpusProjectionIndexesTx,
+  recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
+  retireAcceptedCorpusProjectionAppendsTx,
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionMultipartAppendTx,
+  validateCorpusProjectionUnprovenBytesBudget,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
   readCorpusAst,
@@ -170,6 +181,18 @@ type ExecuteCorpusProjectionAppendCycleOptions<
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
+  /**
+   * The most bytes of started or accepted, not yet proven appends one index
+   * may hold (`validateCorpusProjectionUnprovenBytesBudget`). A property of
+   * the engine deployment, which queues accepted documents until a commit
+   * publishes them.
+   */
+  unprovenBytesBudget: number;
+  /**
+   * The previous cycle's `proof.afterIndexId`, or null: the cycle's proof pass
+   * takes the next index after it, so passes rotate over the indexes in scope.
+   */
+  proofAfterIndexId: string | null;
   payloadReader?: typeof loadCorpusProjectionPayload;
 };
 
@@ -203,9 +226,16 @@ type CorpusProjectionAppendCycleTiming = {
 };
 
 export type CorpusProjectionAppendCycleResult = {
+  /**
+   * `backpressured`: an index's unproven appends reached the byte budget, so
+   * the cycle reserved or started nothing more for it. Neither a failure nor
+   * idle: `cycleRetryDelayMs` is how long until its earliest unproven
+   * revision can leave the budget.
+   */
   status:
     | "idle"
     | "completed"
+    | "backpressured"
     | "append_unknown"
     | "append_blocked"
     | "engine_unavailable";
@@ -221,16 +251,32 @@ export type CorpusProjectionAppendCycleResult = {
   retryScheduled: number;
   blocked: number;
   requestCount: number;
+  /** The proof cycle this append cycle ran before it reserved. */
+  proof: CorpusProjectionProofCycleResult;
   timing: CorpusProjectionAppendCycleTiming;
 };
 
-const emptyResult = (
-  replacementCleanupScheduled: number,
-  timing: CorpusProjectionAppendCycleTiming,
-): CorpusProjectionAppendCycleResult => ({
+/** How one chain of requests ended. */
+type ProjectionChainStatus = Exclude<
+  CorpusProjectionAppendCycleResult["status"],
+  "idle"
+>;
+
+type EmptyResultOptions = {
+  replacementCleanupScheduled: number;
+  proof: CorpusProjectionProofCycleResult;
+  timing: CorpusProjectionAppendCycleTiming;
+};
+
+const emptyResult = ({
+  replacementCleanupScheduled,
+  proof,
+  timing,
+}: EmptyResultOptions): CorpusProjectionAppendCycleResult => ({
   status: "idle",
   cycleRetryDelayMs: null,
   replacementCleanupScheduled,
+  proof,
   timing,
   reserved: 0,
   applied: 0,
@@ -475,6 +521,8 @@ type PreparedProjectionEntry = {
   ndjson: string;
   ndjsonBytes: number;
   parts: readonly string[];
+  /** What the revision sends over every part; `ndjsonBytes` is the first. */
+  appendBytes: number;
   leaseExpiresAtMs: number;
   appendMode: CorpusProjectionIntentLease["appendMode"];
 };
@@ -752,13 +800,17 @@ const prepareProjectionEntry = (
   if (request === undefined) {
     return panic("Projection revision did not produce an append request");
   }
+  const partBytes = planned.value.map(
+    ({ ndjson }) => Buffer.byteLength(ndjson, "utf-8") + 1,
+  );
   return Result.ok({
     material,
     documentCount: entry.documents.length,
     indexId: material.lease.indexId,
     ndjson: request.ndjson,
-    ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
+    ndjsonBytes: partBytes.at(0) ?? panic("Projection revision has no part"),
     parts: planned.value.map(({ ndjson }) => ndjson),
+    appendBytes: partBytes.reduce((total, bytes) => total + bytes, 0),
     leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
     appendMode: material.lease.appendMode,
   });
@@ -875,83 +927,6 @@ const logAppendFailure = ({
   return { fault, stopForEngine };
 };
 
-type ConfirmProjectionAppendOptions = {
-  client: ProjectionAppendClient;
-  indexId: string;
-  entries: readonly PreparedProjectionEntry[];
-};
-
-type ProvenProjectionEntry = {
-  entry: PreparedProjectionEntry;
-  proof: CorpusProjectionPresenceProof;
-};
-
-/** Each revision belongs to one document_id; require all of its passages. */
-const confirmProjectionAppend = async ({
-  client,
-  indexId,
-  entries,
-}: ConfirmProjectionAppendOptions): Promise<
-  Result<ProvenProjectionEntry[], CorpusIndexError>
-> => {
-  const proven: ProvenProjectionEntry[] = [];
-  for (const batch of chunkItems(
-    entries,
-    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  )) {
-    const census = await proveCorpusProjectionRevisionsPresent({
-      client,
-      indexId,
-      expected: batch.map(({ material, documentCount }) => ({
-        revision: material.lease.intentId,
-        documentCount,
-      })),
-    });
-    if (census.isErr()) {
-      return Result.err(
-        new CorpusIndexError({
-          message: "projection append presence confirmation failed",
-          rejection: "transient",
-          cause: census.error,
-        }),
-      );
-    }
-    switch (census.value.status) {
-      case "unproven":
-        return Result.err(
-          new CorpusIndexError({
-            message:
-              "projection append is not fully searchable after publication",
-            rejection: "transient",
-          }),
-        );
-      case "proven": {
-        const proofs = new Map(
-          census.value.proofs.map((proof) => [proof.revision, proof]),
-        );
-        for (const entry of batch) {
-          proven.push({
-            entry,
-            proof:
-              proofs.get(entry.material.lease.intentId) ??
-              panic(`Lost presence proof ${entry.material.lease.intentId}`),
-          });
-        }
-        break;
-      }
-      default:
-        census.value satisfies never;
-        return panic(`Unhandled presence census: ${String(census.value)}`);
-    }
-  }
-  return Result.ok(proven);
-};
-
-type PublishAndConfirmProjectionAppendOptions =
-  ConfirmProjectionAppendOptions & {
-    commitMode: CorpusProjectionAppendCommitMode;
-  };
-
 /** One request writes one physical index, so one generation. */
 const requestManifest = (
   entries: readonly PreparedProjectionEntry[],
@@ -959,28 +934,255 @@ const requestManifest = (
   entries.at(0)?.material.manifest ??
   panic("A projection append request carries no revision");
 
-const publishAndConfirmProjectionAppend = async ({
+const PRESENCE_CONFIRMATION_FAILED =
+  "projection append presence confirmation failed";
+const PRESENCE_INCOMPLETE =
+  "projection append is not fully searchable after publication";
+
+type AcceptAndProveProjectionAppendOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: ProjectionAppendClient;
+  indexId: string;
+  /** Revisions of one request the engine accepted. */
+  entries: readonly PreparedProjectionEntry[];
+  result: CorpusProjectionAppendCycleResult;
+};
+
+/**
+ * Record an accepted request's revisions, then prove them at once: the request
+ * waited for publication, so an exact count applies a revision. A revision the
+ * census does not count exactly, or a census that fails, is retired through
+ * the same transition with an uncharged retry, and the failure is returned so
+ * the caller stops its chain as it does after an unknown request.
+ */
+const acceptAndProveProjectionAppend = async ({
+  runInTransaction,
   client,
-  commitMode,
   indexId,
   entries,
-}: PublishAndConfirmProjectionAppendOptions) => {
-  const published = await ingestCorpusProjectionRequest(client, {
-    commitMode,
-    manifest: requestManifest(entries),
-    indexId,
-    ndjson: entries.map(({ ndjson }) => ndjson).join("\n"),
-  });
-  if (published.isErr()) {
-    return published;
+  result,
+}: AcceptAndProveProjectionAppendOptions): Promise<CorpusIndexError | null> => {
+  const recorded = await measured(
+    async () =>
+      await runInTransaction(
+        async (tx) =>
+          await recordAcceptedCorpusProjectionAppendsTx(tx, {
+            accepted: entries.map(({ material, documentCount }) => ({
+              intentId: material.lease.intentId,
+              leaseToken: material.lease.leaseToken,
+              documentCount,
+            })),
+          }),
+      ),
+    (elapsedMs) => {
+      result.timing.storeCommitMs += elapsedMs;
+    },
+  );
+  const documentCounts = new Map(
+    entries.map(({ material, documentCount }) => [
+      material.lease.intentId,
+      documentCount,
+    ]),
+  );
+  const accepted: {
+    revision: CorpusProjectionIntentLease["intentId"];
+    documentCount: number;
+  }[] = [];
+  for (const outcome of recorded) {
+    switch (outcome.status) {
+      case "accepted":
+        accepted.push({
+          revision: outcome.intentId,
+          documentCount:
+            documentCounts.get(outcome.intentId) ??
+            panic(`Lost accepted projection revision ${outcome.intentId}`),
+        });
+        break;
+      case "stale_cleanup_pending":
+        result.staleCleanupPending += 1;
+        break;
+      case "lease_lost":
+        result.leaseLost += 1;
+        break;
+      default:
+        outcome satisfies never;
+        panic(`Unhandled accepted append: ${String(outcome)}`);
+    }
   }
-  return await confirmProjectionAppend({ client, indexId, entries });
+  let failure: CorpusIndexError | null = null;
+  for (const batch of chunkItems(
+    accepted,
+    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  )) {
+    const census = await measured(
+      async () =>
+        await proveCorpusProjectionRevisionsPresent({
+          client,
+          indexId,
+          expected: batch,
+        }),
+      (elapsedMs) => {
+        result.timing.ingestMs += elapsedMs;
+      },
+    );
+    if (census.isErr()) {
+      failure ??= new CorpusIndexError({
+        message: PRESENCE_CONFIRMATION_FAILED,
+        rejection: "transient",
+        cause: census.error,
+      });
+    } else if (census.value.unproven.length > 0) {
+      failure ??= new CorpusIndexError({
+        message: PRESENCE_INCOMPLETE,
+        rejection: "transient",
+      });
+    }
+    const settled = await measured(
+      async () =>
+        await runInTransaction(async (tx) =>
+          census.isOk()
+            ? await proveAcceptedCorpusProjectionAppendsTx(tx, {
+                indexId,
+                census: census.value,
+                timing: {
+                  type: "request_waited",
+                  failureMessage: PRESENCE_INCOMPLETE,
+                },
+              })
+            : await retireAcceptedCorpusProjectionAppendsTx(tx, {
+                indexId,
+                revisions: batch,
+                failureMessage: PRESENCE_CONFIRMATION_FAILED,
+              }),
+        ),
+      (elapsedMs) => {
+        result.timing.storeCommitMs += elapsedMs;
+      },
+    );
+    for (const outcome of settled) {
+      switch (outcome.status) {
+        case "applied":
+          result.applied += 1;
+          break;
+        case "stale_cleanup_pending":
+          result.staleCleanupPending += 1;
+          break;
+        case "unproven_cleanup_pending":
+          result.unknownCleanupPending += 1;
+          break;
+        case "blocked":
+          result.blocked += 1;
+          logger.warn("corpus_projection.append_blocked", {
+            entity: outcome.entityId,
+            kind: outcome.kind,
+            attempts: outcome.attempts,
+          });
+          break;
+        // An erasure moved it after the acceptance was recorded.
+        case "already_applied":
+        case "not_accepted":
+          result.leaseLost += 1;
+          break;
+        case "awaiting_publication":
+          return panic(`A waited request left ${outcome.intentId} unproven`);
+        default:
+          outcome satisfies never;
+          return panic(`Unhandled inline proof: ${String(outcome)}`);
+      }
+    }
+  }
+  return failure;
 };
+
+type StopAfterUnknownRequestOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  failure: { stopForEngine: boolean };
+  blocked: boolean;
+  laterLeases: readonly CorpusProjectionIntentLease[];
+  cancelMessage: string;
+  result: CorpusProjectionAppendCycleResult;
+};
+
+/** Cancel the chain behind a request whose outcome stopped it. */
+const stopAfterUnknownRequest = async ({
+  runInTransaction,
+  failure,
+  blocked,
+  laterLeases,
+  cancelMessage,
+  result,
+}: StopAfterUnknownRequestOptions): Promise<
+  "append_unknown" | "append_blocked" | "engine_unavailable"
+> => {
+  addCancellation(
+    result,
+    await cancelReservations({
+      runInTransaction,
+      leases: laterLeases,
+      errorMessage: cancelMessage,
+    }),
+  );
+  if (failure.stopForEngine) {
+    result.status = "engine_unavailable";
+    result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
+    return "engine_unavailable";
+  }
+  result.status = blocked ? "append_blocked" : "append_unknown";
+  return result.status;
+};
+
+const BACKPRESSURED_CANCEL_MESSAGE =
+  "projection append deferred: the index's unproven appends reached the byte budget";
+
+type StopForBackpressureOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  start: Extract<CorpusProjectionAppendBatchStart, { status: "backpressured" }>;
+  /** The refused request's leases and every lease behind it in the chain. */
+  leases: readonly CorpusProjectionIntentLease[];
+  result: CorpusProjectionAppendCycleResult;
+};
+
+/**
+ * Hand back a chain whose next request met its index's byte budget. Nothing
+ * was sent, so its reservations are cancelled rather than failed, and their
+ * entities are reserved again once proofs bring the index under the budget.
+ */
+const stopForBackpressure = async ({
+  runInTransaction,
+  start,
+  leases,
+  result,
+}: StopForBackpressureOptions): Promise<"backpressured"> => {
+  addCancellation(
+    result,
+    await cancelReservations({
+      runInTransaction,
+      leases,
+      errorMessage: BACKPRESSURED_CANCEL_MESSAGE,
+    }),
+  );
+  result.status = "backpressured";
+  result.cycleRetryDelayMs = start.retryDelayMs;
+  return "backpressured";
+};
+
+/** Every lease behind request `requestIndex` in its chain. */
+const laterLeasesOf = (
+  requests: readonly PreparedProjectionRequest[],
+  requestIndex: number,
+  unattemptedLeases: readonly CorpusProjectionIntentLease[],
+): CorpusProjectionIntentLease[] => [
+  ...requests
+    .slice(requestIndex + 1)
+    .flatMap(({ entries }) => entries.map(({ material }) => material.lease)),
+  ...unattemptedLeases,
+];
 
 type ProcessPreparedRequestsOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
+  unprovenBytesBudget: number;
   requests: readonly PreparedProjectionRequest[];
   requestIndex: number;
   unattemptedLeases: readonly CorpusProjectionIntentLease[];
@@ -991,13 +1193,12 @@ const processPreparedRequests = async ({
   runInTransaction,
   client,
   commitMode,
+  unprovenBytesBudget,
   requests,
   requestIndex,
   unattemptedLeases,
   result,
-}: ProcessPreparedRequestsOptions): Promise<
-  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
-> => {
+}: ProcessPreparedRequestsOptions): Promise<ProjectionChainStatus> => {
   const request = requests.at(requestIndex);
   if (request === undefined) {
     return "completed";
@@ -1012,6 +1213,7 @@ const processPreparedRequests = async ({
       runInTransaction,
       client,
       commitMode,
+      unprovenBytesBudget,
       entry: multipart,
       unattemptedLeases: [...laterLeases, ...unattemptedLeases],
       result,
@@ -1023,6 +1225,7 @@ const processPreparedRequests = async ({
       runInTransaction,
       client,
       commitMode,
+      unprovenBytesBudget,
       requests,
       requestIndex: requestIndex + 1,
       unattemptedLeases,
@@ -1032,18 +1235,34 @@ const processPreparedRequests = async ({
   // Start one physical request as a batch. Its shared timestamp is read from
   // PostgreSQL only after all state locks are held, immediately before
   // external I/O; crash recovery cannot settle ahead of a late append.
-  const starts = await measured(
+  const admission = await measured(
     async () =>
       await runInTransaction(
         async (tx) =>
           await startCorpusProjectionAppendBatchTx(tx, {
-            leases: request.entries.map(({ material }) => material.lease),
+            revisions: request.entries.map(({ material, appendBytes }) => ({
+              lease: material.lease,
+              appendBytes,
+            })),
+            unprovenBytesBudget,
           }),
       ),
     (elapsedMs) => {
       result.timing.storeCommitMs += elapsedMs;
     },
   );
+  if (admission.status === "backpressured") {
+    return await stopForBackpressure({
+      runInTransaction,
+      start: admission,
+      leases: [
+        ...request.entries.map(({ material }) => material.lease),
+        ...laterLeasesOf(requests, requestIndex, unattemptedLeases),
+      ],
+      result,
+    });
+  }
+  const { starts } = admission;
   result.cancelled += starts.filter(
     ({ status }) => status === "stale_cancelled",
   ).length;
@@ -1067,6 +1286,7 @@ const processPreparedRequests = async ({
       runInTransaction,
       client,
       commitMode,
+      unprovenBytesBudget,
       requests,
       requestIndex: requestIndex + 1,
       unattemptedLeases,
@@ -1076,11 +1296,11 @@ const processPreparedRequests = async ({
   result.requestCount += 1;
   const appended = await measured(
     async () =>
-      await publishAndConfirmProjectionAppend({
-        client,
+      await ingestCorpusProjectionRequest(client, {
         commitMode,
+        manifest: requestManifest(started),
         indexId: request.indexId,
-        entries: started,
+        ndjson: started.map(({ ndjson }) => ndjson).join("\n"),
       }),
     (elapsedMs) => {
       result.timing.ingestMs += elapsedMs;
@@ -1116,74 +1336,43 @@ const processPreparedRequests = async ({
       };
     });
     recordAbandonedAppendResults(result, abandoned);
-    const laterLeases = requests
-      .slice(requestIndex + 1)
-      .flatMap(({ entries: laterEntries }) =>
-        laterEntries.map(({ material }) => material.lease),
-      );
-    for (const lease of unattemptedLeases) {
-      laterLeases.push(lease);
-    }
-    addCancellation(
+    return await stopAfterUnknownRequest({
+      runInTransaction,
+      failure,
+      blocked: abandoned.blocked.length > 0,
+      laterLeases: laterLeasesOf(requests, requestIndex, unattemptedLeases),
+      cancelMessage: "projection append stopped after an unknown request",
       result,
-      await cancelReservations({
-        runInTransaction,
-        leases: laterLeases,
-        errorMessage: "projection append stopped after an unknown request",
-      }),
-    );
-    if (failure.stopForEngine) {
-      result.status = "engine_unavailable";
-      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
-    } else if (abandoned.blocked.length > 0) {
-      result.status = "append_blocked";
-    } else {
-      result.status = "append_unknown";
-    }
-    return result.status;
+    });
   }
 
-  const committed = await measured(
-    async () =>
-      await runInTransaction(async (tx) => {
-        const outcomes = await mapSequentially(
-          appended.value,
-          async ({ entry, proof }) =>
-            await commitCorpusProjectionAppendTx(tx, {
-              proof,
-              leaseToken: entry.material.lease.leaseToken,
-            }),
-        );
-        const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
-        for (const outcome of outcomes) {
-          switch (outcome.status) {
-            case "applied":
-              counts.applied += 1;
-              break;
-            case "stale_cleanup_pending":
-              counts.staleCleanupPending += 1;
-              break;
-            case "lease_lost":
-              counts.leaseLost += 1;
-              break;
-            default:
-              outcome satisfies never;
-              panic(`Unhandled outcome: ${String(outcome)}`);
-          }
-        }
-        return counts;
+  const unproven = await acceptAndProveProjectionAppend({
+    runInTransaction,
+    client,
+    indexId: request.indexId,
+    entries: started,
+    result,
+  });
+  if (unproven !== null) {
+    return await stopAfterUnknownRequest({
+      runInTransaction,
+      failure: logAppendFailure({
+        indexId: request.indexId,
+        documents: started.length,
+        revisionCount: started.length,
+        error: unproven,
       }),
-    (elapsedMs) => {
-      result.timing.storeCommitMs += elapsedMs;
-    },
-  );
-  result.applied += committed.applied;
-  result.staleCleanupPending += committed.staleCleanupPending;
-  result.leaseLost += committed.leaseLost;
+      blocked: false,
+      laterLeases: laterLeasesOf(requests, requestIndex, unattemptedLeases),
+      cancelMessage: "projection append stopped after an unknown request",
+      result,
+    });
+  }
   return await processPreparedRequests({
     runInTransaction,
     client,
     commitMode,
+    unprovenBytesBudget,
     requests,
     requestIndex: requestIndex + 1,
     unattemptedLeases,
@@ -1195,6 +1384,7 @@ type ProcessMultipartEntryOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
+  unprovenBytesBudget: number;
   entry: PreparedProjectionEntry;
   unattemptedLeases: readonly CorpusProjectionIntentLease[];
   result: CorpusProjectionAppendCycleResult;
@@ -1204,12 +1394,11 @@ const processMultipartEntry = async ({
   runInTransaction,
   client,
   commitMode,
+  unprovenBytesBudget,
   entry,
   unattemptedLeases,
   result,
-}: ProcessMultipartEntryOptions): Promise<
-  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
-> => {
+}: ProcessMultipartEntryOptions): Promise<ProjectionChainStatus> => {
   const lease = entry.material.lease;
   const stop = async ({
     errorMessage,
@@ -1271,13 +1460,7 @@ const processMultipartEntry = async ({
   };
   const appendPart = async (
     partIndex: number,
-  ): Promise<
-    | "completed"
-    | "skipped"
-    | "append_unknown"
-    | "append_blocked"
-    | "engine_unavailable"
-  > => {
+  ): Promise<ProjectionChainStatus | "skipped"> => {
     const ndjson = entry.parts.at(partIndex);
     if (ndjson === undefined) {
       return "completed";
@@ -1286,20 +1469,31 @@ const processMultipartEntry = async ({
       async () =>
         await runInTransaction(async (tx) =>
           partIndex === 0
-            ? await startCorpusProjectionMultipartAppendTx(tx, lease)
-            : await continueCorpusProjectionAppendPartTx(tx, lease),
+            ? await startCorpusProjectionMultipartAppendTx(tx, {
+                revision: { lease, appendBytes: entry.appendBytes },
+                unprovenBytesBudget,
+              })
+            : { status: await continueCorpusProjectionAppendPartTx(tx, lease) },
         ),
       (elapsedMs) => {
         result.timing.storeCommitMs += elapsedMs;
       },
     );
-    if (started !== "started") {
+    if (started.status === "backpressured") {
+      return await stopForBackpressure({
+        runInTransaction,
+        start: started,
+        leases: [lease, ...unattemptedLeases],
+        result,
+      });
+    }
+    if (started.status !== "started") {
       if (partIndex > 0) {
         return await stop({
           errorMessage: "projection multipart append lost its lease",
         });
       }
-      if (started === "stale_cancelled") {
+      if (started.status === "stale_cancelled") {
         result.cancelled += 1;
       } else {
         result.leaseLost += 1;
@@ -1342,68 +1536,36 @@ const processMultipartEntry = async ({
   if (appendStatus !== "completed") {
     return appendStatus;
   }
-  const confirmed = await measured(
-    async () =>
-      await confirmProjectionAppend({
-        client,
-        indexId: entry.indexId,
-        entries: [entry],
-      }),
-    (elapsedMs) => {
-      result.timing.ingestMs += elapsedMs;
-    },
-  );
-  if (confirmed.isErr()) {
-    const failure = logAppendFailure({
+  const unproven = await acceptAndProveProjectionAppend({
+    runInTransaction,
+    client,
+    indexId: entry.indexId,
+    entries: [entry],
+    result,
+  });
+  if (unproven === null) {
+    return "completed";
+  }
+  return await stopAfterUnknownRequest({
+    runInTransaction,
+    failure: logAppendFailure({
       indexId: entry.indexId,
       documents: entry.documentCount,
       revisionCount: 1,
-      error: confirmed.error,
-    });
-    return await stop({
-      errorMessage: confirmed.error.message,
-      rejection: confirmed.error.rejection,
-      fault: failure.fault,
-      stopForEngine: failure.stopForEngine,
-    });
-  }
-  const proven =
-    confirmed.value.at(0) ??
-    panic(`Lost multipart presence proof ${lease.intentId}`);
-  const committed = await measured(
-    async () =>
-      await runInTransaction(
-        async (tx) =>
-          await commitCorpusProjectionAppendTx(tx, {
-            proof: proven.proof,
-            leaseToken: lease.leaseToken,
-          }),
-      ),
-    (elapsedMs) => {
-      result.timing.storeCommitMs += elapsedMs;
-    },
-  );
-  switch (committed.status) {
-    case "applied":
-      result.applied += 1;
-      break;
-    case "stale_cleanup_pending":
-      result.staleCleanupPending += 1;
-      break;
-    case "lease_lost":
-      result.leaseLost += 1;
-      break;
-    default:
-      committed satisfies never;
-      panic(`Unhandled multipart commit: ${String(committed)}`);
-  }
-  return "completed";
+      error: unproven,
+    }),
+    blocked: false,
+    laterLeases: unattemptedLeases,
+    cancelMessage: "projection append stopped after a multipart request",
+    result,
+  });
 };
 
 type ProcessPreparedStreamOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
+  unprovenBytesBudget: number;
   appendStartMarginMs: number;
   materialsReady: readonly CorpusProjectionMaterial[];
   payloadReadConcurrency: number;
@@ -1452,6 +1614,7 @@ const processPreparedStream = async ({
   runInTransaction,
   client,
   commitMode,
+  unprovenBytesBudget,
   appendStartMarginMs,
   materialsReady,
   payloadReadConcurrency,
@@ -1459,9 +1622,7 @@ const processPreparedStream = async ({
   payloadRetryLimit,
   result,
   payloadReader,
-}: ProcessPreparedStreamOptions): Promise<
-  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
-> => {
+}: ProcessPreparedStreamOptions): Promise<ProjectionChainStatus> => {
   let tails = new Map<string, ProjectionAppendTail<PreparedProjectionEntry>>();
   const pendingFailures: ReservationFailure[] = [];
   let consumed = 0;
@@ -1571,6 +1732,7 @@ const processPreparedStream = async ({
         runInTransaction,
         client,
         commitMode,
+        unprovenBytesBudget,
         requests: advanced.flush,
         requestIndex: 0,
         unattemptedLeases: remainingLeases(tails, consumed, materialsReady),
@@ -1594,6 +1756,7 @@ const processPreparedStream = async ({
       runInTransaction,
       client,
       commitMode,
+      unprovenBytesBudget,
       requests: marginFlush,
       requestIndex: 0,
       unattemptedLeases: remainingLeases(tails, consumed, materialsReady),
@@ -1615,11 +1778,38 @@ const processPreparedStream = async ({
     runInTransaction,
     client,
     commitMode,
+    unprovenBytesBudget,
     requests: final.flush,
     requestIndex: 0,
     unattemptedLeases: [],
     result,
   });
+};
+
+/**
+ * A cycle whose proof pass could not census reports that fault unless its
+ * append part already reports a failure of its own, so it never reads as idle,
+ * completed or merely backpressured.
+ */
+const withProofFailure = (
+  result: CorpusProjectionAppendCycleResult,
+  proofFailure: { stopForEngine: boolean } | null,
+): CorpusProjectionAppendCycleResult => {
+  if (
+    proofFailure === null ||
+    (result.status !== "idle" &&
+      result.status !== "completed" &&
+      result.status !== "backpressured")
+  ) {
+    return result;
+  }
+  return proofFailure.stopForEngine
+    ? {
+        ...result,
+        status: "engine_unavailable",
+        cycleRetryDelayMs: CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+      }
+    : { ...result, status: "append_unknown" };
 };
 
 /**
@@ -1643,6 +1833,8 @@ export const executeCorpusProjectionAppendCycle = async <
   payloadReadConcurrency,
   retryDelayMs,
   payloadRetryLimit,
+  unprovenBytesBudget,
+  proofAfterIndexId,
   payloadReader = loadCorpusProjectionPayload,
 }: ExecuteCorpusProjectionAppendCycleOptions<Family>): Promise<CorpusProjectionAppendCycleResult> => {
   validateExecutorPolicy(
@@ -1650,7 +1842,9 @@ export const executeCorpusProjectionAppendCycle = async <
     retryDelayMs,
     payloadRetryLimit,
   );
+  validateCorpusProjectionUnprovenBytesBudget(unprovenBytesBudget);
   const manifest = requireCorpusIndexManifest(family, generation);
+  const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
   const leaseMs = corpusProjectionAppendLeaseMs({ manifest, fillWindowMs });
   const timing: CorpusProjectionAppendCycleTiming = {
     reservationMs: 0,
@@ -1660,38 +1854,92 @@ export const executeCorpusProjectionAppendCycle = async <
     ingestMs: 0,
     storeCommitMs: 0,
   };
+  // Committed revisions whose barrier has passed are proven before anything
+  // is reserved, so one this or an earlier process recorded and never proved
+  // converges here; its entity stays out of reservation until it is settled.
+  const proof = await executeCorpusProjectionProofCycle({
+    runInTransaction,
+    client,
+    family,
+    generation,
+    scope,
+    afterIndexId: proofAfterIndexId,
+  });
+  // A census that failed settled nothing; it is reported as the engine fault
+  // it is, and the append part still runs.
+  const proofFailure =
+    proof.status === "census_failed"
+      ? logAppendFailure({
+          indexId: proof.indexId,
+          documents: proof.claimed,
+          revisionCount: proof.claimed,
+          error: proof.error,
+        })
+      : null;
   // A case-law cycle first reconciles a bounded batch of decisions whose
   // ranking signals moved, so a generation that stores them converges on the
   // corpus as it changes; their re-projections are reserved like any other.
   if (family === "case_law") {
     await drainCaseLawRankingSignalChanges({ runInTransaction });
   }
-  const { replacements, leases } = await measured(
+  const { replacements, backpressured, leases } = await measured(
     async () =>
-      await runInTransaction(async (tx) => ({
-        replacements: await prepareCorpusProjectionReplacementsTx(tx, {
+      await runInTransaction(async (tx) => {
+        const replaced = await prepareCorpusProjectionReplacementsTx(tx, {
           family,
           generation,
           scope,
           limit,
-        }),
-        leases: await reserveCorpusProjectionIntentsTx(tx, {
-          family,
-          generation,
-          scope,
-          limit,
-          leaseMs,
-        }),
-      })),
+        });
+        const overBudget = await readBackpressuredCorpusProjectionIndexesTx(
+          tx,
+          {
+            manifest,
+            indexIds: scopedIndexId === null ? null : [scopedIndexId],
+            unprovenBytesBudget,
+          },
+        );
+        return {
+          replacements: replaced,
+          backpressured: overBudget,
+          leases: await reserveCorpusProjectionIntentsTx(tx, {
+            family,
+            generation,
+            scope,
+            limit,
+            leaseMs,
+            backpressuredIndexIds: overBudget.map(({ indexId }) => indexId),
+          }),
+        };
+      }),
     (elapsedMs) => {
       timing.reservationMs += elapsedMs;
     },
   );
   if (leases.length === 0) {
-    return emptyResult(replacements.length, timing);
+    const empty = emptyResult({
+      replacementCleanupScheduled: replacements.length,
+      proof,
+      timing,
+    });
+    const retryDelays = backpressured.map((index) => index.retryDelayMs);
+    return withProofFailure(
+      retryDelays.length === 0
+        ? empty
+        : {
+            ...empty,
+            status: "backpressured",
+            cycleRetryDelayMs: Math.min(...retryDelays),
+          },
+      proofFailure,
+    );
   }
   const result: CorpusProjectionAppendCycleResult = {
-    ...emptyResult(replacements.length, timing),
+    ...emptyResult({
+      replacementCleanupScheduled: replacements.length,
+      proof,
+      timing,
+    }),
     status: "completed",
     reserved: leases.length,
   };
@@ -1745,6 +1993,7 @@ export const executeCorpusProjectionAppendCycle = async <
     runInTransaction,
     client,
     commitMode,
+    unprovenBytesBudget,
     appendStartMarginMs: corpusProjectionAppendStartMarginMs(manifest),
     materialsReady: materials.ready,
     payloadReadConcurrency,
@@ -1756,5 +2005,5 @@ export const executeCorpusProjectionAppendCycle = async <
   if (result.status === "completed" && result.blocked > 0) {
     result.status = "append_blocked";
   }
-  return result;
+  return withProofFailure(result, proofFailure);
 };

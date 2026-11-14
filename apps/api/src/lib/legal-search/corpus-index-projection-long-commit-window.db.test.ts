@@ -35,7 +35,10 @@ import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/
 import { CORPUS_PROJECTION_APPEND_COMMIT_MODE } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
-import { CORPUS_PROJECTION_LEASE_MIN_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  CORPUS_PROJECTION_LEASE_MIN_MS,
+  CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
+} from "@/api/lib/legal-search/corpus-index-projection-store";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -220,6 +223,8 @@ test("a long commit window fills one request with every reserved revision", asyn
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
+    proofAfterIndexId: null,
   });
 
   expect(result.reserved).toBe(REVISIONS);
