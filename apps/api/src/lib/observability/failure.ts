@@ -731,11 +731,15 @@ export const identityFields = (
         : (root.code ?? root.awsName ?? root.tag)),
   };
   const rootFrame = frameValue(root.frame);
-  const frame =
+  // A deadline fires from a timer, whose stack often holds no caller frame;
+  // then the helper frame stays rather than leaving the field empty.
+  const callerFrame =
     root.timeout !== undefined &&
     rootFrame?.includes("packages/concurrency/src/with-timeout.ts:") === true
       ? frameValue(root.timeout.callerFrame)
-      : rootFrame;
+      : undefined;
+  const frame =
+    callerFrame === undefined || callerFrame === "" ? rootFrame : callerFrame;
   if (frame !== undefined) {
     fields["error.frame"] = frame;
   }

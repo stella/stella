@@ -140,6 +140,33 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const staticLabelTables = new Set<string>();
         const staticLabelConstants = new Set<string>();
+        const checkLabels = (node: {
+          callee: unknown;
+          arguments: readonly unknown[];
+        }): void => {
+          const name = callName(node.callee);
+          if (name === null || !/timeout/iu.test(name)) {
+            return;
+          }
+          for (const argument of node.arguments) {
+            const value = labelValue(argument);
+            const isStaticTableLookup =
+              isAstNode(value) &&
+              value.type === "MemberExpression" &&
+              isIdentifier(value.object) &&
+              staticLabelTables.has(value.object.name);
+            const isStaticConstant =
+              isIdentifier(value) && staticLabelConstants.has(value.name);
+            if (
+              isAstNode(value) &&
+              !isStaticString(value) &&
+              !isStaticTableLookup &&
+              !isStaticConstant
+            ) {
+              context.report({ node: value, messageId: "dynamic" });
+            }
+          }
+        };
         return {
           Program(node) {
             for (const statement of node.body) {
@@ -158,28 +185,7 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
-            const name = callName(node.callee);
-            if (name === null || !/timeout/iu.test(name)) {
-              return;
-            }
-            for (const argument of node.arguments) {
-              const value = labelValue(argument);
-              const isStaticTableLookup =
-                isAstNode(value) &&
-                value.type === "MemberExpression" &&
-                isIdentifier(value.object) &&
-                staticLabelTables.has(value.object.name);
-              const isStaticConstant =
-                isIdentifier(value) && staticLabelConstants.has(value.name);
-              if (
-                isAstNode(value) &&
-                !isStaticString(value) &&
-                !isStaticTableLookup &&
-                !isStaticConstant
-              ) {
-                context.report({ node: value, messageId: "dynamic" });
-              }
-            }
+            checkLabels(node);
           },
         };
       },

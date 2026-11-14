@@ -142,6 +142,20 @@ describe("timeout observability", () => {
     );
   });
 
+  test("keeps the helper frame when the timer's stack names no caller", () => {
+    const error = timeout(
+      "workflow-reconcile",
+      [
+        "TimeoutError: expired",
+        "    at callback (/app/packages/concurrency/src/with-timeout.ts:45:25)",
+      ].join("\n"),
+    );
+
+    expect(identityFields(readEvidence(error))["error.frame"]).toBe(
+      "/app/packages/concurrency/src/with-timeout.ts:45:25",
+    );
+  });
+
   test("emits root timeout fields and a direct cause label", () => {
     const root = timeout("workflow-reconcile");
     const wrapped = new Error("wrapper", {
