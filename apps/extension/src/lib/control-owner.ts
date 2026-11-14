@@ -1,8 +1,16 @@
+import { panic } from "better-result";
+
 import {
   BROWSER_CONTROL_ACTION,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
+import {
+  CONTROL_TRANSPORT,
+  type ControlHolder,
+  type ControlTransport,
+  readControlOwner,
+} from "./control-holder";
 import {
   BROWSER_CONTROL_OWNER_STORAGE_KEY,
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
@@ -21,23 +29,6 @@ import { releaseContainedTabs } from "./tab-containment";
  * to open, and the member takes it back for the web connection by pairing
  * or handing a tab over from the popup.
  */
-
-export const CONTROL_TRANSPORT = {
-  desktop: "desktop",
-  web: "web",
-} as const;
-
-type ControlTransport =
-  (typeof CONTROL_TRANSPORT)[keyof typeof CONTROL_TRANSPORT];
-
-/** The desktop chat holding the browser; `null` while the web connection does. */
-export const readControlOwner = async (): Promise<string | null> => {
-  const stored = await chrome.storage.session.get(
-    BROWSER_CONTROL_OWNER_STORAGE_KEY,
-  );
-  const owner: unknown = stored[BROWSER_CONTROL_OWNER_STORAGE_KEY];
-  return typeof owner === "string" ? owner : null;
-};
 
 /** Whether `controllerId` holds the browser now. */
 const holdsControl = async (
@@ -87,16 +78,27 @@ export const admitControl = async ({
 };
 
 /**
- * Hands the browser to `controllerId`: the previous holder's controlled tab
- * stops being controlled and every contained tab goes back to the member,
- * then the new holder is recorded. Called only as the last step of a
- * takeover that nothing refused, so a refusal never changes the previous
- * holder's tabs or their rules.
+ * Hands the browser to `holder`: the previous holder's controlled tab stops
+ * being controlled and every contained tab goes back to the member, then
+ * the new holder is recorded. The web connection is recorded as no record,
+ * so ending its pairing releases what it holds. Called only as the last
+ * step of a takeover that nothing refused, so a refusal never changes the
+ * previous holder's tabs or their rules.
  */
-export const takeOverControl = async (controllerId: string): Promise<void> => {
+export const takeOverControl = async (holder: ControlHolder): Promise<void> => {
   await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
   await releaseContainedTabs();
-  await chrome.storage.session.set({
-    [BROWSER_CONTROL_OWNER_STORAGE_KEY]: controllerId,
-  });
+  switch (holder.transport) {
+    case CONTROL_TRANSPORT.desktop:
+      await chrome.storage.session.set({
+        [BROWSER_CONTROL_OWNER_STORAGE_KEY]: holder.controllerId,
+      });
+      return;
+    case CONTROL_TRANSPORT.web:
+      await chrome.storage.session.remove(BROWSER_CONTROL_OWNER_STORAGE_KEY);
+      return;
+    default:
+      holder satisfies never;
+      panic("Unhandled control holder");
+  }
 };

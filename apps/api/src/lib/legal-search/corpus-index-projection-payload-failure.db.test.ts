@@ -182,6 +182,7 @@ test("unreadable payloads are persisted as they are read, not once the batch dra
     payloadReadConcurrency: READ_CONCURRENCY,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
   });
 
   expect(result.reserved).toBe(REVISIONS);

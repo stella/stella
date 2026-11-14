@@ -96,6 +96,8 @@ const control = asTestRaw<DesktopRunnerControl>({
       type: "available",
       desktopId: DESKTOP_ID,
       harness: CODEX_READY,
+      linkedFolders: [],
+      approvedFolderIds: [],
     };
     return await Promise.resolve(Result.ok(picked));
   },

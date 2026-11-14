@@ -15,6 +15,8 @@ import type {
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
 
+import type { HarnessStepOutput } from "./step-output";
+
 type DesktopRunnerApprovalDecision =
   (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
 type DesktopRunnerApprovalKind = (typeof DESKTOP_RUNNER_APPROVAL_KINDS)[number];
@@ -66,6 +68,11 @@ export type HarnessToolCall = {
    * reads it, and it is not part of what a turn reports.
    */
   localInput?: unknown;
+  /**
+   * The harness's id of the subagent step that made the call; absent on the
+   * main thread. Reported beside the call, never inside its input.
+   */
+  parentCallId?: string;
 };
 
 export type HarnessToolResult = {
@@ -73,6 +80,12 @@ export type HarnessToolResult = {
   /** `cancelled`: the harness never ran the call to its end because the
    *  turn was stopped or a new message cut it off; not a failure. */
   status: "succeeded" | "failed" | "cancelled";
+  /**
+   * What a native step produced (a command's output, a change's diff). It
+   * is the step's content: the sidecar keeps it and sends it to stella beside
+   * the turn's events, and it is not part of what a turn reports.
+   */
+  localOutput?: HarnessStepOutput;
 };
 
 /**
@@ -98,7 +111,7 @@ export type HarnessApprovalRequest = {
  * What an approval asks the user to allow, from what chat keeps of the call
  * (`chatLocalRunApprovalMessage`): a command's shown command line, else the
  * harness's shown reason, or the tool's name. Never more of a step than its
- * call shows, so a heredoc's text stays here.
+ * call shows, so a heredoc's text is never in it.
  */
 export const approvalMessage = (request: HarnessApprovalRequest): string =>
   chatLocalRunApprovalMessage({

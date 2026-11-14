@@ -31,7 +31,12 @@ import {
   type LocalRunQuestionPause,
   toggleLocalRunOption,
 } from "@stll/api-contract/chat-local-run-question";
+import {
+  localRunProposedPlan,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import { chatToolLabel } from "@stll/api-contract/chat-tool-activity";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import {
   getCompleteConnectorInputRows,
@@ -42,6 +47,7 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
+import { useLocalRunSubtitleText } from "@/components/local-run-subtitle";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -444,6 +450,7 @@ const ApprovalRow = ({
   threadId: string;
 }) => {
   const t = useTranslations("chat");
+  const localRunSubtitleText = useLocalRunSubtitleText();
   const { end } = useSession();
   const [granting, setGranting] = useState<ChatToolGrantScope>();
   const [failure, setFailure] = useState<WriteFailure | null>(null);
@@ -452,12 +459,40 @@ const ApprovalRow = ({
     input: approval.input,
     requestLabel: t("inputRequest"),
   };
+  // A step a coding agent asks about on the person's computer reads as its
+  // row does: its kind, and the command, file or search it is about.
+  const local = localRunToolView({
+    name: approval.toolName,
+    input: approval.input,
+    output: undefined,
+  });
+  const localAbout =
+    local === null
+      ? null
+      : (localRunProposedPlan({
+          name: approval.toolName,
+          input: approval.input,
+        }) ?? localRunSubtitleText(local.subtitle));
+  const title = (() => {
+    if (local === null) {
+      return humanizeIdentifier(approval.toolName);
+    }
+    return local.titleKind === null
+      ? t(`tool.${chatToolLabel(approval.toolName)}`)
+      : t(`localRun.title.${local.titleKind}`);
+  })();
   // A credential-backed call sends exactly these arguments once approved, so
-  // the phone shows every one in full, as the web does.
-  const rows =
-    approval.toolName === USE_CONNECTOR_SECRET_TOOL_NAME
+  // the phone shows every one in full, as the web does. A coding agent's
+  // step that names what it is about needs no rows; one that names nothing
+  // (a subagent without a description) still shows what it was given.
+  const rows = (() => {
+    if (local !== null && localAbout !== null && localAbout !== "") {
+      return [];
+    }
+    return approval.toolName === USE_CONNECTOR_SECRET_TOOL_NAME
       ? getCompleteConnectorInputRows(rowOptions)
       : getReadableInputRows(rowOptions);
+  })();
   const held = busy || granting !== undefined;
 
   const grant = async (scope: ChatToolGrantScope) => {
@@ -486,8 +521,11 @@ const ApprovalRow = ({
     <View className="gap-2">
       <View className="gap-0.5">
         <Text variant="label">{t("approvalTitle")}</Text>
-        <Text variant="caption">{humanizeIdentifier(approval.toolName)}</Text>
+        <Text variant="caption">{title}</Text>
       </View>
+      {localAbout === null || localAbout === "" ? null : (
+        <Text selectable>{localAbout}</Text>
+      )}
       {rows.map((row) => (
         <View className="gap-0.5" key={row.key}>
           <Text variant="caption">{row.label}</Text>

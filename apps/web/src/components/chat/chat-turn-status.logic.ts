@@ -2,10 +2,12 @@ import type { ChatClientState, ToolCallState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import {
+  getChatToolActivityCategory,
+  isUserInputChatToolName,
+} from "@stll/api-contract/chat-tool-activity";
 import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 
-import { getChatToolActivityCategory } from "@/components/chat/chat-activity.logic";
-import { isUserInputChatToolName } from "@/components/chat/chat-ui-tools";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
 
 export type TurnActivePhase =

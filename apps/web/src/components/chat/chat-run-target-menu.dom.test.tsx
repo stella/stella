@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import type {
   ChatLocalRunReadiness,
@@ -9,8 +9,9 @@ import type {
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat" });
+const previousFetch = globalThis.fetch;
 
-const { cleanup, fireEvent, render, waitFor } =
+const { cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -20,9 +21,16 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { localRunnersOptions } = await import("@/features/chat/queries");
 const { ChatRunTargetMenu, LocalModelOptions } =
   await import("./chat-run-target-menu");
+const desktopBridge = await import("@/lib/desktop-bridge");
+const { DESKTOP_PING_URL } =
+  await import("@/features/chat/desktop-launch.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  globalThis.fetch = previousFetch;
+  mock.restore();
+});
 afterAll(async () => {
   cleanup();
   await unregisterDomEnvironment();
@@ -32,7 +40,7 @@ const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
 
 /**
  * One connected computer: Codex runs in its one mode and offers no effort
- * choice, and Claude Code cannot use its sandbox here.
+ * choice, and Claude Code can plan but cannot use its sandbox here.
  */
 const READINESS: ChatLocalRunReadiness = {
   status: "enabled",
@@ -41,6 +49,7 @@ const READINESS: ChatLocalRunReadiness = {
       desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
       connected: true,
       lastSeenAt: "2026-11-03T10:00:00.000Z",
+      linkedFolders: [],
       harnesses: [
         {
           id: "codex",
@@ -57,7 +66,7 @@ const READINESS: ChatLocalRunReadiness = {
           state: "ready",
           version: "2.1.309",
           capabilities: ["approvals"],
-          approvalModes: ["ask", "auto"],
+          approvalModes: ["plan", "ask", "auto"],
           models: [
             {
               id: "sonnet",
@@ -186,6 +195,20 @@ test("a local turn offers every permission mode, and the ones this computer cann
   );
 });
 
+test("Plan is offered with what it does, under any limit, and choosing it keeps the harness and model", async () => {
+  const { view, chosen } = renderMenu(LOCAL, {
+    ...READINESS,
+    maxApprovals: "ask",
+  });
+  const plan = await radioItem(view, "Plan");
+  expect(plan.getAttribute("aria-disabled")).not.toBe("true");
+  expect(plan.textContent).toContain(
+    "Reads and plans first; asks before any change until you approve the plan.",
+  );
+  fireEvent.click(plan);
+  expect(chosen).toEqual([{ ...LOCAL, approvals: "plan" }]);
+});
+
 test("a mode above the organization's limit is disabled with that reason, apart from the ones the computer cannot run", async () => {
   const { view, chosen } = renderMenu(LOCAL, {
     ...READINESS,
@@ -249,7 +272,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     ),
   ).toBeTruthy();
   expect(view.getByText("Permissions")).toBeTruthy();
-  // The places alone: no permission mode to pick.
+  // The places and the chat's folder alone: no permission mode to pick.
   expect(
     view
       .getAllByRole("menuitemradio")
@@ -258,6 +281,7 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
     `${messages.chat.runOn.cloud}${messages.chat.runOn.cloudDescription}`,
     "Codex",
     "Claude Code",
+    messages.chat.localRun.folderOwn,
   ]);
 });
 
@@ -296,4 +320,77 @@ test("picking another agent starts it on its recommended model, and the chosen a
   });
   fireEvent.click(claude);
   expect(chosen).toEqual([LOCAL]);
+});
+
+test("choosing an agent on a computer that is not connected opens stella desktop once, and the agent is offered once it connects", async () => {
+  const offline: ChatLocalRunReadiness = {
+    ...READINESS,
+    runners: READINESS.runners.map((runner) => ({
+      ...runner,
+      connected: false,
+    })),
+  };
+  // Opening the desktop is what connects the computer, as on a real machine;
+  // the read that sees it is held so the test sees the wait.
+  let opened = false;
+  const connected = Promise.withResolvers<undefined>();
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request) => {
+      const { pathname } = new URL(
+        input instanceof Request ? input.url : String(input),
+      );
+      if (!pathname.endsWith("/chat/local-runners")) {
+        return Response.json(
+          { message: "Unexpected request" },
+          { status: 500 },
+        );
+      }
+      await connected.promise;
+      return Response.json(opened ? READINESS : offline);
+    },
+    { preconnect: previousFetch.preconnect },
+  );
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => {
+    opened = true;
+  });
+  const { view, chosen } = renderMenu({ kind: "cloud" }, offline);
+
+  const codex = await waitFor(() => {
+    const item = view
+      .getAllByRole("menuitem")
+      .find((candidate) => candidate.textContent.startsWith("Codex"));
+    if (item === undefined) {
+      throw new Error("no Codex row");
+    }
+    return item;
+  });
+  expect(codex.textContent).toContain(messages.chat.runOn.hintOffline);
+  // The row's description is a status region before the click, so the
+  // change to the opening message is announced.
+  const status = within(codex).getByRole("status");
+  expect(status.textContent).toBe(messages.chat.runOn.hintOffline);
+  expect(open).not.toHaveBeenCalled();
+
+  fireEvent.click(codex);
+
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledWith(DESKTOP_PING_URL);
+  await waitFor(() =>
+    expect(status.textContent).toBe(
+      messages.settings.account.desktopCardOpeningTitle,
+    ),
+  );
+  expect(within(codex).getByRole("status")).toBe(status);
+  // A second click while it opens takes nothing: one open per gesture.
+  fireEvent.click(codex);
+  expect(open).toHaveBeenCalledTimes(1);
+
+  connected.resolve(undefined);
+
+  // Connected: the agent is offered to pick, nothing was chosen for the
+  // member, and the desktop was opened once.
+  expect(await radioItem(view, "Codex")).toBeTruthy();
+  expect(view.queryByText(messages.chat.runOn.hintOffline)).toBeNull();
+  expect(chosen).toEqual([]);
+  expect(open).toHaveBeenCalledTimes(1);
 });

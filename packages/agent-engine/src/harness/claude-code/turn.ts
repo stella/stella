@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
 import {
   chatLocalRunAnswersRefusal,
   chatLocalRunQuestionsSchema,
@@ -21,11 +22,14 @@ import {
   type HarnessQuestion,
   type HarnessSessionId,
   type HarnessToolCall,
+  type HarnessToolResult,
   type HarnessUsage,
 } from "../events";
-import { unsupportedItem } from "../tool-parts";
+import { SubagentConversation } from "../step-output";
+import { stepOfSubagent, unsupportedItem } from "../tool-parts";
 import {
   type Detached,
+  type HarnessTurnBackground,
   HarnessTurnLifecycle,
   respondError,
   settlesWithin,
@@ -37,6 +41,10 @@ import {
   ASK_USER_QUESTION_TOOL,
   claudeMessageHandling,
   claudeSystemHandling,
+  EXIT_PLAN_MODE_TOOL,
+  resultText,
+  startsSubagent,
+  subagentPromptOf,
   toolCallForUse,
   toolResultFor,
 } from "./items";
@@ -49,6 +57,7 @@ import {
   CLAUDE_STOPPED_TOOL_KINDS,
   type ClaudeControlRequestSubtype,
   type ClaudeResultMessage,
+  type ClaudeToolResult,
   type ClaudeToolUse,
   ContentBlockSchema,
   isClaudeContentBlockType,
@@ -75,8 +84,10 @@ import {
  * content block, so streamed text deltas are paired with the block they
  * belong to by message id and order; a question is the `AskUserQuestion`
  * tool's permission prompt, answered by allowing the call with the answers
- * in its input; a subagent's messages carry the tool call that started it
- * and are not this turn's output.
+ * in its input; a proposed plan is the `ExitPlanMode` tool's permission
+ * prompt, whose input the CLI fills with the plan; a subagent's messages
+ * carry the tool call that started it, and of them only its tool calls are
+ * this turn's output, as steps of that call.
  */
 
 /** Native permission replies, as the runner protocol's decisions. */
@@ -91,14 +102,39 @@ const ONE_OFF_OPTIONS = CLAUDE_APPROVAL_OPTIONS.filter(
   ({ decision }) => decision !== "approve_for_session",
 );
 
+/**
+ * A suggested rule of this type would change the turn's permission mode; the
+ * mode is the member's choice for the thread, so it is never offered.
+ */
+const SET_MODE_SUGGESTION = "setMode";
+
 /** What the model reads when the user denies a tool call. */
 const DENIED_MESSAGE = "The user denied this action.";
+/** Chat shows a proposed plan up to this length; a longer one is never put
+ *  to the member, since approving it would approve steps they cannot see. */
+const MAX_PLAN_CHARS = CHAT_LOCAL_RUN_TOOL_LIMITS.proposedPlan;
+const PLAN_MISSING_MESSAGE =
+  "No plan was given for the user to review: propose the plan's text.";
+const PLAN_TOO_LONG_MESSAGE = `The plan is too long for the user to review: keep it under ${MAX_PLAN_CHARS} characters and propose it again.`;
 /** Rules granted for the session stay in memory, never in a settings file. */
 const SESSION_DESTINATION = "session";
 const MAX_REASON_CHARS = 2000;
 const ESCAPE = "\u001B";
 
 const requestIdFor = (controlId: string) => `claude-request-${controlId}`;
+
+const SubagentMessageSchema = v.looseObject({
+  parent_tool_use_id: v.pipe(v.string(), v.nonEmpty()),
+});
+
+/**
+ * The call that started the subagent a message belongs to, read before the
+ * message's own schema, or `null` for a message of the main thread.
+ */
+const subagentCallOf = (raw: unknown): string | null => {
+  const parsed = v.safeParse(SubagentMessageSchema, raw);
+  return parsed.success ? parsed.output.parent_tool_use_id : null;
+};
 
 type PendingInteraction =
   | {
@@ -107,6 +143,12 @@ type PendingInteraction =
       input: Readonly<Record<string, unknown>>;
       /** Permission rules the CLI suggests remembering, if approved. */
       suggestions: readonly Readonly<Record<string, unknown>>[];
+      /**
+       * The main thread's `ExitPlanMode` call this approval answers, else
+       * `null`. A subagent's plan is its own: approving it does not take the
+       * turn out of plan mode.
+       */
+      planToolUseId: string | null;
     }
   | {
       type: "question";
@@ -130,6 +172,8 @@ type EarlyMessage =
 type HeldToolUse = {
   use: Pick<ClaudeToolUse, "name" | "input">;
   toolCall: HarnessToolCall;
+  /** The call that started the subagent this call belongs to, else `null`. */
+  parentCallId: string | null;
 };
 
 /**
@@ -284,6 +328,14 @@ type ClaudeCodeTurnSessionOptions = {
    * about like any other action.
    */
   sandboxNetworkHosts: ReadonlySet<string>;
+  /**
+   * The CLI mode a turn started in plan mode switches to once the member
+   * approves its plan; `null` for a turn at any other level, where an
+   * approved plan returns the CLI to the mode it planned from.
+   */
+  approvedPlanMode: string | null;
+  /** The process's background work at the turn's end. */
+  background: HarnessTurnBackground<ClaudeCliClient>;
 };
 
 /**
@@ -300,8 +352,16 @@ export class ClaudeCodeTurnSession {
   private readonly rejectedResets: Temporal.Instant[] = [];
   private readonly early: EarlyMessage[] = [];
   private readonly toolUses = new Map<string, HeldToolUse>();
+  /**
+   * What each subagent at work has written, by the call that started it,
+   * held until that call's result ends the subagent. It never leaves this
+   * computer: the call's result keeps it for the member to open here.
+   */
+  private readonly conversations = new Map<string, SubagentConversation>();
   private readonly pending = new Map<string, PendingInteraction>();
   private readonly resolved = new Set<string>();
+  /** Approved `ExitPlanMode` calls whose result has not arrived yet. */
+  private readonly approvedPlans = new Set<string>();
   /** Text block ids streamed per assistant message, in block order. */
   private readonly streamedTexts = new Map<string, string[]>();
   /** The streamed message's text block ids by content block index. */
@@ -314,20 +374,27 @@ export class ClaudeCodeTurnSession {
   private readonly lifecycle: HarnessTurnLifecycle<ClaudeCliClient>;
   private readonly stellaServer: string;
   private readonly sandboxNetworkHosts: ReadonlySet<string>;
+  private readonly approvedPlanMode: string | null;
+  private readonly detached: Detached;
 
   constructor({
     gracePeriodMs,
     detached,
     stellaServer,
     sandboxNetworkHosts,
+    approvedPlanMode,
+    background,
   }: ClaudeCodeTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
       detached,
       name: "claude-turn",
+      background,
     });
     this.stellaServer = stellaServer;
     this.sandboxNetworkHosts = sandboxNetworkHosts;
+    this.approvedPlanMode = approvedPlanMode;
+    this.detached = detached;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -446,14 +513,16 @@ export class ClaudeCodeTurnSession {
    * Something the pinned protocol does not define, shown as a failed
    * activity so the turn visibly did something Stella skipped.
    */
-  private unsupported(kind: string) {
+  private unsupported(kind: string, parentCallId: string | null = null) {
     this.unsupportedItems += 1;
+    const { toolCall, result } = unsupportedItem(
+      `claude-unsupported-${String(this.unsupportedItems)}`,
+      kind,
+    );
     this.emit({
       type: "tool.completed",
-      ...unsupportedItem(
-        `claude-unsupported-${String(this.unsupportedItems)}`,
-        kind,
-      ),
+      toolCall: stepOfSubagent(toolCall, parentCallId),
+      result,
     });
   }
 
@@ -463,6 +532,14 @@ export class ClaudeCodeTurnSession {
       return;
     }
     const handling = claudeMessageHandling(type);
+    const parentCallId = subagentCallOf(raw);
+    if (
+      parentCallId !== null &&
+      (handling === "assistant" || handling === "user" || handling === "stream")
+    ) {
+      this.subagentMessage(handling, raw, parentCallId);
+      return;
+    }
     switch (handling) {
       case "assistant":
         this.assistant(
@@ -534,7 +611,7 @@ export class ClaudeCodeTurnSession {
   private stream(
     parsed: v.InferOutput<typeof StreamEventMessageSchema> | null,
   ) {
-    if (parsed === null || (parsed.parent_tool_use_id ?? null) !== null) {
+    if (parsed === null) {
       return;
     }
     const { event } = parsed;
@@ -609,7 +686,7 @@ export class ClaudeCodeTurnSession {
   private assistant(
     parsed: v.InferOutput<typeof AssistantMessageSchema> | null,
   ) {
-    if (parsed === null || (parsed.parent_tool_use_id ?? null) !== null) {
+    if (parsed === null) {
       return;
     }
     if (parsed.error !== undefined) {
@@ -655,12 +732,9 @@ export class ClaudeCodeTurnSession {
           }
           break;
         }
-        case "tool_use": {
-          const toolCall = toolCallForUse(block, this.stellaServer);
-          this.toolUses.set(block.id, { use: block, toolCall });
-          this.emit({ type: "tool.started", toolCall });
+        case "tool_use":
+          this.toolUse(block, null);
           break;
-        }
         case "redacted_thinking":
           // Encrypted reasoning carries no text to show.
           break;
@@ -671,45 +745,185 @@ export class ClaudeCodeTurnSession {
     }
   }
 
-  private user(parsed: v.InferOutput<typeof UserMessageSchema> | null) {
-    if (
-      parsed === null ||
-      (parsed.parent_tool_use_id ?? null) !== null ||
-      typeof parsed.message.content === "string"
-    ) {
+  private toolUse(block: ClaudeToolUse, parentCallId: string | null) {
+    const toolCall = toolCallForUse(block, this.stellaServer, parentCallId);
+    this.toolUses.set(block.id, { use: block, toolCall, parentCallId });
+    if (startsSubagent(block)) {
+      this.conversations.set(block.id, new SubagentConversation());
+    }
+    // A proposed plan opens with its approval: the CLI adds the plan
+    // to the call's input only when it asks about the call.
+    if (block.name !== EXIT_PLAN_MODE_TOOL) {
+      this.emit({ type: "tool.started", toolCall });
+    }
+  }
+
+  /**
+   * A subagent's message: its tool calls and their results are steps of the
+   * call that started it. What it wrote is held for that call's result to
+   * keep on this computer, with what it was told and the report the call
+   * returns; none of it is the turn's, and what it thought is not read.
+   *
+   * These steps only add to what chat shows, so a message or block of a
+   * subagent that does not have its shape is never a protocol violation: it
+   * becomes an unsupported step of the subagent, and the turn goes on.
+   */
+  private subagentMessage(
+    handling: "assistant" | "user" | "stream",
+    raw: unknown,
+    parentCallId: string,
+  ) {
+    switch (handling) {
+      case "stream":
+        // A subagent's text as it is written.
+        return;
+      case "assistant": {
+        const parsed = this.readOfSubagent(AssistantMessageSchema, raw, {
+          kind: "assistant",
+          parentCallId,
+        });
+        if (parsed === null) {
+          return;
+        }
+        for (const block of parsed.message.content) {
+          if (block.type === "text") {
+            // A text block that does not have its shape is left out of the
+            // kept conversation; it is no step, so nothing is shown for it.
+            const written = v.safeParse(ContentBlockSchema, block);
+            if (written.success && written.output.type === "text") {
+              this.conversations.get(parentCallId)?.add(written.output.text);
+            }
+            continue;
+          }
+          if (block.type !== "tool_use") {
+            continue;
+          }
+          const use = this.readOfSubagent(ContentBlockSchema, block, {
+            kind: block.type,
+            parentCallId,
+          });
+          if (use?.type === "tool_use") {
+            this.toolUse(use, parentCallId);
+          }
+        }
+        return;
+      }
+      case "user": {
+        const parsed = this.readOfSubagent(UserMessageSchema, raw, {
+          kind: "user",
+          parentCallId,
+        });
+        if (parsed !== null) {
+          this.user(parsed, parentCallId);
+        }
+        return;
+      }
+      default:
+        handling satisfies never;
+        panic("Unhandled Claude subagent message");
+    }
+  }
+
+  /**
+   * What a subagent sent, or `null` when it does not have `schema`'s shape,
+   * which is then shown as an unsupported step of the subagent.
+   */
+  private readOfSubagent<TSchema extends v.GenericSchema>(
+    schema: TSchema,
+    raw: unknown,
+    { kind, parentCallId }: { kind: string; parentCallId: string },
+  ): v.InferOutput<TSchema> | null {
+    const parsed = v.safeParse(schema, raw);
+    if (parsed.success) {
+      return parsed.output;
+    }
+    this.unsupported(kind, parentCallId);
+    return null;
+  }
+
+  /**
+   * A message's tool results. `parentCallId` is the call that started the
+   * subagent whose message this is, or `null` on the main thread.
+   */
+  private user(
+    parsed: v.InferOutput<typeof UserMessageSchema> | null,
+    parentCallId: string | null = null,
+  ) {
+    if (parsed === null || typeof parsed.message.content === "string") {
       return;
     }
-    // Text blocks here are the CLI's own notes to the model; only tool
-    // results are output.
+    // Text blocks here are the CLI's own notes to the model, or the prompt a
+    // subagent was started with; only tool results are output.
     for (const raw of parsed.message.content) {
       if (raw.type !== "tool_result") {
         continue;
       }
-      const block = this.parse(ToolResultBlockSchema, raw, "tool result");
+      const block =
+        parentCallId === null
+          ? this.parse(ToolResultBlockSchema, raw, "tool result")
+          : this.readOfSubagent(ToolResultBlockSchema, raw, {
+              kind: raw.type,
+              parentCallId,
+            });
       if (block === null) {
-        return;
+        if (parentCallId === null) {
+          return;
+        }
+        continue;
       }
       const held = this.toolUses.get(block.tool_use_id);
-      // A result always follows its call on the main thread, once: the call
+      const notRun = parsed.tool_result_meta?.find(
+        ({ id }) => id === block.tool_use_id,
+      )?.non_execution_kind;
+      // A call the stop cut off never ran: not a failure, and not done.
+      const stopped =
+        notRun !== undefined &&
+        notRun !== null &&
+        CLAUDE_STOPPED_TOOL_KINDS.has(notRun);
+      // A result always follows its call on its own thread, once: the call
       // is released with it.
       if (held !== undefined) {
         this.toolUses.delete(block.tool_use_id);
-        const result = toolResultFor(held.use, block);
-        const notRun = parsed.tool_result_meta?.find(
-          ({ id }) => id === block.tool_use_id,
-        )?.non_execution_kind;
+        const result = this.withConversation(
+          block,
+          held,
+          toolResultFor(held.use, block),
+        );
         this.emit({
           type: "tool.completed",
           toolCall: held.toolCall,
-          result:
-            notRun !== undefined &&
-            notRun !== null &&
-            CLAUDE_STOPPED_TOOL_KINDS.has(notRun)
-              ? { ...result, status: "cancelled" }
-              : result,
+          result: stopped ? { ...result, status: "cancelled" } : result,
         });
       }
+      // Only a plan call that ran leaves plan mode.
+      if (this.approvedPlans.delete(block.tool_use_id)) {
+        this.leavePlanMode(block.is_error === true || stopped);
+      }
     }
+  }
+
+  /**
+   * `result` with the conversation of the subagent `held` started, for the
+   * sidecar to keep on this computer: what it was told, what it wrote, and
+   * the report this result returns. Any other call's result is unchanged.
+   */
+  private withConversation(
+    block: ClaudeToolResult,
+    held: HeldToolUse,
+    result: HarnessToolResult,
+  ): HarnessToolResult {
+    const conversation = this.conversations.get(block.tool_use_id);
+    if (conversation === undefined) {
+      return result;
+    }
+    this.conversations.delete(block.tool_use_id);
+    return {
+      ...result,
+      localOutput: conversation.ended({
+        prompt: subagentPromptOf(held.use),
+        report: resultText(block),
+      }),
+    };
   }
 
   private result(parsed: ClaudeResultMessage | null) {
@@ -797,20 +1011,61 @@ export class ClaudeCodeTurnSession {
     const requestId = requestIdFor(controlId);
     const use = { name: parsed.tool_name, input: parsed.input };
     const held = this.toolUses.get(parsed.tool_use_id);
+    const proposesPlan = parsed.tool_name === EXIT_PLAN_MODE_TOOL;
+    // A proposed plan's call is built from this input, which carries the
+    // plan the member approves.
+    const parentCallId = held?.parentCallId ?? null;
     const toolCall =
-      held?.toolCall ??
-      toolCallForUse({ id: parsed.tool_use_id, ...use }, this.stellaServer);
-    this.toolUses.set(parsed.tool_use_id, held ?? { use, toolCall });
+      held === undefined || proposesPlan
+        ? toolCallForUse(
+            { id: parsed.tool_use_id, ...use },
+            this.stellaServer,
+            parentCallId,
+          )
+        : held.toolCall;
+    this.toolUses.set(parsed.tool_use_id, {
+      use: held?.use ?? use,
+      toolCall,
+      parentCallId,
+    });
     if (parsed.tool_name === ASK_USER_QUESTION_TOOL) {
       this.question(controlId, toolCall, parsed.input);
       return;
     }
-    const suggestions = parsed.permission_suggestions ?? [];
+    const plan = parsed.input["plan"];
+    // A plan is put to the member only as the text they approve: none, or
+    // more than chat shows, is refused before any approval opens.
+    if (proposesPlan && (typeof plan !== "string" || plan.trim() === "")) {
+      this.client?.respond(controlId, {
+        behavior: "deny",
+        message: PLAN_MISSING_MESSAGE,
+      });
+      return;
+    }
+    if (
+      proposesPlan &&
+      typeof plan === "string" &&
+      plan.length > MAX_PLAN_CHARS
+    ) {
+      this.client?.respond(controlId, {
+        behavior: "deny",
+        message: PLAN_TOO_LONG_MESSAGE,
+      });
+      return;
+    }
+    // A plan is approved once: no rule from it outlives this call.
+    const suggestions = proposesPlan
+      ? []
+      : (parsed.permission_suggestions ?? []).filter(
+          ({ type }) => type !== SET_MODE_SUGGESTION,
+        );
     this.pending.set(requestId, {
       type: "approval",
       controlId,
       input: parsed.input,
       suggestions,
+      planToolUseId:
+        proposesPlan && parentCallId === null ? parsed.tool_use_id : null,
     });
     const reason =
       parsed.decision_reason ?? parsed.description ?? parsed.title ?? null;
@@ -913,8 +1168,38 @@ export class ClaudeCodeTurnSession {
     }
     // The call's own result follows from the harness once it has run.
     client.respond(interaction.controlId, result.value);
+    if (
+      interaction.type === "approval" &&
+      interaction.planToolUseId !== null &&
+      response.type === "approval" &&
+      response.decision === "approve"
+    ) {
+      this.approvedPlans.add(interaction.planToolUseId);
+    }
     this.settle(requestId);
     return Result.ok();
+  }
+
+  /**
+   * An approved plan has run its `ExitPlanMode` call, which returned the CLI
+   * to `default`; a turn started in plan mode now continues in its approved
+   * mode. The switch waits for the call's result so the CLI's own exit from
+   * plan mode has finished, and until it lands the CLI asks more, never less.
+   */
+  private leavePlanMode(failed: boolean) {
+    const mode = this.approvedPlanMode;
+    const client = this.client;
+    if (failed || mode === null || client === null || this.lifecycle.ended) {
+      return;
+    }
+    this.detached(this.switchMode(client, mode), "claude-turn.leavePlanMode");
+  }
+
+  private async switchMode(client: ClaudeCliClient, mode: string) {
+    const switched = await client.request("set_permission_mode", { mode });
+    if (Result.isError(switched)) {
+      this.violation("The harness did not leave plan mode.");
+    }
   }
 
   private async interrupt() {

@@ -331,6 +331,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.generations.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generations-create` |
 | `lists.generations.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generations-list` |
 | `lists.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists get` |
+| `lists.graph.neighbours.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-neighbours-list` |
+| `lists.graph.nodes.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-nodes-list` |
+| `lists.graph.paths.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists graph-paths-list` |
 | `lists.items.activity.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-activity-list` |
 | `lists.items.comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-comments-create` |
 | `lists.items.fact-details.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-fact-details-update` |
@@ -357,6 +360,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.verifications.claim-reviews.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-list` |
 | `lists.verifications.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-create` |
 | `lists.verifications.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-get` |
+| `lists.verifications.graph.get` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-graph-get` |
 | `lists.verifications.latest.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-latest-list` |
 | `lists.verifications.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-list` |
 
@@ -814,13 +818,13 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
-| assistant_chat | 16 |
-| auth_plumbing | 41 |
+| assistant_chat | 19 |
+| auth_plumbing | 43 |
 | billing_ui | 1 |
-| chat_thread_ui | 26 |
+| chat_thread_ui | 32 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 26 |
+| document_processing | 27 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
@@ -828,10 +832,10 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui | 11 |
 | organization_export | 2 |
 | provider_secret | 33 |
-| public_indexing | 10 |
+| public_indexing | 11 |
 | realtime_stream | 9 |
 | search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 22 |
+| upload_mechanics | 24 |
 | url_preview | 2 |

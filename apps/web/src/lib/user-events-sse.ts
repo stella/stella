@@ -190,8 +190,14 @@ export const useUserEventRefreshes = ({
     queryKey: chatKeys.groupedThreadLists(organizationId, userId),
   });
 
+  // Each open chat that ran on a computer reads its own count again.
+  const backgroundTasks = (): UserEventRefresh => ({
+    queryKey: chatKeys.backgroundTaskCounts(organizationId, userId),
+  });
+
   const refreshes = {
     [USER_EVENT_READ.ACTIVE_CHAT_RUNS]: activeChatRuns,
+    [USER_EVENT_READ.CHAT_BACKGROUND_TASKS]: backgroundTasks,
     [USER_EVENT_READ.CHAT_THREADS]: chatThreadLists,
     [USER_EVENT_READ.NOTIFICATIONS]: notifications,
   } satisfies Record<UserEventRead, () => UserEventRefresh>;
@@ -203,6 +209,7 @@ export const useUserEventRefreshes = ({
       notifications(),
       activeChatRuns(),
       chatThreadLists(),
+      backgroundTasks(),
       ...organizationEventQueryKeys(
         resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
         organizationId,

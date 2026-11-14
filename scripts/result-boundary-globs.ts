@@ -136,6 +136,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/queue/**/*.ts",
   "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
@@ -356,6 +357,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Wraps that StreamDurability adapter for a chat turn: the SDK still reads a
+  // delivery failure only from a rejection, now carrying its AI error kind.
+  "apps/api/src/handlers/chat/chat-delivery-failure.ts",
   // Drizzle rolls back transaction callbacks through rejection; returning a
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",

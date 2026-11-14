@@ -2,9 +2,11 @@ import {
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   INVOICE_LANGUAGES,
 } from "@stll/api-contract";
-import { CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
+} from "@stll/api-contract/chat-run-target";
 import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
-import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -216,7 +218,7 @@ export const organizationSettings = p.pgTable(
      */
     localRunMaxApprovalMode: p
       .text("local_run_max_approval_mode", {
-        enum: DESKTOP_RUNNER_APPROVAL_MODES,
+        enum: CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
       })
       .notNull()
       .default(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS),
@@ -447,7 +449,7 @@ export const organizationSettings = p.pgTable(
     p.check(
       "organization_settings_local_run_max_approval_mode_check",
       sql`${table.localRunMaxApprovalMode} IN (${sql.join(
-        DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => sql`${mode}`),
+        CHAT_LOCAL_RUN_APPROVAL_CEILINGS.map((mode) => sql`${mode}`),
         sql`, `,
       )})`,
     ),

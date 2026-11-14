@@ -7,6 +7,7 @@ import {
   type BrowserControlResult,
   type BrowserDesktopRequest,
   type BrowserDesktopResponse,
+  type BrowserDownload,
   parseBrowserDesktopRequest,
   STELLA_DESKTOP_NATIVE_HOST,
 } from "@stll/api-contract/browser-control";
@@ -64,8 +65,16 @@ const writeDesktopLinkState = async (state: DesktopLinkState) => {
  * a web connection's (a random UUID) and never reaches that connection's
  * controlled tab, receipts or budget.
  */
+const DESKTOP_CONTROLLER_PREFIX = "desktop:";
+
 export const desktopControllerId = (controllerId: string) =>
-  `desktop:${controllerId}`;
+  `${DESKTOP_CONTROLLER_PREFIX}${controllerId}`;
+
+/** The chat id stella desktop sent, from the id its commands run under. */
+export const desktopChatId = (controllerId: string): string | null =>
+  controllerId.startsWith(DESKTOP_CONTROLLER_PREFIX)
+    ? controllerId.slice(DESKTOP_CONTROLLER_PREFIX.length)
+    : null;
 
 export type DesktopCommand = Extract<
   BrowserDesktopRequest,
@@ -239,6 +248,22 @@ export const createDesktopLink = ({
   };
 
   return {
+    /**
+     * Tells stella desktop about a download of a chat's tab, unasked;
+     * dropped while stella desktop is not connected.
+     */
+    reportDownload: (chatId: string, download: BrowserDownload) => {
+      if (current === null) {
+        return;
+      }
+      send(current, {
+        controllerId: chatId,
+        download,
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+        type: "download",
+      });
+    },
     /** Connects unless connected; safe to call on every worker start. */
     connect,
     /** Drops the connection, as when the member takes the permission back. */

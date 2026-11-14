@@ -172,6 +172,8 @@ const useRunsStream = (
     },
     // The app hears of notifications through push.
     [USER_EVENT_READ.NOTIFICATIONS]: () => undefined,
+    // Read by an open chat's own background count, not by this list.
+    [USER_EVENT_READ.CHAT_BACKGROUND_TASKS]: () => undefined,
   } satisfies Record<UserEventRead, () => void>;
   const onEvent = useEffectEvent(({ type }: UserRealtimeEvent) => {
     for (const stale of USER_EVENT_READS[type]) {

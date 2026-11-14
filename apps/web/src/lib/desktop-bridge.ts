@@ -16,7 +16,7 @@ import type {
 import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
-import type { FetchWithTimeoutInit } from "@stll/fetch";
+import type { FetchTimeout, FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
@@ -349,6 +349,39 @@ const loopback = (init: FetchWithTimeoutInit): LoopbackFetchInit => ({
   ...init,
   targetAddressSpace: "loopback",
 });
+
+type DesktopBridgeRequestOptions = {
+  path: string;
+  headers: Record<string, string>;
+  signal?: AbortSignal | undefined;
+  timeout: FetchTimeout;
+};
+
+/**
+ * A GET to the app's loopback bridge on this computer, with the caller's
+ * signed headers; `DesktopBridgeUnavailableError` when nothing answers there.
+ */
+export const requestDesktopBridge = async ({
+  path,
+  headers,
+  signal,
+  timeout,
+}: DesktopBridgeRequestOptions) =>
+  await Result.tryPromise({
+    try: async () =>
+      await fetchWithTimeout(
+        `${DESKTOP_BRIDGE_URL}${path}`,
+        loopback({
+          credentials: "omit",
+          method: "GET",
+          referrerPolicy: "no-referrer",
+          timeout,
+          headers,
+          signal,
+        }),
+      ),
+    catch: () => new DesktopBridgeUnavailableError(),
+  });
 
 const parseBridgeResponse = async (response: Response) => {
   try {

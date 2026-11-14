@@ -12,6 +12,7 @@ import {
   elementNamed,
   launchExtensionHarness,
   openInNewControlledTab,
+  readOn,
   successful,
   targetOf,
 } from "./fixtures/harness";
@@ -22,6 +23,7 @@ import {
   INTRANET_ORIGIN,
   INTRANET_PAGE,
   INTRANET_SECRET,
+  LONG_TEXT,
 } from "./fixtures/pages";
 
 const CONTROLLER_ID = "controller-protocol";
@@ -96,15 +98,16 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     const indexUrl = `${FIXTURE_ORIGIN}/index.html`;
     let snapshot = await openInNewControlledTab(harness, send, indexUrl);
     expect(snapshot.url).toBe(indexUrl);
-    expect(snapshot.text).toHaveLength(BROWSER_CONTROL_LIMITS.pageTextChars);
-    expect(snapshot.textTotalChars).toBeGreaterThan(
+    expect(snapshot.text.length).toBeLessThanOrEqual(
       BROWSER_CONTROL_LIMITS.pageTextChars,
     );
+    expect(snapshot.window.previous).toBeUndefined();
+    expect(snapshot.window.next).toBeDefined();
+    expect(snapshot.text.split("\n").at(0)).toBe("# Fixture index");
     expect(snapshot.text).toContain("Visible through display contents");
     expect(snapshot.text).toContain("Shadow text inside the widget");
-    expect(elementNamed(snapshot.elements, "Frame action").ref).toMatch(
-      /^e:[1-9]\d*:/u,
-    );
+    expect(snapshot.text).toContain("Second page [L1]");
+    expect(elementNamed(snapshot.elements, "Second page").id).toBe("L1");
     expect(elementNamed(snapshot.elements, "Shadow action").ref).toContain(
       ".s.",
     );
@@ -133,20 +136,61 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     );
     expect(intranetRequests).toEqual([]);
 
-    const lastOffset = snapshot.textTotalChars - 1;
-    const tail = successful(
-      await send({ action: "snapshot", textOffset: lastOffset }),
+    // A block longer than a window is read in parts, cut at spaces, with
+    // nothing left out or read twice; the embedded frame's text follows the
+    // top document's.
+    const toFrame = await readOn(send, snapshot, ({ text }) =>
+      text.includes("Frame text lives here"),
     );
-    expect(tail.textOffset).toBe(lastOffset);
-    expect(tail.text).toHaveLength(1);
-    const remainder = successful(
+    expect(toFrame.length).toBeGreaterThan(2);
+    expect(
+      toFrame
+        .map(({ text }) => text)
+        .join(" ")
+        .replaceAll("\n", " "),
+    ).toContain(LONG_TEXT);
+    const frameWindow = toFrame.at(-1);
+    if (frameWindow === undefined) {
+      throw new TypeError("No window reached the frame.");
+    }
+    expect(elementNamed(frameWindow.elements, "Frame action").ref).toMatch(
+      /^e:[1-9]\d*:/u,
+    );
+    const back = successful(
       await send({
         action: "snapshot",
-        textOffset: BROWSER_CONTROL_LIMITS.pageTextChars * 2,
+        cursor: frameWindow.window.previous ?? "",
       }),
     );
-    expect(remainder.text).toContain("Frame text lives here");
-    snapshot = remainder;
+    expect(back.text).toContain("appeal was dismissed with costs.");
+
+    // Find in page, and the window a match's cursor reads.
+    const found = await send({
+      action: "find",
+      search: { query: "FRAME text   lives", type: "text" },
+    });
+    expect(found).toMatchObject({
+      found: { total: 1, type: "text" },
+      status: "found",
+    });
+    const match =
+      found.status === "found" && found.found.type === "text"
+        ? found.found.matches.at(0)
+        : undefined;
+    const atMatch = successful(
+      await send({ action: "snapshot", cursor: match?.cursor ?? "" }),
+    );
+    expect(atMatch.text.split("\n").at(0)).toBe("Frame text lives here.");
+    expect(
+      await send({
+        action: "find",
+        search: { query: "Fixture", type: "headings" },
+      }),
+    ).toMatchObject({
+      found: { headings: [{ level: 1, text: "Fixture index" }] },
+      status: "found",
+    });
+    snapshot = successful(await send({ action: "snapshot" }));
 
     const page = () => ({ revision: snapshot.revision, url: snapshot.url });
     expect(
@@ -226,6 +270,58 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
       }),
     );
     expect(snapshot.text).toContain("Submitted: notice period");
+    // An option is chosen by its visible label as well as by its value; a
+    // select without it is refused with the options it has.
+    snapshot = successful(
+      await send({
+        action: "select",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Court")),
+        value: "supreme  court",
+      }),
+    );
+    expect(elementNamed(snapshot.elements, "Court").value).toBe("supreme");
+    expect(
+      await send({
+        action: "select",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Court")),
+        value: "Family court",
+      }),
+    ).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      message:
+        'The select has no option with this label or value. Its options: "Any court", "Supreme Court"',
+    });
+    // An option in a disabled group is disabled: never chosen, never listed.
+    for (const value of ["closed", "Closed court"]) {
+      expect(
+        await send({
+          action: "select",
+          page: page(),
+          target: targetOf(elementNamed(snapshot.elements, "Court")),
+          value,
+        }),
+      ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.executionFailed });
+    }
+    snapshot = successful(
+      await send({ action: "snapshot", cursor: snapshot.window.cursor }),
+    );
+    expect(elementNamed(snapshot.elements, "Court").value).toBe("supreme");
+    // A label holding a value the page script learned as secret is listed
+    // redacted, as every read redacts it.
+    const savedCard = await send({
+      action: "select",
+      page: page(),
+      target: targetOf(elementNamed(snapshot.elements, "Saved card")),
+      value: "Another card",
+    });
+    expect(savedCard).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      message:
+        'The select has no option with this label or value. Its options: "Card [hidden]"',
+    });
+    expect(JSON.stringify(savedCard)).not.toContain("4111111111111111");
     expect(
       snapshot.elements.some(({ name }) => name === "Archive (disabled)"),
     ).toBe(false);
@@ -284,6 +380,13 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     expect(
       snapshot.elements.some(({ name }) => name === "Shadow clicked"),
     ).toBe(true);
+    // The frame's controls are listed where its text is read.
+    snapshot =
+      (
+        await readOn(send, snapshot, ({ text }) =>
+          text.includes("Frame text lives here"),
+        )
+      ).at(-1) ?? snapshot;
     snapshot = successful(
       await send({
         action: "click",
@@ -291,9 +394,15 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
         target: targetOf(elementNamed(snapshot.elements, "Frame action")),
       }),
     );
-    expect(snapshot.elements.some(({ name }) => name === "Frame clicked")).toBe(
-      true,
-    );
+    const clickedFrame = (
+      await readOn(send, snapshot, ({ text }) =>
+        text.includes("Frame text lives here"),
+      )
+    ).at(-1);
+    expect(
+      clickedFrame?.elements.some(({ name }) => name === "Frame clicked"),
+    ).toBe(true);
+    snapshot = successful(await send({ action: "snapshot" }));
 
     const replayId = "tool-replay";
     const navigated = successful(

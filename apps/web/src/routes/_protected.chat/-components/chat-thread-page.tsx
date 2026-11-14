@@ -75,6 +75,10 @@ import {
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
 import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -107,10 +111,12 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
+import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 
 // The composer block publishes its live height on this element, the
@@ -140,6 +146,8 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
@@ -285,6 +293,7 @@ export const ChatThreadPage = ({
     turnAbandoned,
     computerWait,
     turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -559,7 +568,23 @@ export const ChatThreadPage = ({
             title: args.length > 0 ? args : null,
           });
         },
+        "make-skill": (args) => {
+          controller.setContent(composerText(""));
+          if (messages.length === 0) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected.
+      if (!handledReserved || newThreadMessages.length > 0) {
+        composerModels.openDesktopForSend();
+      }
       if (handledReserved) {
         const newThreadMessage = newThreadMessages.at(0);
         if (newThreadMessage === undefined) {
@@ -775,6 +800,10 @@ export const ChatThreadPage = ({
                           workspaceId={workspaceId}
                         />
                       </ChatLocalRunQuestionContext>
+                      <ChatBackgroundTasks
+                        generationActive={isGenerating}
+                        threadId={threadRef.threadId}
+                      />
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}
@@ -789,6 +818,15 @@ export const ChatThreadPage = ({
                 </ConversationContent>
                 <ChatTurnNavigator messages={messages} />
               </Conversation>
+              {/* Outside the transcript's log, whose additions it would
+                  otherwise be read among. */}
+              <ChatTurnAnnouncer
+                hasError={error !== undefined}
+                isGenerating={isGenerating}
+                key={`turn-announcer-${threadRef.threadId}`}
+                messages={messages}
+                turnsStarted={turnsStarted}
+              />
 
               <ChatAnonymizationLayer
                 editor={controller.editor}
@@ -835,6 +873,7 @@ export const ChatThreadPage = ({
                     controller.setContent(composerStoredMarkdown(prompt));
                     detached(
                       controller.submit(async (draft) => {
+                        composerModels.openDesktopForSend();
                         if (!(await ensureAIAvailable())) {
                           return CHAT_SEND_KEPT;
                         }

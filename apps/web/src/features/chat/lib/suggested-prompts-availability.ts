@@ -1,14 +1,10 @@
 import { panic } from "better-result";
 
-import type {
-  ChatMessage,
-  ChatPart,
-  UserInputChatToolName,
-} from "@/components/chat/chat-ui-tools";
-import {
-  isUserInputChatToolName,
-  resolveChatAssistantTurnOutcome,
-} from "@/components/chat/chat-ui-tools";
+import { isUserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
+import type { UserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
+
+import type { ChatMessage, ChatPart } from "@/components/chat/chat-ui-tools";
+import { resolveChatAssistantTurnOutcome } from "@/components/chat/chat-ui-tools";
 
 type SuggestedPromptsAvailability =
   | { status: "eligible"; lastMessageId: string }

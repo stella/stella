@@ -27,3 +27,4 @@ stella-desktop-signing-core = { path = "../signing-core", version = "0.0.1" }
 core-foundation = "0.10"
 security-framework = "3"
 security-framework-sys = "2.17"
+tracing = "0.1"

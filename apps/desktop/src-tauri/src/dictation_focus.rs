@@ -5,7 +5,8 @@
 //! lands in a window the speaker did not choose. Only identity is read: the
 //! app, its process and the number of its focused window (the foreground
 //! window on Windows, the frontmost normal window of the frontmost app on
-//! macOS), never window titles or contents.
+//! macOS), never window titles or contents; `dictation_context` reads those
+//! only when the speaker shares them with cleanup.
 
 #![cfg_attr(
   not(dictation),
@@ -21,6 +22,14 @@ pub struct FocusTarget {
   pub identifier: Option<String>,
   process_id: i64,
   window: Option<isize>,
+}
+
+impl FocusTarget {
+  /// The focused app's process, for the opt-in context reads in
+  /// `dictation_context`.
+  pub const fn process_id(&self) -> i64 {
+    self.process_id
+  }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

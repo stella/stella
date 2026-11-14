@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 119,
+    "count": 118,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -36,7 +36,6 @@
       "apps/api/src/lib/lists/verification/run-summary.ts": 2,
       "apps/api/src/lib/mcp-upstream/connections.ts": 1,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 1,
-      "apps/api/src/lib/usage/model-run-caps/caps.ts": 1,
       "apps/api/src/lib/public-law-relations.ts": 1,
       "apps/api/src/lib/s3.ts": 1,
       "apps/api/src/lib/safe-id-boundaries.ts": 2,

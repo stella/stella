@@ -23,7 +23,11 @@ import {
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
@@ -65,10 +69,12 @@ import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
   chatVolatilePromptSection,
+  CLOUD_PROMPT_TARGET,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
+  ChatPromptTarget,
   ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
@@ -115,6 +121,7 @@ import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistenc
 import {
   CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  chatTurnRunBoundOf,
   countChatTurnSettlement,
   processChatTurnOwnership,
 } from "@/api/handlers/chat/chat-turn-run";
@@ -924,7 +931,10 @@ export class ChatSendLifecycle {
    * run gets nothing of the request, so it behaves the same once the request
    * is gone.
    */
-  startRun(connectors: LoadedExternalMcpTools | undefined): ChatTurnRun {
+  startRun(
+    connectors: LoadedExternalMcpTools | undefined,
+    runsOn: ChatRunTarget["kind"],
+  ): ChatTurnRun {
     if (this.claimedTurn.status !== "preflight") {
       return panic("Cannot start a run for a turn this send does not hold");
     }
@@ -933,7 +943,7 @@ export class ChatSendLifecycle {
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
-      deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      bound: chatTurnRunBoundOf(runsOn),
       mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
@@ -2386,6 +2396,25 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
   resolveCredentialMemberExecutionContext;
 
 /** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
+/**
+ * A coding agent on the member's computer answers with its own tools, so its
+ * prompt names none of stella's cloud tools or settings, and says how its web
+ * search runs at the turn's permission level. A turn bound for a computer
+ * runs there or is refused, so the run target alone decides.
+ */
+const turnPromptTarget = (
+  runTarget: ChatRunTarget | undefined,
+): ChatPromptTarget =>
+  runTarget === undefined || runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
+    ? CLOUD_PROMPT_TARGET
+    : {
+        type: "local_run",
+        webSearch:
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS[runTarget.harness][
+            runTarget.approvals
+          ],
+      };
+
 const turnCopiesFiles = (
   localRun: LocalChatRun | undefined,
   sendMode: ChatSendMode,
@@ -3201,6 +3230,7 @@ export const createSendMessage = (
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
+          promptTarget: turnPromptTarget(body.runTarget),
           recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
@@ -3483,7 +3513,10 @@ export const createSendMessage = (
               // The run owns the turn and the loaded connectors from here.
               // Agent runs load none for streaming, so the send's cleanup
               // closes any validation-only load.
-              const run = lifecycle.startRun(externalMcpTools);
+              const run = lifecycle.startRun(
+                externalMcpTools,
+                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,
+              );
               try {
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,
@@ -3845,6 +3878,7 @@ const turnRunModeOf = (
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
   copiesFilesToComputer: boolean;
+  promptTarget: ChatPromptTarget;
   recordAuditEvent: AuditRecorder;
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
@@ -3950,6 +3984,7 @@ const auditedLocalRunAttachments = async ({
 const prepareChatContext = async ({
   caseLawDb,
   copiesFilesToComputer,
+  promptTarget,
   recordAuditEvent,
   featureAccessSnapshot,
   activeDecision,
@@ -4015,6 +4050,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        promptTarget,
         browserExtension,
         userContext,
         userId,

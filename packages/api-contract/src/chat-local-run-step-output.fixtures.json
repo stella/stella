@@ -1,0 +1,24 @@
+{
+  "grantSeconds": 300,
+  "maxBytes": { "text": 1048576, "image": 10485760 },
+  "headers": {
+    "grantExpiresAt": "x-stella-bridge-grant",
+    "totalBytes": "x-stella-output-bytes"
+  },
+  "grant": {
+    "outputKey": "abababababababababababababababababababababababababababababababab",
+    "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+    "userId": "user-fixture-1",
+    "organizationId": "org-fixture-1",
+    "expiresAt": 1900000300,
+    "grantHmac": "747d91030c558258c22e18331f051076712d5e5755fd06612c52b055c7fe8985"
+  },
+  "request": {
+    "toolCallId": "call-heredoc",
+    "callId": "0b6f5c8e2d3a4f1b9c7e5a4d3b2c1e0f_call-heredoc",
+    "stepHash": "bb34b20c905942692f6c1de5d40e5575fe948096fe094e8936d719457951ee99",
+    "path": "/v1/runs/0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f/steps/bb34b20c905942692f6c1de5d40e5575fe948096fe094e8936d719457951ee99/output",
+    "timestamp": "1900000000",
+    "proof": "e91ff810aaadb021f8a463842b49cfde8de8db29828132dba97aded52fa76a0b"
+  }
+}

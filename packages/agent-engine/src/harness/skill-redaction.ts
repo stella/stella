@@ -7,6 +7,7 @@ import type {
   HarnessToolCall,
   HarnessToolResult,
 } from "./events";
+import type { HarnessStepOutput } from "./step-output";
 
 /**
  * What a turn sends to stella about its skill folders. A tool call's input and
@@ -96,6 +97,8 @@ const createRedactor = (scope: SkillPathScope) => {
   const rules = rulesFor(scope);
   /** Calls known to have touched a skill, by id, for their later events. */
   const touched = new Set<string>();
+  /** The subagent step each call of a subagent ran in, by the call's id. */
+  const parents = new Map<string, string>();
 
   const text = (value: string) => {
     let current = value;
@@ -125,25 +128,78 @@ const createRedactor = (scope: SkillPathScope) => {
   const changes = (value: unknown) =>
     JSON.stringify(anything(value)) !== JSON.stringify(value);
 
+  /**
+   * `id` touched a skill, and so did every subagent it ran in: what a
+   * subagent wrote or reported may quote what its step read, with no path
+   * beside it to tell.
+   */
+  const touch = (id: string) => {
+    touched.add(id);
+    let parent = parents.get(id);
+    // A subagent is marked once: ids a harness made name each other end here.
+    while (parent !== undefined && !touched.has(parent)) {
+      touched.add(parent);
+      parent = parents.get(parent);
+    }
+  };
+
   const toolCall = ({
     localInput,
     ...call
   }: HarnessToolCall): HarnessToolCall => {
+    if (call.parentCallId !== undefined) {
+      parents.set(call.id, call.parentCallId);
+    }
     if (changes(call.input) || changes(localInput)) {
-      touched.add(call.id);
+      touch(call.id);
     }
     return { ...call, input: anything(call.input) };
   };
 
-  const result = (id: string, outcome: HarnessToolResult): HarnessToolResult =>
-    touched.has(id) || mentions(outcome.content)
-      ? {
-          content: JSON.stringify({
-            status: outcome.status === "failed" ? "failed" : "completed",
-          }),
-          status: outcome.status,
-        }
-      : outcome;
+  const outputMentions = (output: HarnessStepOutput) => {
+    switch (output.type) {
+      case "command":
+        return mentions(output.output);
+      case "diff":
+        return output.files.some(
+          ({ path, diff }) => mentions(path) || mentions(diff),
+        );
+      case "conversation":
+        return output.entries.some(({ text: said }) => mentions(said));
+      case "image":
+        return mentions(output.path);
+      default:
+        output satisfies never;
+        return panic("Unhandled step output");
+    }
+  };
+
+  // A step that touched a skill keeps nothing it produced, not even on this
+  // computer: a skill's licensed text is the harness's to read, never the
+  // member's to open.
+  const result = (
+    id: string,
+    outcome: HarnessToolResult,
+  ): HarnessToolResult => {
+    if (touched.has(id) || mentions(outcome.content)) {
+      // What it returned names a skill: the subagents it ran in may quote it.
+      touch(id);
+      return {
+        content: JSON.stringify({
+          status: outcome.status === "failed" ? "failed" : "completed",
+        }),
+        status: outcome.status,
+      };
+    }
+    if (
+      outcome.localOutput === undefined ||
+      !outputMentions(outcome.localOutput)
+    ) {
+      return outcome;
+    }
+    touch(id);
+    return { content: outcome.content, status: outcome.status };
+  };
 
   return (event: HarnessEvent): HarnessEvent => {
     switch (event.type) {
@@ -238,6 +294,7 @@ export const redactingSkillPaths = (
     events: events(),
     respond: turn.respond,
     interrupt: turn.interrupt,
+    release: turn.release,
     dispose: turn.dispose,
   };
 };

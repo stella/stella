@@ -50,6 +50,8 @@ export const sameChatRunTarget = (
       left.harness === right.harness &&
       left.model === right.model &&
       left.approvals === right.approvals &&
+      left.folder?.desktopId === right.folder?.desktopId &&
+      left.folder?.linkId === right.folder?.linkId &&
       left.reasoningEffort === right.reasoningEffort
     : right.kind === left.kind;
 
