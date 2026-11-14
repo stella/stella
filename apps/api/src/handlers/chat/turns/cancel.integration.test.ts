@@ -349,7 +349,7 @@ const produceUntilCut = ({
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
-    deadlineMs: 60_000,
+    bound: { type: "provider-deadline", deadlineMs: 60_000 },
     mode: "raw",
     heartbeat,
     owner: {
