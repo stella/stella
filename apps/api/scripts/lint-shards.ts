@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 /**
- * Runs the API's oxlint command once per shard of the API tree, one shard after
- * another: `bun apps/api/scripts/lint-shards.ts <oxlint command without paths>`.
+ * Runs the API's lint command once per shard of the API tree, one shard after
+ * another: `bun apps/api/scripts/lint-shards.ts <lint command without paths>`
+ * (the API's `lint` script passes `bun scripts/lint.ts`).
  *
  * One process over the whole API keeps the oxlint process's memory resident
  * while tsgolint type-checks every file. On a 16 GiB CI runner the two
@@ -31,7 +32,7 @@ export const apiLintCommands = (oxlint: readonly string[]): string[][] => [
 if (import.meta.main) {
   const oxlint = process.argv.slice(2);
   if (oxlint.length === 0) {
-    console.error("usage: lint-shards.ts <oxlint command without paths>");
+    console.error("usage: lint-shards.ts <lint command without paths>");
     process.exit(2);
   }
   let failed = false;

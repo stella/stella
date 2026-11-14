@@ -28,6 +28,7 @@ import {
 import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import { lintCommand } from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 import { matches } from "./oxlint-config-scopes";
 import { lintModuleClosure } from "./oxlint-module-closure";
@@ -106,7 +107,6 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/ownership-loader.ts",
   "$TURBO_ROOT$/scripts/ownership-types.ts",
   "$TURBO_ROOT$/scripts/sha256-owners.ts",
-  "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
@@ -157,8 +157,16 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
   "$TURBO_ROOT$/scripts/test-timing-ledger.json",
 ] as const;
+// scripts/lint.ts starts every lint run with the command
+// scripts/lint-command.ts builds, so a change to either can change what any
+// workspace lint reports.
+export const LINT_ENTRY_INPUTS = [
+  "$TURBO_ROOT$/scripts/lint.ts",
+  "$TURBO_ROOT$/scripts/lint-command.ts",
+] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
@@ -173,6 +181,7 @@ export const PLUGIN_FIXTURE_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
@@ -200,6 +209,7 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
   "$TURBO_ROOT$/scripts/lint-root-scripts.ts",
   "$TURBO_ROOT$/scripts/root-script-lint.ts",
@@ -1369,15 +1379,10 @@ export const resultBoundaryLintCommand = (
   if (paths.length === 0) {
     return null;
   }
-  return [
-    "bun",
-    "--bun",
-    "oxlint",
-    "-c",
-    "oxlint.result-boundary.config.ts",
+  return lintCommand({ config: "result-boundary" }, [
     "--deny-warnings",
     ...paths,
-  ];
+  ]);
 };
 
 type PlanResultBoundaryLintOptions = {

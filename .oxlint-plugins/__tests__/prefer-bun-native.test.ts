@@ -182,7 +182,8 @@ test("Bun preferences use exact files and preserve the canonical SHA owner optio
   expect(scope.excludeFiles).toEqual([]);
   expect(scope.files.every((file) => !/[*?{}[\]]/u.test(file))).toBe(true);
   const base = readScopes(config).at(0);
-  const baseOptions = ruleOptions(base?.rules[hmacRule]).at(0);
+  // The base scope may configure the rule with no options at all.
+  const baseOptions = ruleOptions(base?.rules[hmacRule]).at(0) ?? {};
   expect(isRecord(baseOptions)).toBe(true);
   if (!isRecord(baseOptions)) {
     return;

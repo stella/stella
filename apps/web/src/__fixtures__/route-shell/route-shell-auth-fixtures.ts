@@ -17,7 +17,7 @@ export const authFixtureBeforeLoadData = (routeId: string, email: string) => {
         ReturnType<NonNullable<typeof OtpRoute.options.beforeLoad>>
       >;
     case "/auth/organization":
-      return { userId, isOauthPostLoginFromSearch: false } satisfies Awaited<
+      return { userId } satisfies Awaited<
         ReturnType<NonNullable<typeof OrganizationRoute.options.beforeLoad>>
       >;
     case "/auth/professional-use":

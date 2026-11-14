@@ -32,10 +32,13 @@ const TEXT = v.pipe(
   v.check((text) => text.trim().length > 0, "Expected nonblank metadata text"),
 );
 const DIGEST = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u));
+// Every job is listed with its digest; only a privileged job is reviewed and
+// carries the decision.
 const JOB = v.strictObject({
   id: TEXT,
-  kind: v.picklist(CLASSIFICATIONS),
-  qualifier: TEXT,
+  decision: v.optional(
+    v.strictObject({ kind: v.picklist(CLASSIFICATIONS), qualifier: TEXT }),
+  ),
   digest: DIGEST,
 });
 const SOURCE = v.strictObject({
@@ -244,6 +247,46 @@ const verifyJobDigests = ({
   }
 };
 
+type VerifyJobReviewsOptions = {
+  nodes: ReadonlyMap<string, PublicMetadata["nodes"][number]>;
+  jobPrivileges: ReadonlyMap<string, boolean>;
+};
+
+// The reviewed jobs are exactly the privileged ones, so a manifest can
+// neither leave a privileged job undecided nor keep a decision past its use.
+const verifyJobReviews = ({
+  nodes,
+  jobPrivileges,
+}: VerifyJobReviewsOptions) => {
+  const undecided: string[] = [];
+  const stale: string[] = [];
+  for (const node of nodes.values()) {
+    if (node.type !== "metadata") {
+      continue;
+    }
+    for (const job of node.jobs) {
+      const privileged =
+        jobPrivileges.get(`${node.repository}:${node.path}/${job.id}`) ?? false;
+      if (privileged && job.decision === undefined) {
+        undecided.push(`${node.path}/${job.id}`);
+      }
+      if (!privileged && job.decision !== undefined) {
+        stale.push(`${node.path}/${job.id}`);
+      }
+    }
+  }
+  if (undecided.length) {
+    reject(
+      `Privileged jobs without a decision: ${undecided.join(", ")}. Classify them, then ${REVIEW_INSTRUCTION}`,
+    );
+  }
+  if (stale.length) {
+    reject(
+      `Decisions for jobs that are not privileged: ${stale.join(", ")}. Remove their directories from .github/ci-job-classification-decisions/`,
+    );
+  }
+};
+
 export type MetadataOptions = { manifest: unknown; reader: MetadataReader };
 export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
   Result.try({
@@ -320,7 +363,9 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             );
           }
           for (const job of node.jobs) {
-            classifications[job.kind] += 1;
+            if (job.decision !== undefined) {
+              classifications[job.decision.kind] += 1;
+            }
             jobCount += 1;
           }
           const references = new Set(Object.keys(parsed.value.dependencies));
@@ -395,10 +440,12 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
       const decisions = Object.fromEntries(
         metadata.nodes.flatMap((node) =>
           node.type === "metadata"
-            ? node.jobs.map((job) => [
-                `${node.repository}:${node.path}/${job.id}`,
-                { kind: job.kind },
-              ])
+            ? node.jobs.flatMap((job) => {
+                const key = `${node.repository}:${node.path}/${job.id}`;
+                return job.decision === undefined
+                  ? []
+                  : [[key, { kind: job.decision.kind }] as const];
+              })
             : [],
         ),
       );
@@ -407,6 +454,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         parsedDocuments,
         decisions,
       });
+      verifyJobReviews({ nodes, jobPrivileges });
       verifyJobDigests({
         nodes,
         parsedDocuments,

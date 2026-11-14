@@ -14,16 +14,14 @@
  *     certificate, so provenance survives without re-parsing the bytes.
  *   - "sharepoint": the version was copied (one-way, read-only) from a
  *     Microsoft Graph drive item the user had permission to read. The
- *     payload pins the exact item and its ETag at copy time so a later
- *     re-import can detect drift without a sync loop.
+ *     payload pins the exact item, its ETag and the content digest at copy
+ *     time so a later re-import can detect drift without a sync loop.
  *   - "import": the file was brought in from another system. The payload
  *     keeps what that system recorded and stella cannot recreate: its id
  *     for the file, the original creation and modification times, and the
  *     author's name when the author is not a stella user. The version's own
  *     `createdAt`/`createdBy` stay the import's, so queues, retention and
  *     audit keep reading when the bytes entered stella.
- *
- * `sharepoint` is reserved for the future SharePoint/OneDrive import pipeline.
  */
 
 import * as v from "valibot";
@@ -76,6 +74,8 @@ export const documentSourceSchema = v.variant("kind", [
     itemId: v.pipe(v.string(), v.minLength(1)),
     eTag: v.string(),
     webUrl: v.pipe(v.string(), v.url()),
+    /** SHA-256 of the bytes as copied, so a re-import detects a real change. */
+    contentHash: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
   }),
   v.strictObject({
     kind: v.literal("import"),

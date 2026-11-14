@@ -1,50 +1,49 @@
 import { panic } from "better-result";
 
+import type { ChatActiveRun } from "@stll/api-contract/chat";
+
 /** Where one of the reader's chats stands while it is still open. */
-export type ActiveChatRunState = "needs-you" | "working";
+export type ActiveChatRunState = ChatActiveRun["state"];
 
-type ActiveChatRunPlacement = {
-  state: ActiveChatRunState;
-  workspaceId: string | null;
-};
+type WaitingChatRun = Extract<ChatActiveRun, { state: "needs-you" }>;
+type WorkingChatRun = Extract<ChatActiveRun, { state: "working" }>;
 
-/** How many of the reader's chats in one matter wait on them or are working. */
-export type MatterRunStatus = {
-  needsYou: number;
-  working: number;
+/** The reader's open chats in one matter: waiting on them, and working. */
+export type MatterRuns = {
+  needsYou: readonly WaitingChatRun[];
+  working: readonly WorkingChatRun[];
 };
 
 /**
- * Count the reader's open chats per matter. Chats outside any matter count
- * nowhere: the matter list is the only place these counts are shown.
+ * Group the reader's open chats per matter, keeping the list's order. Chats
+ * outside any matter count nowhere: the matter list is the only place these
+ * runs are shown.
  */
-export const matterRunStatusByWorkspace = (
-  runs: readonly ActiveChatRunPlacement[],
-): ReadonlyMap<string, MatterRunStatus> => {
-  const byWorkspace = new Map<string, MatterRunStatus>();
-  for (const { state, workspaceId } of runs) {
-    if (workspaceId === null) {
+export const matterRunsByWorkspace = (
+  runs: readonly ChatActiveRun[],
+): ReadonlyMap<string, MatterRuns> => {
+  const byWorkspace = new Map<
+    string,
+    { needsYou: WaitingChatRun[]; working: WorkingChatRun[] }
+  >();
+  for (const run of runs) {
+    if (run.workspaceId === null) {
       continue;
     }
-    const current = byWorkspace.get(workspaceId) ?? {
-      needsYou: 0,
-      working: 0,
+    const current = byWorkspace.get(run.workspaceId) ?? {
+      needsYou: [],
+      working: [],
     };
-    switch (state) {
+    byWorkspace.set(run.workspaceId, current);
+    switch (run.state) {
       case "needs-you":
-        byWorkspace.set(workspaceId, {
-          ...current,
-          needsYou: current.needsYou + 1,
-        });
+        current.needsYou.push(run);
         break;
       case "working":
-        byWorkspace.set(workspaceId, {
-          ...current,
-          working: current.working + 1,
-        });
+        current.working.push(run);
         break;
       default:
-        state satisfies never;
+        run satisfies never;
         panic("Unhandled active chat run state");
     }
   }
@@ -56,13 +55,13 @@ export const matterRunStatusByWorkspace = (
  * collapsed rail): waiting on the reader outranks work in progress.
  */
 export const topMatterRunState = (
-  status: MatterRunStatus | undefined,
+  runs: MatterRuns | undefined,
 ): ActiveChatRunState | null => {
-  if (status === undefined) {
+  if (runs === undefined) {
     return null;
   }
-  if (status.needsYou > 0) {
+  if (runs.needsYou.length > 0) {
     return "needs-you";
   }
-  return status.working > 0 ? "working" : null;
+  return runs.working.length > 0 ? "working" : null;
 };

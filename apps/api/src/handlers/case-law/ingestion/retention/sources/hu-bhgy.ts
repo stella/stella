@@ -12,6 +12,8 @@
  * module's own readers. A listing stored without its file is a decision whose
  * text the publisher did not serve.
  */
+import { restoreHungarianLetters } from "@stll/text-normalize/hungarian-letters";
+
 import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,
@@ -52,7 +54,16 @@ const projectHuBhgy = async (
       reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_DOCUMENT,
     };
   }
-  return { type: "source", source: { type: "paragraphs", paragraphs } };
+  // The parse reads "õ" and "û" as the Hungarian letters they stand in for;
+  // the file's text is compared with them read the same way, so a restored
+  // letter is not counted as a lost word.
+  return {
+    type: "source",
+    source: {
+      type: "paragraphs",
+      paragraphs: paragraphs.map(restoreHungarianLetters),
+    },
+  };
 };
 
 export const huBhgyRetention = {

@@ -83,10 +83,10 @@ describe("buildSearchResults", () => {
     ]);
   });
 
-  // The corpus almost never repeats the reader's phrase verbatim, so a
-  // multi-word query is its words: each one marked where the text uses it,
-  // apart and in the publisher's own spelling.
-  it("marks every word of the query, wherever it is used", () => {
+  // The corpus rarely repeats the reader's phrase verbatim, so a multi-word
+  // query the text never uses whole is its words: each one marked where the
+  // text uses it, apart and in the publisher's own spelling.
+  it("marks every word of a phrase the text never uses", () => {
     const text = "Náhrada škody a jiné újmy.";
     const result = buildSearchResults({
       pieces: [{ id: "p1", text }],
@@ -99,6 +99,69 @@ describe("buildSearchResults", () => {
         text.slice(range.start, range.end),
       ),
     ).toEqual(["Náhrada", "újmy"]);
+  });
+
+  // A docket typed into the find bar is the citation the reader is after; the
+  // same digits standing alone in an article number or a date are noise.
+  it("marks only the phrase where the text uses it", () => {
+    const pieces = [
+      { id: "p1", text: "práva na ochranu (čl. 7 odst. 1 a čl. 10 Listiny)." },
+      {
+        id: "p2",
+        text: "nález ze dne 12. 10. 1994. Jak uzavřel v rozsudku č. j. 10 As 245/2016-41 Nejvyšší správní soud.",
+      },
+    ];
+    const result = buildSearchResults({ pieces, query: "10 As 245/2016" });
+
+    expect(result.matchCount).toBe(1);
+    expect(result.rangesByPieceId["p1"]).toBeUndefined();
+    const text = pieces[1]?.text ?? "";
+    expect(
+      result.rangesByPieceId["p2"]?.map((range) =>
+        text.slice(range.start, range.end),
+      ),
+    ).toEqual(["10 As 245/2016"]);
+  });
+
+  it("does not run a phrase on from a longer number", () => {
+    const text = "Rozsudek 100 As 245/2016 a rozsudek 10 As 245/2016.";
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "10 as 245/2016",
+    });
+
+    expect(
+      result.rangesByPieceId["p1"]?.map((range) =>
+        text.slice(range.start, range.end),
+      ),
+    ).toEqual(["10 As 245/2016"]);
+  });
+
+  // The last word is the one the reader may still be typing.
+  it("lets the phrase's last word be a prefix", () => {
+    const text = "Náhrada škody a náhrada škodné události.";
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "nahrada skod",
+    });
+
+    expect(
+      result.rangesByPieceId["p1"]?.map((range) =>
+        text.slice(range.start, range.end),
+      ),
+    ).toEqual(["Náhrada škody", "náhrada škodné"]);
+  });
+
+  it("does not join a phrase across pieces", () => {
+    const result = buildSearchResults({
+      pieces: [
+        { id: "p1", text: "Krajský soud 10" },
+        { id: "p2", text: "As rozhodl." },
+      ],
+      query: "10 As",
+    });
+
+    expect(result.matchCount).toBe(2);
   });
 
   // An inflected corpus writes the word the sentence needs, not the one the
@@ -178,12 +241,26 @@ describe("buildSearchResults", () => {
   });
 
   it("finds the short words a reader types", () => {
-    const result = buildSearchResults({
-      pieces: [{ id: "p1", text: "Za to je odpovědný." }],
+    const text = "Za to je odpovědný, a to platí za vše.";
+    const phrase = buildSearchResults({
+      pieces: [{ id: "p1", text }],
       query: "za to",
     });
+    const words = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "to za",
+    });
 
-    expect(result.matchCount).toBe(2);
+    expect(
+      phrase.rangesByPieceId["p1"]?.map(({ end, start }) =>
+        text.slice(start, end),
+      ),
+    ).toEqual(["Za to"]);
+    expect(
+      words.rangesByPieceId["p1"]?.map(({ end, start }) =>
+        text.slice(start, end),
+      ),
+    ).toEqual(["Za", "to", "to", "za"]);
   });
 
   it("handles contextual lowercasing such as Greek final sigma", () => {
@@ -232,10 +309,10 @@ describe("buildSearchResults", () => {
       query: "خدمه احمد",
     });
 
-    expect(result.matchCount).toBe(2);
+    // Both words fold to the typed spelling, so the phrase is found whole.
+    expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { type: "search", start: 0, end: 4, matchIndex: 0 },
-      { type: "search", start: 5, end: 9, matchIndex: 1 },
+      { type: "search", start: 0, end: 9, matchIndex: 0 },
     ]);
   });
 

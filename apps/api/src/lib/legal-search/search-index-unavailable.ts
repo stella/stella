@@ -1,9 +1,8 @@
 import { panic } from "better-result";
 
-import { classifyFailure } from "@stll/errors";
-
 import { HttpStatusResponse } from "@/api/http/status";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { callerAbortRefusal } from "@/api/lib/errors/request-abort";
 import {
   HandlerError,
   type HandlerErrorStatusCode,
@@ -64,15 +63,7 @@ export const corpusIndexReadRefusal = <TStatus extends HandlerErrorStatusCode>(
     case "index_missing":
       return searchIndexUnavailableError(error);
     case "caller_aborted":
-      return classifyFailure(
-        new HandlerError({
-          status: 400,
-          code: "request_aborted",
-          message: "Request aborted",
-          cause: error,
-        }),
-        "client_disconnected",
-      );
+      return callerAbortRefusal(error);
     case "answered":
       return answered(error);
     default:

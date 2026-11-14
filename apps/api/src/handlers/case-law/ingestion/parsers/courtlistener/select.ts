@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+// parser-output-unchanged: candidates are validated against their source paragraphs, the text their validation markup held.
 /**
  * Which text column of an opinion row becomes its document.
  *
@@ -159,7 +160,7 @@ const validateCandidate = (text: ParsedOpinionText): CandidateValidation => {
   // the next one tried, a refusal is recorded in the attempts, and the
   // pipeline reports retention for the document it stores.
   const result = validateAst(
-    text.validationHtml,
+    { type: "paragraphs", paragraphs: text.validationParagraphs },
     text.units.flatMap(({ blocks }) => [...blocks]),
     { sourcePolicy: courtListenerValidationPolicy },
   );

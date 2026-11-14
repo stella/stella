@@ -46,6 +46,9 @@ jobs:
         timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts --filter '@stll/mojibake...' --filter '!stella'
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Check input validation
         run: bun test ./packages/mojibake/src/exemplar-input.test.ts
 

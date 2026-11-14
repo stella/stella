@@ -11,6 +11,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -337,12 +339,6 @@ return { id: document.entityId, name: document.name };`;
         import.meta.url,
       ).href
     );
-    const draft: unknown = await import(
-      new URL(
-        "../../../../web/src/components/chat/create-document-draft.logic.ts",
-        import.meta.url,
-      ).href
-    );
     const { name, source } = asTestRaw<{ name: string; source: string }>(
       JSON.parse(DRAFT_ARGUMENTS),
     );
@@ -354,9 +350,6 @@ return { id: document.entityId, name: document.name };`;
         | { fixes: unknown[]; status: "ok"; warnings: unknown[] }
         | { status: "error" };
     }>(compiler);
-    const { buildCreateDocumentDownloadFileName } = asTestRaw<{
-      buildCreateDocumentDownloadFileName: (name: string) => string;
-    }>(draft);
     const compiled = compileCreateDocumentSourceToDocument(source, {
       titleFallback: name,
     });

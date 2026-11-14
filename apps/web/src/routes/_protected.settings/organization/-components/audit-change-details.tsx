@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { fetchAuditLogs } from "@/routes/_protected.settings/organization/-queries/audit-logs";
@@ -43,15 +44,15 @@ export const AuditChangeSummary = ({
   switch (changesStatus) {
     case AUDIT_CHANGES_STATUS.unrecognizedResource:
       return (
-        <span className="text-muted-foreground line-clamp-2">
+        <TruncatedText className="text-muted-foreground" lines={2}>
           {t("common.detailsHiddenUnrecognizedResource")}
-        </span>
+        </TruncatedText>
       );
     case AUDIT_CHANGES_STATUS.featureUnavailable:
       return (
-        <span className="text-muted-foreground line-clamp-2">
+        <TruncatedText className="text-muted-foreground" lines={2}>
           {t("common.detailsHiddenFeatureUnavailable")}
-        </span>
+        </TruncatedText>
       );
     case AUDIT_CHANGES_STATUS.visible: {
       const rows = auditChangeRows(changes);
@@ -64,7 +65,7 @@ export const AuditChangeSummary = ({
         formatAuditValueInline(value) ?? emptyValue;
       return (
         <span className="flex min-w-0 items-baseline gap-2">
-          <span className="min-w-0 truncate">
+          <TruncatedText>
             {first.field === "" ? null : (
               <span className="text-muted-foreground">
                 <bdi>{fieldLabel(first.field)}</bdi>:{" "}
@@ -78,7 +79,7 @@ export const AuditChangeSummary = ({
             ) : (
               <bdi>{inline(first.value)}</bdi>
             )}
-          </span>
+          </TruncatedText>
           {rows.length > 1 ? (
             <span className="text-muted-foreground shrink-0">
               {t("settings.organization.auditLogsMoreChanges", {

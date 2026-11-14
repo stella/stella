@@ -1,5 +1,6 @@
 mod accessibility_guide;
 mod account;
+mod account_switch;
 mod activity;
 mod activity_calls;
 mod activity_commands;
@@ -41,10 +42,14 @@ mod diagnostics;
 mod dictation;
 #[cfg(dictation)]
 mod dictation_audio;
+mod dictation_cleanup;
 #[cfg(dictation)]
 mod dictation_engine;
+mod dictation_focus;
+mod dictation_format;
 #[cfg(dictation)]
 mod dictation_input;
+mod dictation_language;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -65,6 +70,8 @@ mod http_client;
 mod i18n;
 mod idle_time;
 mod keychain;
+mod local_linked_folder_commands;
+mod local_linked_folders;
 mod local_skill_folder_commands;
 mod local_skill_folders;
 mod local_store;

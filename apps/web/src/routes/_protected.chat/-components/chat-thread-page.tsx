@@ -12,9 +12,8 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button, buttonVariants } from "@stll/ui/button";
-import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
+import { NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -47,17 +46,17 @@ import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
-import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
-import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import Tooltip from "@/components/tooltip";
 import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
+import { ChatActiveSkillIntro } from "@/features/chat/components/chat-active-skill-intro";
 import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -68,7 +67,6 @@ import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  applyChatModelChange,
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
@@ -76,6 +74,7 @@ import {
   resolveThreadActiveSkill,
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
+import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -108,10 +107,12 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
+import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 
 // The composer block publishes its live height on this element, the
@@ -131,6 +132,10 @@ const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
   });
   return null;
 };
+
+/** What the reader sees of the thread, for marking it read once per revision. */
+const latestMessageId = (messages: readonly { id: string }[]): string | null =>
+  messages.at(-1)?.id ?? null;
 
 export const ChatThreadPage = ({
   threadRef,
@@ -203,11 +208,13 @@ export const ChatThreadPage = ({
   // The skill is known only after the read above, and the cache key never
   // depends on it, so this context addresses the same entry the page reads.
   // Read at send time, so a turn carries the target the menu shows then.
-  const threadRunTarget = useEffectiveRunTarget(
+  const composerModels = useChatComposerModels({
     activeOrganizationId,
-    data.runTarget,
-  );
-  const getRunTarget = useLatestCallback(() => threadRunTarget);
+    threadRef,
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+  });
+  const { getRunTarget } = composerModels;
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
@@ -273,11 +280,14 @@ export const ChatThreadPage = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     reconnecting,
     turnAbandoned,
-    waitingForComputer,
+    computerWait,
+    turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -326,6 +336,13 @@ export const ChatThreadPage = ({
     holdQueueForMessageEdit,
     messages,
     startUserMessageEdit,
+    threadRef,
+  });
+
+  useMarkChatThreadReadWhileOpen({
+    isGenerating,
+    revision: latestMessageId(messages),
+    threadExists: data.threadExists,
     threadRef,
   });
 
@@ -400,34 +417,6 @@ export const ChatThreadPage = ({
   const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  // Persists the composer's Models submenu selection and gates message
-  // submit on the outcome (see `onSubmit` below) so a send can never race
-  // a just-changed model onto the old, stale one.
-  const modelSelection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort, runTarget }) => {
-      applyChatModelChange({
-        model,
-        reasoningEffort,
-        runTarget,
-        queryClient,
-        queryKey: threadQueryOptions.queryKey,
-        threadId: toSafeId<"chatThread">(threadRef.threadId),
-      });
-    },
-    threadRef,
-  });
-  // The thread keeps where its turns run beside its model, so a reload shows
-  // the same choice; the model stays as it is.
-  const runTargetChoice = {
-    selected: threadRunTarget,
-    select: (runTarget: ChatRunTarget) =>
-      modelSelection.selectModel({
-        model: data.model,
-        reasoningEffort: data.reasoningEffort,
-        runTarget,
-      }),
-  };
 
   // "Move to side" — re-host this thread inside the inspector
   // tab. Workspace-scoped chats land on the matter so the pane
@@ -574,6 +563,11 @@ export const ChatThreadPage = ({
           });
         },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected.
+      if (!handledReserved || newThreadMessages.length > 0) {
+        composerModels.openDesktopForSend();
+      }
       if (handledReserved) {
         const newThreadMessage = newThreadMessages.at(0);
         if (newThreadMessage === undefined) {
@@ -582,7 +576,7 @@ export const ChatThreadPage = ({
         if (!(await ensureAIAvailable())) {
           return CHAT_SEND_KEPT;
         }
-        if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        if (Result.isError(await composerModels.awaitPendingSelection())) {
           return CHAT_SEND_KEPT;
         }
         const newThreadRef: ChatThreadRef =
@@ -637,7 +631,7 @@ export const ChatThreadPage = ({
       // failure the hook has already toasted; abort instead
       // of sending with a model that may not match what the
       // server has persisted.
-      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
       const message = await buildChatRequestMessage(draft);
@@ -680,18 +674,9 @@ export const ChatThreadPage = ({
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
             <ChromeHeaderActions>
               <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
-              <Tooltip
-                content={t("inspector.moveToSide")}
-                render={
-                  <Button
-                    className="hidden md:inline-flex"
-                    onClick={moveToSide}
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <Minimize2Icon className="size-4" />
-                  </Button>
-                }
+              <MoveToSideButton
+                className="hidden md:inline-flex"
+                onClick={moveToSide}
               />
               <ChatHistoryLink />
               <NewChatButton
@@ -724,10 +709,17 @@ export const ChatThreadPage = ({
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[max(var(--chat-bottom-fade-h),calc(var(--composer-block-h,7rem)+1.5rem))]">
                   {messages.length === 0 && !isGenerating && !error ? (
                     <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
-                      <PromptSuggestions
-                        onSelect={selectPrompt}
-                        prompts={suggestedSkills}
-                      />
+                      {activeSkill ? (
+                        <ChatActiveSkillIntro
+                          onSelectPrompt={selectPrompt}
+                          skill={activeSkill}
+                        />
+                      ) : (
+                        <PromptSuggestions
+                          onSelect={selectPrompt}
+                          prompts={suggestedSkills}
+                        />
+                      )}
                       <GuideNudge />
                     </div>
                   ) : (
@@ -744,6 +736,7 @@ export const ChatThreadPage = ({
                         value={{
                           pause: localRunQuestion,
                           answer: answerLocalRunQuestion,
+                          threadRef,
                         }}
                       >
                         <ChatThreadMessages
@@ -782,12 +775,18 @@ export const ChatThreadPage = ({
                           queuedMessages={queuedMessages}
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
-                          waitingForComputer={waitingForComputer}
+                          computerWait={computerWait}
+                          newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
+                          turnSentAt={turnSentAt}
                           userMessageEdit={userMessageEdit}
                           workspaceId={workspaceId}
                         />
                       </ChatLocalRunQuestionContext>
+                      <ChatBackgroundTasks
+                        generationActive={isGenerating}
+                        threadId={threadRef.threadId}
+                      />
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}
@@ -802,6 +801,15 @@ export const ChatThreadPage = ({
                 </ConversationContent>
                 <ChatTurnNavigator messages={messages} />
               </Conversation>
+              {/* Outside the transcript's log, whose additions it would
+                  otherwise be read among. */}
+              <ChatTurnAnnouncer
+                hasError={error !== undefined}
+                isGenerating={isGenerating}
+                key={`turn-announcer-${threadRef.threadId}`}
+                messages={messages}
+                turnsStarted={turnsStarted}
+              />
 
               <ChatAnonymizationLayer
                 editor={controller.editor}
@@ -848,6 +856,7 @@ export const ChatThreadPage = ({
                     controller.setContent(composerStoredMarkdown(prompt));
                     detached(
                       controller.submit(async (draft) => {
+                        composerModels.openDesktopForSend();
                         if (!(await ensureAIAvailable())) {
                           return CHAT_SEND_KEPT;
                         }
@@ -888,20 +897,14 @@ export const ChatThreadPage = ({
                     guideAnchorsEnabled
                     isGenerating={isGenerating}
                     mcpOrganizationId={activeOrganizationId}
-                    models={{
-                      activeOrganizationId,
-                      threadRef,
-                      selectedModel: data.model,
-                      selectedReasoningEffort: data.reasoningEffort,
-                      selectModel: modelSelection.selectModel,
-                      runTarget: runTargetChoice,
-                    }}
+                    models={composerModels.models}
                     reservedCommands={{
                       hasPersistedThread: messages.length > 0,
                     }}
                     skillChat={{
                       contextMatterIds: selectedContextMatterIds,
                       document: null,
+                      runTarget: composerModels.runTarget,
                       threadRef,
                       webSearch: {
                         available: data.webSearchAvailable,
@@ -914,14 +917,7 @@ export const ChatThreadPage = ({
                       <ChatComposerDock
                         data={data}
                         guideAnchorsEnabled
-                        models={{
-                          activeOrganizationId,
-                          threadRef,
-                          selectedModel: data.model,
-                          selectedReasoningEffort: data.reasoningEffort,
-                          selectModel: modelSelection.selectModel,
-                          runTarget: runTargetChoice,
-                        }}
+                        models={composerModels.models}
                         leadingContext={
                           <>
                             {activeSkill && (
@@ -950,6 +946,7 @@ export const ChatThreadPage = ({
                     onStop={() => {
                       stop();
                     }}
+                    stopping={stopPending}
                     onFocusChange={setComposerFocused}
                     onSubmit={handleSubmit}
                   />

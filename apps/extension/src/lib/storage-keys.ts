@@ -5,4 +5,8 @@ export const BROWSER_EXECUTION_RECEIPTS_STORAGE_KEY =
 export const BROWSER_COMMAND_BUDGET_STORAGE_KEY = "browserCommandBudget";
 export const BROWSER_CONTAINED_TABS_STORAGE_KEY = "browserContainedTabs";
 export const BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY = "browserDownloadNotices";
+export const BROWSER_RECENT_NAVIGATIONS_STORAGE_KEY =
+  "browserRecentNavigations";
 export const BROWSER_STELLA_TABS_STORAGE_KEY = "browserStellaTabs";
+export const BROWSER_DESKTOP_LINK_STORAGE_KEY = "browserDesktopLink";
+export const BROWSER_CONTROL_OWNER_STORAGE_KEY = "browserControlOwner";
