@@ -1,7 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
+import * as v from "valibot";
 
-import { isChatTurnInFlight } from "@/components/chat/chat-ui-tools";
+import { localRunQuestionPauseOf } from "@stll/api-contract/chat-local-run-question";
+import { chatResumeSnapshotSchema } from "@stll/chat/resume-contract";
+
+import {
+  isChatTurnInFlight,
+  openMemberWaitKeys,
+} from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -73,13 +80,13 @@ const chatThreadIdentity = ({
  * data's signal diverges from this frozen seed → idle rebuild from
  * server-authoritative messages.
  *
- * The sole exception is an authoritative refresh that confirms the same
- * pending approval already held by the runtime. That acknowledgement
- * advances every alias of the runtime to the persisted approval's seed,
- * so resolving the approval locally cannot rebuild from that now-stale
- * pending transcript before the continuation refetch lands. Updating the
- * seed from stream progress itself would break the normal divergence
- * detection above.
+ * The sole exception is an authoritative refresh that confirms what the
+ * runtime already has open for the member (an approval, a question; see
+ * `openMemberWaitKeys`). That acknowledgement advances every alias of the
+ * runtime to the persisted wait's seed, so answering it locally cannot
+ * rebuild from that now-stale waiting transcript before the continuation
+ * refetch lands. Updating the seed from stream progress itself would break
+ * the normal divergence detection above.
  */
 type ChatRuntimeSeedSignal = {
   lastActivityAt: string | null;
@@ -124,26 +131,33 @@ const seedSignalsEqual = (
   left.lastMessageId === right.lastMessageId &&
   left.threadRevision === right.threadRevision;
 
-const getPendingToolApprovalIds = (
+/**
+ * What the stored thread still has open for the member, under the keys a
+ * runtime's own wait reads as: the awaited parts of its latest answer, and
+ * the question its parked turn's resume snapshot holds.
+ */
+const storedMemberWaitKeys = (
   messages: readonly PersistedChatMessage[],
 ): readonly string[] => {
-  const message = messages.at(-1);
-  if (!message || message.role !== "assistant") {
-    return [];
-  }
-
-  return message.parts.flatMap((part) =>
-    part.type === "tool-call" && part.state === "approval-requested"
-      ? [part.id]
-      : [],
+  const resume = v.safeParse(
+    chatResumeSnapshotSchema,
+    messages.at(-1)?.metadata?.resumeSnapshot,
   );
+  const interrupts = resume.success
+    ? resume.output.pendingInterrupts
+    : undefined;
+  return openMemberWaitKeys({
+    localRunQuestion:
+      interrupts === undefined ? null : localRunQuestionPauseOf(interrupts),
+    messages,
+  });
 };
 
 const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
   idle: "idle",
-  replaceStaleApproval: "replace-stale-approval",
+  replaceStaleMemberWait: "replace-stale-member-wait",
   retainInFlight: "retain-in-flight",
-  retainPendingApproval: "retain-pending-approval",
+  retainMemberWait: "retain-member-wait",
 } as const;
 
 /**
@@ -172,6 +186,14 @@ const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
   return snapshot.isLoading || snapshot.sessionGenerating || turnInFlight;
 };
 
+/**
+ * A runtime the member has something open on is kept, like one with work in
+ * flight: rebuilding it would drop what they entered into the open card and
+ * read the paused turn from the server again. It is kept while the stored
+ * thread still holds everything it waits on, or has not been read since the
+ * wait began; a refreshed thread that no longer holds it (answered on
+ * another device, stopped) replaces the stale wait.
+ */
 const getChatRuntimeReconcileDisposition = ({
   data,
   hasAuthoritativeRefresh,
@@ -185,23 +207,20 @@ const getChatRuntimeReconcileDisposition = ({
     return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight;
   }
 
-  const pendingApprovalIds = getPendingToolApprovalIds(
-    runtime.getSnapshot().messages,
-  );
-  if (pendingApprovalIds.length === 0) {
+  const { localRunQuestion, messages } = runtime.getSnapshot();
+  const openKeys = openMemberWaitKeys({ localRunQuestion, messages });
+  if (openKeys.length === 0) {
     return CHAT_RUNTIME_RECONCILE_DISPOSITION.idle;
   }
 
-  const authoritativeApprovalIds = new Set(
-    getPendingToolApprovalIds(data.messages),
-  );
-  if (pendingApprovalIds.every((id) => authoritativeApprovalIds.has(id))) {
-    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
+  const storedKeys = new Set(storedMemberWaitKeys(data.messages));
+  if (openKeys.every((key) => storedKeys.has(key))) {
+    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait;
   }
 
   return hasAuthoritativeRefresh
-    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval
-    : CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
+    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleMemberWait
+    : CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait;
 };
 
 /**
@@ -283,7 +302,7 @@ export const showStoredChatThread = async (
   runtime.showStoredMessages(stored.value.messages);
 };
 
-const advanceAcknowledgedApprovalSeed = ({
+const advanceAcknowledgedMemberWaitSeed = ({
   runtime,
   seed,
   threadIdentity,
@@ -358,16 +377,15 @@ const findBusyChatRuntimeEntryForThread = ({
     });
     if (
       disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight &&
-      disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+      disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait
     ) {
       continue;
     }
     if (
-      disposition ===
-        CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval &&
+      disposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait &&
       hasAuthoritativeRefresh
     ) {
-      advanceAcknowledgedApprovalSeed({
+      advanceAcknowledgedMemberWaitSeed({
         runtime: entry.runtime,
         seed,
         threadIdentity,
@@ -483,9 +501,11 @@ export type AcquireChatRuntimeArgs = {
  *      registers the runtime and starts the stream BEFORE navigating, so
  *      the destination page's acquire (identical fingerprint) lands here
  *      and reattaches instead of rebuilding.
- *      A pending approval is retained while the query still carries the
- *      runtime's pre-send seed, or when a refreshed transcript contains every
- *      pending tool-call id. A refreshed mismatch replaces stale local state.
+ *      A runtime the member has something open on (an approval, a
+ *      question; see `openMemberWaitKeys`) is retained while the query still
+ *      carries its pre-send seed, or when a refreshed transcript still holds
+ *      everything it waits on. A refreshed mismatch replaces stale local
+ *      state.
  *   2. Runtime with in-flight work under ANY other registry key for the
  *      same THREAD
  *      (any fingerprint, any query key — the inspector's active-skill
@@ -514,8 +534,9 @@ export type AcquireChatRuntimeArgs = {
  *      no entry exists. Build from the CURRENT caller's live getters and
  *      fresh sanitized messages (the pre-registry design rebuilt on
  *      every queryFn run; this is the idle-only equivalent). This is
- *      also forced when an authoritative transcript resolves a pending
- *      approval in place without changing the tail message id or timestamp.
+ *      also forced when an authoritative transcript resolves what the
+ *      member had open in place, without changing the tail message id or
+ *      timestamp.
  *      Rebuild is also the moment a busy-reattached foreign runtime — or a
  *      route-handoff runtime — sheds its originating surface's getters
  *      in favour of the mounted caller's. Superseded same-thread entries
@@ -558,11 +579,10 @@ export const acquireChatRuntime = ({
   }
   if (
     existing !== undefined &&
-    existingDisposition ===
-      CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+    existingDisposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainMemberWait
   ) {
     if (!seedSignalsEqual(existing.seed, seed)) {
-      advanceAcknowledgedApprovalSeed({
+      advanceAcknowledgedMemberWaitSeed({
         runtime: existing.runtime,
         seed,
         threadIdentity,
@@ -595,7 +615,7 @@ export const acquireChatRuntime = ({
   if (
     existing !== undefined &&
     existingDisposition !==
-      CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval &&
+      CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleMemberWait &&
     seedSignalsEqual(existing.seed, seed)
   ) {
     return existing.runtime;
