@@ -236,8 +236,9 @@ canonical link and standard meta entries. Without a cursor it starts at the
 section in view, else at the top; `next` and `previous` cursors move on from
 there, and `find` searches the same text or lists the headings. Frames are
 read in order after the top document. The reading rules live in
-`src/lib/page-script.ts` (in the page) and `src/lib/page-window.ts` (cursors
-and frames).
+`packages/browser-page/src/page-script.ts` (in the page) and
+`packages/browser-page/src/page-window.ts` (cursors and frames), shared with
+every browser host.
 
 Each browser command is approved in stella chat. The user may choose, per web
 session, to auto-approve page reads; every other command always asks.

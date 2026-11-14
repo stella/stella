@@ -154,7 +154,7 @@ const colourExemptions = [
       // An awareness placeholder the collaboration server replaces; never drawn.
       "apps/web/src/components/docx/use-folio-collaboration-room.ts",
       // A third-party page's computed colours, compared to find hidden text.
-      "apps/extension/src/lib/page-script.ts",
+      "packages/browser-page/src/page-script.ts",
     ],
   },
   {
@@ -6017,6 +6017,7 @@ const config = defineConfig({
       files: [
         "apps/extension/src/lib/desktop-link.ts",
         "packages/agent-engine/src/sidecar/browser/**/*.ts",
+        "packages/browser-page/src/**/*.ts",
       ],
       excludeFiles: ["**/*.test.ts"],
       rules: {

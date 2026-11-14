@@ -6,6 +6,11 @@ import {
   BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
+import { pageScript } from "@stll/browser-page/page-script";
+import {
+  SIGN_IN_POLICY,
+  type SignInPolicy,
+} from "@stll/browser-page/sign-in-policy";
 
 import { CONTROL_TRANSPORT } from "./control-holder";
 import {
@@ -13,7 +18,6 @@ import {
   CONTROL_ADMISSION,
   takeOverControl,
 } from "./control-owner";
-import { SIGN_IN_POLICY, type SignInPolicy } from "./sign-in-policy";
 import { releaseToUser } from "./tab-containment";
 import {
   adoptControlledTab,
@@ -610,6 +614,8 @@ describe("a page that asks for a sign-in", () => {
     if (func === undefined) {
       throw new TypeError("No script was injected.");
     }
+    // The one page script every browser host runs, not a copy of it.
+    expect(Object.is(func, pageScript)).toBe(true);
 
     // A login form on an ordinary site: one visible password field whose
     // value the member has typed. Reading its value, listening for input

@@ -11,9 +11,9 @@ import {
   parseBrowserDesktopRequest,
   STELLA_DESKTOP_NATIVE_HOST,
 } from "@stll/api-contract/browser-control";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
 
 import { hasDesktopLinkAccess } from "./access";
-import { browserControlError } from "./browser-control-result";
 import { BROWSER_DESKTOP_LINK_STORAGE_KEY } from "./storage-keys";
 
 /**

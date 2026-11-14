@@ -26,6 +26,19 @@ import type {
  * frame-local; the host qualifies them with the frame and its document.
  */
 
+/**
+ * What the page script keeps between its runs in one document, in the
+ * world it runs in (the extension's isolated world, or the one the stella
+ * browser creates), which the page can neither see nor change. Only
+ * `pageScript` reads and writes them, and it checks each before use.
+ */
+declare global {
+  var stellaSecretValues: unknown;
+  var stellaSensitiveFields: unknown;
+  var stellaSecretWatch: unknown;
+  var stellaElementIds: unknown;
+}
+
 export const SNAPSHOT_PURPOSE = {
   read: "read",
   /** Answers `{ refused: "sign-in" }` or `{ refused: "none" }`; reads nothing. */
@@ -245,14 +258,13 @@ export const pageScript = (pageOperation: PageOperation) => {
   // any field holding one, and any text containing one, is withheld.
   // Values shorter than this are too common to match safely.
   const SECRET_VALUE_MIN_CHARS = 4;
-  const SECRETS_KEY = "stellaSecretValues";
   const isSecretSet = (value: unknown): value is Set<string> =>
     value instanceof Set;
-  const storedSecrets: unknown = Reflect.get(globalThis, SECRETS_KEY);
+  const storedSecrets: unknown = globalThis.stellaSecretValues;
   const secretValues = isSecretSet(storedSecrets)
     ? storedSecrets
     : new Set<string>();
-  Reflect.set(globalThis, SECRETS_KEY, secretValues);
+  globalThis.stellaSecretValues = secretValues;
   const REDACTED = "[hidden]";
   const holdsSecret = (text: string) => {
     for (const secret of secretValues) {
@@ -274,11 +286,10 @@ export const pageScript = (pageOperation: PageOperation) => {
   // text does not make the value readable. The extension's isolated world
   // keeps this set across injections; the page can neither see nor clear
   // it.
-  const HISTORY_KEY = "stellaSensitiveFields";
-  const storedHistory: unknown = Reflect.get(globalThis, HISTORY_KEY);
+  const storedHistory: unknown = globalThis.stellaSensitiveFields;
   const sensitiveHistory: WeakSet<Element> =
     storedHistory instanceof WeakSet ? storedHistory : new WeakSet();
-  Reflect.set(globalThis, HISTORY_KEY, sensitiveHistory);
+  globalThis.stellaSensitiveFields = sensitiveHistory;
   const isTextField = (
     element: Element,
   ): element is HTMLInputElement | HTMLTextAreaElement =>
@@ -355,9 +366,8 @@ export const pageScript = (pageOperation: PageOperation) => {
     // user has the tab, then shown by a page that swaps or retypes the
     // field, is still known. Installed once per document, in the
     // extension's isolated world, where the page cannot remove it.
-    const WATCH_KEY = "stellaSecretWatch";
-    if (Reflect.get(globalThis, WATCH_KEY) !== true) {
-      Reflect.set(globalThis, WATCH_KEY, true);
+    if (globalThis.stellaSecretWatch !== true) {
+      globalThis.stellaSecretWatch = true;
       const learn = (node: unknown) => {
         if (node instanceof Element) {
           rememberSecretValue(node);
@@ -915,7 +925,6 @@ export const pageScript = (pageOperation: PageOperation) => {
     // agent read always names the same element. The numbers live in the
     // extension's isolated world, which the page can neither see nor
     // change; the host prefixes a subframe's with the frame's id.
-    const ID_KEY = "stellaElementIds";
     type IdRegistry = {
       controls: WeakMap<Element, number>;
       links: WeakMap<Element, number>;
@@ -935,7 +944,7 @@ export const pageScript = (pageOperation: PageOperation) => {
       typeof value.next.control === "number" &&
       "link" in value.next &&
       typeof value.next.link === "number";
-    const storedIds: unknown = Reflect.get(globalThis, ID_KEY);
+    const storedIds: unknown = globalThis.stellaElementIds;
     const ids: IdRegistry = isIdRegistry(storedIds)
       ? storedIds
       : {
@@ -943,7 +952,7 @@ export const pageScript = (pageOperation: PageOperation) => {
           links: new WeakMap(),
           next: { control: 1, link: 1 },
         };
-    Reflect.set(globalThis, ID_KEY, ids);
+    globalThis.stellaElementIds = ids;
     const idPrefix = operation.kind === "snapshot" ? operation.idPrefix : "";
     const idOf = (element: Element, kind: "control" | "link") => {
       const numbers = kind === "link" ? ids.links : ids.controls;

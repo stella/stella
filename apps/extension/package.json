@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/browser-page": "workspace:*",
     "@stll/concurrency": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"

@@ -1,0 +1,61 @@
+import { describe, expect, test } from "bun:test";
+
+import { createOriginPolicy } from "./origin-policy";
+
+describe("createOriginPolicy", () => {
+  const policy = createOriginPolicy({
+    hostnames: ["app.example-stella.com"],
+    originFromUrl: (rawUrl) =>
+      URL.parse(rawUrl)?.origin === "https://api.example-stella.com"
+        ? "https://api.example-stella.com"
+        : null,
+  });
+
+  test("refuses the hosts and origins it is given as stella's", () => {
+    expect(
+      policy.parseControllableUrl("https://app.example-stella.com/chat"),
+    ).toBeNull();
+    expect(
+      policy.parseControllableUrl("https://api.example-stella.com/v1"),
+    ).toBeNull();
+    expect(
+      policy.parseControllableUrl("https://docs.example-stella.com/")?.hostname,
+    ).toBe("docs.example-stella.com");
+  });
+
+  test("refuses what is not a public HTTPS address", () => {
+    for (const rawUrl of [
+      "http://research.example.com/",
+      "https://user:secret@research.example.com/",
+      "https://127.0.0.1/",
+      "https://intranet/",
+      "not a url",
+    ]) {
+      expect(policy.parseControllableUrl(rawUrl)).toBeNull();
+    }
+  });
+
+  test("holds a frame to its origin and the top frame to its address", () => {
+    expect(
+      policy.isControllableFrame({
+        isTopFrame: false,
+        origin: "https://research.example.com",
+        url: "about:blank",
+      }),
+    ).toBe(true);
+    expect(
+      policy.isControllableFrame({
+        isTopFrame: true,
+        origin: "https://research.example.com",
+        url: "about:blank",
+      }),
+    ).toBe(false);
+    expect(
+      policy.isControllableFrame({
+        isTopFrame: false,
+        origin: "null",
+        url: "https://research.example.com/",
+      }),
+    ).toBe(false);
+  });
+});
