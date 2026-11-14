@@ -22,10 +22,6 @@ import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
-beforeEach(() => {
-  suggestTemplateFieldsMock.mockClear();
-});
-
 const PROVIDER_ERROR = new Error(
   "upstream provider rejected request: invalid api key sk-live-abc123",
 );
@@ -39,6 +35,7 @@ const suggestTemplateFieldsMock = mock(async () => {
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  suggestTemplateFieldsMock.mockClear();
   analytics = installRecordingAnalytics();
 });
 

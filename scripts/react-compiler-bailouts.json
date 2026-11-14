@@ -6,10 +6,6 @@
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
     ]
   },
-  "apps/web/src/components/bilingual-review-rows.tsx::BilingualReviewRows": {
-    "memos": 0,
-    "reasons": ["Use of incompatible library"]
-  },
   "apps/web/src/components/chat-editor-provider.tsx::useChatEditor": {
     "memos": 19,
     "reasons": [

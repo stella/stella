@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import {
   type ChatLocalHarnessReadiness,
+  type ChatLocalLinkedFolderReadiness,
   type ChatLocalRunReadiness,
   isChatLocalRunHarness,
 } from "@stll/api-contract/chat-run-target";
@@ -70,6 +71,14 @@ const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
             isChatLocalRunHarness(report.id)
               ? [{ ...report, id: report.id }]
               : [],
+        ),
+        linkedFolders: runner.linkedFolders.map(
+          (folder): ChatLocalLinkedFolderReadiness => ({
+            ...folder,
+            approval: runner.approvedFolderIds.includes(folder.id)
+              ? "approved"
+              : "pending",
+          }),
         ),
       })),
       maxApprovals,

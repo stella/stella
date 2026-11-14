@@ -249,6 +249,8 @@ export const WITHDRAWN_COPY_REGISTRY = {
       "compactionAttemptedAt",
       "compactionAttempts",
       "compactionEpoch",
+      "lastReadAt",
+      "pinnedAt",
       "createdAt",
       "updatedAt",
     ],

@@ -18,6 +18,10 @@ export const AI_ERROR_KINDS = [
   "local_runner_limit_reached",
   "local_runner_unavailable",
   "local_runner_turn_too_large",
+  "local_runner_not_reached",
+  "local_runner_relinked",
+  "local_runner_restoring",
+  "local_runner_folder_unavailable",
   "unknown",
 ] as const;
 
@@ -42,6 +46,10 @@ export const AI_FAILURE_CODES = {
   local_runner_limit_reached: "ai_local_runner_limit_reached",
   local_runner_unavailable: "ai_local_runner_unavailable",
   local_runner_turn_too_large: "ai_local_runner_turn_too_large",
+  local_runner_not_reached: "ai_local_runner_not_reached",
+  local_runner_relinked: "ai_local_runner_relinked",
+  local_runner_restoring: "ai_local_runner_restoring",
+  local_runner_folder_unavailable: "ai_local_runner_folder_unavailable",
   unknown: "ai_unknown",
   role_not_configured: "ai_role_not_configured",
   own_key_required: "ai_own_key_required",

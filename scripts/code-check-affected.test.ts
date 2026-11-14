@@ -56,6 +56,10 @@ import {
   WORKSPACE_TYPECHECK_CACHE_INPUTS,
 } from "./code-check-affected";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import {
+  lintCommand as repositoryLintCommand,
+  parseLintArguments,
+} from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 import { rootScriptLintPaths } from "./root-script-lint";
 
@@ -1058,10 +1062,24 @@ process.exit(childExitStatus(result));
 
   // The full check and every affected run reach workspaces through the same
   // `lint` and `typecheck` tasks, so the workspace scripts are the pass list.
+  // Each script lints through scripts/lint.ts; the command it starts is the
+  // one that has to carry the type-aware rules and the type check.
   test("every workspace lint runs the type-checking Oxlint pass", () => {
+    const startedLint = (script: string): string[] => {
+      const call = /bun scripts\/lint\.ts((?: [^\s&|;]+)*)/u.exec(script);
+      if (call === null) {
+        return [];
+      }
+      const parsed = parseLintArguments(
+        (call[1] ?? "").split(" ").filter((part) => part !== ""),
+      );
+      return "error" in parsed
+        ? []
+        : repositoryLintCommand(parsed.options, parsed.args);
+    };
     const missing = workspaceManifests()
       .filter(({ scripts }) => {
-        const lint = scripts["lint"] ?? "";
+        const lint = startedLint(scripts["lint"] ?? "");
         return !lint.includes("--type-aware") || !lint.includes("--type-check");
       })
       .map(({ workspace }) => workspace);
@@ -2203,6 +2221,7 @@ test("the CLI stops after failure, reports it, and propagates its exit code", ()
     "code-quality-task-budgets.json",
     "generated-files.ts",
     "ledger-membership.ts",
+    "lint-command.ts",
     "lint-paths.ts",
     "oxlint-config-scopes.ts",
     "oxlint-module-closure.ts",

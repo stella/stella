@@ -7,12 +7,15 @@
 
 import * as v from "valibot";
 
+import { chatLocalRunApprovalMessage } from "@stll/api-contract/chat-local-run-tool";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import type {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
 } from "@stll/api-contract/desktop-runner";
+
+import type { HarnessStepOutput } from "./step-output";
 
 type DesktopRunnerApprovalDecision =
   (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
@@ -65,11 +68,24 @@ export type HarnessToolCall = {
    * reads it, and it is not part of what a turn reports.
    */
   localInput?: unknown;
+  /**
+   * The harness's id of the subagent step that made the call; absent on the
+   * main thread. Reported beside the call, never inside its input.
+   */
+  parentCallId?: string;
 };
 
 export type HarnessToolResult = {
   content: string;
-  status: "succeeded" | "failed";
+  /** `cancelled`: the harness never ran the call to its end because the
+   *  turn was stopped or a new message cut it off; not a failure. */
+  status: "succeeded" | "failed" | "cancelled";
+  /**
+   * What a native step produced (a command's output, a change's diff). It
+   * stays on this computer: the sidecar keeps it for the member to open
+   * here, and it is not part of what a turn reports.
+   */
+  localOutput?: HarnessStepOutput;
 };
 
 /**
@@ -92,28 +108,17 @@ export type HarnessApprovalRequest = {
 };
 
 /**
- * What an approval asks the user to allow. A command approval names the
- * command itself, since that is what runs, not the harness's summary of it
- * (as t3code, MIT, shows command approvals); anything else uses the
- * harness's reason, or names the tool.
+ * What an approval asks the user to allow, from what chat keeps of the call
+ * (`chatLocalRunApprovalMessage`): a command's shown command line, else the
+ * harness's shown reason, or the tool's name. Never more of a step than its
+ * call shows, so a heredoc's text stays here.
  */
-export const approvalMessage = (request: HarnessApprovalRequest): string => {
-  const { input } = request.toolCall;
-  if (
-    request.kind === "command" &&
-    typeof input === "object" &&
-    input !== null &&
-    "command" in input &&
-    typeof input.command === "string" &&
-    input.command.trim() !== ""
-  ) {
-    return input.command;
-  }
-  if (request.reason !== null && request.reason.trim() !== "") {
-    return request.reason;
-  }
-  return `Approval required to run ${request.toolCall.name}`;
-};
+export const approvalMessage = (request: HarnessApprovalRequest): string =>
+  chatLocalRunApprovalMessage({
+    toolName: request.toolCall.name,
+    input: request.toolCall.input,
+    reason: request.reason,
+  });
 
 /** One question of a blocking question, as the chat contract carries it. */
 export type HarnessQuestion = ChatLocalRunQuestion;
@@ -173,6 +178,11 @@ export type HarnessUsage = {
 export type HarnessFailure =
   | { type: "auth_required"; message: string }
   | { type: "usage_limit"; message: string; resetsAt: string | null }
+  /**
+   * The model stayed at capacity through every retry: a transient state of
+   * the provider, unlike a usage limit, which is the member's own allowance.
+   */
+  | { type: "model_at_capacity"; message: string }
   | { type: "provider_error"; message: string; code: string }
   | {
       type: "harness_exited";
@@ -185,7 +195,15 @@ export type HarnessFailure =
    * The run's approval mode needs the harness's OS sandbox and the sandbox
    * could not start; the run never runs without it.
    */
-  | { type: "sandbox_unavailable"; message: string };
+  | { type: "sandbox_unavailable"; message: string }
+  /**
+   * The harness kept retrying the provider with nothing else happening for
+   * longer than a turn may wait; the turn ends instead of waiting on.
+   */
+  | { type: "retry_stalled"; message: string }
+  /** The harness could not reach stella's MCP server, so it has none of
+   *  stella's tools; the turn does not run without them. */
+  | { type: "tools_unavailable"; message: string };
 
 export type HarnessEvent =
   | {
@@ -219,8 +237,11 @@ export type HarnessEvent =
 export const HARNESS_FAILURE_OUTCOME = {
   auth_required: "needs_login",
   usage_limit: "limit_reached",
+  model_at_capacity: "failed",
   provider_error: "failed",
   harness_exited: "failed",
   protocol_violation: "failed",
   sandbox_unavailable: "failed",
+  retry_stalled: "failed",
+  tools_unavailable: "failed",
 } as const satisfies Record<HarnessFailure["type"], DesktopRunnerRunOutcome>;

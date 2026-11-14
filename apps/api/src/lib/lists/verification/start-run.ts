@@ -7,11 +7,8 @@ import {
   VERIFICATION_PIPELINE_VERSION,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
-import type { VerificationRunCaps } from "@/api/lib/lists/verification/run-cap-config";
-import {
-  getVerificationRunCaps,
-  verificationCapErrorFromDatabase,
-} from "@/api/lib/lists/verification/run-caps";
+import { startModelRun } from "@/api/lib/usage/model-run-caps/caps";
+import type { ModelRunCaps } from "@/api/lib/usage/model-run-caps/config";
 
 type StartVerificationRunArgs = {
   safeDb: SafeDb;
@@ -26,51 +23,52 @@ type StartVerificationRunArgs = {
     | "entityVersionId"
     | "contentSha256"
     | "evidence"
+    | "scope"
     | "requestedBy"
   >;
-  caps?: VerificationRunCaps;
+  caps?: ModelRunCaps;
 };
 
-/** The insert trigger locks and charges the org row after the run row;
- * terminal transitions use the same lock order. Refusals roll back both. */
+/** A verification is a `list-run`: the insert trigger locks and charges the
+ *  organization's counter after the run row, and a refusal rolls back both.
+ *  Answers `false` when the document already has a verification in flight. */
 export const startVerificationRun = async ({
   safeDb,
   recordAuditEvent,
   run,
-  caps = getVerificationRunCaps(),
-}: StartVerificationRunArgs) => {
-  const inserted = await safeDb(async (tx) => {
-    await tx.execute(sql`SELECT
-      set_config('app.list_verification_active_limit', ${String(caps.active)}, true),
-      set_config('app.list_verification_daily_limit', ${String(caps.startsPerDay)}, true)`);
-    const created = await tx
-      .insert(legalListVerificationRuns)
-      .values({
-        ...run,
-        status: "queued",
-        pipelineVersion: VERIFICATION_PIPELINE_VERSION,
-      })
-      .onConflictDoNothing({
-        target: [
-          legalListVerificationRuns.workspaceId,
-          legalListVerificationRuns.entityId,
-          legalListVerificationRuns.fileFieldId,
-        ],
-        where: sql`${legalListVerificationRuns.status} IN (${sql.join(
-          VERIFICATION_RUN_ACTIVE_STATUSES.map((status) =>
-            sql.raw(`'${status}'`),
-          ),
-          sql`, `,
-        )})`,
-      })
-      .returning({ id: legalListVerificationRuns.id });
-    if (created.length === 0) {
-      return false;
-    }
-    await recordAuditEvent(tx);
-    return true;
+  caps,
+}: StartVerificationRunArgs) =>
+  await startModelRun({
+    safeDb,
+    kind: "list-run",
+    operation: "lists.verifications.create",
+    ...(caps === undefined ? {} : { caps }),
+    start: async (tx) => {
+      const created = await tx
+        .insert(legalListVerificationRuns)
+        .values({
+          ...run,
+          status: "queued",
+          pipelineVersion: VERIFICATION_PIPELINE_VERSION,
+        })
+        .onConflictDoNothing({
+          target: [
+            legalListVerificationRuns.workspaceId,
+            legalListVerificationRuns.entityId,
+            legalListVerificationRuns.fileFieldId,
+          ],
+          where: sql`${legalListVerificationRuns.status} IN (${sql.join(
+            VERIFICATION_RUN_ACTIVE_STATUSES.map((status) =>
+              sql.raw(`'${status}'`),
+            ),
+            sql`, `,
+          )})`,
+        })
+        .returning({ id: legalListVerificationRuns.id });
+      if (created.length === 0) {
+        return false;
+      }
+      await recordAuditEvent(tx);
+      return true;
+    },
   });
-  return inserted.mapError(
-    (error) => verificationCapErrorFromDatabase(error) ?? error,
-  );
-};

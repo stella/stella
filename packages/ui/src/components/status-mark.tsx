@@ -1,6 +1,14 @@
 "use client";
 
 import { cn } from "../lib/utils";
+import {
+  STATUS_MARK_RING_RADIUS,
+  STATUS_MARK_STROKE_WIDTH,
+  STATUS_MARK_VIEWBOX,
+} from "./status-mark.shared";
+
+const CHECK_PATH = "M5.4 8.3 7.2 10.1 10.6 6.3";
+const CROSS_PATH = "M6.1 6.1 9.9 9.9M9.9 6.1 6.1 9.9";
 
 type StatusMarkStatus = "pending" | "running" | "done" | "failed";
 
@@ -10,11 +18,6 @@ type StatusMarkProps = {
   label?: string | undefined;
   className?: string;
 };
-
-// A 16-unit box with a 1.5 stroke: the ring sits inside the box edge.
-const RING_RADIUS = 6.25;
-const CHECK_PATH = "M5.4 8.3 7.2 10.1 10.6 6.3";
-const CROSS_PATH = "M6.1 6.1 9.9 9.9M9.9 6.1 6.1 9.9";
 
 // Every state is a style of the same elements, keyed off `data-status`, so
 // a change is a CSS transition: interruptible midway, and absent on first
@@ -75,8 +78,8 @@ const StatusMark = ({ className, label, status }: StatusMarkProps) => (
     stroke="currentColor"
     strokeLinecap="round"
     strokeLinejoin="round"
-    strokeWidth={1.5}
-    viewBox="0 0 16 16"
+    strokeWidth={STATUS_MARK_STROKE_WIDTH}
+    viewBox={STATUS_MARK_VIEWBOX}
     {...(label === undefined
       ? { "aria-hidden": true }
       : { "aria-label": label, role: "img" })}
@@ -87,7 +90,7 @@ const StatusMark = ({ className, label, status }: StatusMarkProps) => (
       cx="8"
       cy="8"
       fill="currentColor"
-      r={RING_RADIUS}
+      r={STATUS_MARK_RING_RADIUS}
       stroke="none"
     />
     {/* The track the arc runs on, shown only while it runs. */}
@@ -95,7 +98,7 @@ const StatusMark = ({ className, label, status }: StatusMarkProps) => (
       className="opacity-0 transition-opacity duration-200 group-data-[status=running]/status:opacity-20"
       cx="8"
       cy="8"
-      r={RING_RADIUS}
+      r={STATUS_MARK_RING_RADIUS}
     />
     <g className={SPIN_CLASS}>
       <circle
@@ -103,7 +106,7 @@ const StatusMark = ({ className, label, status }: StatusMarkProps) => (
         cx="8"
         cy="8"
         pathLength={100}
-        r={RING_RADIUS}
+        r={STATUS_MARK_RING_RADIUS}
         transform="rotate(-90 8 8)"
       />
     </g>
