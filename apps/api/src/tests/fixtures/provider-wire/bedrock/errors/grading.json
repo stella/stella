@@ -410,6 +410,18 @@
         "status": null,
         "grade": "client"
       }
+    },
+    {
+      "name": "turn_too_large",
+      "origin": "run-log",
+      "evidence": {
+        "reason": "chunk-too-large"
+      },
+      "expected": {
+        "kind": "turn_too_large",
+        "status": null,
+        "grade": "client"
+      }
     }
   ]
 }

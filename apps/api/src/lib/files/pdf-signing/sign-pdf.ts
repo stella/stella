@@ -42,6 +42,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { sha256Bytes as browserHashSha256Bytes } from "@stll/sha256/browser";
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -51,11 +52,8 @@ import {
   carriesSignatureValue,
   isSignedPdf,
 } from "@/api/lib/files/pdf-signatures";
+import { addArchivalTimestamp } from "@/api/lib/files/pdf-signing/archival-timestamp";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/files/pdf-signing/certificate";
-import {
-  certificationPathReachesAnchor,
-  completeCertificateChain,
-} from "@/api/lib/files/pdf-signing/certificate-chain";
 import { readDocMdpPermission } from "@/api/lib/files/pdf-signing/doc-mdp";
 import { settleForLibpdf } from "@/api/lib/files/pdf-signing/libpdf-callbacks";
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
@@ -68,11 +66,13 @@ import {
 } from "@/api/lib/files/pdf-signing/stamp";
 import type { SignatureStamp } from "@/api/lib/files/pdf-signing/stamp";
 import { loadStampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
+import { assessTimestamp } from "@/api/lib/files/pdf-signing/timestamp-assessment";
 import {
   createFallbackTimestampAuthority,
   PdfSigningTimestampUnavailableError,
 } from "@/api/lib/files/pdf-signing/timestamp-authority";
 import type { NamedTimestampAuthority } from "@/api/lib/files/pdf-signing/timestamp-authority";
+import type { TimestampTrust } from "@/api/lib/files/pdf-signing/timestamp-trust";
 import {
   embedValidationData,
   findRevokedCertificates,
@@ -81,11 +81,12 @@ import {
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
- * PAdES levels this pipeline produces: without trusted time a signature
- * claims its own time (B-B); with a timestamp it is B-T; with validation data
- * for its whole chain as well, B-LT.
+ * PAdES levels this pipeline produces (ETSI EN 319 142-1): without trusted
+ * time a signature claims its own time (B-B); with a timestamp it is B-T;
+ * with validation data for its whole chain as well, B-LT; sealed by an
+ * archival document timestamp over all of that, B-LTA.
  */
-type PdfSigningLevel = "B-B" | "B-T" | "B-LT";
+type PdfSigningLevel = "B-B" | "B-T" | "B-LT" | "B-LTA";
 
 const DIGEST_ALGORITHM = "SHA-256" as const satisfies DigestAlgorithm;
 
@@ -96,6 +97,14 @@ const PDF_SIGNING_PREPARE_TIMEOUT_MS = 30_000;
  * fetches; both are bounded on their own, this bounds the whole.
  */
 const PDF_SIGNING_APPLY_TIMEOUT_MS = 75_000;
+/**
+ * The archival timestamp gets what is left of phase 2's budget, at most
+ * this: it only ever adds to a signature that is already complete, so it
+ * must finish inside the budget rather than let the whole embedding time
+ * out.
+ */
+const ARCHIVAL_TIMESTAMP_TIMEOUT_MS = 20_000;
+const APPLY_DEADLINE_MARGIN_MS = 2000;
 
 class PdfSigningError extends TaggedError("PdfSigningError")<{
   message: string;
@@ -516,11 +525,13 @@ type ApplySignatureInvocation = SigningInvocation & {
   /** Whether `certificateChain` reaches a self-signed root. */
   certificateChainComplete: boolean;
   /**
-   * Certificates a timestamp's chain must reach for its time to count; see
-   * `timestamp-trust.ts`. Empty: timestamps are embedded, never trusted.
+   * What a timestamp's chain must reach for its time to count; see
+   * `timestamp-trust.ts`. Nothing: timestamps are embedded, never trusted.
    */
-  timestampTrustAnchors: readonly Uint8Array[];
+  timestampTrust: TimestampTrust;
   revocationProvider?: TrackedRevocationProvider;
+  /** Milliseconds since the epoch; phase 2's budget is measured with it. */
+  now?: () => number;
 };
 
 export type AppliedSignature = {
@@ -529,7 +540,7 @@ export type AppliedSignature = {
   level: PdfSigningLevel;
   /** The authority whose timestamp the signature carries. */
   timestampAuthorityUrl: string | null;
-  /** What kept the signature below B-LT, and anything LibPDF noted. */
+  /** What kept the signature below B-LTA, and anything LibPDF noted. */
   warnings: PdfSigningWarning[];
 };
 
@@ -554,24 +565,6 @@ const libpdfWarnings = (warnings: readonly SignWarning[]) =>
   warnings
     .filter(({ code }) => code !== "MDP_VIOLATION")
     .map(({ code, message }) => ({ code, message }));
-
-/**
- * The level a timestamped signature reached. Time from an authority no
- * trust anchor vouches for is not trusted time, so such a signature is
- * B-B however much validation data it carries.
- */
-const achievedLevel = ({
-  longTermValidated,
-  timestampTrusted,
-}: {
-  longTermValidated: boolean;
-  timestampTrusted: boolean;
-}): PdfSigningLevel => {
-  if (!timestampTrusted) {
-    return "B-B";
-  }
-  return longTermValidated ? "B-LT" : "B-T";
-};
 
 const describeError = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -608,13 +601,10 @@ const embeddingFailure = (cause: unknown): ApplySignatureError =>
 type SignedOnce = { bytes: Uint8Array; pdf: PDF; warnings: SignWarning[] };
 
 /**
- * Phase 2: the signed PDF. Refuses with {@link PdfSigningDigestMismatchError}
- * when LibPDF asks to sign anything other than what phase 1 published, so a
- * signature can never end up over bytes the desktop did not see.
+ * The signer LibPDF calls: it hands back the desktop's signature only for the
+ * signed attributes phase 1 published.
  */
-export const applySignature = async (
-  invocation: ApplySignatureInvocation,
-): Promise<Result<AppliedSignature, ApplySignatureError>> => {
+const digestCheckedSigner = (invocation: ApplySignatureInvocation): Signer => {
   const matchingSignature = async (
     data: Uint8Array,
   ): Promise<Result<Uint8Array, PdfSigningDigestMismatchError>> =>
@@ -626,13 +616,24 @@ export const applySignature = async (
               "The prepared signature no longer matches this document. Start signing again.",
           }),
         );
-  const signer: Signer = {
+  return {
     certificate: invocation.certificate,
     certificateChain: invocation.certificateChain,
     keyType: invocation.keyType,
     signatureAlgorithm: invocation.signatureAlgorithm,
     sign: async (data) => await settleForLibpdf(matchingSignature(data)),
   };
+};
+
+/**
+ * Phase 2: the signed PDF. Refuses with {@link PdfSigningDigestMismatchError}
+ * when LibPDF asks to sign anything other than what phase 1 published, so a
+ * signature can never end up over bytes the desktop did not see.
+ */
+export const applySignature = async (
+  invocation: ApplySignatureInvocation,
+): Promise<Result<AppliedSignature, ApplySignatureError>> => {
+  const signer = digestCheckedSigner(invocation);
 
   /** One LibPDF pass; what it rejects with is the caller's to classify. */
   const signOnce = async (
@@ -655,6 +656,10 @@ export const applySignature = async (
     });
     return Result.isError(passed) ? passed : passed.value;
   };
+
+  const now =
+    invocation.now ?? (() => Temporal.Now.instant().epochMilliseconds);
+  const startedAt = now();
 
   const embed = async (): Promise<
     Result<AppliedSignature, ApplySignatureError>
@@ -736,26 +741,18 @@ export const applySignature = async (
     // The chain is phase 1's completed one, so what is left to gather is
     // revocation data; LibPDF reloaded `pdf` with the signed bytes, so
     // the store lands in one more incremental update after them.
-    // The timestamp's own chain, completed like the signer's: what the
+    // The timestamp's own chain is completed like the signer's: what the
     // token carries, then its issuers' AIA URLs through the guard.
-    const timestampIssuers = await completeCertificateChain({
+    const timestampAssessment = await assessTimestamp({
       permit: invocation.permit,
-      candidates: [
-        ...timestamp.certificates,
-        ...invocation.timestampTrustAnchors,
-      ],
-      certificate: timestamp.signerCertificate,
-    });
-    const timestampTrusted = await certificationPathReachesAnchor({
-      anchors: invocation.timestampTrustAnchors,
-      at: timestamp.genTime,
-      chain: [timestamp.signerCertificate, ...timestampIssuers.chain],
+      timestamp,
+      trust: invocation.timestampTrust,
     });
     const validation = await gatherValidationData({
       provider,
       signer: signerRevocation.material,
       signerChain,
-      timestampChain: [timestamp.signerCertificate, ...timestampIssuers.chain],
+      timestampChain: timestampAssessment.chain,
     });
     if (!invocation.certificateChainComplete) {
       warnings.push({
@@ -764,14 +761,18 @@ export const applySignature = async (
           "The signer's certificate chain does not reach a root certificate.",
       });
     }
-    if (!timestampTrusted) {
+    // A PAdES level names what the signature carries, not whom a validator
+    // trusts: time from an authority outside the trust bundle (a public,
+    // non-qualified one) still makes B-T and up. Whether its time counts is
+    // the validator's call, and the warning says this one could not vouch.
+    if (!timestampAssessment.trusted) {
       warnings.push({
         code: "TIMESTAMP_UNTRUSTED",
         message:
-          "The timestamp authority's chain reaches no configured trust anchor; its time is embedded but not relied on.",
+          "The timestamp authority's chain reaches no trust anchor (shipped EU qualified services or PDF_SIGNING_TSA_TRUST_PEM); validators that do not trust it will not rely on its time.",
       });
     }
-    if (!timestampIssuers.complete) {
+    if (!timestampAssessment.complete) {
       warnings.push({
         code: "TIMESTAMP_CHAIN_INCOMPLETE",
         message:
@@ -788,16 +789,45 @@ export const applySignature = async (
     if (Result.isError(embedded)) {
       return Result.err(embeddingFailure(embedded.error));
     }
-    return Result.ok({
+    // B-LT needs validation data for both chains, which only a chain that
+    // reaches its root can have.
+    const level =
+      invocation.certificateChainComplete &&
+      timestampAssessment.complete &&
+      validation.uncovered.length === 0
+        ? "B-LT"
+        : "B-T";
+    const timestampAuthorityUrl = timestampAuthority.usedUrl();
+    if (level !== "B-LT") {
+      return Result.ok({
+        bytes: embedded.value,
+        level,
+        timestampAuthorityUrl,
+        warnings: boundWarnings(warnings),
+      } satisfies AppliedSignature);
+    }
+
+    // B-LTA: seal what is there with an archival document timestamp.
+    const archival = await addArchivalTimestamp({
       bytes: embedded.value,
-      level: achievedLevel({
-        longTermValidated:
-          invocation.certificateChainComplete &&
-          timestampIssuers.complete &&
-          validation.uncovered.length === 0,
-        timestampTrusted,
-      }),
-      timestampAuthorityUrl: timestampAuthority.usedUrl(),
+      embeddedCertificates: validation.material.certificates,
+      permit: invocation.permit,
+      provider,
+      signatureTokenBytes: timestamp.token.byteLength,
+      timestampAuthorities: invocation.timestampAuthorities,
+      timeoutMs: Math.min(
+        ARCHIVAL_TIMESTAMP_TIMEOUT_MS,
+        PDF_SIGNING_APPLY_TIMEOUT_MS -
+          APPLY_DEADLINE_MARGIN_MS -
+          (now() - startedAt),
+      ),
+      trust: invocation.timestampTrust,
+    });
+    warnings.push(...archival.warnings);
+    return Result.ok({
+      bytes: archival.bytes,
+      level: archival.status === "archived" ? "B-LTA" : level,
+      timestampAuthorityUrl,
       warnings: boundWarnings(warnings),
     } satisfies AppliedSignature);
   };

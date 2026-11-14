@@ -18,6 +18,7 @@ import apiLedger from "./api-scaling-ledger.json";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunStepOutputGrantScalingScenario } from "./chat-local-run-step-output-grant";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
@@ -76,6 +77,10 @@ import {
 } from "./surface";
 import { timeEntryReportScalingScenario } from "./time-entry-report";
 import { suggestionRangeScalingScenario } from "./time-suggestion-range";
+import {
+  verificationChronologyScalingScenarios,
+  verificationGraphScalingScenarios,
+} from "./verification-graph";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -97,6 +102,7 @@ const measuredApiScenarios = [
   chatLocalRunStepOutputGrantScalingScenario,
   chatActiveRunsScalingScenario,
   chatPinnedThreadsScalingScenario,
+  chatLimitReminderScalingScenario,
   browserSiteGrantsScalingScenario,
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,
@@ -104,6 +110,8 @@ const measuredApiScenarios = [
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   ...reviewHistoryScalingScenarios,
+  ...verificationGraphScalingScenarios,
+  ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,

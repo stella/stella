@@ -36,6 +36,7 @@
     "flowRunAwaitingApproval": "Un flujo de trabajo espera tu aprobación",
     "flowRunCompleted": "Un flujo de trabajo ha finalizado",
     "flowRunFailed": "Un flujo de trabajo ha fallado",
+    "localRunLimitReset": "El agente de programación de tu ordenador puede continuar tu chat",
     "mention": "Te han mencionado en un comentario",
     "taskAssigned": "Se te ha asignado una tarea"
   },

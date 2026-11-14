@@ -33,16 +33,6 @@ import type {
 const clip = (text: string): string =>
   text.slice(0, VERIFICATION_LIMITS.EVIDENCE_TEXT_MAX);
 
-/** One source of a fact as a run pins it, before it is grouped by fact. */
-type FactSourceRow = Pick<
-  typeof legalListItemSources.$inferSelect,
-  | "itemEntityId"
-  | "sourceEntityId"
-  | "sourceEntityVersionId"
-  | "locator"
-  | "quote"
-> & { sourceName: string };
-
 type ReadEvidenceArgs = {
   tx: Pick<Transaction, "select">;
   workspaceId: SafeId<"workspace">;
@@ -59,7 +49,62 @@ export const readVerificationEvidence = async ({
   listId,
 }: ReadEvidenceArgs): Promise<ReadEvidenceOutcome> => {
   // One more than the cap, so an oversized list is reported, not truncated.
-  const facts = await tx
+  const facts = await readListFactRows({
+    tx,
+    workspaceId,
+    listId,
+    held: "left-out",
+    limit: VERIFICATION_LIMITS.FACTS_PER_RUN_MAX + 1,
+  });
+  if (facts.length > VERIFICATION_LIMITS.FACTS_PER_RUN_MAX) {
+    return { type: "too-many-facts", count: facts.length };
+  }
+
+  const sourcesByFact = await readFactSources({
+    tx,
+    workspaceId,
+    factIds: facts.map((fact) => fact.factEntityId),
+  });
+
+  return {
+    type: "read",
+    evidence: {
+      listId,
+      facts: facts.map((fact): VerificationEvidenceFact => ({
+        factEntityId: fact.factEntityId,
+        text: clip(fact.text),
+        occurredOn: fact.occurredOn,
+        occurredOnPrecision: fact.occurredOnPrecision,
+        evidenceKind: fact.evidenceKind,
+        medium: fact.medium,
+        confidence: fact.confidence,
+        interpretationNote: fact.interpretationNote,
+        sources:
+          sourcesByFact.get(fact.factEntityId) ??
+          panic("list verification evidence lost a fact's source bucket"),
+      })),
+    },
+  };
+};
+
+type ReadListFactRowsArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  listId: SafeId<"legalList">;
+  /** A run leaves held facts out; the list's graph draws them. */
+  held: "left-out" | "included";
+  limit: number;
+};
+
+/** The list's facts with their details, in list order, up to `limit`. */
+export const readListFactRows = async ({
+  tx,
+  workspaceId,
+  listId,
+  held,
+  limit,
+}: ReadListFactRowsArgs) =>
+  await tx
     .select({
       factEntityId: legalListItems.entityId,
       text: entities.name,
@@ -87,75 +132,85 @@ export const readVerificationEvidence = async ({
         eq(legalListItems.workspaceId, workspaceId),
         eq(legalListItems.listId, listId),
         eq(entities.listItemType, LIST_ITEM_TYPE.FACT),
-        or(
-          isNull(legalListFactDetails.scoring),
-          ne(legalListFactDetails.scoring, "held"),
-        ),
+        held === "included"
+          ? undefined
+          : or(
+              isNull(legalListFactDetails.scoring),
+              ne(legalListFactDetails.scoring, "held"),
+            ),
       ),
     )
     .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
-    .limit(VERIFICATION_LIMITS.FACTS_PER_RUN_MAX + 1);
-  if (facts.length > VERIFICATION_LIMITS.FACTS_PER_RUN_MAX) {
-    return { type: "too-many-facts", count: facts.length };
-  }
+    .limit(limit);
 
-  // Read only for a list that has facts: an empty list has no sources.
-  let sources: FactSourceRow[] = [];
-  if (facts.length > 0) {
-    // Ranked within each fact, so one heavily sourced fact cannot use up the
-    // read and leave the others pinned with no sources.
-    const ranked = tx
-      .select({
-        itemEntityId: legalListItemSources.itemEntityId,
-        sourceEntityId: legalListItemSources.sourceEntityId,
-        sourceEntityVersionId: legalListItemSources.sourceEntityVersionId,
-        locator: legalListItemSources.locator,
-        quote: legalListItemSources.quote,
-        sourceName: entities.name,
-        rank: sql<number>`row_number() over (partition by ${legalListItemSources.itemEntityId} order by ${legalListItemSources.createdAt}, ${legalListItemSources.id})`.as(
-          "rank",
-        ),
-      })
-      .from(legalListItemSources)
-      .innerJoin(
-        entities,
-        and(
-          eq(entities.id, legalListItemSources.sourceEntityId),
-          eq(entities.workspaceId, legalListItemSources.workspaceId),
-        ),
-      )
-      .where(
-        and(
-          eq(legalListItemSources.workspaceId, workspaceId),
-          inArray(
-            legalListItemSources.itemEntityId,
-            facts.map((fact) => fact.factEntityId),
-          ),
-          ne(legalListItemSources.verificationStatus, "rejected"),
-        ),
-      )
-      .as("ranked");
-    sources = await tx
-      .select({
-        itemEntityId: ranked.itemEntityId,
-        sourceEntityId: ranked.sourceEntityId,
-        sourceEntityVersionId: ranked.sourceEntityVersionId,
-        locator: ranked.locator,
-        quote: ranked.quote,
-        sourceName: ranked.sourceName,
-      })
-      .from(ranked)
-      .where(lte(ranked.rank, VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX))
-      .orderBy(asc(ranked.itemEntityId), asc(ranked.rank))
-      .limit(
-        VERIFICATION_LIMITS.FACTS_PER_RUN_MAX *
-          VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX,
-      );
-  }
+type ReadFactSourcesArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  factIds: readonly SafeId<"entity">[];
+};
 
+/**
+ * The sources of each named fact as a run pins them: the oldest
+ * `SOURCES_PER_FACT_MAX` that have not been rejected, each with its
+ * document's name. Every named fact has an entry, empty when it has none.
+ */
+export const readFactSources = async ({
+  tx,
+  workspaceId,
+  factIds,
+}: ReadFactSourcesArgs): Promise<
+  ReadonlyMap<SafeId<"entity">, VerificationEvidenceSource[]>
+> => {
   const sourcesByFact = new Map<SafeId<"entity">, VerificationEvidenceSource[]>(
-    facts.map((fact) => [fact.factEntityId, []]),
+    factIds.map((factId) => [factId, []]),
   );
+  if (factIds.length === 0) {
+    return sourcesByFact;
+  }
+  // Ranked within each fact, so one heavily sourced fact cannot use up the
+  // read and leave the others pinned with no sources.
+  const ranked = tx
+    .select({
+      itemEntityId: legalListItemSources.itemEntityId,
+      sourceEntityId: legalListItemSources.sourceEntityId,
+      sourceEntityVersionId: legalListItemSources.sourceEntityVersionId,
+      locator: legalListItemSources.locator,
+      quote: legalListItemSources.quote,
+      sourceName: entities.name,
+      rank: sql<number>`row_number() over (partition by ${legalListItemSources.itemEntityId} order by ${legalListItemSources.createdAt}, ${legalListItemSources.id})`.as(
+        "rank",
+      ),
+    })
+    .from(legalListItemSources)
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.id, legalListItemSources.sourceEntityId),
+        eq(entities.workspaceId, legalListItemSources.workspaceId),
+      ),
+    )
+    .where(
+      and(
+        eq(legalListItemSources.workspaceId, workspaceId),
+        inArray(legalListItemSources.itemEntityId, [...factIds]),
+        ne(legalListItemSources.verificationStatus, "rejected"),
+      ),
+    )
+    .as("ranked");
+  const sources = await tx
+    .select({
+      itemEntityId: ranked.itemEntityId,
+      sourceEntityId: ranked.sourceEntityId,
+      sourceEntityVersionId: ranked.sourceEntityVersionId,
+      locator: ranked.locator,
+      quote: ranked.quote,
+      sourceName: ranked.sourceName,
+    })
+    .from(ranked)
+    .where(lte(ranked.rank, VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX))
+    .orderBy(asc(ranked.itemEntityId), asc(ranked.rank))
+    .limit(factIds.length * VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX);
+
   for (const { itemEntityId, quote, sourceName, ...source } of sources) {
     sourcesByFact.get(itemEntityId)?.push({
       ...source,
@@ -163,26 +218,7 @@ export const readVerificationEvidence = async ({
       quote: quote === null ? null : clip(quote),
     });
   }
-
-  return {
-    type: "read",
-    evidence: {
-      listId,
-      facts: facts.map((fact): VerificationEvidenceFact => ({
-        factEntityId: fact.factEntityId,
-        text: clip(fact.text),
-        occurredOn: fact.occurredOn,
-        occurredOnPrecision: fact.occurredOnPrecision,
-        evidenceKind: fact.evidenceKind,
-        medium: fact.medium,
-        confidence: fact.confidence,
-        interpretationNote: fact.interpretationNote,
-        sources:
-          sourcesByFact.get(fact.factEntityId) ??
-          panic("list verification evidence lost a fact's source bucket"),
-      })),
-    },
-  };
+  return sourcesByFact;
 };
 
 type ReadHeldFactIdsArgs = ReadEvidenceArgs & {

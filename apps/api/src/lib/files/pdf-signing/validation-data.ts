@@ -31,9 +31,37 @@ const isSelfSigned = (der: Uint8Array) => {
 };
 
 /**
+ * Whether `chain[index]` is the self-signed root that ends the chain. Only
+ * the top counts: the chain builder verified its self-signature, while a
+ * self-issued certificate further down (a key rollover) is signed by
+ * another key and needs revocation data like any other.
+ */
+const isChainRoot = (chain: readonly Uint8Array[], index: number) => {
+  const certificate = chain[index];
+  return (
+    index === chain.length - 1 &&
+    certificate !== undefined &&
+    isSelfSigned(certificate)
+  );
+};
+
+/** The certificates of `chain` with no revocation data behind them. */
+const uncoveredIn = (
+  chain: readonly Uint8Array[],
+  provider: TrackedRevocationProvider,
+) =>
+  chain.filter(
+    (certificate, index) =>
+      !isChainRoot(chain, index) && !provider.covers(certificate),
+  );
+
+/**
  * Revocation data for each certificate of `chain` (leaf first, issuers
- * after), OCSP first and the CRL when OCSP has nothing. A self-signed root
- * is trusted by being a root and has nothing to check.
+ * after), OCSP first and the CRL when OCSP has nothing. The self-signed
+ * root at the top is trusted by being a root and has nothing to check, and
+ * a certificate the provider already covers had its data gathered by an
+ * earlier call, for a chain sharing it or a document timestamp from the
+ * same authority.
  */
 const gatherRevocation = async (
   chain: readonly Uint8Array[],
@@ -41,7 +69,7 @@ const gatherRevocation = async (
   material: ValidationMaterial,
 ) => {
   for (const [index, certificate] of chain.entries()) {
-    if (isSelfSigned(certificate)) {
+    if (isChainRoot(chain, index) || provider.covers(certificate)) {
       continue;
     }
     const issuer = chain[index + 1];
@@ -117,12 +145,54 @@ export const gatherValidationData = async ({
   // signature: both chains count.
   return {
     material,
-    uncovered: [...signerChain, ...timestampChain].filter(
-      (certificate) =>
-        !isSelfSigned(certificate) && !provider.covers(certificate),
-    ),
+    uncovered: [
+      ...uncoveredIn(signerChain, provider),
+      ...uncoveredIn(timestampChain, provider),
+    ],
   };
 };
+
+/**
+ * Validation data for an archival document timestamp's chain, after the
+ * signature's own store is embedded: only certificates and revocation data
+ * that store does not already hold, so a document timestamp from the
+ * signature's authority adds nothing. Empty material means nothing to embed.
+ */
+export const gatherArchivalValidationData = async ({
+  embeddedCertificates,
+  provider,
+  timestampChain,
+}: {
+  /** Certificates the document's store already holds. */
+  embeddedCertificates: readonly Uint8Array[];
+  provider: TrackedRevocationProvider;
+  /** The document timestamp's signing certificate first, then its issuers. */
+  timestampChain: readonly Uint8Array[];
+}): Promise<GatheredValidationData> => {
+  const embedded = new Set(
+    embeddedCertificates.map((certificate) => Buffer.from(certificate).toHex()),
+  );
+  const material: ValidationMaterial = {
+    certificates: timestampChain.filter(
+      (certificate) => !embedded.has(Buffer.from(certificate).toHex()),
+    ),
+    crls: [],
+    ocspResponses: [],
+  };
+  await gatherRevocation(timestampChain, provider, material);
+  return {
+    material,
+    uncovered: uncoveredIn(timestampChain, provider),
+  };
+};
+
+/** Whether `material` holds anything a store would carry. */
+export const hasValidationMaterial = ({
+  certificates,
+  crls,
+  ocspResponses,
+}: ValidationMaterial) =>
+  certificates.length + crls.length + ocspResponses.length > 0;
 
 /**
  * Append a Document Security Store holding `material` as an incremental

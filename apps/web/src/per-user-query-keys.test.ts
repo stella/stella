@@ -13,6 +13,7 @@ import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { chatLimitReminderOptions } from "@/features/chat/chat-limit-reminder";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
@@ -31,6 +32,7 @@ import {
   sessionsOptions,
 } from "@/lib/account/queries";
 import { professionalUseOptions } from "@/lib/auth-queries";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -283,6 +285,15 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
   },
+  "lists/verifications/graph/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipts; the returned graph is shared within the matter.",
+  },
+  "lists/verifications/chronology/export.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
   "lists/graph/nodes/list.ts": {
     kind: "not-per-user",
     reason:
@@ -383,6 +394,18 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
+  "chat/limit-reminder/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat.threads()["limit-reminder"].get'],
+    files: ["features/chat/chat-limit-reminder.ts"],
+    keys: () => [
+      chatLimitReminderOptions({
+        activeOrganizationId: ORG,
+        threadRef: { scope: "global", threadId: toChatThreadId("thread") },
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "chat/browser-site-grants/list.ts": {
     kind: "keyed",
     calls: ['api.chat["browser-site-grants"].get'],
