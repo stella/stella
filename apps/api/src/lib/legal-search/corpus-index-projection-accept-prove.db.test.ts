@@ -597,7 +597,7 @@ const applyCommand = async (run: ModelRun, next: Command) => {
     }
     default:
       next satisfies never;
-      return panic(`Unhandled model command: ${String(next)}`);
+      panic(`Unhandled model command: ${String(next)}`);
   }
 };
 

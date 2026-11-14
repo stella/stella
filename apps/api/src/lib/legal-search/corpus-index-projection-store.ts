@@ -1279,7 +1279,7 @@ const validateAcceptedBatch = (intentIds: readonly ProjectionIntentId[]) => {
     intentIds.length > CORPUS_PROJECTION_APPEND_MAX_REVISIONS ||
     new Set(intentIds).size !== intentIds.length
   ) {
-    return panic(
+    panic(
       `Accepted projection appends must name 1 to ${CORPUS_PROJECTION_APPEND_MAX_REVISIONS} unique revisions`,
     );
   }
@@ -1319,8 +1319,7 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
   const outcomes = accepted.map(({ intentId, leaseToken, documentCount }) => {
     const intent = rows.intents.get(intentId);
     if (
-      intent === undefined ||
-      intent.status !== "append_started" ||
+      intent?.status !== "append_started" ||
       intent.leaseToken !== leaseToken
     ) {
       return { status: "lease_lost", intentId, documentCount } as const;
@@ -1978,8 +1977,8 @@ const writeCorpusProjectionProofTransitionsTx = async (
   if (unproven.length === 0) {
     return;
   }
-  const byEntity = <Value>(
-    value: (charge: AppendFailureCharge) => Value,
+  const byEntity = (
+    value: (charge: AppendFailureCharge) => string | number | Date | null,
     cast: string,
   ) =>
     sqlCaseFragment({
