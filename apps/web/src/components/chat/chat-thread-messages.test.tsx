@@ -302,10 +302,11 @@ describe("chat thread messages", () => {
         {
           type: "tool-call",
           id: "call-1",
-          name: "web_search",
+          // An external tool name keeps the output untyped.
+          name: "mcp__external-lookup",
           arguments: '{"query":"court fees"}',
           state: "complete",
-          output: { results: [] },
+          output: { result: "Court fees" },
         },
       ],
       metadata: {
