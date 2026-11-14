@@ -1619,7 +1619,6 @@ const PausedTurnNotice = ({
       </span>
       {onContinue !== undefined && (
         <Button
-          className="h-6 px-1.5"
           onClick={() => {
             detached(onContinue(), "chat-thread-messages.continue-paused-turn");
           }}

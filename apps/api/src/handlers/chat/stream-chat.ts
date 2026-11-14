@@ -3495,6 +3495,26 @@ const approvedCallIdsOf = (message: ChatMessage | undefined): Set<string> =>
     ),
   );
 
+/**
+ * The chunks that close a drained run: a paused turn's outcome on the live
+ * message first (the provider finish does not carry it), then the run's
+ * deferred finish.
+ */
+const closingChunks = function* (
+  outcome: ChatTurnOutcome,
+  messageId: string,
+  finished: readonly PublicStreamChunk[],
+): Generator<PublicStreamChunk> {
+  if (outcome.type === "paused") {
+    yield {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId,
+      metadata: { turnOutcome: outcome },
+    } as const satisfies PublicStreamChunk;
+  }
+  yield* finished;
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   dismissesAwaited = false,
@@ -3661,14 +3681,7 @@ export const processServerChatStream = async function* ({
       flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
-    if (outcome.type === "paused") {
-      yield {
-        type: EventType.TEXT_MESSAGE_END,
-        messageId: responseMessageId,
-        metadata: { turnOutcome: outcome },
-      } as const satisfies PublicStreamChunk;
-    }
-    yield* finalRunFinishedChunks;
+    yield* closingChunks(outcome, responseMessageId, finalRunFinishedChunks);
   } catch (error) {
     if (admissionLost()) {
       const outcome = admissionLossOutcome();
