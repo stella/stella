@@ -20,10 +20,20 @@ export type BrowserErrorCollector = {
    * cause outside what the spec exercises. Matching entries are excluded from
    * the final empty-collection assertion and none has to be observed. Prefer
    * `expectCaptured` whenever the error is deterministic: this one cannot
-   * tell when the cause is gone, so each call names it and what removes it.
+   * tell when the cause is gone, so each call states the cause and the change
+   * that removes the call, and the `e2e-tolerated-browser-errors` ratchet
+   * metric counts the call sites, which only shrink.
    */
-  tolerate: (pattern: RegExp) => void;
+  tolerate: (tolerated: ToleratedBrowserError) => void;
   trackPage: (page: Page) => () => void;
+};
+
+type ToleratedBrowserError = {
+  pattern: RegExp;
+  /** Why the error appears on some runs, and why this spec is not its cause. */
+  reason: string;
+  /** The change that ends the cause, after which this call is deleted. */
+  removedBy: string;
 };
 
 type BrowserErrorFixtures = {
@@ -108,7 +118,7 @@ export const createBrowserErrorCollector = (
     expectCaptured: (pattern) => {
       expectedPatterns.push(stateless(pattern));
     },
-    tolerate: (pattern) => {
+    tolerate: ({ pattern }) => {
       toleratedPatterns.push(stateless(pattern));
     },
     assertEmpty: (label) => {
