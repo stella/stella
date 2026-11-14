@@ -90,7 +90,7 @@ import {
 // costs a ~2.2 GB peak (drizzle-kit's push diffing plus PGlite WASM churn);
 // loading a snapshot skips drizzle-kit entirely and keeps the process near
 // PGlite's runtime floor.
-export const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
 
 const allSchema = {
   ...schema,

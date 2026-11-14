@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 106,
+    "count": 100,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -23,14 +23,12 @@
       "apps/api/src/lib/document-translation/run-queue.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 3,
       "apps/api/src/lib/errors/tagged-errors.ts": 3,
-      "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts": 1,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
       "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": 1,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 1,
       "apps/api/src/lib/legal-search/sk-document-backfill.ts": 2,
       "apps/api/src/lib/lists/verification/run-persistence.ts": 1,
-      "apps/api/src/lib/lists/verification/run-summary.ts": 2,
       "apps/api/src/lib/mcp-upstream/connections.ts": 1,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 1,
       "apps/api/src/lib/public-law-relations.ts": 1,
@@ -47,8 +45,7 @@
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
       "apps/api/src/mcp/tool-types.ts": 7,
-      "apps/api/src/tests/helpers/provider-wire-contract.ts": 3,
-      "apps/api/src/tests/pglite-test-db.ts": 1
+      "apps/api/src/tests/helpers/provider-wire-contract.ts": 1
     }
   },
   "apps/desktop": {
