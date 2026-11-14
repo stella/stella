@@ -32,6 +32,13 @@ the default provider chain (see `getTanStackTextModelById`).
 
 ## Evals
 
+- `graph-tools.ts`: can a model answer a matter question through the graph's
+  query tools (`lists.graph.nodes.list`, `lists.graph.neighbours.list`,
+  `lists.graph.paths.list`) from their schemas and descriptions alone? Calls
+  are parsed by the handlers' own schemas and answered by the handlers over a
+  synthetic case in an in-process database; scores looking up first,
+  navigating by returned ids only, the direct filter, and quoting the exact
+  text. Runs only with an explicit `--models` list.
 - `create-document-drafting.ts`: can a model write legal source the
   docx-core compiler accepts, how much does the compiler normalize, and does
   literal markdown leak into the document?
