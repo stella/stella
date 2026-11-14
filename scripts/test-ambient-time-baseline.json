@@ -399,16 +399,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/chat/stream-chat.test.ts": {
-    "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/chat/tool-call-end-arguments.test.ts": {
-    "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/chat/tools/execute/script-call-guide.test.ts": {
     "count": 2,
     "owner": "api",
@@ -2541,11 +2531,6 @@
   },
   "apps/web/src/lib/preload-error-recovery.dom.test.ts": {
     "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/lib/search-recents.test.ts": {
-    "count": 5,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
