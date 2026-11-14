@@ -2047,14 +2047,58 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 type ChatPartPersistenceDecision =
   { type: "drop"; partType: string } | { type: "persist"; part: ChatPart };
 
+/**
+ * A streamed sub-agent part with each of its child's parts classified as a
+ * message's own part is: a child part this rule drops at the top level (a
+ * server resource the turn did not mint, an invalid presentation part) is
+ * dropped inside the child too, at every depth, so nesting never widens what
+ * a message stores.
+ */
+const withClassifiedSubagentChildren = (
+  part: Record<string, unknown>,
+  visualOrigin: Pick<VisualResourceOrigin, "accepts"> | undefined,
+): Record<string, unknown> => {
+  const subagent = part["subagent"];
+  if (!isRecord(subagent) || !Array.isArray(subagent["messages"])) {
+    return part;
+  }
+  const messages: readonly unknown[] = subagent["messages"];
+  return {
+    ...part,
+    subagent: {
+      ...subagent,
+      messages: messages.map((message) => {
+        if (!isRecord(message) || !Array.isArray(message["parts"])) {
+          return message;
+        }
+        const parts: readonly unknown[] = message["parts"];
+        return {
+          ...message,
+          parts: parts.flatMap((child) => {
+            const decision = classifyChatPartForPersistence(
+              child,
+              visualOrigin,
+            );
+            return decision.type === "persist" ? [decision.part] : [];
+          }),
+        };
+      }),
+    },
+  };
+};
+
 export const classifyChatPartForPersistence = (
-  part: unknown,
+  streamed: unknown,
   visualOrigin?: Pick<VisualResourceOrigin, "accepts">,
 ): ChatPartPersistenceDecision => {
-  if (!isRecord(part) || typeof part["type"] !== "string") {
+  if (!isRecord(streamed) || typeof streamed["type"] !== "string") {
     panic("Cannot classify a malformed chat part for persistence");
   }
-  const type = part["type"];
+  const part =
+    streamed["type"] === "subagent"
+      ? withClassifiedSubagentChildren(streamed, visualOrigin)
+      : streamed;
+  const type = streamed["type"];
   // A server resource is persisted only as the server minted it.
   if (
     type === "ui-resource" &&

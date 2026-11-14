@@ -31,7 +31,8 @@ import type {
   ChatPart,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   buildServedSnapshot,
   buildWireSnapshot,
@@ -410,11 +411,23 @@ describe("only a well-formed tool-mode sub-agent part is stored", () => {
     },
   } as const;
 
-  for (const [name, part] of Object.entries(REFUSED)) {
+  // A child part is classified as a message's own part is, so a malformed
+  // child call fails as a malformed call.
+  const REFUSED_AS = {
+    "a router-mode part": "subagent",
+    "a part whose child holds a malformed part": "tool-call",
+    "a nested router-mode part": "subagent",
+    "a failed run without its error": "subagent",
+    "a suspended run without its interrupts": "subagent",
+    "a child message with an unknown role": "subagent",
+  } as const satisfies Record<keyof typeof REFUSED, ChatPart["type"]>;
+
+  for (const [name, refusedAs] of Object.entries(REFUSED_AS)) {
+    const part: unknown = Reflect.get(REFUSED, name);
     test(`refuses ${name}`, () => {
       expect(isChatPart(part)).toBe(false);
       expect(() => classifyChatPartForPersistence(part)).toThrow(
-        "Cannot persist malformed chat part type: subagent",
+        `Cannot persist malformed chat part type: ${refusedAs}`,
       );
       expect(() =>
         toPersistedChatMessageContentV3({ data: [asTestRaw<ChatPart>(part)] }),
@@ -424,6 +437,80 @@ describe("only a well-formed tool-mode sub-agent part is stored", () => {
 
   test("accepts the same part with its parent call", () => {
     expect(isChatPart({ subagent, type: "subagent" })).toBe(true);
+  });
+});
+
+describe("a child's parts are kept by the rule a message's own parts follow", () => {
+  const origin = createVisualResourceOrigin();
+  const visual = origin.issue({
+    fileId: createSafeId<"userFile">(),
+    title: "Court overview",
+    toolCallId: "visual-call-one",
+  });
+  const invalidResource = {
+    resource: { mimeType: "text/plain", uri: "https://example.cz" },
+    toolCallId: "call-1",
+    toolName: "tool",
+    type: "ui-resource",
+  };
+  const text = { content: "Hotovo.", type: "text" };
+  const withChildParts = (parts: readonly unknown[]): unknown => {
+    const { subagent } = browsingChild("finished", 1);
+    return {
+      subagent: {
+        ...subagent,
+        messages: [
+          ...subagent.messages,
+          { id: "child-extra", parts: [...parts], role: "assistant" },
+        ],
+      },
+      type: "subagent",
+    };
+  };
+  const lastChildParts = (part: ChatPart | undefined) =>
+    part?.type === "subagent"
+      ? part.subagent.messages.at(-1)?.parts
+      : panic("Expected a sub-agent part");
+  const storedChildParts = (
+    decision: ReturnType<typeof classifyChatPartForPersistence>,
+  ) =>
+    decision.type === "persist"
+      ? lastChildParts(decision.part)
+      : panic("Expected a stored sub-agent part");
+
+  test("drops what the top level drops, at any depth", () => {
+    // Each is dropped alone at the top level: no origin issued the visual,
+    // and the resource is not a valid one.
+    expect(classifyChatPartForPersistence(structuredClone(visual)).type).toBe(
+      "drop",
+    );
+    expect(classifyChatPartForPersistence(invalidResource).type).toBe("drop");
+    expect(
+      storedChildParts(
+        classifyChatPartForPersistence(
+          withChildParts([structuredClone(visual), invalidResource, text]),
+        ),
+      ),
+    ).toEqual([text]);
+    const nested = storedChildParts(
+      classifyChatPartForPersistence(
+        withChildParts([withChildParts([structuredClone(visual), text])]),
+      ),
+    );
+    expect(
+      lastChildParts(asTestRaw<ChatPart | undefined>(nested?.at(0))),
+    ).toEqual([text]);
+  });
+
+  test("keeps a resource the turn's own origin issued", () => {
+    expect(
+      storedChildParts(
+        classifyChatPartForPersistence(
+          withChildParts([structuredClone(visual)]),
+          origin,
+        ),
+      )?.map((part) => part.type),
+    ).toEqual(["ui-resource"]);
   });
 });
 
