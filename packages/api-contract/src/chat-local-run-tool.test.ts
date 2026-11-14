@@ -5,6 +5,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output";
 import {
+  CHAT_LOCAL_RUN_BROWSER_ACTIONS,
   CHAT_LOCAL_RUN_NEEDS_MEMBER,
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
@@ -343,6 +344,80 @@ describe("a browser step on the member's computer", () => {
         action: "evaluate",
       }),
     ).toBeNull();
+  });
+
+  test("every kind of step is kept by its kind, whatever the agent passed", () => {
+    for (const action of CHAT_LOCAL_RUN_BROWSER_ACTIONS) {
+      expect(
+        parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+          action,
+          ref: "E4",
+          key: "Enter",
+          option: "Private option",
+          tabId: 9,
+          text: "Private query",
+        }),
+      ).toEqual({ name: CHAT_LOCAL_RUN_TOOL_NAMES.browser, input: { action } });
+    }
+  });
+
+  test("a step the member was asked about keeps the question, never the typed text", () => {
+    const asked = {
+      url: "https://fixture-library.test/search",
+      role: "searchbox",
+      name: "Search decisions",
+    };
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "type",
+        asked: { ...asked, text: "Private query" },
+        text: "Private query",
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "type", asked },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "press_key",
+        asked: { ...asked, key: "Enter" },
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "press_key", asked: { ...asked, key: "Enter" } },
+    });
+    const longOption = "x".repeat(CHAT_LOCAL_RUN_TOOL_LIMITS.elementName + 50);
+    const select = parseChatLocalRunToolCall(
+      CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      { action: "select", asked: { ...asked, option: longOption } },
+    );
+    expect(select).toMatchObject({ input: { action: "select" } });
+    expect(
+      select?.name === CHAT_LOCAL_RUN_TOOL_NAMES.browser &&
+        "asked" in select.input
+        ? select.input.asked?.option?.length
+        : null,
+    ).toBe(CHAT_LOCAL_RUN_TOOL_LIMITS.elementName);
+    // Neither the address an agent's own read passed nor a question that
+    // does not parse is kept: the step keeps its kind.
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "press_key",
+        asked: { ...asked, key: "F5" },
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "press_key" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "go_back",
+        asked,
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "go_back" },
+    });
   });
 
   test("a sign-in the member completes is kept as its own status", () => {

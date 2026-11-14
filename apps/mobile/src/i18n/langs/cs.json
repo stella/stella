@@ -219,6 +219,10 @@
       },
       "patternInPath": "{pattern} v {path}",
       "commandExited": "{command} (návratový kód {code})",
+      "browserClick": "Kliknout na „{target}“ na stránce {url}",
+      "browserPressKey": "Stisknout klávesu {key} v „{target}“ na stránce {url}",
+      "browserSelect": "Vybrat „{option}“ v „{target}“ na stránce {url}",
+      "browserType": "Zadat text do „{target}“ na stránce {url}",
       "opensOnComputer": "Otevřete na počítači, kde krok běžel",
       "status": {
         "needs_approval": "Čekání na schválení",

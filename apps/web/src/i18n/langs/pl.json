@@ -2335,6 +2335,10 @@
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
+      "browserClick": "Kliknij „{target}” na stronie {url}",
+      "browserPressKey": "Naciśnij klawisz {key} w „{target}” na stronie {url}",
+      "browserSelect": "Wybierz „{option}” w „{target}” na stronie {url}",
+      "browserType": "Wprowadź tekst w „{target}” na stronie {url}",
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
       "commandExited": "{command} (kod wyjścia {code})",
       "consoleLogs": "Dane wyjściowe konsoli",

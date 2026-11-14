@@ -219,6 +219,10 @@
       },
       "patternInPath": "{pattern} ({path})",
       "commandExited": "{command} (išėjimo kodas {code})",
+      "browserClick": "Spustelėti „{target}“ puslapyje {url}",
+      "browserPressKey": "Paspausti klavišą {key} elemente „{target}“ puslapyje {url}",
+      "browserSelect": "Pasirinkti „{option}“ elemente „{target}“ puslapyje {url}",
+      "browserType": "Įvesti tekstą į „{target}“ puslapyje {url}",
       "opensOnComputer": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
       "status": {
         "needs_approval": "Laukiama patvirtinimo",
