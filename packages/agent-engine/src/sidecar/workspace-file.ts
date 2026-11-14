@@ -124,6 +124,14 @@ const resolvedRoot = async (workspaceDir: string) =>
 const procPath = (folder: FileHandle, name: string) =>
   `/proc/self/fd/${String(folder.fd)}/${name}`;
 
+/** A refusal at `target` named `link` when a link stands there. */
+const linkOrSame = async (target: string, refusal: Opened): Promise<Opened> => {
+  const entry = await Result.tryPromise(async () => await lstat(target));
+  return Result.isOk(entry) && entry.value.isSymbolicLink()
+    ? Result.err({ reason: "link" })
+    : refusal;
+};
+
 /**
  * Linux: walks from the run's folder one segment at a time, each folder
  * opened without following a link and the next reached through the open
@@ -142,8 +150,14 @@ const openParentLinux = async (
     const current = folder.value;
     // await-in-loop: each folder is reached through the one before it.
     const next = await tryOpen(procPath(current, segment), FOLDER_FLAGS);
+    // Linux answers a link opened as a folder without following it with
+    // ENOTDIR, not ELOOP: look at what stands there to name it.
+    const named =
+      Result.isError(next) && next.error.reason === "unreadable"
+        ? await linkOrSame(procPath(current, segment), next)
+        : next;
     await current.close();
-    folder = next;
+    folder = named;
   }
   return folder;
 };
