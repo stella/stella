@@ -371,7 +371,11 @@ const startOfflineIndexer = (spec: OfflineRunSpec): OfflineRun => {
   const { args, env, pidFile } = offlineIndexerCommand(spec).unwrap();
   return {
     pidFile,
-    exited: engineExec({ args, env, timeoutMs: OFFLINE_RUN_TIMEOUT_MS }),
+    exited: engineExec({
+      args,
+      env,
+      timeoutMs: OFFLINE_RUN_TIMEOUT_MS, // timeout: engine-side kill bound plus margin
+    }),
   };
 };
 
@@ -1002,7 +1006,7 @@ describe.skipIf(!runEngineTests)(
           await waitForExternalState({
             description: "the first commit of the file is published",
             intervalMs: 10,
-            timeoutMs: OFFLINE_RUN_TIMEOUT_MS,
+            timeoutMs: OFFLINE_RUN_TIMEOUT_MS, // timeout: engine-side kill bound plus margin
             read: async () =>
               inState(await splitsOf(config.index_id, spec.nodeId), "Published")
                 .length > 0,
@@ -1198,7 +1202,7 @@ describe.skipIf(!runEngineTests)(
           await waitForExternalState({
             description: "the indexer has a split in its scratch directory",
             intervalMs: 20,
-            timeoutMs: OFFLINE_RUN_TIMEOUT_MS,
+            timeoutMs: OFFLINE_RUN_TIMEOUT_MS, // timeout: engine-side kill bound plus margin
             read: async () => (await dataEntries(spec.dataDir)).length > 0,
           });
           await killOfflineIndexer(run);
@@ -1673,7 +1677,7 @@ describe.skipIf(!runEngineTests)(
           const exited = engineExec({
             args,
             env: { ...env, QW_CONFIG: configFile },
-            timeoutMs: OFFLINE_RUN_TIMEOUT_MS,
+            timeoutMs: OFFLINE_RUN_TIMEOUT_MS, // timeout: engine-side kill bound plus margin
           });
           await waitForLockWaiter(STAGE_INSERT);
           // The indexed split waits for staging in the scratch directory.
