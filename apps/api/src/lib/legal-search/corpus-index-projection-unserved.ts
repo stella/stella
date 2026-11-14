@@ -131,7 +131,7 @@ const readRows = async (
   });
 
 /** The most entities one page returns. */
-export const CORPUS_PROJECTION_UNSERVED_PAGE_MAX = 500;
+const CORPUS_PROJECTION_UNSERVED_PAGE_MAX = 500;
 
 /** Where the next page starts: the last entity the previous page returned. */
 export type CorpusProjectionUnservedCursor =
@@ -314,7 +314,7 @@ export const CORPUS_PROJECTION_UNSERVED_COUNT_CAP = 100;
 export type CorpusProjectionUnservedOldest =
   { type: "exact"; since: Temporal.Instant } | { type: "unknown" };
 
-export type CorpusProjectionUnservedIndexCount = {
+type CorpusProjectionUnservedIndexCount = {
   indexId: string;
   count: number;
   oldest: CorpusProjectionUnservedOldest;

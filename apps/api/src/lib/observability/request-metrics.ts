@@ -478,10 +478,10 @@ export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
 export const CORPUS_PROJECTION_UNSERVED_METRIC = {
   entities: "CorpusProjectionUnservedEntities",
   oldestAgeSeconds: "CorpusProjectionUnservedOldestAgeSeconds",
-} as const satisfies Record<string, string>;
+} as const;
 
 /** `at_least` when the count stopped at its cap. */
-export type CorpusProjectionUnservedCountBound = "exact" | "at_least";
+type CorpusProjectionUnservedCountBound = "exact" | "at_least";
 
 /** A generation's record sums its indexes; an index record names one. */
 type CorpusProjectionUnservedMetricScope =

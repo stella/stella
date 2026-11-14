@@ -72,7 +72,7 @@ export const CORPUS_INDEX_APPEND_CANCEL_REASON = {
  * the two apart. `never_named`: a state names only an applied revision, and
  * these statuses come before it or instead of it.
  */
-export const CORPUS_INDEX_NAMED_REVISION_COPY = {
+const CORPUS_INDEX_NAMED_REVISION_COPY = {
   reserved: "never_named",
   append_started: "never_named",
   append_committed: "never_named",
