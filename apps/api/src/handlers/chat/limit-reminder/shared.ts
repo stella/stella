@@ -99,11 +99,7 @@ export const readLimitedLatestTurn = async ({
         "The chat's latest turn is not waiting for a usage limit to reset",
     }),
   );
-  if (
-    latest === undefined ||
-    latest.status !== "failed" ||
-    latest.assistantMessageId === null
-  ) {
+  if (latest?.status !== "failed" || latest.assistantMessageId === null) {
     return refused;
   }
   const [answer] = await tx

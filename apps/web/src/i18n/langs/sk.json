@@ -5061,7 +5061,7 @@
       "flowRunAwaitingApproval": "Pracovný postup <bdi>{flowName}</bdi> čaká na vaše schválenie",
       "flowRunCompleted": "Pracovný postup <bdi>{flowName}</bdi> bol dokončený",
       "flowRunFailed": "Pracovný postup <bdi>{flowName}</bdi> zlyhal",
-      "localRunLimitReset": "Programovací agent vo vašom počítači môže pokračovať vo vašom čete",
+      "localRunLimitReset": "Programovací agent vo vašom počítači môže pokračovať vo vašom chate",
       "mention": "<bdi>{actorName}</bdi> vás spomenul v komentári",
       "reportExportFailed": "Export správy zlyhal",
       "reportExportSucceeded": "Vaša správa je pripravená",

@@ -27,6 +27,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { chatLimitReminderScalingScenario } from "@/api/tests/read-scaling/chat-limit-reminder";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -225,6 +227,41 @@ const suite = (
         const refused = await read(threadId);
         expect(refused.isErr() && refused.error.status).toBe(409);
       }
+    });
+  });
+
+  describe("the reminder read", () => {
+    test("reads one chat's reminder with the same work however many chats wait on one", async () => {
+      const later = at(HOUR_MS);
+      const measureAt = async (size: number) => {
+        const owner = await seedOwner();
+        const waiting = async () => {
+          const chat = await seedThread(owner, [
+            { limitResetsAt: later, status: "failed" },
+          ]);
+          await remind(owner, chat.threadId, chat.firstTurnId, later);
+          return chat;
+        };
+        const measured = await waiting();
+        for (let index = 0; index < size; index += 1) {
+          // db-await-in-loop: seeds the member's other waiting chats, one reminder each, before the measured read.
+          await waiting();
+        }
+        return await chatLimitReminderScalingScenario.measure({
+          database,
+          organizationId: owner.organizationId,
+          threadId: measured.threadId,
+          userId: owner.userId,
+        });
+      };
+      const at10 = await measureAt(10);
+      const at200 = await measureAt(200);
+      console.info(
+        "handler-scaling",
+        JSON.stringify({ name: "chat limit reminder", at10, at200 }),
+      );
+      expect(at10.statements).toBeGreaterThan(0);
+      expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
     });
   });
 

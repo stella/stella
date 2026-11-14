@@ -694,7 +694,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SEND_CHAT_LIMIT_REMINDERS_TASK,
-    reads: "unmeasured",
+    reads: { budget: "scheduled.chat.sendLimitReminders" },
   },
   {
     description: "Delete expired unused registrations",

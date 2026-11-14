@@ -114,12 +114,12 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "billing_codes",
   "case_law_research_answers",
   "case_law_research_columns",
-  "chat_limit_reminders",
   "chat_run_log_entries",
   "chat_run_logs",
   "chat_secrets",
   "chat_threads",
   "chat_browser_site_grants",
+  "chat_limit_reminders",
   "chat_tool_grants",
   "chat_turns",
   "clause_categories",
@@ -231,9 +231,10 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
       "desktop_runner_runs",
       "desktop_runners",
     ],
-    // The member's standing approvals, for websites and for tools: both
-    // member-scoped, keyed on the same member and organization.
-    ["chat_browser_site_grants", "chat_tool_grants"],
+    // The member's own chat settings: standing approvals for websites and
+    // for tools, and usage limit reminders, all keyed on the same member and
+    // organization.
+    ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
     // Independent search history deletion barriers under one owner policy.
     ["search_history_country_clears", "search_history_tombstones"],
   ];
