@@ -37,7 +37,6 @@ import {
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
@@ -152,7 +151,7 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
 
-    test("known pre-contract state rejects fallback siblings without overwriting the first decision", async () => {
+    test("fallback siblings coexist across courts and within a court without overwriting replay", async () => {
       const scopedSourceId = createSafeId<"caseLawSource">();
       await db.insert(caseLawSources).values({
         id: scopedSourceId,
@@ -166,6 +165,7 @@ if (!databaseUrl || !runPostgresTests) {
           input: {
             ...decisionAt(court, undefined),
             decisionDate,
+            fulltext: `${court} ${decisionDate}`,
             rawHash: `${court}:${decisionDate}`,
           },
           observationOrder: ++observationOrder,
@@ -173,74 +173,27 @@ if (!databaseUrl || !runPostgresTests) {
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
         });
-      try {
-        await write("Mestský súd Košice", "2025-04-18");
-        const before = await db
+      const stored = async () =>
+        await db
           .select({
             id: caseLawDecisions.id,
             court: caseLawDecisions.court,
             decisionDate: caseLawDecisions.decisionDate,
-            fallbackCohortKey: caseLawDecisions.fallbackCohortKey,
-            fallbackContentHash: caseLawDecisions.fallbackContentHash,
           })
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.sourceId, scopedSourceId));
-        expect(before).toHaveLength(1);
-        const original =
-          before.at(0) ?? panic("Initial fallback observation must be stored");
-        expect(original.fallbackContentHash).not.toBeNull();
-        for (const [court, decisionDate] of [
-          ["Okresný súd Bardejov", "2025-04-18"],
-        ] as const) {
-          // db-await-in-loop: each observation must leave the first decision unchanged.
-          // processDecision answers a refused write as an error result.
-          const attempted = await write(court, decisionDate);
-          expect(attempted.isErr()).toBe(true);
-          if (attempted.isErr()) {
-            expect(
-              isPgConstraintError(
-                attempted.error,
-                PG_ERROR.UNIQUE_VIOLATION,
-                "case_law_decisions_source_case_lang_null_idx",
-              ),
-            ).toBe(true);
-          }
-        }
-        expect(
-          await db
-            .select({
-              id: caseLawDecisions.id,
-              court: caseLawDecisions.court,
-              decisionDate: caseLawDecisions.decisionDate,
-              fallbackCohortKey: caseLawDecisions.fallbackCohortKey,
-              fallbackContentHash: caseLawDecisions.fallbackContentHash,
-            })
-            .from(caseLawDecisions)
-            .where(eq(caseLawDecisions.sourceId, scopedSourceId)),
-        ).toEqual(before);
+      try {
         await write("Mestský súd Košice", "2025-04-18");
-        expect(
-          await db
-            .select({ id: caseLawDecisions.id })
-            .from(caseLawDecisions)
-            .where(eq(caseLawDecisions.sourceId, scopedSourceId)),
-        ).toHaveLength(1);
+        const first =
+          (await stored()).at(0) ??
+          panic("Initial fallback observation must be stored");
+        await write("Okresný súd Bardejov", "2025-04-18");
         await write("Mestský súd Košice", "2025-05-28");
-        const corrected = await db
-          .select({
-            id: caseLawDecisions.id,
-            decisionDate: caseLawDecisions.decisionDate,
-            fallbackContentHash: caseLawDecisions.fallbackContentHash,
-          })
-          .from(caseLawDecisions)
-          .where(eq(caseLawDecisions.sourceId, scopedSourceId));
-        expect(corrected).toEqual([
-          {
-            id: original.id,
-            decisionDate: "2025-05-28",
-            fallbackContentHash: original.fallbackContentHash,
-          },
-        ]);
+        const siblings = await stored();
+        expect(siblings).toHaveLength(3);
+        expect(siblings).toContainEqual(first);
+        await write("Mestský súd Košice", "2025-04-18");
+        expect(await stored()).toEqual(siblings);
       } finally {
         await db
           .delete(caseLawSources)

@@ -5,6 +5,7 @@ import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  FALLBACK_DECISION_CONTENT_INDEX,
   FALLBACK_DECISION_IDENTITY_INDEX,
   PREVIOUS_FALLBACK_DECISION_INDEX,
 } from "@/api/lib/case-law/fallback-decision-identity-constants";
@@ -189,14 +190,12 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
-  test("the expansion keeps the docket-only fallback index until its contract release", () => {
-    // The contract release retires it through an index replacement; until
-    // then the schema still declares it, so the runner keeps it valid.
+  test("the online runner does not rebuild the retired docket-only fallback index", () => {
     expect(
       ONLINE_MIGRATION_INDEXES.some(
         ({ name }) => name === PREVIOUS_FALLBACK_DECISION_INDEX,
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       ONLINE_INDEX_REPLACEMENTS.flatMap(
         ({ replacementNames }) => replacementNames,
@@ -1475,6 +1474,21 @@ describe("online migrations", () => {
     );
     expect(dropOffset).toBeGreaterThan(
       indexOfStatement(harness.statements, FALLBACK_DECISION_IDENTITY_INDEX),
+    );
+  });
+
+  test("retires the docket-only fallback index after both decision replacements validate", async () => {
+    const harness = createHarness({ retiredIndexes: [] });
+    await runOnlineMigrations(harness.pool, { repairs: [] });
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `DROP INDEX CONCURRENTLY IF EXISTS public."${PREVIOUS_FALLBACK_DECISION_INDEX}"`,
+    );
+    expect(dropOffset).toBeGreaterThan(
+      indexOfStatement(harness.statements, FALLBACK_DECISION_IDENTITY_INDEX),
+    );
+    expect(dropOffset).toBeGreaterThan(
+      indexOfStatement(harness.statements, FALLBACK_DECISION_CONTENT_INDEX),
     );
   });
 

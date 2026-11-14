@@ -1008,16 +1008,12 @@ export const caseLawDecisions = p.pgTable(
       }),
     ),
     // Publisher ids identify documents; fallback keys include court and decision
-    // evidence. The obsolete docket-only index is removed by the contract migration.
+    // evidence; weak cohort members are distinguished by published content.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
     ...fallbackDecisionIdentityIndexes(t),
-    p
-      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
-      .on(t.sourceId, t.caseNumber, t.language)
-      .where(isNull(t.sourceDocumentId)),
     p
       .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)

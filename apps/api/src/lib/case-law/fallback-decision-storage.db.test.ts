@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -63,11 +62,6 @@ test("weak storage matches content without merging same-day same-type cohort mem
       adapterKey: "fallback-content-fixture",
       name: "Fallback content fixture",
     });
-    // This private snapshot models the later contract cutover. The shipped
-    // expansion retains this index, covered by the real-PostgreSQL fixture.
-    await db.execute(
-      sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
-    );
     const first = publication("Prvé uznesenie.");
     const sibling = publication("Druhé uznesenie toho istého dňa.");
     const otherCourt = publication("Prvé uznesenie.", "Okresný súd Bardejov");

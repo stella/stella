@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -127,10 +127,6 @@ test("expansion enrichment preserves its row before post-contract sibling storag
     await ingest(publication(""));
     await ingest(publication("Prvé uznesenie."));
     expect(await stored()).toHaveLength(1);
-    // This isolated snapshot models the contract release; the expansion still retains this index.
-    await db.execute(
-      sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
-    );
     await ingest(publication("", "https://example.org/publication/second"));
     await ingest(
       publication("Druhé uznesenie.", "https://example.org/publication/second"),
@@ -225,10 +221,6 @@ test.each(["ecli", "sheet-number"] as const)(
       expect(enriched.at(0)?.id).toBe(original.id);
       expect(enriched.at(0)?.text).toBe("Výrok 1.");
       expect(enriched.at(0)?.strongKey).toContain("case-number:v2:");
-      // The expansion keeps the previous index until the separate contract release.
-      await db.execute(
-        sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
-      );
       await ingest("2");
       await ingest("1");
       expect(await rows()).toHaveLength(2);
@@ -313,10 +305,6 @@ test.each(["ecli", "sheet-number"] as const)(
         .from(caseLawDecisionFallbackIdentities)
         .where(eq(caseLawDecisionFallbackIdentities.sourceId, sourceId));
       expect(aliases).toEqual([{ decisionId: original.id }]);
-      // The expansion keeps the previous index until the separate contract release.
-      await db.execute(
-        sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
-      );
       await ingest("2");
       await ingest("1");
       expect(await rows()).toHaveLength(2);
@@ -643,9 +631,6 @@ test("post-contract overlapping full observations cannot overwrite one textless 
       metadata: {},
     });
     // This fixture models the separate contract release, where different full siblings can coexist.
-    await db.execute(
-      sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
-    );
     const contract = await readSourceContract(sourceId, scopedDb);
     const bothResolved = Promise.withResolvers();
     const matchedIds: string[] = [];
@@ -765,9 +750,6 @@ test.each(["ecli", "sheet-number"] as const)(
         adapterKey: `unknown-evidence-${sourceId}`,
         name: "Unknown evidence fixture",
       });
-      await db.execute(
-        sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
-      );
       await ingest("1", "");
       const original =
         (

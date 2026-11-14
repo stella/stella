@@ -208,3 +208,4 @@ export { default as replacements_case_law_provision_citations_work_subtree_idx }
 export { default as replacements_legal_reader_answer_messages_answer_idx } from "./online-migration-entries/replacements-legal-reader-answer-messages-answer-idx";
 export { default as replacements_legislation_documents_eli_current_lang_idx } from "./online-migration-entries/replacements-legislation-documents-eli-current-lang-idx";
 export { default as replacements_legislation_documents_eli_version_lang_idx } from "./online-migration-entries/replacements-legislation-documents-eli-version-lang-idx";
+export { default as replacements_previous_fallback_decision_index } from "./online-migration-entries/replacements-previous-fallback-decision-index";
