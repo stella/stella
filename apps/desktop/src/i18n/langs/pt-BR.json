@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Assinatura",
     "pdfSignCertificate": "Certificado de assinatura",
     "pdfSignDocument": "Documento",
+    "pdfSignDownloadDriver": "Baixar driver",
+    "pdfSignDriverMissing": "Um cartão em um leitor precisa do driver {vendor}, que não está instalado. Instale-o para assinar com esse cartão.",
+    "pdfSignDriverNeedsUpdate": "O driver {vendor} instalado não funciona no processador deste Mac. Instale a versão atual para assinar com esse cartão.",
     "pdfSignErrorCode": "Código do erro: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Seu conjunto de chaves precisa que você permita o acesso a este certificado. Tente novamente e permita o acesso quando solicitado.",
@@ -118,6 +121,9 @@
       "startAgain": "A assinatura não pôde continuar. Inicie a assinatura novamente na stella.",
       "temporarilyUnavailable": "A stella não conseguiu concluir a assinatura agora. Tente novamente.",
       "tokenNotPresent": "O cartão inteligente ou token não está conectado. Conecte-o e tente novamente.",
+      "tokenSigningFailed": "O cartão inteligente ou token não assinou o documento.",
+      "tokenTimeout": "O cartão inteligente ou token não respondeu a tempo. Tente novamente.",
+      "tokenUnreadable": "Não foi possível ler o cartão inteligente ou token. Tente novamente.",
       "unsupportedAlgorithm": "A chave deste certificado não consegue criar a assinatura que este documento exige. Escolha outro certificado.",
       "wouldBreakSignatures": "Assinar este PDF invalidaria as assinaturas que ele já contém."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Caso",
     "pdfSignNoIdentities": "Nenhum certificado de assinatura está disponível no seu conjunto de chaves.",
     "pdfSignNoIdentitiesCertificateStore": "Nenhum certificado de assinatura está disponível no seu repositório de certificados.",
+    "pdfSignOnToken": "Armazenado em: {tokenLabel}",
+    "pdfSignPin": "PIN",
+    "pdfSignPinFinalTry": "Mais um PIN incorreto bloqueará o cartão ou token.",
+    "pdfSignPinLow": "Um PIN incorreto já foi digitado. Confira o PIN com atenção.",
+    "pdfSignPinPad": "Digite o PIN no leitor de cartões para assinar {documentName}.",
+    "pdfSignPinPrompt": "Digite o PIN do seu cartão ou token para assinar {documentName}.",
+    "pdfSignRescanCards": "Procurar cartões novamente",
     "pdfSignRetry": "Tentar novamente",
     "pdfSignServer": "Solicitado por",
     "pdfSignSign": "Assinar",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Carimbo visível na página {pageNumber}",
     "pdfSignSubtitle": "A chave privada permanece no seu conjunto de chaves; só a assinatura sai deste computador.",
     "pdfSignSubtitleCertificateStore": "A chave privada permanece no seu repositório de certificados; só a assinatura sai deste computador.",
+    "pdfSignSubtitleToken": "A chave privada permanece no seu cartão inteligente ou token; só a assinatura sai deste computador.",
     "pdfSignTitle": "Assinar este PDF?",
     "pdfSignUnsupported": "A assinatura requer macOS ou Windows. Abra o documento em um Mac ou em um PC com Windows para assiná-lo.",
     "pdfSignVersion": "Versão",
@@ -870,6 +884,18 @@
       "runs_can_write": "As execuções locais podem gravar nesta pasta, então ela não pode conter uma habilidade.",
       "network_folder": "Esta pasta está em um compartilhamento de rede. As habilidades precisam estar no disco deste computador.",
       "path_changed": "Uma pasta superior mudou. Remova esta pasta e adicione-a de novo."
+    }
+  },
+  "signingDriver": {
+    "title": "Driver de cartão inteligente",
+    "description": "Se o stella desktop não encontrar sozinho o driver do seu cartão inteligente ou token, escolha o módulo PKCS #11 dele. Ele só é carregado para assinar PDFs, em um processo separado.",
+    "choose": "Escolher módulo",
+    "remove": "Remover",
+    "notice": {
+      "action_failed": "Não funcionou. Tente de novo.",
+      "missing": "Este arquivo não existe mais.",
+      "needs_update": "Este módulo não funciona no processador deste Mac. Instale a versão atual do driver.",
+      "not_a_library": "Este arquivo não é um módulo PKCS #11."
     }
   },
   "localLinkedFolders": {

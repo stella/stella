@@ -268,7 +268,9 @@ pub async fn pdf_sign_respond(
   use crate::pdf_signing::{DialogChoice, PdfSignDialogResponse, PdfSignResult};
 
   let choice = match response {
-    PdfSignDialogResponse::Sign { identity_id } => DialogChoice::Sign { identity_id },
+    PdfSignDialogResponse::Sign { identity_id, pin } => {
+      DialogChoice::Sign { identity_id, pin }
+    }
     PdfSignDialogResponse::Retry => DialogChoice::Retry,
     PdfSignDialogResponse::Cancel => DialogChoice::Cancel,
   };
@@ -283,6 +285,26 @@ pub async fn pdf_sign_respond(
   }
 }
 
+/// Opens the download page of a smart card driver the signing dialog says
+/// is missing or needs an update. The page names the driver; the address comes from the
+/// desktop's own driver list, never from the page.
+#[tauri::command]
+pub fn pdf_sign_open_driver_download(
+  driver_id: String,
+  app: tauri::AppHandle,
+) -> Result<(), String> {
+  use tauri_plugin_opener::OpenerExt;
+
+  let driver = stella_desktop_pkcs11::drivers::known_driver(&driver_id)
+    .ok_or_else(|| format!("no known smart card driver is named {driver_id}"))?;
+  app
+    .opener()
+    .open_url(driver.download_url, None::<&str>)
+    .map_err(crate::logging::with_cause_logged(
+      "the driver's download page could not be opened",
+    ))
+}
+
 /// The PDF signing dialog re-reads the certificates it offers while it waits
 /// for a choice, so a smart card inserted or removed meanwhile shows up.
 /// Listing reads certificates only and never prompts.
@@ -294,6 +316,19 @@ pub async fn pdf_sign_identities(
     return Err("Only the PDF signing dialog lists signing certificates".into());
   }
   Ok(crate::pdf_signing::dialog_listing().await)
+}
+
+/// The PDF signing dialog's Rescan button: the smart cards are scanned
+/// again, which starts the PKCS #11 helper. The dialog's own refresh never
+/// does; it re-reads only the platform store.
+#[tauri::command]
+pub async fn pdf_sign_rescan_cards(
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::DialogListing, String> {
+  if window.label() != crate::pdf_signing::DIALOG_LABEL {
+    return Err("Only the PDF signing dialog scans for smart cards".into());
+  }
+  Ok(crate::pdf_signing::rescan_dialog_listing().await)
 }
 
 #[tauri::command]

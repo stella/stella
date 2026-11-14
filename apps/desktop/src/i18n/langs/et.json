@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Allkiri",
     "pdfSignCertificate": "Allkirjastamissertifikaat",
     "pdfSignDocument": "Dokument",
+    "pdfSignDownloadDriver": "Laadi draiver alla",
+    "pdfSignDriverMissing": "Kaardilugejas oleva kaardi jaoks on vaja draiverit {vendor}, mis pole paigaldatud. Selle kaardiga allkirjastamiseks paigaldage see.",
+    "pdfSignDriverNeedsUpdate": "Paigaldatud {vendor} draiver ei tööta selle Maci protsessoril. Selle kaardiga allkirjastamiseks paigaldage draiveri uusim versioon.",
     "pdfSignErrorCode": "Veakood: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Teie võtmehoidla vajab sellele sertifikaadile juurdepääsuks luba. Proovige uuesti ja lubage juurdepääs, kui seda küsitakse.",
@@ -118,6 +121,9 @@
       "startAgain": "Allkirjastamist ei saanud jätkata. Alustage allkirjastamist stellas uuesti.",
       "temporarilyUnavailable": "stella ei saanud allkirjastamist praegu lõpetada. Proovige uuesti.",
       "tokenNotPresent": "Kiipkaart või turvavõti pole ühendatud. Ühendage see ja proovige uuesti.",
+      "tokenSigningFailed": "Kiipkaart või turvavõti ei allkirjastanud dokumenti.",
+      "tokenTimeout": "Kiipkaart või turvavõti ei vastanud õigel ajal. Proovige uuesti.",
+      "tokenUnreadable": "Kiipkaarti või turvavõtit ei õnnestunud lugeda. Proovige uuesti.",
       "unsupportedAlgorithm": "Selle sertifikaadi võtmega ei saa luua allkirja, mida see dokument nõuab. Valige mõni teine sertifikaat.",
       "wouldBreakSignatures": "Selle PDF-i allkirjastamine muudaks selles juba olevad allkirjad kehtetuks."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Toimik",
     "pdfSignNoIdentities": "Teie võtmehoidlas pole ühtegi allkirjastamissertifikaati.",
     "pdfSignNoIdentitiesCertificateStore": "Teie sertifikaadisalves pole ühtegi allkirjastamissertifikaati.",
+    "pdfSignOnToken": "Asukoht: {tokenLabel}",
+    "pdfSignPin": "PIN-kood",
+    "pdfSignPinFinalTry": "Veel üks vale PIN-kood blokeerib kaardi või turvavõtme.",
+    "pdfSignPinLow": "Varem on sisestatud vale PIN-kood. Kontrollige PIN-koodi hoolikalt.",
+    "pdfSignPinPad": "Dokumendi {documentName} allkirjastamiseks sisestage PIN-kood kaardilugejal.",
+    "pdfSignPinPrompt": "Dokumendi {documentName} allkirjastamiseks sisestage kaardi või turvavõtme PIN-kood.",
+    "pdfSignRescanCards": "Otsi kaarte uuesti",
     "pdfSignRetry": "Proovi uuesti",
     "pdfSignServer": "Taotleja",
     "pdfSignSign": "Allkirjasta",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Nähtav tempel lehel {pageNumber}",
     "pdfSignSubtitle": "Privaatvõti jääb võtmehoidlasse; sellest arvutist lahkub ainult allkiri.",
     "pdfSignSubtitleCertificateStore": "Privaatvõti jääb sertifikaadisalve; sellest arvutist lahkub ainult allkiri.",
+    "pdfSignSubtitleToken": "Privaatvõti jääb teie kiipkaardile või turvavõtmele; sellest arvutist lahkub ainult allkiri.",
     "pdfSignTitle": "Kas allkirjastada see PDF?",
     "pdfSignUnsupported": "Allkirjastamiseks on vaja macOS-i või Windowsi. Avage dokument Macis või Windowsi arvutis, et see allkirjastada.",
     "pdfSignVersion": "Versioon",
@@ -870,6 +884,18 @@
       "runs_can_write": "Kohalikud käivitused saavad sellesse kausta kirjutada, seega ei saa selles oskust hoida.",
       "network_folder": "See kaust asub võrguketta jagatud alal. Oskused peavad olema selle arvuti enda kettal.",
       "path_changed": "Ülemkaust on muutunud. Eemaldage see kaust ja lisage see uuesti."
+    }
+  },
+  "signingDriver": {
+    "title": "Kiipkaardi draiver",
+    "description": "Kui stella desktop ei leia teie kiipkaardi või turvavõtme draiverit ise üles, valige selle PKCS #11 moodul. Seda laaditakse ainult PDF-ide allkirjastamiseks, eraldi protsessis.",
+    "choose": "Vali moodul",
+    "remove": "Eemalda",
+    "notice": {
+      "action_failed": "See ei õnnestunud. Proovige uuesti.",
+      "missing": "Seda faili enam pole.",
+      "needs_update": "See moodul ei tööta selle Maci protsessoril. Paigaldage draiveri uusim versioon.",
+      "not_a_library": "See fail ei ole PKCS #11 moodul."
     }
   },
   "localLinkedFolders": {

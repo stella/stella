@@ -1,0 +1,30 @@
+[package]
+name = "stella-desktop-pkcs11"
+version = "0.0.1"
+edition = "2024"
+description = "What the desktop and its PKCS #11 helper process share: the request and response protocol, the known driver modules, and the checks run before a module is loaded"
+license = "Apache-2.0"
+publish = false
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+let_underscore_must_use = "deny"
+map_err_ignore = "deny"
+await_holding_lock = "deny"
+significant_drop_in_scrutinee = "deny"
+significant_drop_tightening = "warn"
+unused_result_ok = "deny"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[dependencies]
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+stella-desktop-signing-core = { path = "../signing-core", version = "0.0.1" }
+zeroize = "1"

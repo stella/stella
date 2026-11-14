@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Aláírás",
     "pdfSignCertificate": "Aláírási tanúsítvány",
     "pdfSignDocument": "Dokumentum",
+    "pdfSignDownloadDriver": "Illesztőprogram letöltése",
+    "pdfSignDriverMissing": "Az olvasóban lévő kártyához {vendor}-illesztőprogram kell, de nincs telepítve. Az ezzel a kártyával való aláíráshoz telepítse.",
+    "pdfSignDriverNeedsUpdate": "A telepített {vendor}-illesztőprogram nem fut ennek a Macnek a processzorán. Az ezzel a kártyával való aláíráshoz telepítse az aktuális verzióját.",
     "pdfSignErrorCode": "Hibakód: {code}",
     "pdfSignErrors": {
       "authenticationRequired": "A kulcskarika engedélyt kér a tanúsítvány használatához. Próbálja újra, és engedélyezze a hozzáférést.",
@@ -118,6 +121,9 @@
       "startAgain": "Az aláírás nem folytatható. Indítsa újra az aláírást a stellában.",
       "temporarilyUnavailable": "A stella most nem tudta befejezni az aláírást. Próbálja újra.",
       "tokenNotPresent": "Az intelligens kártya vagy a token nincs csatlakoztatva. Csatlakoztassa, majd próbálja újra.",
+      "tokenSigningFailed": "Az intelligens kártya vagy a token nem írta alá a dokumentumot.",
+      "tokenTimeout": "Az intelligens kártya vagy a token nem válaszolt időben. Próbálja újra.",
+      "tokenUnreadable": "Az intelligens kártyát vagy a tokent nem sikerült beolvasni. Próbálja újra.",
       "unsupportedAlgorithm": "Ennek a tanúsítványnak a kulcsával nem hozható létre a dokumentumhoz szükséges aláírás. Válasszon másik tanúsítványt.",
       "wouldBreakSignatures": "Az aláírás érvénytelenítené a PDF-ben már meglévő aláírásokat."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Ügy",
     "pdfSignNoIdentities": "A kulcskarikán nincs elérhető aláírási tanúsítvány.",
     "pdfSignNoIdentitiesCertificateStore": "A tanúsítványtárolóban nincs elérhető aláírási tanúsítvány.",
+    "pdfSignOnToken": "Tárolás helye: {tokenLabel}",
+    "pdfSignPin": "PIN-kód",
+    "pdfSignPinFinalTry": "Még egy hibás PIN-kód letiltja a kártyát vagy a tokent.",
+    "pdfSignPinLow": "Korábban már hibás PIN-kódot adtak meg. Gondosan ellenőrizze a PIN-kódot.",
+    "pdfSignPinPad": "A dokumentum ({documentName}) aláírásához adja meg a PIN-kódot a kártyaolvasón.",
+    "pdfSignPinPrompt": "A dokumentum ({documentName}) aláírásához adja meg a kártya vagy a token PIN-kódját.",
+    "pdfSignRescanCards": "Kártyák újrakeresése",
     "pdfSignRetry": "Újra",
     "pdfSignServer": "Kérelmező",
     "pdfSignSign": "Aláírás",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Látható bélyegző a(z) {pageNumber}. oldalon",
     "pdfSignSubtitle": "A titkos kulcs a kulcskarikán marad; ezt a számítógépet csak az aláírás hagyja el.",
     "pdfSignSubtitleCertificateStore": "A titkos kulcs a tanúsítványtárolóban marad; ezt a számítógépet csak az aláírás hagyja el.",
+    "pdfSignSubtitleToken": "A titkos kulcs az intelligens kártyán vagy a tokenen marad; ezt a számítógépet csak az aláírás hagyja el.",
     "pdfSignTitle": "Aláírja ezt a PDF-et?",
     "pdfSignUnsupported": "Az aláíráshoz macOS vagy Windows szükséges. Nyissa meg a dokumentumot Macen vagy windowsos számítógépen az aláíráshoz.",
     "pdfSignVersion": "Verzió",
@@ -870,6 +884,18 @@
       "runs_can_write": "A helyi futtatások írhatnak ebbe a mappába, ezért nem tartalmazhat készséget.",
       "network_folder": "Ez a mappa hálózati megosztáson van. A készségeknek a számítógép saját lemezén kell lenniük.",
       "path_changed": "Egy szülőmappa megváltozott. Távolítsa el ezt a mappát, majd adja hozzá újra."
+    }
+  },
+  "signingDriver": {
+    "title": "Intelligenskártya-illesztőprogram",
+    "description": "Ha a stella desktop nem találja meg magától az intelligens kártya vagy a token illesztőprogramját, válassza ki a PKCS #11-modulját. Csak PDF-ek aláírásához töltődik be, külön folyamatban.",
+    "choose": "Modul kiválasztása",
+    "remove": "Eltávolítás",
+    "notice": {
+      "action_failed": "Ez nem sikerült. Próbálja újra.",
+      "missing": "Ez a fájl már nem létezik.",
+      "needs_update": "Ez a modul nem fut ennek a Macnek a processzorán. Telepítse az illesztőprogram aktuális verzióját.",
+      "not_a_library": "Ez a fájl nem PKCS #11-modul."
     }
   },
   "localLinkedFolders": {

@@ -81,6 +81,9 @@
     "pdfSignAppearance": "Signature",
     "pdfSignCertificate": "Certificat de signature",
     "pdfSignDocument": "Document",
+    "pdfSignDownloadDriver": "Télécharger le pilote",
+    "pdfSignDriverMissing": "Une carte dans un lecteur a besoin du pilote {vendor}, qui n’est pas installé. Installez-le pour signer avec cette carte.",
+    "pdfSignDriverNeedsUpdate": "Le pilote {vendor} installé ne fonctionne pas avec le processeur de ce Mac. Installez sa version actuelle pour signer avec cette carte.",
     "pdfSignErrorCode": "Code d’erreur : {code}",
     "pdfSignErrors": {
       "authenticationRequired": "Votre trousseau demande votre autorisation pour ce certificat. Réessayez et autorisez l’accès lorsque cela vous est demandé.",
@@ -118,6 +121,9 @@
       "startAgain": "La signature n’a pas pu se poursuivre. Relancez la signature dans stella.",
       "temporarilyUnavailable": "stella n’a pas pu terminer la signature pour le moment. Réessayez.",
       "tokenNotPresent": "La carte à puce ou le jeton n’est pas connecté. Connectez-le, puis réessayez.",
+      "tokenSigningFailed": "La carte à puce ou le jeton n’a pas signé le document.",
+      "tokenTimeout": "La carte à puce ou le jeton n’a pas répondu à temps. Réessayez.",
+      "tokenUnreadable": "La carte à puce ou le jeton n’a pas pu être lu. Réessayez.",
       "unsupportedAlgorithm": "La clé de ce certificat ne peut pas produire la signature que ce document exige. Choisissez un autre certificat.",
       "wouldBreakSignatures": "Signer ce PDF invaliderait les signatures qu’il contient déjà."
     },
@@ -127,6 +133,13 @@
     "pdfSignMatter": "Dossier",
     "pdfSignNoIdentities": "Aucun certificat de signature n’est disponible dans votre trousseau.",
     "pdfSignNoIdentitiesCertificateStore": "Aucun certificat de signature n’est disponible dans votre magasin de certificats.",
+    "pdfSignOnToken": "Stocké sur : {tokenLabel}",
+    "pdfSignPin": "Code PIN",
+    "pdfSignPinFinalTry": "Un autre code PIN erroné bloquera la carte ou le jeton.",
+    "pdfSignPinLow": "Un code PIN erroné a déjà été saisi. Vérifiez-le attentivement.",
+    "pdfSignPinPad": "Saisissez le code PIN sur le lecteur de cartes pour signer {documentName}.",
+    "pdfSignPinPrompt": "Saisissez le code PIN de votre carte ou de votre jeton pour signer {documentName}.",
+    "pdfSignRescanCards": "Rechercher à nouveau les cartes",
     "pdfSignRetry": "Réessayer",
     "pdfSignServer": "Demandé par",
     "pdfSignSign": "Signer",
@@ -135,6 +148,7 @@
     "pdfSignStampOnPage": "Cachet visible en page {pageNumber}",
     "pdfSignSubtitle": "La clé privée reste dans votre trousseau ; seule la signature quitte cet ordinateur.",
     "pdfSignSubtitleCertificateStore": "La clé privée reste dans votre magasin de certificats ; seule la signature quitte cet ordinateur.",
+    "pdfSignSubtitleToken": "La clé privée reste sur votre carte à puce ou votre jeton ; seule la signature quitte cet ordinateur.",
     "pdfSignTitle": "Signer ce PDF ?",
     "pdfSignUnsupported": "La signature nécessite macOS ou Windows. Ouvrez ce document sur un Mac ou un PC Windows pour le signer.",
     "pdfSignVersion": "Version",
@@ -870,6 +884,18 @@
       "runs_can_write": "Les exécutions locales peuvent écrire dans ce dossier, il ne peut donc pas contenir de compétence.",
       "network_folder": "Ce dossier se trouve sur un partage réseau. Les compétences doivent être sur le disque de cet ordinateur.",
       "path_changed": "Un dossier parent a changé. Retirez ce dossier et ajoutez-le de nouveau."
+    }
+  },
+  "signingDriver": {
+    "title": "Pilote de carte à puce",
+    "description": "Si stella desktop ne trouve pas seul le pilote de votre carte à puce ou de votre jeton, choisissez son module PKCS #11. Il n’est chargé que pour signer des PDF, dans un processus distinct.",
+    "choose": "Choisir le module",
+    "remove": "Retirer",
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "missing": "Ce fichier n’existe plus.",
+      "needs_update": "Ce module ne fonctionne pas avec le processeur de ce Mac. Installez la version actuelle du pilote.",
+      "not_a_library": "Ce fichier n’est pas un module PKCS #11."
     }
   },
   "localLinkedFolders": {
