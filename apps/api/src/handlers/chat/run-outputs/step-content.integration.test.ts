@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
   type ChatLocalRunStepContentKind,
   chatLocalRunStepContentUploadedSchema,
   chatLocalRunStepContentUploadPath,
@@ -338,6 +339,28 @@ describe("a run sending what a step produced", () => {
       storedBytes: Buffer.byteLength(output),
       text: output,
     });
+  });
+
+  test("a step is written once: a retry answers as stored, other text is refused", async () => {
+    const run = await seedRun();
+    const key = stepKey();
+    const token = tokenFor(run.runId);
+    const send = async (value: string) =>
+      await put(run.runId, key, {
+        token,
+        kind: "command",
+        totalBytes: Buffer.byteLength(value),
+        content: text(value),
+      });
+    expect(await stateOf(await send("first"))).toBe("stored");
+    expect(await stateOf(await send("first"))).toBe("stored");
+    const rewrite = await send("other");
+    expect(rewrite.status).toBe(409);
+    const refusal: unknown = await rewrite.json();
+    expect(refusal).toMatchObject({
+      code: CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
+    });
+    expect(await read(run, key)).toMatchObject({ text: "first" });
   });
 
   test("refuses text that is not UTF-8, or more than its step produced", async () => {

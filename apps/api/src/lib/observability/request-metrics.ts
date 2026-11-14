@@ -586,16 +586,17 @@ const LOCAL_RUN_STEP_CONTENT_METRIC = {
   storedBytes: "LocalRunStepContentStoredBytes",
   budgetReached: "LocalRunStepContentBudgetReached",
   tooLarge: "LocalRunStepContentTooLarge",
+  refused: "LocalRunStepContentRefused",
 } as const;
 
 type LocalRunStepContentMetric = {
-  /** How the step's content settled. */
-  state: "stored" | "too_large" | "run_budget_reached";
+  /** How the step's content settled; `refused` for a write to a settled step. */
+  state: "stored" | "too_large" | "run_budget_reached" | "refused";
   /** Bytes this write stored. */
   storedBytes: number;
 };
 
-/** One settled write of a local run's step content, by how it settled. */
+/** One write of a local run's step content, by how it settled or that it was refused. */
 export const emitLocalRunStepContentMetric = ({
   state,
   storedBytes,
@@ -605,6 +606,7 @@ export const emitLocalRunStepContentMetric = ({
     [LOCAL_RUN_STEP_CONTENT_METRIC.budgetReached]:
       state === "run_budget_reached" ? 1 : 0,
     [LOCAL_RUN_STEP_CONTENT_METRIC.tooLarge]: state === "too_large" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.refused]: state === "refused" ? 1 : 0,
   });
 };
 

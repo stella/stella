@@ -65,30 +65,13 @@ type SeededRun = {
   userMessageId: SafeId<"chatMessage">;
 };
 
-/** A running local run of `owner`, bound to a turn of a thread of theirs. */
-const seedRun = async (
+/** A running local run of `owner` with its own turn in one of their threads. */
+const seedRunIn = async (
   owner: RunOwner,
-  dataWorkspaceIds: SafeId<"workspace">[] = [],
-): Promise<SeededRun> => {
+  threadId: SafeId<"chatThread">,
+  userMessageId: SafeId<"chatMessage">,
+) => {
   const now = new Date(clock.now());
-  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-  await db.insert(chatThreads).values({
-    id: threadId,
-    organizationId: owner.organizationId,
-    userId: owner.userId,
-    title: "A turn on this computer",
-    dataWorkspaceIds,
-  });
-  const userMessageId = createSafeId<"chatMessage">();
-  await db.insert(chatMessages).values({
-    id: userMessageId,
-    threadId,
-    userId: owner.userId,
-    role: "user",
-    content: toPersistedChatMessageContentV3({
-      data: [{ type: "text", content: "Work on the matter" }],
-    }),
-  });
   const turnId = createSafeId<"chatTurn">();
   await db.insert(chatTurns).values({
     id: turnId,
@@ -134,6 +117,33 @@ const seedRun = async (
     chatThreadId: threadId,
     chatTurnId: turnId,
   });
+  return { runId, turnId };
+};
+
+/** A running local run of `owner`, bound to a turn of a thread of theirs. */
+const seedRun = async (
+  owner: RunOwner,
+  dataWorkspaceIds: SafeId<"workspace">[] = [],
+): Promise<SeededRun> => {
+  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  await db.insert(chatThreads).values({
+    id: threadId,
+    organizationId: owner.organizationId,
+    userId: owner.userId,
+    title: "A turn on this computer",
+    dataWorkspaceIds,
+  });
+  const userMessageId = createSafeId<"chatMessage">();
+  await db.insert(chatMessages).values({
+    id: userMessageId,
+    threadId,
+    userId: owner.userId,
+    role: "user",
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text", content: "Work on the matter" }],
+    }),
+  });
+  const { runId, turnId } = await seedRunIn(owner, threadId, userMessageId);
   return { runId, threadId, turnId, userMessageId };
 };
 
@@ -203,6 +213,9 @@ const countersOf = async (runId: string) =>
       .where(eq(desktopRunnerRuns.runId, runId))
   ).at(0);
 
+const IMAGE_SHA = "a".repeat(64);
+const OTHER_IMAGE_SHA = "b".repeat(64);
+
 const seedImageFile = async (owner: RunOwner, run: SeededRun) => {
   const id = createSafeId<"userFile">();
   await db.insert(userFiles).values({
@@ -211,7 +224,7 @@ const seedImageFile = async (owner: RunOwner, run: SeededRun) => {
     fileName: "shot.png",
     mimeType: "image/png",
     sizeBytes: 10,
-    sha256Hex: "a".repeat(64),
+    sha256Hex: IMAGE_SHA,
     s3Key: createUserFileKey({
       fileId: id,
       mimeType: "image/png",
@@ -330,14 +343,69 @@ describe("the stored content of a local run's steps", () => {
     expect(await read(ownerA, run, key)).toMatchObject({ text: "kept" });
   });
 
-  test("a step sent again replaces its text and is counted once", async () => {
+  test("a step settles once: the same text again answers as stored, other text is refused", async () => {
     const run = await seedRun(ownerA);
     const key = stepKey();
     await storeText(ownerA, run, key, "first report");
-    await storeText(ownerA, run, key, "second");
-    expect(await read(ownerA, run, key)).toMatchObject({ text: "second" });
+    // A retry that sends the same bytes.
+    expect(await storeText(ownerA, run, key, "first report")).toEqual({
+      type: "settled",
+      state: "stored",
+    });
+    expect(await storeText(ownerA, run, key, "rewritten")).toEqual({
+      type: "refused",
+      reason: "different_content",
+    });
+    expect(await read(ownerA, run, key)).toMatchObject({
+      text: "first report",
+    });
     expect(await countersOf(run.runId)).toMatchObject({
-      textBytes: Buffer.byteLength("second"),
+      textBytes: Buffer.byteLength("first report"),
+    });
+  });
+
+  test("a run never writes a step another run of the thread stored", async () => {
+    const earlier = await seedRun(ownerA);
+    const key = stepKey();
+    await storeText(ownerA, earlier, key, "what the earlier run printed");
+    const later = await seedRunIn(
+      ownerA,
+      earlier.threadId,
+      earlier.userMessageId,
+    );
+    const refused = { type: "refused", reason: "other_run" } as const;
+    // Neither other text nor the very same text: the step is not this run's.
+    expect(await storeText(ownerA, later, key, "rewritten")).toEqual(refused);
+    expect(
+      await storeText(ownerA, later, key, "what the earlier run printed"),
+    ).toEqual(refused);
+    expect(
+      await recordStepTooLarge(runnerDb(), {
+        owner: ownerA,
+        runId: later.runId,
+        stepKey: key,
+        kind: "image",
+        totalBytes: 20_000_000,
+      }),
+    ).toEqual(refused);
+    expect(
+      await openStepImage(runnerDb(), {
+        owner: ownerA,
+        runId: later.runId,
+        stepKey: key,
+        sha256Hex: IMAGE_SHA,
+        totalBytes: 10,
+      }),
+    ).toEqual(refused);
+    expect(await read(ownerA, earlier, key)).toMatchObject({
+      kind: "command",
+      text: "what the earlier run printed",
+    });
+    expect(await countersOf(later.runId)).toEqual({ textBytes: 0, images: 0 });
+    // The later run still stores its own steps in the same thread.
+    expect(await storeText(ownerA, later, stepKey(), "its own")).toEqual({
+      type: "settled",
+      state: "stored",
     });
   });
 
@@ -370,10 +438,15 @@ describe("the stored content of a local run's steps", () => {
     expect(await countersOf(run.runId)).toMatchObject({ textBytes: budget });
   });
 
-  test("an image step names its file once and keeps its first image", async () => {
+  test("an image step names its file once, and no other image replaces it", async () => {
     const run = await seedRun(ownerA);
     const key = stepKey();
-    const step = { owner: ownerA, runId: run.runId, stepKey: key };
+    const step = {
+      owner: ownerA,
+      runId: run.runId,
+      stepKey: key,
+      sha256Hex: IMAGE_SHA,
+    };
     expect(
       await openStepImage(runnerDb(), { ...step, totalBytes: 10 }),
     ).toEqual({ type: "room" });
@@ -395,17 +468,36 @@ describe("the stored content of a local run's steps", () => {
         placeholder: null,
       },
     });
-    const second = await seedImageFile(ownerA, run);
+    // The same image again (a retry) answers as stored and adopts nothing.
+    const again = await seedImageFile(ownerA, run);
     expect(
       await openStepImage(runnerDb(), { ...step, totalBytes: 10 }),
     ).toEqual({ type: "settled", state: "stored" });
     expect(
       await storeStepImage(runnerDb(), {
         ...step,
-        userFileId: second,
+        userFileId: again,
         sizeBytes: 10,
       }),
     ).toEqual({ type: "settled", state: "stored", adopted: false });
+    // Another image for the step is refused: a step settles once.
+    const refused = { type: "refused", reason: "different_content" } as const;
+    expect(
+      await openStepImage(runnerDb(), {
+        ...step,
+        sha256Hex: OTHER_IMAGE_SHA,
+        totalBytes: 10,
+      }),
+    ).toEqual(refused);
+    expect(
+      await storeStepImage(runnerDb(), {
+        ...step,
+        sha256Hex: OTHER_IMAGE_SHA,
+        userFileId: again,
+        sizeBytes: 10,
+      }),
+    ).toEqual(refused);
+    expect(await read(ownerA, run, key)).toMatchObject({ file: { id: first } });
     expect(await countersOf(run.runId)).toMatchObject({ images: 1 });
   });
 
@@ -418,6 +510,7 @@ describe("the stored content of a local run's steps", () => {
         owner: ownerA,
         runId: run.runId,
         stepKey: stepKey(),
+        sha256Hex: IMAGE_SHA,
         userFileId: foreign,
         sizeBytes: 10,
       }),
@@ -439,6 +532,7 @@ describe("the stored content of a local run's steps", () => {
         owner: ownerA,
         runId: run.runId,
         stepKey: key,
+        sha256Hex: IMAGE_SHA,
         totalBytes: 10,
       }),
     ).toEqual({ type: "settled", state: "run_budget_reached" });
@@ -527,6 +621,7 @@ describe("the stored content of a local run's steps", () => {
       owner: ownerA,
       runId: run.runId,
       stepKey: key,
+      sha256Hex: IMAGE_SHA,
       userFileId: file,
       sizeBytes: 10,
     });

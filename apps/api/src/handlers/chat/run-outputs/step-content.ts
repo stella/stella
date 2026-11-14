@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
   CHAT_LOCAL_RUN_STEP_CONTENT_INVALID_CODE,
   CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE,
@@ -16,6 +17,7 @@ import {
   chatLocalRunImageType,
 } from "@stll/api-contract/chat-local-run-step-output";
 import { numberFromString } from "@stll/api-contract/http-input";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { chatThreads } from "@/api/db/schema";
 import {
@@ -79,6 +81,22 @@ const noSuchRun = () =>
     }),
   );
 
+/**
+ * A write to a step that already settled otherwise: stored by another run of
+ * the thread, or with other content. Counted, since no honest sidecar sends
+ * one.
+ */
+const refusedWrite = () => {
+  emitLocalRunStepContentMetric({ state: "refused", storedBytes: 0 });
+  return Result.err(
+    new HandlerError({
+      status: 409,
+      code: CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE,
+      message: "This step is already stored",
+    }),
+  );
+};
+
 const settled = (state: ChatLocalRunStepContentStoredState) =>
   Result.ok({ state });
 
@@ -128,6 +146,9 @@ const storeText = async ({
     if (stored.type === "unknown_run") {
       return noSuchRun();
     }
+    if (stored.type === "refused") {
+      return refusedWrite();
+    }
     emitLocalRunStepContentMetric({
       state: stored.state,
       storedBytes:
@@ -166,16 +187,21 @@ const storeImage = async ({
     if (mimeType === null) {
       return invalid("A step's image must be a PNG, JPEG, GIF or WebP image");
     }
+    const sha256Hex = hashSha256Hex(bytes);
     const room = yield* Result.await(
       control.openStepImage({
         owner,
         runId,
         stepKey,
+        sha256Hex,
         totalBytes: bytes.byteLength,
       }),
     );
     if (room.type === "unknown_run") {
       return noSuchRun();
+    }
+    if (room.type === "refused") {
+      return refusedWrite();
     }
     if (room.type === "settled") {
       return settled(room.state);
@@ -216,6 +242,7 @@ const storeImage = async ({
       owner,
       runId,
       stepKey,
+      sha256Hex,
       userFileId: uploaded.id,
       sizeBytes: bytes.byteLength,
     });
@@ -242,6 +269,9 @@ const storeImage = async ({
     if (stored.value.type === "unknown_run") {
       return noSuchRun();
     }
+    if (stored.value.type === "refused") {
+      return refusedWrite();
+    }
     emitLocalRunStepContentMetric({
       state: stored.value.state,
       storedBytes: stored.value.adopted ? bytes.byteLength : 0,
@@ -251,8 +281,8 @@ const storeImage = async ({
 
 /**
  * Stores what one step of a local run produced, for the run's own agent
- * token. The step's key makes the write repeatable: the same step sent again
- * replaces its text, and an image step keeps its first image.
+ * token. A step settles once: the run that stored it may send the same
+ * content again and is answered as before, and nothing else writes it.
  */
 export const createStoreRunStepContent = (
   dependencies: StepContentDependencies = {},
@@ -315,6 +345,9 @@ export const createStoreRunStepContent = (
         );
         if (recorded.type === "unknown_run") {
           return noSuchRun();
+        }
+        if (recorded.type === "refused") {
+          return refusedWrite();
         }
         emitLocalRunStepContentMetric({
           state: recorded.state,

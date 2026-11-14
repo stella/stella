@@ -107,6 +107,14 @@ const byteCountSchema = v.pipe(v.number(), v.safeInteger(), v.minValue(0));
  */
 export const CHAT_LOCAL_RUN_STEP_CONTENT_INVALID_CODE = "step_content_invalid";
 
+/**
+ * The code of a refusal to write a step that already settled: a step is
+ * stored once, by the run that produced it, and nothing rewrites it. The
+ * computer must not send the step again.
+ */
+export const CHAT_LOCAL_RUN_STEP_CONTENT_CONFLICT_CODE =
+  "step_content_conflict";
+
 /** What the API answers once it settled a step's content. */
 export const chatLocalRunStepContentUploadedSchema = v.strictObject({
   state: v.picklist(CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES),

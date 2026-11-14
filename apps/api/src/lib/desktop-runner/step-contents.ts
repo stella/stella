@@ -33,8 +33,9 @@ import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
  *
  * Every write of a run first takes that run's row, so the writes of one run
  * settle one at a time against what the run may store
- * (`CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET`), and a step sent again settles
- * against what it stored before.
+ * (`CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET`). A step settles once: only the
+ * run that wrote it is answered again, with how it settled, and nothing
+ * replaces what it stored.
  */
 
 const contents = chatLocalRunStepContents;
@@ -49,9 +50,17 @@ type StepOptions = {
   stepKey: string;
 };
 
+/**
+ * Why a write is refused although its run is going: the step was stored by
+ * another run of the thread, or it already settled with other content. A
+ * step settles once; nothing rewrites it.
+ */
+export type StepContentRefusal = "other_run" | "different_content";
+
 /** How a step's content settled; `unknown_run` for a run that takes none. */
 export type StepContentSettlement =
   | { type: "unknown_run" }
+  | { type: "refused"; reason: StepContentRefusal }
   | { type: "settled"; state: ChatLocalRunStepContentStoredState };
 
 type HeldRun = {
@@ -104,16 +113,22 @@ const readStored = async (tx: Transaction, run: HeldRun, stepKey: string) =>
   (
     await tx
       .select({
+        runId: contents.runId,
         kind: contents.kind,
         state: contents.outcome,
-        storedBytes: contents.storedBytes,
+        textEncrypted: contents.textEncrypted,
+        textIv: contents.textIv,
+        fileSha256Hex: userFiles.sha256Hex,
       })
       .from(contents)
+      .leftJoin(userFiles, eq(userFiles.id, contents.userFileId))
       .where(
         and(eq(contents.threadId, run.threadId), eq(contents.stepKey, stepKey)),
       )
       .limit(1)
   ).at(0) ?? null;
+
+type StoredStep = NonNullable<Awaited<ReturnType<typeof readStored>>>;
 
 /** A stored row's state, which the table's check holds to the stored states. */
 const storedStateOf = (state: string): ChatLocalRunStepContentStoredState => {
@@ -129,6 +144,65 @@ const storedStateOf = (state: string): ChatLocalRunStepContentStoredState => {
   }
 };
 
+type RepeatedStep = {
+  previous: StoredStep;
+  runId: string;
+  kind: ChatLocalRunStepContentKind;
+  /** Whether what is sent now is what the step stored. */
+  sameContent: (previous: StoredStep) => boolean | Promise<boolean>;
+};
+
+/**
+ * How a step that already has a row answers a write. Only the run that
+ * wrote the row is answered at all; it gets how the step settled when it
+ * sends the same thing again (a retry), and a refusal when it sends
+ * anything else. A step that stored nothing keeps that outcome.
+ */
+const settleRepeat = async ({
+  previous,
+  runId,
+  kind,
+  sameContent,
+}: RepeatedStep): Promise<
+  Exclude<StepContentSettlement, { type: "unknown_run" }>
+> => {
+  if (previous.runId !== runId) {
+    return { type: "refused", reason: "other_run" };
+  }
+  const state = storedStateOf(previous.state);
+  if (previous.kind !== kind) {
+    return { type: "refused", reason: "different_content" };
+  }
+  if (state !== stored || (await sameContent(previous))) {
+    return { type: "settled", state };
+  }
+  return { type: "refused", reason: "different_content" };
+};
+
+/** Another run of the thread stored the step first, past this run's lock. */
+const RACED_BY_ANOTHER_RUN = {
+  type: "refused",
+  reason: "other_run",
+} as const satisfies StepContentSettlement;
+
+/**
+ * Insert a step's row; `false` when the step has one. A run's own writes
+ * are serialized on its row, so only another run of the thread can have
+ * written the step since this transaction read it.
+ */
+const insertStep = async (
+  tx: Transaction,
+  values: typeof contents.$inferInsert,
+): Promise<boolean> => {
+  // audit: skip - a turn's own output, stored with the turn the member ran; an image's file records its own create event
+  const inserted = await tx
+    .insert(contents)
+    .values(values)
+    .onConflictDoNothing({ target: [contents.threadId, contents.stepKey] })
+    .returning({ stepKey: contents.stepKey });
+  return inserted.length === 1;
+};
+
 type StoreStepTextOptions = StepOptions & {
   kind: ChatLocalRunStepTextKind;
   /** How many bytes the step produced. */
@@ -140,9 +214,9 @@ type StoreStepTextOptions = StepOptions & {
 };
 
 /**
- * Store a step's text, replacing what the same step stored before. Past what
- * the run may store, the step keeps no text and says so. A step that already
- * stored an image keeps it.
+ * Store a step's text, once. Past what the run may store, the step keeps no
+ * text and says so. The same text sent again answers as stored; other text
+ * for a step that settled is refused.
  */
 export const storeStepText = async (
   db: DesktopRunnerDb,
@@ -163,13 +237,23 @@ export const storeStepText = async (
       return { type: "unknown_run" };
     }
     const previous = await readStored(tx, run, stepKey);
-    if (previous?.kind === "image") {
-      return { type: "settled", state: storedStateOf(previous.state) };
+    if (previous !== null) {
+      return await settleRepeat({
+        previous,
+        runId,
+        kind,
+        sameContent: async ({ textEncrypted, textIv }) =>
+          textEncrypted !== null &&
+          textIv !== null &&
+          (await decryptContent(
+            owner.organizationId,
+            textEncrypted,
+            textIv,
+          )) === text,
+      });
     }
-    const previousBytes = previous?.storedBytes ?? 0;
-    const withoutStep = run.textBytes - previousBytes;
     const fits =
-      withoutStep + storedBytes <=
+      run.textBytes + storedBytes <=
       CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET.textBytes;
     const row = fits
       ? {
@@ -180,33 +264,24 @@ export const storeStepText = async (
           textEncrypted: sealed.ciphertext,
           textIv: sealed.iv,
         }
-      : {
-          kind,
-          outcome: runBudgetReached,
-          totalBytes,
-          storedBytes: 0,
-          textEncrypted: null,
-          textIv: null,
-        };
-    // audit: skip - a turn's own output, stored with the turn the member ran
-    await tx
-      .insert(contents)
-      .values({
-        threadId: run.threadId,
-        stepKey,
-        runId,
-        turnId: run.turnId,
-        ...row,
-      })
-      .onConflictDoUpdate({
-        target: [contents.threadId, contents.stepKey],
-        set: row,
-      });
-    // audit: skip - run bookkeeping for the write above
-    await tx
-      .update(runs)
-      .set({ stepContentTextBytes: withoutStep + row.storedBytes })
-      .where(eq(runs.runId, runId));
+      : { kind, outcome: runBudgetReached, totalBytes, storedBytes: 0 };
+    const inserted = await insertStep(tx, {
+      threadId: run.threadId,
+      stepKey,
+      runId,
+      turnId: run.turnId,
+      ...row,
+    });
+    if (!inserted) {
+      return RACED_BY_ANOTHER_RUN;
+    }
+    if (fits) {
+      // audit: skip - run bookkeeping for the write above
+      await tx
+        .update(runs)
+        .set({ stepContentTextBytes: run.textBytes + storedBytes })
+        .where(eq(runs.runId, runId));
+    }
     return { type: "settled", state: row.outcome };
   });
 };
@@ -231,10 +306,15 @@ export const recordStepTooLarge = async (
     }
     const previous = await readStored(tx, run, stepKey);
     if (previous !== null) {
-      return { type: "settled", state: storedStateOf(previous.state) };
+      // Content is never what a size-only report sends again.
+      return await settleRepeat({
+        previous,
+        runId,
+        kind,
+        sameContent: () => false,
+      });
     }
-    // audit: skip - a turn's own output, stored with the turn the member ran
-    await tx.insert(contents).values({
+    const inserted = await insertStep(tx, {
       threadId: run.threadId,
       stepKey,
       runId,
@@ -244,23 +324,42 @@ export const recordStepTooLarge = async (
       totalBytes,
       storedBytes: 0,
     });
+    if (!inserted) {
+      return RACED_BY_ANOTHER_RUN;
+    }
     return { type: "settled", state: tooLarge };
   });
 
+type StepImageOptions = StepOptions & {
+  /** SHA-256 hex of the image's bytes. */
+  sha256Hex: string;
+};
+
+const sameImage =
+  (sha256Hex: string) =>
+  ({ fileSha256Hex }: StoredStep) =>
+    fileSha256Hex === sha256Hex;
+
 /** Whether a run has room for one more image before its bytes are stored. */
 export type StepImageRoom =
-  | { type: "unknown_run" }
+  | Exclude<StepContentSettlement, { type: "settled" }>
   | { type: "settled"; state: ChatLocalRunStepContentStoredState }
   | { type: "room" };
 
 /**
  * Decide, before an image's bytes are stored as a file, whether its step
- * takes one: not when the step already settled (an image step keeps its
- * first image), and not past the run's images, which the step then says.
+ * takes one: not when the step already settled, and not past the run's
+ * images, which the step then says.
  */
 export const openStepImage = async (
   db: DesktopRunnerDb,
-  { owner, runId, stepKey, totalBytes }: StepOptions & { totalBytes: number },
+  {
+    owner,
+    runId,
+    stepKey,
+    sha256Hex,
+    totalBytes,
+  }: StepImageOptions & { totalBytes: number },
 ): Promise<StepImageRoom> =>
   await withAggregateTransaction(db, async (tx) => {
     const run = await holdRun(tx, { owner, runId });
@@ -269,13 +368,17 @@ export const openStepImage = async (
     }
     const previous = await readStored(tx, run, stepKey);
     if (previous !== null) {
-      return { type: "settled", state: storedStateOf(previous.state) };
+      return await settleRepeat({
+        previous,
+        runId,
+        kind: "image",
+        sameContent: sameImage(sha256Hex),
+      });
     }
     if (run.images < CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET.images) {
       return { type: "room" };
     }
-    // audit: skip - a turn's own output, stored with the turn the member ran
-    await tx.insert(contents).values({
+    const inserted = await insertStep(tx, {
       threadId: run.threadId,
       stepKey,
       runId,
@@ -285,10 +388,13 @@ export const openStepImage = async (
       totalBytes,
       storedBytes: 0,
     });
+    if (!inserted) {
+      return RACED_BY_ANOTHER_RUN;
+    }
     return { type: "settled", state: runBudgetReached };
   });
 
-type StoreStepImageOptions = StepOptions & {
+type StoreStepImageOptions = StepImageOptions & {
   /** The chat file the image was stored as, in the run's thread. */
   userFileId: SafeId<"userFile">;
   sizeBytes: number;
@@ -296,7 +402,7 @@ type StoreStepImageOptions = StepOptions & {
 
 /** How an image settled, and whether the step now names the file. */
 export type StepImageSettlement =
-  | { type: "unknown_run" }
+  | Exclude<StepContentSettlement, { type: "settled" }>
   | {
       type: "settled";
       state: ChatLocalRunStepContentStoredState;
@@ -312,7 +418,14 @@ export type StepImageSettlement =
  */
 export const storeStepImage = async (
   db: DesktopRunnerDb,
-  { owner, runId, stepKey, userFileId, sizeBytes }: StoreStepImageOptions,
+  {
+    owner,
+    runId,
+    stepKey,
+    sha256Hex,
+    userFileId,
+    sizeBytes,
+  }: StoreStepImageOptions,
 ): Promise<StepImageSettlement> =>
   await withAggregateTransaction(db, async (tx) => {
     const run = await holdRun(tx, { owner, runId });
@@ -321,11 +434,15 @@ export const storeStepImage = async (
     }
     const previous = await readStored(tx, run, stepKey);
     if (previous !== null) {
-      return {
-        type: "settled",
-        state: storedStateOf(previous.state),
-        adopted: false,
-      };
+      const repeat = await settleRepeat({
+        previous,
+        runId,
+        kind: "image",
+        sameContent: sameImage(sha256Hex),
+      });
+      return repeat.type === "settled"
+        ? { type: "settled", state: repeat.state, adopted: false }
+        : repeat;
     }
     const file = (
       await tx
@@ -345,8 +462,7 @@ export const storeStepImage = async (
       return { type: "unknown_run" };
     }
     const fits = run.images < CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET.images;
-    // audit: skip - a turn's own output; the file's own create event audits it
-    await tx.insert(contents).values({
+    const inserted = await insertStep(tx, {
       threadId: run.threadId,
       stepKey,
       runId,
@@ -361,6 +477,9 @@ export const storeStepImage = async (
           }
         : { outcome: runBudgetReached, totalBytes: sizeBytes, storedBytes: 0 }),
     });
+    if (!inserted) {
+      return RACED_BY_ANOTHER_RUN;
+    }
     if (!fits) {
       return { type: "settled", state: runBudgetReached, adopted: false };
     }
