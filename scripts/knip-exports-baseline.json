@@ -65,16 +65,5 @@
     "files": {
       "packages/agent-engine/src/harness/skill-folders.ts": 1
     }
-  },
-  "packages/business-registries": {
-    "count": 22,
-    "files": {
-      "packages/business-registries/src/ares/parse.ts": 1,
-      "packages/business-registries/src/ares/types.ts": 7,
-      "packages/business-registries/src/companies-house/types.ts": 1,
-      "packages/business-registries/src/denue/types.ts": 1,
-      "packages/business-registries/src/krs/types.ts": 3,
-      "packages/business-registries/src/orsr/types.ts": 9
-    }
   }
 }

@@ -51,9 +51,6 @@ export const parseAddress = (raw: AresRawAddress): AresAddress => ({
   textAddress: raw.textovaAdresa ?? null,
 });
 
-export const formatTextAddress = (raw: AresRawAddress): string | null =>
-  raw.textovaAdresa || null;
-
 // ---------------------------------------------------------------------------
 // RES record → AresCompany (partial, without VR fields)
 // ---------------------------------------------------------------------------
