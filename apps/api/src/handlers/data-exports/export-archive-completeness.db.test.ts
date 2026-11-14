@@ -226,6 +226,7 @@ const TABLE_CLASSIFICATIONS = {
   chatBrowserSiteGrants: FORMAT_SCOPE_EXCLUSION,
   chatContentV3BackfillReceipts: FORMAT_SCOPE_EXCLUSION,
   chatLimitReminders: FORMAT_SCOPE_EXCLUSION,
+  chatLocalRunStepContents: FORMAT_SCOPE_EXCLUSION,
   chatMessageRevisions: FORMAT_SCOPE_EXCLUSION,
   chatMessageSearchDocuments: FORMAT_SCOPE_EXCLUSION,
   chatMessages: FORMAT_SCOPE_EXCLUSION,

@@ -17,6 +17,7 @@ import {
   type BrowserControlCommand,
   type BrowserControlElement,
   type BrowserControlResult,
+  type BrowserControlSnapshot,
   type BrowserObservedTab,
   parseBrowserControlResult,
 } from "@stll/api-contract/browser-control";
@@ -343,6 +344,27 @@ export const openInNewControlledTab = async (
   }
   await tab.goto(url);
   return successful(await send({ action: "snapshot" }));
+};
+
+/**
+ * Reads on from `snapshot` with each window's `next` cursor until `until`
+ * holds; every window read on the way, the first included.
+ */
+export const readOn = async (
+  send: (command: BrowserControlCommand) => Promise<BrowserControlResult>,
+  snapshot: BrowserControlSnapshot,
+  until: (window: BrowserControlSnapshot) => boolean,
+): Promise<BrowserControlSnapshot[]> => {
+  const windows = [snapshot];
+  for (let current = snapshot; !until(current); ) {
+    const { next } = current.window;
+    if (next === undefined) {
+      return panic("The page ended before the window looked for.");
+    }
+    current = successful(await send({ action: "snapshot", cursor: next }));
+    windows.push(current);
+  }
+  return windows;
 };
 
 export const successful = (result: BrowserControlResult) => {

@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 4,
+  "reason": "Drafting a skill from a chat reads the chat exactly as the recap does: the chat scope check, the recap message window, its transcript builder and the persisted message parts, which all live under handlers/chat. A second reader of the same thread would let the two drift."
+}

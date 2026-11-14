@@ -5,6 +5,8 @@ export type CorpusIndexDesiredAction =
 export const CORPUS_INDEX_INTENT_STATUSES = [
   "reserved",
   "append_started",
+  // Accepted by the engine; publication is proven separately, and only an
+  // exact presence proof moves the revision to `applied`.
   "append_committed",
   "applied",
   "cleanup_pending",
