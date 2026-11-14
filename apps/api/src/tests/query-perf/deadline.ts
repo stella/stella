@@ -3,6 +3,7 @@ import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import type { QueryPerfProfileId } from "./profiles";
 
 const QUERY_PERF_PROFILE_DEADLINE_MS = 150_000;
+const QUERY_PERF_DEADLINE_LABEL = "query-perf-profile-deadline";
 
 type QueryPerfDeadlineOptions = {
   profileId: QueryPerfProfileId;
@@ -34,13 +35,24 @@ export const createQueryPerfDeadline = ({
         if (remainingMs <= 0) {
           throw new TimeoutError({
             message: `${messageLabel} exceeded profile deadline ${timeoutMs}ms`,
-            label: "query-perf-profile-deadline",
+            label: QUERY_PERF_DEADLINE_LABEL,
             timeoutMs,
           });
         }
         const value = await withTimeout(operation, {
-          label: "query-perf-profile-deadline",
+          label: QUERY_PERF_DEADLINE_LABEL,
           timeoutMs: remainingMs,
+        }).catch((error: unknown) => {
+          // The label stays static; the message names the phase it cut.
+          throw error instanceof TimeoutError &&
+            error.label === QUERY_PERF_DEADLINE_LABEL
+            ? new TimeoutError({
+                message: `${messageLabel} exceeded ${String(error.timeoutMs)}ms`,
+                label: QUERY_PERF_DEADLINE_LABEL,
+                timeoutMs: error.timeoutMs,
+                cause: error,
+              })
+            : error;
         });
         process.stdout.write(
           `${JSON.stringify({

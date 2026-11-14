@@ -240,7 +240,7 @@ describe("failure evidence reads identity", () => {
     });
     const lookalike = Object.assign(new Error("expired"), {
       label: "user-controlled",
-      timeoutMs: 1,
+      timeoutMs: 1, // timeout: a lookalike field, never a deadline
     });
 
     expect(readEvidence(timeout).nodes[0]?.timeout).toMatchObject({
