@@ -16,7 +16,13 @@ import {
 import { stableStringify } from "@stll/stable-stringify";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { AlertTriangleIcon, CheckIcon, PlusIcon, XIcon } from "@stll/ui/icons";
+import {
+  AlertTriangleIcon,
+  CheckIcon,
+  PlusIcon,
+  Undo2Icon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -33,9 +39,10 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -59,6 +66,7 @@ import type {
   ImportEditableTextField,
   ImportIssue,
   ImportSkipReason,
+  ImportWarning,
 } from "@/routes/_protected.contacts/-import-candidate";
 
 const VALIDATION_DEBOUNCE_MS = 400;
@@ -88,7 +96,7 @@ export const IMPORT_FIELD_LABELS = {
   notes: "common.notes",
   tags: "templates.tags",
   registration_number: "contacts.fields.registrationNumber",
-  tax_id: "contacts.importStudio.fields.tax_id",
+  tax_id: "common.taxId",
 } as const satisfies Record<ContactImportField, TranslationKey>;
 
 const IMPORT_ISSUE_LABELS = {
@@ -110,6 +118,8 @@ const IMPORT_ISSUE_LABELS = {
     "contacts.importStudio.issue.invalid_tax_id",
   [CONTACT_IMPORT_ISSUE_CODE.INVALID_TYPE]:
     "contacts.importStudio.issue.invalid_type",
+  [CONTACT_IMPORT_ISSUE_CODE.IN_FILE_DUPLICATE]:
+    "contacts.importStudio.issue.in_file_duplicate",
   [CONTACT_IMPORT_ISSUE_CODE.ROW_LENGTH_MISMATCH]:
     "contacts.importStudio.issue.row_length_mismatch",
   [CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED]:
@@ -123,7 +133,9 @@ const IMPORT_ISSUE_LABELS = {
 
 const IMPORT_SKIP_REASON_LABELS = {
   duplicate_contact_id: "contacts.import.skippedDuplicateContactId",
+  duplicate_external_ref: "contacts.import.skippedDuplicateExternalRef",
   duplicate_tax_id: "contacts.import.skippedDuplicateTaxId",
+  in_file_duplicate: "contacts.import.skippedInFileDuplicate",
   invalid_row: "contacts.import.skippedInvalidRow",
   invalid_tax_id: "contacts.import.skippedInvalidTaxId",
   contacts_limit_reached: "contacts.import.skippedLimitReached",
@@ -148,15 +160,19 @@ type ImportReviewSeedRow = {
   issues: ImportIssue[];
   /** Position in the source, kept stable while rows are edited or removed. */
   rowNumber: number;
+  warnings: ImportWarning[];
 };
 
 type ImportReviewRow = ImportReviewSeedRow & {
-  /** The contact id the commit will use; stable so a retry replays. */
+  /** Local identity for editing the reviewed row. */
   id: SafeId<"contact">;
 };
 
 export type ImportReviewResult = { rowNumber: number; displayName: string } & (
-  | { status: "created"; contactId: SafeId<"contact"> }
+  | {
+      status: "created" | "updated" | "unchanged";
+      contactId: SafeId<"contact">;
+    }
   | { status: "skipped"; reason: ImportSkipReason }
 );
 
@@ -185,6 +201,20 @@ type SeedArgs = {
   taxIdScheme: ContactImportTaxIdScheme;
 };
 
+type ValidatedImportRows = NonNullable<
+  Awaited<ReturnType<typeof api.contacts.import.validate.post>>["data"]
+>["rows"];
+
+export const toImportReviewSeedRows = (
+  rows: ValidatedImportRows,
+): ImportReviewSeedRow[] =>
+  rows.map(({ contact, issues, rowNumber, warnings }) => ({
+    candidate: contact,
+    issues,
+    rowNumber,
+    warnings,
+  }));
+
 export type ImportReview = {
   rows: ImportReviewRow[];
   isDirty: boolean;
@@ -211,6 +241,7 @@ export type ImportReview = {
 export const useImportReview = ({
   onImported,
 }: UseImportReviewOptions = {}): ImportReview => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const scope = protectedRouteApi.useRouteContext({
     select: ({ user }) => ({
@@ -235,14 +266,16 @@ export const useImportReview = ({
 
   const requestValidation = async (
     candidates: ImportCandidate[],
+    rowNumbers: number[],
     scheme: ContactImportTaxIdScheme,
   ) =>
     await Result.tryPromise(async () => {
       const response = await api.contacts.import.validate.post({
         taxIdScheme: scheme,
         rows: candidates.map(toWireCandidate),
+        rowNumbers,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
 
   const revalidate = async () => {
@@ -251,13 +284,20 @@ export const useImportReview = ({
     setValidation({ status: "pending" });
     const result = await requestValidation(
       pending.map(({ candidate }) => candidate),
+      pending.map(({ rowNumber }) => rowNumber),
       taxIdScheme,
     );
     if (generation !== validationGeneration.current) {
       return;
     }
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useImportReview.revalidate:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useImportReview.revalidate:failure",
+        },
+      });
       setValidation({
         status: "failed",
         message: userErrorFromThrown(
@@ -304,20 +344,26 @@ export const useImportReview = ({
     taxIdScheme: scheme,
   }: SeedValidatedArgs) => {
     setIsSeeding(true);
-    const result = await requestValidation(candidates, scheme);
+    const result = await requestValidation(
+      candidates,
+      candidates.map((_, index) => index + 1),
+      scheme,
+    );
     setIsSeeding(false);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useImportReview.seedValidated:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useImportReview.seedValidated:failure",
+        },
+      });
       notifyUserError(result.error, t("contacts.importStudio.validateFailed"));
       return false;
     }
     seed({
       taxIdScheme: scheme,
-      rows: result.value.rows.map(({ contact, issues, rowNumber }) => ({
-        candidate: contact,
-        issues,
-        rowNumber,
-      })),
+      rows: toImportReviewSeedRows(result.value.rows),
     });
     return true;
   };
@@ -341,6 +387,7 @@ export const useImportReview = ({
   };
 
   const reset = () => {
+    submit.reset();
     validationGeneration.current += 1;
     scheduleValidation.cancel();
     setRows([]);
@@ -361,24 +408,28 @@ export const useImportReview = ({
     setIsImporting(true);
     const payload = {
       taxIdScheme,
-      rows: validRows.map(({ candidate, id }) => ({
-        id,
-        ...toWireCandidate(candidate),
-      })),
+      rows: validRows.map(({ candidate }) => toWireCandidate(candidate)),
     } satisfies ImportCommitPayload;
 
     const outcome = await Result.tryPromise(async () => {
       const request = await resolveContactImportRequest({ payload, scope });
-      const response = await api.contacts.import.put({
-        importRequestId: request.id,
-        ...payload,
+      const response = await submit.run({
+        operation: "contact-import",
+        send: async (body) => api.contacts.import.put(body),
+        body: {
+          importRequestId: request.id,
+          ...payload,
+        },
       });
-      return { data: unwrapEden(response), request };
+      return { data: unwrapApiResponse(response), request };
     });
     setIsImporting(false);
 
     if (Result.isError(outcome)) {
-      getAnalytics().captureError(outcome.error);
+      getAnalytics().captureError(outcome.error, {
+        fingerprintKey: "useImportReview.commit:failure",
+        scope: { type: "handler", handlerId: "useImportReview.commit:failure" },
+      });
       notifyUserError(outcome.error, t("contacts.importStudio.importFailed"));
       return;
     }
@@ -389,18 +440,18 @@ export const useImportReview = ({
         const row = validRows.at(result.index);
         const rowNumber = row?.rowNumber ?? result.index;
         const displayName = row?.candidate.displayName ?? "";
-        return result.status === "created"
+        return result.status === "skipped"
           ? {
-              rowNumber,
-              displayName,
-              status: "created",
-              contactId: result.contactId,
-            }
-          : {
               rowNumber,
               displayName,
               status: "skipped",
               reason: result.reason,
+            }
+          : {
+              rowNumber,
+              displayName,
+              status: result.status,
+              contactId: result.contactId,
             };
       }),
     );
@@ -437,8 +488,6 @@ type ImportCandidateCardProps = {
   fields: readonly ImportEditableField[];
   onChange: (candidate: ImportCandidate) => void;
   onRemove: () => void;
-  /** 1-based position in the review list; the title falls back to it. */
-  ordinal: number;
 };
 
 /** One reviewed contact, editable, with the issues the server reported on it. */
@@ -447,7 +496,6 @@ export const ImportCandidateCard = ({
   fields,
   onChange,
   onRemove,
-  ordinal,
 }: ImportCandidateCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -476,7 +524,10 @@ export const ImportCandidateCard = ({
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-3">
+    <section
+      className="flex flex-col gap-3 rounded-lg border p-3"
+      id={`import-row-${String(row.rowNumber)}`}
+    >
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-medium">
           {row.issues.length === 0 ? (
@@ -487,14 +538,19 @@ export const ImportCandidateCard = ({
           <span>
             {row.candidate.displayName.trim() ||
               t("contacts.import.rowLabel", {
-                index: format.number(ordinal),
+                index: format.number(row.rowNumber),
               })}
           </span>
-          <span className="text-muted-foreground font-normal">
-            {t("contacts.importStudio.sourceRow", {
-              index: format.number(row.rowNumber),
-            })}
-          </span>
+          {row.candidate.displayName.trim() && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                {t("contacts.importStudio.sourceRow", {
+                  index: format.number(row.rowNumber),
+                })}
+              </span>
+            </>
+          )}
         </h3>
         <Button
           aria-label={t("common.remove")}
@@ -572,6 +628,29 @@ export const ImportCandidateCard = ({
           ),
         )}
       </div>
+
+      {row.warnings.map((warning) => (
+        <p
+          className="text-warning-foreground flex items-center gap-1.5 text-sm"
+          key={`${warning.code}:${warning.column ?? warning.duplicateOfRowNumber ?? "row"}`}
+        >
+          <AlertTriangleIcon className="size-4" />
+          {warning.code === "ignored_populated_column" ? (
+            t("contacts.importStudio.warning.ignored_populated_column", {
+              column: warning.column ?? "",
+            })
+          ) : (
+            <a
+              className="underline"
+              href={`#import-row-${String(warning.duplicateOfRowNumber)}`}
+            >
+              {t("contacts.importStudio.warning.possible_in_file_duplicate", {
+                row: format.number(warning.duplicateOfRowNumber ?? 0),
+              })}
+            </a>
+          )}
+        </p>
+      ))}
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-muted-foreground text-xs font-medium">
@@ -678,49 +757,69 @@ export const ImportCandidateCard = ({
 /** The receipt a commit returns: one line per submitted row. */
 export const ImportResultsList = ({
   results,
+  undoneContactIds,
 }: {
   results: ImportReviewResult[];
+  /** Created contacts a later undo removed; they no longer have a page. */
+  undoneContactIds?: ReadonlySet<string> | undefined;
+}) => (
+  <ul className="flex flex-col gap-1.5 text-sm">
+    {results.map((result) => (
+      <li className="flex items-center gap-1.5" key={result.rowNumber}>
+        <ImportResultLine result={result} undoneContactIds={undoneContactIds} />
+      </li>
+    ))}
+  </ul>
+);
+
+// Each line names the contact; a written one links to its page so the
+// receipt is a way into the imported data, not just a tally.
+const ImportResultLine = ({
+  result,
+  undoneContactIds,
+}: {
+  result: ImportReviewResult;
+  undoneContactIds: ReadonlySet<string> | undefined;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const name =
+    result.displayName ||
+    t("contacts.import.rowLabel", { index: format.number(result.rowNumber) });
 
-  // Each line names the contact; a created one links to its page so the
-  // receipt is a way into the imported data, not just a tally.
+  if (result.status === "skipped") {
+    return (
+      <>
+        <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
+        <span>{name}</span>
+        <span className="text-muted-foreground">
+          {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
+        </span>
+      </>
+    );
+  }
+  if (undoneContactIds?.has(result.contactId)) {
+    return (
+      <>
+        <Undo2Icon className="text-muted-foreground size-4 shrink-0" />
+        <span className="text-muted-foreground">{name}</span>
+        <span className="text-muted-foreground">
+          {t("contacts.importStudio.undoneRow")}
+        </span>
+      </>
+    );
+  }
   return (
-    <ul className="flex flex-col gap-1.5 text-sm">
-      {results.map((result) => (
-        <li className="flex items-center gap-1.5" key={result.rowNumber}>
-          {result.status === "created" ? (
-            <>
-              <CheckIcon className="text-success size-4 shrink-0" />
-              <Link
-                className="hover:underline"
-                params={{ contactId: result.contactId }}
-                to="/contacts/$contactId"
-              >
-                {result.displayName ||
-                  t("contacts.import.rowLabel", {
-                    index: format.number(result.rowNumber),
-                  })}
-              </Link>
-            </>
-          ) : (
-            <>
-              <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
-              <span>
-                {result.displayName ||
-                  t("contacts.import.rowLabel", {
-                    index: format.number(result.rowNumber),
-                  })}
-              </span>
-              <span className="text-muted-foreground">
-                {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
-              </span>
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      <CheckIcon className="text-success size-4 shrink-0" />
+      <Link
+        className="hover:underline"
+        params={{ contactId: result.contactId }}
+        to="/contacts/$contactId"
+      >
+        {name}
+      </Link>
+    </>
   );
 };
 

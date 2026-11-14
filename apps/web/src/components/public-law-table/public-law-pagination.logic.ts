@@ -185,8 +185,7 @@ export type PublicLawPageCount =
       type: "counted";
       /** An estimate is drawn with `~` and read out as approximate. */
       precision:
-        | typeof SEARCH_TOTAL_TYPE.EXACT
-        | typeof SEARCH_TOTAL_TYPE.ESTIMATE;
+        typeof SEARCH_TOTAL_TYPE.EXACT | typeof SEARCH_TOTAL_TYPE.ESTIMATE;
       pages: number;
     }
   | { type: "not_counted" };

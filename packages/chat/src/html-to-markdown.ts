@@ -1,0 +1,359 @@
+import { load } from "@stll/html";
+import { isTag, isText } from "@stll/html/nodes";
+import type { AnyNode, Element } from "@stll/html/nodes";
+
+// Includes `|` so table-cell pipes are escaped in the same pass as backslashes
+// (renders as a literal `|` in GFM/CommonMark), rather than a separate pipe
+// replace that would double-escape the backslashes escapeText already added.
+const INLINE_ESCAPE = /(?<ch>[\\`*_~[\]<>|])/g;
+
+const escapeText = (text: string): string =>
+  text.replace(INLINE_ESCAPE, "\\$<ch>");
+
+// CommonMark's bracketed link-destination form `(<dest>)` tolerates any
+// byte except an unescaped `<`, `>`, or newline, whereas the bare form
+// `(dest)` ends at the first unescaped `)` — a `)` in the href (common in
+// wiki/query-string URLs) would otherwise close the link early.
+// Destinations that the bare form serializes unambiguously stay bare so
+// downstream consumers matching `](#stella-…)` hrefs keep working.
+const LINK_DESTINATION_ESCAPE = /(?<ch>[\\<>])/g;
+const NEEDS_BRACKETED_DESTINATION = /[\s()<>\\]/;
+
+const renderLinkDestination = (href: string): string => {
+  if (!NEEDS_BRACKETED_DESTINATION.test(href)) {
+    return href;
+  }
+  const escaped = href
+    .replace(/\r?\n/g, " ")
+    .replace(LINK_DESTINATION_ESCAPE, "\\$<ch>");
+  return `<${escaped}>`;
+};
+
+const collapseWhitespace = (text: string): string => text.replace(/\s+/g, " ");
+
+const endsWithWhitespace = (text: string): boolean =>
+  text.length === 0 || text.endsWith(" ") || text.endsWith("\n");
+
+const tagNameOf = (node: Element): string => node.tagName.toLowerCase();
+
+const HEADING_LEVELS: Record<string, number> = {
+  h1: 1,
+  h2: 2,
+  h3: 3,
+  h4: 4,
+  h5: 5,
+  h6: 6,
+};
+
+const BLOCK_TAGS = new Set([
+  "blockquote",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "hr",
+  "ol",
+  "p",
+  "pre",
+  "table",
+  "ul",
+]);
+
+const rawText = (node: AnyNode): string => {
+  if (isText(node)) {
+    return node.data;
+  }
+  if (isTag(node)) {
+    if (tagNameOf(node) === "br") {
+      return "\n";
+    }
+    return node.children.map(rawText).join("");
+  }
+  return "";
+};
+
+/**
+ * Wrap inline code so that any backtick run inside the
+ * payload survives intact. CommonMark allows the fence to
+ * be any number of backticks longer than the longest
+ * internal run; pad with one space on each side when the
+ * payload itself starts or ends with a backtick.
+ */
+const wrapInlineCode = (text: string): string => {
+  if (text === "") {
+    return "``";
+  }
+  let longestRun = 0;
+  for (const match of text.matchAll(/`+/g)) {
+    longestRun = Math.max(longestRun, match[0].length);
+  }
+  const fence = "`".repeat(longestRun + 1);
+  const padded =
+    text.startsWith("`") || text.endsWith("`") ? ` ${text} ` : text;
+  return `${fence}${padded}${fence}`;
+};
+
+/**
+ * Where inline output lands. GFM splits a table row on every unescaped `|`
+ * before inline parsing, code spans and link destinations included, so a cell
+ * must escape the pipes those emit raw everywhere else.
+ */
+type InlineContext = "flow" | "table-cell";
+
+const escapeTableCellPipes = (text: string, context: InlineContext): string =>
+  context === "table-cell" ? text.replace(/\|/g, "\\|") : text;
+
+const CODE_HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "|": "&#124;",
+};
+
+/**
+ * Inline code for a table cell. The row splitter drops one backslash before
+ * each `\|`, so code text with its own backslash before a pipe cannot be
+ * written as a code span that keeps both the cell and the text: it is written
+ * as an HTML `<code>` element, which carries the pipe as an entity.
+ */
+const renderTableCellCode = (text: string): string =>
+  text.includes("\\|")
+    ? `<code>${text.replace(/[&<>|]/g, (char) => CODE_HTML_ESCAPES[char] ?? char)}</code>`
+    : escapeTableCellPipes(wrapInlineCode(text), "table-cell");
+
+const renderInlineElement = (el: Element, context: InlineContext): string => {
+  const tag = tagNameOf(el);
+  switch (tag) {
+    case "strong":
+    case "b":
+      return `**${renderInline(el.children, context)}**`;
+    case "em":
+    case "i":
+      return `*${renderInline(el.children, context)}*`;
+    case "del":
+    case "s":
+      return `~~${renderInline(el.children, context)}~~`;
+    case "code":
+      return context === "table-cell"
+        ? renderTableCellCode(rawText(el))
+        : wrapInlineCode(rawText(el));
+    case "br":
+      return "  \n";
+    case "a": {
+      const href = el.attribs["href"] ?? "";
+      return `[${renderInline(el.children, context)}](${escapeTableCellPipes(renderLinkDestination(href), context)})`;
+    }
+    case "u":
+    case "sub":
+    case "sup":
+      return `<${tag}>${renderInline(el.children, context)}</${tag}>`;
+    default:
+      return renderInline(el.children, context);
+  }
+};
+
+const renderInline = (nodes: AnyNode[], context: InlineContext): string => {
+  let out = "";
+  for (const node of nodes) {
+    if (isText(node)) {
+      let collapsed = collapseWhitespace(node.data);
+      if (collapsed.startsWith(" ") && endsWithWhitespace(out)) {
+        collapsed = collapsed.slice(1);
+      }
+      out += escapeText(collapsed);
+      continue;
+    }
+    if (isTag(node)) {
+      out += renderInlineElement(node, context);
+    }
+  }
+  return out;
+};
+
+const renderMixed = (nodes: AnyNode[]): string => {
+  const blocks: string[] = [];
+  let inlineRun: AnyNode[] = [];
+
+  const flushInline = (): void => {
+    if (inlineRun.length === 0) {
+      return;
+    }
+    const text = renderInline(inlineRun, "flow").trim();
+    if (text) {
+      blocks.push(text);
+    }
+    inlineRun = [];
+  };
+
+  for (const node of nodes) {
+    if (isTag(node) && BLOCK_TAGS.has(tagNameOf(node))) {
+      flushInline();
+      const block = renderBlock(node);
+      if (block) {
+        blocks.push(block);
+      }
+      continue;
+    }
+    inlineRun.push(node);
+  }
+  flushInline();
+
+  return blocks.join("\n\n");
+};
+
+const renderListItem = (li: Element): string => renderMixed(li.children).trim();
+
+const renderList = (el: Element, ordered: boolean): string => {
+  const items = el.children.filter(
+    (c): c is Element => isTag(c) && tagNameOf(c) === "li",
+  );
+  return items
+    .map((li, index) => {
+      const marker = ordered ? `${index + 1}. ` : "- ";
+      const indent = " ".repeat(marker.length);
+      const content = renderListItem(li);
+      return marker + content.replace(/\n/g, () => `\n${indent}`);
+    })
+    .join("\n");
+};
+
+const renderTableCell = (cell: Element): string =>
+  // Pipes are escaped upstream (escapeText for text, the "table-cell" context
+  // for code and link destinations); here we only flatten embedded newlines so
+  // a cell stays on one table row.
+  renderInline(cell.children, "table-cell").replace(/\n/g, " ");
+
+const collectTableRows = (parent: Element): string[][] => {
+  const rows: string[][] = [];
+  for (const child of parent.children) {
+    if (!isTag(child)) {
+      continue;
+    }
+    const tag = tagNameOf(child);
+    if (tag === "thead" || tag === "tbody" || tag === "tfoot") {
+      rows.push(...collectTableRows(child));
+      continue;
+    }
+    if (tag !== "tr") {
+      continue;
+    }
+    const cells: string[] = [];
+    for (const cell of child.children) {
+      if (
+        isTag(cell) &&
+        (tagNameOf(cell) === "th" || tagNameOf(cell) === "td")
+      ) {
+        cells.push(renderTableCell(cell));
+      }
+    }
+    rows.push(cells);
+  }
+  return rows;
+};
+
+const findTableCaption = (el: Element): string => {
+  const caption = el.children.find(
+    (c): c is Element => isTag(c) && tagNameOf(c) === "caption",
+  );
+  return caption ? renderInline(caption.children, "flow").trim() : "";
+};
+
+const renderTable = (el: Element): string => {
+  const rows = collectTableRows(el);
+  if (rows.length === 0) {
+    return "";
+  }
+  const colCount = Math.max(...rows.map((r) => r.length));
+  const padded = rows.map((row) => {
+    const copy = Array.from(row);
+    while (copy.length < colCount) {
+      copy.push("");
+    }
+    return copy;
+  });
+  const [header = [], ...body] = padded;
+  const tableLines = [
+    `| ${header.join(" | ")} |`,
+    `| ${header.map(() => "---").join(" | ")} |`,
+    ...body.map((row) => `| ${row.join(" | ")} |`),
+  ];
+  const caption = findTableCaption(el);
+  // Markdown has no native caption; render it as a bold line
+  // before the table so it survives the round-trip without
+  // being silently dropped.
+  return caption
+    ? `**${caption}**\n\n${tableLines.join("\n")}`
+    : tableLines.join("\n");
+};
+
+const renderBlock = (el: Element): string => {
+  const tag = tagNameOf(el);
+  const headingLevel = HEADING_LEVELS[tag];
+  if (headingLevel !== undefined) {
+    return `${"#".repeat(headingLevel)} ${renderInline(el.children, "flow").trim()}`;
+  }
+  switch (tag) {
+    case "p":
+      return renderInline(el.children, "flow").trim();
+    case "hr":
+      return "---";
+    case "blockquote": {
+      const inner = renderChildren(el.children).trim();
+      if (!inner) {
+        return "";
+      }
+      return inner
+        .split("\n")
+        .map((line) => `> ${line}`.trimEnd())
+        .join("\n");
+    }
+    case "pre": {
+      const codeEl = el.children.find(
+        (c): c is Element => isTag(c) && tagNameOf(c) === "code",
+      );
+      const lang =
+        codeEl?.attribs["class"]?.match(/language-(?<lang>\S+)/)?.groups?.[
+          "lang"
+        ] ?? "";
+      const text = trimTrailingNewlines(rawText(codeEl ?? el));
+      return `\`\`\`${lang}\n${text}\n\`\`\``;
+    }
+    case "ul":
+      return renderList(el, false);
+    case "ol":
+      return renderList(el, true);
+    case "table":
+      return renderTable(el);
+    default:
+      return renderChildren(el.children).trim();
+  }
+};
+
+const renderChildren = (nodes: AnyNode[]): string => renderMixed(nodes);
+
+const trimTrailingNewlines = (text: string): string => {
+  let end = text.length;
+  while (text[end - 1] === "\n") {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
+
+/**
+ * Convert sanitized HTML to GFM-flavored Markdown.
+ *
+ * Inputs come from cheerio with an upstream allowlist
+ * sanitizer; tags outside the allowlist are unwrapped
+ * (children rendered, tag dropped). Output ends with a
+ * single trailing newline when non-empty.
+ */
+export const htmlToMarkdown = (html: string): string => {
+  if (!html.trim()) {
+    return "";
+  }
+  const $ = load(html, undefined, false);
+  const body = renderChildren($.root().contents().toArray());
+  return body ? `${body}\n` : "";
+};

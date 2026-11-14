@@ -25,8 +25,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   elementName,
-  getImportLocalName,
   getImportedName,
+  getImportLocalName,
   isAstNode,
   jsxName,
 } from "./utils.ts";

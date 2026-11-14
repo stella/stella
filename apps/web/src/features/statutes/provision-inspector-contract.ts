@@ -101,7 +101,7 @@ export const provisionTabId = ({
 }: ProvisionTabKey): string => `${PROVISION_VIEW}:${documentId}:${anchorId}`;
 
 /** A short tab label: the provision, then the act it sits in. */
-export const provisionTabLabel = ({
+const provisionTabLabel = ({
   provisionLabel,
   statuteTitle,
 }: Pick<ProvisionViewPayload, "provisionLabel" | "statuteTitle">): string =>

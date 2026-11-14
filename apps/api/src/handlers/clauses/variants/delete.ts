@@ -1,14 +1,14 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 import { deleteVariantHandler } from "../variants";
 
-const deleteVariantParamsSchema = t.Object({
-  clauseId: tSafeId("clause"),
-  variantId: tSafeId("clauseVariant"),
+const deleteVariantParamsSchema = v.object({
+  clauseId: resourceIdSchema("clause"),
+  variantId: resourceIdSchema("clauseVariant"),
 });
 
 const config = {

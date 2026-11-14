@@ -1,14 +1,15 @@
 import { Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import type {
+  CleanScanResult,
   ContentBox,
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
-  CleanScanResult,
 } from "./types";
 import { ScanEngineError } from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
@@ -69,9 +70,13 @@ type WorkerEngineOptions = {
 const loadWasmBindings = async () => {
   const response = await fetchWithTimeout(
     new URL("../generated/scan_engine_bg.wasm", import.meta.url),
-    { timeout: { type: "idle", ms: WASM_LOAD_TIMEOUT_MS } },
+    { timeout: { type: "headers", ms: WASM_LOAD_TIMEOUT_MS } },
   );
-  const module = await WebAssembly.compile(await response.arrayBuffer());
+  const module = await WebAssembly.compile(
+    await readBodyWithIdleDeadline(response, {
+      idleMs: WASM_LOAD_TIMEOUT_MS,
+    }),
+  );
   initSync({ module });
   return { clean_scan_rgba };
 };

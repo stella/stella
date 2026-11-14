@@ -1,9 +1,15 @@
+// parser-output-unchanged: [cz-regional] recapture upgrades a document-only stored payload to the crawl's envelope; crawl and replay build decisions as before.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
 // parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: [cz-regional] rawHash comes from the sourceFingerprint owner, equal to the previous envelope hash for a source that stores no objects.
 import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
@@ -18,36 +24,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
@@ -61,8 +37,8 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
@@ -76,18 +52,18 @@ import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fing
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
   READ_OUTCOME_METADATA_KEY,
+  type ReadOutcome,
   readPresent,
   readUnavailable,
-  storedReadUnavailable,
-  type ReadOutcome,
   type StoredReadOutcome,
+  storedReadUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
@@ -99,6 +75,41 @@ import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
+  listingIdentityKey,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationListingItem,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawRecaptureInput,
+  StoredRawRecaptureOutcome,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -378,7 +389,6 @@ type CzRegionalFinaldoc = {
     affectedDocs?: unknown;
     regulations?: unknown[] | null;
     flags?: string[] | null;
-    [key: string]: unknown;
   } | null;
 };
 
@@ -542,6 +552,59 @@ const czRegionalIdentityItem = (raw: unknown): CzRegionalApiItem | null => {
     jednaciCislo,
     soud,
     ...(typeof raw["odkaz"] === "string" ? { odkaz: raw["odkaz"] } : {}),
+    // The docket's registry spelling comes from the row's ECLI, so the
+    // identity reads it too and keys the row by the same docket.
+    ...(typeof raw["ecli"] === "string" ? { ecli: raw["ecli"] } : {}),
+  };
+};
+
+/** `16 CO 179/2022`: senate, registry, number and year of a regional docket. */
+const REGIONAL_DOCKET =
+  /^(?<senate>\d+) (?<registry>\p{L}+) (?<number>\d+)\/(?<year>\d{4})$/u;
+
+/**
+ * The docket and sheet of a listing row, the registry spelled as the court
+ * spells it. The listing prints the registry in capitals (`16 CO 179/2022`)
+ * while the court's own ECLI keeps its spelling (`…:16.Co.179.2022.1`), and
+ * the same court's rows otherwise read both ways. The ECLI's spelling is
+ * taken only when its senate, number and year are this docket's, so an ECLI
+ * filed against another decision never renames the docket. The listing row
+ * and its identity both read through here, so a row is keyed by the docket it
+ * is stored under.
+ */
+export const czRegionalCaseNumberOf = (
+  item: Pick<CzRegionalApiItem, "ecli"> & { jednaciCislo: string },
+): { caseNumber: string; sheetNumber: string | undefined } => {
+  const reference = splitCaseReference(item.jednaciCislo);
+  const docket = REGIONAL_DOCKET.exec(reference.caseNumber)?.groups;
+  const senate = docket?.["senate"];
+  const printedRegistry = docket?.["registry"];
+  const number = docket?.["number"];
+  const year = docket?.["year"];
+  // ECLI:CZ:KSOS:2022:16.Co.179.2022.1: the fifth part names the docket.
+  const ecliDocket = toOptionalValue(item.ecli)?.split(":").at(4);
+  if (ecliDocket === undefined) {
+    return reference;
+  }
+  const [ecliSenate, ecliRegistry, ecliNumber, ecliYear] =
+    ecliDocket.split(".");
+  if (
+    senate === undefined ||
+    printedRegistry === undefined ||
+    number === undefined ||
+    year === undefined ||
+    ecliRegistry === undefined ||
+    ecliSenate !== senate ||
+    ecliNumber !== number ||
+    ecliYear !== year ||
+    ecliRegistry.toLocaleLowerCase("cs") !==
+      printedRegistry.toLocaleLowerCase("cs")
+  ) {
+    return reference;
+  }
+  return {
+    ...reference,
+    caseNumber: `${senate} ${ecliRegistry} ${number}/${year}`,
   };
 };
 
@@ -710,8 +773,7 @@ const retryFinaldocRead = async (
  * publisher's document path, which is never requested.
  */
 type CzRegionalFinaldocRead =
-  | ReadOutcome<CzRegionalDocumentPayload>
-  | { readonly type: "link-rejected" };
+  ReadOutcome<CzRegionalDocumentPayload> | { readonly type: "link-rejected" };
 
 /**
  * Fetch the document payload from /api/finaldoc/{uuid}.
@@ -1031,7 +1093,10 @@ export const czRegionalListingIdentity = (raw: unknown): ListingIdentity => {
   }
   return {
     type: "case-number",
-    caseNumber: splitCaseReference(item.jednaciCislo).caseNumber,
+    caseNumber: czRegionalCaseNumberOf({
+      ...item,
+      jednaciCislo: item.jednaciCislo,
+    }).caseNumber,
     language: CZ_REGIONAL_LANGUAGE,
   };
 };
@@ -1173,7 +1238,10 @@ export const assembleCzRegionalDecision = ({
   }
 
   // This source publishes the docket with the sheet number appended.
-  const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
+  const { caseNumber, sheetNumber } = czRegionalCaseNumberOf({
+    ...item,
+    jednaciCislo: item.jednaciCislo,
+  });
   const publishedDocumentUrl = toOptionalValue(item.odkaz);
   const documentUrl = publishedDocumentUrl
     ? restrictCzRegionalFinaldocUrl(publishedDocumentUrl)
@@ -1459,7 +1527,10 @@ export const buildCzRegionalDecision = async (
   if (publishedDocumentUrl === undefined) {
     return assembleCzRegionalDecision({ item, document: null, chain: null });
   }
-  const caseNumber = splitCaseReference(item.jednaciCislo).caseNumber;
+  const caseNumber = czRegionalCaseNumberOf({
+    ...item,
+    jednaciCislo: item.jednaciCislo,
+  }).caseNumber;
   const finaldoc = finaldocOf({
     read: await fetchFinaldoc(publishedDocumentUrl, caseNumber, signal),
     caseNumber,
@@ -1501,34 +1572,36 @@ type CursorState = {
   emptyDays: number;
 };
 
-const parseCursor = (cursor: string): CursorState => {
+const parseCursor = (cursor: string) => {
   // Format: "YYYY-MM-DD:page" or "YYYY-MM-DD:page:emptyDays"
   const parts = cursor.split(":");
   if (parts.length >= 3) {
-    // New format with emptyDays counter
     const date = parts.slice(0, -2).join(":");
-    const page = Number.parseInt(parts.at(-2) ?? "0", 10);
-    const emptyDays = Number.parseInt(parts.at(-1) ?? "0", 10);
-    return {
-      date: date || cursor,
-      page: Number.isNaN(page) ? 0 : page,
-      emptyDays: Number.isNaN(emptyDays) ? 0 : emptyDays,
-    };
+    return parseIntegerToken(parts.at(-2), { sign: "unsigned" }).andThen(
+      (page) =>
+        parseIntegerToken(parts.at(-1), { sign: "unsigned" }).map(
+          (emptyDays) => ({
+            date: date || cursor,
+            page,
+            emptyDays,
+          }),
+        ),
+    );
   }
 
   const colonIdx = cursor.lastIndexOf(":");
   if (colonIdx === -1) {
-    return { date: cursor, page: 0, emptyDays: 0 };
+    return Result.ok({ date: cursor, page: 0, emptyDays: 0 });
   }
 
   const date = cursor.slice(0, colonIdx);
-  const page = Number.parseInt(cursor.slice(colonIdx + 1), 10);
-
-  return {
+  return parseIntegerToken(cursor.slice(colonIdx + 1), {
+    sign: "unsigned",
+  }).map((page) => ({
     date,
-    page: Number.isNaN(page) ? 0 : page,
+    page,
     emptyDays: 0,
-  };
+  }));
 };
 
 const makeCursor = (state: CursorState): string =>
@@ -1850,6 +1923,16 @@ const SOURCE_FIELDS = [
  * its own ECLI and dates, and a listing row reached without its document is
  * the only statement of the judge, the keywords and the statutes in words.
  */
+type CzRegionalPublisherRecord = Readonly<
+  Record<
+    | (typeof SOURCE_FIELDS)[number]
+    | `listing.${keyof CzRegionalApiItem}`
+    | `document.${keyof CzRegionalFinaldoc}`
+    | `document.metadata.${keyof NonNullable<CzRegionalFinaldoc["metadata"]>}`,
+    unknown
+  >
+>;
+
 const CZ_REGIONAL_SOURCE_FIELDS = {
   "listing.jednaciCislo": {
     disposition: "stored",
@@ -1913,7 +1996,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "document" },
   },
   "document.styles": { disposition: "stored", target: { type: "document" } },
-  "document.metadata": excludedSourceField(
+  "document.metadata": legacyExcludedSourceField(
     "the object holding the thirteen metadata keys below, each of which carries its own disposition",
   ),
   "document.texts[].text": {
@@ -1930,20 +2013,20 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.tableCellInfo": excludedSourceField(
+  "document.tableCellInfo": legacyExcludedSourceField(
     "a paragraph's placement inside a table; every payload sampled states it as null, so the shape a non-null value would take is unstated and nothing can be read from it",
   ),
   "document.styles[].localId": {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.styles[].alignment": excludedSourceField(
+  "document.styles[].alignment": legacyExcludedSourceField(
     "how the paragraph was aligned on the printed page; the document model carries the text and its emphasis, not its layout",
   ),
-  "document.styles[].hasSpaceBefore": excludedSourceField(
+  "document.styles[].hasSpaceBefore": legacyExcludedSourceField(
     "vertical spacing above the paragraph on the printed page, which the document model does not represent",
   ),
-  "document.styles[].hasSpaceAfter": excludedSourceField(
+  "document.styles[].hasSpaceAfter": legacyExcludedSourceField(
     "vertical spacing below the paragraph on the printed page, which the document model does not represent",
   ),
   "document.styles[].bold": {
@@ -2036,7 +2119,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "metadata", key: "affectingDocs" },
   },
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof CzRegionalPublisherRecord,
   SourceFieldDisposition
 >;
 
@@ -2186,6 +2269,161 @@ const reparseCzRegionalStoredRaw = (
     };
   }
   return { type: "parsed", result: built.decision };
+};
+
+/**
+ * The media type rows carried before this adapter stored an envelope: the
+ * document payload alone, without the listing row that keyed it.
+ */
+const CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE = "application/json";
+
+const PUBLICATION_DAY = /^\d{4}-\d{2}-\d{2}/u;
+
+/**
+ * The day listing that names a document-only row: its publication day, which
+ * the document payload states and the opendata endpoint is addressed by.
+ */
+const czRegionalRecaptureLookupOf = (
+  stored: StoredRawReparseInput,
+): string | null => {
+  if (stored.contentType !== CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE) {
+    return null;
+  }
+  const document = readCzRegionalDocument(new TextDecoder().decode(stored.raw));
+  const publishedAt = toOptionalValue(document.parsed?.metadata?.publishedAt);
+  return publishedAt === undefined
+    ? null
+    : (PUBLICATION_DAY.exec(publishedAt)?.[0] ?? null);
+};
+
+/**
+ * The publisher's id of the decision a document-only row holds: the id the
+ * held document states. The row's own id came from the crawl's listing, not
+ * from the bytes, so it alone never proves which document the row holds.
+ */
+const czRegionalHeldDocumentId = (
+  stored: StoredRawReparseInput,
+): string | undefined =>
+  stored.contentType === CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE
+    ? toOptionalValue(
+        readCzRegionalDocument(new TextDecoder().decode(stored.raw)).parsed
+          ?.uuid,
+      )
+    : undefined;
+
+/**
+ * Whether a listed item is the stored row, by the identity rule the crawl and
+ * the reconciliation key rows by: the publisher's document id where the row
+ * or its held document states one, the docket otherwise.
+ */
+const czRegionalMatchesStored = (
+  item: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const listed = listingIdentityKey(item.identity);
+  const sourceDocumentId =
+    stored.sourceDocumentId ?? czRegionalHeldDocumentId(stored);
+  const held = listingIdentityKey(
+    sourceDocumentId === undefined
+      ? {
+          type: "case-number",
+          caseNumber: stored.caseNumber,
+          language: CZ_REGIONAL_LANGUAGE,
+        }
+      : { type: "document", sourceDocumentId },
+  );
+  return listed !== null && listed === held;
+};
+
+const sameDocket = (left: string, right: string): boolean =>
+  left.toLocaleLowerCase("cs") === right.toLocaleLowerCase("cs");
+
+/**
+ * Upgrade a document-only row to the envelope the crawl stores today, from the
+ * day listing's own row for it.
+ *
+ * The envelope comes out of {@link assembleCzRegionalDecision}, the builder the
+ * crawl uses, so a recaptured row and a freshly crawled one store the same
+ * bytes. The listed row has to be proved to name the decision the held
+ * document is: the held document states its id, the listing links that id,
+ * the row's own id (where it holds one) is the same, and the docket is the
+ * row's. A docket alone proves nothing, so anything less is reported rather
+ * than written.
+ */
+const recaptureCzRegionalStoredRaw = ({
+  listingPayload,
+  stored,
+}: StoredRawRecaptureInput): StoredRawRecaptureOutcome => {
+  if (stored.contentType !== CZ_REGIONAL_DOCUMENT_ONLY_CONTENT_TYPE) {
+    return {
+      type: "not-recapturable",
+      detail: `stored under ${stored.contentType ?? "no content type"}, which keeps its listing row already or holds no document`,
+    };
+  }
+  const read = readCzRegionalListingItem(listingPayload);
+  if (read.type === "unidentifiable") {
+    return {
+      type: "not-recapturable",
+      detail: "the listed item states no docket and court",
+    };
+  }
+  const document = readCzRegionalDocument(new TextDecoder().decode(stored.raw));
+  const heldDocumentId = toOptionalValue(document.parsed?.uuid);
+  if (heldDocumentId === undefined) {
+    return {
+      type: "not-recapturable",
+      detail:
+        "the held document states no id, so no listed item is provably its own",
+    };
+  }
+  if (
+    stored.sourceDocumentId !== null &&
+    stored.sourceDocumentId !== heldDocumentId
+  ) {
+    return {
+      type: "identity-mismatch",
+      detail: `the row names ${stored.sourceDocumentId}, the held document is ${heldDocumentId}`,
+    };
+  }
+  const listedDocumentId = documentIdFromLink(toOptionalValue(read.item.odkaz));
+  if (listedDocumentId === undefined) {
+    return {
+      type: "not-recapturable",
+      detail: `the listed item links no document, so it is not provably ${heldDocumentId}`,
+    };
+  }
+  if (listedDocumentId !== heldDocumentId) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing links ${listedDocumentId}, the held document is ${heldDocumentId}`,
+    };
+  }
+  const built = assembleCzRegionalDecision({
+    item: read.item,
+    rawListing: listingPayload,
+    document,
+    chain: null,
+  });
+  if (built.type === "unkeyable") {
+    return {
+      type: "not-recapturable",
+      detail: "the listed item and the held document name no court decision",
+    };
+  }
+  const { decision } = built;
+  if (!sameDocket(decision.caseNumber, stored.caseNumber)) {
+    return {
+      type: "identity-mismatch",
+      detail: `the listing states ${decision.caseNumber}, the row ${stored.caseNumber}`,
+    };
+  }
+  return decision.sourceRaw === undefined
+    ? panic("The regional assembler built a decision without its envelope")
+    : {
+        type: "recaptured",
+        raw: decision.sourceRaw,
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      };
 };
 
 /**
@@ -2587,11 +2825,25 @@ export const czRegionalAdapter = defineSourceAdapter({
     // for is not marked and stays held: there is nothing left to ask for, and
     // re-listing it on every pass would never let the day settle.
     heldRequiresDetail: true,
+    // Rows stored before the envelope hold the document alone; the day
+    // listing restates the row that keyed them.
+    recapture: {
+      lookupOf: czRegionalRecaptureLookupOf,
+      listLookup: listCzRegionalSlicePage,
+      matchesStored: czRegionalMatchesStored,
+      recaptureStoredRaw: recaptureCzRegionalStoredRaw,
+    },
     listSlicePage: listCzRegionalSlicePage,
     buildDecision: buildCzRegionalFromPayload,
   },
 
   async fetchPage(cursor, _config, signal) {
+    const cursorState = cursor ? parseCursor(cursor) : Result.ok(null);
+    if (cursorState.isErr()) {
+      return Result.err(
+        adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor)(cursorState.error),
+      );
+    }
     return await Result.tryPromise({
       try: async () => {
         const readBudget = AbortSignal.timeout(CZ_REGIONAL_PAGE_READ_BUDGET_MS);
@@ -2603,9 +2855,11 @@ export const czRegionalAdapter = defineSourceAdapter({
         const readBudgetSpent = (): boolean =>
           readBudget.aborted && signal?.aborted !== true;
 
-        const state: CursorState = cursor
-          ? parseCursor(cursor)
-          : { date: defaultDate(), page: 0, emptyDays: 0 };
+        const state = cursorState.value ?? {
+          date: defaultDate(),
+          page: 0,
+          emptyDays: 0,
+        };
 
         const fetchT0 = performance.now();
 
@@ -2641,6 +2895,7 @@ export const czRegionalAdapter = defineSourceAdapter({
             const next = advanceDate(state.date, skip);
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor:
                 next <= today
                   ? makeCursor({ date: next, page: 0, emptyDays: empty })
@@ -2691,6 +2946,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: refused },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: nextCzRegionalListingCursor({
             state,
             totalPages: json.totalPages,

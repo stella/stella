@@ -5,9 +5,7 @@ import type { PublicCrawlOptions } from "@/public-crawl-policy";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type CacheClass =
-  | "private-no-store"
-  | "public-anonymous"
-  | "public-indexable";
+  "private-no-store" | "public-anonymous" | "public-indexable";
 
 export const SSR_CACHE_CLASS_HEADER = "x-stella-cache-class";
 
@@ -26,6 +24,10 @@ export const ROUTE_CACHE_CLASSES = {
   "/chat": "private-no-store",
   "/settings": "private-no-store",
   "/time": "private-no-store",
+  "/time/approvals": "private-no-store",
+  "/time/report": "private-no-store",
+  "/auth/handoff": "private-no-store",
+  "/auth/reauth": "private-no-store",
   "/auth/error": "private-no-store",
   "/auth/organization": "private-no-store",
   "/auth/otp": "private-no-store",
@@ -39,6 +41,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/knowledge/workflows": "private-no-store",
   "/law/coverage": "public-indexable",
   "/mcp/oauth-callback": "private-no-store",
+  "/sharepoint/oauth-callback": "private-no-store",
   "/sitemaps/law.xml": "public-anonymous",
   "/sitemaps/tools.xml": "public-anonymous",
   "/tools/$slug": "public-indexable",
@@ -48,6 +51,9 @@ export const ROUTE_CACHE_CLASSES = {
   "/law/": "public-indexable",
   "/tools/": "public-indexable",
   "/admin": "private-no-store",
+  "/settings/organization": "private-no-store",
+  "/contacts": "private-no-store",
+  "/workspaces": "private-no-store",
   "/workspaces/$workspaceId": "private-no-store",
   "/chat/$threadId": "private-no-store",
   "/chat/new": "private-no-store",
@@ -75,19 +81,33 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings/account/memory": "private-no-store",
   "/settings/account/profile": "private-no-store",
   "/admin/general": "private-no-store",
+  "/settings/organization/general": "private-no-store",
   "/admin/tools": "private-no-store",
+  "/settings/organization/tools": "private-no-store",
   "/admin/ai": "private-no-store",
+  "/settings/organization/ai": "private-no-store",
   "/admin/billing": "private-no-store",
+  "/settings/organization/billing": "private-no-store",
   "/admin/anonymization": "private-no-store",
+  "/settings/organization/anonymization": "private-no-store",
   "/admin/audit-logs": "private-no-store",
+  "/settings/organization/audit-logs": "private-no-store",
   "/admin/catalogue": "private-no-store",
+  "/settings/organization/catalogue": "private-no-store",
   "/admin/document-types": "private-no-store",
+  "/settings/organization/document-types": "private-no-store",
   "/admin/matter-numbering": "private-no-store",
+  "/settings/organization/matter-numbering": "private-no-store",
   "/admin/members": "private-no-store",
+  "/settings/organization/members": "private-no-store",
   "/admin/number-series": "private-no-store",
+  "/settings/organization/number-series": "private-no-store",
   "/admin/time-policy": "private-no-store",
+  "/settings/organization/time-policy": "private-no-store",
   "/admin/usage": "private-no-store",
+  "/settings/organization/usage": "private-no-store",
   "/admin/vat-rates": "private-no-store",
+  "/settings/organization/vat-rates": "private-no-store",
   "/workspaces/$workspaceId/expenses": "private-no-store",
   "/workspaces/$workspaceId/invoices": "private-no-store",
   "/workspaces/$workspaceId/lists": "private-no-store",
@@ -98,6 +118,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/law/cases/research/$tableId": "private-no-store",
   "/sitemaps/law-statutes/$country/{$bucket}.xml": "public-anonymous",
   "/admin/": "private-no-store",
+  "/settings/organization/": "private-no-store",
   "/workspaces/$workspaceId/": "private-no-store",
   "/law/$country/statutes/": "public-indexable",
   "/law/cases/research/": "private-no-store",
@@ -151,6 +172,12 @@ export const documentResponsePolicyHeaders = ({
   match,
   crawl,
 }: DocumentResponsePolicyOptions) => {
+  if (match?.fullPath === "/auth/handoff") {
+    return {
+      ...ssrCacheClassHeaders("private-no-store"),
+      "Referrer-Policy": "no-referrer",
+    };
+  }
   if (!match || match.ssr === false || match.status !== "success") {
     return ssrCacheClassHeaders("private-no-store");
   }

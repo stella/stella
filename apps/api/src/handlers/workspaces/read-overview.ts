@@ -1,35 +1,28 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import { readOverviewAgenda } from "@/api/handlers/workspaces/read-overview-agenda.query";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadOverviewHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  /** The reader's local date for the agenda; the database's today if absent. */
-  agendaFrom?: string | undefined;
 };
 
 export const readOverviewHandler = async ({
-  scopedDb,
+  safeDb,
   workspaceId,
-  agendaFrom,
 }: ReadOverviewHandlerProps) => {
-  const [
-    { entityCount, documentCount, taskCount, recentEntities },
-    upcomingAgenda,
-  ] = await Promise.all([
-    scopedDb(async (tx) => {
-      const [totals, recent] = await Promise.all([
+  const overview = await safeDb(async (tx) => {
+    const [[totals, recent], upcomingAgenda] = await Promise.all([
+      Promise.all([
         tx
           .select({
             entityCount: sql<number>`count(*)::int`,
             documentCount: sql<number>`count(*) filter (where ${entities.kind} = 'document')::int`,
-            taskCount: sql<number>`count(*) filter (where ${entities.kind} = 'task')::int`,
           })
           .from(entities)
           .where(eq(entities.workspaceId, workspaceId))
@@ -107,83 +100,96 @@ export const readOverviewHandler = async ({
           orderBy: { updatedAt: "desc" },
           limit: LIMITS.overviewRecentEntities,
         }),
-      ]);
-      return {
-        entityCount: totals.entityCount,
-        documentCount: totals.documentCount,
-        taskCount: totals.taskCount,
-        recentEntities: recent,
-      };
-    }),
-    readOverviewAgenda({ scopedDb, workspaceId, agendaFrom }),
-  ]);
-
-  const recent = recentEntities.map((e) => {
-    const cv = e.currentVersion ?? panic("Entity has no currentVersion");
-    // Prefer the file field so document rows render the right mime
-    // icon and click-to-open works.
-    const primaryField =
-      cv.fields.find((f) => f.content.type === "file") ?? cv.fields.at(0);
-    let name = e.name;
-    let mimeType: string | null = null;
-    let fieldId: string | null = null;
-    let propertyId: string | null = null;
-    let pdfFileId: string | null = null;
-    if (primaryField) {
-      fieldId = primaryField.id;
-      propertyId = primaryField.propertyId;
-      const c = primaryField.content;
-      if (c.type === "text") {
-        name = c.value;
-      } else if (c.type === "file") {
-        // The entity's own name is what read_document and list_documents
-        // report; the current version's file name only labels a document that
-        // has none (the display_name trigger's rule), so uploading a new
-        // version does not appear to rename the document here.
-        name = e.name || c.fileName;
-        mimeType = c.mimeType;
-        pdfFileId = c.pdfFileId;
-      }
-    }
-
-    // Prefer last editor over original creator for the activity feed
-    const editor = e.lastEditedByUser ?? e.createdByUser;
-    const displayName = editor ? editor.name || editor.email : null;
-    const primaryAssignee = e.assignees.at(0)?.user;
-    const assigneeName = primaryAssignee
-      ? primaryAssignee.name || primaryAssignee.email
-      : null;
+      ]),
+      readOverviewAgenda({ tx, workspaceId }),
+    ]);
 
     return {
-      entityId: e.id,
-      name,
-      kind: e.kind,
-      status: e.status,
-      priority: e.priority,
-      listItemType: e.listItemType,
-      dueDate: e.dueDate,
-      mimeType,
-      fieldId,
-      propertyId,
-      pdfFileId,
-      encrypted:
-        primaryField?.content.type === "file" && primaryField.content.encrypted,
-      createdAt: e.createdAt.toISOString(),
-      updatedAt: e.updatedAt?.toISOString() ?? null,
-      createdBy: displayName,
-      createdByImage: editor?.image ?? null,
-      createdByDeletedAt: editor?.deletedAt?.toISOString() ?? null,
-      assignedTo: assigneeName,
-      assignedToImage: primaryAssignee?.image ?? null,
-      assignedToDeletedAt: primaryAssignee?.deletedAt?.toISOString() ?? null,
+      entityCount: totals.entityCount,
+      documentCount: totals.documentCount,
+      taskCount: upcomingAgenda.totalCount,
+      recentEntities: recent,
+      upcomingAgenda: upcomingAgenda.items,
     };
   });
+  return overview.map(
+    ({
+      entityCount,
+      documentCount,
+      taskCount,
+      recentEntities,
+      upcomingAgenda,
+    }) => {
+      const recent = recentEntities.map((e) => {
+        const cv = e.currentVersion ?? panic("Entity has no currentVersion");
+        // Prefer the file field so document rows render the right mime
+        // icon and click-to-open works.
+        const primaryField =
+          cv.fields.find((f) => f.content.type === "file") ?? cv.fields.at(0);
+        let name = e.name;
+        let mimeType: string | null = null;
+        let fieldId: string | null = null;
+        let propertyId: string | null = null;
+        let pdfFileId: string | null = null;
+        if (primaryField) {
+          fieldId = primaryField.id;
+          propertyId = primaryField.propertyId;
+          const c = primaryField.content;
+          if (c.type === "text") {
+            name = c.value;
+          } else if (c.type === "file") {
+            // The entity's own name is what read_document and list_documents
+            // report; the current version's file name only labels a document that
+            // has none (the display_name trigger's rule), so uploading a new
+            // version does not appear to rename the document here.
+            name = e.name || c.fileName;
+            mimeType = c.mimeType;
+            pdfFileId = c.pdfFileId;
+          }
+        }
 
-  return {
-    entityCount,
-    documentCount,
-    taskCount,
-    recentEntities: recent,
-    upcomingAgenda,
-  };
+        // Prefer last editor over original creator for the activity feed
+        const editor = e.lastEditedByUser ?? e.createdByUser;
+        const displayName = editor ? editor.name || editor.email : null;
+        const primaryAssignee = e.assignees.at(0)?.user;
+        const assigneeName = primaryAssignee
+          ? primaryAssignee.name || primaryAssignee.email
+          : null;
+
+        return {
+          entityId: e.id,
+          name,
+          kind: e.kind,
+          status: e.status,
+          priority: e.priority,
+          listItemType: e.listItemType,
+          dueDate: e.dueDate,
+          mimeType,
+          fieldId,
+          propertyId,
+          pdfFileId,
+          encrypted:
+            primaryField?.content.type === "file" &&
+            primaryField.content.encrypted,
+          createdAt: e.createdAt.toISOString(),
+          updatedAt: e.updatedAt?.toISOString() ?? null,
+          createdBy: displayName,
+          createdByImage: editor?.image ?? null,
+          createdByDeletedAt: editor?.deletedAt?.toISOString() ?? null,
+          assignedTo: assigneeName,
+          assignedToImage: primaryAssignee?.image ?? null,
+          assignedToDeletedAt:
+            primaryAssignee?.deletedAt?.toISOString() ?? null,
+        };
+      });
+
+      return {
+        entityCount,
+        documentCount,
+        taskCount,
+        recentEntities: recent,
+        upcomingAgenda,
+      };
+    },
+  );
 };

@@ -1,7 +1,7 @@
 {
   "name": "@stll/docx-utils",
-  "version": "0.2.0",
-  "description": "Low-level helpers for reading and writing DOCX/OOXML zip packages: text and binary extraction, relationship and content-type management, and namespace constants.",
+  "version": "0.3.0",
+  "description": "Low-level OOXML helpers: relationship and content-type management, attached-template handling, office format metadata, and namespace constants.",
   "keywords": [
     "docx",
     "ooxml",
@@ -43,15 +43,14 @@
     "check:office-fixture-metadata": "bun scripts/check-office-fixture-metadata.ts",
     "test:office-fixture-metadata": "bun test scripts/check-office-fixture-metadata.test.ts",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/docx-utils",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/docx-utils",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/docx-utils",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/docx-utils",
     "prepack": "bun run build",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
+    "@stll/docx-core": "catalog:",
     "better-result": "catalog:",
-    "jszip": "catalog:",
     "slimdom": "^4.3.5"
   },
   "devDependencies": {
@@ -59,6 +58,7 @@
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

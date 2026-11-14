@@ -4,33 +4,35 @@ import type { SQL } from "drizzle-orm";
 
 import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
 import type { EntityFind } from "@stll/api-contract";
-import { compareByLocale } from "@stll/collation";
 import {
   type BuiltinField,
   type CompareNode,
   type ConditionNode,
   type ConditionValue,
-  type FoldHandlers,
-  type GroupNode,
-  type Operand,
-  type PredicateNode,
-  type RefOperand,
   evaluateCondition,
   foldCondition,
+  type FoldHandlers,
+  type GroupNode,
   isEffectiveLeaf,
+  type Operand,
+  type PredicateNode,
   pruneIncomplete,
+  type RefOperand,
 } from "@stll/conditions";
+import { foldLikePostgresSearch } from "@stll/text-normalize/postgres-search-fold";
 
 import { member, user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  entityQueryScopeCondition,
   type EntityQueryScope,
+  entityQueryScopeCondition,
 } from "@/api/lib/entities/query-scope";
-import { escapeLike } from "@/api/lib/escape-like";
+import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
+import { searchFold } from "@/api/lib/search/search-fold";
 import { typedPgArray } from "@/api/lib/search/sql";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 // -- Types --
 
@@ -80,36 +82,17 @@ const getFieldValue = (content: FieldContent | undefined): string => {
       return String(content.amountCents);
     case "person":
       return content.name;
+    // Matches `fieldValueExpr`, which projects no scalar for these.
     case "error":
     case "pending":
     case "unsupported":
     case "clip":
+    case "record":
       return "";
     default:
-      return "";
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
-};
-
-// Numeric value for sort comparison: int content uses its number; a
-// missing field or a legacy/coerced non-int value parses its string form,
-// returning null when no finite number is available (sorts to the end).
-const numericContentValue = (
-  content: FieldContent | undefined,
-): number | null => {
-  if (content?.type === "int") {
-    return content.value;
-  }
-  // Money sorts on its minor-unit amount, which is exact; comparing across
-  // currencies is the caller's problem, as it is in SQL.
-  if (content?.type === "money") {
-    return content.amountCents;
-  }
-  const raw = getFieldValue(content).trim();
-  if (raw === "" || !NUMERIC_TEXT_RE.test(raw)) {
-    return null;
-  }
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
 };
 
 const findField = (
@@ -127,8 +110,8 @@ const findField = (
  *  - everything else collapses to the same scalar text SQL's
  *    `content->>'value'` (or `->>'fileName'`) produces.
  *
- * Distinct from `getFieldValue`, which the sort comparators need as a plain
- * string; filtering must not flatten multi-select arrays.
+ * Distinct from `getFieldValue`, which flattens every type to a plain string;
+ * filtering must not flatten multi-select arrays.
  */
 const getFilterValue = (content: FieldContent | undefined): ConditionValue => {
   if (content?.type === "multi-select") {
@@ -302,65 +285,6 @@ export const applyFilters = <T extends FilterableEntity>(
       }
       return evaluateCondition(gateMissingCompareFields(node, entity), resolve);
     });
-  });
-};
-
-export const applySorts = <T extends FilterableEntity>(
-  items: T[],
-  sorts: ViewSort[],
-  // Property values are user-entered text (as opposed to e.g. an id), so
-  // sorting them needs the viewer's locale, not codepoint order. Callers must
-  // pass the request locale (extractLangFromRequest) explicitly; there is no
-  // implicit default, since an implicit locale is the bug this module guards
-  // against.
-  locale: string,
-): T[] => {
-  if (sorts.length === 0) {
-    return items;
-  }
-
-  const compareText = compareByLocale(locale);
-
-  return [...items].toSorted((a, b) => {
-    for (const sort of sorts) {
-      const fieldA = findField(a.fields, sort.propertyId);
-      const fieldB = findField(b.fields, sort.propertyId);
-      const dir = sort.desc ? -1 : 1;
-
-      // Numeric ordering whenever the property is numeric on at least one
-      // side. Comparing only when BOTH sides are int dropped to a string
-      // compare the moment a row was missing the field or held a legacy
-      // non-int value, so 10 sorted before 9. Rows without a numeric value
-      // bucket to the end, independent of sort direction.
-      if (fieldA?.content.type === "int" || fieldB?.content.type === "int") {
-        const numA = numericContentValue(fieldA?.content);
-        const numB = numericContentValue(fieldB?.content);
-        if (numA !== null && numB !== null) {
-          const cmp = (numA - numB) * dir;
-          if (cmp !== 0) {
-            return cmp;
-          }
-          continue;
-        }
-        if (numA === null && numB !== null) {
-          return 1;
-        }
-        if (numA !== null && numB === null) {
-          return -1;
-        }
-        continue;
-      }
-
-      const valueA = getFieldValue(fieldA?.content);
-      const valueB = getFieldValue(fieldB?.content);
-      const cmp = compareText(valueA, valueB) * dir;
-
-      if (cmp !== 0) {
-        return cmp;
-      }
-    }
-
-    return 0;
   });
 };
 
@@ -660,7 +584,16 @@ const compileKindPredicate = (node: PredicateNode): SQL | null => {
   if (expanded.length === 0) {
     return null;
   }
-  return inArray(entities.kind, expanded);
+  if (!expanded.includes("task")) {
+    return inArray(entities.kind, expanded);
+  }
+  const otherKinds = expanded.filter((kind) => kind !== "task");
+  return (
+    or(
+      workTask(entities),
+      otherKinds.length === 0 ? undefined : inArray(entities.kind, otherKinds),
+    ) ?? null
+  );
 };
 
 const compilePredicate = (node: PredicateNode): SQL | null => {
@@ -767,6 +700,7 @@ export const FIELD_FIND_SUPPORT = {
   date: "excluded",
   int: "excluded",
   money: "excluded",
+  record: "excluded",
   error: "excluded",
   pending: "excluded",
   unsupported: "excluded",
@@ -785,11 +719,9 @@ export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
 
 /**
  * The type gate as the partial index `fields_find_text_trgm_idx` spells it:
- * inline literals, not a bound array. The planner proves a query clause
- * implies an index predicate only when it can see both, and a parameter it
- * cannot see would leave the index unusable for every find. The literals are
- * content-type names from a const map, checked here so a name that needed
- * quoting could not reach `sql.raw`.
+ * inline literals, not a bound array, so the planner can see the gate. The
+ * literals are content-type names from a const map, checked here so a name
+ * that needed quoting could not reach `sql.raw`.
  */
 const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
   const unquotable = FINDABLE_FIELD_TYPES.find(
@@ -802,6 +734,14 @@ const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
     FINDABLE_FIELD_TYPES.map((type) => `'${type}'`).join(", "),
   )})`;
 })();
+
+/**
+ * Whether `value` contains `term` as a find compares them: both folded
+ * through `search_fold`, the term as literal text. Every half of the find
+ * predicate (the cell prefilter, the recheck, the name) is this expression.
+ */
+export const findTermMatches = (value: SQL, term: string): SQL =>
+  sql`${searchFold(value)} LIKE ('%' || ${escapeLikeSql(searchFold(term))} || '%')`;
 
 type BuildFindConditionsOptions = {
   find: EntityFind | undefined;
@@ -816,14 +756,21 @@ type BuildFindConditionsOptions = {
  * counts — because counts that disagree with rows is the failure this shares
  * one expression to prevent.
  *
+ * Both sides are folded through `search_fold`, so case and accents never
+ * decide a match: `dvorak` finds `Dvořák`, `muller` finds `Müller`. The
+ * highlighter marks through the same fold (`foldLikePostgresSearch`), which
+ * is why it is `search_fold` and not a broader client-side fold.
+ *
  * The column half is an uncorrelated subquery over `fields`, not an EXISTS
- * per entity: the planner runs it once, reading candidates off the trigram
- * index `fields_find_text_trgm_idx` through the same `field_find_text`
- * expression and the same type gate the index is built over. A correlated
- * form would probe the index once per candidate row instead. The index only
- * proposes: `fieldValueMatches` stays inside as the recheck, so a multi-select
- * whose joined text matches across an element boundary is still rejected, and
- * what a find returns is defined by the recheck alone.
+ * per entity: the planner runs it once over the matter's cells, which the
+ * workspace scope bounds. The find runs under row policies, and a trigram
+ * operator is not leakproof, so Postgres applies the policy before the find
+ * and no trigram index can answer it; the workspace bound is what keeps the
+ * read to one matter. A correlated form would rescan those cells once per
+ * candidate row instead. `search_fold(field_find_text(...))` only proposes:
+ * `fieldValueMatches` stays inside as the recheck, so a multi-select whose
+ * joined text matches across an element boundary is still rejected, and what
+ * a find returns is defined by the recheck alone.
  *
  * The name half reads `entities.name`, the string the grid's name column
  * renders, not `display_name`: its fallbacks (a file name, a text value, an
@@ -831,8 +778,10 @@ type BuildFindConditionsOptions = {
  * in, and a reader typing their own locale's placeholder would find nothing.
  *
  * A find term is literal text, not a pattern: a typed `%` or `_` has to match
- * itself, or the server would return rows the highlighter cannot mark.
- * `contains` filters keep their pass-through behaviour; find is stricter.
+ * itself, or the server would return rows the highlighter cannot mark. The
+ * term is escaped after it is folded, because the fold turns full-width `％`
+ * and `＿` into the ASCII wildcards. `contains` filters keep their
+ * pass-through behaviour; find is stricter.
  *
  * Property ids need no ownership check: like `fieldIds`, they are only used
  * inside a subquery already scoped to the authorized workspace, so a foreign
@@ -846,16 +795,15 @@ export const buildFindConditions = ({
     return [];
   }
   // The floor over the string the pattern is built from, not the one that
-  // arrived: the wire schema rejects a short term padded or bare, and this is
-  // what makes an ILIKE the trigram index cannot answer unreachable for every
-  // caller, wire or not.
+  // arrived: the wire schema rejects a short term padded or bare, and this
+  // holds every caller, wire or not, to the same floor. The fold deletes
+  // combining marks, so the floor reads the folded length.
   const term = find.term.trim();
-  if (term.length < ENTITY_FIND_TERM_MIN_LENGTH) {
+  if (foldLikePostgresSearch(term).length < ENTITY_FIND_TERM_MIN_LENGTH) {
     return [];
   }
 
-  const pattern = `%${escapeLike(term)}%`;
-  const matchesPattern = (valueExpr: SQL) => sql`${valueExpr} ILIKE ${pattern}`;
+  const matchesPattern = (valueExpr: SQL) => findTermMatches(valueExpr, term);
   const { propertyIds } = find.scope;
   const columnsMatch =
     propertyIds.length === 0
@@ -865,7 +813,7 @@ export const buildFindConditions = ({
           WHERE ${entityQueryScopeCondition(scope, fields.workspaceId)}
             AND ${fields.propertyId} = ANY(${typedPgArray(propertyIds, "uuid")})
             AND ${FINDABLE_FIELD_TYPES_PREDICATE_SQL}
-            AND field_find_text(${fields.content}) ILIKE ${pattern}
+            AND ${matchesPattern(sql`field_find_text(${fields.content})`)}
             AND ${fieldValueMatches(matchesPattern, matchesPattern)}
         )`;
 
@@ -950,6 +898,73 @@ const internalSortExpr = (
   }
 };
 
+/** One property's current cell on the row, projected through `value`. */
+const currentCellValue = (propertyId: string, value: SQL): SQL => sql`(
+  SELECT ${value}
+  FROM ${fields}
+  WHERE ${fields.workspaceId} = ${entities.workspaceId}
+    AND ${fields.entityVersionId} = ${entities.currentVersionId}
+    AND ${fields.propertyId} = ${propertyId}
+  LIMIT 1
+)`;
+
+type PropertySortValues = {
+  /** A money cell's currency code; NULL for every other content type. */
+  currency: SQL;
+  /** A money amount in minor units, an int, or numeric text in an int column. */
+  number: SQL;
+  /** The scalar the filters compare against. */
+  text: SQL;
+};
+
+/**
+ * What a property column orders by, in key order: currency, number, text.
+ * Every property sort reads them here, so the table window and the calendar
+ * cannot disagree on how a content type orders.
+ *
+ * Money is ordered within its currency, never across one. Minor units are not
+ * comparable between currencies (they do not even share a scale, JPY having
+ * none), so 100 JPY beside 100 CZK is a comparison with no answer, the same
+ * judgement the calculation reducer makes when it refuses to add them.
+ * Grouping by currency code first gives a total order that is meaningful
+ * inside each currency and merely deterministic between them.
+ *
+ * The number exists because `content->>'value'` is text, so a text ORDER BY
+ * sorts "10" before "9". The text key is the same projection the filters
+ * compare against; a second copy of that COALESCE is how sorting once came to
+ * know about fewer content types than filtering did.
+ */
+export const propertySortValues = (propertyId: string): PropertySortValues => {
+  const propertyIsInt = sql`EXISTS (
+    SELECT 1 FROM ${properties}
+    WHERE ${properties.workspaceId} = ${entities.workspaceId}
+      AND ${properties.id} = ${propertyId}
+      AND ${properties.content}->>'type' = 'int'
+    LIMIT 1
+  )`;
+  return {
+    currency: currentCellValue(
+      propertyId,
+      sql`CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${fields.content}->>'currency'
+        ELSE NULL
+      END`,
+    ),
+    number: currentCellValue(
+      propertyId,
+      sql`CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${numericTextExpr(sql`${fields.content}->>'amountCents'`)}
+        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
+        THEN ${numericFieldValueExpr(fields.content)}
+        ELSE NULL
+      END`,
+    ),
+    text: currentCellValue(propertyId, fieldValueExpr(fields.content)),
+  };
+};
+
 /**
  * Builds ORDER BY expressions from ViewSort[].
  *
@@ -978,78 +993,21 @@ export const buildSortExpressions = (
       continue;
     }
 
-    const propertyIsInt = sql`EXISTS (
-      SELECT 1 FROM ${properties}
-      WHERE ${properties.workspaceId} = ${entities.workspaceId}
-        AND ${properties.id} = ${sort.propertyId}
-        AND ${properties.content}->>'type' = 'int'
-      LIMIT 1
-    )`;
-
-    // Money is ordered within its currency, never across one. Minor units are
-    // not comparable between currencies — they do not even share a scale, JPY
-    // having none — so 100 JPY beside 100 CZK is a comparison with no answer,
-    // the same judgement the calculation reducer makes when it refuses to add
-    // them. Grouping by currency code first gives a total order that is
-    // meaningful inside each currency and merely deterministic between them.
-    const currencySortKey = sql`(
-      SELECT CASE
-        WHEN ${fields.content}->>'type' = 'money'
-        THEN ${fields.content}->>'currency'
-        ELSE NULL
-      END
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
-
-    // Numeric sort key: `content->>'value'` is text, so a plain ORDER BY sorts
-    // "10" before "9". Use numeric mode for money amounts, for int fields, and
-    // for int properties with legacy text content, then break ties with the
-    // text key.
-    const numericSortKey = sql`(
-      SELECT CASE
-        WHEN ${fields.content}->>'type' = 'money'
-        THEN ${numericTextExpr(sql`${fields.content}->>'amountCents'`)}
-        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
-        THEN ${numericFieldValueExpr(fields.content)}
-        ELSE NULL
-      END
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
-    // The same projection the filters compare against. It had been a second
-    // copy of the COALESCE, which is how sorting came to know about fewer
-    // content types than filtering did.
-    const textSortKey = sql`(
-      SELECT ${fieldValueExpr(fields.content)}
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
+    const { currency, number, text } = propertySortValues(sort.propertyId);
 
     // Ahead of the amount, so a money column groups by currency; NULL for every
     // other content type, which leaves their ordering untouched.
     expressions.push(
       sort.desc
-        ? sql`${currencySortKey} DESC NULLS LAST`
-        : sql`${currencySortKey} ASC NULLS LAST`,
+        ? sql`${currency} DESC NULLS LAST`
+        : sql`${currency} ASC NULLS LAST`,
     );
     expressions.push(
       sort.desc
-        ? sql`${numericSortKey} DESC NULLS LAST`
-        : sql`${numericSortKey} ASC NULLS LAST`,
+        ? sql`${number} DESC NULLS LAST`
+        : sql`${number} ASC NULLS LAST`,
     );
-    expressions.push(
-      sort.desc ? sql`${textSortKey} DESC` : sql`${textSortKey} ASC`,
-    );
+    expressions.push(sort.desc ? sql`${text} DESC` : sql`${text} ASC`);
   }
 
   // Tie-breaker for stable ordering

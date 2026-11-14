@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
@@ -18,8 +20,8 @@ import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { transition } from "@/api/lib/db/transitions";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
 import {
-  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   DOCUMENT_OCR_PROCESSOR_VERSION,
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
 } from "@/api/lib/document-processing-contract";
 import { DOCUMENT_PROCESSING_RETRY_TRANSITIONS } from "@/api/lib/document-processing-retry";
 
@@ -90,7 +92,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
               organizationId: workspaces.organizationId,
             })
             .from(workspaces),
-        where: eq(workspaces.status, "active"),
+        where: eq(workspaces.status, WORKSPACE_STATUS.active),
       })
     ).rows;
     if (!workspaceRows.at(0)) {

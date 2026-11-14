@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   FEEDBACK_AREAS,
@@ -24,7 +24,7 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const RATE_LIMIT_BUCKET = "feedback:user";
 
 const optionalCapped = (maxLength: number) =>
-  t.Optional(t.String({ maxLength }));
+  v.exactOptional(v.pipe(v.string(), v.maxLength(maxLength)));
 
 const config = {
   contract: "patch",
@@ -44,28 +44,32 @@ const config = {
   // gate this route does not need (a person is already at the keyboard).
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "write",
-  body: t.Object({
-    kind: t.UnionEnum(FEEDBACK_KINDS),
-    area: t.UnionEnum(FEEDBACK_AREAS),
-    title: t.String({ minLength: 1, maxLength: FEEDBACK_LIMITS.title }),
-    whatHappened: t.String({
-      minLength: 1,
-      maxLength: FEEDBACK_LIMITS.whatHappened,
-    }),
+  body: v.object({
+    kind: v.picklist(FEEDBACK_KINDS),
+    area: v.picklist(FEEDBACK_AREAS),
+    title: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FEEDBACK_LIMITS.title),
+    ),
+    whatHappened: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FEEDBACK_LIMITS.whatHappened),
+    ),
     expected: optionalCapped(FEEDBACK_LIMITS.expected),
     steps: optionalCapped(FEEDBACK_LIMITS.steps),
     evidence: optionalCapped(FEEDBACK_LIMITS.evidence),
-    context: t.Optional(
-      t.Object({
-        // Threaded explicitly rather than defaulted server-side: the desktop
-        // shell posts to this same route and is not the web app.
-        client: t.UnionEnum(FEEDBACK_CLIENTS),
+    context: v.exactOptional(
+      v.object({
+        client: v.picklist(FEEDBACK_CLIENTS),
         clientVersion: optionalCapped(FEEDBACK_LIMITS.contextField),
-        requestId: t.Optional(
-          t.String({
-            maxLength: 64,
-            pattern: FEEDBACK_REQUEST_ID_PATTERN.source,
-          }),
+        requestId: v.exactOptional(
+          v.pipe(
+            v.string(),
+            v.maxLength(64),
+            v.regex(new RegExp(FEEDBACK_REQUEST_ID_PATTERN.source, "u")),
+          ),
         ),
         route: optionalCapped(FEEDBACK_LIMITS.contextField),
         errorReference: optionalCapped(FEEDBACK_LIMITS.contextField),
@@ -74,7 +78,7 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-type FeedbackBody = (typeof config)["body"]["static"];
+type FeedbackBody = v.InferOutput<(typeof config)["body"]>;
 
 const toReportInput = (body: FeedbackBody): FeedbackReportInput => {
   const report: FeedbackReportInput = {
@@ -171,6 +175,7 @@ const createFeedbackReport = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Could not record the feedback report",
           cause: submitted.error,
         }),

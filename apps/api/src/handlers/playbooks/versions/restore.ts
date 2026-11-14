@@ -1,19 +1,21 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { playbookDefinitions } from "@/api/db/schema";
 import { mapPlaybookDocumentTypeError } from "@/api/handlers/playbooks/assert-document-type";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 
-const restorePlaybookVersionParamsSchema = t.Object({
-  playbookId: tSafeId("playbookDefinition"),
-  version: t.Numeric({ minimum: 1 }),
+const restorePlaybookVersionParamsSchema = v.object({
+  playbookId: resourceIdSchema("playbookDefinition"),
+  version: numberFromString(v.pipe(v.number(), v.minValue(1))),
 });
 
 const config = {

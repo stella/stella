@@ -3,10 +3,10 @@ import { current, type Draft } from "immer";
 
 import { forgetDocxDocuments } from "@/components/docx/docx-document-cache";
 import {
-  CASE_DECISION_VIEW,
   CASE_DECISION_PLACEMENT,
-  isCaseDecisionViewPayload,
+  CASE_DECISION_VIEW,
   caseDecisionTabId,
+  isCaseDecisionViewPayload,
 } from "@/components/inspector/case-decision-view";
 import {
   getInspectorTabGroupId,
@@ -155,6 +155,11 @@ const upsertFileTab = (
   existing.justificationFieldId = tab.justificationFieldId;
   existing.propertyId = tab.propertyId;
   existing.metadataLane = tab.metadataLane;
+  // A caller that names a facet asks for it even when the file is already
+  // open; one that names none keeps the facet the reader chose.
+  if (tab.facet !== undefined) {
+    existing.facet = tab.facet;
+  }
   if (tab.label) {
     existing.label = tab.label;
   }
@@ -845,6 +850,9 @@ export const createInspectorTabsSlice = (
         }
         state.tabs.splice(index, 1);
         removeGroupAssignment(state, id);
+        if (options?.movedToMain === true) {
+          state.minimized = true;
+        }
         if (state.activeId === id) {
           const next = state.tabs[Math.min(index, state.tabs.length - 1)];
           if (next === undefined) {

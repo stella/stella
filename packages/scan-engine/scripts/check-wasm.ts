@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 // Compares a fresh build (scripts/build-wasm.sh with SCAN_ENGINE_WASM_OUT_DIR)

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import {
   filterClientsBySearch,
@@ -33,18 +34,14 @@ const searchText = fc
   )
   .map((characters) => characters.join(""));
 
-const containsPreviousScalarSearchKey = (content: string, query: string) => {
-  const contentScalars = Array.from(content.toWellFormed());
-  const queryScalars = Array.from(query.toWellFormed());
-  if (queryScalars.length === 0) {
-    return true;
-  }
-  return contentScalars.some((_, start) =>
-    queryScalars.every(
-      (scalar, offset) => contentScalars.at(start + offset) === scalar,
-    ),
+/**
+ * The contract every filter here keeps: a record stays when one of its fields
+ * contains the trimmed query once both are folded for search.
+ */
+const matchesFolded = (field: string, query: string) =>
+  foldSearchMatchText(field.toWellFormed()).includes(
+    foldSearchMatchText(query.trim().toWellFormed()),
   );
-};
 
 describe("matter list search", () => {
   it("matches name, reference, or client display name, preserving input order", () => {
@@ -61,20 +58,35 @@ describe("matter list search", () => {
     expect(filterWorkspacesBySearch(workspaces, "match")).toEqual(workspaces);
   });
 
-  it("keeps accent-sensitive matching and the existing whitespace-only empty behavior", () => {
+  it("ignores accents and case on both sides; a blank query keeps every matter", () => {
     const workspaces = [
       { client: null, name: "Café matter", reference: "R-1" },
-      { client: null, name: "Other", reference: "R-2" },
+      {
+        client: { displayName: "Antonín Dvořák" },
+        name: "Lease",
+        reference: "R-2",
+      },
+      { client: null, name: "Other", reference: "Straße-3" },
     ];
 
-    expect(filterWorkspacesBySearch(workspaces, "cafe")).toEqual([]);
+    expect(filterWorkspacesBySearch(workspaces, "cafe")).toEqual(
+      workspaces.slice(0, 1),
+    );
+    expect(filterWorkspacesBySearch(workspaces, " CAFÉ ")).toEqual(
+      workspaces.slice(0, 1),
+    );
+    expect(filterWorkspacesBySearch(workspaces, "dvorak")).toEqual(
+      workspaces.slice(1, 2),
+    );
+    expect(filterWorkspacesBySearch(workspaces, "strasse")).toEqual(
+      workspaces.slice(2),
+    );
     expect(filterWorkspacesBySearch(workspaces, "   ")).toEqual(workspaces);
-    expect(filterWorkspacesBySearch(workspaces, " café ")).toEqual([]);
   });
 });
 
 describe("client filter search", () => {
-  it("trims and case-folds display names without changing order or accent behavior", () => {
+  it("trims and folds display names without changing order", () => {
     const clients = [
       { id: "b", displayName: "Case B" },
       { id: "a", displayName: "CASE A" },
@@ -84,8 +96,8 @@ describe("client filter search", () => {
     expect(
       filterClientsBySearch(clients, " CASE ").map(({ id }) => id),
     ).toEqual(["b", "a"]);
-    expect(filterClientsBySearch(clients, "cafe")).toEqual([]);
-    expect(filterClientsBySearch(clients, " ")).toBe(clients);
+    expect(filterClientsBySearch(clients, "cafe")).toEqual(clients.slice(2));
+    expect(filterClientsBySearch(clients, " ")).toEqual(clients);
   });
 });
 
@@ -109,8 +121,20 @@ describe("team filter search", () => {
         userName: "Person",
       },
     ]);
-    expect(filterTeamMembersBySearch(members, "")).toBe(members);
-    expect(filterTeamMembersBySearch(members, " ")).toBe(members);
+    expect(filterTeamMembersBySearch(members, "")).toEqual(members);
+    expect(filterTeamMembersBySearch(members, " ")).toEqual(members);
+    expect(
+      filterTeamMembersBySearch(
+        [
+          {
+            userId: "u",
+            userEmail: "jd@example.test",
+            userName: "Jiří Dvořák",
+          },
+        ],
+        "jiri dvorak",
+      ),
+    ).toHaveLength(1);
   });
 });
 
@@ -144,9 +168,9 @@ it("matches malformed matter fields by replacement scalar without matching emoji
   );
 });
 
-it("matter search filters match their previous per-field substring behavior", () => {
+it("matter search filters keep exactly the records a field of which matches", () => {
   assertProperty(
-    "matter search filters match their previous per-field substring behavior",
+    "matter search filters keep exactly the records a field of which matches",
     fc.property(
       fc.array(
         fc.record({
@@ -171,60 +195,25 @@ it("matter search filters match their previous per-field substring behavior", ()
       ),
       searchText,
       (workspaces, clients, members, query) => {
-        const expectedWorkspaces = workspaces.filter((workspace) => {
-          if (!query.trim()) {
-            return true;
-          }
-          const normalizedQuery = query.toLowerCase();
-          return (
-            containsPreviousScalarSearchKey(
-              workspace.name.toLowerCase(),
-              normalizedQuery,
-            ) ||
-            containsPreviousScalarSearchKey(
-              workspace.reference.toLowerCase(),
-              normalizedQuery,
-            ) ||
-            (workspace.client !== null &&
-              containsPreviousScalarSearchKey(
-                workspace.client.displayName.toLowerCase(),
-                normalizedQuery,
-              ))
-          );
-        });
-        const normalizedQuery = query.trim().toLowerCase();
-        const expectedClients = normalizedQuery
-          ? clients.filter((client) =>
-              containsPreviousScalarSearchKey(
-                client.displayName.toLowerCase(),
-                normalizedQuery,
-              ),
-            )
-          : clients;
-        const expectedMembers = normalizedQuery
-          ? members.filter(
-              (member) =>
-                containsPreviousScalarSearchKey(
-                  member.userName.toLowerCase(),
-                  normalizedQuery,
-                ) ||
-                containsPreviousScalarSearchKey(
-                  member.userEmail.toLowerCase(),
-                  normalizedQuery,
-                ) ||
-                containsPreviousScalarSearchKey(
-                  member.userId.toLowerCase(),
-                  normalizedQuery,
-                ),
-            )
-          : members;
-
         expect(filterWorkspacesBySearch(workspaces, query)).toEqual(
-          expectedWorkspaces,
+          workspaces.filter(
+            (workspace) =>
+              matchesFolded(workspace.name, query) ||
+              matchesFolded(workspace.reference, query) ||
+              (workspace.client !== null &&
+                matchesFolded(workspace.client.displayName, query)),
+          ),
         );
-        expect(filterClientsBySearch(clients, query)).toEqual(expectedClients);
+        expect(filterClientsBySearch(clients, query)).toEqual(
+          clients.filter((client) => matchesFolded(client.displayName, query)),
+        );
         expect(filterTeamMembersBySearch(members, query)).toEqual(
-          expectedMembers,
+          members.filter(
+            (member) =>
+              matchesFolded(member.userName, query) ||
+              matchesFolded(member.userEmail, query) ||
+              matchesFolded(member.userId, query),
+          ),
         );
       },
     ),

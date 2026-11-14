@@ -22,6 +22,7 @@ import { panic } from "better-result";
 
 import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  type ChatToolExecutor,
   chatToolExecutor,
 } from "@stll/api-contract/chat";
 
@@ -120,7 +121,7 @@ export type TanStackTextFinishReason = Exclude<
 // fixture, an event this service synthesises) carries the value at the top
 // level, and so does one this service transformed and re-emitted.
 const readEngineField = (chunk: object, key: string): unknown => {
-  if (key in chunk) {
+  if (Object.hasOwn(chunk, key)) {
     const topLevel: unknown = Reflect.get(chunk, key);
     if (topLevel !== undefined) {
       return topLevel;
@@ -228,9 +229,14 @@ export const streamChatChunks = async function* (
   options: StreamChatChunksOptions,
 ): AsyncIterable<PublicStreamChunk> {
   const executors = new Map<string, "server" | "client">();
-  const storedExecutors = new Map<string, "server" | "client">();
+  // A stored call keeps its owner, a harness's included: a cloud turn that
+  // replays one never runs it, and persisting the turn refuses one it would.
+  const storedExecutors = new Map<string, ChatToolExecutor>();
   // The SDK owns error results for unknown model-emitted tool names too.
-  const executorForCall = ({ id, name }: ToolCallExecutorOptions) =>
+  const executorForCall = ({
+    id,
+    name,
+  }: ToolCallExecutorOptions): ChatToolExecutor =>
     storedExecutors.get(id) ?? executors.get(name) ?? "server";
   // Input-complete server calls can wait behind an approval. Their executor
   // must survive snapshots so the browser does not offer a client resolution.

@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 // Happy DOM omits the legacy editing API that the EditContext polyfill wraps.
@@ -27,7 +28,7 @@ const { render, cleanup, fireEvent, waitFor } =
 const { QueryClient, QueryClientProvider, QueryObserver, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { SkillRevisionComparison } = await import("./skill-revision-comparison");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
@@ -50,7 +51,7 @@ test("clicking retry recovers a selected read and replaces the error with conten
     return { body: "Recovered revision" };
   };
   const Read = () => {
-    const view = useQueryView(
+    const view = queryView(
       useQuery({
         queryKey: ["skill-revision-comparison", "retry"],
         queryFn: read,
@@ -69,11 +70,11 @@ test("clicking retry recovers a selected read and replaces the error with conten
       </QueryClientProvider>
     </IntlProvider>,
   );
-  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeNull());
+  await waitFor(() => expect(screen.queryByRole("alert") === null).toBe(false));
   expect(attempts).toBe(1);
   readStatus = "available";
   fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
-  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("alert") === null).toBe(true));
   expect(attempts).toBe(2);
   expect(screen.getByText("Recovered revision")).toBeTruthy();
   cleanup();

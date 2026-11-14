@@ -4,6 +4,7 @@ import type { ErrorInfo, ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 /**
@@ -37,13 +38,22 @@ export class PDFErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, _info: ErrorInfo) {
-    getAnalytics().captureError(
-      new ClientTelemetryError({
-        area: "pdf-viewer",
-        message: `[PDF] ${error.message}`,
-        cause: error,
-      }),
-    );
+    reportErrorOnce(error, () => {
+      getAnalytics().captureError(
+        new ClientTelemetryError({
+          area: "pdf-viewer",
+          message: `[PDF] ${error.message}`,
+          cause: error,
+        }),
+        {
+          fingerprintKey: "PDFErrorBoundary.componentDidCatch:caught",
+          scope: {
+            type: "handler",
+            handlerId: "PDFErrorBoundary.componentDidCatch:caught",
+          },
+        },
+      );
+    });
     this.props.onError?.(error);
   }
 

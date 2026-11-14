@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -60,7 +60,6 @@ const GLOBAL_INPUTS = [
   "scripts/**",
   ".oxlint-plugins/**",
   "oxlint*.ts",
-  ".oxfmtrc*",
   "stll-toolchain.json",
   "packages/typescript-config/**",
   "**/package.json",
@@ -191,7 +190,8 @@ export const withDerivedOutputs = (changed: readonly string[]) => {
   while (expanded) {
     expanded = false;
     for (const generator of GENERATORS.filter(
-      ({ outputKind }) => outputKind === "derived",
+      ({ outputKind, selectsConsumers }) =>
+        outputKind === "derived" && selectsConsumers !== false,
     )) {
       if (
         ![...files].some((file) =>

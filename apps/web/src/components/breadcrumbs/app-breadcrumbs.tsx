@@ -1,15 +1,18 @@
 import { Fragment } from "react";
 
-import { Link, useMatches } from "@tanstack/react-router";
+import { useMatches } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
   Breadcrumb,
+  BreadcrumbEllipsis,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import { cn } from "@stll/ui/utils";
 
+import { declaredBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs.logic";
 import { ChatBreadcrumb } from "@/components/breadcrumbs/chat-breadcrumb";
 import { ClausesBreadcrumb } from "@/components/breadcrumbs/clauses-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
@@ -19,221 +22,58 @@ import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
 import { TemplatesBreadcrumb } from "@/components/breadcrumbs/templates-breadcrumb";
 import { WorkspaceBreadcrumb } from "@/components/breadcrumbs/workspace-breadcrumb";
-import type { RouterFullPath } from "@/lib/types";
+import { getTranslator } from "@/i18n/i18n-store";
+import type { RouteBreadcrumb } from "@/routes/-route-presentation";
 
-const PATH_SEPARATOR = "|";
-
-const serializeKey = (paths: readonly RouterFullPath[]) =>
-  paths.join(PATH_SEPARATOR);
-
-type BreadcrumbEntry =
-  | React.JSX.Element
-  | ((params: Record<string, string | undefined>) => React.ReactNode);
-
-type BreadcrumbDefinition = {
-  key: string;
-  paths: readonly RouterFullPath[];
-  entry: BreadcrumbEntry;
-};
-
-const renderPdfBreadcrumb = () => <PdfBreadcrumb />;
-
-const renderWorkspaceBreadcrumb = ({
-  workspaceId,
-}: Record<string, string | undefined>) => {
-  if (!workspaceId) {
-    return null;
-  }
-  return <WorkspaceBreadcrumb workspaceId={workspaceId} />;
-};
-
-const renderContactBreadcrumb = ({
-  contactId,
-}: Record<string, string | undefined>) => {
-  if (!contactId) {
-    return null;
-  }
-  return <ContactBreadcrumb contactId={contactId} />;
-};
-
-const renderChatThreadBreadcrumb = ({
-  threadId,
-  workspaceId,
-}: Record<string, string | undefined>) => {
-  if (!threadId) {
-    return null;
-  }
-  // `workspaceId` is present only on the workspace-scoped chat route; it
-  // scopes the inline rename's PATCH the same way the thread query is scoped.
-  return <ChatBreadcrumb threadId={threadId} workspaceId={workspaceId} />;
-};
-
-const renderBreadcrumbEntry = (
-  entry: BreadcrumbEntry,
-  params: Record<string, string | undefined>,
-): React.ReactNode => (typeof entry === "function" ? entry(params) : entry);
-
-const defineBreadcrumb = (
-  paths: readonly RouterFullPath[],
-  entry: BreadcrumbEntry,
-): BreadcrumbDefinition => ({
-  key: serializeKey(paths),
-  paths,
-  entry,
-});
+/*
+ * On a phone the header actions leave the trail too little room, so every
+ * item above the current one folds away whole and an ellipsis stands in for
+ * them; the current item takes the rest of the bar and truncates. A wider
+ * window keeps every item reachable and truncates them instead, so a link to
+ * a parent never disappears beside a busy header. A crumb component may draw
+ * several items, so the fold works on the drawn items, and the ellipsis shows
+ * only when there is an item to fold (its two fold items, then at least item,
+ * separator, item).
+ *
+ * The list fills the bar rather than sizing to its items: a crumb that takes
+ * "the rest of the bar" (`flex-1`, the chat title) then shares real free
+ * space instead of depending on how the engine sizes a zero-basis item inside
+ * a list sized to its content, which left the title cut short beside an empty
+ * header in the desktop app.
+ */
+const APP_CRUMB_LIST_CLASS = cn(
+  "min-w-0 flex-1 flex-nowrap overflow-hidden",
+  "max-md:[&>li:not(:last-child,[data-crumb-fold])]:hidden",
+  "max-md:[&>li:last-child]:min-w-0",
+  "max-md:[&>li:last-child]:flex-1",
+  "md:[&>[data-crumb-fold]]:hidden",
+  "[&:not(:has(>li:nth-child(5)))>[data-crumb-fold]]:hidden",
+);
 
 export const AppBreadcrumbs = () => {
-  const t = useTranslations();
+  useTranslations();
+  const t = getTranslator();
   const matches = useMatches();
 
-  const breadcrumbDefinitions: BreadcrumbDefinition[] = [
-    defineBreadcrumb(
-      ["/workspaces/"],
-      <BreadcrumbItem className="min-w-8 shrink">
-        <Link
-          activeOptions={{ exact: true, includeSearch: false }}
-          activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground min-w-0 truncate"
-          title={t("common.matters")}
-          to="/workspaces"
-        >
-          {t("common.matters")}
-        </Link>
-      </BreadcrumbItem>,
-    ),
-    defineBreadcrumb(["/workspaces/$workspaceId"], renderWorkspaceBreadcrumb),
-    defineBreadcrumb(
-      ["/workspaces/$workspaceId/$viewId/document"],
-      renderPdfBreadcrumb,
-    ),
-    defineBreadcrumb(
-      ["/inbox/"],
-      <BreadcrumbLink to="/inbox">{t("navigation.inbox")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/knowledge"],
-      <BreadcrumbLink to="/knowledge">
-        {t("navigation.knowledge")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(["/knowledge/templates"], <TemplatesBreadcrumb />),
-    defineBreadcrumb(
-      ["/knowledge/styles"],
-      <BreadcrumbLink to="/knowledge/styles">
-        {t("styleSets.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/contacts/"],
-      <BreadcrumbLink to="/contacts">
-        {t("navigation.contacts")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/contacts/import"],
-      <BreadcrumbItem>{t("contacts.importStudio.title")}</BreadcrumbItem>,
-    ),
-    defineBreadcrumb(["/knowledge/clauses"], <ClausesBreadcrumb />),
-    defineBreadcrumb(["/knowledge/playbooks"], <PlaybooksBreadcrumb />),
-    defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),
-    defineBreadcrumb(
-      ["/knowledge/tools"],
-      <BreadcrumbLink to="/knowledge/tools">
-        {t("knowledge.sections.tools.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(["/knowledge/tools/$entry"], <SkillBreadcrumb />),
-    defineBreadcrumb(
-      ["/settings"],
-      <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/settings/account/profile"],
-      <BreadcrumbLink to="/settings/account/profile">
-        {t("common.profile")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/settings/account/desktop"],
-      <BreadcrumbLink to="/settings/account/desktop">
-        {t("settings.account.desktop")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin"],
-      <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>,
-    ),
-    defineBreadcrumb(
-      ["/admin/members"],
-      <BreadcrumbLink to="/admin/members">
-        {t("common.members")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/number-series"],
-      <BreadcrumbLink to="/admin/number-series">
-        {t("billing.numberSeries.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/vat-rates"],
-      <BreadcrumbLink to="/admin/vat-rates">
-        {t("billing.vatRates.title")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/billing"],
-      <BreadcrumbLink to="/admin/billing">
-        {t("billing.settingsTitle")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/matter-numbering"],
-      <BreadcrumbLink to="/admin/matter-numbering">
-        {t("settings.organization.matterNumbering")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/ai"],
-      <BreadcrumbLink to="/admin/ai">
-        {t("settings.organization.ai")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/chat"],
-      <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/chat/history"],
-      <BreadcrumbLink to="/chat/history">{t("common.history")}</BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/chat/$threadId", "/chat/workspaces/$workspaceId/$threadId"],
-      renderChatThreadBreadcrumb,
-    ),
-  ];
-
-  const breadcrumbs = (() => {
-    const results = new Map<string, React.ReactNode>();
-
-    for (const match of matches) {
-      for (const definition of breadcrumbDefinitions) {
-        if (definition.paths.some((path) => match.fullPath.startsWith(path))) {
-          const result = renderBreadcrumbEntry(definition.entry, match.params);
-
-          if (result !== null && result !== undefined && result !== false) {
-            results.set(definition.key, result);
-          }
-        }
-      }
-    }
-
-    return [...results.entries()];
-  })();
+  const breadcrumbs = declaredBreadcrumbs(matches).map(
+    ({ decision, key }) =>
+      [
+        key,
+        renderBreadcrumb(
+          decision,
+          matches.at(-1)?.params ?? {},
+          decision.type === "label" ? t(decision.labelKey) : undefined,
+        ),
+      ] as const,
+  );
 
   return (
-    <Breadcrumb className="min-w-0 has-[input]:flex-1">
-      <BreadcrumbList className="flex-nowrap overflow-hidden has-[input]:w-full">
+    <Breadcrumb className="flex min-w-0 flex-1">
+      <BreadcrumbList className={APP_CRUMB_LIST_CLASS}>
+        <BreadcrumbItem className="shrink-0" data-crumb-fold="">
+          <BreadcrumbEllipsis />
+        </BreadcrumbItem>
+        <BreadcrumbSeparator className="shrink-0" data-crumb-fold="" />
         {breadcrumbs.map(([key, breadcrumb], index) => (
           <Fragment key={key}>
             {index !== 0 && <BreadcrumbSeparator className="shrink-0" />}
@@ -244,3 +84,43 @@ export const AppBreadcrumbs = () => {
     </Breadcrumb>
   );
 };
+
+function renderBreadcrumb(
+  decision: Exclude<RouteBreadcrumb, { type: "inherit" } | { type: "none" }>,
+  params: Record<string, string | undefined>,
+  translatedLabel: string | undefined,
+) {
+  if (decision.type === "label") {
+    return <BreadcrumbLink to={decision.to}>{translatedLabel}</BreadcrumbLink>;
+  }
+  if (decision.type === "entity") {
+    if (decision.entity === "pdf") {
+      return <PdfBreadcrumb />;
+    }
+    if (decision.entity === "matter" && params["workspaceId"]) {
+      return <WorkspaceBreadcrumb workspaceId={params["workspaceId"]} />;
+    }
+    if (decision.entity === "contact" && params["contactId"]) {
+      return <ContactBreadcrumb contactId={params["contactId"]} />;
+    }
+    if (decision.entity === "chat" && params["threadId"]) {
+      return (
+        <ChatBreadcrumb
+          threadId={params["threadId"]}
+          workspaceId={params["workspaceId"]}
+        />
+      );
+    }
+    return null;
+  }
+  if (decision.detail === "clauses") {
+    return <ClausesBreadcrumb />;
+  }
+  if (decision.detail === "playbooks") {
+    return <PlaybooksBreadcrumb />;
+  }
+  if (decision.detail === "skill") {
+    return <SkillBreadcrumb />;
+  }
+  return <TemplatesBreadcrumb />;
+}

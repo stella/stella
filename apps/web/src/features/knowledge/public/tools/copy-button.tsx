@@ -1,8 +1,8 @@
 import { cn } from "@stll/ui/utils";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 
-// Client-only: reads `navigator.clipboard`. Lazy-loaded by the detail
+// Client-only: it writes the clipboard. Lazy-loaded by the detail
 // page so it never runs during SSR.
 export const CopyButton = ({
   text,
@@ -11,7 +11,7 @@ export const CopyButton = ({
   text: string;
   className?: string;
 }) => (
-  <CopyActionButton
+  <CopyControl
     className={cn(className)}
     size="xs"
     text={text}

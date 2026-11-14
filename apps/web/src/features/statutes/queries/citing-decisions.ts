@@ -5,7 +5,7 @@ import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-ci
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import { api } from "@/lib/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 /**
@@ -53,7 +53,7 @@ export const statuteCitationCountsOptions = (
         fetch: { signal },
       });
 
-      return unwrapPublicLawEden(response, "readStatuteCitationCounts");
+      return unwrapPublicLawResponse(response, "readStatuteCitationCounts");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -82,7 +82,7 @@ export const topCitingDecisionsOptions = (key: CitingDecisionsKey) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "listPublicTopCitingDecisions",
       );
@@ -120,7 +120,10 @@ export const citingDecisionsInfiniteOptions = (
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "listPublicCitingDecisions");
+      const data = unwrapPublicLawResponse(
+        response,
+        "listPublicCitingDecisions",
+      );
 
       return data;
     },

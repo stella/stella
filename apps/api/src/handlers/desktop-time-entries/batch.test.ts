@@ -1,14 +1,15 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import Elysia from "elysia";
 import * as v from "valibot";
 
 import {
-  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
+  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatch,
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
+import { createTestState } from "@stll/test-state";
 
 import {
   auditLogs,
@@ -16,16 +17,21 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteTable } from "@/api/http/route";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -52,6 +58,11 @@ const BODY = {
     },
   ],
 };
+const serve = (table: RouteTable) =>
+  serveForTest(
+    createHttpApp({ routes: routes(table), middleware: [errorBoundary] }),
+  );
+
 const receiptSchema = v.object({
   requestFingerprint: v.nullable(v.string()),
   status: v.picklist(DESKTOP_TIME_ENTRY_BATCH_STATUSES),
@@ -93,7 +104,64 @@ test("batch fingerprint follows reviewed field values rather than JSON key order
   );
 });
 
-const createBatchHarness = (existingEntries = 0) => {
+test("a classification is part of the fingerprint, in any key order, and an entry without one hashes as before", () => {
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  const withCodes = (
+    classification: DesktopTimeEntryBatch["entries"][number]["classification"],
+  ) =>
+    desktopBatchFingerprint({
+      ...BODY,
+      entries: [{ ...entry, classification }],
+    });
+  expect(withCodes(undefined)).toBe(desktopBatchFingerprint(BODY));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).not.toBe(desktopBatchFingerprint(BODY));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).toBe(withCodes({ activityCode: "A104", taskCode: "L120", type: "ledes" }));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).not.toBe(
+    withCodes({ type: "ledes", taskCode: "L130", activityCode: "A104" }),
+  );
+});
+
+const LEDES = {
+  type: "ledes",
+  taskCode: "L120",
+  activityCode: "A104",
+} as const;
+const CLIENT_GROUP = {
+  type: "activity_group",
+  activityGroup: "client",
+} as const;
+
+const classified = (
+  classification: DesktopTimeEntryBatch["entries"][number]["classification"],
+  idempotencyKey: string,
+): DesktopTimeEntryBatch => ({
+  idempotencyKey,
+  entries: BODY.entries.map((entry) => ({ ...entry, classification })),
+});
+
+/** How the fixture matter's client bills: no client, a client billed in
+ * categories or in LEDES, or a client the caller cannot read. */
+type ClientBilling = "none" | "categories" | "ledes" | "unreadable";
+
+const matterRow = (billing: ClientBilling) => ({
+  id: MATTER,
+  clientId: billing === "none" ? null : "00000000-0000-4000-8000-0000000000c1",
+  client:
+    billing === "none" || billing === "unreadable"
+      ? null
+      : { timeBillingFormat: billing },
+});
+
+const createBatchHarness = (
+  existingEntries = 0,
+  clientBilling: ClientBilling = "none",
+) => {
   let receipt: v.InferOutput<typeof receiptSchema> | undefined;
   let missingMatter = false;
   let rateReads = 0;
@@ -106,7 +174,8 @@ const createBatchHarness = (existingEntries = 0) => {
       execute: async (statement: SQL) => aggregateExecutionRows(statement),
       query: {
         workspaces: {
-          findMany: async () => (missingMatter ? [] : [{ id: MATTER }]),
+          findMany: async () =>
+            missingMatter ? [] : [matterRow(clientBilling)],
           findFirst: async () => ({ leadUserId: null }),
         },
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
@@ -161,6 +230,18 @@ const createBatchHarness = (existingEntries = 0) => {
   const authorizeAccount = async (request: Request) => {
     const device = await deviceSigner;
     return Result.ok({
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: toSafeId<"organization">("org_test"),
+        userId: "user_test",
+        identity: { email: "desktop@example.test", emailVerified: true },
+        enrolments: [
+          {
+            featureId: "time-billing",
+            organizationId: "org_test",
+            userId: "user_test",
+          },
+        ],
+      }),
       consumedProof: await claimFixtureDeviceProof({
         request: await device.signRequest({
           request,
@@ -180,25 +261,20 @@ const createBatchHarness = (existingEntries = 0) => {
   const endpoint = createDesktopTimeEntryBatchEndpoint(authorizeAccount);
   const statusEndpoint =
     createDesktopTimeEntryBatchStatusEndpoint(authorizeAccount);
-  const app = new Elysia()
-    .put("/batch", endpoint.handler, {
-      body: endpoint.config.body,
-      response: endpoint.config.response,
-    })
-    .put("/status", statusEndpoint.handler, {
-      body: statusEndpoint.config.body,
-      response: statusEndpoint.config.response,
-    });
+  const server = serve({
+    "/batch": { PUT: endpoint },
+    "/status": { PUT: statusEndpoint },
+  });
   const status = async () =>
-    await app.handle(
+    await server.fetch(
       new Request("http://localhost/status", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ idempotencyKey: BODY.idempotencyKey }),
       }),
     );
-  const send = async (body: typeof BODY) =>
-    await app.handle(
+  const send = async (body: DesktopTimeEntryBatch) =>
+    await server.fetch(
       new Request("http://localhost/batch", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -224,11 +300,13 @@ const createBatchHarness = (existingEntries = 0) => {
     revokeMatter: () => {
       missingMatter = true;
     },
+    [Symbol.asyncDispose]: server.stop,
   };
 };
 
 test("batch replay converges and a changed payload or revoked matter refuses without new writes", async () => {
-  const { send, writes, revokeMatter } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes, revokeMatter } = harness;
   const first = await send(BODY);
   expect(first.status).toBe(200);
   const result = await first.json();
@@ -249,14 +327,11 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
   expect(writes).toHaveLength(1);
 });
 
-test("batch rejects unknown fields before authorization under default normalization", async () => {
+test("batch rejects unknown fields before authorization", async () => {
   const endpoint = createDesktopTimeEntryBatchEndpoint(async () =>
     panic("Invalid batch must fail validation before authorization"),
   );
-  const app = new Elysia().put("/batch", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  await using server = serve({ "/batch": { PUT: endpoint } });
   for (const extra of [
     { appName: "private" },
     { rawSegments: [] },
@@ -270,7 +345,7 @@ test("batch rejects unknown fields before authorization under default normalizat
         entries: BODY.entries.map((entry) => ({ ...entry, ...extra })),
       },
     ]) {
-      const response = await app.handle(
+      const response = await server.fetch(
         new Request("http://localhost/batch", {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -282,8 +357,33 @@ test("batch rejects unknown fields before authorization under default normalizat
   }
 });
 
+test.each(["2026-02-30", "1900-02-29", "2026-04-31", "0000-01-01"])(
+  "batch rejects invalid calendar date %s before authorization",
+  async (dateWorked) => {
+    let authorizationCalls = 0;
+    const endpoint = createDesktopTimeEntryBatchEndpoint(async () => {
+      authorizationCalls += 1;
+      return panic("Invalid calendar date must not reach authorization");
+    });
+    await using server = serve({ "/batch": { PUT: endpoint } });
+    const response = await server.fetch(
+      new Request("http://localhost/batch", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...BODY,
+          entries: BODY.entries.map((entry) => ({ ...entry, dateWorked })),
+        }),
+      }),
+    );
+    expect(response.status).toBe(422);
+    expect(authorizationCalls).toBe(0);
+  },
+);
+
 test("uppercase matter identifiers converge with lowercase database identities and fingerprints", async () => {
-  const { send, writes } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes } = harness;
   const uppercase = {
     ...BODY,
     entries: BODY.entries.map((entry) => ({
@@ -306,7 +406,8 @@ test("uppercase matter identifiers converge with lowercase database identities a
 });
 
 test("recovery cancels a noncommitted batch after rejection and fences delayed originals", async () => {
-  const { send, status, writes } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, status, writes } = harness;
   // The first attempt was not delivered; a subsequent attempt is definitively rejected.
   expect(
     (
@@ -328,7 +429,7 @@ test("recovery cancels a noncommitted batch after rejection and fences delayed o
 });
 
 test("entry creation is audited in the batch transaction; a cancellation receipt writes no entry or audit row", async () => {
-  const committed = createBatchHarness();
+  await using committed = createBatchHarness();
   expect((await committed.send(BODY)).status).toBe(200);
   // The audit skip in batch status covers only the receipt: the committed
   // batch audits its entries before the receipt closes the transaction.
@@ -338,7 +439,7 @@ test("entry creation is audited in the batch transaction; a cancellation receipt
   );
   expect(committed.inserts.at(-1)).toBe("receipt");
 
-  const cancelled = createBatchHarness();
+  await using cancelled = createBatchHarness();
   expect(await (await cancelled.status()).json()).toEqual({
     type: "cancelled",
   });
@@ -346,7 +447,8 @@ test("entry creation is audited in the batch transaction; a cancellation receipt
 });
 
 test("recovery preserves a committed batch and returns its exact receipt without new writes", async () => {
-  const { send, status, writes } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, status, writes } = harness;
   const created = await send(BODY);
   expect(created.status).toBe(200);
   const receipt = v.parse(
@@ -361,7 +463,8 @@ test("recovery preserves a committed batch and returns its exact receipt without
 });
 
 test("uppercase matter identifiers count towards the authorized matter capacity", async () => {
-  const { send, writes } = createBatchHarness(LIMITS.timeEntriesPerWorkspace);
+  await using harness = createBatchHarness(LIMITS.timeEntriesPerWorkspace);
+  const { send, writes } = harness;
   const uppercase = {
     ...BODY,
     entries: BODY.entries.map((entry) => ({
@@ -374,7 +477,8 @@ test("uppercase matter identifiers count towards the authorized matter capacity"
 });
 
 test("a full unpriced batch resolves rates once and preserves nonbillable entries", async () => {
-  const { send, writes, rateReads } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes, rateReads } = harness;
   const entry = BODY.entries.at(0);
   if (!entry) {
     panic("Missing fixture entry");
@@ -395,7 +499,8 @@ test("a full unpriced batch resolves rates once and preserves nonbillable entrie
 });
 
 test("missing bulk rates reject billable entries without individual rate reads or writes", async () => {
-  const { send, writes, rateReads } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes, rateReads } = harness;
   const response = await send({
     ...BODY,
     entries: BODY.entries.map((entry) => ({ ...entry, billable: true })),
@@ -403,4 +508,59 @@ test("missing bulk rates reject billable entries without individual rate reads o
   expect(response.status).toBe(400);
   expect(writes).toHaveLength(0);
   expect(rateReads()).toBe(1);
+});
+
+test("UTBMS codes reach the entry only on a matter whose client bills in LEDES", async () => {
+  await using ledes = createBatchHarness(0, "ledes");
+  expect((await ledes.send(classified(LEDES, "ledes-codes"))).status).toBe(200);
+  expect(ledes.writes).toEqual([
+    expect.objectContaining({ taskCode: "L120", activityCode: "A104" }),
+  ]);
+
+  for (const billing of ["none", "categories"] as const) {
+    await using harness = createBatchHarness(0, billing);
+    expect(
+      (await harness.send(classified(LEDES, `codes-${billing}`))).status,
+    ).toBe(400);
+    expect(harness.writes).toEqual([]);
+  }
+});
+
+test("the client activity group fits only a matter not billed in LEDES, and adds no codes", async () => {
+  for (const billing of ["none", "categories"] as const) {
+    await using harness = createBatchHarness(0, billing);
+    expect(
+      (await harness.send(classified(CLIENT_GROUP, `group-${billing}`))).status,
+    ).toBe(200);
+    expect(harness.writes).toEqual([
+      expect.objectContaining({ taskCode: null, activityCode: null }),
+    ]);
+  }
+  await using ledes = createBatchHarness(0, "ledes");
+  expect(
+    (await ledes.send(classified(CLIENT_GROUP, "group-ledes"))).status,
+  ).toBe(400);
+  await using internal = createBatchHarness(0, "categories");
+  expect(
+    (
+      await internal.send(
+        classified(
+          { type: "activity_group", activityGroup: "internal" },
+          "group-internal",
+        ),
+      )
+    ).status,
+  ).toBe(400);
+  expect([...ledes.writes, ...internal.writes]).toEqual([]);
+});
+
+test("a classified entry on a matter whose client the caller cannot read is refused, not failed", async () => {
+  await using harness = createBatchHarness(0, "unreadable");
+  expect((await harness.send(classified(LEDES, "unreadable"))).status).toBe(
+    409,
+  );
+  expect(harness.writes).toEqual([]);
+  // Without a classification the client's billing format does not matter.
+  expect((await harness.send(BODY)).status).toBe(200);
+  expect(harness.writes).toHaveLength(1);
 });

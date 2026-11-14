@@ -4,6 +4,7 @@ import { afterEach, mock } from "bun:test";
 import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import type { streamChat } from "@/api/handlers/chat/stream-chat";
 import { sseResponse } from "@/api/lib/sse";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 
 /** A dispatch-only stub still owns the handed-over run until teardown. */
 export const createChatStreamMock = () => {
@@ -30,6 +31,9 @@ export const createChatStreamMock = () => {
     } finally {
       reader.releaseLock();
     }
-    return { type: "streaming", response: sseResponse(source) } as const;
+    return {
+      type: "streaming",
+      response: sseResponse(source, HELD_TEST_STREAM_BINDING),
+    } as const;
   });
 };

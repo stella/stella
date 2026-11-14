@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -9,18 +9,19 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   maskWebSearchKey,
   validateWebSearchKey,
+  WEB_SEARCH_KEY_KINDS,
   webSearchKeyAuditField,
   webSearchKeyColumns,
-  WEB_SEARCH_KEY_KINDS,
 } from "@/api/lib/web-search/keys";
 import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
-const updateWebSearchKeyBody = t.Object({
-  kind: t.UnionEnum(WEB_SEARCH_KEY_KINDS),
-  apiKey: t.String({ minLength: 1, maxLength: 256 }),
+const updateWebSearchKeyBody = v.object({
+  kind: v.picklist(WEB_SEARCH_KEY_KINDS),
+  apiKey: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
 const WEB_SEARCH_KEY_ERROR_CODE = {
@@ -80,10 +81,14 @@ const updateWebSearchKey = createSafeRootHandler(
           );
         }
       }
-      captureError(error);
+      captureError(
+        error,
+        handlerErrorContext("organizationsettings.updateWebSearchKey"),
+      );
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not reach the provider to validate the key",
         }),
       );

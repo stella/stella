@@ -1,10 +1,10 @@
 // @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { Worker } from "node:worker_threads";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
@@ -22,6 +22,7 @@ import {
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import { createHttpApp } from "@/api/http/app";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
@@ -46,6 +47,7 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -54,8 +56,29 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+/** The public sanctions route on a real port behind the error boundary. */
+const servePublicSanctions = (
+  options: Parameters<typeof createPublicSanctionsRoute>[0],
+) =>
+  serveForTest(
+    createHttpApp({
+      routes: createPublicSanctionsRoute(options),
+      middleware: [errorBoundary],
+    }),
+  );
+
+/** A public answer, checked against the route's own 200 schema. */
+const publicAnswer = (value: unknown) => {
+  const parsed = v.safeParse(publicSanctionsResponseSchema[200], value);
+  expect(parsed.issues).toBeUndefined();
+  return parsed.success
+    ? parsed.output
+    : panic("Public sanctions answer broke its schema");
+};
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const VERIFIED_AT = new Date("2026-09-20T08:00:00Z");
@@ -334,7 +357,7 @@ const assertParity = async ({
   const analytics = installRecordingAnalytics();
   const logger = installRecordingLogger();
   const context = new InMemoryRateLimitContext();
-  const route = createPublicSanctionsRoute({
+  await using route = servePublicSanctions({
     db: publicDb,
     now,
     screen: publicScreen,
@@ -349,7 +372,7 @@ const assertParity = async ({
   try {
     const response =
       publicResponse ??
-      (await route.handle(
+      (await route.fetch(
         new Request("http://localhost/sanctions/search", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -357,13 +380,7 @@ const assertParity = async ({
         }),
       ));
     expect(response.status).toBe(200);
-    const body = Value.Decode(
-      publicSanctionsResponseSchema[200],
-      await response.json(),
-    );
-    expect([...Value.Errors(publicSanctionsResponseSchema[200], body)]).toEqual(
-      [],
-    );
+    const body = publicAnswer(await response.json());
     expect(JSON.stringify(body)).not.toContain("UnmatchedPrivateIdentityQxzv");
     if (publicResponse === undefined) {
       expect(JSON.stringify(analytics.events)).not.toContain(
@@ -492,7 +509,7 @@ describe("public sanctions search parity", () => {
       const publicScreen = createPublicSanctionsScreening({
         pool: benchmarkPool(),
       });
-      const route = createPublicSanctionsRoute({
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
         screen: publicScreen,
@@ -506,7 +523,7 @@ describe("public sanctions search parity", () => {
       await db.execute(sql`REVOKE SELECT (content_hash, payload)
         ON sanctions_entry_payloads FROM stella_public_sanctions_reader`);
       const search = async () =>
-        await route.handle(
+        await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -878,7 +895,7 @@ describe("public sanctions search parity", () => {
               await screenSanctionsSubject({ ...props, indexCache: cache })
           : publicScreen;
       const context = new InMemoryRateLimitContext();
-      const route = createPublicSanctionsRoute({
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
         screen,
@@ -890,7 +907,7 @@ describe("public sanctions search parity", () => {
         },
       });
       const search = async (firstName: string, lastName: string) => {
-        const response = await route.handle(
+        const response = await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -900,13 +917,7 @@ describe("public sanctions search parity", () => {
           }),
         );
         expect(response.status).toBe(200);
-        const body = Value.Decode(
-          publicSanctionsResponseSchema[200],
-          await response.json(),
-        );
-        expect([
-          ...Value.Errors(publicSanctionsResponseSchema[200], body),
-        ]).toEqual([]);
+        const body = publicAnswer(await response.json());
         return body;
       };
       const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
@@ -1241,7 +1252,7 @@ describe("public sanctions search parity", () => {
           return entries;
         },
       });
-      const route = createPublicSanctionsRoute({
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
         screen: publicScreen,
@@ -1253,7 +1264,7 @@ describe("public sanctions search parity", () => {
         },
       });
       const run = async () =>
-        await route.handle(
+        await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -1302,7 +1313,7 @@ describe("public sanctions search parity", () => {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ subject: { type: "organization", name } }),
             });
-          expect((await route.handle(adversarialRequest())).status).toBe(200);
+          expect((await route.fetch(adversarialRequest())).status).toBe(200);
           const before = { ...recorded.work };
           const began = performance.now();
           let lastTick = began;
@@ -1315,7 +1326,7 @@ describe("public sanctions search parity", () => {
             ticks += 1;
           }, 1);
           try {
-            const response = await route.handle(adversarialRequest());
+            const response = await route.fetch(adversarialRequest());
             expect(response.status).toBe(200);
             maximumTurnMs = Math.max(
               maximumTurnMs,
@@ -1368,7 +1379,7 @@ describe("public sanctions search parity", () => {
         const logger = installRecordingLogger();
         try {
           for (const subject of subjects) {
-            const response = await route.handle(
+            const response = await route.fetch(
               new Request("http://localhost/sanctions/search", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -1479,10 +1490,7 @@ describe("public sanctions search parity", () => {
         const incompleteResponse =
           publicResponses.get(JSON.stringify(incompleteSubject)) ??
           panic("Missing bounded worker response");
-        const incomplete = Value.Decode(
-          publicSanctionsResponseSchema[200],
-          await incompleteResponse.json(),
-        );
+        const incomplete = publicAnswer(await incompleteResponse.json());
         expect(incomplete.lists.find(({ source }) => source === "ch")).toEqual({
           source: "ch",
           issuer: "CH",

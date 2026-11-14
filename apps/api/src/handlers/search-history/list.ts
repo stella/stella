@@ -1,11 +1,14 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import { and, desc, eq, gt, max, min, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { searchHistoryEntries } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,14 +21,16 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedSearchHistoryEntryId } from "@/api/lib/safe-id-boundaries";
 
 import {
+  searchHistoryCountrySchema,
   searchHistoryKindSchema,
+  searchHistoryReadIdentityPredicate,
   toSearchHistoryEntryResponse,
 } from "./entries";
 
 const config = {
   contract: "patch",
   description:
-    "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Pass `kind` to list one kind, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
+    "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Pass `kind` to list one kind, `country` to list one jurisdiction's entries, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
   permissions: { searchHistory: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -35,15 +40,24 @@ const config = {
     consumesServices: false,
     readClass: "tenant",
   },
-  query: t.Object({
-    kind: t.Optional(searchHistoryKindSchema),
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.searchHistoryPageSizeMax,
-        description: `Entries per page; ${LIMITS.searchHistoryPageSizeDefault} when omitted.`,
-      }),
+  query: v.object({
+    kind: v.optional(searchHistoryKindSchema),
+    country: v.optional(searchHistoryCountrySchema),
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      v.pipe(
+        numberFromString(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(1),
+            v.maxValue(LIMITS.searchHistoryPageSizeMax),
+          ),
+        ),
+        v.description(
+          `Entries per page; ${LIMITS.searchHistoryPageSizeDefault} when omitted.`,
+        ),
+      ),
     ),
   }),
 } satisfies HandlerConfig;
@@ -53,6 +67,9 @@ const UNSELECTED_HISTORY_COLUMNS = [
   "organizationId",
   "userId",
   "lookupKey",
+  "countryUsedAt",
+  "baseLookupKey",
+  "countryRepairFailedAt",
 ] as const satisfies readonly (keyof typeof searchHistoryEntries.$inferSelect)[];
 
 const searchHistoryCursor = createTimestampIdCursorCodec({
@@ -73,6 +90,9 @@ const listSearchHistory = createSafeRootHandler(
     ];
     if (query.kind !== undefined) {
       conditions.push(eq(searchHistoryEntries.kind, query.kind));
+    }
+    if (query.country !== undefined) {
+      conditions.push(eq(searchHistoryEntries.country, query.country));
     }
     if (query.cursor !== undefined) {
       const cursor = searchHistoryCursor.decode(query.cursor);
@@ -96,29 +116,69 @@ const listSearchHistory = createSafeRootHandler(
     }
 
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb((tx) => {
+        const candidate = alias(
+          searchHistoryEntries,
+          "history_identity_candidate",
+        );
+        const sameIdentity = searchHistoryReadIdentityPredicate({
+          entry: candidate,
+          identity: searchHistoryEntries,
+        });
+        const firstUse = tx
+          .select({ value: min(candidate.firstUsedAt) })
+          .from(candidate)
+          .where(sameIdentity);
+        const useCount = tx
+          .select({ value: max(candidate.useCount) })
+          .from(candidate)
+          .where(sameIdentity);
+        return tx
           .select({
             id: searchHistoryEntries.id,
             kind: searchHistoryEntries.kind,
+            country: searchHistoryEntries.country,
             courtId: searchHistoryEntries.courtId,
             ciphertext: searchHistoryEntries.ciphertext,
             iv: searchHistoryEntries.iv,
-            firstUsedAt: searchHistoryEntries.firstUsedAt,
+            firstUsedAt: sql`(${firstUse})`.mapWith(
+              searchHistoryEntries.firstUsedAt,
+            ),
             lastUsedAt: searchHistoryEntries.lastUsedAt,
-            useCount: searchHistoryEntries.useCount,
+            useCount: sql`(${useCount})`.mapWith(Number),
             lastUsedAtCursor: searchHistoryCursor.cursorValue.as(
               "last_used_at_cursor",
             ),
           })
           .from(searchHistoryEntries)
-          .where(and(...conditions))
+          .where(
+            and(
+              ...conditions,
+              notExists(
+                tx
+                  .select({ id: candidate.id })
+                  .from(candidate)
+                  .where(
+                    and(
+                      sameIdentity,
+                      or(
+                        sql`${candidate.lastUsedAt} > ${searchHistoryEntries.lastUsedAt}::timestamptz`,
+                        and(
+                          sql`${candidate.lastUsedAt} = ${searchHistoryEntries.lastUsedAt}::timestamptz`,
+                          gt(candidate.id, searchHistoryEntries.id),
+                        ),
+                      ),
+                    ),
+                  ),
+              ),
+            ),
+          )
           .orderBy(
             desc(searchHistoryEntries.lastUsedAt),
             desc(searchHistoryEntries.id),
           )
-          .limit(limit + 1),
-      ),
+          .limit(limit + 1);
+      }),
     );
     type SelectedHistoryRow = Omit<(typeof rows)[number], "lastUsedAtCursor">;
     type UnselectedHistoryColumn = (typeof UNSELECTED_HISTORY_COLUMNS)[number];

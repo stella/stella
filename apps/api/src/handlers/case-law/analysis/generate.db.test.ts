@@ -8,7 +8,7 @@
  * as a sentinel connection.
  */
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";

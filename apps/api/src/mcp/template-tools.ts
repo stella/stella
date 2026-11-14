@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
+import { displayNameSchema } from "@stll/api-contract/display-name";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
@@ -11,6 +12,12 @@ import type {
   TemplatePersistenceResult,
 } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
+import {
+  decodeTemplateListCursor,
+  encodeTemplateListCursor,
+  templateCursorCreatedAt,
+  templateListCursorCondition,
+} from "@/api/handlers/templates/list-cursor";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -21,6 +28,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
@@ -50,24 +58,19 @@ import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-} from "@/api/lib/pagination";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { createCursorPage } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
+  type AdmittedModelAction,
   createModelActionAdmitter,
   modelActionRefusal,
-  type AdmittedModelAction,
 } from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
 } from "@/api/lib/safe-id-boundaries";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
@@ -84,8 +87,8 @@ import {
 import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {
-  templateConditionPreviewSchema,
   decideTemplateConditions,
+  templateConditionPreviewSchema,
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
 import type {
@@ -117,11 +120,15 @@ import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { projectMcpRefusal } from "@/api/mcp/error-codes";
-import { plainRecord } from "@/api/mcp/input-schemas";
+import {
+  cursorInput,
+  nullAsAbsent,
+  plainRecord,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import {
   TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
   TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA,
@@ -168,19 +175,17 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
   invalidCursorResult,
   isToolErrorResult,
+  MAX_LIST_LIMIT,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -188,6 +193,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -241,9 +247,7 @@ const createTemplateArgsSchema = nullAsAbsent(
       ),
       name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
+          displayNameSchema(),
           v.description(
             "Display name; required when creating, optional when it renames an existing template",
           ),
@@ -688,6 +692,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   access: "read",
+  permissions: { type: "all", permissions: { template: ["use"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
@@ -702,17 +707,12 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   description:
-    "Configure an existing template's fields: who fills each one, its input " +
-    "control, options and validation. The configuration lives in the " +
-    "document, so this rewrites what carries each field (its markers at " +
-    "every occurrence, the {% if %} tags a rule replaces, the keyed markers " +
-    "that render a registry hit) and publishes the result. Pass " +
-    "template_id and one entry per field path; every path must be one the " +
-    "document already carries, and a " +
-    "property you leave out keeps what the marker says. Read " +
-    `${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the template's full ` +
-    "field configuration afterwards, plus the entries that could not be " +
-    "applied.",
+    "Configure an existing template's field owner, input control, options and " +
+    "validation. This rewrites its field markers and affected {% if %} or " +
+    "registry markers, then publishes the result. Pass template_id and entries " +
+    "for existing field paths; omitted properties keep their marker settings. " +
+    `Read ${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the full configuration ` +
+    "and entries that could not be applied.",
   inputSchema: configureTemplateFieldsArgsSchema,
   inputNormalization: {
     "fields[].date_format": {
@@ -746,13 +746,19 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
 const listTemplatesArgsSchema = nullAsAbsent(
   v.strictObject({
     template_id: v.optional(
-      uuidInputSchema(
-        "Template id to describe its fields in detail; omit to list templates",
+      uuidInputSchema("Template id for field details; omit to list"),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(LIMITS.mcpListPageSizeMin),
+        v.maxValue(MAX_LIST_LIMIT),
+        v.description("Page size (list mode)"),
       ),
     ),
     cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous list_templates call to fetch the next page",
+      description: "Next-page cursor from list_templates",
     }),
   }),
 );
@@ -766,19 +772,18 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "List the document templates in this organization (NDAs, powers of " +
-    "attorney, leases), or describe one template's fillable fields. Omit " +
-    "template_id to list templates: each template's id, name, field count, " +
-    "tags, and usage guidance (whenToUse / whenNotToUse); use a template " +
-    "whose whenToUse matches the request and skip any whose whenNotToUse " +
-    "applies. Pass template_id to return that template's full field " +
-    "configuration, its named conditions and formula fields. The " +
-    "configuration is in the shape configure_template_fields accepts " +
-    `(see ${TEMPLATE_FIELD_REFERENCE_URI}), and the response carries that ` +
-    "call to make next. " +
+    "List the organization's document templates (NDAs, powers of attorney, " +
+    "leases), or pass template_id for one template's full field " +
+    "configuration, named conditions and formula fields. Listing returns " +
+    "each template's id, name, field count, tags and usage guidance: use one " +
+    "whose whenToUse matches the request; skip any whose whenNotToUse " +
+    "applies. The configuration is in the shape configure_template_fields " +
+    `accepts (see ${TEMPLATE_FIELD_REFERENCE_URI}), and the response carries ` +
+    "that call to make next. " +
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
+  permissions: { type: "all", permissions: { workspace: ["read"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
@@ -948,17 +953,6 @@ const TEMPLATE_TOOL_DEFINITIONS = [
   PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
-// The list_templates cursor is the boundary template id alone; the query
-// resolves its (createdAt, id) in-DB.
-const decodeTemplatePageCursor = (cursor: string): string | null => {
-  const parts = decodePaginationCursor(cursor);
-  if (!parts || parts.length !== 1) {
-    return null;
-  }
-  const [rawId] = parts;
-  return isUuidPaginationCursorPart(rawId) ? rawId : null;
-};
-
 const handleListTemplatesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_TEMPLATES_PROJECTION>
 > = async ({ args, context }) => {
@@ -976,40 +970,46 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   const { cursor: requestedCursor, template_id: templateId } = routed.output;
 
   // Detail mode: template_id returns one template's field configuration. The
-  // list-only cursor does not apply, so reject the mixed request up front.
+  // Paging applies only to list mode; reject mixed requests before reading detail.
   if (templateId !== undefined) {
-    if (requestedCursor !== undefined) {
+    const pagingFields = [
+      ...(requestedCursor === undefined ? [] : ["cursor"]),
+      ...(routed.output.limit === undefined ? [] : ["limit"]),
+    ];
+    if (pagingFields.length > 0) {
       return structuredErrorResult({
         code: "validation_error",
         message:
-          "cursor applies when listing templates; omit template_id to list",
-        issues: [
-          {
-            path: "cursor",
-            message:
-              "cursor applies when listing templates; omit template_id to list",
-          },
-        ],
-        hint: "Omit 'template_id' to list templates with 'cursor', or omit 'cursor' when requesting a single template_id.",
+          "Paging applies when listing templates; omit template_id to list",
+        issues: pagingFields.map((path) => ({
+          path,
+          message: `${path} applies when listing templates; omit template_id to list`,
+        })),
+        hint: "Omit 'template_id' to list templates with paging, or omit 'cursor' and 'limit' when requesting a single template_id.",
       });
     }
     return await describeTemplateDetail({ templateId, context });
   }
 
-  let boundaryId: string | undefined;
+  let boundary:
+    NonNullable<ReturnType<typeof decodeTemplateListCursor>> | undefined;
   if (requestedCursor !== undefined) {
-    const decoded = decodeTemplatePageCursor(requestedCursor);
+    const decoded = decodeTemplateListCursor(requestedCursor);
     if (decoded === null) {
-      return invalidCursorResult({ cursor: requestedCursor });
+      return invalidCursorResult({
+        cursor: requestedCursor,
+        tool: "list_templates",
+      });
     }
-    boundaryId = decoded;
+    boundary = decoded;
   }
 
-  const limit = LIMITS.templatesCount;
+  const limit = routed.output.limit ?? LIMITS.templatesCount;
   const rows = await context.scopedDb((tx) =>
     tx
       .select({
         id: templates.id,
+        cursorCreatedAt: templateCursorCreatedAt,
         name: templates.name,
         fieldCount: templates.fieldCount,
         tags: templates.tags,
@@ -1020,14 +1020,9 @@ const handleListTemplatesTool: TypedMcpToolHandler<
       .where(
         and(
           eq(templates.organizationId, context.organizationId),
-          // Resolve the full-precision (createdAt, id) boundary in-DB by id
-          // so the cursor never round-trips createdAt through a millisecond
-          // JS Date. The boundary lookup is org-scoped (defense in depth
-          // beyond RLS) so a cursor carrying a foreign template id cannot
-          // shift this org's page boundary.
-          boundaryId === undefined
+          boundary === undefined
             ? undefined
-            : sql`(${templates.createdAt}, ${templates.id}) < (select b.created_at, b.id from templates b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId})`,
+            : templateListCursorCondition(boundary),
         ),
       )
       .orderBy(desc(templates.createdAt), desc(templates.id))
@@ -1037,14 +1032,14 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   const page = createCursorPage({
     rows,
     limit,
-    cursorForItem: (item) => encodePaginationCursor([item.id]),
+    cursorForItem: encodeTemplateListCursor,
   });
 
   // Templates are organization-scoped, so the org id is the anonymization
   // scope. Only the org-authored free text (name, usage guidance, tags) is
   // redacted; ids and field counts pass through.
   const payload = projectionPayload(LIST_TEMPLATES_LIST_PROJECTION, {
-    templates: page.items,
+    templates: page.items.map(({ cursorCreatedAt, ...item }) => item),
     nextCursor: page.nextCursor,
   });
   const textFields = runTextFieldSpecs(
@@ -1063,7 +1058,7 @@ const describeTemplateDetail = async ({
   context,
 }: {
   templateId: string;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }): Promise<
   TypedMcpToolResponse<v.InferInput<typeof LIST_TEMPLATES_PROJECTION>>
 > => {
@@ -1307,7 +1302,7 @@ type OrgAIConfigRead = Awaited<ReturnType<typeof loadOrgAIConfig>>;
  * asks for a usage preflight or AI collaborators. A deterministic template
  * declares no AI field, so it must not pay for that read.
  */
-const deferOrgAIConfig = (context: McpRequestContext) => {
+const deferOrgAIConfig = (context: AuthorizedMcpRequestContext) => {
   let pending: Promise<OrgAIConfigRead> | undefined;
   return async (): Promise<OrgAIConfigRead> => {
     const reader = {
@@ -1350,7 +1345,7 @@ const assertTemplateFillUsage = async ({
   readOrgAIConfig,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   readOrgAIConfig: () => Promise<OrgAIConfigRead>;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
@@ -1388,7 +1383,7 @@ const admitTemplateFillAi = ({
   workspaceId,
   collaborators,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   readOrgAIConfig: () => Promise<OrgAIConfigRead>;
   workspaceId: SafeId<"workspace"> | null;
   collaborators: (
@@ -1553,7 +1548,10 @@ const handleFillTemplateTool: McpToolHandler<
     recordAuditEvent: context.recordAuditEvent,
   });
   if (Result.isError(recorded)) {
-    return internalFailureResult(recorded.error);
+    return internalFailureResult(
+      recorded.error,
+      "mcp.handleFillTemplateTool.recorded_error",
+    );
   }
 
   const completion = gateTemplateFillCompletion({
@@ -1575,7 +1573,7 @@ const handleFillTemplateTool: McpToolHandler<
           ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
           : filled.text,
         truncated,
-        docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
+        docxBase64: Buffer.from(filled.file.bytes).toBase64(),
         unmatchedPlaceholders: filled.unmatchedPlaceholders,
         unusedValues: filled.unusedValues,
         clauseWarnings: filled.clauseWarnings,
@@ -1659,10 +1657,10 @@ const validateFilledTemplateDestination = async ({
   workspaceId,
 }: {
   action: "create_document" | "create_version";
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId?: string | undefined;
   parentId?: string | undefined;
-  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+  workspaceId: AuthorizedMcpRequestContext["accessibleWorkspaceIds"][number];
 }): Promise<string | null> => {
   if (action === "create_document") {
     const destinationResult = await context.safeDb(async (tx) => {
@@ -1823,7 +1821,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     requestFingerprint,
   });
   if (Result.isError(claim)) {
-    return internalFailureResult(claim.error);
+    return internalFailureResult(
+      claim.error,
+      "mcp.handleSaveFilledTemplateTool.claim_error",
+    );
   }
   const claimToken = (():
     | string
@@ -1876,7 +1877,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       claimToken,
     });
     if (Result.isError(released)) {
-      captureError(released.error);
+      captureError(
+        released.error,
+        handlerErrorContext("mcp.releaseClaim.released_error"),
+      );
     }
   };
 
@@ -1991,7 +1995,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   );
   if (Result.isError(filledResult)) {
     await releaseClaim();
-    return internalFailureResult(filledResult.error);
+    return internalFailureResult(
+      filledResult.error,
+      "mcp.handleSaveFilledTemplateTool.filledResult_error",
+    );
   }
   const filled = filledResult.value;
   if ("usageRejection" in filled) {
@@ -2159,7 +2166,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   });
   if (Result.isError(persistence)) {
     await releaseClaim();
-    return internalFailureResult(persistence.error);
+    return internalFailureResult(
+      persistence.error,
+      "mcp.handleSaveFilledTemplateTool.persistence_error",
+    );
   }
   if (persistence.value.status === "error") {
     await releaseClaim();
@@ -2282,7 +2292,7 @@ const downloadHostFileDocx = async ({
   context,
   file,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
 }): Promise<ResolvedTemplateDocx> => {
   const permit = context.thirdPartyOutboundPermit;
@@ -2341,7 +2351,7 @@ const resolveTemplateDocx = async ({
   context,
   source,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   source: TemplateDocxSource;
 }): Promise<ResolvedTemplateDocx> => {
   switch (source.type) {
@@ -2366,7 +2376,7 @@ const readCreateTemplateDocx = async ({
   context,
   source,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   source: TemplateDocxSource;
 }): Promise<CreateTemplateDocx> => {
   const resolved = await resolveTemplateDocx({ context, source });
@@ -2472,7 +2482,7 @@ const upsertStoredTemplate = async ({
   templateId,
 }: {
   file: ScannedFile | null;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   name: string | undefined;
   templateId: SafeId<"template">;
 }): Promise<InternalToolErrorResult | { fieldCount: number }> => {
@@ -2487,7 +2497,10 @@ const upsertStoredTemplate = async ({
       }),
     );
     return Result.isError(renamed)
-      ? internalFailureResult(renamed.error)
+      ? internalFailureResult(
+          renamed.error,
+          "mcp.upsertStoredTemplate.renamed_error",
+        )
       : { fieldCount: renamed.value.fieldCount };
   }
 
@@ -2505,7 +2518,10 @@ const upsertStoredTemplate = async ({
     }),
   );
   return Result.isError(written)
-    ? internalFailureResult(written.error)
+    ? internalFailureResult(
+        written.error,
+        "mcp.upsertStoredTemplate.written_error",
+      )
     : { fieldCount: written.value.row.fieldCount };
 };
 
@@ -2591,7 +2607,10 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.handleCreateTemplateTool.created_error",
+    );
   }
 
   const described = await describeTemplateForAgent({
@@ -2628,7 +2647,7 @@ const describeTemplateForAgent = async ({
   context,
   templateId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   templateId: SafeId<"template">;
 }): Promise<InternalToolErrorResult | TemplateDetailPayload> => {
   const described = await (
@@ -2968,7 +2987,10 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(configured)) {
-    return internalFailureResult(configured.error);
+    return internalFailureResult(
+      configured.error,
+      "mcp.handleConfigureTemplateFieldsTool.configured_error",
+    );
   }
   // The service only saw the entries the schema accepted, so it counts
   // positions in THAT list. The caller counts positions in the list it sent,
@@ -3032,7 +3054,7 @@ const templateFailureResult = (
     case 403:
     case 429:
     case 500:
-      return internalFailureResult(error);
+      return internalFailureResult(error, "mcp.templateFailureResult.error");
     default:
       error.status satisfies never;
       return panic(
@@ -3164,7 +3186,10 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
     }
     return decided.error.status === 404 || decided.error.status === 422
       ? templateFailureResult(decided.error)
-      : internalFailureResult(decided.error);
+      : internalFailureResult(
+          decided.error,
+          "mcp.handlePreviewTemplateConditionsTool.decided_error",
+        );
   }
 
   // Each condition's label is the org-authored field label; its path,

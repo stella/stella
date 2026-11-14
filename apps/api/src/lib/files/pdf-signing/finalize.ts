@@ -8,7 +8,7 @@ import { Result } from "better-result";
  */
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { pdfSigningSessions } from "@/api/db/schema";
@@ -39,7 +39,7 @@ import {
 } from "@/api/lib/files/pdf-signing/sign-pdf";
 import type { AppliedSignature } from "@/api/lib/files/pdf-signing/sign-pdf";
 import { configuredTimestampAuthorities } from "@/api/lib/files/pdf-signing/timestamp-authority";
-import { configuredTimestampTrustAnchors } from "@/api/lib/files/pdf-signing/timestamp-trust";
+import { configuredTimestampTrust } from "@/api/lib/files/pdf-signing/timestamp-trust";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -182,7 +182,7 @@ const embed = async (
     signingTime: prepared.signingTime,
     stamp: session.stamp,
     timestampAuthorities: configuredTimestampAuthorities(permit),
-    timestampTrustAnchors: configuredTimestampTrustAnchors(),
+    timestampTrust: await configuredTimestampTrust(),
   });
   if (Result.isOk(applied)) {
     return Result.ok(applied.value);

@@ -114,8 +114,7 @@ export const createEbsReaderCache = ({
     let lastReal: EbsBalanceReading | undefined;
     let cached: Result<EbsBalanceReading, EbsBalanceReadError> | undefined;
     let inFlight:
-      | Promise<Result<EbsBalanceReading, EbsBalanceReadError>>
-      | undefined;
+      Promise<Result<EbsBalanceReading, EbsBalanceReadError>> | undefined;
     const read: RawReader = async () => {
       if (inFlight !== undefined) {
         return await inFlight;
@@ -192,8 +191,7 @@ export const createEbsSignalReader = ({
 }: EbsSignalReaderOptions): (() => Promise<Signal>) => {
   let loggedMissing = false;
   let read:
-    | (() => Promise<Result<EbsBalanceReading, EbsBalanceReadError>>)
-    | undefined;
+    (() => Promise<Result<EbsBalanceReading, EbsBalanceReadError>>) | undefined;
   return async () => {
     switch (configuration.type) {
       case "enabled":

@@ -1,9 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -15,7 +17,7 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
@@ -51,6 +53,8 @@ import {
   resolveQueuedFileObject,
 } from "@/api/lib/files/file-object-ids";
 import {
+  ConversionInputError,
+  type ConversionInputErrorReason,
   convertToPdf,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
@@ -75,6 +79,7 @@ import type {
   MemoryPressureGate,
   PressurePause,
 } from "@/api/lib/memory-pressure";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -93,9 +98,9 @@ import {
   S3ObjectBudgetError,
 } from "@/api/lib/s3";
 import {
+  brandNullablePersistedUserId,
   brandPersistedEntityId,
   brandPersistedFieldId,
-  brandNullablePersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -160,7 +165,7 @@ const lockActiveWorkspaceForDerivative = async (
     .where(eq(workspaces.id, workspaceId))
     .limit(1)
     .for("update");
-  return workspaceRows.at(0)?.status === "active";
+  return workspaceAcceptsWrites(workspaceRows.at(0)?.status);
 };
 
 const cleanupUnpublishedDerivative = async ({
@@ -191,7 +196,13 @@ const cleanupUnpublishedDerivative = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, telemetry);
+    captureError(
+      cleanup.error,
+      handlerErrorContext(
+        "lib.cleanupUnpublishedDerivative.cleanup_error",
+        telemetry,
+      ),
+    );
   }
   const settlement = await settleObjectCleanupIntentsAfterWriter({
     intentIds: [intentId],
@@ -202,7 +213,13 @@ const cleanupUnpublishedDerivative = async ({
     safeDb,
   });
   if (Result.isError(settlement)) {
-    captureError(settlement.error, telemetry);
+    captureError(
+      settlement.error,
+      handlerErrorContext(
+        "lib.cleanupUnpublishedDerivative.settlement_error",
+        telemetry,
+      ),
+    );
   }
 };
 
@@ -298,11 +315,14 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
       args,
       DERIVATIVE_FAILURE_REASON.ENQUEUE,
     ).catch((markError: unknown) => {
-      captureError(markError, {
-        entityId: args.entityId,
-        fieldId: args.fieldId,
-        workspaceId: args.workspaceId,
-      });
+      captureError(
+        markError,
+        handlerErrorContext("lib.enqueuePdfDerivativeOrMarkFailed.markError", {
+          entityId: args.entityId,
+          fieldId: args.fieldId,
+          workspaceId: args.workspaceId,
+        }),
+      );
     });
 
     throw error;
@@ -361,11 +381,14 @@ export const enqueueImageThumbnailOrMarkFailed = async (
       args,
       DERIVATIVE_FAILURE_REASON.ENQUEUE,
     ).catch((markError: unknown) => {
-      captureError(markError, {
-        entityId: args.entityId,
-        fieldId: args.fieldId,
-        workspaceId: args.workspaceId,
-      });
+      captureError(
+        markError,
+        handlerErrorContext("lib.enqueueImageThumbnailOrMarkFailed.markError", {
+          entityId: args.entityId,
+          fieldId: args.fieldId,
+          workspaceId: args.workspaceId,
+        }),
+      );
     });
 
     throw error;
@@ -393,7 +416,9 @@ export const initFileDerivativeWorker = () => {
   // Bound late: the controller pauses the worker that runs the processor.
   let pauseTarget: { pause: () => void; resume: () => void } | null = null;
   const pausing = createPressurePause({
-    gate: memory,
+    gate: {
+      read: () => memory.read(LIMITS.fileDerivativeSourceMaxBytes),
+    },
     pause: () => pauseTarget?.pause(),
     resume: () => pauseTarget?.resume(),
     recheckMs: LIMITS.fileDerivativeDeferDelayMs,
@@ -428,20 +453,28 @@ export const initFileDerivativeWorker = () => {
     // Local pause without waiting: it is called from inside the processor,
     // which must still finish the job in hand.
     pause: () => {
-      worker.pause(true).catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        async () =>
+          worker.pause(true).catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.pause",
+      );
     },
     resume: () => {
-      worker.resume().catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        async () =>
+          worker.resume().catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.resume",
+      );
     },
   };
 
@@ -449,34 +482,51 @@ export const initFileDerivativeWorker = () => {
     const exhausted =
       job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
     if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-      markImageThumbnailFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(markError, {
-          entityId: job.data.entityId,
-          fieldId: job.data.fieldId,
-          workspaceId: job.data.workspaceId,
-        });
-      });
+      detached(
+        async () =>
+          markImageThumbnailFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markThumbnailFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
+          }),
+        "file-derivative-queue.mark-image-thumbnail-failed",
+      );
     } else if (exhausted) {
-      markPdfDerivativeFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(markError, {
-          entityId: job.data.entityId,
-          fieldId: job.data.fieldId,
-          workspaceId: job.data.workspaceId,
-        });
-      });
+      detached(
+        async () =>
+          markPdfDerivativeFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markPdfFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
+          }),
+        "file-derivative-queue.mark-pdf-derivative-failed",
+      );
     }
 
-    captureError(error, {
-      entityId: job?.data.entityId ?? "",
-      fieldId: job?.data.fieldId ?? "",
-      workspaceId: job?.data.workspaceId ?? "",
-    });
+    captureError(
+      error,
+      handlerErrorContext("lib.initFileDerivativeWorker", {
+        entityId: job?.data.entityId ?? "",
+        fieldId: job?.data.fieldId ?? "",
+        workspaceId: job?.data.workspaceId ?? "",
+      }),
+    );
     logger.error("file_derivative.failed", {
       entityId: job?.data.entityId ?? "",
       "error.type": errorTag(error),
@@ -537,7 +587,10 @@ export const createFileDerivativeProcessor =
     processThumbnail: (data: FileDerivativeJobData) => Promise<void>;
   }) =>
   async (job: FileDerivativeProcessorJob): Promise<void> => {
-    const pressure = memory.read();
+    // Reserve the full admitted input budget before claiming converter work.
+    // Every backend enforces this same cap, so even legacy jobs without a
+    // recorded source size receive conservative byte-weighted admission.
+    const pressure = memory.read(LIMITS.fileDerivativeSourceMaxBytes);
     if (pressure.cause !== null) {
       pausing.closed(pressure);
       await job.moveToDelayed(
@@ -607,7 +660,8 @@ const MARK_DERIVATIVE_FAILED = {
   [FILE_DERIVATIVE_KIND.PDF]: async (
     data: FileDerivativeJobData,
     reason: DerivativeFailureReason,
-  ) => await markPdfDerivativeFailed(data, reason),
+    conversionRefusal?: DisplayableConversionRefusal,
+  ) => await markPdfDerivativeFailed(data, reason, conversionRefusal),
   [FILE_DERIVATIVE_KIND.THUMBNAIL]: async (
     data: FileDerivativeJobData,
     reason: DerivativeFailureReason,
@@ -617,6 +671,7 @@ const MARK_DERIVATIVE_FAILED = {
   (
     data: FileDerivativeJobData,
     reason: DerivativeFailureReason,
+    conversionRefusal?: DisplayableConversionRefusal,
   ) => Promise<void>
 >;
 
@@ -626,12 +681,14 @@ const refuseDerivative = async ({
   jobData,
   kind,
   reason,
+  conversionRefusal,
   workspaceId,
 }: {
   fieldId: SafeId<"field">;
   jobData: FileDerivativeJobData;
   kind: FileDerivativeKind;
   reason: DerivativeFailureReason;
+  conversionRefusal?: DisplayableConversionRefusal;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
   logger.info("file_derivative.refused", {
@@ -640,14 +697,53 @@ const refuseDerivative = async ({
     reason,
     workspaceId,
   });
-  await MARK_DERIVATIVE_FAILED[kind](jobData, reason);
+  await MARK_DERIVATIVE_FAILED[kind](jobData, reason, conversionRefusal);
 };
 
 type FileFieldContent = Extract<FieldContent, { type: "file" }>;
 
+type DisplayableConversionRefusal = ConversionRefusal;
+
+/** Every refusal the user can act on is shown; a new kind must choose. */
+export const displayableConversionRefusal = (
+  reason: ConversionInputErrorReason,
+): DisplayableConversionRefusal | undefined => {
+  switch (reason.kind) {
+    case "unsupported_encoding": {
+      return { kind: reason.kind, encoding: reason.encoding.slice(0, 256) };
+    }
+    case "unsupported_reference": {
+      return {
+        kind: reason.kind,
+        format: reason.format.slice(0, 256),
+        element: reason.element.slice(0, 512),
+        attribute: reason.attribute.slice(0, 512),
+      };
+    }
+    case "unsupported_field": {
+      return { kind: reason.kind, fieldType: reason.fieldType.slice(0, 256) };
+    }
+    case "legacy_format": {
+      return reason;
+    }
+    case "external_reference":
+    case "inspection_failed": {
+      return undefined;
+    }
+    default: {
+      reason satisfies never;
+      return panic("Unclassified conversion refusal");
+    }
+  }
+};
+
 type DerivativeBuild<T> =
   | { type: "built"; value: T }
-  | { type: "refused"; reason: DerivativeFailureReason };
+  | {
+      type: "refused";
+      reason: DerivativeFailureReason;
+      conversionRefusal?: DisplayableConversionRefusal;
+    };
 
 const readSourceWithinBudget = async <T>(
   read: (signal: AbortSignal) => Promise<T>,
@@ -682,8 +778,20 @@ const buildPdfDerivative = async (
   if (source.type === "refused") {
     return source;
   }
-  const conversion = await convertToPdf(source.source, { retry: "caller" });
+  const conversion = await convertToPdf(source.source, {
+    retry: "caller",
+  });
   if (Result.isError(conversion)) {
+    if (conversion.error instanceof ConversionInputError) {
+      const conversionRefusal = displayableConversionRefusal(
+        conversion.error.reason,
+      );
+      return {
+        type: "refused",
+        reason: DERIVATIVE_FAILURE_REASON.PROCESSING,
+        ...(conversionRefusal === undefined ? {} : { conversionRefusal }),
+      };
+    }
     if (conversion.error instanceof DerivativeAdmissionError) {
       return {
         type: "refused",
@@ -794,6 +902,9 @@ const processPdfDerivativeJob = async (
       jobData,
       kind: FILE_DERIVATIVE_KIND.PDF,
       reason: built.reason,
+      ...(built.conversionRefusal === undefined
+        ? {}
+        : { conversionRefusal: built.conversionRefusal }),
       workspaceId: branded.workspaceId,
     });
     return;
@@ -939,17 +1050,25 @@ const readyPdfDerivativeContent = (pdfFileId: string) =>
     true
   )`;
 
-const failedPdfDerivativeContent = (reason: DerivativeFailureReason) =>
+const failedPdfDerivativeContent = (
+  reason: DerivativeFailureReason,
+  conversionRefusal?: DisplayableConversionRefusal,
+) =>
   sql<FieldContent>`jsonb_set(
     ${fields.content},
     '{pdfDerivative}',
-    ${JSON.stringify({ status: "failed", reason })}::text::jsonb,
+    ${JSON.stringify({
+      status: "failed",
+      reason,
+      ...(conversionRefusal === undefined ? {} : { conversionRefusal }),
+    })}::text::jsonb,
     true
   )`;
 
 const markPdfDerivativeFailed = async (
   { fieldId, organizationId, userId, workspaceId }: FileDerivativeJobData,
   reason: DerivativeFailureReason,
+  conversionRefusal?: DisplayableConversionRefusal,
 ): Promise<void> => {
   const branded = brandValidatedWorkflowActorKey({
     organizationId,
@@ -965,7 +1084,7 @@ const markPdfDerivativeFailed = async (
     tx
       .update(fields)
       .set({
-        content: failedPdfDerivativeContent(reason),
+        content: failedPdfDerivativeContent(reason, conversionRefusal),
       })
       .where(
         and(
@@ -1428,7 +1547,14 @@ export const requeueFileDerivative = async (
   } catch (error) {
     await markFailed(kind, jobData, DERIVATIVE_FAILURE_REASON.ENQUEUE).catch(
       (markError: unknown) => {
-        captureError(markError, { entityId, fieldId, workspaceId });
+        captureError(
+          markError,
+          handlerErrorContext("lib.requeueFileDerivative.markError", {
+            entityId,
+            fieldId,
+            workspaceId,
+          }),
+        );
       },
     );
     throw error;

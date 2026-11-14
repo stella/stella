@@ -5,12 +5,12 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  PINNED_BOTTOM_THRESHOLD_PX,
   attachFollowState,
   decideContentResize,
   followAfterScroll,
   followAfterScrollToBottomRequest,
   followAfterWheel,
+  PINNED_BOTTOM_THRESHOLD_PX,
 } from "@/hooks/use-stick-to-bottom.logic";
 import type {
   FollowState,

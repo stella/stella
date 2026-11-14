@@ -9,6 +9,7 @@ import {
 } from "@/api/lib/scheduler/jobs";
 import { REGISTERED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/registry";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import { FLOW_RUN_TASK } from "@/api/lib/scheduler/tasks/flow-run";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
@@ -68,7 +69,7 @@ describe("declared scheduler jobs", () => {
     });
   });
 
-  test("case-law freshness is reported every five minutes", () => {
+  test("case-law freshness is reported hourly", () => {
     expect(
       DECLARED_SCHEDULER_JOBS.find(
         ({ task }) => task === REPORT_CASE_LAW_FRESHNESS_TASK,
@@ -76,7 +77,7 @@ describe("declared scheduler jobs", () => {
     ).toMatchObject({
       id: "caseLaw.reportFreshness.fiveMinute",
       mode: "recurring",
-      schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+      schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     });
   });
 
@@ -105,5 +106,18 @@ describe("declared scheduler jobs", () => {
     expect(initialNextRunAt(definition, now).getTime()).toBe(
       now.getTime() + DAY_IN_MS,
     );
+  });
+});
+
+test("parsed input state backfill retires once and preserves completion on registration", () => {
+  expect(
+    DECLARED_SCHEDULER_JOBS.find(
+      ({ task }) => task === BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
+    ),
+  ).toMatchObject({
+    mode: "oneShot",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    reads: "load-governed",
   });
 });

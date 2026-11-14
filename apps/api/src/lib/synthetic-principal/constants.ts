@@ -1,3 +1,5 @@
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+
 export const SYNTHETIC_PRINCIPAL = {
   user: {
     id: "synthetic-prod-user",
@@ -12,6 +14,10 @@ export const SYNTHETIC_PRINCIPAL = {
   memberId: "synthetic-prod-member",
 } as const;
 
+const SYNTHETIC_PRINCIPAL_EMAIL = normalizeEmail(
+  SYNTHETIC_PRINCIPAL.user.email,
+);
+
 type SyntheticPrincipalIdentity = {
   userId?: string | null | undefined;
   organizationId?: string | null | undefined;
@@ -25,7 +31,8 @@ export const isSyntheticPrincipal = ({
 }: SyntheticPrincipalIdentity): boolean =>
   userId === SYNTHETIC_PRINCIPAL.user.id ||
   organizationId === SYNTHETIC_PRINCIPAL.org.id ||
-  email?.trim().toLowerCase() === SYNTHETIC_PRINCIPAL.user.email;
+  (typeof email === "string" &&
+    normalizeEmail(email) === SYNTHETIC_PRINCIPAL_EMAIL);
 
 export const SYNTHETIC_SESSION_PREFIX = "synthetic-session-";
 export const SYNTHETIC_SESSION_LIFETIME_MS = 30 * 60 * 1000;

@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
 
+import { installTauriIpc } from "./tauri-ipc";
+
 const localeRoot = new URL("../../src/i18n/langs/", import.meta.url);
 const locales = readdirSync(localeRoot).filter((name) =>
   name.endsWith(".json"),
@@ -53,12 +55,15 @@ for (const file of locales) {
           availHeight: { value: 768 },
           availWidth: { value: 1440 },
         });
-        Reflect.set(window, "__TAURI_INTERNALS__", {
-          invoke: (command: string, size: unknown) =>
-            command === "fit_static_dialog"
-              ? Reflect.get(window, "resizeDialog")(size)
-              : Promise.resolve(null),
-        });
+      });
+      await installTauriIpc(page, {
+        windowLabel: kind,
+        unhandled: "resolveUndefined",
+        arg: null,
+        handlers: () => ({
+          fit_static_dialog: (size) =>
+            Reflect.get(window, "resizeDialog")(size),
+        }),
       });
       const params = new URLSearchParams({
         lang: locale,

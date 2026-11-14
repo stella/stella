@@ -1,34 +1,36 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import type {
-  CorrespondenceAuthResult,
-  CorrespondenceAuthentication,
   CorrespondenceAuthenticatedSender,
+  CorrespondenceAuthentication,
+  CorrespondenceAuthResult,
   CorrespondenceDropReason,
   CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { declareFingerprintFields } from "@stll/errors";
 import { createSha256 } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import { parseInboundAddressToken } from "@/api/lib/email/inbound/address";
 import {
   hasAlignedAuthentication,
-  verifyOriginalSignature,
   type MailAuthentication,
   type MailAuthResult,
   type MailEnvelope,
   type MailVerifier,
+  verifyOriginalSignature,
 } from "@/api/lib/email/inbound/authentication";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
   correspondenceFromMessage,
-  InboundMessageError,
-  parseInboundMessage,
   type InboundAttachment,
+  InboundMessageError,
   type InboundMessageErrorReason,
   type ParsedInboundMessage,
+  parseInboundMessage,
 } from "@/api/lib/email/inbound/message";
 
 const AUTH_PROJECTION = {
@@ -56,7 +58,7 @@ export const PARSE_DROP_REASON = {
 >;
 
 const deliveryMetadataSchema = v.strictObject({
-  receivedAt: v.pipe(v.string(), v.isoTimestamp()),
+  receivedAt: apiDateTimeSchema,
   envelope: v.strictObject({
     mailFrom: v.pipe(v.string(), v.maxLength(1024)),
     recipients: v.pipe(
@@ -76,7 +78,11 @@ class InboundIngestError extends TaggedError("InboundIngestError")<{
     | "verification-unavailable"
     | "scan-unavailable"
     | "persistence-unavailable";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type ClassifiedDelivery =
   | { status: "drop"; sender: string | null; reason: CorrespondenceDropReason }
@@ -375,6 +381,7 @@ export const ingestInboundMail = async ({
         }),
       );
     } else if (scan !== "pass") {
+      // An inconclusive provider verdict is immutable; retrying cannot resolve it.
       delivery = {
         status: "drop",
         sender: outerSender,

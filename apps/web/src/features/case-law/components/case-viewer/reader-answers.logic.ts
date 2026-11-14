@@ -4,21 +4,30 @@ import * as v from "valibot";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
 import type {
-  ReaderAnswerErrorCode,
   ReaderAnswer,
+  ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { safeIdSchema } from "@stll/api-contract/safe-id";
 
 import { APIError } from "@/lib/errors/api";
-import { readSSEEvents } from "@/lib/sse-events";
+import { readSSEEventChunks } from "@/lib/sse-events";
 import type { SSEEvent } from "@/lib/sse-events";
 
 export class ReaderAnswerFailure extends TaggedError("ReaderAnswerFailure")<{
   message: string;
   kind: "protocol" | "model" | "request";
   code?: ReaderAnswerErrorCode;
+  cause?: unknown;
 }> {}
+
+export type ReaderAnswerFailureNotice =
+  | { type: "operation"; error: Error }
+  | {
+      type: "message";
+      messageId: string;
+      error: APIError | ReaderAnswerFailure;
+    };
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- Nonnegative token and citation quantities validate the wire contract; zero is a mathematical boundary, not a product limit.
 const count = v.pipe(v.number(), v.integer(), v.minValue(0));
@@ -96,12 +105,12 @@ const parseReaderAnswerEvent = (frame: SSEEvent) => {
 };
 
 type ConsumeReaderAnswerStreamOptions = {
-  body: ReadableStream<Uint8Array>;
+  chunks: AsyncIterable<Uint8Array>;
   signal: AbortSignal;
   onEvent: (event: ReaderAnswerStreamEvent) => void;
 };
 export const consumeReaderAnswerStream = async ({
-  body,
+  chunks,
   signal,
   onEvent,
 }: ConsumeReaderAnswerStreamOptions) => {
@@ -111,7 +120,7 @@ export const consumeReaderAnswerStream = async ({
   };
   const read = await Result.tryPromise(
     async () =>
-      await readSSEEvents(body, (frame) => {
+      await readSSEEventChunks(chunks, (frame) => {
         if (signal.aborted) {
           return false;
         }
@@ -268,7 +277,11 @@ const READER_ANSWER_ERROR_KINDS = {
   [ACTION_ADMISSION_CODES.periodExhausted]: "budget",
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "network",
   [ACTION_ADMISSION_CODES.notEnabled]: "network",
-  [ACTION_ADMISSION_CODES.admissionUnavailable]: "network",
+  [ACTION_ADMISSION_CODES.storeUnavailable]: "network",
+  [ACTION_ADMISSION_CODES.configurationIncomplete]: "network",
+  [ACTION_ADMISSION_CODES.organizationStateUnreadable]: "network",
+  [ACTION_ADMISSION_CODES.leaseLost]: "network",
+  [ACTION_ADMISSION_CODES.featureDisabled]: "network",
 } as const satisfies Record<ReaderAnswerErrorCode, string>;
 
 export type ReaderAnswerFailureKind =
@@ -290,8 +303,17 @@ export const readerAnswerFailureKind = (
   ) {
     return "budget";
   }
-  if (!ReaderAnswerFailure.is(error)) {
+  if (APIError.is(error)) {
+    return "model";
+  }
+  if (error instanceof Error && error.name === "TimeoutError") {
+    return "timeout";
+  }
+  if (error instanceof Error && error.name === "AbortError") {
     return "network";
+  }
+  if (!ReaderAnswerFailure.is(error)) {
+    return "model";
   }
   if (error.code !== undefined) {
     return readerAnswerErrorCodeKind(error.code);

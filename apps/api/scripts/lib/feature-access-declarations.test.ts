@@ -516,9 +516,14 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
         await Bun.file(`${apiDirectory}${file}`).text(),
       );
     }
-    const ordinary = "apps/api/src/handlers/contacts/get.ts";
+    const ordinaryHandlers = [
+      "apps/api/src/handlers/account-exports/download.ts",
+      "apps/api/src/handlers/contacts/get.ts",
+    ];
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
-    expect(sources.has(ordinary)).toBe(true);
+    for (const ordinary of ordinaryHandlers) {
+      expect(sources.has(ordinary)).toBe(true);
+    }
     expect(sources.has(featureFile)).toBe(true);
     const additional = "apps/api/src/handlers/lists/fixture/list.ts";
     sources.set(additional, "export const list = () => true;");
@@ -536,14 +541,16 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
     const violations = validateFeatureAccessDeclarations({
       registry: FEATURE_REGISTRY,
       endpoints: [
-        { file: ordinary, config: {} },
+        ...ordinaryHandlers.map((file) => ({ file, config: {} })),
         { file: featureFile, config: {} },
       ],
       sources,
     });
-    expect(
-      violations.filter((violation) => violation.file === ordinary),
-    ).toEqual([]);
+    for (const ordinary of ordinaryHandlers) {
+      expect(
+        violations.filter((violation) => violation.file === ordinary),
+      ).toEqual([]);
+    }
     expect(
       violations.some(
         (violation) =>
@@ -656,11 +663,11 @@ describe("parsed declaration sources", () => {
     const source = "export const value = 1;";
     const first = parseDeclarationSource(file, source);
     expect(parseDeclarationSource(file, source)).toBe(first);
-    expect(first.getFullText()).toBe(source);
+    expect(first.parsed.sourceText).toBe(source);
 
     const changed = parseDeclarationSource(file, "export const value = 2;");
     expect(changed).not.toBe(first);
-    expect(changed.getFullText()).toBe("export const value = 2;");
+    expect(changed.parsed.sourceText).toBe("export const value = 2;");
 
     const renamed = parseDeclarationSource(
       "apps/api/src/feature/parse-cache-other.ts",

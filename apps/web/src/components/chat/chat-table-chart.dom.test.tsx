@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { TableChartResponse } from "@stll/api-contract/table-chart";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import arabic from "@/i18n/langs/ar.json";
 import english from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const originalFetch = globalThis.fetch;
@@ -21,6 +21,10 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { Streamdown } = await import("streamdown");
 const { ChatTableChart } = await import("./chat-table-chart");
+const { getWorkspaceReconnectQueryActions } =
+  await import("@/lib/workspace-realtime");
+const { applyResourceQueryActions } =
+  await import("@/testing/resource-query-actions.test-fixtures");
 
 afterEach(async () => {
   await act(async () => cleanup());
@@ -51,7 +55,7 @@ const mount = (
   sourceMarkdown = markdown,
 ) => {
   const client = new QueryClient();
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <IntlProvider
         locale={locale}
@@ -77,6 +81,7 @@ const mount = (
       </IntlProvider>
     </QueryClientProvider>,
   );
+  return { ...view, client };
 };
 
 test("requests no decision until clicked, switches kind, returns to table and reuses the session decision", async () => {
@@ -112,11 +117,35 @@ test("requests no decision until clicked, switches kind, returns to table and re
     view.container.querySelectorAll('[data-slot="chart-slice"]').length,
   ).toBe(2);
   expect(view.queryByRole("button", { name: "Scatter" })).toBeNull();
+  await act(async () => {
+    await applyResourceQueryActions(
+      view.client,
+      getWorkspaceReconnectQueryActions({
+        queryClient: view.client,
+        workspaceId: "matter-a",
+      }),
+    );
+  });
   fireEvent.click(view.getByRole("button", { name: "Show table" }));
   expect(view.getByRole("table")).toBeDefined();
   fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   await view.findByRole("img", { name: "Hours" });
   expect(calls).toBe(1);
+});
+
+test("a table without a numeric column offers no chart", () => {
+  let calls = 0;
+  const view = mount(
+    async () => {
+      calls += 1;
+      return ready;
+    },
+    "en",
+    "| Situation | Outcome |\n| --- | --- |\n| Driving drunk | Termination |\n| Low level | Notice |",
+  );
+  expect(view.getByRole("table")).toBeDefined();
+  expect(view.queryByRole("button", { name: "Show as chart" })).toBeNull();
+  expect(calls).toBe(0);
 });
 
 test("an unavailable decision keeps the table and is reused for the session", async () => {

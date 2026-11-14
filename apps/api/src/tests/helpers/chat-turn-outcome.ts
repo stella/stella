@@ -124,10 +124,7 @@ export type SettledTurnRow = {
 
 /** How the page's read of the response ended (`RecordedExchange["ended"]`). */
 type ResponseEnding =
-  | "complete"
-  | "connection-lost"
-  | "disconnected"
-  | "stopped";
+  "complete" | "connection-lost" | "disconnected" | "stopped";
 
 /**
  * Whether a chunk ends its run for good: a run error, or a finish that is

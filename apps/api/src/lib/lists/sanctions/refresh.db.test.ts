@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -11,8 +11,8 @@ import { stableStringify } from "@stll/stable-stringify";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  sanctionsEditions,
   sanctionsEditionEntries,
+  sanctionsEditions,
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
@@ -22,7 +22,12 @@ import {
   refreshSanctionsSource,
   SANCTIONS_PARSER_VERSION,
 } from "@/api/lib/lists/sanctions/refresh";
-import { SanctionsRefreshError } from "@/api/lib/lists/sanctions/source-fetch";
+import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
+import {
+  fetchSanctionsMarker,
+  SanctionsRefreshError,
+} from "@/api/lib/lists/sanctions/source-fetch";
+import { createSilentPublisher } from "@/api/tests/helpers/silent-publisher";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -668,3 +673,100 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("a publisher feed that never answers records a fetch failure and keeps the EU edition until it goes stale", async () => {
+  const verifiedAt = new Date("2026-01-05T08:00:00.000Z");
+  await db.insert(sanctionsSources).values({
+    id: "eu",
+    issuer: "European Union",
+    markerUrl: SOURCE_URL,
+    lastCheckedAt: verifiedAt,
+    lastSuccessfulVerifiedAt: verifiedAt,
+  });
+  const [edition] = await db
+    .insert(sanctionsEditions)
+    .values({
+      sourceId: "eu",
+      markerKey: "e".repeat(64),
+      publishedAt: "2026-09-22T18:01:34.799Z",
+      fileId: "185564",
+      contentHash: "0".repeat(64),
+      entryCount: 3000,
+      state: "ready",
+      activatedAt: verifiedAt,
+    })
+    .returning({ id: sanctionsEditions.id });
+  if (!edition) {
+    panic("Missing seeded EU edition");
+  }
+  await db
+    .update(sanctionsSources)
+    .set({ activeEditionId: edition.id })
+    .where(eq(sanctionsSources.id, "eu"));
+
+  const publisher = createSilentPublisher({ timeoutMs: 50 }); // timeout under test
+  let downloads = 0;
+  try {
+    const outcome = await refreshSanctionsSource({
+      permit,
+      db: scopedDb,
+      source: "eu",
+      signal: new AbortController().signal,
+      fetchMarker: async (source, options) =>
+        await fetchSanctionsMarker(source, {
+          ...options,
+          fetchBytesRequest: publisher.fetchBytesRequest,
+        }),
+      fetchEdition: async () => {
+        downloads += 1;
+        return panic("no download without a marker");
+      },
+    });
+    expect(outcome).toEqual({
+      status: "failed",
+      source: "eu",
+      code: "fetch-failed",
+    });
+    expect(downloads).toBe(0);
+    expect(publisher.received()).toHaveLength(3);
+    expect(publisher.requested().map(({ timeoutMs }) => timeoutMs)).toEqual([
+      30_000, 30_000, 30_000,
+    ]);
+  } finally {
+    await publisher.stop();
+  }
+
+  const [source] = await db
+    .select()
+    .from(sanctionsSources)
+    .where(eq(sanctionsSources.id, "eu"));
+  expect(source?.activeEditionId).toBe(edition.id);
+  expect(source?.markerUrl).toBe(SANCTIONS_SOURCE_CONFIG.eu.markerUrl);
+  expect(source?.lastFailureCode).toBe("fetch-failed");
+  expect(source?.lastSuccessfulVerifiedAt).toEqual(verifiedAt);
+  expect(source?.lastCheckedAt?.getTime()).toBeGreaterThan(
+    verifiedAt.getTime(),
+  );
+
+  const freshness = await readSanctionsFreshness({
+    db: scopedDb,
+    now: new Date(verifiedAt.getTime() + 60 * 60 * 1000),
+  });
+  const eu = freshness.find((item) => item.source === "eu");
+  expect(eu?.status).toBe("fresh");
+  expect(eu?.edition?.id).toBe(edition.id);
+  expect(eu?.annotation).toMatchObject({
+    type: "transport-failure",
+    code: "fetch-failed",
+  });
+  const later = await readSanctionsFreshness({
+    db: scopedDb,
+    now: new Date(
+      verifiedAt.getTime() + SANCTIONS_SOURCE_CONFIG.eu.freshnessMs + 1,
+    ),
+  });
+  expect(later.find((item) => item.source === "eu")).toMatchObject({
+    status: "unavailable",
+    reason: "stale",
+  });
+});

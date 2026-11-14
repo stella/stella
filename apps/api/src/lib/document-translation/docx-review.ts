@@ -5,9 +5,9 @@ import {
   applyDocxXmlPatchProposal,
   FOLIO_DOCX_CONFORMANCE_PROFILE,
   FolioDocxReviewer,
-  inspectDocxPackage,
   type FolioReviewComment,
   type FolioReviewCommentReply,
+  inspectDocxPackage,
 } from "@stll/folio-core/server";
 
 import type { DocumentTranslationCommentPolicy } from "@/api/lib/document-translation/contract";

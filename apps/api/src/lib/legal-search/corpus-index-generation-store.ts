@@ -17,10 +17,10 @@ import {
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import { clearJurisdictionServingTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
   corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
-  type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { isRecord } from "@/api/lib/type-guards";
 

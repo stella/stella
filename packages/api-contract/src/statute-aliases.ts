@@ -1,7 +1,7 @@
 import {
   STATUTE_ACTS,
-  statuteActEliCollection,
   type StatuteAct,
+  statuteActEliCollection,
 } from "./statute-acts";
 import type { StatuteQueryCountry } from "./statute-query-capability";
 

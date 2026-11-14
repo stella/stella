@@ -286,7 +286,7 @@
   },
   "retainedApiTaskDefaults": ["@stll/api#generate:capability-runtime"],
   "e2eProductionShards": {
-    "measurementNotes": "Successful Run Playwright shard step wall times from the 29 most recent completed merge-group CI runs sampled on 2026-10-13. Include successful jobs in cancelled workflows; exclude skipped, failed and cancelled steps and jobs. Nearest-rank empirical p50/p95: shard 1 = 363/381 seconds (5 samples), shard 2 = 402/409 seconds (4 samples). Sparse samples are not a population estimate. The existing task-budget policy applies: max(1.5 x p95, 2 x largest sample) + 30 seconds, rounded up to whole minutes for Actions. Both sequential general and geometry batches, container startup and teardown are included. Keep the two-shard split and concurrency: increasing the watchdog does not lengthen passing runs. Changes to the measured invocation require fresh samples; elapsed wall time is checked against the budget before the 30-second cleanup margin.",
+    "measurementNotes": "Successful Run Playwright shard step wall times from the prior two-way split. The four-way split subdivides each measured lane; until direct samples accumulate, each new shard inherits its parent lane's conservative max(1.5 x p95, 2 x largest sample) watchdog plus the cleanup margin. Both sequential general and geometry batches, container startup and teardown are included. Elapsed wall time is checked against the budget before the cleanup margin. The fingerprint was refreshed when the Playwright shard total moved to the matrix planner's step output, with the same four-way split; its first four-way run kept every Run Playwright shard step between 206 and 235 seconds, inside the inherited budgets. The static configuration and immutable device descriptor refactor was measured by successful Run Playwright shard steps in run 40491740199: shard 1: 234s (job 122148293853), shard 2: 254s (job 122148294237), shard 3: 156s (job 122148294112), shard 4: 255s (job 122148293994). The four-way split, parent samples and watchdog ceilings are unchanged.",
     "samples": [
       {
         "runId": 38338932363,
@@ -348,6 +348,6 @@
       "apps/web/e2e/execution-profile.ts",
       "apps/web/e2e/shard-count.ts"
     ],
-    "planSha256": "82492733ea240200da1d501be897dfb998c348ad633960ea5a9428f8021f4a27"
+    "planSha256": "4c82f48f03ebd7010bb671026fe5f4bb1b48e0f6695d645fa00212083f2b386c"
   }
 }

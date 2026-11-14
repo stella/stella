@@ -3,15 +3,15 @@ import { afterEach, expect, test } from "bun:test";
 import {
   DECISION_PUBLICATION_FIELD_KEYS,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
-  SK_US_ECLI_AVAILABILITY_STATUSES,
+  parseDecisionTextAbsence,
   SK_COURTS_SOURCE_URL_STATUSES,
+  SK_US_ECLI_AVAILABILITY_STATUSES,
+  type SkUsEcliAvailability,
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
-  parseDecisionTextAbsence,
-  type SkUsEcliAvailability,
 } from "@stll/api-contract/case-law-text-field";
 
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -23,6 +23,9 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { TYPED_ABSENCE_DEBT } from "@/api/tests/helpers/case-law-publication-absence-debt";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const isStoredEcliAvailability = (
   value: unknown,
@@ -37,9 +40,8 @@ const storedEcliAvailability = (
 ): SkUsEcliAvailability | undefined =>
   isStoredEcliAvailability(value) ? value : undefined;
 
-const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 for (const reason of TEXT_ABSENCE_REASONS) {

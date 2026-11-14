@@ -48,9 +48,9 @@ type UpdatePlaybookDefinitionArgs = {
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   playbookId: SafeId<"playbookDefinition">;
   orgAIConfig: OrgAIConfig | null;
-  managedAIResidency: ManagedAIResidency;
+  managedAIResidency: ManagedAIResidency | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   recordAuditEvent: AuditRecorder;
   body: UpdatePlaybookDefinitionBody;
 };

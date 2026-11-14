@@ -1,22 +1,31 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import type { ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import type { TurnAppRead } from "@/api/handlers/chat/tools/show-app-tool";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { buildMcpContextFromChat } from "./mcp-chat-context";
+import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
 import { runRegistryReadTool } from "./run-registry-tool";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -52,19 +61,24 @@ const buildContext = ({
 }: {
   accessibleWorkspaceIds?: ReturnType<typeof toSafeId<"workspace">>[];
   scopedDb?: ScopedDb;
-} = {}): McpRequestContext =>
-  buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: toSafeId<"organization">("org_1"),
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds,
-      pinnedIds: [],
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: toSafeId<"organization">("org_1"),
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds,
+        pinnedIds: [],
+      }),
+      workspaceStatusById: new Map(
+        accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+      ),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
     }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  );
 
 describe("runRegistryReadTool", () => {
   // Per test: the real capture path throttles identical errors to one event
@@ -454,20 +468,29 @@ describe("runRegistryReadTool", () => {
     });
   });
 
-  test("refuses a read tool the ref map keeps off the chat surface", async () => {
-    const result = await runRegistryReadTool({
-      args: {},
-      context: buildContext(),
-      refRegistry: createChatRefRegistry(),
-      toolName: "list_audit_log",
-    });
-
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.message).toContain("not available in chat");
-      expect(result.error.kind).toBe("unavailable");
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (definition.access !== "read") {
+      continue;
     }
-  });
+    if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
+      continue;
+    }
+    const toolName = definition.name;
+    test(`refuses ${toolName} kept off the chat surface`, async () => {
+      const result = await runRegistryReadTool({
+        args: {},
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName,
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("not available in chat");
+        expect(result.error.kind).toBe("unavailable");
+      }
+    });
+  }
 
   test("classifies a structured registry error envelope by its code", async () => {
     const registry = createChatRefRegistry();
@@ -489,5 +512,62 @@ describe("runRegistryReadTool", () => {
     if (Result.isError(result)) {
       expect(result.error.kind).toBe("not-found");
     }
+  });
+
+  test("keeps a read a chat app presents, with the MCP result, and names it", async () => {
+    testState.setConfig("FEATURE_PUBLIC_LAW", true);
+    {
+      const kept: TurnAppRead[] = [];
+      const answer = {
+        doctrineAvailability: "unavailable",
+        decisionId: DOCUMENT_UUID,
+        direction: "cites",
+        nextCursor: null,
+        citations: [],
+      } as const;
+      const handler: McpToolHandler = () => ({
+        status: "success",
+        data: answer,
+      });
+      const result = await runRegistryReadTool({
+        args: { decision_id: DOCUMENT_UUID, direction: "cites" },
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName: "read_case_law_citations",
+        handler,
+        recordAppRead: (read) => {
+          kept.push(read);
+          return "app_1";
+        },
+      });
+      expect(result.unwrap()).toMatchObject({
+        direction: "cites",
+        appId: "app_1",
+      });
+      expect(kept).toHaveLength(1);
+      expect(kept.at(0)).toMatchObject({
+        toolName: "read_case_law_citations",
+        call: {
+          input: { decision_id: DOCUMENT_UUID, direction: "cites" },
+          result: { structuredContent: { decisionId: DOCUMENT_UUID } },
+        },
+      });
+    }
+  });
+
+  test("keeps no read no chat app presents", async () => {
+    const kept: TurnAppRead[] = [];
+    const result = await runRegistryReadTool({
+      args: {},
+      context: buildContext({ scopedDb: selectScopedDb([ONE_MATTER_ROW]) }),
+      refRegistry: createChatRefRegistry(),
+      toolName: "list_matters",
+      recordAppRead: (read) => {
+        kept.push(read);
+        return "app_1";
+      },
+    });
+    expect(result.unwrap()).not.toHaveProperty("appId");
+    expect(kept).toEqual([]);
   });
 });

@@ -2,12 +2,13 @@ import { Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user, verification } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   accountDeletionRequests,
-  contacts,
   entities,
   taskAssignees,
   workspaceMembers,
@@ -25,11 +26,14 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -41,35 +45,45 @@ setDefaultTimeout(120_000);
 
 /** Polls lock state, never elapsed time: proceeds once Postgres reports the wait. */
 const waitUntilBlocked = async (db: GatedTestDb, blockedPid: number) => {
-  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    const [row] = await db.execute<{ blocked: boolean }>(
-      sql`SELECT cardinality(pg_blocking_pids(${blockedPid})) > 0 AS blocked`,
-    );
-    if (row?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
-  }
-  throw new Error("The transaction did not reach its lock wait");
+  await waitForExternalState({
+    description: "the transaction reaches its lock wait",
+    intervalMs: BLOCK_OBSERVATION_INTERVAL_MS,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: async () => {
+      const [row] = await db.execute<{ blocked: boolean }>(
+        sql`SELECT cardinality(pg_blocking_pids(${blockedPid})) > 0 AS blocked`,
+      );
+      return row?.blocked === true;
+    },
+  });
 };
 
-/** Waits until any backend is blocked by `holderPid`. */
+/**
+ * Waits until any backend is blocked by `holderPid`. A holder parked on its
+ * release never waits itself; one that does was signalled before it took its
+ * locks, so the ordering under test was inverted and waiting cannot help.
+ */
 const waitUntilHolding = async (db: GatedTestDb, holderPid: number) => {
-  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    const [row] = await db.execute<{ blocking: boolean }>(
-      sql`SELECT EXISTS (
-        SELECT 1 FROM pg_stat_activity
-        WHERE ${holderPid} = ANY(pg_blocking_pids(pid))
-      ) AS blocking`,
-    );
-    if (row?.blocking === true) {
-      return;
-    }
-    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
-  }
-  throw new Error("Nothing reached the held lock");
+  await waitForExternalState({
+    description: "a backend reaches the held lock",
+    intervalMs: BLOCK_OBSERVATION_INTERVAL_MS,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: async () => {
+      const [row] = await db.execute<{ blocking: boolean; waiting: boolean }>(
+        sql`SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity
+          WHERE ${holderPid} = ANY(pg_blocking_pids(pid))
+        ) AS blocking,
+        cardinality(pg_blocking_pids(${holderPid})) > 0 AS waiting`,
+      );
+      if (row?.waiting === true && !row.blocking) {
+        throw new Error(
+          "The holder is itself waiting on a lock: signal it only after it holds",
+        );
+      }
+      return row?.blocking === true;
+    },
+  });
 };
 
 const backendPid = async (tx: { execute: GatedTestDb["execute"] }) => {
@@ -116,6 +130,10 @@ const fixture = async (db: GatedTestDb) => {
     name: "Erasure",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(member).values([
     {
@@ -195,7 +213,7 @@ const fixture = async (db: GatedTestDb) => {
         eq(verification.identifier, `delete-account:${email}`),
       ),
     cleanUp: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db
         .delete(accountDeletionRequests)
         .where(eq(accountDeletionRequests.userId, leaverId));
@@ -544,13 +562,15 @@ describeLocks("matter creation against organization removal (postgres)", () => {
         const data = await fixture(db);
         const clientId = createSafeId<"contact">();
         const newWorkspaceId = createSafeId<"workspace">();
-        await db.insert(contacts).values({
-          id: clientId,
-          organizationId: data.organizationId,
-          type: "person",
-          displayName: "Matter client",
-        });
-        const creationPid = Promise.withResolvers<number>();
+        await insertOwnerContacts(db, [
+          {
+            id: clientId,
+            organizationId: data.organizationId,
+            type: "person",
+            displayName: "Matter client",
+          },
+        ]);
+        const creationHolding = Promise.withResolvers<number>();
         const releaseCreation = Promise.withResolvers<undefined>();
         const create = async (hold: boolean) =>
           await Result.gen(() =>
@@ -559,7 +579,6 @@ describeLocks("matter creation against organization removal (postgres)", () => {
               safeDb: safeDbFromScoped(
                 async (fn) =>
                   await creationDb.transaction(async (tx) => {
-                    creationPid.resolve(await backendPid(tx));
                     // A request transaction carries its organization and
                     // member; matter creation in the database reads them.
                     await tx.execute(
@@ -568,6 +587,10 @@ describeLocks("matter creation against organization removal (postgres)", () => {
                     );
                     const value = await fn(asTestRaw<Transaction>(tx));
                     if (hold) {
+                      // Signal only once the creation's writes hold their
+                      // locks: a removal started earlier can take the
+                      // membership first and leave creation waiting on it.
+                      creationHolding.resolve(await backendPid(tx));
                       await releaseCreation.promise;
                     }
                     return value;
@@ -599,7 +622,15 @@ describeLocks("matter creation against organization removal (postgres)", () => {
         try {
           if (first === "creation") {
             const creation = create(true);
-            const holder = await creationPid.promise;
+            // A creation that settles without holding fails here at once;
+            // rejecting after the signal resolved is a no-op.
+            const notHolding = () => {
+              creationHolding.reject(
+                new Error("Matter creation settled before it held its locks"),
+              );
+            };
+            void creation.then(notHolding, notHolding);
+            const holder = await creationHolding.promise;
             removal = heldRemoval(removalDb, data);
             await waitUntilHolding(db, holder);
             releaseCreation.resolve(undefined);
@@ -704,6 +735,10 @@ const movableMatter = async (db: GatedTestDb, data: Fixture) => {
     slug: targetOrganizationId,
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: targetOrganizationId,
+    now: new Date(),
+  });
   await db.insert(workspaces).values({
     id: workspaceId,
     organizationId: data.organizationId,
@@ -735,9 +770,7 @@ const movableMatter = async (db: GatedTestDb, data: Fixture) => {
       ).at(0)?.count,
     cleanUp: async () => {
       await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-      await db
-        .delete(organization)
-        .where(eq(organization.id, targetOrganizationId));
+      await deleteOrganizationsForTest(db, [targetOrganizationId]);
     },
   };
 };

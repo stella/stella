@@ -11,17 +11,17 @@ import { eq, TransactionRollbackError } from "drizzle-orm";
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  usageEntitlements,
   usageEvents,
   usagePolicies,
-  usageEntitlements,
   workspaces,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  assertUsageAvailable,
   allocateUsage,
+  assertUsageAvailable,
   getRemainingUsageUnits,
   isConsumableEntitlementStatus,
   isEntitlementConsumableAt,

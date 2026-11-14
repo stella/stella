@@ -35,6 +35,8 @@ export type ClipboardItem =
       groupedAt: string | null;
       id: string;
       name: string | null;
+      /** Present only on a dictation stella kept itself; a copy has none. */
+      origin?: "dictation";
       plainText: string;
       sourceApp: ClipboardSourceApp | null;
       type: "text";
@@ -110,6 +112,7 @@ const isClipboardRetention = (value: unknown): value is ClipboardRetention =>
   CLIPBOARD_RETENTIONS.some((retention) => retention === value);
 
 export type ClipboardSnapshot = {
+  revision: number;
   captureStatus: ClipboardCaptureStatus;
   groupLimit: number;
   groups: ClipboardGroup[];
@@ -177,7 +180,10 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
 
   switch (value["type"]) {
     case "text":
-      return typeof value["plainText"] === "string";
+      return (
+        typeof value["plainText"] === "string" &&
+        (value["origin"] === undefined || value["origin"] === "dictation")
+      );
     case "formattedText":
       return (
         typeof value["plainText"] === "string" &&
@@ -262,6 +268,37 @@ export type ClipboardEditorContext = {
   sourceAppVisual: ClipboardSourceAppVisual | null;
 };
 
+const isClipboardRevision = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= 0 &&
+  value <= 0xff_ff_ff_ff;
+
+export const isClipboardCaptureRevision = (
+  value: unknown,
+): value is { revision: number } =>
+  isRecord(value) &&
+  Object.keys(value).length === 1 &&
+  isClipboardRevision(value["revision"]);
+
+export type ClipboardCaptureUpdate = {
+  revision: number;
+  item: ClipboardItem;
+  removedItemIds: string[];
+  sourceAppVisuals: ClipboardSourceAppVisual[];
+};
+
+export const isClipboardCaptureUpdate = (
+  value: unknown,
+): value is ClipboardCaptureUpdate =>
+  isRecord(value) &&
+  isClipboardRevision(value["revision"]) &&
+  isClipboardItem(value["item"]) &&
+  Array.isArray(value["removedItemIds"]) &&
+  value["removedItemIds"].every((id: unknown) => typeof id === "string") &&
+  Array.isArray(value["sourceAppVisuals"]) &&
+  value["sourceAppVisuals"].every(isClipboardSourceAppVisual);
+
 // Native event names; `fixtures/clipboard-contract.json` binds them to the
 // Rust constants.
 export const CLIPBOARD_HISTORY_CHANGED_EVENT = "clipboard-history-changed";
@@ -269,8 +306,7 @@ export const CLIPBOARD_EDITOR_SESSION_EVENT = "clipboard-editor-session";
 
 /** What the reused editor window shows: one clip per session, or nothing. */
 export type ClipboardEditorSession =
-  | { type: "open"; session: number }
-  | { type: "idle" };
+  { type: "open"; session: number } | { type: "idle" };
 
 export const isClipboardEditorSession = (
   value: unknown,
@@ -300,6 +336,7 @@ export const isClipboardSnapshot = (
   const sourceAppExclusionLimit = value["sourceAppExclusionLimit"];
   const sourceAppExclusions = value["sourceAppExclusions"];
   return (
+    isClipboardRevision(value["revision"]) &&
     (captureStatus === "active" || captureStatus === "paused") &&
     isGroupLimit(value["groupLimit"]) &&
     Array.isArray(value["groups"]) &&

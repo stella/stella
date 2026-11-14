@@ -1,19 +1,20 @@
-import Elysia from "elysia";
-
 import readAIAvailability from "@/api/handlers/organization-settings/ai-availability/get";
 import previewAIConfigDefaults from "@/api/handlers/organization-settings/ai-config/defaults/preview";
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/get";
 import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/update";
 import {
+  deleteBusinessRegistryCredential,
   readBusinessRegistryCredentials,
   saveBusinessRegistryCredential,
-  deleteBusinessRegistryCredential,
 } from "@/api/handlers/organization-settings/business-registry-credentials";
 import createCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
 import deleteCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/delete";
 import listCorrespondenceAllowedSenders from "@/api/handlers/organization-settings/correspondence/allowed-senders/list";
 import addCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/add";
 import removeCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/remove";
+import addOrganizationDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/create";
+import removeOrganizationDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/delete";
+import getOrganizationDataBoxes from "@/api/handlers/organization-settings/correspondence/data-boxes/get";
 import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-availability/get";
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
@@ -24,6 +25,7 @@ import enrolFeature from "@/api/handlers/organization-settings/feature-enrolment
 import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-enrolments/get";
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
+import updateLocalRunApprovalCeiling from "@/api/handlers/organization-settings/local-runs/update";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
@@ -34,169 +36,97 @@ import updateOrganizationSettings from "@/api/handlers/organization-settings/upd
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { mount, routes } from "@/api/http/route";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
-export const organizationSettingsRoute = new Elysia({
-  prefix: "/organization-settings",
-})
-  .use(authMacro)
-  .use(permissionMacro)
-  // Kept deliberately: this guard is the type-level carrier of
-  // `validateAuth` for Elysia's context composition. `permissions` is a
-  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md) that
-  // applies `validateAuth` at runtime but not in type composition, so a
-  // per-route `validateAuth: true` literal instead of this guard breaks
-  // sibling macro context composition. The per-request memoization in
-  // `resolveValidateAuth`
-  // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
-  // of `permissions`. See tests/security/route-auth-invariants.test.ts.
-  .guard({
-    validateAuth: true,
-  })
-  .get(
-    "/correspondence/allowed-senders",
-    listCorrespondenceAllowedSenders.handler,
-    {
-      permissions: listCorrespondenceAllowedSenders.config.permissions,
-      query: listCorrespondenceAllowedSenders.config.query,
-    },
-  )
-  .post(
-    "/correspondence/allowed-senders",
-    createCorrespondenceAllowedSender.handler,
-    {
-      permissions: createCorrespondenceAllowedSender.config.permissions,
-      body: createCorrespondenceAllowedSender.config.body,
-    },
-  )
-  .delete(
-    "/correspondence/allowed-senders/:senderId",
-    deleteCorrespondenceAllowedSender.handler,
-    {
-      permissions: deleteCorrespondenceAllowedSender.config.permissions,
-      params: deleteCorrespondenceAllowedSender.config.params,
-    },
-  )
-  .post(
-    "/correspondence/allowed-senders/:senderId/scope",
-    addCorrespondenceAllowedSenderScope.handler,
-    {
-      permissions: addCorrespondenceAllowedSenderScope.config.permissions,
-      params: addCorrespondenceAllowedSenderScope.config.params,
-      body: addCorrespondenceAllowedSenderScope.config.body,
-    },
-  )
-  .delete(
-    "/correspondence/allowed-senders/:senderId/scope",
-    removeCorrespondenceAllowedSenderScope.handler,
-    {
-      permissions: removeCorrespondenceAllowedSenderScope.config.permissions,
-      params: removeCorrespondenceAllowedSenderScope.config.params,
-      body: removeCorrespondenceAllowedSenderScope.config.body,
-    },
-  )
-  .get("/", readOrganizationSettings.handler, {
-    permissions: readOrganizationSettings.config.permissions,
-  })
-  .get(
-    "/business-registry-credentials",
-    readBusinessRegistryCredentials.handler,
-    { permissions: readBusinessRegistryCredentials.config.permissions },
-  )
-  .post(
-    "/business-registry-credentials",
-    saveBusinessRegistryCredential.handler,
-    {
-      body: saveBusinessRegistryCredential.config.body,
-      permissions: saveBusinessRegistryCredential.config.permissions,
-    },
-  )
-  .delete(
-    "/business-registry-credentials",
-    deleteBusinessRegistryCredential.handler,
-    {
-      query: deleteBusinessRegistryCredential.config.query,
-      permissions: deleteBusinessRegistryCredential.config.permissions,
-    },
-  )
-  .post("/", updateOrganizationSettings.handler, {
-    body: updateOrganizationSettings.config.body,
-    permissions: updateOrganizationSettings.config.permissions,
-  })
-  .post("/sanctions-monitoring", updateSanctionsMonitoring.handler, {
-    permissions: updateSanctionsMonitoring.config.permissions,
-    body: updateSanctionsMonitoring.config.body,
-  })
-  .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
-    body: updatePracticeJurisdictions.config.body,
-    permissions: updatePracticeJurisdictions.config.permissions,
-  })
-  .post("/preview", previewOrganizationSettings.handler, {
-    body: previewOrganizationSettings.config.body,
-    permissions: previewOrganizationSettings.config.permissions,
-  })
-  .get("/ai-availability", readAIAvailability.handler, {
-    permissions: readAIAvailability.config.permissions,
-  })
-  .get("/feature-enrolments", getFeatureEnrolments.handler, {
-    permissions: getFeatureEnrolments.config.permissions,
-  })
-  .put("/feature-enrolments/:featureId", enrolFeature.handler, {
-    permissions: enrolFeature.config.permissions,
-    params: enrolFeature.config.params,
-  })
-  .delete("/feature-enrolments/:featureId", unenrolFeature.handler, {
-    permissions: unenrolFeature.config.permissions,
-    params: unenrolFeature.config.params,
-  })
-  .get("/feature-access", getFeatureAccess.handler, {
-    permissions: getFeatureAccess.config.permissions,
-  })
-  .get("/document-ocr-availability", getDocumentOcrAvailability.handler, {
-    permissions: getDocumentOcrAvailability.config.permissions,
-  })
-  .post("/ai-config/defaults-preview", previewAIConfigDefaults.handler, {
-    body: previewAIConfigDefaults.config.body,
-    permissions: previewAIConfigDefaults.config.permissions,
-  })
-  .get("/ai-config", readAIConfig.handler, {
-    permissions: readAIConfig.config.permissions,
-  })
-  .post("/ai-config", updateAIConfig.handler, {
-    body: updateAIConfig.config.body,
-    permissions: updateAIConfig.config.permissions,
-  })
-  .delete("/ai-config", deleteAIConfig.handler, {
-    permissions: deleteAIConfig.config.permissions,
-  })
-  .get("/deepl", readDeepLAvailability.handler, {
-    permissions: readDeepLAvailability.config.permissions,
-  })
-  .get("/deepl-config", readDeepLConfig.handler, {
-    permissions: readDeepLConfig.config.permissions,
-  })
-  .post("/deepl", updateDeepLKey.handler, {
-    body: updateDeepLKey.config.body,
-    permissions: updateDeepLKey.config.permissions,
-  })
-  .delete("/deepl", deleteDeepLKey.handler, {
-    permissions: deleteDeepLKey.config.permissions,
-  })
-  .get("/web-search-config", readWebSearchConfig.handler, {
-    permissions: readWebSearchConfig.config.permissions,
-  })
-  .post("/web-search-key", updateWebSearchKey.handler, {
-    body: updateWebSearchKey.config.body,
-    permissions: updateWebSearchKey.config.permissions,
-  })
-  .delete("/web-search-key", deleteWebSearchKey.handler, {
-    body: deleteWebSearchKey.config.body,
-    permissions: deleteWebSearchKey.config.permissions,
-  })
-  .get("/anonymization-blacklist", readAnonymizationBlacklist.handler, {
-    permissions: readAnonymizationBlacklist.config.permissions,
-  })
-  .put("/anonymization-blacklist", updateAnonymizationBlacklist.handler, {
-    body: updateAnonymizationBlacklist.config.body,
-    permissions: updateAnonymizationBlacklist.config.permissions,
-  });
+import {
+  listBillingKnowledgeFiles,
+  readBillingKnowledgeFile,
+} from "./billing-drafts";
+import readBillingDraftConfiguration from "./billing-drafts/get";
+import updateBillingDraftConfiguration from "./billing-drafts/update";
+
+export const organizationSettingsRoute = mount(
+  [
+    routes(
+      {
+        "/": {
+          GET: readBillingDraftConfiguration,
+          POST: updateBillingDraftConfiguration,
+        },
+        "/knowledge-files": { GET: listBillingKnowledgeFiles },
+        "/knowledge-files/:resourceId": {
+          GET: readBillingKnowledgeFile,
+        },
+      },
+      {
+        prefix: "/billing-drafts",
+        middleware: [
+          deploymentFeatureGate("FEATURE_TIME_BILLING"),
+          featureAccessGate("time-billing"),
+        ],
+      },
+    ),
+    routes({
+      "/correspondence/data-boxes": {
+        GET: getOrganizationDataBoxes,
+        POST: addOrganizationDataBox,
+      },
+      "/correspondence/data-boxes/:boxId": {
+        DELETE: removeOrganizationDataBox,
+      },
+      "/correspondence/allowed-senders": {
+        GET: listCorrespondenceAllowedSenders,
+        POST: createCorrespondenceAllowedSender,
+      },
+      "/correspondence/allowed-senders/:senderId": {
+        DELETE: deleteCorrespondenceAllowedSender,
+      },
+      "/correspondence/allowed-senders/:senderId/scope": {
+        POST: addCorrespondenceAllowedSenderScope,
+        DELETE: removeCorrespondenceAllowedSenderScope,
+      },
+      "/": { GET: readOrganizationSettings, POST: updateOrganizationSettings },
+      "/business-registry-credentials": {
+        GET: readBusinessRegistryCredentials,
+        POST: saveBusinessRegistryCredential,
+        DELETE: deleteBusinessRegistryCredential,
+      },
+      "/sanctions-monitoring": { POST: updateSanctionsMonitoring },
+      "/local-runs": { POST: updateLocalRunApprovalCeiling },
+      "/practice-jurisdictions": { POST: updatePracticeJurisdictions },
+      "/preview": { POST: previewOrganizationSettings },
+      "/ai-availability": { GET: readAIAvailability },
+      "/feature-enrolments": { GET: getFeatureEnrolments },
+      "/feature-enrolments/:featureId": {
+        PUT: enrolFeature,
+        DELETE: unenrolFeature,
+      },
+      "/feature-access": { GET: getFeatureAccess },
+      "/document-ocr-availability": { GET: getDocumentOcrAvailability },
+      "/ai-config/defaults-preview": { POST: previewAIConfigDefaults },
+      "/ai-config": {
+        GET: readAIConfig,
+        POST: updateAIConfig,
+        DELETE: deleteAIConfig,
+      },
+      "/deepl": {
+        GET: readDeepLAvailability,
+        POST: updateDeepLKey,
+        DELETE: deleteDeepLKey,
+      },
+      "/deepl-config": { GET: readDeepLConfig },
+      "/web-search-config": { GET: readWebSearchConfig },
+      "/web-search-key": {
+        POST: updateWebSearchKey,
+        DELETE: deleteWebSearchKey,
+      },
+      "/anonymization-blacklist": {
+        GET: readAnonymizationBlacklist,
+        PUT: updateAnonymizationBlacklist,
+      },
+    }),
+  ],
+  { prefix: "/organization-settings" },
+);

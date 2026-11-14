@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   anonymizationAllowlistQueryRoot,
   workspaceAnonymizationAllowlistQueryRoot,
@@ -46,6 +46,6 @@ export const anonymizationAllowlistOptions = ({
             : {}),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });

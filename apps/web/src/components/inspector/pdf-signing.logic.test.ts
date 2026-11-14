@@ -7,10 +7,12 @@ import {
   parsePdfSigningDeadline,
   PDF_SIGNING_POLL_INTERVAL_MS,
   pdfSigningFinalizedQueryKeys,
-  pdfSigningStartErrorCode,
   type PdfSigningSessionSnapshot,
+  pdfSigningStartErrorCode,
   resolvePdfSignTarget,
+  resolveSavedPdfSignTarget,
 } from "@/components/inspector/pdf-signing.logic";
+import { PDF_MIME } from "@/lib/consts";
 
 const NOW = Date.UTC(2026, 8, 21, 12, 0, 0);
 
@@ -318,5 +320,78 @@ describe("resolvePdfSignTarget", () => {
     ],
   ])("offers no signing %s", (_label, override) => {
     expect(resolvePdfSignTarget({ ...signable, ...override })).toBeNull();
+  });
+});
+
+describe("resolveSavedPdfSignTarget", () => {
+  const target = {
+    entityId: "entity-1",
+    propertyId: "property-1",
+    workspaceId: "workspace-1",
+  };
+  const fileField = (
+    id: string,
+    propertyId: string,
+    fileId: string,
+    mimeType: string,
+  ) => ({
+    id,
+    propertyId,
+    content: { id: fileId, type: "file", mimeType },
+  });
+
+  test("signs the file named by the saved receipt even if its property changed", () => {
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField(
+            "field-old-property",
+            "property-1",
+            "file-original",
+            PDF_MIME,
+          ),
+          fileField("field-saved", "property-2", "file-saved", PDF_MIME),
+        ],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toEqual({
+      ...target,
+      fieldId: "field-saved",
+      propertyId: "property-2",
+    });
+  });
+
+  test("signs nothing when the receipt file is absent or is not a PDF", () => {
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField(
+            "field-old-property",
+            "property-1",
+            "file-original",
+            PDF_MIME,
+          ),
+        ],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField("field-saved", "property-2", "file-saved", "image/png"),
+        ],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
   });
 });

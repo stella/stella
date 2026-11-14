@@ -3,8 +3,8 @@ import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
-  RECENT_FILES_STORAGE_KEY,
   ownerStorageKey,
+  RECENT_FILES_STORAGE_KEY,
 } from "@stll/api-contract/browser-storage";
 import type { RecentFile } from "@stll/api-contract/browser-storage";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";

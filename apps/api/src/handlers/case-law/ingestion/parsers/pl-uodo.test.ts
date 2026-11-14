@@ -9,9 +9,9 @@
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 import type {
   Block,
   Inline,
@@ -19,10 +19,14 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import {
-  parsePlUodoDecisionXml,
+  parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml,
   plUodoSourceTexts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import type { ParsePlUodoDecisionOutput } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
+import { toPlainCorpusText } from "@/api/mcp/tool-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
 
 const SHORT_DECISION = new URL(
   "__fixtures__/pl-uodo-zsoss-440-82-2019.xml",
@@ -33,9 +37,22 @@ const LONG_DECISION = new URL(
   import.meta.url,
 );
 
+/** A decision whose reasons are numbered paragraph units straight in its chapters. */
+const NUMBERED_DECISION = new URL(
+  "__fixtures__/pl-uodo-doke-561-5-2023.xml.gz",
+  import.meta.url,
+);
+
+const xmlOf = async (fixture: URL): Promise<string> => {
+  const bytes = await Bun.file(fixture).bytes();
+  return new TextDecoder().decode(
+    fixture.pathname.endsWith(".gz") ? Bun.gunzipSync(bytes) : bytes,
+  );
+};
+
 const parse = async (fixture: URL): Promise<ParsePlUodoDecisionOutput> => {
   const parsed = parsePlUodoDecisionXml({
-    xml: await Bun.file(fixture).text(),
+    xml: await xmlOf(fixture),
     documentId: "urn:ndoc:gov:pl:uodo:test",
     caseNumber: "test",
     court: "Prezes Urzędu Ochrony Danych Osobowych",
@@ -53,11 +70,12 @@ const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
   blocks.filter((block): block is ParagraphBlock => block.type === "paragraph");
 
 /**
- * Every `<xText>` of the source as the portal prints it: a footnote mark as
- * its label, other markup dropped, whitespace collapsed.
+ * Every `<xText>` of the source as the portal prints it: a gloss reference as
+ * the label of the gloss it names or, naming none, as a caret-delimited
+ * numeric index. Other markup is dropped and whitespace collapsed.
  */
 const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const labels = new Map(
     $("xGloss")
       .toArray()
@@ -71,7 +89,11 @@ const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
       return "";
     }
     if (node.tagName === "xGlossRef") {
-      return withFootnoteMarks ? (labels.get(node.attribs["xRef"]) ?? "") : "";
+      const ref = node.attribs["xRef"] ?? "";
+      if (!withFootnoteMarks) {
+        return "";
+      }
+      return labels.get(ref) ?? (/^\d+$/u.test(ref) ? `^${ref}` : ref);
     }
     return node.children.map(textOf).join("");
   };
@@ -119,7 +141,7 @@ const footnoteMarksOf = (blocks: readonly Block[]): string[] =>
   );
 
 describe("a short decision", () => {
-  test("reads as the portal prints it: form, file mark, operative part, reasons", async () => {
+  test("reads as the portal prints it: form, file mark, lead-in, operative part, reasons", async () => {
     const { documentAst } = await parse(SHORT_DECISION);
     const [title, fileMark] = documentAst.blocks;
 
@@ -139,13 +161,26 @@ describe("a short decision", () => {
     );
     expect(reasonsAt).toBeGreaterThan(2);
     const operative = paragraphs(documentAst.blocks.slice(2, reasonsAt));
-    expect(operative.every((block) => block.role === "holding")).toBe(true);
+    // The legal basis and the recital open the operative branch unmarked;
+    // they introduce the ruling, which follows them.
+    const leadIn = operative.filter((block) => block.role === "intro");
+    expect(leadIn.map((block) => block.plainText.slice(0, 18))).toEqual([
+      "Na podstawie art. ",
+      "po przeprowadzeniu",
+    ]);
+    expect(operative.slice(leadIn.length).map((block) => block.role)).toEqual(
+      operative.slice(leadIn.length).map(() => "holding"),
+    );
     expect(operative.at(-1)?.plainText).toBe("umarzam postępowanie");
+    const reasons = paragraphs(documentAst.blocks.slice(reasonsAt)).filter(
+      (block) => block.note === undefined,
+    );
+    expect(reasons.length).toBeGreaterThan(0);
     expect(
-      paragraphs(documentAst.blocks.slice(reasonsAt)).some(
-        (block) => block.role === "holding",
+      reasons.filter(
+        (block) => block.role !== "argumentation" && block.role !== "quote",
       ),
-    ).toBe(false);
+    ).toEqual([]);
   });
 
   test("keeps every text the source prints, in order", async () => {
@@ -202,6 +237,23 @@ describe("a long decision", () => {
     ]);
   });
 
+  test("the served text lists each footnote under the mark the body cites it by", async () => {
+    // The label is structure, not the note's text: served without it, the
+    // notes closing the text could not be matched to the body's marks.
+    const { documentAst } = await parse(LONG_DECISION);
+    const text = toPlainCorpusText({
+      blocks: documentAst.blocks,
+      fulltext: null,
+    });
+    const notes = paragraphs(documentAst.blocks).filter(
+      (block) => block.note !== undefined,
+    );
+    expect(notes).toHaveLength(4);
+    for (const note of notes) {
+      expect(text).toContain(`\n\n${note.note?.label ?? ""} ${note.plainText}`);
+    }
+  });
+
   test("a quoted passage is a quotation, opening with the source's mark", async () => {
     const { documentAst } = await parse(LONG_DECISION);
     const quoted = paragraphs(documentAst.blocks).filter(
@@ -229,6 +281,128 @@ describe("a long decision", () => {
     const missing = sourceTexts(xml).filter((text) => !fulltext.includes(text));
     expect(missing).toEqual([]);
     expect(validationIssues).toEqual([]);
+  });
+});
+
+/**
+ * Decisions whose gloss references include some that name no gloss: the
+ * portal's way of setting an article's superscript index (art. 22¹), beside
+ * the portal's own text rendition of the same body.
+ */
+const RAISED_INDEX_DECISIONS = [
+  {
+    name: "ZSZZS.440.780.2018",
+    body: new URL(
+      "__fixtures__/pl-uodo-zszzs-440-780-2018.xml",
+      import.meta.url,
+    ),
+    rendition: new URL(
+      "__fixtures__/pl-uodo-zszzs-440-780-2018.search.json",
+      import.meta.url,
+    ),
+  },
+  {
+    name: "DKN.5131.4.2024",
+    body: new URL("__fixtures__/pl-uodo-dkn-5131-4-2024.xml", import.meta.url),
+    rendition: new URL(
+      "__fixtures__/pl-uodo-dkn-5131-4-2024.search.json.gz",
+      import.meta.url,
+    ),
+  },
+] as const;
+
+/**
+ * The marks the portal's text rendition (`search.json`) raises in the body,
+ * in order. It sets raised text between `╚` and `╝`, and prints the footnotes
+ * after the body, each opening with `¤`.
+ */
+const renditionBodyMarks = async (rendition: URL): Promise<string[]> => {
+  const bytes = new Uint8Array(await Bun.file(rendition).arrayBuffer());
+  const json = rendition.pathname.endsWith(".gz")
+    ? Bun.gunzipSync(bytes)
+    : bytes;
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(json));
+  // `{ fts: { content: { pl: "<text>" } } }`
+  let text: unknown = parsed;
+  for (const key of ["fts", "content", "pl"]) {
+    text =
+      typeof text === "object" && text !== null
+        ? Reflect.get(text, key)
+        : undefined;
+  }
+  expect(typeof text, "the rendition states its text as fts.content.pl").toBe(
+    "string",
+  );
+  const body = String(text).split("\n¤").at(0) ?? "";
+  return [...body.matchAll(/╚(?<mark>[^╝]*)╝/gu)].map(
+    (match) => match.groups?.["mark"] ?? "",
+  );
+};
+
+describe("a gloss reference that names no gloss", () => {
+  test.each(RAISED_INDEX_DECISIONS)(
+    "$name: every mark the portal raises is a superscript, in its order",
+    async ({ body, rendition }) => {
+      const marks = await renditionBodyMarks(rendition);
+      // The fixture reaches the fault: a raised mark that is no footnote label.
+      expect(marks.filter((mark) => !/^\[\d+\]$/u.test(mark))).not.toEqual([]);
+
+      const { documentAst } = await parse(body);
+      expect(footnoteMarksOf(documentAst.blocks)).toEqual(marks);
+    },
+  );
+
+  test.each(RAISED_INDEX_DECISIONS)(
+    "$name: keeps every text the source prints, the raised index included",
+    async ({ body }) => {
+      const xml = await Bun.file(body).text();
+      const { fulltext, validationIssues } = await parse(body);
+      const missing = sourceTexts(xml).filter(
+        (text) => !fulltext.includes(text),
+      );
+      expect(missing).toEqual([]);
+      expect(validationIssues).toEqual([]);
+    },
+  );
+
+  test("the raised index sits against the article number it belongs to", async () => {
+    const { documentAst } = await parse(RAISED_INDEX_DECISIONS[0].body);
+    const paragraph = paragraphs(documentAst.blocks).find((block) =>
+      block.plainText.includes("zgodnie z brzmieniem art. 22"),
+    );
+    const at = paragraph?.inlines.findIndex(
+      (inline) => inline.type === "superscript",
+    );
+    expect(at).toBeGreaterThan(0);
+    const before = paragraph?.inlines[(at ?? 0) - 1];
+    const raised = paragraph?.inlines[at ?? 0];
+    const after = paragraph?.inlines[(at ?? 0) + 1];
+    expect(before?.type === "text" && before.text.endsWith("art. 22")).toBe(
+      true,
+    );
+    expect(raised).toEqual({
+      type: "superscript",
+      children: [{ type: "text", text: "1" }],
+    });
+    expect(after?.type === "text" && after.text.startsWith(" ustawy")).toBe(
+      true,
+    );
+  });
+
+  test("a reference that states nothing to print is reported, not dropped unseen", () => {
+    const parsed = parsePlUodoDecisionXml({
+      xml: `<xPart><xName>Decyzja</xName><xBlock><xUnit><xText>art. 22<xGlossRef xCtxt="0"/> ustawy</xText></xUnit></xBlock></xPart>`,
+      documentId: "x",
+      caseNumber: "x",
+      court: "x",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+    });
+    if (Result.isError(parsed)) {
+      throw parsed.error;
+    }
+    expect(parsed.value.unmappedMarkup).toEqual(["xGlossRef"]);
   });
 });
 
@@ -532,5 +706,90 @@ describe("containers and text this reader has no rule for", () => {
       "przypis zapisany poza elementem tekstu, który musi przetrwać",
     );
     expect(parsed.value.unmappedMarkup).toContain("#text");
+  });
+});
+
+describe("the authority's paragraph numbers", () => {
+  test("DOKE.561.5.2023: a paragraph unit in a chapter of the reasons numbers its paragraph", async () => {
+    const xml = await xmlOf(NUMBERED_DECISION);
+    const { documentAst, fulltext, validationIssues } =
+      await parse(NUMBERED_DECISION);
+    const numbered = paragraphs(documentAst.blocks).filter(
+      (block) => block.number !== undefined,
+    );
+
+    expect(numbered.map((block) => block.number)).toEqual(
+      Array.from({ length: 40 }, (_, index) => index + 1),
+    );
+    expect(numbered.every((block) => block.role === "argumentation")).toBe(
+      true,
+    );
+    expect(numbered.every((block) => block.listDepth === undefined)).toBe(true);
+    // The number is structure; the text opens on what the authority wrote.
+    expect(numbered[0]?.plainText).toStartWith(
+      "Do Prezesa Urzędu Ochrony Danych Osobowych",
+    );
+    expect(numbered.some((block) => /^\d+\. /u.test(block.plainText))).toBe(
+      false,
+    );
+    const missing = sourceTexts(xml).filter((text) => !fulltext.includes(text));
+    expect(missing).toEqual([]);
+    expect(validationIssues).toEqual([]);
+  });
+
+  test("a numbered unit nested in another unit numbers a list and keeps its printed marker", async () => {
+    const { documentAst } = await parse(LONG_DECISION);
+    const blocks = paragraphs(documentAst.blocks);
+
+    expect(blocks.filter((block) => block.number !== undefined)).toEqual([]);
+    expect(
+      blocks.some(
+        (block) =>
+          block.listDepth !== undefined && /^\d+\. /u.test(block.plainText),
+      ),
+    ).toBe(true);
+  });
+
+  test("a numbered unit numbers its paragraph only in a chapter of the reasons", () => {
+    const unit = (n: number) =>
+      `<xUnit xType="pass"><xName xSffx=".">${String(n)}</xName><xText>Zdanie ${String(n)}.</xText></xUnit>`;
+    const xml = `<?xml version='1.0' encoding='UTF-8'?>
+<xPart xml:space="preserve"><xName>Decyzja</xName><xTitle>DKN.1.1.2025</xTitle>
+<xBlock><xUnit xIsTitle="true" xType="bran"><xName> </xName><xTitle> </xTitle>
+${unit(1)}${unit(2)}</xUnit>
+<xUnit xIsTitle="true" xType="bran"><xName> </xName><xTitle>Uzasadnienie</xTitle>
+<xUnit xIsTitle="true" xType="chpt"><xName> </xName><xTitle>Stan faktyczny</xTitle>
+${unit(1)}${unit(2)}
+<xUnit xType="none"><xName> </xName><xText>Organ ustalił:</xText>${unit(1)}${unit(2)}</xUnit>
+${unit(3)}</xUnit></xUnit></xBlock></xPart>`;
+    const parsed = parsePlUodoDecisionXml({
+      xml,
+      documentId: "x",
+      caseNumber: "DKN.1.1.2025",
+      court: "x",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+    });
+    if (Result.isError(parsed)) {
+      throw parsed.error;
+    }
+    expect(
+      paragraphs(parsed.value.documentAst.blocks).map((block) => [
+        block.role,
+        block.number,
+        block.plainText,
+      ]),
+    ).toEqual([
+      ["case-number", undefined, "DKN.1.1.2025"],
+      ["holding", undefined, "1. Zdanie 1."],
+      ["holding", undefined, "2. Zdanie 2."],
+      ["argumentation", 1, "Zdanie 1."],
+      ["argumentation", 2, "Zdanie 2."],
+      ["argumentation", undefined, "Organ ustalił:"],
+      ["argumentation", undefined, "1. Zdanie 1."],
+      ["argumentation", undefined, "2. Zdanie 2."],
+      ["argumentation", 3, "Zdanie 3."],
+    ]);
   });
 });

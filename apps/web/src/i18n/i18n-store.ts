@@ -230,7 +230,7 @@ setTranslator(
 export { getTranslator } from "@/i18n/translator";
 
 type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
-type NumberingPreference = "auto" | "latn" | "arab";
+export type NumberingPreference = "auto" | "latn" | "arab";
 export type RegionalFormatPreference = "auto" | "en-IN";
 type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
 
@@ -248,6 +248,57 @@ const WEEK_START_KEYWORD = {
   sunday: "sun",
   monday: "mon",
 } as const satisfies Record<Exclude<WeekStartPreference, "auto">, string>;
+
+/**
+ * The digits the reader sees: "auto" means Eastern Arabic-Indic for Arabic
+ * and Western digits elsewhere. One owner for both locales below, so a number
+ * formatted by the formatter and one an ICU message formats (a plural's `#`)
+ * never differ in digits.
+ */
+const resolveNumberingSystem = (
+  language: string,
+  numberingSystem: NumberingPreference,
+) => {
+  const autoNumbers = language === "ar" ? "arab" : "latn";
+  const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
+  return { autoNumbers, numbers };
+};
+
+type MessageLocaleOptions = Pick<
+  FormattingLocaleOptions,
+  "lang" | "region" | "regionalFormat" | "numberingSystem"
+>;
+
+/**
+ * BCP-47 locale messages render in: the UI language, carrying the formatting
+ * locale's number system as a -u-nu- keyword so the numbers ICU formats
+ * inside a message (a plural's `#`, `{n, number}`) use the same digits as
+ * `format.number`. Plural rules and the language itself stay the UI
+ * language's; read the language with `useMessageLocale`, which drops the
+ * keyword.
+ */
+export const buildMessageLocale = ({
+  lang,
+  region,
+  regionalFormat,
+  numberingSystem,
+}: MessageLocaleOptions): string => {
+  const autoBase = region && !lang.includes("-") ? `${lang}-${region}` : lang;
+  const base = regionalFormat === "auto" ? autoBase : regionalFormat;
+  const { numbers } = resolveNumberingSystem(
+    new Intl.Locale(base).language,
+    numberingSystem,
+  );
+  // Western digits need no keyword, except in a language whose own default
+  // Intl may resolve differently (Arabic).
+  const languageDefault = resolveNumberingSystem(
+    new Intl.Locale(lang).language,
+    "auto",
+  ).numbers;
+  return numbers === "latn" && languageDefault === "latn"
+    ? lang
+    : `${lang}-u-nu-${numbers}`;
+};
 
 type FormattingLocaleOptions = {
   lang: SupportedLanguage;
@@ -284,8 +335,10 @@ export const buildFormattingLocale = ({
   const base = regionalFormat === "auto" ? autoBase : regionalFormat;
   const formattingLanguage = new Intl.Locale(base).language;
   const calendarSystem = calendar === "auto" ? "gregory" : calendar;
-  const autoNumbers = formattingLanguage === "ar" ? "arab" : "latn";
-  const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
+  const { autoNumbers, numbers } = resolveNumberingSystem(
+    formattingLanguage,
+    numberingSystem,
+  );
 
   // Unicode extension keywords, kept in canonical (alphabetical) order: ca, fw, nu.
   const keywords: string[] = [];
@@ -297,15 +350,16 @@ export const buildFormattingLocale = ({
   if (weekStart !== "auto") {
     keywords.push(`fw-${WEEK_START_KEYWORD[weekStart]}`);
   }
-  if (numbers !== "latn") {
+  if (numbers !== "latn" || autoNumbers !== "latn") {
     keywords.push(`nu-${numbers}`);
   }
   return keywords.length > 0 ? `${base}-u-${keywords.join("-")}` : base;
 };
 
 // Locale-aware formatter for non-React code (utilities, store logic), mirroring
-// getTranslator. React components should use use-intl's useFormatter, which
-// reads the same locale from the provider. Both are kept in sync by the store.
+// getTranslator. React components use useFormatter from
+// @/i18n/formatting-context, which reads the same locale from the provider.
+// Both are kept in sync by the store.
 let formatter = createFormatter({
   locale: "en",
   timeZone: SERVER_I18N_TIME_ZONE,
@@ -384,7 +438,12 @@ const applyMessages = ({
 }: ApplyMessagesArgs): void => {
   setTranslator(
     createTranslator({
-      locale: lang,
+      locale: buildMessageLocale({
+        lang,
+        region,
+        regionalFormat,
+        numberingSystem,
+      }),
       messages,
     }),
   );
@@ -402,6 +461,18 @@ const applyMessages = ({
 
 /** Rebuild the non-React formatter from the current store state. */
 const recomputeFormatterForState = (state: State): void => {
+  // The translator's digits follow the number system too (buildMessageLocale).
+  setTranslator(
+    createTranslator({
+      locale: buildMessageLocale({
+        lang: state.loadedLang,
+        region: state.region,
+        regionalFormat: state.regionalFormat,
+        numberingSystem: state.numberingSystem,
+      }),
+      messages: state.messages,
+    }),
+  );
   refreshFormatter(
     buildFormattingLocale({
       lang: state.loadedLang,
@@ -473,7 +544,10 @@ export const useI18nStore = create<State & Actions>()(
           });
           // The UI stays in the previous language; tell the user the switch
           // did not happen. The toast renders in that previous language.
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "loadMessages:failure",
+            scope: { type: "handler", handlerId: "loadMessages:failure" },
+          });
           notifyUserError(error, getTranslator()("common.languageLoadFailed"));
           return;
         }
@@ -558,7 +632,7 @@ export const useI18nStore = create<State & Actions>()(
 /**
  * The current formatting locale for non-React code (region plus calendar,
  * number-system, and first-day-of-week extensions). React reads the same value
- * through use-intl's useLocale().
+ * through useFormattingLocale from @/i18n/formatting-context.
  */
 export const getFormattingLocale = (): string => {
   const state = useI18nStore.getState();

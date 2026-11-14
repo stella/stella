@@ -16,7 +16,7 @@
  * the shape, so the emptiness decision cannot be made a second time.
  */
 
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 /** The fallback for a CASE whose miss falls through to an enclosing COALESCE. */
 export const SQL_NULL = "NULL";

@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtemp,
   mkdir,
+  mkdtemp,
   readFile,
-  writeFile,
   rm,
   symlink,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,10 +21,12 @@ import {
   createTaskProgressWatchdog,
   DEFAULT_TASK_BUDGETS,
   evaluateTaskBudgets,
+  largestOwnedProcesses,
   ownedProcessGroupMembers,
   ownedProcessTreeRows,
   parseTaskBudgets,
   parseTurboRunSummary,
+  processCpuSnapshot,
   runBudgetedCheck,
   TaskBudgetInputError,
 } from "./code-quality-task-budget";
@@ -284,8 +286,10 @@ test("every API code-quality graph task has an explicit budget entry", async () 
   const plan = planCheck({
     changedPaths,
     presentChangedPaths: changedPaths,
+    repositoryPaths: changedPaths,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
+    pluginModulePaths: new Set(),
   });
   if (plan.type !== "scoped") {
     throw new Error("Expected API code-quality entry-point plan");
@@ -1060,14 +1064,14 @@ test("successful leader exit cleans its inherited-pipe descendants without waiti
 test("a progress stall interrupts a longer group drain window", async () => {
   const cwd = await scratch();
   try {
-    const descendant =
-      "process.stdout.write('ready'); setTimeout(()=>process.exit(0),5000)";
+    const completion = path.join(cwd, "descendant-completion");
+    // Kernel sleep keeps this quiescence fixture independent of JS runtime CPU work.
+    const descendant = `trap 'printf interrupted > "$1"; exit 0' TERM; printf ready; sleep 5; printf completed > "$1"`;
     const leader = `
       const {spawn}=require('child_process');
-      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      const nested=spawn('/bin/sh',['-c',${JSON.stringify(descendant)},'descendant',${JSON.stringify(completion)}],{stdio:['ignore','pipe','inherit']});
       nested.stdout.once('data',()=>process.exit(0));
     `;
-    const started = Date.now();
     const result = await runBudgetedCheck({
       command: [process.execPath, "-e", leader],
       cwd,
@@ -1082,7 +1086,10 @@ test("a progress stall interrupts a longer group drain window", async () => {
     expect(result.exitCode).toBe(124);
     expect(result.outcome).toBe("stalled");
     expect(result.output).toContain("class=task-stall");
-    expect(Date.now() - started).toBeLessThan(3800);
+    expect(await Bun.file(completion).text()).toBe("interrupted");
+    expect(result.output).not.toContain(
+      "Notice: Terminating owned process after leader exit:",
+    );
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
@@ -1163,6 +1170,36 @@ test("termination diagnostics retain tree ancestry, group members and process st
     "102 101 102 S worker",
     "103 1 100 Z exited",
   ]);
+});
+
+test("the machine trail names the group's largest resident processes, largest first", () => {
+  const snapshot = [
+    "100 1 100 S 2468 bun --bun turbo run lint",
+    "101 100 100 S 19688 turbo daemon",
+    "102 101 102 S 9437184 oxlint --type-aware apps/api",
+    "103 102 102 R 4194304 tsgolint headless",
+    "104 101 104 Z 0 [node] <defunct>",
+    "105 999 999 S 16777216 unrelated database",
+  ].join("\n");
+  expect(largestOwnedProcesses(snapshot, 100)).toEqual([
+    "rss_mib=9216 oxlint --type-aware apps/api",
+    "rss_mib=4096 tsgolint headless",
+    "rss_mib=19 turbo daemon",
+  ]);
+  expect(largestOwnedProcesses(`${"x".repeat(10)}\n`, 100)).toEqual([]);
+});
+
+test("a runnable owned process is progress between CPU clock ticks", () => {
+  const runnable = "100 1 100 R 00:00:01 compiler\n";
+  const waiting = "100 1 100 S 00:00:01 compiler\n";
+  expect(processCpuSnapshot(runnable, 100)).toEqual({
+    activity: "runnable",
+    cpu: "100:00:00:01",
+  });
+  expect(processCpuSnapshot(waiting, 100)).toEqual({
+    activity: "waiting",
+    cpu: "100:00:00:01",
+  });
 });
 
 test("owned process audits retain live descendants and ignore unrelated groups or exited zombies", () => {

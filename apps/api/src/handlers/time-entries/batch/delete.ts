@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -11,11 +11,15 @@ import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const batchDeleteBodySchema = t.Object({
-  ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
+const batchDeleteBodySchema = v.object({
+  ids: v.pipe(
+    v.array(resourceIdSchema("timeEntry")),
+    v.minLength(1),
+    v.maxLength(200),
+  ),
 });
 
 const buildBatchDeleteEvents = (params: {

@@ -1,6 +1,7 @@
 import { inArray } from "drizzle-orm";
 
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import { publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,21 +23,27 @@ export type CourtParagraphNumbersByDecision = ReadonlyMap<
  */
 export const COURT_PARAGRAPH_NUMBER_DECISIONS_MAX = 16;
 
-/**
- * The court paragraph numbers of the named decisions, through the public
- * corpus gate: one statement decides which decisions the public may read and
- * fetches their document pointers, and only the numbered blocks' anchors are
- * kept of each document. A decision that is missing, restricted, absorbed,
- * or over the bound, or whose document holds no AST, is absent from the
- * result, which callers read as "no number".
- */
-export const loadCourtParagraphNumbers = async ({
-  caseLawDb = caseLawPublicReadDb,
-  decisionIds,
-}: {
+/** Each decision's blocks, by the decision they belong to. */
+export type DecisionBlocksByDecision = ReadonlyMap<
+  SafeId<"caseLawDecision">,
+  readonly Block[]
+>;
+
+type LoadDecisionBlocksOptions = {
   caseLawDb?: CaseLawPublicReadDb | undefined;
   decisionIds: readonly SafeId<"caseLawDecision">[];
-}): Promise<CourtParagraphNumbersByDecision> => {
+};
+
+/**
+ * The blocks of the named decisions, through the public corpus gate: one
+ * statement decides which decisions the public may read and fetches their
+ * document pointers. A decision that is missing, restricted, absorbed, or
+ * over the bound, or whose document holds no AST, is absent from the result.
+ */
+export const loadDecisionBlocks = async ({
+  caseLawDb = caseLawPublicReadDb,
+  decisionIds,
+}: LoadDecisionBlocksOptions): Promise<DecisionBlocksByDecision> => {
   const ids = [...new Set(decisionIds)].slice(
     0,
     COURT_PARAGRAPH_NUMBER_DECISIONS_MAX,
@@ -74,10 +81,23 @@ export const loadCourtParagraphNumbers = async ({
   const entries = await Promise.all(
     rows.map(async (row) => {
       const ast = await readDecisionAnalysisAst(row, readCorpusTombstones);
-      return ast === null
-        ? null
-        : ([row.id, courtParagraphNumbersByAnchor(ast.blocks)] as const);
+      return ast === null ? null : ([row.id, ast.blocks] as const);
     }),
   );
   return new Map(entries.filter((entry) => entry !== null));
 };
+
+/**
+ * The court paragraph numbers of the named decisions (`loadDecisionBlocks`),
+ * keeping only the numbered blocks' anchors of each document. An absent
+ * decision reads as "no number".
+ */
+export const loadCourtParagraphNumbers = async (
+  options: LoadDecisionBlocksOptions,
+): Promise<CourtParagraphNumbersByDecision> =>
+  new Map(
+    [...(await loadDecisionBlocks(options))].map(([id, blocks]) => [
+      id,
+      courtParagraphNumbersByAnchor(blocks),
+    ]),
+  );

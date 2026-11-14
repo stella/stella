@@ -9,9 +9,10 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import type {
-  ReaderAnswerStreamEvent,
   ReaderAnswer,
+  ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import {
   type DecisionAnalysis,
@@ -20,6 +21,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -236,10 +238,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-2",
-    quote: passage,
-    startOffset: 0,
-    endOffset: passage.length,
+    spans: [
+      {
+        paragraphId: "p-2",
+        quote: passage,
+        startOffset: 0,
+        endOffset: passage.length,
+      },
+    ],
   },
   messages: [
     {
@@ -330,10 +336,15 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
         return Response.json({ message: "Not found" }, { status: 404 });
       }
       if (path.endsWith("/workspaces/navigation")) {
-        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          workspaces: [],
+          features: { timeBilling: false },
+        });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: true });
+        return Response.json(aiAvailableResponse());
       }
       throw new TypeError(`Unexpected request: ${request.method} ${path}`);
     },
@@ -391,7 +402,7 @@ const renderWorkspace = async (
                 role: "member",
                 ai: true,
                 deepl: false,
-                ocr: false,
+                ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                 desktop: "none",
                 settings: undefined,
               })}
@@ -604,8 +615,8 @@ for (const activation of ["create", "regenerate", "follow-up"]) {
     const view = await renderWorkspace(client, "enabled");
     await waitFor(() =>
       expect(
-        view.container.querySelectorAll('[data-margin-note="card"]'),
-      ).toHaveLength(3),
+        view.container.querySelectorAll('[data-margin-note="card"]').length,
+      ).toBe(3),
     );
     if (activation === "create") {
       const paragraph = view.container.querySelector('[data-anchor="p-2"]');

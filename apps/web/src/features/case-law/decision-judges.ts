@@ -50,11 +50,56 @@ export const dissentingJudges = (
   judges.filter((judge) => judge.role === "dissenting");
 
 /**
- * A key that separates two judges of the same decision: the roster may not
- * know either of them, and the read keys a row by its role and name.
+ * One person on the bench with every part the decision gives them: a
+ * presiding judge who also reported the case is one face captioned twice,
+ * not two faces.
  */
-export const decisionJudgeKey = (judge: DecisionJudge): string =>
-  `${judge.role}:${judge.name}`;
+export type DecisionBenchSeat = {
+  key: string;
+  name: string;
+  portrait: DecisionJudge["portrait"];
+  roles: readonly DecisionJudgeRole[];
+};
+
+/**
+ * Who a row is. The roster row where the name matched one; otherwise the
+ * name, since a decision that prints one name twice means one person.
+ */
+const personKey = (judge: DecisionJudge): string =>
+  judge.judgeId === null ? `name:${judge.name}` : `judge:${judge.judgeId}`;
+
+/**
+ * The bench one person at a time, in reading order: each person where their
+ * first role puts them, their roles in the contract's order, and the name
+ * and portrait of the row read first.
+ */
+export const decisionBenchSeats = (
+  judges: readonly DecisionJudge[],
+): readonly DecisionBenchSeat[] => {
+  const seats = new Map<string, DecisionBenchSeat>();
+  for (const judge of orderDecisionJudges(judges)) {
+    const key = personKey(judge);
+    const seat = seats.get(key);
+    seats.set(
+      key,
+      seat === undefined
+        ? {
+            key,
+            name: judge.name,
+            portrait: judge.portrait,
+            roles: [judge.role],
+          }
+        : {
+            ...seat,
+            portrait: seat.portrait ?? judge.portrait,
+            roles: seat.roles.includes(judge.role)
+              ? seat.roles
+              : [...seat.roles, judge.role],
+          },
+    );
+  }
+  return [...seats.values()];
+};
 
 /** The distinct sources credited for the portraits actually drawn. */
 export const portraitAttributions = (

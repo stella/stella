@@ -3,8 +3,8 @@ import { panic } from "better-result";
 import { statements } from "@stll/permissions";
 
 import {
-  PERSONAL_API_KEY_DEFAULT_SCOPES,
   parseMachineApiKeyPermissions,
+  PERSONAL_API_KEY_DEFAULT_SCOPES,
 } from "@/api/lib/machine-api-key-config";
 import type { PersonalApiKeyScope } from "@/api/lib/machine-api-key-config";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -37,6 +37,7 @@ const PERSONAL_WRITE_SCOPES = {
   chat: null,
   organizationSettings: null,
   auditLog: null,
+  dataExport: null,
   agentSkill: null,
   firmMemory: null,
   caseLawResearch: null,
@@ -44,6 +45,9 @@ const PERSONAL_WRITE_SCOPES = {
   savedSearch: null,
   searchHistory: ["stella:knowledge_write"],
   integration: null,
+  // A conflict check probes matters the key's holder cannot open; it stays a
+  // signed-in action until a personal key can carry that decision.
+  conflictCheck: null,
 } as const satisfies Record<
   keyof typeof statements,
   readonly PersonalApiKeyScope[] | null

@@ -1,5 +1,6 @@
 import type { SchemaClient } from "@better-auth/oauth-provider";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 /**
@@ -18,6 +19,7 @@ const REDIRECT_URI = "https://client.example.com/oauth/callback";
 const FOREIGN_REDIRECT_URI = "https://attacker.example.net/oauth/callback";
 
 const documentsByUrl = new Map<string, unknown>();
+const headersByUrl = new Map<string, Record<string, string>>();
 const requestedUrls: string[] = [];
 
 const metadataDocument = (overrides: Record<string, unknown> = {}) => ({
@@ -39,7 +41,7 @@ await mock.module("@better-auth/cimd/node", () => ({
       return new Response("not found", { status: 404 });
     }
     return new Response(JSON.stringify(document), {
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headersByUrl.get(url) },
       status: 200,
     });
   },
@@ -50,6 +52,8 @@ const { getAuthEndpointUrl, getAuthIssuerUrl } =
   await import("@/api/lib/auth/auth-paths");
 const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
+const { rootDb } = await import("@/api/db/root");
+const { oauthClient } = await import("@/api/db/auth-schema");
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
@@ -98,8 +102,12 @@ const refusalFrom = async (response: Response): Promise<string> => {
   const location = response.headers.get("location");
   if (location === null) {
     expect(response.status).toBeGreaterThanOrEqual(400);
-    const body: unknown = await response.json();
-    expect(body).toMatchObject({ error: expect.any(String) });
+    // Parsed rather than matched: Bun's toMatchObject writes an asymmetric
+    // matcher into the object it checks, so the text would lose the code.
+    const body = v.parse(
+      v.looseObject({ error: v.string() }),
+      await response.json(),
+    );
     return JSON.stringify(body);
   }
 
@@ -397,5 +405,64 @@ describe("OAuth client ID metadata documents", () => {
     expect(response.headers.get("location")).toContain("oauth_query=");
     // An opaque client_id is not a URL, so no discovery runs for it.
     expect(requestedUrls).toEqual([]);
+  });
+
+  test("keeps a registered client resolving for the grace window while its document is unavailable", async () => {
+    const clientId = "https://intermittent.example.com/oauth/client.json";
+    const redirectUri = "https://intermittent.example.com/oauth/callback";
+    const readValidatedAt = async () =>
+      (
+        await rootDb
+          .select({ validatedAt: oauthClient.metadataValidatedAt })
+          .from(oauthClient)
+          .where(eq(oauthClient.clientId, clientId))
+      ).at(0)?.validatedAt;
+    documentsByUrl.set(
+      clientId,
+      metadataDocument({ client_id: clientId, redirect_uris: [redirectUri] }),
+    );
+    // Uncacheable, so every resolution revalidates the document upstream.
+    headersByUrl.set(clientId, { "cache-control": "no-store" });
+
+    const discovered = await authorize(clientId, redirectUri);
+    expect(discovered.status).toBe(302);
+    expect(discovered.headers.get("location")).toContain("oauth_query=");
+    const validatedAt = await readValidatedAt();
+    expect(validatedAt).toBeInstanceOf(Date);
+
+    documentsByUrl.delete(clientId);
+    requestedUrls.length = 0;
+    const stale = await authorize(clientId, redirectUri);
+    expect(requestedUrls).toEqual([clientId]);
+    expect(stale.status).toBe(302);
+    expect(stale.headers.get("location")).toContain("oauth_query=");
+    // A stale answer records no validation, so it cannot extend its window.
+    expect(await readValidatedAt()).toEqual(validatedAt);
+
+    await rootDb
+      .update(oauthClient)
+      .set({
+        metadataValidatedAt: sql`now() - interval '6 hours 1 second'`,
+      })
+      .where(eq(oauthClient.clientId, clientId));
+    // The retry lands inside the discovery's failed-fetch interval or fetches
+    // the missing document again; past the window either one is refused.
+    expect(await refusalFrom(await authorize(clientId, redirectUri))).toMatch(
+      /invalid_client|temporarily_unavailable/u,
+    );
+  });
+
+  test("never creates a client from an unavailable document", async () => {
+    const clientId = "https://unpublished.example.com/oauth/client.json";
+    const refusal = await refusalFrom(
+      await authorize(clientId, "https://unpublished.example.com/oauth/cb"),
+    );
+    expect(refusal).toContain("invalid_client");
+    expect(
+      await rootDb
+        .select({ clientId: oauthClient.clientId })
+        .from(oauthClient)
+        .where(eq(oauthClient.clientId, clientId)),
+    ).toEqual([]);
   });
 });

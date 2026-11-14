@@ -12,30 +12,37 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript6";
+import * as ts from "tsrs/ast";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
+import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { MCP_APP_DIRECTORY_OUTPUTS } from "../packages/scripts/src/generated-files";
+import { parseSource } from "../packages/scripts/src/syntax-tree";
+import { createProgram } from "../packages/scripts/src/typescript-program";
+import {
+  MCP_APP_OUTPUT_PATTERNS,
+  mcpAppOutputFailures,
+} from "./check-mcp-app-outputs";
 import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   computeChangedFileScope,
   DEFAULT_DETECTORS,
-  MODEL_CATALOG_DRIFT_INPUTS,
   ROUTE_TREE_INPUTS,
   type ScopeOutput,
 } from "./ci-plan-scope";
 import {
-  GENERATORS,
+  allowedOutputs,
   CI_GENERATED_FILES,
   CI_GENERATED_OUTPUTS,
-  allowedOutputs,
-  GUARD_A_EXCLUSIONS,
   derivedPrerequisites,
+  GENERATORS,
   generatorsForFiles,
+  GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
   runGenerators,
@@ -55,79 +62,85 @@ const generator = (id: string) => {
   return found ?? panic(`Missing generator ${id}`);
 };
 
-test("Generator output kinds remain literal discriminators after export widening", () => {
+test("Generator output kinds remain literal discriminators after export widening", async () => {
   const file = nodePath.resolve(import.meta.dirname, "generator-type-probe.ts");
-  const declaration = ts.createSourceFile(
-    file,
+  const declaration = parseSource(
+    "generated-files.ts",
     readFileSync(
       nodePath.resolve(import.meta.dirname, "generated-files.ts"),
       "utf-8",
     ),
-    ts.ScriptTarget.Latest,
-    true,
   );
-  const definitions = declaration.statements
+  const definitions = declaration.program.body
     .filter(
       (statement) =>
-        ts.isTypeAliasDeclaration(statement) &&
-        ["Generator", "GeneratorCheck"].includes(statement.name.text),
+        (statement.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(statement.id.name)) ||
+        (statement.type === "ExportNamedDeclaration" &&
+          statement.declaration?.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(
+            statement.declaration.id.name,
+          )),
     )
-    .map((statement) => statement.getText(declaration))
+    .map((statement) =>
+      declaration.sourceText.slice(statement.start, statement.end),
+    )
     .join("\n");
-  const options = { strict: true, noEmit: true, skipLibCheck: true, types: [] };
-  const host = ts.createCompilerHost(options);
-  const sourceFile = host.getSourceFile;
-  host.getSourceFile = (
-    name,
-    languageVersion,
-    onError,
-    shouldCreateNewSourceFile,
-  ) =>
-    name === file
-      ? ts.createSourceFile(name, definitions, ts.ScriptTarget.Latest, true)
-      : sourceFile(name, languageVersion, onError, shouldCreateNewSourceFile);
-  const program = ts.createProgram([file], options, host);
-  const probe = program.getSourceFile(file);
-  if (probe === undefined) {
-    throw new Error("Missing generator type probe");
-  }
-  const generatorType = probe.statements.find(
-    (statement) =>
-      ts.isTypeAliasDeclaration(statement) &&
-      statement.name.text === "Generator",
-  );
-  if (
-    generatorType === undefined ||
-    !ts.isTypeAliasDeclaration(generatorType)
-  ) {
-    throw new Error("Missing Generator declaration");
-  }
-  const checker = program.getTypeChecker();
-  const generatorUnion = checker.getTypeAtLocation(generatorType);
-  if (!generatorUnion.isUnion()) {
-    throw new Error("Generator must be a discriminated union");
-  }
-  const kinds = new Set<string>();
-  for (const branch of generatorUnion.types) {
-    const discriminator = checker.getPropertyOfType(branch, "outputKind");
-    if (discriminator === undefined) {
-      throw new Error("Generator branch has no outputKind");
-    }
-    const kind = checker.getTypeOfSymbolAtLocation(
-      discriminator,
-      generatorType,
+  const opened = await createProgram({
+    rootNames: [file],
+    virtualFiles: new Map([[file, definitions]]),
+    compilerOptions: {
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      types: [],
+    },
+  });
+  try {
+    const probe =
+      (await opened.program.getSourceFile(file)) ??
+      panic("Missing generator type probe");
+    const generatorType = probe.statements.find(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        statement.name.text === "Generator",
     );
-    // A union-valued property recreates TS1360 even if another field forms a union.
-    if (!kind.isStringLiteral()) {
-      throw new Error(
-        "Every Generator branch must retain a literal outputKind",
-      );
+    if (
+      generatorType === undefined ||
+      !ts.isTypeAliasDeclaration(generatorType)
+    ) {
+      panic("Missing Generator declaration");
     }
-    kinds.add(kind.value);
+    const { checker } = opened;
+    const generatorUnion = await checker.getTypeAtLocation(generatorType);
+    if (!generatorUnion.isUnionType()) {
+      panic("Generator must be a discriminated union");
+    }
+    const kinds = new Set<string>();
+    for (const branch of await generatorUnion.getTypes()) {
+      const discriminator = await checker.getPropertyOfType(
+        branch,
+        "outputKind",
+      );
+      if (discriminator === undefined) {
+        panic("Generator branch has no outputKind");
+      }
+      const kind = await checker.getTypeOfSymbolAtLocation(
+        discriminator,
+        generatorType,
+      );
+      // A union-valued property recreates TS1360 even if another field forms a union.
+      if (!kind.isStringLiteralType()) {
+        panic("Every Generator branch must retain a literal outputKind");
+      }
+      kinds.add(kind.value);
+    }
+    expect(kinds).toEqual(
+      new Set(GENERATORS.map(({ outputKind }) => outputKind)),
+    );
+  } finally {
+    await opened.close();
   }
-  expect(kinds).toEqual(
-    new Set(GENERATORS.map(({ outputKind }) => outputKind)),
-  );
 });
 
 test("generation owners have unique identifiers", () => {
@@ -578,7 +591,26 @@ test("the route generator guard rejects missing script and direct pin", async ()
   }
 });
 
+test("visual sandbox regeneration follows its shared error metadata owner", () => {
+  for (const file of [
+    "packages/errors/src/fingerprint-fields.ts",
+    "packages/errors/src/exception-cause-chain.ts",
+    "apps/api/src/handlers/visual-sandbox/prepare.ts",
+    "apps/api/src/handlers/visual-sandbox/sanitize.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("visual-sandbox-bundle");
+  }
+});
+
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
+  expect(
+    generatorsForFiles([
+      "packages/api-contract/src/document-version-upload.ts",
+    ]).map(({ id }) => id),
+  ).toContain("cli-registry");
   const requiredIds = [
     "capability-catalog",
     "capability-runtime",
@@ -636,7 +668,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .filter(Boolean);
   const changedPaths = [
     [
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "capability-catalog",
       "capability-runtime",
       "cli-registry",
@@ -685,7 +717,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
 
 test("the planned allowlist is exactly the selected committed output union", () => {
   for (const paths of [
-    ".oxfmtrc.json\n",
+    "bunfig.toml\n",
     "packages/api-contract/src/mcp-tool.ts\n",
     "docs/unrelated.md\n",
   ]) {
@@ -717,6 +749,19 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
+  // Local skill sources must affect the generation input contract, including a skill
+  // added after the generator's other inputs were last reviewed.
+  const instructions = generator("ai-instructions");
+  const localSkills = tracked.filter((file) =>
+    file.startsWith(".ai/local-skills/"),
+  );
+  expect(localSkills.length).toBeGreaterThan(0);
+  for (const file of localSkills) {
+    expect(
+      instructions.inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      `ai-instructions: ${file}`,
+    ).toBe(true);
+  }
   // Pooled checks are steps of their job, so resolve names through them.
   const workflow: unknown = Bun.YAML.parse(ci);
   const steps = new Set([
@@ -765,7 +810,11 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
       ).toBe(true);
     }
     expect(entry.outputs.every((glob) => !/[|\n]/u.test(glob))).toBe(true);
-    const scriptFile = entry.write.find((part) => /\.(?:ts|sh)$/u.test(part));
+    // Any file a runtime can execute directly: TypeScript, JavaScript in each
+    // module flavour, or a shell script.
+    const scriptFile = entry.write.find((part) =>
+      /\.(?:[cm]?[jt]s|sh)$/u.test(part),
+    );
     if (scriptFile) {
       expect(existsSync(scriptFile), `${entry.id}: ${scriptFile}`).toBe(true);
       continue;
@@ -880,13 +929,6 @@ test("route-tree CI scope covers every manifest input and output", () => {
   expect(paths.toSorted()).toEqual([...ROUTE_TREE_INPUTS].toSorted());
 });
 
-test("CI rate snapshot scope stays pinned to the manifest", () => {
-  const inputs = generator("model-rates").inputs.map((glob) =>
-    glob.replace(/\/\*\*$/u, "/*"),
-  );
-  expect(inputs.toSorted()).toEqual([...MODEL_CATALOG_DRIFT_INPUTS].toSorted());
-});
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -948,6 +990,15 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
   }
 });
 
+test.each([
+  "apps/api/src/mcp/web-handoff-link-contract.ts",
+  "apps/api/src/mcp/write-result-omission.ts",
+])("app contracts follow their advertised output owner %s", (file) => {
+  expect(generatorsForFiles([file]).map(({ id }) => id)).toContain(
+    "mcp-app-contracts",
+  );
+});
+
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ciGeneratedStepRun(
     "CLI sharded registry and derived runtime guard",
@@ -978,19 +1029,14 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   // Derived outputs are untracked, so a diff would pass on anything: the
   // guard instead requires every declared output to exist after the build
   // and runs the tracking check.
-  const declared = (bundle.split("outputs=(\n")[1] ?? "")
-    .split("\n)")[0]
-    ?.split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  expect(declared?.toSorted()).toEqual(
+  expect(MCP_APP_OUTPUT_PATTERNS.toSorted()).toEqual(
     [
       ...generator("mcp-app-contracts").outputs,
       ...generator("mcp-app-bundles").outputs,
     ].toSorted(),
   );
   expect(bundle).not.toContain("git diff --exit-code");
-  expect(bundle).toContain('test -s "$output"');
+  expect(bundle).toContain("bun scripts/check-mcp-app-outputs.ts");
   expect(bundle).toContain("bun scripts/check-mcp-generated-tracking.ts");
   const preparation = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
@@ -1026,7 +1072,10 @@ test("route tree has one derived owner and a cache producer for every consumer",
   const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
   expect(ignored.exitCode).toBe(0);
   const producer = config.tasks["@stll/web#generate:route-tree"];
-  expect(producer?.outputs).toEqual(["src/routeTree.gen.ts"]);
+  expect(producer?.outputs).toEqual([
+    "src/routeTree.gen.ts",
+    "src/route-templates.gen.ts",
+  ]);
   expect(
     generationInputs("generate:route-tree")
       .map((input) =>
@@ -1148,6 +1197,7 @@ test("web messages have one derived owner and are generated wherever the route t
 
 // Runs in a copy of the tracked files the checks read, never by deleting the
 // checkout's declarations: other test files read them concurrently.
+// Measured p95 is 19.8 s; this test must run the real web catalog checker in that copy.
 test("web catalog checks pass without the derived message declarations", async () => {
   const repo = new URL("..", import.meta.url).pathname;
   const tracked = Bun.spawnSync(
@@ -1160,6 +1210,7 @@ test("web catalog checks pass without the derived message declarations", async (
       "apps/web/src",
       "apps/web/scripts",
       "apps/web/public/prepaint-init.js",
+      "apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json",
       "packages/ai-catalog/src",
     ],
     { cwd: repo, stdout: "pipe", stderr: "pipe" },
@@ -1203,7 +1254,7 @@ test("web catalog checks pass without the derived message declarations", async (
   } finally {
     await rm(copy, { recursive: true, force: true });
   }
-}, 60_000);
+}, 40_000);
 
 test("long optional runs accept dispatch only", () => {
   for (const file of [
@@ -1337,6 +1388,13 @@ test("cloud setup has one generator owner and checks shared policy output", () =
       "scripts/generate-cloud-setup.ts",
       "scripts/generated-artifacts.ts",
     ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      "packages/portable-path/src/index.ts",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
     write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
     check: ["bun", "scripts/generate-cloud-setup.ts"],
     autofix: true,
@@ -1356,9 +1414,15 @@ test("every plan builds the derived outputs its generators read before running t
   const witness = (glob: string) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
   const problems: string[] = [];
+  const planByGlob = new Map(
+    GENERATORS.flatMap((entry) => [...entry.inputs, ...entry.outputs]).map(
+      (glob) =>
+        [glob, orderGenerators(generatorsForFiles([witness(glob)]))] as const,
+    ),
+  );
   for (const start of GENERATORS) {
     for (const glob of [...start.inputs, ...start.outputs]) {
-      const plan = orderGenerators(generatorsForFiles([witness(glob)]));
+      const plan = planByGlob.get(glob) ?? [];
       const position = new Map(plan.map(({ id }, index) => [id, index]));
       for (const planned of plan) {
         for (const prerequisite of derivedPrerequisites(planned)) {
@@ -1420,4 +1484,93 @@ test("a CLI registry change plans the MCP app bundles it reads", () => {
     expect(ids).toContain(prerequisite);
     expect(ids.indexOf(prerequisite)).toBeLessThan(ids.indexOf("cli-registry"));
   }
+});
+
+const withMcpOutputs = async (
+  run: (root: string, appDirectories: readonly string[]) => Promise<void>,
+) => {
+  const root = await mkdtemp(nodePath.join(tmpdir(), "mcp-output-guard-"));
+  const appDirectories = MCP_APPS.slice(0, 2).map(({ directory }) => directory);
+  try {
+    const outputs = [
+      ...generator("mcp-app-contracts").outputs,
+      ...generator("mcp-app-bundles").outputs,
+    ].flatMap((pattern) =>
+      pattern.includes("/*/")
+        ? appDirectories.map((directory) =>
+            pattern.replace("/*/", () => `/${directory}/`),
+          )
+        : [pattern],
+    );
+    for (const file of outputs) {
+      await mkdir(nodePath.dirname(nodePath.join(root, file)), {
+        recursive: true,
+      });
+      await writeFile(
+        nodePath.join(root, file),
+        file.endsWith("/app.css.txt") ? "" : "generated",
+      );
+    }
+    await run(root, appDirectories);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+};
+
+test("every declared app output is checked even when another app has that output", async () => {
+  await withMcpOutputs(async (root, appDirectories) => {
+    expect(appDirectories).toHaveLength(2);
+    expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([]);
+    const secondAppDirectory =
+      appDirectories.at(1) ??
+      panic("the regression fixture needs two MCP apps");
+    for (const file of MCP_APP_DIRECTORY_OUTPUTS) {
+      const missing = `packages/mcp-apps/src/${secondAppDirectory}/generated/${file}`;
+      const target = nodePath.join(root, missing);
+      await rm(target);
+      expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([
+        `${missing}: missing generated file`,
+      ]);
+      await writeFile(target, file === "app.css.txt" ? "" : "generated");
+    }
+  });
+});
+
+test("an absent app directory cannot disappear from the expected output inventory", async () => {
+  await withMcpOutputs(async (root, appDirectories) => {
+    const secondAppDirectory =
+      appDirectories.at(1) ??
+      panic("the regression fixture needs two MCP apps");
+    const missingApp = `packages/mcp-apps/src/${secondAppDirectory}`;
+    await rm(nodePath.join(root, missingApp), { recursive: true });
+    expect(mcpAppOutputFailures({ root, appDirectories }).toSorted()).toEqual(
+      MCP_APP_DIRECTORY_OUTPUTS.map(
+        (file) => `${missingApp}/generated/${file}: missing generated file`,
+      ).toSorted(),
+    );
+  });
+});
+
+test("empty per-app CSS passes while every other empty artifact is reported", async () => {
+  await withMcpOutputs(async (root, appDirectories) => {
+    expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([]);
+    const outputs = [
+      ...generator("mcp-app-contracts").outputs,
+      ...generator("mcp-app-bundles").outputs,
+    ]
+      .flatMap((pattern) =>
+        pattern.includes("/*/")
+          ? appDirectories.map((directory) =>
+              pattern.replace("/*/", () => `/${directory}/`),
+            )
+          : [pattern],
+      )
+      .filter((file) => !file.endsWith("/app.css.txt"));
+    for (const file of outputs) {
+      await writeFile(nodePath.join(root, file), "");
+    }
+    expect(mcpAppOutputFailures({ root, appDirectories }).toSorted()).toEqual(
+      outputs.map((file) => `${file}: empty generated file`).toSorted(),
+    );
+  });
 });

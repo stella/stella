@@ -168,14 +168,14 @@ describe("S3 object-key tenant scoping", () => {
     expect(key.startsWith("org_1/ws_1/")).toBe(true);
   });
 
-  test("createUserFileKey is prefixed by the owning user", () => {
+  test("createUserFileKey is prefixed by the owning organization", () => {
     const key: string = createUserFileKey({
-      userId: toSafeId<"user">("user_1"),
+      organizationId: toSafeId<"organization">("org_1"),
       fileId: "file_1",
       mimeType: "text/markdown",
     });
-    expect(key).toBe("user_1/file_1.bin");
-    expect(key.startsWith("user_1/")).toBe(true);
+    expect(key).toBe("org_1/file_1.bin");
+    expect(key.startsWith("org_1/")).toBe(true);
   });
 
   test("keys contain no path-traversal segments for branded ids", () => {

@@ -9,6 +9,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
 
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   mapMarkdownSelection,
@@ -16,7 +17,6 @@ import {
 } from "@/components/chat/markdown-selection.logic";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
 import { mapAnswerSelection } from "@/features/chat/answer-edit/answer-edit-selection";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 afterAll(async () => await unregisterDomEnvironment());
@@ -190,7 +190,7 @@ test("every generated rendered markdown leaf maps to the same stripped source te
     }),
     { numRuns: 40 },
   );
-}, 20_000);
+});
 
 test("refuses rendered replacements, stale source and cross-root selections", () => {
   const source = "**original**";

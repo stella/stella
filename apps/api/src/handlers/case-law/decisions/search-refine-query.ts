@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { TRUNCATED_AT_OUTPUT_CEILING_CODE } from "@/api/lib/chat/provider-stream-contract";
+import {
+  ModelRunError,
+  ProviderCallError,
+} from "@/api/lib/errors/provider-call-error";
 import {
   formatCorpusQueryTokens,
   partitionCorpusFunctionWords,
@@ -79,3 +84,15 @@ export const normalizeCaseLawRefinedQuery = (
   }
   return Result.ok(formatCorpusQueryTokens(required));
 };
+
+/**
+ * Whether a failed generation is worth another attempt: the model answered,
+ * but the answer was cut off or could not be read. A provider's own answer (a
+ * rejected key, an exhausted quota, a retired model) and a cancelled run stay
+ * final.
+ */
+export const isIncompleteCaseLawRefineGeneration = (error: unknown): boolean =>
+  error instanceof ModelRunError ||
+  (error instanceof ProviderCallError &&
+    (error.code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+      error.kind === "provider_stream_incomplete"));

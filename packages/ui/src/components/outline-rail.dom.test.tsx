@@ -4,7 +4,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 
-import { OutlineRail, type OutlineItem } from "./outline-rail";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
+import { type OutlineItem, OutlineRail } from "./outline-rail";
 
 const items = [
   { id: "introduction", label: "Introduction", level: 1 },
@@ -30,7 +33,7 @@ afterAll(async () => {
   } else {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderOutline = async (presentation: "popover" | "rail" = "popover") => {
@@ -187,6 +190,47 @@ test("leaving the rail from inside the panel closes the popover", async () => {
   }
 });
 
+test("the tick strip opens the panel only when the pointer rests on it", async () => {
+  const rendered = await renderOutline();
+  const outside = document.createElement("div");
+  document.body.append(outside);
+  jest.useFakeTimers();
+  try {
+    const strip = rendered.container.querySelector<HTMLElement>(
+      "[data-outline-ticks]",
+    );
+    const tick = strip?.querySelector<HTMLButtonElement>("button");
+    const leave = () =>
+      strip?.dispatchEvent(
+        new MouseEvent("mouseout", { bubbles: true, relatedTarget: outside }),
+      );
+
+    // Crossing the strip on the way elsewhere opens nothing, then or later.
+    await hover(strip);
+    await act(async () => {
+      jest.advanceTimersByTime(60);
+      leave();
+      jest.advanceTimersByTime(500);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
+
+    // Resting on it does.
+    await hover(strip);
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("true");
+  } finally {
+    restoreRealTimers();
+    outside.remove();
+    await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
 test("focus inside a hover-opened panel holds it open after the pointer leaves", async () => {
   const rendered = await renderOutline();
   const outside = document.createElement("div");
@@ -210,7 +254,7 @@ test("focus inside a hover-opened panel holds it open after the pointer leaves",
         jest.advanceTimersByTime(200);
       });
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
     expect(panel?.hasAttribute("inert")).toBe(false);
@@ -242,5 +286,155 @@ test("Escape from a panel opened without a focused tick lands on a tick", async 
     expect(ticks[0]?.getAttribute("aria-expanded")).toBe("false");
   } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
+test("a branch the reader closed stays closed when the items are rebuilt", async () => {
+  const nested = [
+    { id: "terms", label: "Terms", level: 0, meta: "1" },
+    { id: "waiver", label: "Waiver", level: 1, meta: "2" },
+    { id: "notices", label: "Notices", level: 0, meta: "3" },
+  ] satisfies OutlineItem[];
+  const container = document.createElement("div");
+  const scrollContainer = document.createElement("div");
+  document.body.append(container, scrollContainer);
+  const root = createRoot(container);
+  const renderItems = async (next: OutlineItem[]) =>
+    await act(async () => {
+      root.render(
+        <OutlineRail
+          items={next}
+          onJump={() => undefined}
+          presentation="panel"
+          resolvePct={() => 50}
+          scrollContainerRef={{ current: scrollContainer }}
+        />,
+      );
+    });
+  try {
+    await renderItems(nested);
+    const collapse = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse"]',
+    );
+    await act(async () => collapse?.click());
+    expect(container.textContent).not.toContain("Waiver");
+
+    // A relayout moves a later heading to another page.
+    await renderItems(
+      nested.map((item) =>
+        item.id === "notices" ? { ...item, meta: "4" } : { ...item },
+      ),
+    );
+
+    expect(container.textContent).not.toContain("Waiver");
+    expect(container.textContent).toContain("4");
+  } finally {
+    await cleanup(root, container, scrollContainer);
+  }
+});
+
+const renderItems = async (railItems: OutlineItem[]) => {
+  const container = document.createElement("div");
+  const scrollContainer = document.createElement("div");
+  document.body.append(container, scrollContainer);
+  const root = createRoot(container);
+  const render = async (next: OutlineItem[]) => {
+    await act(async () => {
+      root.render(
+        <OutlineRail
+          ariaLabel="Document outline"
+          items={next}
+          onJump={() => undefined}
+          resolvePct={(id) => (id === "opinion" ? 90 : 10)}
+          scrollContainerRef={{ current: scrollContainer }}
+        />,
+      );
+    });
+  };
+  await render(railItems);
+  return { container, render, root, scrollContainer };
+};
+
+const OPINION = {
+  id: "opinion",
+  label: "Svatoň Jan",
+  level: 0,
+  portraits: [{ image: null, name: "Svatoň Jan" }],
+  title: "Dissenting opinion",
+} satisfies OutlineItem;
+
+const opinionTick = (container: HTMLElement) =>
+  container.querySelector<HTMLButtonElement>(
+    '[data-outline-ticks] button[aria-label="Svatoň Jan Dissenting opinion"]',
+  );
+
+test("a lone entry with people keeps the rail a lone tick would not", async () => {
+  const lone = await renderItems([OPINION]);
+  const tick = await renderItems([{ id: "only", label: "Only", level: 0 }]);
+  try {
+    expect(opinionTick(lone.container)).not.toBeNull();
+    expect(tick.container.querySelector("[data-outline-ticks]")).toBeNull();
+  } finally {
+    await cleanup(lone.root, lone.container, lone.scrollContainer);
+    await cleanup(tick.root, tick.container, tick.scrollContainer);
+  }
+});
+
+test("a tick with people draws no face until it is asked", async () => {
+  const { container, root, scrollContainer } = await renderItems([OPINION]);
+  try {
+    const tick = opinionTick(container);
+    expect(tick?.textContent).toBe("");
+    expect(tick?.style.height).toBe("2px");
+    expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeNull();
+  } finally {
+    await cleanup(root, container, scrollContainer);
+  }
+});
+
+test("a lone tick answers with its card, not a list of one", async () => {
+  const { container, root, scrollContainer } = await renderItems([OPINION]);
+  try {
+    expect(container.querySelector("nav")).toBeNull();
+    expect(opinionTick(container)?.getAttribute("aria-controls")).toBeNull();
+  } finally {
+    await cleanup(root, container, scrollContainer);
+  }
+});
+
+test("an entry with people stays on a rail too dense for its level", async () => {
+  const dense = Array.from({ length: 60 }, (_, index) => ({
+    id: `shallow-${index}`,
+    label: `Shallow ${index}`,
+    level: index % 2,
+  })) satisfies OutlineItem[];
+  const { container, root, scrollContainer } = await renderItems([
+    ...dense,
+    { ...OPINION, level: 1 },
+  ]);
+  try {
+    expect(
+      container.querySelector('button[aria-label="Shallow 1"]'),
+    ).toBeNull();
+    expect(opinionTick(container)).not.toBeNull();
+  } finally {
+    await cleanup(root, container, scrollContainer);
+  }
+});
+
+test("a changed person reaches the panel when the items are rebuilt", async () => {
+  const other = { id: "other", label: "Other", level: 0 };
+  const { container, render, root, scrollContainer } = await renderItems([
+    OPINION,
+    other,
+  ]);
+  try {
+    await render([
+      { ...OPINION, portraits: [{ image: null, name: "Novák Petr" }] },
+      other,
+    ]);
+    expect(container.querySelector("nav")?.textContent).toContain("NP");
+  } finally {
+    await cleanup(root, container, scrollContainer);
   }
 });

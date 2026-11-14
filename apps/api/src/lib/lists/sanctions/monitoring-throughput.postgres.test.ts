@@ -6,24 +6,25 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
 import type { ScreeningIndex } from "@stll/sanctions";
 import {
-  syntheticMonitoringEntry,
-  syntheticMonitoringName,
   MONITORING_CONTACT_COUNT,
   MONITORING_ENTRY_COUNT,
+  syntheticMonitoringEntry,
+  syntheticMonitoringName,
 } from "@stll/sanctions/test-fixtures/monitoring-corpus";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization } from "@/api/db/auth-schema";
 import {
   contacts,
-  sanctionsSources,
-  sanctionsEditions,
-  sanctionsEntryPayloads,
   sanctionsEditionEntries,
   sanctionsEditionFanouts,
+  sanctionsEditions,
+  sanctionsEntryPayloads,
+  sanctionsSources,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import {
   commitSanctionsMonitoringBatch,
   SANCTIONS_MONITORING_BATCH_SIZE,
@@ -33,6 +34,8 @@ import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-i
 import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const SEED_BATCH_SIZE = 100;
 const BENCHMARK_PROFILES = [
@@ -125,7 +128,8 @@ if (!runPostgresTests) {
                 })),
               );
               if (offset < CONTACT_COUNT) {
-                await db.insert(contacts).values(
+                await insertOwnerContacts(
+                  db,
                   Array.from(
                     {
                       length: Math.min(SEED_BATCH_SIZE, CONTACT_COUNT - offset),
@@ -294,12 +298,15 @@ if (!runPostgresTests) {
                     sourceBefore.lastSuccessfulVerifiedAt,
                 })
                 .where(eq(sanctionsSources.id, "eu"));
-              await tx
-                .delete(contacts)
-                .where(eq(contacts.organizationId, organizationId));
-              await tx
-                .delete(organization)
-                .where(eq(organization.id, organizationId));
+              await withOwnerOrganizationScope(
+                tx,
+                organizationId,
+                async (scoped) =>
+                  await scoped
+                    .delete(contacts)
+                    .where(eq(contacts.organizationId, organizationId)),
+              );
+              await deleteOrganizationsForTest(tx, [organizationId]);
               await tx.execute(sql`
             CREATE TEMP TABLE monitoring_benchmark_payloads ON COMMIT DROP AS
             SELECT content_hash

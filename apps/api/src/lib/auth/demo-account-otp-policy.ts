@@ -1,3 +1,5 @@
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+
 export const DEMO_ACCOUNT_OTP_WARNING_EVENT =
   "auth.demo_credential_override_skipped";
 
@@ -31,7 +33,7 @@ export const resolveDemoAccountOtp = ({
   if (type !== "sign-in" || !demoEmail || !demoOtp) {
     return undefined;
   }
-  if (email.trim().toLowerCase() !== demoEmail.trim().toLowerCase()) {
+  if (normalizeEmail(email) !== normalizeEmail(demoEmail)) {
     warn();
     return undefined;
   }

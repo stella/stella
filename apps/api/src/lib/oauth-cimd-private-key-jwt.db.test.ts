@@ -6,16 +6,22 @@ import {
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
   mock,
-  spyOn,
   test,
 } from "bun:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
+
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // Mirrors https://chatgpt.com/oauth/client.json, fetched 2026-10-05. The
 // documents and signing keys are test-owned; no request reaches ChatGPT.
@@ -52,7 +58,8 @@ const { readOAuthRedirect, readSignedQuery } =
 
 const clientKeys = await generateKeyPair("RS256");
 const wrongKeys = await generateKeyPair("RS256");
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveAuthJwks: typeof fetch;
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
@@ -81,23 +88,21 @@ beforeAll(async () => {
   });
   // Only the AS's public keys are served through global fetch. Client JWKS
   // must use the CIMD discovery transport above; bypassing it fails closed.
-  fetchSpy.mockImplementation(
-    Object.assign(
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const request =
-          input instanceof Request
-            ? new Request(input, init)
-            : new Request(String(input), init);
-        expect(request.url).toBe(getAuthEndpointUrl("jwks"));
-        return await getAuth().handler(request);
-      },
-      { preconnect: fetch.preconnect },
-    ),
+  serveAuthJwks = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(String(input), init);
+      expect(request.url).toBe(getAuthEndpointUrl("jwks"));
+      return await getAuth().handler(request);
+    },
+    { preconnect: fetch.preconnect },
   );
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await releaseAgentAuthTestDb();
 });
 
@@ -260,6 +265,13 @@ const mcpRequest = (token: string, method: "tools/list" | "tools/call") =>
       },
     }),
   });
+
+beforeEach(() => {
+  fetchSpy = Object.assign(mock(serveAuthJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
+});
 
 describe("confidential CIMD private_key_jwt OAuth", () => {
   test.each(["endpoint", "issuer"] as const)(

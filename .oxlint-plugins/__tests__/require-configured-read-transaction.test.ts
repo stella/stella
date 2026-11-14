@@ -4,7 +4,8 @@ import { lintSingleRule as lintRule } from "./lint-single-rule.ts";
 
 // The owner module declares the helper; it shares line 1 with each source so
 // reported lines stay put.
-const OWNER = "const configureReadTransaction = async tx => setup(tx); ";
+const OWNER =
+  "const configureReadTransaction = async tx => setup(tx); const observePublicLawReadTransaction = tx => tx; ";
 const lintSingleRule = async (
   ruleName: string,
   source: string,
@@ -12,16 +13,29 @@ const lintSingleRule = async (
 ) => lintRule(ruleName, `${OWNER}${source}`, options);
 
 test("rejects conditional or unawaited configuration", async () => {
-  for (const source of [
-    "const publicLawReadDb = fn => database.transaction(async tx => { if (enabled) await configureReadTransaction(tx); return fn(tx); });",
-    "const publicLawReadDb = fn => database.transaction(async tx => { configureReadTransaction(tx); return fn(tx); });",
-  ]) {
-    expect(
-      await lintSingleRule("require-configured-read-transaction", source, {
-        plugin: "public-law-read-boundary",
-      }),
-    ).toEqual([1]);
-  }
+  const results = await Promise.all(
+    [
+      "const publicLawReadDb = fn => database.transaction(async tx => { if (enabled) await configureReadTransaction(tx); return fn(tx); });",
+      "const publicLawReadDb = fn => database.transaction(async tx => { configureReadTransaction(tx); return fn(tx); });",
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "require-configured-read-transaction",
+          source,
+          {
+            plugin: "public-law-read-boundary",
+          },
+        ),
+        expected: [1],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("requires awaited configuration before returning the shared callback", async () => {
@@ -52,6 +66,43 @@ test("accepts unconditional configured reads and direct awaited callback returns
       { plugin: "public-law-read-boundary" },
     ),
   ).toEqual([]);
+});
+
+test("accepts the legacy direct transaction without an observer binding", async () => {
+  expect(
+    await lintRule(
+      "require-configured-read-transaction",
+      "const configureReadTransaction = async tx => setup(tx); const publicLawReadDb = fn => database.transaction(async tx => { await configureReadTransaction(tx); return fn(tx); });",
+      { plugin: "public-law-read-boundary" },
+    ),
+  ).toEqual([]);
+});
+
+test("accepts the owning observer alias when configuration and callback share it", async () => {
+  expect(
+    await lintSingleRule(
+      "require-configured-read-transaction",
+      "const publicLawReadDb = fn => database.transaction(async transaction => { const tx = observePublicLawReadTransaction(transaction); await configureReadTransaction(tx); return fn(tx); });",
+      { plugin: "public-law-read-boundary" },
+    ),
+  ).toEqual([]);
+});
+
+test("rejects observer aliases for another or reassigned transaction", async () => {
+  const invalid = [
+    "const publicLawReadDb = fn => database.transaction(async transaction => { const tx = observePublicLawReadTransaction(other); await configureReadTransaction(tx); return fn(tx); });",
+    "const publicLawReadDb = fn => database.transaction(async transaction => { let tx = observePublicLawReadTransaction(transaction); tx = other; await configureReadTransaction(tx); return fn(tx); });",
+    "const publicLawReadDb = fn => database.transaction(async transaction => { const observePublicLawReadTransaction = tx => other; const tx = observePublicLawReadTransaction(transaction); await configureReadTransaction(tx); return fn(tx); });",
+  ];
+  expect(
+    await Promise.all(
+      invalid.map(async (source) =>
+        lintSingleRule("require-configured-read-transaction", source, {
+          plugin: "public-law-read-boundary",
+        }),
+      ),
+    ),
+  ).toEqual([[1], [1], [1]]);
 });
 
 test("requires the owning public read wrapper to be present", async () => {

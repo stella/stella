@@ -9,6 +9,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { Input } from "@stll/ui/input";
 import { MenuSection } from "@stll/ui/menu-section";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -25,9 +26,10 @@ import type {
 } from "@/components/search-dialog.shared";
 import type { TimeFilter } from "@/components/search-filters.logic";
 import { useFormatter } from "@/i18n/formatting-context";
+import { queryView } from "@/lib/query-view.logic";
 import { searchFacetOptions, TIME_PRESETS } from "@/lib/search";
 import type { SearchableFacet, TimePreset } from "@/lib/search";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type FacetGroupProps = {
   title: string;
@@ -106,9 +108,9 @@ export const TimeFacetGroup = ({
             variant="ghost"
           >
             <Checkbox checked={isActive} tabIndex={-1} />
-            <span className="min-w-0 flex-1 truncate">
+            <TruncatedText className="flex-1">
               {t(TIME_PRESET_TRANSLATION_KEYS[preset])}
-            </span>
+            </TruncatedText>
           </Button>
         );
       })}
@@ -124,9 +126,9 @@ export const TimeFacetGroup = ({
         variant="ghost"
       >
         <Checkbox checked={isCustom} tabIndex={-1} />
-        <span className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1">
           {t("search.timeFilterCustom")}
-        </span>
+        </TruncatedText>
       </Button>
       {isCustom && (
         <div className="px-2">
@@ -181,9 +183,9 @@ const FacetBucketList = ({
           variant="ghost"
         >
           <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
-          <span className="min-w-0 flex-1 truncate">
+          <TruncatedText className="flex-1">
             {bucket.label ?? bucket.value}
-          </span>
+          </TruncatedText>
           <span className="text-muted-foreground tabular-nums">
             {bucket.countLabel ?? format.number(bucket.count)}
           </span>
@@ -235,8 +237,8 @@ export const SearchableFacetGroup = ({
     }),
     enabled: isSearching && searchParams.enabled,
   });
-  const searchDataView = useQueryView(searchDataQuery);
-  useQueryViewError(searchDataView);
+  const searchDataView = queryView(searchDataQuery);
+  useQueryViewError(searchDataView, "SearchableFacetGroup:query");
   const searchData =
     searchDataView.type === "items" ? searchDataView.items : undefined;
   const resolveLabel = (bucket: FacetBucket): string =>

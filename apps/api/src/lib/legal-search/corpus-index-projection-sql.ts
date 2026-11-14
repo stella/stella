@@ -49,6 +49,22 @@ export const corpusIndexProjectionNeedsWork = ({
   )
 )`;
 
+/**
+ * One source of truth for the append queue and its partial index: this row has
+ * no earlier revision left in the index. A replacement stays out until its old
+ * revision settles, so a claim costs the rows it can take rather than every
+ * replacement still waiting its turn. The queue's outstanding-intent probe
+ * remains the authority; this only keeps the walk from reaching what it would
+ * refuse.
+ */
+export const corpusIndexProjectionAppendIsUnblocked = ({
+  appliedRevision,
+  appliedRevisionSettled,
+}: {
+  appliedRevision: SQLWrapper;
+  appliedRevisionSettled: SQLWrapper;
+}) => sql`(${appliedRevision} IS NULL OR ${appliedRevisionSettled})`;
+
 export const corpusIndexProjectionIsBlocked = (workStatus: SQLWrapper) =>
   sql`${workStatus} = 'blocked'`;
 

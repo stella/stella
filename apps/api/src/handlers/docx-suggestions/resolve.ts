@@ -3,8 +3,9 @@ import { and, eq } from "drizzle-orm";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import { tResolveDocxSuggestionBody } from "./schemas";
 
@@ -24,12 +25,27 @@ import { tResolveDocxSuggestionBody } from "./schemas";
 const resolveDocxSuggestion = createSafeHandler(
   {
     contract: "patch",
+    description:
+      "Record a decision on one pending redline suggestion: accepted (with " +
+      "the mode the change was applied in) or rejected. This records the " +
+      "decision only and does not edit the document file, so accept a " +
+      "suggestion only once its change is in the document. A suggestion that " +
+      "is no longer pending answers { updated: false } and is left as it is; " +
+      "a linked document-review finding takes the same decision.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      confirmation: "required",
+      reason: "document_processing",
+      consumesServices: false,
+    },
+    realtime: noResourceSetUpdates(
+      "The document review store updates resolved suggestions locally and hydrates them when the document opens.",
+    ),
     params: workspaceParams({
-      entityId: tSafeId("entity"),
-      suggestionId: tSafeId("docxSuggestion"),
+      entityId: resourceIdSchema("entity"),
+      suggestionId: resourceIdSchema("docxSuggestion"),
     }),
     body: tResolveDocxSuggestionBody,
   },

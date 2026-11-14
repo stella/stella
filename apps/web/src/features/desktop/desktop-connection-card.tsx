@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import {
   CircleCheckIcon,
+  ExternalLinkIcon,
   LaptopIcon,
   LinkIcon,
   TriangleAlertIcon,
@@ -22,6 +23,7 @@ import {
 } from "@/features/desktop/desktop-connection-card.logic";
 import type { DesktopCardState } from "@/features/desktop/desktop-connection-card.logic";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
+import type { DesktopLinkApproval } from "@/features/desktop/desktop-connection-store.logic";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -30,10 +32,11 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   captureDesktopAccountLink,
   hasDesktopAccountChallenge,
+  openDesktopUrl,
 } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 
 const serverHost = () => window.location.host;
 
@@ -46,14 +49,18 @@ export const DesktopConnectionCard = () => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
   const platform = useHydrationSafeDesktopPlatform();
-  const { connect, state: connection } = useDesktopAccountConnection();
+  const {
+    connect,
+    state: connection,
+    switchAccount,
+  } = useDesktopAccountConnection();
   const presenceQuery = useQuery(
     desktopPresenceOptions({
       userId: user.id,
       organizationId: user.activeOrganizationId,
     }),
   );
-  const presenceView = useQueryView(presenceQuery);
+  const presenceView = queryView(presenceQuery);
   // An unreadable record never claims a link; the card falls back to what it
   // can see on this computer.
   const presence =
@@ -61,28 +68,18 @@ export const DesktopConnectionCard = () => {
   const [challengeWaiting, setChallengeWaiting] = useState(false);
   const [host, setHost] = useState("");
 
-  // Capture the native challenge and remove its secret from browser history.
-  // Linking still requires the button's explicit user gesture.
-  useMountEffect(() => {
-    captureDesktopAccountLink();
+  const handleConnect = async (approval: DesktopLinkApproval) => {
+    const outcome = await connect(approval);
+    // A failed or unproven approval keeps a challenge that is still valid;
+    // an expired or consumed one falls back to the install-or-connect offer.
     setChallengeWaiting(hasDesktopAccountChallenge());
-    setHost(serverHost());
-  });
-
-  const card =
-    connection.status === "connected"
-      ? ({ type: "connected", version: "", onThisComputer: true } as const)
-      : desktopCardState({
-          challengeWaiting,
-          presence,
-        });
-
-  const handleConnect = async () => {
-    const outcome = await connect();
-    // A failed approval keeps a challenge that is still valid; an expired or
-    // consumed one falls back to the install-or-connect offer.
-    setChallengeWaiting(hasDesktopAccountChallenge());
-    if (outcome.status === "started" || outcome.status === "update-required") {
+    // A refusal names its own next step in the status below the card.
+    if (
+      outcome.status === "started" ||
+      outcome.status === "approval-required" ||
+      outcome.status === "update-required" ||
+      outcome.status === "refused"
+    ) {
       return;
     }
     if (outcome.status === "connected") {
@@ -93,10 +90,32 @@ export const DesktopConnectionCard = () => {
       );
       return;
     }
-    notifyUserError(undefined, t("errors.actionFailed"));
+    notifyUserProblem(t("errors.actionFailed"));
   };
+  const startConnect = (approval: DesktopLinkApproval) => {
+    detached(
+      handleConnect(approval),
+      "settings-account-desktop.connect-desktop",
+    );
+  };
+
+  // Capture the native challenge and remove its secret from browser history.
+  // The page answers it on its own only when the app on this computer proves
+  // the challenge is its own; otherwise the approve button stays.
+  useMountEffect(() => {
+    captureDesktopAccountLink();
+    const waiting = hasDesktopAccountChallenge();
+    setChallengeWaiting(waiting);
+    setHost(serverHost());
+    if (waiting) {
+      startConnect("local-proof");
+    }
+  });
+
+  const card = desktopCardState({ challengeWaiting, connection, presence });
+
   const onConnect = () => {
-    detached(handleConnect(), "settings-account-desktop.connect-desktop");
+    startConnect("explicit");
   };
 
   const copy = cardCopy(card);
@@ -136,6 +155,23 @@ export const DesktopConnectionCard = () => {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {card.type === "verifying" ? (
+              <Button loading variant="outline">
+                <ExternalLinkIcon />
+                {t("settings.account.desktopOpenApp")}
+              </Button>
+            ) : null}
+            {card.type === "opening" ? (
+              <Button
+                onClick={() => {
+                  openDesktopUrl(card.desktopUrl);
+                }}
+                variant="outline"
+              >
+                <ExternalLinkIcon />
+                {t("settings.account.desktopOpenApp")}
+              </Button>
+            ) : null}
             {card.type === "approve" ? (
               <Button
                 loading={connection.status === "connecting"}
@@ -163,9 +199,14 @@ export const DesktopConnectionCard = () => {
           </div>
         ) : null}
         {connection.status === "error" ||
-        connection.status === "update-required" ? (
+        connection.status === "update-required" ||
+        connection.status === "refused" ? (
           <div className="mt-3">
-            <DesktopConnectionStatus onRetry={onConnect} state={connection} />
+            <DesktopConnectionStatus
+              onRetry={onConnect}
+              onSwitchAccount={switchAccount}
+              state={connection}
+            />
           </div>
         ) : null}
       </FramePanel>
@@ -197,6 +238,14 @@ const cardCopy = (card: DesktopCardState) => {
         tone: "neutral",
         titleKey: "settings.account.desktopCardApproveTitle",
         detailKey: "settings.account.desktopCardApproveDetail",
+      } as const;
+    case "verifying":
+    case "opening":
+      return {
+        icon: LaptopIcon,
+        tone: "neutral",
+        titleKey: "settings.account.desktopCardOpeningTitle",
+        detailKey: "settings.account.desktopCardOpeningDetail",
       } as const;
     case "missing":
       return {

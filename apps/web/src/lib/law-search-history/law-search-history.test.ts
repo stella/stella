@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 
 import {
-  SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_HISTORY_IMPORT_MAX,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
 } from "@stll/api-contract/limits";
 import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { rejectionOf } from "@stll/property-testing/rejection";

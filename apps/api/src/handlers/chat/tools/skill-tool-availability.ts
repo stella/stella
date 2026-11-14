@@ -8,8 +8,8 @@ import {
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { DIRECT_ONLY_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import {
-  restrictChatToolsToScope,
   type ChatToolScope,
+  restrictChatToolsToScope,
 } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { roleForDisplay } from "@/api/lib/permission-authorization";

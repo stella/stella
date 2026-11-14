@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 import { TEMPLATE_PACK_SLUG_PATTERN } from "@stll/template-packs/schema";
@@ -12,7 +12,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, withDescription } from "@/api/lib/custom-schema";
+import { resourceIdSchema, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { LIMITS } from "@/api/lib/limits";
@@ -22,25 +22,29 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
   canInstallTemplatePacks,
-  TEMPLATE_PACK_INSTALL_PERMISSIONS,
   getTemplatePackCatalogue,
+  TEMPLATE_PACK_INSTALL_PERMISSIONS,
 } from "../catalogue";
 import { templatePackParamsSchema } from "../get";
 import { readInstalledPackTemplates } from "../organization-context";
 
-const installTemplatePackBodySchema = t.Object({
+const installTemplatePackBodySchema = v.object({
   templateSlugs: withDescription(
-    t.Array(
-      t.String({
-        minLength: 1,
-        maxLength: 64,
-        pattern: TEMPLATE_PACK_SLUG_PATTERN.source,
-      }),
-      { minItems: 1, maxItems: LIMITS.templatePackInstallTemplatesMax },
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(64),
+          v.regex(new RegExp(TEMPLATE_PACK_SLUG_PATTERN.source, "u")),
+        ),
+      ),
+      v.minLength(1),
+      v.maxLength(LIMITS.templatePackInstallTemplatesMax),
     ),
     "Slugs of the pack templates to copy into the organization's library",
   ),
-  categoryId: t.Optional(tSafeId("templateCategory")),
+  categoryId: v.exactOptional(resourceIdSchema("templateCategory")),
 });
 
 const config = {

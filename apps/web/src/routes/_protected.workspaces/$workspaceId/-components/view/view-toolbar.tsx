@@ -10,6 +10,7 @@ import type { PlaybookRunProjection } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import {
+  AiActionIcon,
   AlignJustifyIcon,
   CalendarIcon,
   ClockIcon,
@@ -19,7 +20,6 @@ import {
   Rows3Icon,
   SparklesIcon,
   UserIcon,
-  AiActionIcon,
   WrapTextIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -61,7 +61,7 @@ import {
   KanbanGroupingSettings,
 } from "@/components/workspaces/view-grouping-controls";
 import { FilterChips } from "@/components/workspaces/view-toolbar-filters";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -79,6 +79,7 @@ import {
   playbooksOptions,
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -86,9 +87,9 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
@@ -123,7 +124,7 @@ export const ViewToolbar = ({
   workspaceId,
 }: ViewToolbarProps) => {
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(propertiesQuery);
+  const propertiesView = queryView(propertiesQuery);
   const properties =
     propertiesView.type === "items" ? propertiesView.items : [];
   const updateView = useUpdateView(workspaceId);
@@ -155,10 +156,7 @@ export const ViewToolbar = ({
       : [];
 
   return (
-    <ViewToolbarChrome
-      className="md:ms-auto md:justify-end"
-      data-slot="workspace-view-toolbar"
-    >
+    <ViewToolbarChrome data-slot="workspace-view-toolbar">
       <QueryViewFeedback view={propertiesView} />
       <ExtractionRunProgress workspaceId={workspaceId} />
 
@@ -396,7 +394,7 @@ const SelectionActions = ({
         className="bg-primary/12 animate-attention-flash-twice pointer-events-none absolute -inset-x-1.5 -inset-y-1 rounded-md opacity-0 motion-reduce:animate-none"
       />
       <span className="text-muted-foreground relative text-xs">
-        {t("workspaces.views.fieldsSelected", {
+        {t("common.selectedCount", {
           count: selectedEntities.length,
         })}
       </span>
@@ -536,7 +534,7 @@ type TableExportMenuProps = {
 
 const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const [exportingFormat, setExportingFormat] =
     useState<TableExportFormat | null>(null);
@@ -575,7 +573,10 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
     setExportingFormat(null);
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "TableExportMenu.handleExport:failure",
+        scope: { type: "handler", handlerId: `table-export.${format}` },
+      });
       notifyUserError(result.error, t("workspaces.views.exportFailed"));
       return;
     }
@@ -702,14 +703,26 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
       });
     };
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "RunPlaybookControl.requestRun:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RunPlaybookControl.requestRun:failure",
+        },
+      });
       reportFailure(result.error, t("common.unexpectedError"));
       return null;
     }
 
     const response = result.value;
     if (response.error) {
-      analytics.captureError(toAPIError(response.error));
+      analytics.captureError(toAPIError(response.error), {
+        fingerprintKey: "RunPlaybookControl.requestRun:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RunPlaybookControl.requestRun:failure-2",
+        },
+      });
       reportFailure(
         toAPIError(response.error),
         userErrorMessage(response.error, t("common.unexpectedError")),
@@ -893,12 +906,12 @@ const FilesystemOrganizerAction = ({
   // useSuspenseQuery) keeps a cache miss from suspending the toolbar
   // chrome — the action button just stays disabled until the data resolves.
   const foldersDataQuery = useQuery(workspaceFoldersOptions(workspaceId));
-  const foldersDataView = useQueryView(foldersDataQuery);
+  const foldersDataView = queryView(foldersDataQuery);
   const foldersData =
     foldersDataView.type === "items" ? foldersDataView.items : undefined;
   const allFolders = normalizeOptionalArray(foldersData);
   const filesDataQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesDataView = useQueryView(filesDataQuery);
+  const filesDataView = queryView(filesDataQuery);
   const filesData =
     filesDataView.type === "items" ? filesDataView.items : undefined;
   const allFiles = normalizeOptionalArray(filesData);
@@ -1035,12 +1048,13 @@ const useMatterColumnToggleGroups = (
   properties: WorkspaceProperty[],
 ): ColumnToggleGroup[] => {
   const t = useTranslations();
+  const displayName = usePropertyDisplayName();
   const propertyColumns = (tool: WorkspaceProperty["tool"]["type"]) =>
     properties
       .filter((property) => property.tool.type === tool)
       .map((property) => ({
         id: property.id,
-        name: property.name,
+        name: displayName(property),
         icon: <PropertyIcon type={property.content.type} />,
       }));
 

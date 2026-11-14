@@ -2,16 +2,18 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { InlinePill } from "@/components/inline-pill";
 import {
   ReferenceChip,
   ReferenceIcon,
 } from "@/components/references/reference-chip";
-import type { ChatReference } from "@/components/references/reference.logic";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatListWithMore } from "@/i18n/list-format";
 
 import { layoutThreadContext } from "./thread-context-line.logic";
 
@@ -59,9 +61,6 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
   const hiddenNames = [
     ...layout.hidden.matters.map((matter) => matter.name),
     ...layout.hidden.files.map((file) => file.name),
-    ...(layout.unnamedCount > 0
-      ? [t("chat.historyContext.unnamed", { count: layout.unnamedCount })]
-      : []),
   ];
 
   return (
@@ -86,7 +85,15 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
               count: layout.overflowCount,
             })}
           </span>
-          <span className="sr-only">{format.list(hiddenNames)}</span>
+          <span className="sr-only">
+            {formatListWithMore({
+              items: hiddenNames,
+              additionalCount: layout.unnamedCount,
+              formatList: (items) => format.list(items),
+              formatMore: (count) =>
+                t("chat.historyContext.unnamed", { count }),
+            })}
+          </span>
         </InlinePill>
       ) : null}
     </span>
@@ -160,8 +167,6 @@ const ThreadContextEntry = ({
 }) => (
   <li className="flex min-w-0 items-center gap-1.5">
     {icon}
-    <BidiText as="span" className="min-w-0 truncate">
-      {name}
-    </BidiText>
+    <TruncatedText render={<BidiText as="span" />}>{name}</TruncatedText>
   </li>
 );

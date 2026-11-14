@@ -12,11 +12,14 @@ import { actYearCondition } from "@/api/lib/legal-search/legislation-act-number"
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import {
+  explainRoot,
+  indexedAccessPaths,
+} from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const WORKS = 500;
@@ -24,7 +27,7 @@ const SOURCES = 8;
 const VERSIONS = 8;
 const PAGE_SIZE = 100;
 const ELI_TRIGRAM_INDEX = "legislation_documents_eli_trgm_idx";
-const WORK_INDEX = "legislation_documents_eli_version_lang_idx";
+const WORK_INDEX = "legislation_documents_work_version_lang_idx";
 const TABLES = [
   "legislation_sources",
   "legislation_documents",
@@ -82,12 +85,16 @@ const assertAmendmentProbe = (root: Record<string, unknown>) => {
   expect(indexes).toHaveLength(1);
   const index =
     indexes.at(0) ?? panic("The amendment count has no canonical work index");
-  if (index["Node Type"] === "Bitmap Index Scan") {
-    expect(scan["Node Type"]).toBe("Bitmap Heap Scan");
-  } else {
-    expect(index["Node Type"]).toBe("Index Scan");
-    expect(scan).toBe(index);
-  }
+  // The work scan is the work index's access path: the index scan itself, or
+  // the heap scan over its bitmap.
+  expect(
+    indexedAccessPaths(count, "legislation_documents").filter(
+      ({ node, accessKind, branches }) =>
+        node === scan &&
+        accessKind !== "index-only" &&
+        branches.every(({ indexName }) => indexName === WORK_INDEX),
+    ),
+  ).toHaveLength(1);
   const condition = index["Index Cond"];
   if (typeof condition !== "string") {
     panic("The amendment count has no index condition");
@@ -148,11 +155,12 @@ describe.skipIf(!enabled)(
           // LIKE copies the production index definition but assigns a fixture name.
           const indexes = await db.execute(sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'legislation_documents'
-            AND indexdef LIKE '%(source_id, eli, version_valid_from, language)%'`);
+            AND indexdef LIKE '%(source_id, eli, version_valid_from, language)%'
+            AND indexdef NOT LIKE 'CREATE UNIQUE%'`);
           expect(indexes).toHaveLength(1);
           const indexName = indexes.at(0)?.["indexname"];
           if (typeof indexName !== "string") {
-            panic("The canonical unique work index was not cloned");
+            panic("The canonical work access index was not cloned");
           }
           if (indexName !== WORK_INDEX) {
             await db.execute(sql`ALTER INDEX ${schema}.${sql.identifier(indexName)}

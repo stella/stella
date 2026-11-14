@@ -21,6 +21,7 @@ import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";
@@ -29,8 +30,8 @@ import {
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
 import {
-  ToolsCatalogueView,
   type ToolsCatalogueKind,
+  ToolsCatalogueView,
 } from "@/features/knowledge/views/tools/tools-catalogue-view";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -38,13 +39,13 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
-  isEffectivelyInstalled,
   type CatalogueDisplayEntry,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
-  BlueprintGallerySheet,
   type BlueprintCreatedSkill,
+  BlueprintGallerySheet,
 } from "@/routes/knowledge/-components/blueprint-gallery-sheet";
 import { ImportSkillDialog } from "@/routes/knowledge/-components/import-skill-dialog";
 
@@ -98,6 +99,7 @@ const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
   iconUrl: entry.iconUrl,
   jurisdictions: entry.jurisdictions,
   invocation: entry.invocation,
+  binding: entry.binding,
 });
 
 /** The organization's tools: the shared catalogue view with the member's
@@ -141,10 +143,11 @@ const CatalogueBrowser = ({
       inspector.close(tabId);
       return;
     }
+    const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     inspector.open({
       type: "tool-detail",
       id: tabId,
-      label: entry.displayName,
+      label: labelKey ? t(labelKey) : entry.displayName,
       payload: getToolDetailPayload(entry, organizationId),
       ownerRouteId: "/knowledge/tools",
     });
@@ -239,7 +242,7 @@ const CatalogueBrowser = ({
                         onClick={() => setImportSkillOpen(true)}
                       >
                         <FileDownIcon className="size-4" />
-                        {t("knowledge.agentSkills.importSkill")}
+                        {t("knowledge.agentSkills.importTitle")}
                       </MenuItem>
                     );
                   default: {

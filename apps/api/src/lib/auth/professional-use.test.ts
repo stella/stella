@@ -2,7 +2,7 @@ import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getOAuthState } from "better-auth/api";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -17,6 +17,10 @@ import {
 } from "@/api/lib/auth/professional-use";
 import type { CreationAcceptance } from "@/api/lib/auth/professional-use";
 import { REVIEW_ACCOUNT_CREATE_USER_PATH } from "@/api/lib/auth/review-account-plugin";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const STALE_VERSION = "2000-01";
 
@@ -27,7 +31,7 @@ describe("account creation origin", () => {
     ["/callback/microsoft", "social_registration"],
     ["/callback/:id", "social_registration"],
     ["/sign-up/email", "bootstrap_registration"],
-    ["/sign-in/social", "identity_token_sign_in"],
+    ["/sign-in/social", "social_registration"],
     [AGENT_IDENTITY_CREATE_USER_PATH, "agent_provisioning"],
     [REVIEW_ACCOUNT_CREATE_USER_PATH, "operator_command"],
   ] as const)("an account created through %s has origin %s", (path, origin) => {
@@ -98,7 +102,6 @@ describe("acceptance at creation", () => {
   }
 
   test.each([
-    ["/sign-in/social"],
     [AGENT_IDENTITY_CREATE_USER_PATH],
     [REVIEW_ACCOUNT_CREATE_USER_PATH],
   ])(
@@ -118,6 +121,21 @@ describe("acceptance at creation", () => {
       ).toEqual({ type: "required", reason: "statement_not_shown" });
     },
   );
+
+  test("a social creation reported at its initiating path reads the OAuth state", async () => {
+    expect(
+      await readCreationAcceptance(
+        { path: "/sign-in/social", body: {} },
+        async () => ({
+          [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+            PROFESSIONAL_USE_STATEMENT_VERSION,
+        }),
+      ),
+    ).toEqual({
+      type: "accepted",
+      statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+    });
+  });
 
   const BASE_URL = "http://localhost:3001";
 
@@ -212,9 +230,10 @@ describe("acceptance at creation", () => {
         ),
       { preconnect: globalThis.fetch.preconnect },
     );
-    const tokenExchange = spyOn(globalThis, "fetch").mockImplementation(
-      fetchToken,
-    );
+    const tokenExchange = Object.assign(mock(asFetchMock(fetchToken)), {
+      preconnect: globalThis.fetch.preconnect,
+    });
+    testFetchState.set(tokenExchange);
     try {
       const callback = await auth.handler(
         new Request(
@@ -224,7 +243,7 @@ describe("acceptance at creation", () => {
       );
       expect(callback.status).toBe(302);
     } finally {
-      tokenExchange.mockRestore();
+      testFetchState.restore();
     }
     return decisions;
   };

@@ -16,13 +16,13 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
-  SCHEDULER_BACKFILL_IDS,
   logSchedulerBackfillStatus,
+  SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import {
-  SchedulerTaskFailure,
   type SchedulerTask,
+  SchedulerTaskFailure,
 } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -320,7 +320,7 @@ export const createLegislationExpressionIdBackfill =
       initialSize: pageRows,
       initialCursor: backfillCursor(job.payload),
       config: {
-        ...SCHEDULER_BACKFILL_CONFIG,
+        ...schedulerBackfillConfig(),
         minSize: Math.min(100, pageRows),
         maxSize: pageRows,
       },

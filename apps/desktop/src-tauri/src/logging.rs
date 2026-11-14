@@ -10,7 +10,7 @@
 //! platform log directory. It carries levels, event names and codes only:
 //! see `TrailLayer`.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -185,8 +185,13 @@ where
     }
     line.push('\n');
     if let Ok(mut writer) = self.writer.lock() {
-      let _ = writer.write_all(line.as_bytes());
-      let _ = writer.flush();
+      #[expect(
+        clippy::let_underscore_must_use,
+        reason = "the log writer has nowhere to report its own failure"
+      )]
+      let _ = writer
+        .write_all(line.as_bytes())
+        .and_then(|()| writer.flush());
     }
   }
 }
@@ -207,7 +212,7 @@ struct RollingLog {
 
 impl RollingLog {
   fn open(dir: &Path, files: LogFiles) -> io::Result<Self> {
-    fs::create_dir_all(dir)?;
+    crate::local_store::create_private_dir(dir)?;
     let path = dir.join(files.name);
     let file = open_append(&path)?;
     let written = file.metadata()?.len();
@@ -239,7 +244,7 @@ impl RollingLog {
         fs::remove_file(&to)?;
       }
       if from.exists() {
-        fs::rename(&from, &to)?;
+        crate::local_store::rename_private(&from, &to)?;
       }
     }
     self.file = open_append(&self.path)?;
@@ -275,14 +280,89 @@ impl Write for RollingLog {
 // Log lines can name documents and accounts, so the file is private to
 // the user like the rest of the app data.
 fn open_append(path: &Path) -> io::Result<File> {
-  let mut options = OpenOptions::new();
-  options.create(true).append(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
+  crate::local_store::open_private(crate::local_store::OpenMode::Append, path)
+}
+
+/// Logs a step whose failure must not stop the surrounding flow. Only use
+/// errors whose text carries no credentials or personal data.
+pub fn best_effort<T, E: std::fmt::Display>(result: Result<T, E>, what: &'static str) {
+  if let Err(error) = result {
+    log_cause(&error, what);
   }
-  options.open(path)
+}
+
+/// Logs `cause` as the reason for `what`. Only for causes whose text carries
+/// no credentials or personal data; see [`log_json_error`] and
+/// [`log_request_error`] for the ones that can.
+pub fn log_cause(cause: &impl std::fmt::Display, what: &'static str) {
+  tracing::warn!(cause = %cause, "{what}");
+}
+
+/// Replaces an error with a fixed message for the caller and keeps the cause
+/// in the local log, under the same rule as [`log_cause`].
+pub fn with_cause_logged<E: std::fmt::Display>(
+  message: &'static str,
+) -> impl FnOnce(E) -> String {
+  move |cause| {
+    log_cause(&cause, message);
+    message.to_string()
+  }
+}
+
+/// Replaces an error with `replacement`, such as a failure kind the caller
+/// matches on, and keeps the cause in the local log as [`log_cause`] does.
+pub fn replaced_logged<E: std::fmt::Display, T>(
+  what: &'static str,
+  replacement: T,
+) -> impl FnOnce(E) -> T {
+  move |cause| {
+    log_cause(&cause, what);
+    replacement
+  }
+}
+
+/// serde repeats input values in its messages, and the inputs here include
+/// credentials and client data: only the category and position are logged.
+pub fn log_json_error(error: &serde_json::Error, what: &'static str) {
+  tracing::warn!(
+    category = ?error.classify(),
+    line = error.line(),
+    column = error.column(),
+    "{what}"
+  );
+}
+
+/// reqwest names the URL in its messages, which can carry search terms and
+/// identifiers: only the kind of failure and the status are logged.
+pub fn log_request_error(error: &reqwest::Error, what: &'static str) {
+  tracing::warn!(
+    timeout = error.is_timeout(),
+    connect = error.is_connect(),
+    decode = error.is_decode(),
+    status = error.status().map(|status| status.as_u16()),
+    "{what}"
+  );
+}
+
+/// [`with_cause_logged`] for a JSON error, logged as [`log_json_error`] does.
+pub fn json_cause_logged(
+  message: &'static str,
+) -> impl FnOnce(serde_json::Error) -> String {
+  move |error| {
+    log_json_error(&error, message);
+    message.to_string()
+  }
+}
+
+/// [`with_cause_logged`] for an HTTP error, logged as [`log_request_error`]
+/// does.
+pub fn request_cause_logged(
+  message: &'static str,
+) -> impl FnOnce(reqwest::Error) -> String {
+  move |error| {
+    log_request_error(&error, message);
+    message.to_string()
+  }
 }
 
 #[cfg(test)]

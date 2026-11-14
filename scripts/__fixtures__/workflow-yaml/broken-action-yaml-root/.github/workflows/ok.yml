@@ -3,5 +3,6 @@ on: push
 jobs:
   ok:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - run: echo ok

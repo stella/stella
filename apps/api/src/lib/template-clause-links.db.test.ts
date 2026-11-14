@@ -27,6 +27,7 @@ import {
   syncAllClausesHandler,
   syncClauseHandler,
 } from "@/api/lib/template-clause-links";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -88,7 +89,7 @@ const template = (id: SafeId<"template">, name: string) => ({
   organizationId,
   name,
   fileName: `${name}.docx`,
-  s3Key: `templates/${id}.docx`,
+  s3Key: `${organizationId}/templates/${id}.docx`,
   sizeBytes: 1,
   createdBy: userId,
 });
@@ -205,7 +206,7 @@ afterAll(async () => {
       .delete(templates)
       .where(inArray(templates.id, [templateId, otherTemplateId]));
     await tx.delete(clauses).where(eq(clauses.organizationId, organizationId));
-    await tx.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(tx, [organizationId]);
     await tx.delete(user).where(eq(user.id, userId));
   });
   await releaseTestDb();

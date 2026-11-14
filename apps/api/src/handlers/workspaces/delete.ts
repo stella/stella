@@ -6,14 +6,18 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { WorkspaceStorageTeardownBoundError } from "@/api/lib/organization-storage-teardown";
-import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
+import {
+  WorkspaceBillingHistoryError,
+  WorkspaceStorageTeardownBoundError,
+} from "@/api/lib/organization-storage-teardown";
+import { executeAuthorizedWorkspaceDeletionWithRoot } from "@/api/lib/workspace-deletion";
 
 const config = {
   contract: "patch",
   description:
-    "Permanently delete a matter and all its documents, tasks, fields, and " +
-    "chat history. This is irreversible.",
+    "Permanently delete a matter with its documents, tasks, fields and " +
+    "chat history; irreversible. Refused (409) when it has time, expenses " +
+    "or invoices: archive it instead.",
   permissions: { workspace: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
@@ -33,8 +37,13 @@ export type DeleteWorkspaceHandlerProps = {
 export const deleteWorkspaceHandler = async function* (
   props: DeleteWorkspaceHandlerProps,
 ) {
-  const outcome = await executeAuthorizedWorkspaceDeletion(props);
+  const outcome = await executeAuthorizedWorkspaceDeletionWithRoot(props);
   if (Result.isError(outcome)) {
+    if (outcome.error instanceof WorkspaceBillingHistoryError) {
+      return Result.err(
+        new HandlerError({ status: 409, message: outcome.error.message }),
+      );
+    }
     if (outcome.error instanceof WorkspaceStorageTeardownBoundError) {
       return Result.err(
         new HandlerError({ status: 400, message: outcome.error.message }),

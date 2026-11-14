@@ -2,8 +2,8 @@ import { expectTypeOf } from "bun:test";
 
 import type {
   ChatTurnFailureResponse,
-  StreamChatOutcome,
   streamChat,
+  StreamChatOutcome,
 } from "@/api/handlers/chat/stream-chat";
 
 type RefusedOutcome = Extract<StreamChatOutcome, { type: "refused" }>;

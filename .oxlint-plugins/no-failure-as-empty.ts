@@ -25,13 +25,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import baseline from "./no-failure-as-empty-baseline.json" with { type: "json" };
 import {
+  type AstNode,
   isAstNode,
   isIdentifier,
   isMemberAccess,
   memberPropertyName,
   repoRelativeFilename,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 const RULE_NAME = "no-failure-as-empty";
@@ -291,6 +291,19 @@ const isValueUsed = (node: AstNode): boolean => {
     return false;
   }
   if (parent.type === "ExpressionStatement") {
+    return false;
+  }
+  // `detached(() => work.catch(...), "feature.action")` discards the work's
+  // value exactly as a bare statement does.
+  if (
+    parent.type === "ArrowFunctionExpression" &&
+    parent.body === current &&
+    isAstNode(parent.parent) &&
+    parent.parent.type === "CallExpression" &&
+    isIdentifier(parent.parent.callee, "detached") &&
+    Array.isArray(parent.parent.arguments) &&
+    parent.parent.arguments[0] === parent
+  ) {
     return false;
   }
   return !(parent.type === "UnaryExpression" && parent.operator === "void");

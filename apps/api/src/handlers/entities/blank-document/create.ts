@@ -1,16 +1,16 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { createBlankDocument } from "@/api/handlers/entities/create-blank-document-service";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const bodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 256 }),
-  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+const bodySchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
 });
 
 export default createSafeHandler(

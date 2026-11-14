@@ -8,8 +8,8 @@ import {
   safeOrganizationId,
   storedFileScanState,
   storedFileScanStateCheck,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 export const styleSets = p.pgTable(
@@ -46,6 +46,10 @@ export const styleSets = p.pgTable(
       .on(table.updatedAt, table.id)
       .where(sql`${table.cleanupS3Key} IS NOT NULL`),
     storedFileScanStateCheck("style_sets_scan_state_check", table.scanState),
+    p.check(
+      "style_sets_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
+    ),
     ...orgPolicies(),
   ],
 );

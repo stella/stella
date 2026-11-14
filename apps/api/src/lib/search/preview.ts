@@ -1,14 +1,19 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
+import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
+import { normalizeSearchableChatMessageContent } from "@/api/lib/search/chat-search-text";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
@@ -21,13 +26,13 @@ import {
   SEARCH_PREVIEW_HEADLINE_CONFIG,
   truncateSearchPreviewAroundCandidates,
 } from "@/api/lib/search/highlight";
-import { normalizeSearchableChatMessageContent } from "@/api/lib/search/index-chat";
 import { previewPassageJoin } from "@/api/lib/search/preview-passage-sql";
 import {
   SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT,
   SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT,
 } from "@/api/lib/search/preview-passages";
 import {
+  buildSearchCandidateTsQuery,
   buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
   getSearchPreviewLocatorCandidates,
@@ -71,6 +76,9 @@ type SearchPreviewChatMessageRow = {
 };
 
 type SearchPreviewChatRow = {
+  generation_provenance: unknown;
+  subjectDecisionId?: unknown;
+  titleSource?: unknown;
   isTitleOnlyMatch: unknown;
   messages: SearchPreviewChatMessageRow[];
   title: unknown;
@@ -273,7 +281,7 @@ const chatPreviewTitleOnlyMatch = (tsQuery: SQL | null): SQL =>
         (
           to_tsvector(
             'simple',
-            unaccent(arabic_normalize(coalesce(cst.title, '')))
+            unaccent(arabic_normalize(coalesce(t.title, '')))
           ) @@ ${tsQuery}
           AND NOT EXISTS (
             SELECT 1
@@ -425,6 +433,10 @@ export const buildSearchPreviewQuery = ({
         LIMIT 1
       `;
     case "case-law":
+      // A point read by id. The hit came from the corpus search engine, whose
+      // matching (an any-word top-up, legal alternatives) is not this
+      // tsquery's, so the decision is not asked to match it again; the query
+      // still picks the passage the preview opens on.
       return sql`
         SELECT ${previewContent({
           body: sql`clsd.searchable_text`,
@@ -446,13 +458,22 @@ export const buildSearchPreviewQuery = ({
           table: "case-law",
         })}
         WHERE clsd.decision_id = ${resultId}
-          ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
         LIMIT 1
       `;
-    case "chat":
+    case "chat": {
+      // Search admits chat hits on positive terms before projecting withdrawn
+      // text away, so a negated term in a masked title cannot hide a hit here.
+      const candidateTsQuery = query.trim()
+        ? buildSearchCandidateTsQuery(query)
+        : null;
+      // The title is read from the thread row with its provenance, never from
+      // the index document, which can trail a rename.
       return sql`
         SELECT
-          cst.title,
+          t.title,
+          t.subject_decision_id AS "subjectDecisionId",
+          t.title_source AS "titleSource",
+          t.generation_provenance,
           ${chatPreviewTitleOnlyMatch(tsQuery)},
           ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
@@ -460,7 +481,7 @@ export const buildSearchPreviewQuery = ({
         WHERE cst.thread_id = ${resultId}
           AND cst.preview_generation =
             ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
-          ${previewTextFilter(sql`cst.tsv`, tsQuery)}
+          ${previewTextFilter(sql`cst.tsv`, candidateTsQuery)}
           AND ${chatThreadScopeSql({
             userId,
             organizationId,
@@ -469,6 +490,7 @@ export const buildSearchPreviewQuery = ({
           })}
         LIMIT 1
       `;
+    }
     case "document":
     case "folder":
     case "task":
@@ -537,25 +559,159 @@ const isSearchPreviewRow = (value: unknown): value is SearchPreviewRow =>
   "useUnaccent" in value &&
   typeof value.useUnaccent === "boolean";
 
+type CaseLawDecisionTextSource = {
+  id: string;
+  fulltext: string | null;
+  textS3Key: string | null;
+  contentHash: string | null;
+};
+
+/**
+ * A published decision's flat text wherever its corpus storage keeps it: the
+ * Postgres column, or, once storage is canonical, the stored text object (the
+ * column then stays NULL). The same read the decision reader's text fallback
+ * makes; the corpus module loads on first use, so the search routes do not
+ * pull the object-storage graph in for every other result type.
+ */
+const readCaseLawDecisionText = async ({
+  id,
+  fulltext,
+  textS3Key,
+  contentHash,
+}: CaseLawDecisionTextSource): Promise<string | null> => {
+  if (
+    corpusStorageMode === "off" ||
+    textS3Key === null ||
+    contentHash === null
+  ) {
+    return fulltext;
+  }
+  const [{ readCorpusText }, { readCorpusPayloadOrFallback }] =
+    await Promise.all([
+      import("@/api/lib/legal-search/corpus-reads"),
+      import("@/api/lib/legal-search/corpus-storage"),
+    ]);
+  return await readCorpusPayloadOrFallback({
+    documentId: id,
+    key: textS3Key,
+    step: "searchPreview.decisionText",
+    read: async () => await readCorpusText(textS3Key),
+    fallback: () => fulltext,
+  });
+};
+
+/**
+ * The published, redistributable decision a case-law hit names, for one
+ * without a search projection row. Same gate as the projection read.
+ */
+export const buildCaseLawDecisionPreviewQuery = (resultId: string): SQL => sql`
+  SELECT
+    d.id,
+    d.case_number || ' - ' || d.court AS title,
+    left(d.fulltext, ${SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT}) AS fulltext,
+    d.text_s3_key,
+    d.content_hash
+  FROM case_law_published_decisions d
+  ${publicCaseLawDecisionJoin}
+  WHERE d.id = ${resultId}
+  LIMIT 1
+`;
+
+const nullableText = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+type SearchPreviewDependencies = {
+  readCaseLawText?: (
+    source: CaseLawDecisionTextSource,
+  ) => Promise<string | null>;
+};
+
+/**
+ * A case-law hit comes from the corpus search engine, which also serves
+ * decisions the Postgres search projection never held (canonical storage
+ * writes none). Such a hit is previewed from the decision itself: its title
+ * and the stretch of its text around the query's words, as plain text.
+ */
+const readCaseLawDecisionPreview = async (
+  input: SearchPreviewQuery,
+  scopedDb: ScopedDb,
+  readCaseLawText: NonNullable<SearchPreviewDependencies["readCaseLawText"]>,
+): Promise<SearchPreview | null> => {
+  const rows = await scopedDb(
+    async (tx) =>
+      await tx.execute(buildCaseLawDecisionPreviewQuery(input.resultId)),
+  );
+  const row = rows.at(0);
+  const title = nullableText(row?.["title"]);
+  const id = nullableText(row?.["id"]);
+  if (row === undefined || id === null || title === null) {
+    return null;
+  }
+  const text = await readCaseLawText({
+    id,
+    fulltext: nullableText(row["fulltext"]),
+    textS3Key: nullableText(row["text_s3_key"]),
+    contentHash: nullableText(row["content_hash"]),
+  });
+  const heading = title.slice(0, SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
+  const body = truncateSearchPreviewAroundCandidates({
+    candidates: getSearchPreviewLocatorCandidates(input.query),
+    maxLength: LIMITS.searchPreviewResponseCharacterLimit - heading.length - 1,
+    source: (text ?? "").slice(
+      0,
+      SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT,
+    ),
+  });
+  return {
+    type: "plain-text",
+    content: body.trim().length === 0 ? heading : `${heading} ${body}`,
+  };
+};
+
 /** Preview of one search hit, read on the request's scoped handle. */
 export const readSearchPreview = async (
   input: SearchPreviewQuery,
   scopedDb: ScopedDb,
-): Promise<SearchPreview | null> => {
+  { readCaseLawText = readCaseLawDecisionText }: SearchPreviewDependencies = {},
+): Promise<Result<SearchPreview | null, ArtefactProvenanceDecodeError>> => {
   if (input.type === "chat") {
     const rows = await scopedDb(
       async (tx) =>
         await tx.execute<SearchPreviewChatRow>(buildSearchPreviewQuery(input)),
     );
     const row = rows.at(0);
-    if (!row || !Array.isArray(row.messages)) {
-      return null;
+    if (!row) {
+      return Result.ok(null);
     }
 
-    if (row.isTitleOnlyMatch === true && typeof row.title === "string") {
-      const title = row.title.trim();
-      if (title) {
-        return { type: "plain-text", content: title };
+    const provenance = decodeRawThreadArtefactProvenance(row);
+    if (provenance.isErr()) {
+      return Result.err(provenance.error);
+    }
+    if (!Array.isArray(row.messages)) {
+      return Result.ok(null);
+    }
+    const withdrawal = await readWithdrawnCopyProjection({ values: row });
+    const subject =
+      typeof row.subjectDecisionId === "string" ? row.subjectDecisionId : null;
+    const titleMarker = withdrawal.threadTitleMarker({
+      title: row.title,
+      titleSource: row.titleSource,
+      subjectDecisionId: subject?.toLowerCase() ?? null,
+      ...provenance.value,
+      messages: row.messages,
+    });
+    // A withdrawn title replaces only the title: message matches keep their
+    // message-level projection.
+    if (row.isTitleOnlyMatch === true) {
+      if (titleMarker !== null) {
+        return Result.ok({ type: "plain-text", content: titleMarker });
+      }
+      if (typeof row.title === "string") {
+        const title = row.title.trim();
+        if (title) {
+          return Result.ok({ type: "plain-text", content: title });
+        }
       }
     }
 
@@ -567,7 +723,14 @@ export const readSearchPreview = async (
       if (!isSearchPreviewChatRole(rawMessage.role)) {
         continue;
       }
-      const textParts = extractChatPreviewTextParts(rawMessage.content);
+      const marker =
+        rawMessage.role === "user"
+          ? null
+          : withdrawal.marker(rawMessage.content, subject);
+      const textParts =
+        marker === null
+          ? extractChatPreviewTextParts(rawMessage.content)
+          : [marker];
       if (textParts.length === 0) {
         continue;
       }
@@ -627,12 +790,12 @@ export const readSearchPreview = async (
       remainingCharacters -= content.length;
     }
 
-    return {
+    return Result.ok({
       type: "chat-messages",
       messages: messages
         .toSorted((first, second) => first.position - second.position)
         .map((entry) => entry.message),
-    };
+    });
   }
 
   const rows = await scopedDb(
@@ -640,11 +803,15 @@ export const readSearchPreview = async (
   );
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {
-    return null;
+    return Result.ok(
+      input.type === "case-law"
+        ? await readCaseLawDecisionPreview(input, scopedDb, readCaseLawText)
+        : null,
+    );
   }
 
   if (preview.sourceContent === null) {
-    return { type: "plain-text", content: preview.content };
+    return Result.ok({ type: "plain-text", content: preview.content });
   }
   const content = restoreOriginalSearchPreview({
     headline: preview.content,
@@ -653,5 +820,8 @@ export const readSearchPreview = async (
     source: preview.sourceContent,
     useUnaccent: preview.useUnaccent,
   });
-  return { type: "highlighted-html", content: escapeAndHighlight(content) };
+  return Result.ok({
+    type: "highlighted-html",
+    content: escapeAndHighlight(content),
+  });
 };

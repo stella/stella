@@ -1,7 +1,16 @@
-import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
+  INVOICE_LANGUAGES,
+} from "@stll/api-contract";
+import {
+  CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
+} from "@stll/api-contract/chat-run-target";
+import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
@@ -17,17 +26,17 @@ import {
 import {
   bytea,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
@@ -77,6 +86,19 @@ export type DocumentProcessingMode = (typeof DOCUMENT_PROCESSING_MODES)[number];
 
 export const DEFAULT_DOCUMENT_PROCESSING_MODE =
   "off" as const satisfies DocumentProcessingMode;
+
+export const AI_BILLING_DRAFTS_MODE = {
+  DISABLED: "disabled",
+  ENABLED: "enabled",
+} as const;
+export const AI_BILLING_DRAFTS_MODES = [
+  AI_BILLING_DRAFTS_MODE.DISABLED,
+  ...Object.values(AI_BILLING_DRAFTS_MODE).filter(
+    (mode) => mode !== AI_BILLING_DRAFTS_MODE.DISABLED,
+  ),
+] as const;
+/** Drafting is on until an administrator turns it off; no setup is needed. */
+export const DEFAULT_AI_BILLING_DRAFTS_MODE = AI_BILLING_DRAFTS_MODE.ENABLED;
 
 export const DEFAULT_TIME_MINIMUM_UNIT_MINUTES = 6;
 export const DEFAULT_TIME_EDIT_WINDOW_DAYS = 90;
@@ -181,10 +203,27 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .unique()
       .references(() => organization.id, { onDelete: "cascade" }),
+    aiBillingDraftsMode: p
+      .text("ai_billing_drafts_mode", { enum: AI_BILLING_DRAFTS_MODES })
+      .notNull()
+      .default(DEFAULT_AI_BILLING_DRAFTS_MODE),
     personalApiKeyPolicy: p
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
       .default("enabled"),
+    /**
+     * The most a chat turn run on a member's computer may do without asking
+     * (`ask < auto < full_auto`). A turn above it is refused when it starts;
+     * a run already going keeps the mode it started with.
+     */
+    localRunMaxApprovalMode: p
+      .text("local_run_max_approval_mode", {
+        enum: CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
+      })
+      .notNull()
+      .default(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS),
+    /** Default document language for invoices; null derives it from the seller. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
     sanctionsMonitoringMode: p
       .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
       .notNull()
@@ -246,6 +285,9 @@ export const organizationSettings = p.pgTable(
       .$type<PracticeJurisdiction[]>()
       .notNull()
       .default([]),
+    // The organization's own data-box IDs (lowercase); they decide whether a
+    // filed data-box message is outgoing or incoming.
+    dataBoxIds: jsonb("data_box_ids").$type<string[]>().notNull().default([]),
     /**
      * Per-slug overrides for built-in native tools (e.g. ARES). The
      * effective state of a tool is `overrides[slug] ?? jurisdictionDefault`,
@@ -258,10 +300,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .default({}),
     /**
-     * Legacy disable list kept for rolling deploy compatibility. New
-     * code reads nativeToolOverrides; keep writes in sync until a later
-     * migration can drop this column after all deployed versions no
-     * longer read it.
+     * Legacy disable list that nothing reads or writes any more. Each
+     * row keeps the value its last synced toggle left, so it may lag
+     * nativeToolOverrides, the only source of truth. A later migration
+     * drops this column.
      */
     disabledNativeTools: jsonb("disabled_native_tools")
       .$type<string[]>()
@@ -287,6 +329,8 @@ export const organizationSettings = p.pgTable(
       .text("managed_ai_residency", { enum: MANAGED_AI_RESIDENCIES })
       .notNull()
       .default(DEFAULT_MANAGED_AI_RESIDENCY),
+    /** Admin-authored instructions applied to every organization chat turn. */
+    aiInstructions: p.text("ai_instructions").notNull().default(""),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
@@ -338,6 +382,17 @@ export const organizationSettings = p.pgTable(
   },
   (table) => [
     p.check(
+      "organization_settings_ai_instructions_length_check",
+      sql`char_length(${table.aiInstructions}) <= ${sql.raw(String(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH))}`,
+    ),
+    p.check(
+      "organization_settings_ai_billing_drafts_mode_check",
+      sql`${table.aiBillingDraftsMode} IN (${sql.join(
+        AI_BILLING_DRAFTS_MODES.map((mode) => sql.raw(`'${mode}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "organization_settings_personal_api_key_policy_check",
       sql`${table.personalApiKeyPolicy} IN (${sql.join(
         PERSONAL_API_KEY_POLICIES.map((policy) => sql.raw(`'${policy}'`)),
@@ -348,6 +403,17 @@ export const organizationSettings = p.pgTable(
       "organization_settings_managed_ai_residency_check",
       sql`${table.managedAIResidency} IN (${sql.join(
         MANAGED_AI_RESIDENCIES.map((region) => sql.raw(`'${region}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "organization_settings_data_box_ids_check",
+      sql`jsonb_typeof(${table.dataBoxIds}) = 'array' AND jsonb_array_length(${table.dataBoxIds}) <= ${sql.raw(String(ORGANIZATION_DATA_BOX_LIMIT))}`,
+    ),
+    p.check(
+      "organization_settings_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
         sql`, `,
       )})`,
     ),
@@ -377,6 +443,13 @@ export const organizationSettings = p.pgTable(
       "organization_settings_sanctions_monitoring_mode_check",
       sql`${table.sanctionsMonitoringMode} IN (${sql.join(
         SANCTIONS_MONITORING_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "organization_settings_local_run_max_approval_mode_check",
+      sql`${table.localRunMaxApprovalMode} IN (${sql.join(
+        CHAT_LOCAL_RUN_APPROVAL_CEILINGS.map((mode) => sql`${mode}`),
         sql`, `,
       )})`,
     ),

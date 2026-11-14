@@ -19,7 +19,16 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { VERIFICATION_RUN_ERROR_CODES } from "@/api/lib/lists/verification/contract";
+import {
+  CLAIM_REVIEW_EVENT_KINDS,
+  CLAIM_REVIEW_REASON_RULE,
+  VERIFICATION_LIMITS,
+  VERIFICATION_RUN_ERROR_CODES,
+} from "@/api/lib/lists/verification/contract";
+import type {
+  ClaimReviewAction,
+  ClaimReviewEventKind,
+} from "@/api/lib/lists/verification/contract";
 import {
   createScopedQuery,
   getTestDb,
@@ -135,6 +144,50 @@ describe("verification claims", () => {
   });
 });
 
+describe("verification claim qualifiers", () => {
+  const silent = [
+    { kind: "record-silent", explanation: "Background." },
+  ] as const;
+
+  test("only missing coverage is explained by a silent record", async () => {
+    for (const state of ["supported", "tension", "contradicted"] as const) {
+      await rejects(claim({ state, qualifiers: [...silent] }));
+    }
+    await testDb.insert(legalListClaims).values(
+      claim({
+        state: "nocover",
+        score: null,
+        refs: [],
+        qualifiers: [...silent],
+      }),
+    );
+  });
+
+  test("a scope mismatch may sit beside a scored verdict", async () => {
+    await testDb.insert(legalListClaims).values(
+      claim({
+        state: "tension",
+        score: 40,
+        qualifiers: [
+          { kind: "scope-mismatch", explanation: "The fact covers 2020." },
+        ],
+      }),
+    );
+  });
+
+  test("qualifiers are stored as a list", async () => {
+    const outcome = await testDb
+      .execute(
+        sql`UPDATE ${legalListClaims} SET qualifiers = '{}'::jsonb WHERE run_id = ${runId}`,
+      )
+      .then(
+        () => "stored",
+        () => "rejected",
+      );
+    expect(outcome).toBe("rejected");
+  });
+});
+
 describe("verification source text", () => {
   test("one ordinal belongs to one block in a run", async () => {
     const scopedQuery = createScopedQuery(testDb);
@@ -228,13 +281,81 @@ describe("claim review events", () => {
         runId,
         claimId,
         kind: "override",
-        payload: { kind: "reopen" },
+        payload: { kind: "reopen", reason: "The date can be checked." },
       })
       .then(
         () => "stored",
         () => "rejected",
       );
     expect(outcome).toBe("rejected");
+  });
+
+  // The rule map is the one the request schema reads, so the database and
+  // the API cannot disagree about which actions need a reason.
+  test("a stored reason follows each kind's rule and is never blank", async () => {
+    const claimId = await seedClaim();
+    const actions = {
+      status: { kind: "status", status: "needs-evidence", origin: "single" },
+      override: { kind: "override", state: "tension" },
+      note: { kind: "note", note: "Check the diary." },
+      reopen: { kind: "reopen" },
+      "record-conflict": {
+        kind: "record-conflict",
+        resolution: { kind: "escalated" },
+      },
+      "fact-link": { kind: "fact-link", factEntityId: FACT, change: "link" },
+      recheck: {
+        kind: "recheck",
+        requestKey: "recheck-1",
+        grade: {
+          state: "nocover",
+          score: null,
+          recordConflict: null,
+          refs: [],
+          qualifiers: [],
+        },
+        facts: { changed: [], removed: [] },
+        modelRef: null,
+      },
+    } satisfies {
+      [Kind in ClaimReviewEventKind]: Extract<
+        ClaimReviewAction,
+        { kind: Kind }
+      >;
+    };
+    // Raw JSON, so the payloads no writer's type would allow reach the check.
+    const store = async (kind: ClaimReviewEventKind, payload: object) =>
+      await testDb
+        .execute(
+          sql`INSERT INTO legal_list_claim_review_events
+            (id, workspace_id, run_id, claim_id, kind, payload)
+            VALUES (${createSafeId<"legalListClaimReviewEvent">()},
+              ${workspaceId}, ${runId}, ${claimId}, ${kind},
+              ${JSON.stringify(payload)}::text::jsonb)`,
+        )
+        .then(
+          () => "stored",
+          () => "rejected",
+        );
+    for (const kind of CLAIM_REVIEW_EVENT_KINDS) {
+      const rule = CLAIM_REVIEW_REASON_RULE[kind];
+      const action = actions[kind];
+      expect(await store(kind, action)).toBe(
+        rule === "required" ? "rejected" : "stored",
+      );
+      expect(
+        await store(kind, { ...action, reason: "The minutes say so." }),
+      ).toBe(rule === "none" ? "rejected" : "stored");
+      for (const reason of [
+        "",
+        "   ",
+        42,
+        null,
+        "x".repeat(VERIFICATION_LIMITS.NOTE_MAX + 1),
+      ]) {
+        expect(await store(kind, { ...action, reason })).toBe("rejected");
+      }
+    }
   });
 
   test("a recorded action cannot be rewritten or removed", async () => {
@@ -312,10 +433,12 @@ test("persisted run failures accept every declared code and preserve the status 
     );
   expect(missingReason).toBe("rejected");
   const unknownReason = await testDb
-    .execute(sql`
+    .execute(
+      sql`
     UPDATE ${legalListVerificationRuns} SET status = 'failed', error_code = 'unknown_failure'
     WHERE id = ${runId}
-  `)
+  `,
+    )
     .then(
       () => "stored",
       () => "rejected",

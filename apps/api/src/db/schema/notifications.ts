@@ -6,6 +6,7 @@ import type { NotificationMetadataValue } from "@stll/api-contract/notifications
 
 import {
   jsonb,
+  notificationPolicies,
   organization,
   p,
   pUuid,
@@ -14,7 +15,6 @@ import {
   sql,
   timestamptz,
   user,
-  notificationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
 

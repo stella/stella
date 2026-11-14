@@ -1,18 +1,15 @@
+import type { AuthSocialProviderId } from "@stll/auth-model";
+
+/** One flag per social provider the API knows. */
+type SocialProviderFlags = Record<AuthSocialProviderId, boolean>;
+
 export type AuthCapabilities = {
   emailOtp: boolean;
   localPassword: boolean;
   /** Password sign-in for one configured account only: offered quietly. */
   reviewPasswordSignIn: boolean;
   bootstrap: boolean;
-  social: {
-    google: boolean;
-    microsoft: boolean;
-  };
-};
-
-type SocialProviderFlags = {
-  google: boolean;
-  microsoft: boolean;
+  social: SocialProviderFlags;
 };
 
 export const resolveSignInOptions = ({
@@ -26,7 +23,8 @@ export const resolveSignInOptions = ({
     socialProviderFlags.google && authCapabilities.social.google;
   const showMicrosoft =
     socialProviderFlags.microsoft && authCapabilities.social.microsoft;
-  const showSocialProviders = showGoogle || showMicrosoft;
+  const showApple = socialProviderFlags.apple && authCapabilities.social.apple;
+  const showSocialProviders = showGoogle || showMicrosoft || showApple;
   const showLocalPassword = authCapabilities.localPassword;
   // Email OTP, social sign-in and the first-user bootstrap create an account
   // for a new address; a local password only signs an existing one in.
@@ -48,6 +46,7 @@ export const resolveSignInOptions = ({
       !authCapabilities.bootstrap,
     showGoogle,
     showMicrosoft,
+    showApple,
     showSocialProviders,
     hasAboveEmailOptions: showSocialProviders || showLocalPassword,
   };
@@ -61,6 +60,7 @@ export const resolveSignInOptions = ({
 export const SIGN_IN_METHOD = {
   google: "google",
   microsoft: "microsoft",
+  apple: "apple",
   emailOtp: "email-otp",
   password: "email",
 } as const;
@@ -73,6 +73,7 @@ const isMethodShown: Record<SignInMethod, (options: SignInOptions) => boolean> =
   {
     [SIGN_IN_METHOD.google]: (options) => options.showGoogle,
     [SIGN_IN_METHOD.microsoft]: (options) => options.showMicrosoft,
+    [SIGN_IN_METHOD.apple]: (options) => options.showApple,
     [SIGN_IN_METHOD.emailOtp]: (options) => options.showEmailOtp,
     [SIGN_IN_METHOD.password]: (options) =>
       options.showLocalPassword && !options.showBootstrap,

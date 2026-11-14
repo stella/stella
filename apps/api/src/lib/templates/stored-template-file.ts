@@ -15,6 +15,7 @@ import type { StoredFileScanState } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { validateDocxArchive } from "@/api/lib/docx-archive";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -53,12 +54,18 @@ export const readStoredTemplateFile = async ({
   fileName = DEFAULT_TEMPLATE_FILE_NAME,
   scan,
 }: ReadStoredTemplateFileOptions): Promise<
-  Result<ScannedFile, HandlerError<422 | 500 | 503>>
+  Result<ScannedFile, HandlerError<404 | 422 | 500 | 503>>
 > => {
+  const s3Key = storedKeyForOrganization(row.s3Key, organizationId);
+  if (s3Key === null) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
+  }
   const read = await Result.tryPromise({
     try: async () =>
       await readStoredObject({
-        object: storedObject({ key: row.s3Key, scanState: row.scanState }),
+        object: storedObject({ key: s3Key, scanState: row.scanState }),
         fileName,
         mimeType: DOCX_MIME_TYPE,
         markScanned: async (object) =>

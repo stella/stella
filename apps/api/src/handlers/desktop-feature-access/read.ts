@@ -1,23 +1,20 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 
-import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 
-const decisionSchema = t.Object(
-  { status: t.UnionEnum(["enabled", "hidden"]) },
-  { additionalProperties: false },
-);
+const decisionSchema = v.strictObject({
+  status: v.picklist(["enabled", "hidden"]),
+});
 
 const config = {
   contract: "patch",
@@ -25,18 +22,14 @@ const config = {
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
   response: safePublicHandlerResponseSchemasWithStatusText(
-    t.Object(
-      {
-        features: t.Object(
-          {
-            "activity-timeline": decisionSchema,
-            "time-billing": decisionSchema,
-          } satisfies Record<DesktopFeatureId, typeof decisionSchema>,
-          { additionalProperties: false },
-        ),
-      },
-      { additionalProperties: false },
-    ),
+    v.object({
+      features: v.object({
+        "activity-timeline": decisionSchema,
+        "desktop-dictation": decisionSchema,
+        "desktop-dictation-cloud": decisionSchema,
+        "local-agents": decisionSchema,
+      } satisfies Record<DesktopFeatureId, typeof decisionSchema>),
+    }),
   ),
 } satisfies PublicHandlerConfig;
 
@@ -62,20 +55,15 @@ export const createDesktopFeatureAccessReadEndpoint = (
   const authorizeAccount =
     dependencies?.authorizeAccount ?? authorizeDesktopAccount;
   return createSafeBoundedPublicHandler(config, async function* ({ request }) {
-    const { scopedDb, userId, organizationId } = yield* Result.await(
+    const { featureAccessSnapshot: snapshot } = yield* Result.await(
       authorizeAccount(request),
-    );
-    const snapshot = yield* Result.await(
-      loadFeatureAccessSnapshot({
-        safeDb: safeDbFromScoped(scopedDb),
-        organizationId,
-        userId,
-      }),
     );
     return Result.ok({
       features: {
         "activity-timeline": decide(snapshot, "activity-timeline"),
-        "time-billing": decide(snapshot, "time-billing"),
+        "desktop-dictation": decide(snapshot, "desktop-dictation"),
+        "desktop-dictation-cloud": decide(snapshot, "desktop-dictation-cloud"),
+        "local-agents": decide(snapshot, "local-agents"),
       } satisfies Record<DesktopFeatureId, unknown>,
     });
   });

@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
 import { type BunRedisRawClient, createBunRedisClient } from "bullmq";
-import { type RedisOptions, RedisClient, sleep } from "bun";
+import { RedisClient, type RedisOptions, sleep } from "bun";
 
 import { redisConnectionConfig } from "@stll/redis-config";
 import {
   createStorePolicy,
   STORE_POLICY_MESSAGE,
-  StoreUnavailableError,
   type StoreClass,
+  StoreUnavailableError,
 } from "@stll/redis-config/store-policy";
 
 import { envBase } from "@/api/env-base";

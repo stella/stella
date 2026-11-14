@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 
 import { READ_PROVISION_HISTORY_PROJECTION } from "../src/lib/chat/legislation-result-projections";
 
@@ -18,7 +19,12 @@ declare global {
   var statuteTimelineFixtureHost: FixtureHost;
 }
 
-const INPUT = { eli: "cz:act:2012:89", anchor: "par_1", language: "cs" };
+const INPUT = {
+  eli: "89/2012 Sb.",
+  anchor: "par_1",
+  language: "cs",
+  limit: 50,
+};
 const VERSION_2020 = {
   url: "https://stella.example/legislation/2020",
   documentId: "00000000-0000-4000-8000-000000000001",
@@ -158,6 +164,7 @@ const mountTimeline = async ({
       input,
       firstPage,
       secondPage,
+      handoffTool,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -244,6 +251,18 @@ const mountTimeline = async ({
           }
           const { name, arguments: args } = params;
           calls.push({ name, arguments: args });
+          // The host declines the sign-in handoff, so links open unchanged.
+          if (name === handoffTool) {
+            reply({
+              jsonrpc: "2.0",
+              id,
+              result: {
+                isError: true,
+                content: [{ type: "text", text: "Handoff declined." }],
+              },
+            });
+            return;
+          }
           if (
             name === "read_provision_history" &&
             args["cursor"] === "timeline-page-2"
@@ -287,6 +306,7 @@ const mountTimeline = async ({
       input: INPUT,
       firstPage: parsedHistory,
       secondPage: SECOND_PAGE,
+      handoffTool: MCP_WEB_HANDOFF_TOOL_NAME,
     },
   );
   expect(mounted).toBe(true);

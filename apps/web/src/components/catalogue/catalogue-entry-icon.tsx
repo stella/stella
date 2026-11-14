@@ -1,10 +1,10 @@
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { EyeOffIcon, GlobeIcon, type LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { getCatalogueIconImageSrc } from "@/components/catalogue/catalogue-entry-icon.logic";
 import { DocxIcon } from "@/components/document-icon";
 import { McpIcon } from "@/components/mcp-icon";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
 
 /**
  * Single source of truth for catalogue entry iconography. Resolution
@@ -27,7 +27,21 @@ type CatalogueEntryIconProps = {
   iconUrl?: string | null;
   /** Pixel size for both the image and the SVG fallback. */
   size?: number;
+  /**
+   * Colour of a glyph drawn in the text colour (the built-in marks and the
+   * MCP fallback). Images and format marks keep their own colours. Without
+   * one, a built-in mark reads as foreground and the fallback as muted.
+   */
+  tone?: CatalogueEntryIconTone;
+  /** Layout only: the tone carries the colour. */
   className?: string;
+};
+
+type CatalogueEntryIconTone = "foreground" | "muted";
+
+const TONE_CLASS: Readonly<Record<CatalogueEntryIconTone, string>> = {
+  foreground: "text-foreground",
+  muted: "text-muted-foreground",
 };
 
 const SLUG_LUCIDE_OVERRIDES: Readonly<Record<string, LucideIcon>> = {
@@ -40,8 +54,11 @@ export const CatalogueEntryIcon = ({
   icon,
   iconUrl,
   size = 24,
+  tone,
   className,
 }: CatalogueEntryIconProps) => {
+  const proxiedIconSrc = useProxiedIconSrc(iconUrl);
+
   if (slug === "create-docx") {
     return <DocxIcon className={className} height={size} width={size} />;
   }
@@ -51,7 +68,7 @@ export const CatalogueEntryIcon = ({
     if (Icon) {
       return (
         <Icon
-          className={cn(className ?? "text-foreground")}
+          className={cn(TONE_CLASS[tone ?? "foreground"], className)}
           style={{ width: size, height: size }}
         />
       );
@@ -75,9 +92,7 @@ export const CatalogueEntryIcon = ({
     );
   }
 
-  const safeIconHref = iconUrl ? sanitizeHref(iconUrl) : undefined;
-
-  if (safeIconHref) {
+  if (proxiedIconSrc) {
     return (
       <img
         alt=""
@@ -86,7 +101,7 @@ export const CatalogueEntryIcon = ({
           "rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10",
         )}
         height={size}
-        src={safeIconHref}
+        src={proxiedIconSrc}
         style={{ width: size, height: size }}
         width={size}
       />
@@ -95,7 +110,7 @@ export const CatalogueEntryIcon = ({
 
   return (
     <McpIcon
-      className={cn(className ?? "text-muted-foreground")}
+      className={cn(TONE_CLASS[tone ?? "muted"], className)}
       style={{ width: size, height: size }}
     />
   );

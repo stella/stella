@@ -1,4 +1,4 @@
-import { describe, expect, test, expectTypeOf } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
@@ -9,11 +9,12 @@ import {
   reporterCitationIdentifierSchema,
 } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import { nullAsAbsent, toolDataResult } from "@/api/mcp/tool-utils";
+import { toolDataResult } from "@/api/mcp/tool-utils";
 import {
   defineChatProjectionMcpToolOutput,
   defineMcpToolOutput,
@@ -245,7 +246,8 @@ describe("Valibot-backed MCP tool definitions", () => {
 
   test("compacted output schemas accept exactly what the uncompacted projection accepts", () => {
     const validator = createWireSchemaValidator();
-    fc.assert(
+    assertProperty(
+      "compacted output schemas accept exactly what the uncompacted projection accepts",
       fc.property(
         outputSourceArbitrary.chain((source) => {
           const compacted = defineMcpToolOutput(source).outputSchema;
@@ -269,7 +271,7 @@ describe("Valibot-backed MCP tool definitions", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 150 }),
+      { numRuns: 150 },
     );
   });
 
@@ -310,6 +312,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -369,6 +372,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -548,6 +552,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -570,6 +575,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -595,6 +601,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -662,5 +669,15 @@ describe("legal AST output identifiers", () => {
     expect(() =>
       defineMcpToolOutput(v.strictObject({ blocks: v.array(blockSchema) })),
     ).not.toThrow();
+  });
+
+  test("recursive block output keeps every citation target status visible", () => {
+    const contract = defineMcpToolOutput(
+      v.strictObject({ blocks: v.array(blockSchema) }),
+    );
+    const published = JSON.stringify(contract.outputSchema);
+    for (const status of ["identified", "unresolved", "legislation"]) {
+      expect(published).toContain(JSON.stringify(status));
+    }
   });
 });

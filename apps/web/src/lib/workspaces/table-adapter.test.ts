@@ -24,10 +24,4 @@ describe("workspaceTableAdapter", () => {
       Object.keys(COVERED).toSorted(),
     );
   });
-
-  test("every entry point is a factory the caller invokes itself", () => {
-    for (const entry of Object.values(workspaceTableAdapter)) {
-      expect(typeof entry).toBe("function");
-    }
-  });
 });

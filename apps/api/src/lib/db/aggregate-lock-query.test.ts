@@ -10,11 +10,11 @@ import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  ROW_LOCK_MODES,
   withAggregateLock,
   withAggregateRowQuery,
   withAggregateSavepoint,
   withAggregateTransaction,
-  ROW_LOCK_MODES,
 } from "@/api/lib/db/aggregate-lock";
 import {
   timestampCasToken,
@@ -22,6 +22,7 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -80,7 +81,7 @@ afterAll(async () => {
   await db
     .delete(workspaces)
     .where(eq(workspaces.organizationId, organizationId));
-  await db.delete(organization).where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(db, [organizationId]);
   await releaseTestDb();
 });
 

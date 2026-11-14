@@ -849,10 +849,7 @@ const writeAll = async () => {
   const formatted = Bun.spawnSync(
     [
       "bun",
-      "--bun",
-      "oxfmt",
-      "-c",
-      ".oxfmtrc.json",
+      "fmt",
       repoRelativePath(REPOSITORY_ROOT, PROVIDER_REQUEST_SCHEMA_DIR),
     ],
     { cwd: REPOSITORY_ROOT, stderr: "inherit", stdout: "ignore" },

@@ -6,8 +6,7 @@ import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -33,6 +32,54 @@ Object.defineProperty(globalThis, "CSS", {
 Object.defineProperty(globalThis, "Highlight", {
   configurable: true,
   value: ReaderHighlight,
+});
+
+// Happy DOM never reports an intersection. These readers are a few
+// paragraphs long, so the whole text sits on screen: every block the find
+// watches is reported visible, as a browser's first observation would.
+class OnScreenObserver implements IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
+  readonly thresholds = [0];
+  private readonly callback: IntersectionObserverCallback;
+  private connected = true;
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+  observe(target: Element) {
+    queueMicrotask(() => {
+      if (!this.connected) {
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      this.callback(
+        [
+          {
+            boundingClientRect: rect,
+            intersectionRatio: 1,
+            intersectionRect: rect,
+            isIntersecting: true,
+            rootBounds: null,
+            target,
+            time: 0,
+          },
+        ],
+        this,
+      );
+    });
+  }
+  disconnect() {
+    this.connected = false;
+  }
+  takeRecords() {
+    return [];
+  }
+  unobserve() {}
+}
+Object.defineProperty(globalThis, "IntersectionObserver", {
+  configurable: true,
+  value: OnScreenObserver,
 });
 
 const { useRef } = await import("react");
@@ -214,7 +261,9 @@ test("a rendered decision paints only CSS find ranges and Escape leaves no searc
     screen.container.querySelector("mark, [data-reader-match-index]"),
   ).toBeNull();
   fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole("searchbox") === null).toBe(true),
+  );
   expect(highlights.size).toBe(0);
   expect(
     screen.container.querySelector("mark, [data-reader-match-index]"),
@@ -276,7 +325,9 @@ test("typing replaces search terms and Escape removes every reader highlight", a
   expect(activeRange("statute")?.toString()).toBe("Náhrada");
   expect(screen.getByText(matchCounter(1, 1))).toBeTruthy();
   fireEvent.keyDown(input, { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole("searchbox") === null).toBe(true),
+  );
   expect([...highlights.keys()]).toEqual([]);
 });
 
@@ -291,7 +342,9 @@ test("closing one reader clears its highlights while the neighboring reader reta
   fireEvent.click(
     decision.getByRole("button", { name: messages.folio.findReplace.close }),
   );
-  await waitFor(() => expect(decision.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(decision.queryByRole("searchbox") === null).toBe(true),
+  );
   expect(highlights.has("stella-inspector-find-decision")).toBe(false);
   expect(highlights.has("stella-inspector-find-active-decision")).toBe(false);
   expect(statute.getByRole("searchbox").getAttribute("value")).toBe("náhrada");
@@ -385,7 +438,9 @@ test("Escape inside one pane leaves its neighbor's find bar and highlights intac
   const decision = within(screen.getByRole("region", { name: "decision" }));
   const statute = within(screen.getByRole("region", { name: "statute" }));
   fireEvent.keyDown(decision.getByRole("searchbox"), { key: "Escape" });
-  await waitFor(() => expect(decision.queryByRole("searchbox")).toBeNull());
+  await waitFor(() =>
+    expect(decision.queryByRole("searchbox") === null).toBe(true),
+  );
   expect(highlights.has("stella-inspector-find-decision")).toBe(false);
   expect(highlights.has("stella-inspector-find-active-decision")).toBe(false);
   expect(statute.getByRole("searchbox").getAttribute("value")).toBe("náhrada");

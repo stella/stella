@@ -10,9 +10,9 @@ import {
   COORDINATION_KEY_EXPIRY,
   coordinationExpireArguments,
   coordinationKey,
+  type CoordinationScope,
   coordinationSetArguments,
   unboundedCoordinationKey,
-  type CoordinationScope,
 } from "@/api/lib/redis-keys";
 
 const isCoordinationScope = (value: string): value is CoordinationScope =>

@@ -11,9 +11,9 @@ import {
   selectTransitionedExpirableSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
 import {
+  type ExpiredDesktopEditSessionNotification,
   publishDesktopEditSessionExpiryNotifications,
   publishDesktopEditSessionExpiryNotificationsWithRetry,
-  type ExpiredDesktopEditSessionNotification,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
 
 const session = (id: string, createdBy: string) => ({
@@ -160,7 +160,7 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
       },
       (error: unknown) => {
         if (!(error instanceof Error)) {
-          throw new Error("Expected publish to reject with an Error");
+          throw new TypeError("Expected publish to reject with an Error");
         }
         expect(error.message).toBe("publish failed");
       },
@@ -223,7 +223,7 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
       },
       (error: unknown) => {
         if (!(error instanceof Error)) {
-          throw new Error("Expected publish to reject with an Error");
+          throw new TypeError("Expected publish to reject with an Error");
         }
         expect(error.message).toBe("publish failed");
       },

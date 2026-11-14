@@ -32,10 +32,12 @@ import {
 } from "@/api/handlers/chat/send-message-side-effects";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
@@ -222,35 +224,38 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
     workspaceId: null,
   });
   unwrap(
-    await safeDb(async (tx) => {
-      await tx.insert(chatMessages).values([
-        {
-          content: toPersistedChatMessageContentV3({
-            data: [{ content: "Review this", type: "text" }],
-          }),
-          id: userMessageId,
-          role: "user",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-        {
-          content: toPersistedChatMessageContentV3({
-            data: [...skillCallParts, pendingAskUserCall],
-          }),
-          id: assistantMessageId,
-          role: "assistant",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-      ]);
-      expect(
-        await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
-      ).toMatchObject({
-        type: "accepted",
-      });
-    }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values([
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "Review this", type: "text" }],
+              }),
+              id: userMessageId,
+              role: "user",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
+            },
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [...skillCallParts, pendingAskUserCall],
+              }),
+              id: assistantMessageId,
+              role: "assistant",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
+            },
+          ]);
+          expect(
+            await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+          ).toMatchObject({
+            type: "accepted",
+          });
+        }),
+    ),
   );
   const execution = unwrap(
     await claimChatTurnForExecution({
@@ -268,17 +273,21 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
     throw new Error("Expected the accepted turn to be claimed");
   }
   unwrap(
-    await safeDb(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId,
-          execution,
-          outcome: {
-            interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
-            type: "awaiting-user",
-          },
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId,
+              execution,
+              outcome: {
+                interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
+                type: "awaiting-user",
+              },
+              tx,
+            }),
+        ),
     ),
   );
   return { assistantMessageId, threadId };
@@ -323,8 +332,8 @@ const createContext = ({
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
-    route: "/v1/chat/send",
+    request: new Request("http://localhost/v1/chat"),
+    route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     session: { activeOrganizationId: ids.orgA },

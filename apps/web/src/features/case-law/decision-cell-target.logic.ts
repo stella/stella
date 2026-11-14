@@ -14,22 +14,23 @@ import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-pre
 type PreferredDecisionTargetOptions = {
   /** The words that found the row; they travel with every gesture that opens it. */
   searchQuery?: string | undefined;
-  uiLocale: string;
+  /** The reader's languages, most preferred first (`useCaseLawReadingLanguages`). */
+  readingLanguages: readonly string[];
 };
 
 /**
  * The version of a multilingual decision the reader is most likely to want:
- * their UI language when it exists, otherwise the version that matched. A
- * monolingual decision is its own only version.
+ * the first of their reading languages it exists in, otherwise the version
+ * the row stands for. A monolingual decision is its own only version.
  */
 export const preferredDecisionTarget = (
   decision: Decision,
-  { searchQuery, uiLocale }: PreferredDecisionTargetOptions,
+  { searchQuery, readingLanguages }: PreferredDecisionTargetOptions,
 ): DecisionTabTarget => {
   const preferred = pickPreferredCaseLawLanguageVariant({
     alternates: decision.languageAlternates,
-    matchedLanguage: decision.language,
-    uiLocale,
+    rowLanguage: decision.language,
+    readingLanguages,
   });
   const terms =
     searchQuery === undefined || searchQuery === "" ? {} : { searchQuery };

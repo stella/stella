@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
-import { spawn, type ChildProcess } from "node:child_process";
-import { readFile, readdir, realpath } from "node:fs/promises";
+import { type ChildProcess, spawn } from "node:child_process";
+import { statfsSync } from "node:fs";
+import { readdir, readFile, realpath } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
@@ -462,6 +464,26 @@ export const ownedProcessTreeRows = (snapshot: string, group: number) => {
   return rows.filter((row) => owned.has(row.pid)).map((row) => row.text);
 };
 
+export const processCpuSnapshot = (snapshot: string, group: number) => {
+  const rows = ownedProcessTreeRows(snapshot, group);
+  const activity = rows.some((row) => row.split(/\s+/u).at(3)?.startsWith("R"))
+    ? "runnable"
+    : "waiting";
+  const cpu = rows
+    .map((row) => {
+      const fields = row.split(/\s+/u);
+      const processId = fields.at(0);
+      const cpuTime = fields.at(4);
+      if (processId === undefined || cpuTime === undefined) {
+        return invalid("Malformed process CPU snapshot row");
+      }
+      return `${processId}:${cpuTime}`;
+    })
+    .toSorted()
+    .join("|");
+  return { activity, cpu };
+};
+
 export const ownedProcessGroupMembers = (snapshot: string, group: number) =>
   snapshot.split(/\r?\n/u).flatMap((line) => {
     const trimmed = line.trimStart();
@@ -502,6 +524,98 @@ type ProcessTreeAtSignalOptions = {
   stallMs: number;
   report: (message: string) => void;
 };
+const MIB = 1024 * 1024;
+const MACHINE_TRAIL_MS = 30_000;
+
+/** What a runner that is being stopped had left, so a stop names its cause. */
+const machineResources = () => {
+  const disk = Result.try(() => statfsSync(process.cwd()));
+  const diskFree = disk.isOk()
+    ? `${Math.round((disk.value.bavail * disk.value.bsize) / MIB)}`
+    : "unknown";
+  const load = os
+    .loadavg()
+    .map((value) => value.toFixed(1))
+    .join(" ");
+  return `Machine: memory_free_mib=${Math.round(os.freemem() / MIB)} memory_total_mib=${Math.round(os.totalmem() / MIB)} disk_free_mib=${diskFree} load=${load} cpus=${os.availableParallelism()}`;
+};
+
+const MACHINE_TRAIL_PROCESSES = 3;
+const MACHINE_TRAIL_COMMAND_CHARS = 120;
+
+/**
+ * The largest resident processes of a command's group, so a trail that ends in
+ * an out-of-memory kill names the process that grew, not only the machine.
+ */
+export const largestOwnedProcesses = (snapshot: string, group: number) =>
+  ownedProcessTreeRows(snapshot, group)
+    .flatMap((row) => {
+      // pid ppid pgid state rss command...; the rows are already trimmed.
+      const fields = row.split(/\s+/u);
+      const rssKb = Number(fields[4]);
+      const [executable = "", ...args] = fields.slice(5);
+      return Number.isSafeInteger(rssKb)
+        ? [{ rssKb, command: [path.basename(executable), ...args].join(" ") }]
+        : [];
+    })
+    .toSorted((left, right) => right.rssKb - left.rssKb)
+    .slice(0, MACHINE_TRAIL_PROCESSES)
+    .map(
+      ({ rssKb, command }) =>
+        `rss_mib=${Math.round(rssKb / 1024)} ${command.slice(0, MACHINE_TRAIL_COMMAND_CHARS)}`,
+    );
+
+/**
+ * A runner can be stopped without warning, so the trail has to exist before
+ * the stop: the last lines show how the machine looked on the way there, and
+ * which of the command's processes held its memory.
+ */
+const reportLargestProcesses = async (
+  group: number,
+  stallMs: number,
+  report: (message: string) => void,
+) => {
+  const snapshot = await Result.tryPromise(
+    async () =>
+      await processSnapshot({
+        columns: "pid=,ppid=,pgid=,stat=,rss=,command=",
+        stallMs,
+        report,
+      }),
+  );
+  if (snapshot.isErr()) {
+    return;
+  }
+  for (const line of largestOwnedProcesses(snapshot.value, group)) {
+    report(`Machine process: ${line}\n`);
+  }
+};
+
+/**
+ * The spawned command leads its own process group only when this supervisor
+ * owns the group; otherwise the trail has no group of its own to list.
+ */
+const ownedGroupLeader = (
+  child: { readonly pid?: number | undefined },
+  ownsGroup: boolean,
+) => (ownsGroup && process.platform !== "win32" ? child.pid : undefined);
+
+const startMachineTrail = (
+  report: (message: string) => void,
+  startedAt: number,
+  stallMs: number,
+  group: number | undefined,
+) => {
+  const trail = setInterval(() => {
+    report(`${machineResources()} elapsed_ms=${Date.now() - startedAt}\n`);
+    if (group !== undefined) {
+      void reportLargestProcesses(group, stallMs, report);
+    }
+  }, MACHINE_TRAIL_MS);
+  trail.unref();
+  return trail;
+};
+
 const processTreeAtSignal = async ({
   group,
   signal,
@@ -512,7 +626,7 @@ const processTreeAtSignal = async ({
   const snapshot = await Result.tryPromise(
     async () =>
       await processSnapshot({
-        columns: "pid=,ppid=,pgid=,stat=,command=",
+        columns: "pid=,ppid=,pgid=,stat=,rss=,command=",
         stallMs,
         report,
       }),
@@ -520,7 +634,7 @@ const processTreeAtSignal = async ({
   const rows = snapshot.isOk()
     ? ownedProcessTreeRows(snapshot.value, group).join("\n")
     : failureMessage(snapshot.error);
-  return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\nPID PPID PGID STATE COMMAND\n${rows || "No remaining group members"}\n`;
+  return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\n${machineResources()}\nPID PPID PGID STATE RSS_KB COMMAND\n${rows || "No remaining group members"}\n`;
 };
 
 const PROCESS_GROUP_POLL_MS = 50;
@@ -715,20 +829,9 @@ const createTaskMonitor = ({
         report: reportDiagnostic,
       });
       if (pid === undefined) {
-        return "";
+        return processCpuSnapshot("", -1);
       }
-      return ownedProcessTreeRows(snapshot, pid)
-        .map((row) => {
-          const fields = row.split(/\s+/u);
-          const processId = fields.at(0);
-          const cpuTime = fields.at(4);
-          if (processId === undefined || cpuTime === undefined) {
-            return invalid("Malformed process CPU snapshot row");
-          }
-          return `${processId}:${cpuTime}`;
-        })
-        .toSorted()
-        .join("|");
+      return processCpuSnapshot(snapshot, pid);
     });
     if (completion.signal.aborted) {
       return;
@@ -744,8 +847,11 @@ const createTaskMonitor = ({
       }
       return;
     }
-    const cpu = cpuSnapshot.value;
-    if (previousCpu !== undefined && cpu !== previousCpu) {
+    const { activity, cpu } = cpuSnapshot.value;
+    if (
+      activity === "runnable" ||
+      (previousCpu !== undefined && cpu !== previousCpu)
+    ) {
       watchdog.progress();
     }
     previousCpu = cpu;
@@ -852,6 +958,8 @@ export const runBudgetedCheck = async ({
     env: { ...process.env, ...env, [PROCESS_GROUP_ENV]: "inherited" },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const leader = ownedGroupLeader(child, ownsGroup);
+  const trail = startMachineTrail(reportDiagnostic, startedAt, stallMs, leader);
   const inspectedSignals = new Set<NodeJS.Signals>();
   const pendingDiagnostics: Promise<void>[] = [];
   const killGroup = (signal: NodeJS.Signals) =>
@@ -930,6 +1038,7 @@ export const runBudgetedCheck = async ({
       resolve(signalExitCode(code, signal));
     });
   });
+  clearInterval(trail);
   const endedAt = Date.now();
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
   const pipesDrained = Promise.race([

@@ -3,14 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   activeAuthorizedWorkspaceQuery,
-  authorizedWorkspaceIdSubquery,
   authorizedWorkspaceIds,
+  authorizedWorkspaceIdSubquery,
+  readAuthorizedWorkspaceExecutionAccess,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -18,6 +19,8 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -56,12 +59,14 @@ describe.skipIf(!runPostgresTests)(
             role: "member",
             createdAt: new Date(),
           });
-          await db.insert(contacts).values({
-            id: clientId,
-            organizationId,
-            type: "person",
-            displayName: "Authorized matters client",
-          });
+          await insertOwnerContacts(db, [
+            {
+              id: clientId,
+              organizationId,
+              type: "person",
+              displayName: "Authorized matters client",
+            },
+          ]);
           await db.insert(workspaces).values([
             {
               id: assignedId,
@@ -98,6 +103,9 @@ describe.skipIf(!runPostgresTests)(
           });
           const outcome = await scopedDb(async (tx) => ({
             set: await readAuthorizedWorkspaces(tx, { organizationId }),
+            executionAccess: await readAuthorizedWorkspaceExecutionAccess(tx, {
+              organizationId,
+            }),
             ids: await authorizedWorkspaceIds(tx, {
               organizationId,
               workspaceIds: [assignedId, closingId, otherId],
@@ -115,7 +123,11 @@ describe.skipIf(!runPostgresTests)(
             ),
           }));
 
-          if (outcome.set.isErr() || outcome.ids.isErr()) {
+          if (
+            outcome.set.isErr() ||
+            outcome.ids.isErr() ||
+            outcome.executionAccess.isErr()
+          ) {
             panic("Authorized workspace read failed");
           }
           expect(outcome.set.value.workspaces).toHaveLength(2);
@@ -125,14 +137,31 @@ describe.skipIf(!runPostgresTests)(
               { id: closingId, status: "deleting" },
             ]),
           );
+          expect(outcome.executionAccess.value.accessibleWorkspaces).toEqual(
+            expect.arrayContaining([
+              { id: assignedId, status: "active" },
+              { id: closingId, status: "deleting" },
+            ]),
+          );
+          expect(
+            outcome.executionAccess.value.accessibleWorkspaces,
+          ).toHaveLength(2);
+          for (const id of [assignedId, closingId]) {
+            expect(
+              outcome.executionAccess.value.pinServerValidatedWorkspaceId(id),
+            ).toBe(true);
+          }
+          expect(
+            outcome.executionAccess.value.pinServerValidatedWorkspaceId(
+              otherId,
+            ),
+          ).toBe(false);
           expect([...outcome.ids.value]).toEqual([assignedId]);
           expect(outcome.assigned).toEqual([{ id: assignedId }]);
           expect(outcome.other).toEqual([]);
           expect(outcome.compared).toEqual([{ id: assignedId }]);
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });

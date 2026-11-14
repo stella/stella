@@ -6,7 +6,6 @@ import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professio
 import { Button } from "@stll/ui/button";
 import {
   Frame,
-  FrameDescription,
   FrameFooter,
   FrameHeader,
   FramePanel,
@@ -17,19 +16,16 @@ import { useSignOut } from "@/hooks/use-sign-out";
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { api } from "@/lib/api";
 import { professionalUseOptions } from "@/lib/auth-queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { destinationNavigation } from "@/lib/redirect";
 
 type ProfessionalUsePanelProps = {
   redirectTo: string;
   userId: string;
 };
 
-/**
- * The professional-use statement for an account created where it was not
- * shown. Accepting records it exactly as creating an account on the sign-in
- * page does, then continues to where the visitor was going.
- */
+/** Records the displayed statement, then continues to the requested page. */
 export const ProfessionalUsePanel = ({
   redirectTo,
   userId,
@@ -41,7 +37,7 @@ export const ProfessionalUsePanel = ({
 
   const accept = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.me["professional-use"].post({
           statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
         }),
@@ -49,7 +45,7 @@ export const ProfessionalUsePanel = ({
     onSuccess: async (state) => {
       queryClient.setQueryData(professionalUseOptions(userId).queryKey, state);
       signalSessionChange();
-      await navigate({ to: redirectTo, replace: true });
+      await navigate(destinationNavigation(redirectTo));
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
@@ -60,9 +56,6 @@ export const ProfessionalUsePanel = ({
     <Frame className="w-full max-w-md">
       <FrameHeader>
         <FrameTitle>{t("auth.professionalUse.title")}</FrameTitle>
-        <FrameDescription>
-          {t("auth.professionalUse.description")}
-        </FrameDescription>
       </FrameHeader>
       <FramePanel>
         <p className="text-foreground text-sm text-pretty">

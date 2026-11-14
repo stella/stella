@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useRouteContext } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { Link } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -15,19 +15,21 @@ import {
   ShieldAlertIcon,
   XIcon,
 } from "@stll/ui/icons";
-import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
+import { notifyTaskCompletion } from "@/components/workspaces/tasks/task-completion-toast";
 import {
-  isTaskPriority,
   isListItemType,
+  isTaskPriority,
   isTaskStatus,
   toISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
@@ -54,21 +56,26 @@ import {
   StatusSelect,
   WorkTypeSelect,
 } from "@/components/workspaces/tasks/task-metadata";
+import { TaskNameField } from "@/components/workspaces/tasks/task-name-field";
 import { SubtasksSection } from "@/components/workspaces/tasks/task-subtasks";
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { DAY_AND_MONTH_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
@@ -115,19 +122,15 @@ const TaskDetailPanelContent = ({
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.id,
-  });
+  const userId = useAuthenticatedUser().id;
 
   const {
     data: task,
     error: taskError,
     isLoading,
-  } = useQuery({
-    ...taskDetailOptions(workspaceId, taskId),
-    enabled: creationStatus === "ready",
-  });
+  } = useQuery(
+    taskTabDetailOptions({ creationStatus, id: taskId, workspaceId }),
+  );
 
   useExternalSyncEffect(() => {
     if (APIError.is(taskError) && taskError.status === 404) {
@@ -135,23 +138,32 @@ const TaskDetailPanelContent = ({
     }
   }, [taskError, taskId]);
 
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editNameValue, setEditNameValue] = useState("");
   const [workflowReason, setWorkflowReason] = useState("");
-  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const name = task?.name ?? t("untitled");
 
-  const updateMutation = useMutation({
-    mutationFn: async (update: TaskUpdate) => {
+  const saveTask = resourceMutation({
+    mutation: "updateTask",
+    queryClient,
+    mutationFn: async ({
+      update,
+    }: {
+      update: TaskUpdate;
+      workspaceId: string;
+      entityId: string;
+    }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
           ...taskUpdateBody(update),
           taskId: toSafeId<"entity">(update.taskId),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
+  });
+  const updateMutation = useMutation({
+    mutationFn: async (update: TaskUpdate) =>
+      await saveTask({ update, workspaceId, entityId: update.taskId }),
     onSuccess: async (_data, variables) => {
       if (taskUpdateClearsWorkflowReason(variables)) {
         setWorkflowReason("");
@@ -173,7 +185,10 @@ const TaskDetailPanelContent = ({
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure",
+        scope: { type: "handler", handlerId: "TaskDetailPanelContent:failure" },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
@@ -200,7 +215,7 @@ const TaskDetailPanelContent = ({
       })({ entityId: toSafeId<"entity">(taskId) }).patch({
         ...workflowUpdateBody(update),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       if (workflowUpdateClearsReason(variables)) {
@@ -209,12 +224,19 @@ const TaskDetailPanelContent = ({
       await invalidateWorkflow();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "TaskDetailPanelContent:failure-2",
+        },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
 
-  const workflowActionMutation = useMutation({
+  const workflowActionMutation = useIdempotentMutation({
+    idempotencyScope: `tasks.${workspaceId}.${taskId}.workflow`,
     mutationFn: async (
       action:
         | { type: "acknowledge" }
@@ -223,14 +245,15 @@ const TaskDetailPanelContent = ({
             action: "reopen";
             reason?: string;
           },
+      request,
     ) => {
       const endpoint = api["work-obligations"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) });
       if (action.type === "acknowledge") {
-        return unwrapEden(await endpoint.acknowledge.post({}));
+        return unwrapApiResponse(await endpoint.acknowledge.post({}, request));
       }
-      return unwrapEden(
+      return unwrapApiResponse(
         await endpoint.transition.post({
           action: action.action,
           ...(action.reason ? { reason: action.reason } : {}),
@@ -244,7 +267,13 @@ const TaskDetailPanelContent = ({
       await invalidateWorkflow();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "TaskDetailPanelContent:failure-3",
+        },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
@@ -253,8 +282,6 @@ const TaskDetailPanelContent = ({
   const didAutoAssign = useRef(false);
   useExternalSyncEffect(() => {
     if (isNewTask && task) {
-      setEditNameValue("");
-      setIsEditingName(true);
       clearNewFlag(taskId);
 
       // Auto-assign the signed-in user
@@ -274,7 +301,13 @@ const TaskDetailPanelContent = ({
                     userId: toSafeId<"user">(userId),
                   });
                 if (response.error) {
-                  analytics.captureError(toAPIError(response.error));
+                  analytics.captureError(toAPIError(response.error), {
+                    fingerprintKey: "TaskDetailPanelContent:failure-4",
+                    scope: {
+                      type: "handler",
+                      handlerId: "TaskDetailPanelContent:failure-4",
+                    },
+                  });
                   await queryClient.invalidateQueries({
                     queryKey: taskKeys.detail(workspaceId, taskId),
                   });
@@ -292,7 +325,13 @@ const TaskDetailPanelContent = ({
                   }),
                 ]);
               } catch (error: unknown) {
-                analytics.captureError(error);
+                analytics.captureError(error, {
+                  fingerprintKey: "TaskDetailPanelContent:failure-5",
+                  scope: {
+                    type: "handler",
+                    handlerId: "TaskDetailPanelContent:failure-5",
+                  },
+                });
                 detached(
                   queryClient.invalidateQueries({
                     queryKey: taskKeys.detail(workspaceId, taskId),
@@ -323,24 +362,54 @@ const TaskDetailPanelContent = ({
     analytics,
   ]);
 
-  const startEditingName = () => {
-    setEditNameValue(task?.name ?? "");
-    setIsEditingName(true);
-  };
-
-  const commitName = () => {
-    const trimmed = editNameValue.trim();
-    if (trimmed && trimmed !== (task?.name ?? "")) {
-      updateMutation.mutate({ taskId, type: "name", value: trimmed });
-    }
-    setIsEditingName(false);
+  const handleRename = (
+    value: string,
+    showError: (message: string) => void,
+  ) => {
+    // `mutateAsync`, not a per-call `onError`: that one is dropped when another
+    // edit starts first, and the refused name would lose its reason.
+    const saveName = async () => {
+      const saved = await Result.tryPromise(
+        async () =>
+          await updateMutation.mutateAsync({ taskId, type: "name", value }),
+      );
+      if (Result.isError(saved)) {
+        showError(
+          userErrorFromThrown(saved.error.cause, tCommon("unexpectedError")),
+        );
+      }
+    };
+    detached(saveName(), "task-detail-panel.rename");
   };
 
   const handleStatusChange = (value: TaskStatus | null) => {
     if (!value) {
       return;
     }
-    updateMutation.mutate(getTaskStatusUpdate(taskId, value, workflowReason));
+    const previous = isTaskStatus(task?.status) ? task.status : "open";
+    const previousKnown = !updateMutation.isPending;
+    const { queryKey } = taskDetailOptions(workspaceId, taskId);
+    // The returned promise, not a per-call `onSuccess`: that one is dropped
+    // when the panel closes or another edit starts, and the toast with it. A
+    // failure is reported by the mutation's own `onError`.
+    const saveStatus = async () => {
+      const saved = await Result.tryPromise(
+        async () =>
+          await updateMutation.mutateAsync(
+            getTaskStatusUpdate(taskId, value, workflowReason),
+          ),
+      );
+      if (Result.isOk(saved)) {
+        notifyTaskCompletion({
+          currentStatus: () => queryClient.getQueryData(queryKey)?.status,
+          next: value,
+          previous: previousKnown ? previous : null,
+          restore: (status) =>
+            updateMutation.mutate(getTaskStatusUpdate(taskId, status, "")),
+        });
+      }
+    };
+    detached(saveStatus(), "task-detail-panel.status");
   };
 
   const handlePriorityChange = (value: TaskPriority | null) => {
@@ -558,9 +627,9 @@ const TaskDetailPanelContent = ({
         >
           <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">
+        <TruncatedText className="flex-1 text-xs font-medium">
           {isNewTask ? t("newTask") : name}
-        </span>
+        </TruncatedText>
         <Button
           aria-label={tCommon("close")}
           onClick={handleClose}
@@ -575,29 +644,11 @@ const TaskDetailPanelContent = ({
       <ScrollArea className="flex-1">
         {/* Editable task name */}
         <div className="px-4 pt-3 pb-2">
-          {isEditingName ? (
-            <span className="block min-w-0 text-base font-semibold">
-              <InlineRenameInput
-                onCommit={commitName}
-                onValueChange={setEditNameValue}
-                onCancel={() => {
-                  setIsEditingName(false);
-                  setEditNameValue(task.name);
-                }}
-                placeholder={t("untitled")}
-                ref={nameInputRef}
-                value={editNameValue}
-              />
-            </span>
-          ) : (
-            <button
-              className="hover:text-foreground-strong-muted w-full overflow-hidden text-start text-base font-semibold text-ellipsis whitespace-pre"
-              onClick={startEditingName}
-              type="button"
-            >
-              {name}
-            </button>
-          )}
+          <TaskNameField
+            autoEdit={isNewTask}
+            name={task.name}
+            onRename={handleRename}
+          />
         </div>
 
         {/* Metadata */}

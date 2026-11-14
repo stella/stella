@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 
 import {
-  courtAbbreviation,
   COURT_NAME_REGISTRY,
+  courtAbbreviation,
 } from "./case-law-court-abbreviations";
 import { ECLI_COURT_REGISTRY } from "./case-law-courts";
 import { SK_COURT_TIERS } from "./sk-court-tiers";

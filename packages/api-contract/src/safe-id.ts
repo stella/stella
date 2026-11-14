@@ -1,4 +1,35 @@
+// parser-output-unchanged: Removal retry ID branding does not change parsed decision identities.
 // parser-output-unchanged: Adding citation doctrine review, search-history, chat revision, reader answer and chat tool grant ID kinds does not change parser IDs or parsed records.
+// parser-output-unchanged: [at-asylgh] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-bks] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-bvwg] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-courts] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-findok] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-lvwg] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-ubas] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-umse] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-uvs] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-verg] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-vfgh] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [at-vwgh] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [cz-ns] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [cz-nss] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [cz-regional] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [cz-us] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [eu-ecj] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [hu-bhgy] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-courts] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-kio] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-kis] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-ncourt] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-nsa] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-sn] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-tk] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-uodo] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [pl-uokik] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [sk-us] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: [us-courtlistener] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: Adding conflict check ID kinds does not change parser IDs or parsed records.
 import * as v from "valibot";
 
 export { isUuid } from "@stll/uuid-codec";
@@ -29,9 +60,11 @@ export type SafeIdType =
   | "caseLawIngestionFailure"
   | "caseLawJudge"
   | "caseLawMatterLink"
+  | "legislationMatterLink"
   | "caseLawPolarityRule"
   | "caseLawProvisionCitation"
   | "caseLawReconciliationItem"
+  | "caseLawRemovalReconciliationItem"
   | "caseLawResearchAnswerClaim"
   | "caseLawResearchColumn"
   | "caseLawSource"
@@ -41,6 +74,7 @@ export type SafeIdType =
   | "chatTurn"
   | "chatThreadCompaction"
   | "chatThread"
+  | "chatBrowserSiteGrant"
   | "chatToolGrant"
   | "fileChatThread"
   | "templateChatThread"
@@ -49,6 +83,8 @@ export type SafeIdType =
   | "clauseCategory"
   | "clauseVariant"
   | "clauseVersion"
+  | "conflictCheck"
+  | "conflictCheckMatter"
   | "contact"
   | "correspondence"
   | "correspondenceFiler"
@@ -59,6 +95,7 @@ export type SafeIdType =
   | "correspondenceDropLog"
   | "contactExtractionUpload"
   | "contactImportRequest"
+  | "requestIdempotencyReceipt"
   | "contactRelationship"
   | "corpusIndexProjectionIntent"
   | "hostedCheckoutClaim"
@@ -72,6 +109,7 @@ export type SafeIdType =
   | "desktopEditSession"
   | "legalListClaim"
   | "legalListClaimReviewEvent"
+  | "legalGraphEdge"
   | "legalListVerificationRun"
   | "bilingualTranslationRun"
   | "bilingualTranslationRow"
@@ -85,6 +123,7 @@ export type SafeIdType =
   | "documentProcessingRun"
   | "documentReferenceCounter"
   | "documentReviewFinding"
+  | "documentReviewFindingDecision"
   | "documentReviewParty"
   | "documentReviewReferencePassage"
   | "documentReviewRun"
@@ -114,6 +153,7 @@ export type SafeIdType =
   | "infoSoudTrackedCase"
   | "invoice"
   | "invoiceLine"
+  | "invoicePayment"
   | "justification"
   | "legislationDocument"
   | "legislationIndexJob"
@@ -134,6 +174,7 @@ export type SafeIdType =
   | "legalListItemComment"
   | "legalListItemReview"
   | "legalListItemSource"
+  | "legalListItemSourceDecision"
   | "legalListSection"
   | "legalReaderAnnotation"
   | "legalReaderAnswer"
@@ -163,6 +204,8 @@ export type SafeIdType =
   | "sellerProfile"
   | "numberSeries"
   | "reportExport"
+  // parser-output-unchanged: Adds the data export id kind; no parser reads or emits it.
+  | "dataExport"
   | "schedulerJobRun"
   | "sharepointConnection"
   | "sharepointOAuthState"
@@ -191,13 +234,23 @@ export type SafeIdType =
   | "entityLink";
 
 export const isSafeIdValue = (value: string): boolean =>
-  value.length > 0 && value.isWellFormed();
+  value.length > 0 && !/[\uD800-\uDFFF]/u.test(value);
 
 /**
  * The one validator behind every brander: a consumer that narrows the id set
  * (the api closes `SafeIdType`) parses with this schema rather than restating
  * the check and its message.
  */
+/**
+ * A user id as the auth provider issues it: an opaque string, not a UUID, so
+ * every input that names a person accepts the same shape.
+ */
+export const userIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(128),
+);
+
 export const safeIdSchema = v.pipe(
   v.string(),
   v.check(isSafeIdValue, "Expected a non-empty, well-formed identifier"),

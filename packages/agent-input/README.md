@@ -82,3 +82,17 @@ their own contracts. Ordinary strings are never normalized heuristically.
 ## License
 
 Apache-2.0
+
+## Machine numeric tokens
+
+`@stll/agent-input/numeric-token` reads protocol counters and numeric strings that
+must consume the entire input. `parseIntegerToken` accepts ASCII digits and an
+optional leading minus, and requires a safe integer. `parseDecimalToken` uses
+`-?[0-9]+(\.[0-9]+)?` and requires a finite value. Neither trims whitespace nor
+accepts plus signs, exponents, hexadecimal, grouping or incomplete fractions.
+Both return `Result<number, InvalidNumericTokenError>` and accept optional
+`sign: "unsigned"`, `min` and `max` bounds. Unsigned mode also rejects `-0`.
+
+Callers choose their invalid-input policy explicitly. Human-authored localized
+values continue through `normalizeNumber`; this strict subpath does not replace
+its intentional normalization rules.

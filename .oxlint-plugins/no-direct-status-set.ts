@@ -1,8 +1,8 @@
 import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
 import {
-  statusWriteCalls,
   type StatusColumns,
+  statusWriteCalls,
 } from "../scripts/status-write-shapes.ts";
 import { filenameForContext } from "./utils.ts";
 
@@ -70,7 +70,7 @@ export default eslintCompatPlugin({
               columns: columnsFrom(Reflect.get(options, "columns")),
             });
             ranges = new Set(
-              matches.map((match) => `${match.getStart()}:${match.getEnd()}`),
+              matches.map((match) => `${match.start}:${match.end}`),
             );
           },
           CallExpression(node) {

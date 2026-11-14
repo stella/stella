@@ -30,6 +30,7 @@ The production Compose contract contains exactly these services:
 
 - `api`: HTTP API and the authoritative scheduled-job loop; readiness `/ready`.
 - `document-processing-worker`: Durable document-processing queue consumer; readiness `api-ready`.
+- `file-derivative-worker`: Durable file-derivative queue consumer; readiness `api-ready`.
 - `gotenberg`: Private authenticated document-conversion sidecar; readiness `/health`.
 
 Its generated environment template is `deploy/selfhost/.env.example`.
@@ -223,7 +224,9 @@ standalone scheduler service to omit accidentally. OCR uses the CPU ONNX models
 bundled in the API image. AnyDoc first inspects each PDF and queues OCR only
 when the document has no usable text layer. Set
 `DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES` on batch workers that should exit after
-the queue stays empty.
+the queue stays empty. Manual OCR requests are accepted while a worker is
+running or has run within the last two batch intervals; otherwise the action
+reports OCR as unavailable.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
 
@@ -402,7 +405,7 @@ must build `apps/web/Dockerfile` with their own public URLs, or run
 ## Run With Docker Compose
 
 From the repository root, validate the production profile, inspect the resolved
-Compose model, migrate, then start the three declared services. Run the web SSR
+Compose model, migrate, then start the declared services. Run the web SSR
 server separately as described above.
 
 <!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->

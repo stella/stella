@@ -1,7 +1,10 @@
-import { Result, panic } from "better-result";
-import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, asc, eq, gt, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -9,8 +12,8 @@ import {
   fields,
   legalListColumns,
   legalListFactDetails,
-  legalListItemSources,
   legalListItems,
+  legalListItemSources,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -18,14 +21,15 @@ import { projectListFactDetails } from "@/api/lib/auth/feature-access/list-eligi
 import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import { readFactTiers } from "@/api/lib/lists/fact-tiers";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -35,12 +39,19 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
-const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
-const querySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.legalListItemsPageSizeMax }),
+const paramsSchema = workspaceParams({ listId: resourceIdSchema("legalList") });
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.legalListItemsPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 const config = {
@@ -52,9 +63,12 @@ const config = {
     "position, description, and review status, plus the values it holds for " +
     "the properties the list binds as columns. A fact item also carries its " +
     "evidential detail (date and precision, evidence kind, medium, " +
-    "confidence and interpretation note), null until it is set, and " +
+    "confidence and interpretation note), null until it is set, " +
     "its first source (document id, document name, locator), null when it " +
-    "has none.",
+    "has none, and its tier: `document` when a source records it, " +
+    "`testimony` when its sources are only witness accounts, `unsourced` " +
+    "without a source (null for other items and for a caller without list " +
+    "verification).",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -119,6 +133,45 @@ const readListPropertyIds = async ({
       return panic("Unexpected bounded list column result");
   }
 };
+
+/** The detail row's join key is read only to tell a match from no row. */
+const withoutJoinKey = <T extends { itemEntityId: unknown }>(
+  details: T | null,
+): Omit<T, "itemEntityId"> | null => {
+  if (details === null) {
+    return null;
+  }
+  const { itemEntityId: _matched, ...rest } = details;
+  return rest;
+};
+
+type ReadPageTiersArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  listId: SafeId<"legalList">;
+  rows: readonly { id: SafeId<"entity">; itemType: string | null }[];
+  accessStatus: "available" | "unavailable";
+};
+
+/** Each fact's tier on the page, for a caller who may see verification
+ *  detail; null for any other caller. */
+const readPageTiers = async ({
+  tx,
+  workspaceId,
+  listId,
+  rows,
+  accessStatus,
+}: ReadPageTiersArgs) =>
+  accessStatus === "available"
+    ? await readFactTiers({
+        tx,
+        workspaceId,
+        listId,
+        factIds: rows
+          .filter((row) => row.itemType === LIST_ITEM_TYPE.FACT)
+          .map((row) => row.id),
+      })
+    : null;
 
 const readListItems = createSafeHandler(config, async function* (context) {
   const { safeDb, workspaceId, params, query } = context;
@@ -211,9 +264,10 @@ const readListItems = createSafeHandler(config, async function* (context) {
             reviewStatus: legalListItems.reviewStatus,
             createdAt: legalListItems.createdAt,
             updatedAt: legalListItems.updatedAt,
-            // Drizzle reads a left-joined object as absent when its first
-            // column is null, so a non-null column must lead.
+            // Drizzle reads a left-joined object as absent when all of its
+            // columns are NULL; the join key is never NULL on a matched row.
             factDetails: {
+              itemEntityId: legalListFactDetails.itemEntityId,
               scoring: legalListFactDetails.scoring,
               confidence: legalListFactDetails.confidence,
               occurredOn: legalListFactDetails.occurredOn,
@@ -246,15 +300,28 @@ const readListItems = createSafeHandler(config, async function* (context) {
               eq(legalListFactDetails.workspaceId, workspaceId),
             ),
           )
-          .leftJoinLateral(firstSource, sql`true`)
+          // Every source row has a document, so this matches whenever the
+          // subquery found one, and the nested object carries the key.
+          .leftJoinLateral(firstSource, isNotNull(firstSource.documentId))
           .where(and(...conditions))
           .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
           .limit(limit + 1),
         readListPropertyIds({ tx, workspaceId, listId: params.listId }),
       ]);
       const entityIds = rows.map((row) => row.id);
+      const tiers = await readPageTiers({
+        tx,
+        workspaceId,
+        listId: params.listId,
+        rows,
+        accessStatus,
+      });
+      const withTier = <T extends { id: SafeId<"entity"> }>(row: T) => ({
+        ...row,
+        sourceTier: tiers?.get(row.id) ?? null,
+      });
       if (entityIds.length === 0 || propertyIds.length === 0) {
-        return rows.map((row) => Object.assign(row, { customFields: [] }));
+        return rows.map((row) => withTier({ ...row, customFields: [] }));
       }
       const fieldRows = await tx
         .select({
@@ -289,7 +356,8 @@ const readListItems = createSafeHandler(config, async function* (context) {
         ).push(field);
       }
       return rows.map((row) =>
-        Object.assign(row, {
+        withTier({
+          ...row,
           customFields:
             fieldsByEntity.get(row.id) ??
             panic(`Entity ${row.id} missing from field grouping`),
@@ -308,7 +376,10 @@ const readListItems = createSafeHandler(config, async function* (context) {
     createCursorPage({
       rows: result.map((row) => ({
         ...row,
-        factDetails: projectListFactDetails(row.factDetails, accessStatus),
+        factDetails: projectListFactDetails(
+          withoutJoinKey(row.factDetails),
+          accessStatus,
+        ),
       })),
       limit,
       cursorForItem: (item) => encodePaginationCursor([item.position, item.id]),

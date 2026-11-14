@@ -118,6 +118,15 @@ export const parseTableChartNumber = (value: string): number | null => {
   return Number.isFinite(number) ? number : null;
 };
 
+/**
+ * Every usable plan charts a column whose cells all parse as numbers, so a
+ * table without one has no chart to offer.
+ */
+export const isTableChartable = (table: TableChartRequest): boolean =>
+  table.headers.some((_header, index) =>
+    table.rows.every((row) => parseTableChartNumber(row[index] ?? "") !== null),
+  );
+
 export const isTableChartPlanUsable = (
   plan: TableChartPlan,
   table: TableChartRequest,

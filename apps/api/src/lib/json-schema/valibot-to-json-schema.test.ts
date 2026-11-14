@@ -3,16 +3,56 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
-import { propertyConfig } from "@stll/property-testing";
+import { uuidSchema } from "@stll/api-contract/uuid";
+import { assertProperty } from "@stll/property-testing";
 
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import {
+  fileSchema,
+  uniqueItems,
+  utf8ByteBounds,
+} from "@/api/lib/custom-schema";
+import {
+  toJsonSchema,
+  toRouteJsonSchema,
+} from "@/api/lib/json-schema/valibot-to-json-schema";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
   LAW_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
+
+test("UTF-8 bounds retain precise published limits and stronger character bounds", () => {
+  const schema = v.pipe(
+    v.string(),
+    v.maxLength(10),
+    utf8ByteBounds({ maxBytes: 20, maxSegmentBytes: 6 }),
+  );
+  for (const convert of [toJsonSchema, toRouteJsonSchema]) {
+    const { $schema: _dialect, ...projected } = convert(schema);
+    expect(projected).toEqual({
+      type: "string",
+      maxLength: 10,
+      "x-maxUtf8Bytes": 20,
+      "x-maxSegmentUtf8Bytes": 6,
+    });
+  }
+  expect(v.safeParse(schema, "ŽŽŽ").success).toBe(true);
+  expect(v.safeParse(schema, "ŽŽŽŽ").success).toBe(false);
+  expect(v.safeParse(schema, "ab/ŽŽŽ/ŽŽŽ").success).toBe(true);
+});
+
+test("UTF-8 constraint support keeps unknown checks strict", () => {
+  expect(() =>
+    toJsonSchema(
+      v.pipe(
+        v.string(),
+        v.check((value: string) => value.includes("x")),
+      ),
+    ),
+  ).toThrow(/check/u);
+});
 
 // Every keyword JSON Schema (draft-07, 2020-12) and the OpenAPI 3.0 subset
 // define, plus the vendor extensions Stella advertises on purpose. A key
@@ -219,25 +259,99 @@ const { schema: schemaArbitrary } = fc.letrec<{ schema: v.GenericSchema }>(
 );
 
 describe("toJsonSchema", () => {
+  test("UUID canonicalization keeps the uppercase-capable input contract", () => {
+    expect(toJsonSchema(uuidSchema)).toMatchObject({
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      pattern:
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    });
+  });
+
   test("emits only JSON Schema keywords, whatever metadata a schema carries", () => {
-    fc.assert(
+    assertProperty(
+      "emits only JSON Schema keywords, whatever metadata a schema carries",
       fc.property(schemaArbitrary, (schema) => {
         expect(findNonKeywordKeys(toJsonSchema(schema))).toEqual([]);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("keeps the JSON Schema annotations metadata carries", () => {
-    fc.assert(
+    assertProperty(
+      "keeps the JSON Schema annotations metadata carries",
       fc.property(leafArbitrary, metadataArbitrary, (make, metadata) => {
         const emitted = toJsonSchema(annotate(make(), metadata));
         expect(emitted.title).toEqual(metadata?.title);
         expect(emitted.description).toEqual(metadata?.description);
         expect(emitted.examples).toEqual(metadata?.examples);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
+  });
+});
+
+describe("toRouteJsonSchema", () => {
+  test("a literal states its JSON type beside its const", () => {
+    expect(
+      toRouteJsonSchema(
+        v.union([v.literal("draft"), v.literal(2), v.literal(true)]),
+      ),
+    ).toMatchObject({
+      anyOf: [
+        { const: "draft", type: "string" },
+        { const: 2, type: "number" },
+        { const: true, type: "boolean" },
+      ],
+    });
+  });
+
+  test("an object with no required property lists none", () => {
+    const emitted = toRouteJsonSchema(
+      v.object({
+        all: v.optional(v.string()),
+        nested: v.optional(v.looseObject({ inner: v.optional(v.string()) })),
+      }),
+    );
+    expect(emitted).not.toHaveProperty("required");
+    expect(emitted.properties?.["nested"]).not.toHaveProperty("required");
+    expect(
+      toRouteJsonSchema(
+        v.object({ id: v.string(), note: v.optional(v.string()) }),
+      ).required,
+    ).toEqual(["id"]);
+  });
+
+  test("a uniqueItems check renders as the keyword, keyed or not", () => {
+    const keyed = v.pipe(
+      v.array(v.object({ id: v.string() })),
+      uniqueItems(({ id }: { id: string }) => id),
+    );
+    expect(
+      toRouteJsonSchema(v.pipe(v.array(v.string()), uniqueItems())),
+    ).toMatchObject({
+      type: "array",
+      uniqueItems: true,
+    });
+    expect(toRouteJsonSchema(keyed)).toMatchObject({ uniqueItems: true });
+    expect(
+      toJsonSchema(v.pipe(v.array(v.string()), uniqueItems())),
+    ).toMatchObject({
+      uniqueItems: true,
+    });
+  });
+
+  test("a file states its size cap", () => {
+    // The cap is a vendor keyword the JSON Schema type does not name.
+    const schema: object = toRouteJsonSchema(fileSchema({ maxBytes: 1024 }));
+    expect(schema).toEqual({
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: "string",
+      format: "binary",
+      "x-maxBytes": 1024,
+    });
   });
 });
 

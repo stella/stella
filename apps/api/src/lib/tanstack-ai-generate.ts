@@ -3,20 +3,20 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec";
 import {
-  EventType,
   convertSchemaToJsonSchema,
+  EventType,
   parsePartialJSON,
 } from "@tanstack/ai";
 import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
-  TokenUsage,
   StructuredOutputPart,
   SystemPrompt,
+  TokenUsage,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import { Result, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -39,8 +39,8 @@ import type {
   OrgAIConfig,
 } from "@/api/lib/ai-config";
 import {
-  classifyAIError,
   type AIErrorKind,
+  classifyAIError,
   providerErrorBody,
   providerStatusCode,
 } from "@/api/lib/ai-error";
@@ -63,8 +63,8 @@ import {
 } from "@/api/lib/chat/openrouter-credential";
 import { OUTPUT_CEILING_OPTION } from "@/api/lib/chat/output-ceiling";
 import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   checkManagedProviderAvailable,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";
@@ -163,6 +163,17 @@ type SystemPromptOrigin = "server-built" | "embeds-untrusted";
 type GenerateTanStackBaseOptions = {
   abortSignal?: AbortSignal | undefined;
   analytics?: TanStackAIAnalyticsCallbacks | undefined;
+  /**
+   * Runs right before every provider request this layer dispatches: the
+   * first one, a retry after a provider's stated delay, a standard-tier
+   * retry, a repair turn and a fallback model. (A provider SDK's own retries
+   * of one dispatched request happen below this layer and do not run it.) A
+   * caller whose permission to send can lapse during the call checks it
+   * again here. An error stops the call before that request leaves, and the
+   * call fails with a `DispatchRefusedError` carrying it, never relabelled
+   * or recorded as a model failure.
+   */
+  beforeEachDispatch?: DispatchCheck | undefined;
   caching: CachingDecision;
   maxOutputTokens?: number | undefined;
   modelId?: string | undefined;
@@ -197,12 +208,11 @@ type TanStackTextForTaskOptions = GenerateTanStackBaseOptions &
  * everything but `stop`. `allow-output-ceiling` also accepts `length`, the
  * finish a run reports when it spends the whole `maxOutputTokens` budget, and
  * still rejects a moderated (`content_filter`), tool-bearing, or unfinished
- * run. `allow-incomplete` returns whatever text arrived.
+ * run. No policy returns text from a run that never reported a finish: such
+ * text stops wherever the stream did, often mid-word.
  */
 export type TanStackTextFinishPolicy =
-  | "allow-incomplete"
-  | "allow-output-ceiling"
-  | "require-complete";
+  "allow-output-ceiling" | "require-complete";
 
 /**
  * A bound on one awaited model call, owned by the call rather than threaded in
@@ -278,6 +288,7 @@ const cancelledGenerationError = (): HandlerError =>
   classifyFailure(
     new HandlerError({
       status: 502,
+      code: "internal_error",
       message: CANCELLED_GENERATION_MESSAGE,
       cause: new AIGenerationCancelledError({
         message: CANCELLED_GENERATION_MESSAGE,
@@ -420,8 +431,6 @@ const finishAccepted = (
   finish: TextRunFinish,
 ): boolean => {
   switch (finishPolicy) {
-    case "allow-incomplete":
-      return true;
     case "allow-output-ceiling":
       return (
         finish.kind === "finished" &&
@@ -532,6 +541,7 @@ const generateTanStackTextWithin = async (
     for await (const delta of streamTanStackTextDeltas({
       abortController,
       analytics: options.analytics,
+      beforeEachDispatch: options.beforeEachDispatch,
       caching: options.caching,
       maxOutputTokens: options.maxOutputTokens,
       messages: requestMessages,
@@ -556,9 +566,9 @@ const generateTanStackTextWithin = async (
   // A cancelled run leaves the chat loop through a plain `break` on the next
   // chunk: no `RUN_FINISHED`, nothing thrown. Whether a cancellation instead
   // surfaces as an adapter rejection races the provider stream, so without
-  // this the same cancellation is sometimes an error and sometimes a truncated
-  // answer the caller cannot tell from a whole one. A reported finish
-  // separates the two: that run completed before the signal fired.
+  // this the same cancellation is sometimes a cancellation and sometimes an
+  // unfinished run, and a failure sink grades the two differently. A reported
+  // finish separates them: that run completed before the signal fired.
   if (run.finish.kind === "unfinished" && abortSignal?.aborted === true) {
     throw cancelledGenerationError();
   }
@@ -571,7 +581,7 @@ const generateTanStackTextWithin = async (
 };
 
 export const streamTanStackTextForTask = async function* (
-  options: TanStackTextForTaskOptions,
+  options: TanStackTextForTaskOptions & StreamingDispatchOptions,
 ): AsyncIterable<string> {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -678,8 +688,7 @@ const admittedAbortController = ({
   userId,
   abortController,
 }: Pick<AdmittedChatRunOptions, "admission" | "userId" | "abortController">):
-  | AbortController
-  | undefined => {
+  AbortController | undefined => {
   switch (admission.type) {
     case "organization": {
       // Checks the proof still admits work, then joins its signal.
@@ -740,9 +749,51 @@ export const collectTanStackTextRun = async (
   return result.value;
 };
 
+/** A caller's check before one provider request; an error refuses it. */
+export type DispatchCheck = () => Promise<Result<void, unknown>>;
+
+/** Streaming runs do not take a dispatch check: a caller that needs one
+ * uses the awaited generation, which runs it before every request. */
+type StreamingDispatchOptions = { beforeEachDispatch?: never };
+
+/**
+ * A caller's dispatch check refused a request, so nothing was sent. Not a
+ * model failure: every recovery step passes it through unchanged and no
+ * repair or fallback outcome records it.
+ */
+export class DispatchRefusedError extends TaggedError("DispatchRefusedError")<{
+  message: string;
+  /** What the caller's check answered. */
+  refusal: unknown;
+}> {}
+
+/** Runs the caller's check and stops the run when it refuses. */
+export const checkBeforeDispatch = async (check: DispatchCheck | undefined) => {
+  if (check === undefined) {
+    return;
+  }
+  const verdict = await check();
+  if (Result.isError(verdict)) {
+    throw new DispatchRefusedError({
+      message: "The caller refused a model request before it was sent",
+      refusal: verdict.error,
+    });
+  }
+};
+
+// A request stream that first runs the caller's per-request check.
+const afterDispatchCheck = async function* <TChunk>(
+  beforeEachDispatch: DispatchCheck | undefined,
+  stream: () => AsyncIterable<TChunk>,
+): AsyncIterable<TChunk> {
+  await checkBeforeDispatch(beforeEachDispatch);
+  yield* stream();
+};
+
 const streamTanStackTextDeltas = async function* ({
   abortController,
   analytics,
+  beforeEachDispatch,
   caching,
   maxOutputTokens,
   messages,
@@ -754,6 +805,7 @@ const streamTanStackTextDeltas = async function* ({
 }: {
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
+  beforeEachDispatch?: DispatchCheck | undefined;
   caching: CachingDecision;
   maxOutputTokens: number | undefined;
   messages: GuardedModelMessages<ModelMessage[]>;
@@ -769,20 +821,24 @@ const streamTanStackTextDeltas = async function* ({
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      streamChatChunks({
-        adapter: textAdapterWithNormalizedStops(model),
-        messages,
-        ...systemPromptsPatch({ caching, model, system }),
-        modelOptions: mergeGenerationOptions({
-          caching,
-          model,
-          maxOutputTokens,
-          serviceTier: requestedServiceTier,
-          temperature,
+      afterDispatchCheck(beforeEachDispatch, () =>
+        streamChatChunks({
+          adapter: textAdapterWithNormalizedStops(model),
+          messages,
+          ...systemPromptsPatch({ caching, model, system }),
+          modelOptions: mergeGenerationOptions({
+            caching,
+            model,
+            maxOutputTokens,
+            serviceTier: requestedServiceTier,
+            temperature,
+          }),
+          ...(modelAnalytics
+            ? { middleware: [modelAnalytics.middleware] }
+            : {}),
+          ...(abortController ? { abortController } : {}),
         }),
-        ...(modelAnalytics ? { middleware: [modelAnalytics.middleware] } : {}),
-        ...(abortController ? { abortController } : {}),
-      }),
+      ),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
         onFinish?.(finishedRunOf(chunk));
@@ -955,6 +1011,17 @@ const PROVIDER_OWNED_ERROR_KIND = {
   deadline_exceeded: false,
   loop_detected: false,
   empty_completion: false,
+  // Named by the computer a local turn runs on.
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: false,
+  local_runner_turn_too_large: false,
+  // Named by a chat turn's delivery log.
+  turn_too_large: false,
+  local_runner_not_reached: false,
+  local_runner_relinked: false,
+  local_runner_restoring: false,
+  local_runner_folder_unavailable: false,
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 
@@ -984,6 +1051,7 @@ export const withRecoveredProviderStatus = ({
 }: RecoveredProviderStatusOptions): unknown => {
   if (
     error instanceof ProviderCallError ||
+    error instanceof DispatchRefusedError ||
     isAbortRejection({ error, signal: abortSignal })
   ) {
     return error;
@@ -1435,6 +1503,13 @@ const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
     try: async () => await repair({ invalidOutput: output, issues }),
     catch: (error: unknown) => error,
   });
+  // A repair the caller refused before it was sent was never tried.
+  if (
+    Result.isError(repaired) &&
+    repaired.error instanceof DispatchRefusedError
+  ) {
+    throw repaired.error;
+  }
   if (
     Result.isError(repaired) &&
     !(repaired.error instanceof ModelOutputInvalidError)
@@ -1464,6 +1539,12 @@ const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
     try: candidate.run,
     catch: (error: unknown) => error,
   });
+  if (
+    Result.isError(attempted) &&
+    attempted.error instanceof DispatchRefusedError
+  ) {
+    throw attempted.error;
+  }
   if (Result.isError(attempted)) {
     report({
       type: "failed",
@@ -1569,8 +1650,9 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
               abortSignal: abortController?.signal,
               model: requestModel,
               serviceTier: options.serviceTier,
-              run: async (serviceTier) =>
-                await generateChatObject({
+              run: async (serviceTier) => {
+                await checkBeforeDispatch(options.beforeEachDispatch);
+                return await generateChatObject({
                   adapter: requestModel.adapter,
                   messages,
                   outputSchema: tanStackOutputSchema,
@@ -1590,7 +1672,8 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
                   }),
                   ...(analytics ? { middleware: [analytics.middleware] } : {}),
                   ...(abortController ? { abortController } : {}),
-                }),
+                });
+              },
             }),
           deadlineAt,
         ),
@@ -1670,7 +1753,8 @@ export const streamTanStackObjectForTask = async function* <
   outputMode: _outputMode,
   outputSchema,
   ...options
-}: GenerateTanStackObjectForTaskOptions<TSchema>): AsyncIterable<
+}: GenerateTanStackObjectForTaskOptions<TSchema> &
+  StreamingDispatchOptions): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > {
   // Checked before the model resolves: a dispatch on a settled proof panics.
@@ -1866,6 +1950,7 @@ const streamTanStackStructuredOutput = async function* <
   if (!completed) {
     throw new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "TanStack AI structured output stream ended before completion.",
     });
   }
@@ -1894,7 +1979,7 @@ export const resolveTanStackTextModel = async (
   options: ResolveTextModelOptions,
   credentials: ReturnType<
     typeof getManagedOpenRouterCredentialProvider
-  > = getManagedOpenRouterCredentialProvider(),
+  > = getManagedOpenRouterCredentialProvider(options.admission.modelTier),
 ): Promise<ResolvedTanStackTextModel> => {
   // Every inference path resolves its model here with the proof that its
   // action was admitted; the type requires the proof, this binds it to the
@@ -1936,7 +2021,7 @@ export const resolveTanStackTextModel = async (
       if (Result.isError(availability)) {
         throw availability.error;
       }
-      const configuration = getManagedOpenRouterConfiguration();
+      const configuration = getManagedOpenRouterConfiguration(modelTier);
       const credential = await credentials.get();
       if (Result.isError(credential)) {
         throw credential.error;

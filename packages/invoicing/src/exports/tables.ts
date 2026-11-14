@@ -2,9 +2,10 @@ import {
   countryCodeOf,
   czechVatBandOf,
   effectiveVatRateBps,
+  exportMattersOf,
+  type InvoiceExportRecord,
   quantityText,
   variableSymbolOf,
-  type InvoiceExportRecord,
 } from "./record";
 
 /** A spreadsheet cell: text, a plain number, or an amount in its currency. */
@@ -154,8 +155,16 @@ export const buildInvoiceSummaryTable = (
       textCell(record.number),
       textCell(t.documentTypes[record.documentType]),
       textCell(t.statuses[record.status]),
-      textCell(record.matter.name),
-      textCell(record.matter.reference),
+      textCell(
+        exportMattersOf(record)
+          .map((matter) => matter.name)
+          .join(", "),
+      ),
+      textCell(
+        exportMattersOf(record)
+          .flatMap((matter) => matter.reference ?? [])
+          .join(", "),
+      ),
       textCell(record.buyer.name),
       textCell(record.buyer.registrationNumber),
       textCell(record.buyer.vatId),
@@ -196,6 +205,8 @@ export const buildInvoiceLinesTable = (
       t.currency,
       t.source,
       t.timekeeper,
+      t.matter,
+      t.matterReference,
     ],
     rows: records.flatMap((record) =>
       record.lines.map((line, index) => [
@@ -213,6 +224,8 @@ export const buildInvoiceLinesTable = (
         textCell(record.currency),
         textCell(t.sources[line.source]),
         textCell(line.timekeeper?.name),
+        textCell(line.matter.name),
+        textCell(line.matter.reference),
       ]),
     ),
   };

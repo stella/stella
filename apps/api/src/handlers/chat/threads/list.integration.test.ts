@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
@@ -18,9 +18,11 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMention } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -119,7 +121,7 @@ const insertUpload = async ({
     s3Key: createUserFileKey({
       fileId,
       mimeType: PDF_MIME_TYPE,
-      userId: ids.userA1,
+      organizationId: ids.orgA,
     }),
     sha256Hex: "b".repeat(64),
     sizeBytes: 12,
@@ -214,6 +216,7 @@ const listThreads = async (
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100, ...(search === undefined ? {} : { search }) },
       request: new Request("http://localhost/v1/chat/threads"),
+      route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb: scopedTo(workspaceIds),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -524,6 +527,7 @@ describe("chat thread list matter filter", () => {
           ...(cursor === undefined ? {} : { cursor }),
         },
         request: new Request("http://localhost/v1/chat/threads"),
+        route: "/v1/chat/threads" satisfies ApiRoutePath,
         safeDb: scopedTo(workspaceIds),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -657,10 +661,8 @@ describe("chat thread list matter filter", () => {
 
   test("rejects a matter id that is not a safe identifier at the query boundary", () => {
     const querySchema = getThreads.config.query;
-    expect(Value.Check(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
-    expect(Value.Check(querySchema, { workspaceId: "not-a-matter-id" })).toBe(
-      false,
-    );
+    expect(v.is(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
+    expect(v.is(querySchema, { workspaceId: "not-a-matter-id" })).toBe(false);
   });
 });
 
@@ -731,6 +733,8 @@ describe("chat thread list decision badges", () => {
     });
     const plainThreadId = await seedThread({ title: "Plain chat" });
     const failingBadges = createGetThreads({
+      readCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       readDecisionBadges: async () =>
         Result.err(
           new HandlerError({ status: 500, message: "corpus unavailable" }),
@@ -743,5 +747,121 @@ describe("chat thread list decision badges", () => {
       type: "unavailable",
     });
     expect(findThread(listed, plainThreadId)?.decision).toBeNull();
+  });
+});
+
+// A generated title whose captured source was withdrawn is listed masked, so
+// its stored text is not what a search can match.
+describe("chat thread list search over withdrawn titles", () => {
+  const withdrawnDecisionId = Bun.randomUUIDv7();
+  const marker = "Withdrawn by publisher";
+  const withWithdrawnTitles = createGetThreads({
+    readCopies: async () =>
+      new WithdrawnCopyProjection([withdrawnDecisionId], marker),
+    readDecisionBadges: async () => Result.ok(new Map()),
+  });
+
+  const seedWithdrawnTitle = async (
+    options: Parameters<typeof seedThread>[0],
+  ) => {
+    const threadId = await seedThread(options);
+    await testDb
+      .update(chatThreads)
+      .set({
+        titleSource: "ai",
+        generationProvenance: {
+          version: 1,
+          slots: {
+            title: {
+              type: "generated",
+              generator: "apps/api/src/handlers/chat/generate-thread-title.ts",
+              decisionIds: [withdrawnDecisionId],
+              coverage: "complete",
+            },
+          },
+        },
+      })
+      .where(eq(chatThreads.id, threadId));
+    return threadId;
+  };
+
+  const listPage = async ({
+    cursor,
+    limit,
+    search,
+    workspaceIds,
+  }: {
+    cursor?: string | undefined;
+    limit: number;
+    search: string;
+    workspaceIds: SafeId<"workspace">[];
+  }) => {
+    const listed = await withWithdrawnTitles.handler(
+      asTestRaw<ThreadsCtx>({
+        memberRole: sessionMemberRole("owner"),
+        query: { limit, search, ...(cursor === undefined ? {} : { cursor }) },
+        request: new Request("http://localhost/v1/chat/threads"),
+        route: "/v1/chat/threads" satisfies ApiRoutePath,
+        safeDb: scopedTo(workspaceIds),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      }),
+    );
+    if ("code" in listed) {
+      throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
+    }
+    return listed;
+  };
+
+  test("matches the listed title, keeps matter-name matches and pages past skipped threads", async () => {
+    const matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    seededWorkspaceIds.push(matterId);
+    await testDb.insert(workspaces).values({
+      clientId: ids.contactA,
+      id: matterId,
+      name: "Quillmark matter",
+      organizationId: ids.orgA,
+      reference: `QUILL-${matterId}`,
+    });
+    const workspaceIds = [ids.wsA1, ids.wsA2, matterId];
+    // Seeded oldest first: the walk has to read past the newest threads, which
+    // matched only by a withdrawn title, to reach the others.
+    const visible = await seedThread({ title: "Quillmark visible" });
+    const inMatter = await seedWithdrawnTitle({
+      title: "Quillmark matter memo",
+      workspaceId: matterId,
+    });
+    await seedWithdrawnTitle({ title: "Quillmark hidden one" });
+    await seedWithdrawnTitle({ title: "Quillmark hidden two" });
+
+    const walked: string[] = [];
+    const pages: Awaited<ReturnType<typeof listPage>>[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await listPage({
+        cursor,
+        limit: 1,
+        search: "quillmark",
+        workspaceIds,
+      });
+      pages.push(page);
+      walked.push(
+        ...page.global.map((thread) => thread.id),
+        ...page.workspaces.flatMap((group) =>
+          group.threads.map((thread) => thread.id),
+        ),
+      );
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined && pages.length < 10);
+
+    expect(walked).toEqual([inMatter, visible]);
+    expect(JSON.stringify(pages)).not.toContain("Quillmark hidden");
+    expect(JSON.stringify(pages)).not.toContain("Quillmark matter memo");
+    expect(
+      pages
+        .flatMap((page) => page.workspaces)
+        .flatMap((group) => group.threads)
+        .map((thread) => thread.title),
+    ).toEqual([marker]);
   });
 });

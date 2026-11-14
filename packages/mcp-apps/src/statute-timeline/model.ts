@@ -5,7 +5,7 @@ import { versionCoversDate } from "@stll/api-contract/statute-version";
 import { DAY_IN_MS } from "@stll/time";
 import { diffWords } from "@stll/ui/review-word-diff";
 
-import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
+import type { ProvisionVersion, StatuteTimelineHistory } from "./parse";
 
 export const mergeHistory = (
   history: StatuteTimelineHistory,

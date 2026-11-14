@@ -3,11 +3,11 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import {
   mkdir,
-  readFile,
   readdir,
+  readFile,
   rename,
-  rmdir,
   rm,
+  rmdir,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -96,13 +96,11 @@ export const readDeferredE2eCleanup = async (
 
   const results = await Promise.allSettled(
     entries.map(async (entry) => {
-      if (
-        !(
-          entry.isFile() &&
-          (entry.name.endsWith(CLEANUP_RECORD_EXTENSION) ||
-            entry.name.endsWith(CLEANUP_TEMP_EXTENSION))
-        )
-      ) {
+      if (!(
+        entry.isFile() &&
+        (entry.name.endsWith(CLEANUP_RECORD_EXTENSION) ||
+          entry.name.endsWith(CLEANUP_TEMP_EXTENSION))
+      )) {
         return panic(`Unexpected deferred E2E cleanup entry: ${entry.name}`);
       }
 

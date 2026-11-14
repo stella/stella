@@ -11,9 +11,9 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -78,18 +78,18 @@ const createContext = ({
 
 const createQueuedSafeDb = (values: unknown[]) => {
   let callIndex = 0;
-  return asTestRaw<SafeDb>(async <T>() => {
+  return asTestRaw<SafeDb>(async () => {
     const value = values.at(callIndex);
     callIndex += 1;
-    return Result.ok(asTestRaw<T>(value));
+    return Result.ok(value);
   });
 };
 
 describe("generated document upload preflight", () => {
   test("rejects an unavailable draft before reading uploaded bytes", async () => {
     const { arrayBuffer, file } = createUnreadFile();
-    const safeDb = asTestRaw<SafeDb>(async <T>() =>
-      Result.ok(asTestRaw<T>({ status: "invalid" })),
+    const safeDb = asTestRaw<SafeDb>(async () =>
+      Result.ok({ status: "invalid" }),
     );
 
     const result = await uploadGeneratedDocument.handler(
@@ -105,8 +105,8 @@ describe("generated document upload preflight", () => {
 
   test("rejects an unbound supplied draft chat before reading uploaded bytes", async () => {
     const { arrayBuffer, file } = createUnreadFile();
-    const safeDb = asTestRaw<SafeDb>(async <T>() =>
-      Result.ok(asTestRaw<T>({ status: "draft-thread-not-bound" })),
+    const safeDb = asTestRaw<SafeDb>(async () =>
+      Result.ok({ status: "draft-thread-not-bound" }),
     );
 
     const result = await uploadGeneratedDocument.handler(
@@ -131,8 +131,8 @@ describe("generated document upload preflight", () => {
       fileName: "draft.docx",
       renamed: false,
     };
-    const safeDb = asTestRaw<SafeDb>(async <T>() =>
-      Result.ok(asTestRaw<T>({ result: replay, status: "saved" })),
+    const safeDb = asTestRaw<SafeDb>(async () =>
+      Result.ok({ result: replay, status: "saved" }),
     );
 
     const result = await uploadGeneratedDocument.handler(
@@ -145,8 +145,8 @@ describe("generated document upload preflight", () => {
 
   test("rejects a saved replay whose bytes no longer match", async () => {
     const { arrayBuffer, file } = createUnreadFile();
-    const safeDb = asTestRaw<SafeDb>(async <T>() =>
-      Result.ok(asTestRaw<T>({ status: "content-mismatch" })),
+    const safeDb = asTestRaw<SafeDb>(async () =>
+      Result.ok({ status: "content-mismatch" }),
     );
 
     const result = await uploadGeneratedDocument.handler(

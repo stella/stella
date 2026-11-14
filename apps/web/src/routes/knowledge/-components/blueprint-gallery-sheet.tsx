@@ -6,9 +6,9 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -17,9 +17,10 @@ import {
 import {
   ClipboardCheckIcon,
   LibraryIcon,
-  PencilLineIcon,
   type LucideIcon,
+  PencilLineIcon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import {
   Select,
@@ -28,18 +29,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
+import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 
-type SkillScope = "team" | "private";
+import { SkillAvailabilityField } from "./skill-availability-field";
+import {
+  coerceSkillAvailability,
+  skillBindingBody,
+} from "./skill-availability.logic";
+import type {
+  SkillAvailability,
+  SkillBindingBody,
+  SkillScope,
+} from "./skill-availability.logic";
+
 type BlueprintId =
-  | "check-against-rules"
-  | "intake-to-draft"
-  | "answer-from-sources"
-  | "blank";
+  "check-against-rules" | "intake-to-draft" | "answer-from-sources" | "blank";
 type BlueprintCardId = Exclude<BlueprintId, "blank">;
 
 export type BlueprintCreatedSkill = {
@@ -79,6 +91,28 @@ const BlueprintGallerySheetBody = ({
   const t = useTranslations();
   const tGallery = useTranslations("knowledge.skills.blueprintGallery");
   const [scope, setScope] = useState<SkillScope>("private");
+  const [availability, setAvailability] =
+    useState<SkillAvailability>("everywhere");
+  const [matter, setMatter] = useState<MatterOption | null>(null);
+  const [client, setClient] = useState<MatterDraftClient | null>(null);
+  // `null` while the chosen matter or client is still missing.
+  const binding = skillBindingBody({
+    availability,
+    clientId: client?.id ?? null,
+    matterId: matter?.id ?? null,
+  });
+  const changeScope = (next: SkillScope) => {
+    setScope(next);
+    setAvailability(
+      coerceSkillAvailability({ availability, canManageTeam, scope: next }),
+    );
+  };
+  const resetForm = () => {
+    setScope("private");
+    setAvailability("everywhere");
+    setMatter(null);
+    setClient(null);
+  };
 
   // Literal keys per card so a stale/missing key fails typecheck without
   // widening to the full TranslationKey union (which would force a values arg).
@@ -118,13 +152,25 @@ const BlueprintGallerySheetBody = ({
     };
   };
 
+  const submitIntent = useIdempotentSubmit();
   const create = useMutation({
-    mutationFn: async (id: BlueprintId) => {
-      const response = await api.skills["from-blueprint"].post({
-        scope,
-        blueprintId: id,
+    mutationFn: async ({
+      bindingFields,
+      id,
+    }: {
+      bindingFields: SkillBindingBody;
+      id: BlueprintId;
+    }) => {
+      const response = await submitIntent.run({
+        operation: "skills.from-blueprint",
+        body: { scope, blueprintId: id, ...bindingFields },
+        send: async (body) => {
+          const reply = await api.skills["from-blueprint"].post(body);
+          unwrapApiResponse(reply);
+          return reply;
+        },
       });
-      return { id: unwrapEden(response).id };
+      return { id: unwrapApiResponse(response).id };
     },
     onSuccess: ({ id }) => {
       onCreated({ id });
@@ -137,13 +183,19 @@ const BlueprintGallerySheetBody = ({
     },
   });
 
-  const pendingId = create.isPending ? create.variables : undefined;
+  const pendingId = create.isPending ? create.variables.id : undefined;
+  const createFrom = (id: BlueprintId) => {
+    if (binding !== null) {
+      create.mutate({ bindingFields: binding, id });
+    }
+  };
+  const cannotCreate = create.isPending || binding === null;
 
   return (
     <DialogPopup className="sm:max-w-2xl">
       <DialogFormState
-        dirty={scope !== "private"}
-        onDiscard={() => setScope("private")}
+        dirty={scope !== "private" || availability !== "everywhere"}
+        onDiscard={resetForm}
       />
       <DialogHeader>
         <DialogTitle>{tGallery("title")}</DialogTitle>
@@ -151,18 +203,18 @@ const BlueprintGallerySheetBody = ({
       </DialogHeader>
 
       <DialogPanel className="flex flex-col gap-3">
-        {canManageTeam && (
+        {/* Members may share with the team too, bound to one matter. */}
+        <div className="flex flex-col gap-2">
           <div className="flex items-center justify-end gap-2">
-            <label
-              className="text-muted-foreground text-xs"
-              htmlFor="blueprint-scope"
-            >
-              {t("knowledge.skills.form.scope")}
-            </label>
+            <Label htmlFor="blueprint-scope" variant="muted">
+              <span className="font-normal">
+                {t("knowledge.skills.form.scope")}
+              </span>
+            </Label>
             <Select
               onValueChange={(value) => {
                 if (value === "team" || value === "private") {
-                  setScope(value);
+                  changeScope(value);
                 }
               }}
               value={scope}
@@ -180,64 +232,86 @@ const BlueprintGallerySheetBody = ({
               </SelectPopup>
             </Select>
           </div>
-        )}
+          <SkillAvailabilityField
+            availability={availability}
+            canManageTeam={canManageTeam}
+            client={client}
+            matter={matter}
+            onAvailabilityChange={setAvailability}
+            onClientChange={setClient}
+            onMatterChange={setMatter}
+            scope={scope}
+          />
+        </div>
 
         {CARDS.map((card) => {
           const text = cardText(card.id);
           return (
-            <button
-              className="border-border hover:border-foreground/30 hover:bg-muted/40 flex items-start gap-3 rounded-lg border p-4 text-start disabled:opacity-60"
-              disabled={create.isPending}
+            <Button
+              disabled={cannotCreate}
               key={card.id}
-              onClick={() => create.mutate(card.id)}
-              type="button"
+              onClick={() => createFrom(card.id)}
+              variant="plain"
             >
-              <span className="bg-muted text-foreground flex size-9 shrink-0 items-center justify-center rounded-md">
-                {pendingId === card.id ? (
-                  <Loader
-                    className="size-4"
-                    label={t("common.loading")}
-                    size="sm"
-                  />
-                ) : (
-                  <card.Icon className="size-4" />
+              <span
+                className={cn(
+                  "border-border hover:border-foreground/30 hover:bg-muted/40 flex items-start gap-3 rounded-lg border p-4 text-start",
+                  cannotCreate && "opacity-60",
                 )}
+              >
+                <span className="bg-muted text-foreground flex size-9 shrink-0 items-center justify-center rounded-md">
+                  {pendingId === card.id ? (
+                    <Loader
+                      className="size-4"
+                      label={t("common.loading")}
+                      size="sm"
+                    />
+                  ) : (
+                    <card.Icon className="size-4" />
+                  )}
+                </span>
+                <span className="flex flex-col gap-1">
+                  <span className="text-foreground text-sm font-medium">
+                    {text.title}
+                  </span>
+                  <span className="text-muted-foreground text-sm">
+                    {text.blurb}
+                  </span>
+                  <span className="text-muted-foreground mt-1 text-xs">
+                    {tGallery("insideLabel")}: {text.inside}
+                  </span>
+                </span>
               </span>
-              <span className="flex flex-col gap-1">
-                <span className="text-foreground text-sm font-medium">
-                  {text.title}
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {text.blurb}
-                </span>
-                <span className="text-muted-foreground mt-1 text-xs">
-                  {tGallery("insideLabel")}: {text.inside}
-                </span>
-              </span>
-            </button>
+            </Button>
           );
         })}
 
         {/* The blank scaffold is a blueprint too — no form, the user lands
             straight in the editor and fills the skill in there. */}
-        <button
-          className="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm disabled:opacity-60"
-          disabled={create.isPending}
-          onClick={() => create.mutate("blank")}
-          type="button"
+        <Button
+          disabled={cannotCreate}
+          onClick={() => createFrom("blank")}
+          variant="plain"
         >
-          {pendingId === "blank" && (
-            <Loader
-              className="me-2 size-4 shrink-0"
-              label={t("common.loading")}
-              size="sm"
-            />
-          )}
-          <span className="text-foreground font-medium">
-            {tGallery("startBlank")}
+          <span
+            className={cn(
+              "text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm",
+              cannotCreate && "opacity-60",
+            )}
+          >
+            {pendingId === "blank" && (
+              <Loader
+                className="me-2 size-4 shrink-0"
+                label={t("common.loading")}
+                size="sm"
+              />
+            )}
+            <span className="text-foreground font-medium">
+              {tGallery("startBlank")}
+            </span>
+            <span className="ms-2">{tGallery("startBlankHint")}</span>
           </span>
-          <span className="ms-2">{tGallery("startBlankHint")}</span>
-        </button>
+        </Button>
       </DialogPanel>
 
       <DialogFooter>

@@ -7,7 +7,7 @@ describe("no-foreign-directive", () => {
     expect(
       await lintSingleRule(
         "no-foreign-directive",
-        "// prettier-ignore\nconst x = 1;\n// biome-ignore lint/style: reason\nconst y = 2;",
+        "// oxfmt-ignore\nconst x = 1;\n// biome-ignore lint/style: reason\nconst y = 2;",
         { plugin: "suppression-hygiene" },
       ),
     ).toEqual([1, 3]);
@@ -21,11 +21,11 @@ describe("no-foreign-directive", () => {
       ),
     ).toEqual([1, 3]);
   });
-  test("accepts canonical oxlint directives", async () => {
+  test("accepts canonical oxlint and bun fmt directives", async () => {
     expect(
       await lintSingleRule(
         "no-foreign-directive",
-        '// oxlint-disable-next-line no-console -- CLI\nconsole.log("ready");',
+        '// oxlint-disable-next-line no-console -- CLI\nconsole.log("ready");\n// prettier-ignore\nconst x = [1,2];',
         { plugin: "suppression-hygiene" },
       ),
     ).toEqual([]);

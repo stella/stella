@@ -37,7 +37,8 @@ export type InboundAcceptance =
         | "scan-unavailable";
     };
 
-export type AttachmentScanVerdict = "pass" | "fail" | "unavailable";
+export type AttachmentScanVerdict =
+  "pass" | "fail" | "inconclusive" | "unavailable";
 
 type EvaluateInboundAcceptanceOptions = {
   outerSender: string | null;
@@ -62,6 +63,7 @@ export const evaluateInboundAcceptance = ({
     return { status: "drop", reason: "sender-not-authorized" };
   }
   switch (scan) {
+    case "inconclusive":
     case "fail":
       return { status: "drop", reason: "malware-detected" };
     case "unavailable":

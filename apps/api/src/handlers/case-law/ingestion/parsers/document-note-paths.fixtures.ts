@@ -5,9 +5,9 @@ import type {
   BlockContent,
   Document,
   Footnote,
+  HeaderFooter,
   Paragraph,
   Table,
-  HeaderFooter,
 } from "@stll/docx-core/model";
 import type { Block } from "@stll/legal-ast/document-ast";
 

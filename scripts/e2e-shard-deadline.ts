@@ -2,12 +2,17 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const CLEANUP_MARGIN_SECONDS = 30;
 
 export const measuredShardBudget = (shard: number) => {
+  // The four-way plan subdivides each measured two-way lane. Until the timing
+  // cache accumulates direct samples, inherit the parent lane's conservative
+  // ceiling rather than inventing a shorter watchdog.
+  const measuredParentShard = Math.ceil(shard / 2);
   const samples = configuredBudgets.e2eProductionShards.samples
-    .filter((sample) => sample.shard === shard)
+    .filter((sample) => sample.shard === measuredParentShard)
     .map((sample) => sample.seconds)
     .toSorted((left, right) => left - right);
   const p50 = samples.at(Math.ceil(samples.length * 0.5) - 1);
@@ -33,6 +38,8 @@ export const shardBudgetViolation = (shard: number, elapsedSeconds: number) => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   const shard = v.parse(
     v.pipe(v.number(), v.integer(), v.minValue(1)),
     Number(process.argv.at(3)),

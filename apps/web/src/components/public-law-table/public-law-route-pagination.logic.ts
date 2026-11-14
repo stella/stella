@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 
 export type PublicLawPageSize = (typeof PUBLIC_LAW_PAGE_SIZES)[number];
@@ -41,7 +42,16 @@ export const publicLawPageSearchSchemaUpTo = (deepestPage: number) =>
     v.optional(
       v.pipe(
         v.union([v.number(), v.string()]),
-        v.transform((value) => publicLawPageNumber(Number(value), deepestPage)),
+        v.transform((value) =>
+          publicLawPageNumber(
+            typeof value === "number"
+              ? value
+              : parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(
+                  undefined,
+                ),
+            deepestPage,
+          ),
+        ),
         v.transform((page) => publicLawPageSearchValue(page)),
       ),
     ),
@@ -55,7 +65,15 @@ export const publicLawPageSizeSearchSchema = v.fallback(
   v.optional(
     v.pipe(
       v.union([v.number(), v.string()]),
-      v.transform((value) => publicLawPageSize(Number(value))),
+      v.transform((value) =>
+        publicLawPageSize(
+          typeof value === "number"
+            ? value
+            : parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(
+                undefined,
+              ),
+        ),
+      ),
       v.transform((pageSize) => publicLawPageSizeSearchValue(pageSize)),
     ),
   ),

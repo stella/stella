@@ -7,7 +7,10 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { ENCRYPTED_CONTENT_ERROR_CODE } from "@stll/api-contract";
+import {
+  CHAT_INPUT_REFUSAL_CODE,
+  ENCRYPTED_CONTENT_ERROR_CODE,
+} from "@stll/api-contract";
 
 import { uploadUserFile } from "@/api/handlers/chat/upload-files";
 import { checkStampHandler } from "@/api/handlers/entities/stamps/check";
@@ -28,6 +31,7 @@ import {
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { requiresDurableNativeExtraction } from "@/api/lib/search/process-extraction";
 import { isAISupportedFile } from "@/api/lib/workflow/ai-file-support";
 import {
@@ -89,7 +93,7 @@ const encryptedHandling = async ({
   }
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType, scanned: scanned.value }),
-    { mimeType },
+    handlerErrorContext("test.detectEncryption", { mimeType }),
   );
   if (encryption === null) {
     return { accepted: false as const, status: 422 };
@@ -163,6 +167,7 @@ describe("encrypted files on raw-byte paths", () => {
             fileName: `locked.${entry.label}`,
             mimeType: entry.mimeType,
           },
+          organizationId: toSafeId<"organization">("org_1"),
           recordAuditEvent: async () => await Promise.resolve(),
           safeDb: async () =>
             await Promise.resolve(
@@ -197,7 +202,11 @@ describe("encrypted files on raw-byte paths", () => {
         docx: refused,
         xlsx: refused,
         // Chat never takes presentations, encrypted or not.
-        pptx: { status: 422, message: "Unsupported file type" },
+        pptx: {
+          status: 422,
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported,
+          message: "Unsupported file type",
+        },
       });
       expect(fake.requests).toEqual([]);
     } finally {

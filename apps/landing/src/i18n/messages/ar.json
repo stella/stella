@@ -91,11 +91,23 @@
   "nav": {
     "aiFactSheet": "بطاقة للذكاء الاصطناعي",
     "aiFactSheetBlurb": "stella بصيغة مقروءة آلياً.",
-    "beta": "تجريبي",
     "blog": "المدونة",
     "changelog": "آخر التحديثات",
     "chooseLanguage": "اختر اللغة",
     "docxEditor": "محرر DOCX مستقل",
+    "featurePreviews": {
+      "documents": {
+        "comments": "التعليقات"
+      },
+      "matters": {
+        "done": "مكتمل",
+        "inProgress": "قيد التنفيذ",
+        "open": "مفتوحة"
+      },
+      "research": {
+        "caseLaw": "الاجتهاد القضائي"
+      }
+    },
     "github": "stella على GitHub",
     "openMenu": "فتح قائمة التنقل",
     "pillars": {

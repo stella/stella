@@ -5,44 +5,27 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import type { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
+import { skillsRoute } from "./routes";
 import {
   consumeSkillSourceRateLimit,
   createSkillSourceRateLimitGenerator,
-  isSkillSourceRateLimitedRequest,
+  skillSourceBudget,
   skillSourceRateLimitBinding,
 } from "./source-rate-limit";
 
-const request = (method: string, path: string) => ({
-  method,
-  url: `https://stella.example${path}`,
-});
+const budgetedRoutes = () =>
+  skillsRoute
+    .filter((entry) => entry.middleware.includes(skillSourceBudget))
+    .map((entry) => `${entry.method} ${entry.path}`)
+    .toSorted();
 
 describe("skill source rate-limit routing", () => {
-  test("matches outbound skill discovery and import requests", () => {
-    expect(
-      isSkillSourceRateLimitedRequest(
-        request("POST", "/v1/skills/discover-url"),
-      ),
-    ).toBe(true);
-    expect(
-      isSkillSourceRateLimitedRequest(request("POST", "/v1/skills/import-url")),
-    ).toBe(true);
-    expect(
-      isSkillSourceRateLimitedRequest(
-        request("POST", "/v1/skills/import-urls/"),
-      ),
-    ).toBe(true);
-  });
-
-  test("leaves other skill requests outside the source-fetch budget", () => {
-    expect(isSkillSourceRateLimitedRequest(request("POST", "/v1/skills"))).toBe(
-      false,
-    );
-    expect(
-      isSkillSourceRateLimitedRequest(
-        request("GET", "/v1/skills/discover-url"),
-      ),
-    ).toBe(false);
+  test("only the routes that fetch a URL spend the source budget", () => {
+    expect(budgetedRoutes()).toEqual([
+      "POST /skills/discover-url",
+      "POST /skills/import-url",
+      "POST /skills/import-urls",
+    ]);
   });
 
   test("shares one fixed-window budget by client IP", async () => {

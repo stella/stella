@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -21,10 +21,10 @@ import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 import {
   acquireCachedSnapshot,
   acquireCurrentSnapshot,
+  SnapshotBuildError,
   snapshotDigest,
   snapshotInputPaths,
   snapshotKey,
-  SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 
 const temporaryRoots: string[] = [];

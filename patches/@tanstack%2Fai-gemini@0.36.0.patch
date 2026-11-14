@@ -10,6 +10,10 @@
    of reading an unhandled one as "stop". Remove when upstream exposes the
    raw reason.
 
+4. structuredOutput preserves the original SDK exception (including status and
+   cause) instead of rebuilding a plain Error from its message. Remove when
+   upstream preserves the exception.
+
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
 index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e54574716 100644
@@ -39,7 +43,17 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  				error: { message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream." }
  			};
  		}
-@@ -349,8 +351,9 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -257,7 +259,8 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 				error,
+ 				source: "gemini.structuredOutput"
+ 			});
+-			throw new Error(error instanceof Error ? error.message : "An unknown error occurred during structured output generation.");
++			if (error instanceof Error) throw error;
++			throw new Error("An unknown error occurred during structured output generation.", { cause: error });
+ 		}
+ 	}
+ 	/**
+@@ -349,8 +352,9 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  		}
  		return textContent;
  	}
@@ -50,7 +64,7 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  		let accumulatedContent = "";
  		let accumulatedThinking = "";
  		const toolCallMap = /* @__PURE__ */ new Map();
-@@ -401,6 +404,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -401,6 +405,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  		};
  		for await (const chunk of result) {
  			logger.provider(`provider=gemini`, { chunk });
@@ -58,7 +72,7 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  			if (!hasEmittedRunStarted) {
  				hasEmittedRunStarted = true;
  				yield {
-@@ -412,6 +416,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -412,6 +417,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  					parentRunId: options.parentRunId
  				};
  			}
@@ -79,7 +93,7 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  			if (chunk.candidates?.[0]?.groundingMetadata) groundingMetadata = chunk.candidates[0].groundingMetadata;
  			if (chunk.candidates?.[0]?.content?.parts) {
  				const parts = chunk.candidates[0].content.parts;
-@@ -574,6 +592,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -574,6 +593,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  				};
  			}
  			if (chunk.candidates?.[0]?.finishReason) {
@@ -87,7 +101,7 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  				yield* emitGroundingToolCall();
  				const finishReason = chunk.candidates[0].finishReason;
  				for (const [toolCallId, toolCallData] of toolCallMap.entries()) {
-@@ -635,11 +654,26 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -635,11 +655,26 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  					model,
  					timestamp: Date.now(),
  					finishReason: toolCallMap.size > 0 ? "tool_calls" : "stop",

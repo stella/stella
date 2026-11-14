@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import { encodeRfc3986Component } from "./rfc3986";
-import { isSafeIdValue, toSafeId, type SafeId } from "./safe-id";
+import { isSafeIdValue, type SafeId, toSafeId } from "./safe-id";
 
 /** Stable product nouns. Presentation labels and storage table names may differ. */
 export const RESOURCE_TYPE = {
@@ -30,6 +30,7 @@ export const RESOURCE_TYPE = {
   FLOW_RUN: "flow_run",
   INVOICE: "invoice",
   LEGAL_LIST: "legal_list",
+  LEGAL_LIST_VERIFICATION: "legal_list_verification",
   LEGISLATION_DOCUMENT: "legislation_document",
   LEGISLATION_SOURCE: "legislation_source",
   MCP_CONNECTOR: "mcp_connector",
@@ -89,6 +90,7 @@ export const RESOURCE_ID_TYPE = {
   [RESOURCE_TYPE.FLOW_RUN]: "flowRun",
   [RESOURCE_TYPE.INVOICE]: "invoice",
   [RESOURCE_TYPE.LEGAL_LIST]: "legalList",
+  [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: "legalListVerificationRun",
   [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: "legislationDocument",
   [RESOURCE_TYPE.LEGISLATION_SOURCE]: "legislationSource",
   [RESOURCE_TYPE.MCP_CONNECTOR]: "mcpConnector",

@@ -15,9 +15,9 @@ import { cn } from "@stll/ui/utils";
 import { DocumentIcon } from "@/components/document-icon";
 import type { MatterFileThumbnailRef } from "@/components/file-thumbnail";
 import {
+  isTaskStatus,
   STATUS_COLORS,
   STATUS_ICONS,
-  isTaskStatus,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { EntityKind } from "@/lib/types";
 

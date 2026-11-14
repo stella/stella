@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   citationScore,
-  courtWeight,
   courtNameWeightSql,
+  courtWeight,
   polarityWeightSql,
   recencyFactor,
   weightedCitationSum,

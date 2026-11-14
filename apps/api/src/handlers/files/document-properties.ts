@@ -1,5 +1,3 @@
-import { status } from "elysia";
-
 import {
   DOCUMENT_PROPERTIES_MAX_BYTES,
   hasDocumentProperties,
@@ -7,6 +5,7 @@ import {
 import type { DocumentPropertiesResult } from "@stll/api-contract";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -14,7 +13,11 @@ import {
   constrainDocumentPropertiesEditability,
   extractDocumentProperties,
 } from "@/api/lib/files/document-properties";
-import { fileFieldQuery } from "@/api/lib/files/read-file";
+import {
+  fileFieldQuery,
+  LIVE_VERSION_DELIVERY,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -97,16 +100,23 @@ export const readDocumentProperties = async ({
   );
 
   // Reading the properties reads the object, so it belongs in the trail
-  // alongside downloads and previews.
-  await scopedDb(
-    async (tx) =>
+  // alongside downloads and previews, and like them answers 404 for a version
+  // withdrawn while the object was read.
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.ACCESS,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: row.entityId,
         metadata: { fieldId, mimeType: content.mimeType },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
 
   return result;
 };

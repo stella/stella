@@ -63,10 +63,10 @@ export const resolveToolWorkspaceIds = ({
 export const intersectAccessibleWorkspaceIds = ({
   pinnedIds,
   accessibleWorkspaceIds,
-}: ResolveToolWorkspaceIdsInput): SafeId<"workspace">[] => {
+}: ResolveToolWorkspaceIdsInput): AuthorizedToolWorkspaceIds => {
   if (pinnedIds.length === 0) {
-    return [];
+    return brand([]);
   }
   const accessible = new Set<string>(accessibleWorkspaceIds);
-  return pinnedIds.filter((id) => accessible.has(id));
+  return brand(pinnedIds.filter((id) => accessible.has(id)));
 };

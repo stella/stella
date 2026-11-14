@@ -83,6 +83,7 @@ const runInstall = ({ primary, mirror, corrupt, cache }: InstallOptions) => {
     writeFileSync(requests, "");
     writeFileSync(githubPath, "");
     const result = spawnSync("bash", [script], {
+      maxBuffer: 2 ** 30,
       encoding: "utf-8",
       env: {
         ...process.env,

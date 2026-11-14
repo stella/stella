@@ -17,6 +17,7 @@ import {
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, LayoutTemplateIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { TemplateForm } from "@/components/templates/template-form";
 import { useTemplateFillSchema } from "@/components/templates/use-template-fill-schema";
@@ -24,6 +25,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { templatesOptions } from "@/lib/knowledge/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 import { filterTemplatesByName } from "./new-document-from-template-dialog.logic";
 
@@ -182,21 +184,23 @@ const TemplatePickList = ({
         )}
         {visibleTemplates.map((template) => (
           <li key={template.id}>
-            <button
-              className="hover:bg-muted/50 flex w-full items-center gap-3 px-3 py-2.5 text-start"
+            <Button
+              className="block w-full"
               onClick={() => onPick({ id: template.id, name: template.name })}
-              type="button"
+              variant="plain"
             >
-              <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg">
-                <LayoutTemplateIcon className="text-muted-foreground size-4" />
-              </div>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                {template.name}
+              <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-3 py-2.5">
+                <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg">
+                  <LayoutTemplateIcon className="text-muted-foreground size-4" />
+                </div>
+                <TruncatedText className="flex-1 text-sm font-medium">
+                  {template.name}
+                </TruncatedText>
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {t("templates.fieldCount", { count: template.fieldCount })}
+                </span>
               </span>
-              <span className="text-muted-foreground shrink-0 text-xs">
-                {t("templates.fieldCount", { count: template.fieldCount })}
-              </span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -218,6 +222,7 @@ const FillStep = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const fill = useTemplateFillSchema(template.id);
 
   if (fill.state === "loading") {
@@ -260,7 +265,7 @@ const FillStep = ({
               detached(
                 navigate({
                   to: "/workspaces/$workspaceId/$viewId/document",
-                  params: { workspaceId, viewId: "all" },
+                  params: viewParams,
                   search: { entity: entityId, field: created.fieldId },
                 }),
                 "new-document-from-template-dialog.navigate",
@@ -270,7 +275,7 @@ const FillStep = ({
               detached(
                 navigate({
                   to: "/workspaces/$workspaceId/$viewId",
-                  params: { workspaceId, viewId: "all" },
+                  params: viewParams,
                 }),
                 "new-document-from-template-dialog.navigate",
               );

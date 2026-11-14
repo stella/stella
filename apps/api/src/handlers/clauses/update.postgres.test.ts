@@ -10,6 +10,7 @@ import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -219,9 +220,7 @@ if (!databaseUrl || !runPostgresTests) {
             secondHeld.resolve(undefined);
             const settled = await Promise.allSettled(operations);
             await observer.delete(clauses).where(eq(clauses.id, clauseId));
-            await observer
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(observer, [organizationId]);
             await observer.delete(user).where(eq(user.id, userId));
             expect(
               settled.filter((result) => result.status === "rejected"),

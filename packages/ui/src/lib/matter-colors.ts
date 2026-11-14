@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 
+import { stableHash } from "./stable-hash";
+
 // Fallback swatches for older or imported workspaces without a stored color.
 const DEFAULT_MATTER_SWATCH = "--option-blue";
 
@@ -14,16 +16,9 @@ export const MATTER_SWATCHES = [
   "--option-teal",
 ] as const;
 
-export const getMatterSwatch = (id: string) => {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = Math.imul(hash, 31) + (id.codePointAt(i) ?? 0);
-  }
-  return (
-    MATTER_SWATCHES[Math.abs(hash) % MATTER_SWATCHES.length] ??
-    DEFAULT_MATTER_SWATCH
-  );
-};
+export const getMatterSwatch = (id: string) =>
+  MATTER_SWATCHES[stableHash(id) % MATTER_SWATCHES.length] ??
+  DEFAULT_MATTER_SWATCH;
 
 export const getMatterColor = (id: string) => `var(${getMatterSwatch(id)})`;
 

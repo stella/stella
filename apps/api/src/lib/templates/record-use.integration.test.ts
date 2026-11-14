@@ -71,7 +71,7 @@ const seedTemplate = async (): Promise<SafeId<"template">> => {
     organizationId: ids.orgA,
     name: "Lease",
     fileName: "lease.docx",
-    s3Key: `test/${templateId}.docx`,
+    s3Key: `${ids.orgA}/test/${templateId}.docx`,
     sizeBytes: 1024,
     createdBy: ids.userA1,
   });
@@ -100,8 +100,7 @@ const failingRecorder: AuditRecorder = async () => {
 };
 
 type FillOutcome =
-  | { type: "returned"; text: unknown }
-  | { type: "failed"; error: unknown };
+  { type: "returned"; text: unknown } | { type: "failed"; error: unknown };
 
 type Transport = {
   name: string;

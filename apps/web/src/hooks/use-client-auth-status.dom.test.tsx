@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag, QueryClient as Client } from "@tanstack/react-query";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // A DOM for this file only: the hook is read while its query observer is
 // mounted, the state a real page is in when a session read fails.
@@ -107,6 +108,42 @@ describe("client auth status", () => {
       queryClient.getQueryData(sessionOptions.queryKey)?.session.userId,
     ).toBe(MEMBER_SESSION.session.userId);
     expect(resolveFeedbackChannel(result.current.status)).toBeNull();
+  });
+
+  // Hosts that need the state only on some pages pass `enabled: false`; a
+  // member signed in on another page must still read as authenticated.
+  test("a disabled read serves a cached member without asking the server", async () => {
+    const fetchBoundary = spyOn(globalThis, "fetch");
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
+    queryClient.setQueryData(
+      professionalUseOptions(MEMBER_SESSION.session.userId).queryKey,
+      {
+        status: "accepted",
+        statementVersion: "2026-10",
+        termsVersion: "2026-10",
+        acceptedAt: MEMBER_SESSION.session.createdAt.toISOString(),
+      },
+    );
+    const { result, unmount } = renderHook(
+      () => useClientAuthStatus({ enabled: false }),
+      {
+        wrapper: ({ children }) =>
+          React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            children,
+          ),
+      },
+    );
+    try {
+      expect(result.current.status).toBe("authenticated");
+      expect(fetchBoundary).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+      queryClient.clear();
+      fetchBoundary.mockRestore();
+    }
   });
 
   // The API refuses its member requests until it accepts, so public pages

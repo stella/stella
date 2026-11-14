@@ -1,4 +1,6 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 export default defineConfig({
   reporter: process.env["CI"]

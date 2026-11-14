@@ -22,32 +22,49 @@ test("a configured publicLawReadDb in one file never satisfies another file", as
   const configured =
     "// one\n// two\nconst configureReadTransaction = async tx => setup(tx); const publicLawReadDb = fn => database.transaction(async tx => { await configureReadTransaction(tx); return fn(tx); });";
   const missing = MISSING;
-  for (const files of orders(configured, missing)) {
-    const lines = await lintRuleAcrossFiles(
-      "require-configured-read-transaction",
+  const cases = orders(configured, missing);
+  const results = await Promise.all(
+    cases.map(async (files) => ({
       files,
-      PLUGIN,
-    );
-    const missingFile = files["a.ts"] === missing ? "a.ts" : "b.ts";
-    const configuredFile = missingFile === "a.ts" ? "b.ts" : "a.ts";
-    expect(lines[missingFile]).toEqual([1]);
-    expect(lines[configuredFile]).toEqual([]);
-  }
+      lines: await lintRuleAcrossFiles(
+        "require-configured-read-transaction",
+        files,
+        PLUGIN,
+      ),
+    })),
+  );
+  expect(results).toEqual(
+    cases.map((files) => {
+      const missingFile = files["a.ts"] === missing ? "a.ts" : "b.ts";
+      const configuredFile = missingFile === "a.ts" ? "b.ts" : "a.ts";
+      return { files, lines: { [missingFile]: [1], [configuredFile]: [] } };
+    }),
+  );
 });
 
 test("search implementations in one file never satisfy another file", async () => {
   const implemented =
     '// one\nimport { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";\nfunction searchPostgresDecisions() { return readPublicDecisionLanguageAlternatesByGroup(); }\nconst searchCorpusIndexDecisions = () => readPublicDecisionLanguageAlternatesByGroup();\nconst listCaseLawProvisionDecisions = () => readPublicDecisionLanguageAlternatesByGroup();';
   const missing = MISSING;
-  for (const files of orders(implemented, missing)) {
-    const lines = await lintRuleAcrossFiles(
-      "require-language-alternate-counts",
+  const cases = orders(implemented, missing);
+  const results = await Promise.all(
+    cases.map(async (files) => ({
       files,
-      PLUGIN,
-    );
-    const missingFile = files["a.ts"] === missing ? "a.ts" : "b.ts";
-    const implementedFile = missingFile === "a.ts" ? "b.ts" : "a.ts";
-    expect(lines[missingFile]).toEqual([1, 1, 1]);
-    expect(lines[implementedFile]).toEqual([]);
-  }
+      lines: await lintRuleAcrossFiles(
+        "require-language-alternate-counts",
+        files,
+        PLUGIN,
+      ),
+    })),
+  );
+  expect(results).toEqual(
+    cases.map((files) => {
+      const missingFile = files["a.ts"] === missing ? "a.ts" : "b.ts";
+      const implementedFile = missingFile === "a.ts" ? "b.ts" : "a.ts";
+      return {
+        files,
+        lines: { [missingFile]: [1, 1, 1], [implementedFile]: [] },
+      };
+    }),
+  );
 });

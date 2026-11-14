@@ -15,6 +15,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
@@ -88,7 +89,7 @@ const runCreate = async (
     memberRole: sessionMemberRole("owner"),
     recordAuditEvent: async () => undefined,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}/views`),
-    route: "/test/views/create",
+    route: "/v1/views/:workspaceId" satisfies ApiRoutePath,
     safeDb,
     scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     session: { activeOrganizationId: ids.orgA },

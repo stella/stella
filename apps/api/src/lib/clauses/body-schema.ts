@@ -1,4 +1,4 @@
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import {
   BLOCK_DIRECTIVE_KINDS,
@@ -18,65 +18,67 @@ type ExactUnion<TLeft, TRight> = [
   ? true
   : never;
 
-const clauseListKindSchema = t.Union([
-  t.Literal(CLAUSE_LIST_KINDS[0]),
-  t.Literal(CLAUSE_LIST_KINDS[1]),
-]);
-true satisfies ExactUnion<Static<typeof clauseListKindSchema>, ClauseListKind>;
-
-const blockDirectiveKindSchema = t.Union([
-  t.Literal(BLOCK_DIRECTIVE_KINDS[0]),
-  t.Literal(BLOCK_DIRECTIVE_KINDS[1]),
-  t.Literal(BLOCK_DIRECTIVE_KINDS[2]),
-  t.Literal(BLOCK_DIRECTIVE_KINDS[3]),
-  t.Literal(BLOCK_DIRECTIVE_KINDS[4]),
-  t.Literal(BLOCK_DIRECTIVE_KINDS[5]),
+const clauseListKindSchema = v.union([
+  v.literal(CLAUSE_LIST_KINDS[0]),
+  v.literal(CLAUSE_LIST_KINDS[1]),
 ]);
 true satisfies ExactUnion<
-  Static<typeof blockDirectiveKindSchema>,
+  v.InferOutput<typeof clauseListKindSchema>,
+  ClauseListKind
+>;
+
+const blockDirectiveKindSchema = v.union([
+  v.literal(BLOCK_DIRECTIVE_KINDS[0]),
+  v.literal(BLOCK_DIRECTIVE_KINDS[1]),
+  v.literal(BLOCK_DIRECTIVE_KINDS[2]),
+  v.literal(BLOCK_DIRECTIVE_KINDS[3]),
+  v.literal(BLOCK_DIRECTIVE_KINDS[4]),
+  v.literal(BLOCK_DIRECTIVE_KINDS[5]),
+]);
+true satisfies ExactUnion<
+  v.InferOutput<typeof blockDirectiveKindSchema>,
   BlockDirectiveKind
 >;
 
-const clauseRunSchema = t.Object({
-  text: t.String(),
-  bold: t.Optional(t.Boolean()),
-  italic: t.Optional(t.Boolean()),
+const clauseRunSchema = v.object({
+  text: v.string(),
+  bold: v.exactOptional(v.boolean()),
+  italic: v.exactOptional(v.boolean()),
 });
 
-const clauseParagraphSchema = t.Object(
-  {
-    text: t.String(),
-    style: t.Optional(t.String()),
-    level: t.Optional(t.Integer()),
-    runs: t.Optional(t.Array(clauseRunSchema)),
-    listKind: t.Optional(clauseListKindSchema),
-    numbering: t.Optional(
-      t.Object(
-        {
-          kind: t.Literal("levelOnly"),
-          ilvl: t.Integer({
-            minimum: LIMITS.clauseNumberingLevelMin,
-            maximum: LIMITS.clauseNumberingLevelMax,
-          }),
-        },
-        { additionalProperties: false },
+const clauseParagraphSchema = v.strictObject({
+  text: v.string(),
+  style: v.exactOptional(v.string()),
+  level: v.exactOptional(v.pipe(v.number(), v.integer())),
+  runs: v.exactOptional(v.array(clauseRunSchema)),
+  listKind: v.exactOptional(clauseListKindSchema),
+  numbering: v.exactOptional(
+    v.strictObject({
+      kind: v.literal("levelOnly"),
+      ilvl: v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(LIMITS.clauseNumberingLevelMin),
+        v.maxValue(LIMITS.clauseNumberingLevelMax),
       ),
-    ),
-    isDirective: t.Optional(t.Boolean()),
-    directiveKind: t.Optional(blockDirectiveKindSchema),
-    directiveExpression: t.Optional(t.String()),
-  },
-  { additionalProperties: false },
+    }),
+  ),
+  isDirective: v.exactOptional(v.boolean()),
+  directiveKind: v.exactOptional(blockDirectiveKindSchema),
+  directiveExpression: v.exactOptional(v.string()),
+});
+
+export const clauseBodySchema = v.pipe(
+  v.array(clauseParagraphSchema),
+  v.minLength(1),
 );
 
-export const clauseBodySchema = t.Array(clauseParagraphSchema, {
-  minItems: 1,
-});
-
-export const clauseExpectedBodySchema = t.Array(
-  t.Object(
-    { text: t.String({ maxLength: LIMITS.clauseExpectedBodyTextChars }) },
-    { additionalProperties: true },
+export const clauseExpectedBodySchema = v.pipe(
+  v.array(
+    v.looseObject({
+      text: v.pipe(v.string(), v.maxLength(LIMITS.clauseExpectedBodyTextChars)),
+    }),
   ),
-  { minItems: 1, maxItems: LIMITS.clauseExpectedBodyParagraphs },
+  v.minLength(1),
+  v.maxLength(LIMITS.clauseExpectedBodyParagraphs),
 );

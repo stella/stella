@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
-  clauseDirectiveWarningSchema,
   type ClauseDirectiveWarning,
+  clauseDirectiveWarningSchema,
 } from "@/api/lib/clauses/clause-directives";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
@@ -109,7 +109,8 @@ const undecided = (
 
 describe("template fill completion policy", () => {
   test("a fill is complete iff every diagnostic it carries is non-blocking", () => {
-    fc.assert(
+    assertProperty(
+      "a fill is complete iff every diagnostic it carries is non-blocking",
       fc.property(
         diagnosticsArbitrary,
         fc.constantFrom(...TEMPLATE_FILL_COMPLETION_MODES),
@@ -147,7 +148,7 @@ describe("template fill completion policy", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

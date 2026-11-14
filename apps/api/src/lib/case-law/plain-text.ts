@@ -1,8 +1,11 @@
+// parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 // parser-output-unchanged: typed URL values pass through; plain strings are projected as before
 // parser-output-unchanged: Rejecting non-finite runtime numbers leaves publisher JSON metadata unchanged.
 import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
 import * as v from "valibot";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import {
   containsTagLikeMarkup,
@@ -15,8 +18,8 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import {
   MetadataUrlDefect,
-  toMetadataUrl,
   type SafeHref,
+  toMetadataUrl,
 } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -41,7 +44,11 @@ export class PlainTextError extends TaggedError("PlainTextError")<{
     | "unsupported-metadata"
     | "empty-present-text"
     | "entity-decode-failed";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const TAG = new RegExp(TAG_LIKE_MARKUP_SOURCE, "gu");
 const RTF_SYNTAX = /\\(?:[A-Za-z]+-?\d*\b|'[0-9a-fA-F]{2})/u;

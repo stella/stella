@@ -120,17 +120,25 @@ test("endpoint discovery and pinned construction remain at their owner", async (
   ).toEqual([]);
 });
 
-test("test fixtures and other tools can model Docker commands", async () => {
-  for (const sourcePath of [
-    "packages/scripts/src/dev-docker.test.ts",
-    "scripts/ci-images.ts",
-  ]) {
-    expect(
-      await lintSingleRule(
-        "no-ambient-dev-docker",
-        'const command = ["docker", "version"];',
-        { sourcePath },
-      ),
-    ).toEqual([]);
-  }
+test("fixtures in tests and other tools can model Docker commands", async () => {
+  const results = await Promise.all(
+    ["packages/scripts/src/dev-docker.test.ts", "scripts/ci-images.ts"].map(
+      async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule(
+            "no-ambient-dev-docker",
+            'const command = ["docker", "version"];',
+            { sourcePath },
+          ),
+          expected: [],
+        };
+      },
+    ),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });

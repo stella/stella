@@ -7,9 +7,9 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
-  systemAuditRuns,
   chatMessages,
   chatThreads,
+  systemAuditRuns,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { clampSharedPoolTimeout } from "@/api/db/shared-pool-timeout-policy";

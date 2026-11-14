@@ -1,4 +1,4 @@
-import { useMatch } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 
@@ -10,17 +10,17 @@ import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
  * has already left. A new chat takes its scope from this hook, through
  * `newChatMatterScope`.
  */
-export const useRouteWorkspaceId = (): string | undefined => {
-  const workspaceMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId",
-    shouldThrow: false,
+export const useRouteWorkspaceId = (): string | undefined =>
+  useRouterState({
+    select: ({ matches }) =>
+      resolveSidebarWorkspaceId({
+        chatWorkspaceId: matches.find(
+          (match) =>
+            match.routeId ===
+            "/_protected/chat/workspaces/$workspaceId/$threadId",
+        )?.params.workspaceId,
+        workspaceId: matches.find(
+          (match) => match.routeId === "/_protected/workspaces/$workspaceId",
+        )?.params.workspaceId,
+      }),
   });
-  const workspaceChatMatch = useMatch({
-    from: "/_protected/chat/workspaces/$workspaceId/$threadId",
-    shouldThrow: false,
-  });
-  return resolveSidebarWorkspaceId({
-    chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
-    workspaceId: workspaceMatch?.params.workspaceId,
-  });
-};

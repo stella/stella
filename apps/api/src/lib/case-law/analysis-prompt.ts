@@ -6,6 +6,7 @@ import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
  * output with a Valibot schema; no textual schema description needed.
  */
 import {
+  ANALYSIS_ABSTRACT_MAX_ANCHORS,
   ANALYSIS_ABSTRACT_MAX_LENGTH,
   ANALYSIS_HOLDING_MAX_ANCHORS,
   ANALYSIS_HOLDING_MAX_LENGTH,
@@ -53,6 +54,25 @@ export const ANALYSIS_GUIDELINES = `
    it says, never by a number, and never turn an anchorId into a
    paragraph number. Anchor fields still take anchorIds only.
 
+## Cited passages: holding and abstract
+
+The holding and the abstract are each a list of spans, \`{ text, anchors }\`.
+The spans' \`text\`, concatenated exactly as written, is the passage.
+
+- Cite each claim where it is made: end a span on the last word of a
+  claim, and give that span the start/end anchorId ranges of the
+  paragraphs that claim rests on. The reader draws those citations right
+  after the span, inside the sentence, next to the claim they support.
+- A span may end mid-sentence. The next span starts with whatever
+  follows, its leading space or punctuation included (", a druhý z
+  rodičů…", " The court…").
+- Never collect the citations at the end of the passage, and never put
+  every citation on the last span.
+- A span that states no claim of its own (a connective, the legal
+  question) has empty \`anchors\`.
+- Never write a paragraph number or an anchorId into \`text\`: the
+  anchors are the citations.
+
 ## holding
 
 The legal proposition this decision stands for: the sentence a lawyer
@@ -63,10 +83,9 @@ would quote when citing it as authority.
   in terms that apply beyond this case's parties.
 - Not a summary of the document, not the disposition ("the appeal was
   dismissed"), not a description ("the court dealt with limitation").
-- \`anchors\`: up to ${String(ANALYSIS_HOLDING_MAX_ANCHORS)} start/end anchorId ranges naming the
-  paragraphs the proposition rests on, from the same anchorIds the
-  annotations use. Name the paragraphs that carry the rule, not the whole
-  reasoning section.
+- Up to ${String(ANALYSIS_HOLDING_MAX_ANCHORS)} cited ranges in all, from the same anchorIds the
+  annotations use. Cite the paragraphs that carry each part of the rule,
+  not the whole reasoning section.
 
 ## abstract
 
@@ -79,7 +98,8 @@ ${String(ANALYSIS_ABSTRACT_MAX_LENGTH)} characters, in this order:
 4. the outcome;
 5. what it changes against the prior case law, or that it changes nothing.
 
-Write prose, not a list, and no headings.
+Write prose, not a list, and no headings. Cite the facts, each step of
+the reasoning and the outcome, up to ${String(ANALYSIS_ABSTRACT_MAX_ANCHORS)} ranges in all.
 
 ## topics
 

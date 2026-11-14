@@ -17,9 +17,9 @@ import {
 import {
   CatalogSnapshotRefreshTimeoutError,
   MODEL_CATALOG_INPUT_DIR,
-  refreshModelCatalogInputs,
   reduceModelsDevInput,
   reduceOpenRouterInput,
+  refreshModelCatalogInputs,
   serializeCatalogInput,
 } from "./model-catalog-snapshot";
 
@@ -109,6 +109,7 @@ describe("committed catalog inputs", () => {
           "model-catalog-capabilities-gen.ts",
           "model-catalog-capabilities.ts",
           "model-catalog-snapshot.ts",
+          "offline-check-startup.ts",
         ]) {
           await cp(path.join(import.meta.dir, file), path.join(sources, file));
         }

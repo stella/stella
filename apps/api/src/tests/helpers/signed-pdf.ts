@@ -57,9 +57,7 @@ const createSigner = async (
  * - `remove-signature-field`: drops the field and its widget entirely.
  */
 export type SignatureHidingRevision =
-  | "drop-sig-flags"
-  | "inherit-signature-value"
-  | "remove-signature-field";
+  "drop-sig-flags" | "inherit-signature-value" | "remove-signature-field";
 
 type SignedPdfOptions = {
   keyPool?: TestRsaKeyPool;
@@ -70,6 +68,8 @@ type SignedPdfOptions = {
    */
   certify?: number | null;
   hidingRevision?: SignatureHidingRevision;
+  /** The unsigned PDF to sign; a one-page image-like PDF when absent. */
+  unsigned?: Uint8Array;
   /** How many signatures to apply, each in its own revision. */
   signatures?: number;
   /** Write cross-reference streams instead of classic xref tables. */
@@ -84,6 +84,12 @@ const drawScan = (pdf: PDF) => {
     height: 40,
     color: rgb(0.8, 0.8, 0.8),
   });
+};
+
+const createScanPdf = async (xrefStream: boolean) => {
+  const scan = PDF.create();
+  drawScan(scan);
+  return await scan.save({ useXRefStream: xrefStream });
 };
 
 /**
@@ -171,20 +177,20 @@ const appendHidingRevision = async (
 };
 
 /**
- * A one-page, image-like PDF (no native text) carrying real signatures made by
- * libpdf over a per-run certificate, optionally certified, and optionally with
- * a later revision that hides the signature from the current form view.
+ * The given PDF, or a one-page image-like one (no native text), carrying real
+ * signatures made by libpdf over a per-run certificate, optionally certified,
+ * and optionally with a later revision that hides the signature from the
+ * current form view.
  */
 export const createSignedPdf = async ({
   keyPool,
   certify,
   hidingRevision,
+  unsigned,
   signatures = 1,
   xrefStream = false,
 }: SignedPdfOptions = {}): Promise<Uint8Array> => {
-  const unsigned = PDF.create();
-  drawScan(unsigned);
-  let bytes = await unsigned.save({ useXRefStream: xrefStream });
+  let bytes = unsigned ?? (await createScanPdf(xrefStream));
   const signer = await createSigner(keyPool);
   for (let index = 0; index < signatures; index += 1) {
     const pdf = await PDF.load(bytes);

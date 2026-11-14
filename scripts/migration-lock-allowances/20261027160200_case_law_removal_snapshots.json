@@ -1,0 +1,4 @@
+{
+  "create-policy": "The corpus ingestion role gains select/delete policies on five global snapshot tables. Policy creation changes catalog metadata without scanning rows, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "add-column": "The nullable JSON checkpoint is a default-free catalog-only addition to corpus sources, bounded by 1s lock_timeout and 5s statement_timeout."
+}

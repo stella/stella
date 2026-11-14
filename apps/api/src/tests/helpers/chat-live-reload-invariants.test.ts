@@ -386,14 +386,20 @@ describe("the served snapshot oracle", () => {
     role: "user",
   };
 
-  /** The engine's snapshot of the message, as the stream presents it. */
-  const presented = async (): Promise<StreamChunk[]> => {
+  /**
+   * The engine's snapshot of the message, as the stream presents it. The
+   * stream carries a stored message only when the turn's acceptance rewrote
+   * it, which is the default here.
+   */
+  const presented = async (
+    rewritten: readonly ClientMessage[] = [served],
+  ): Promise<StreamChunk[]> => {
     const chunks: StreamChunk[] = [];
     for await (const chunk of presentStoredHistory({
       history: {
         loadServed: async () =>
           await Promise.resolve(Result.ok(new Map([[served.id, served]]))),
-        rewrittenOnAcceptance: [],
+        rewrittenOnAcceptance: rewritten,
       },
       source: (async function* () {
         yield await Promise.resolve(buildEngineSnapshot([asEngineHolds]));
@@ -426,6 +432,25 @@ describe("the served snapshot oracle", () => {
     ).toEqual([]);
   });
 
+  const snapshotIds = (chunks: readonly StreamChunk[]) =>
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.MESSAGES_SNAPSHOT
+        ? [chunk.messages.map(({ id }) => id)]
+        : [],
+    );
+
+  test("the engine's snapshot leaves out a stored message the page holds", async () => {
+    // The page keeps a message a snapshot leaves out, so repeating the
+    // stored history would only grow every snapshot with the thread.
+    expect(snapshotIds(await presented([]))).toEqual([[]]);
+  });
+
+  test("every snapshot carries a message acceptance rewrote, as stored", async () => {
+    // The page restores an omitted message from the copy it posted, from
+    // before the rewrite: the opening and the engine's snapshot both carry it.
+    expect(snapshotIds(await presented())).toEqual([[served.id], [served.id]]);
+  });
+
   // Any field the page serves differently is a disagreement, not only the
   // timestamp. The id is what pairs the two.
   test.each(Object.keys(served).filter((field) => field !== "id"))(
@@ -436,7 +461,11 @@ describe("the served snapshot oracle", () => {
           chunks: await presented(),
           served: [{ ...served, [field]: "differs" }],
         }).map(({ oracle }) => oracle),
-      ).toEqual([CHAT_ORACLE.wireSnapshotServed]);
+        // The opening snapshot and the engine's both carry the message.
+      ).toEqual([
+        CHAT_ORACLE.wireSnapshotServed,
+        CHAT_ORACLE.wireSnapshotServed,
+      ]);
     },
   );
 });

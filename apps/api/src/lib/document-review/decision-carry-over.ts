@@ -4,23 +4,29 @@
  *
  * Re-reviewing a document must not silently discard the reading a lawyer
  * already did. When a new run reaches the same conclusion about the same
- * quoted text as the previous review of that document, the earlier decision
- * and flags still apply and move onto the new finding; when the conclusion or
- * the evidence changed, the finding stays `open` and unflagged, because that
- * is the case a reviewer has to look at again.
+ * quoted text as the previous review of that document, against the same
+ * position rules, the earlier decision and flags still apply and move onto the
+ * new finding. When the conclusion, the evidence, or the rules changed, the
+ * finding stays `open` and unflagged, because that is the case a reviewer has
+ * to look at again.
  *
- * Cost: two statements per completed run, regardless of how many findings it
- * holds. One SELECT reads this run's findings and the previous completed run's
- * findings together (both bounded by the confirmed-topic cap); one UPDATE
- * copies every match by joining the prior rows back through their ids, so no
- * decision, decider, or timestamp is round-tripped through the application.
+ * Cost: three statements per completed run, regardless of how many findings it
+ * holds. One SELECT reads the pinned basis of this run and of the previous
+ * completed run (at most two rows); one reads both runs' findings (both bounded
+ * by the confirmed-topic cap); one UPDATE copies every match by joining the
+ * prior rows back through their ids, so no decision, decider, or timestamp is
+ * round-tripped through the application.
  */
 
+import { panic } from "better-result";
 import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+
+import { stableStringify } from "@stll/stable-stringify";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { findingFingerprint } from "@/api/lib/document-review/finding-fingerprint";
 import {
   DOCUMENT_REVIEW_DECISION,
@@ -31,6 +37,11 @@ import type {
   DocumentReviewFindingFlag,
   DocumentReviewFindingPayload,
 } from "@/api/lib/document-review/run-contract";
+import type { Position } from "@/api/lib/workflow/playbook-positions";
+import {
+  canonicalRulesInput,
+  isTierStandard,
+} from "@/api/lib/workflow/position-runtime";
 
 /** What matching needs from a finding row, on either side of the comparison. */
 export type CarryOverFinding = {
@@ -52,9 +63,33 @@ export type CarriedDecision = {
  *  different runs comparable at all. */
 const comparisonKey = ({ positionId }: CarryOverFinding): string => positionId;
 
+/**
+ * What a decision about a position was measured against. Two positions with the
+ * same value hold the same standard, so an earlier decision still applies.
+ *
+ * Tier rules are compared on their inputs rather than on `computeRulesHash`:
+ * that hash decides when to re-derive a question, and a change to derivation
+ * must not reopen a lawyer's decision. A reference or extract position compares
+ * by kind alone, because a finding's citations already cover what it read.
+ */
+const positionStandard = (position: Position): string => {
+  if (isTierStandard(position)) {
+    return stableStringify(canonicalRulesInput(position));
+  }
+  return position.mode === "graded" ? position.standard.source : position.mode;
+};
+
+const positionsById = (
+  positions: readonly Position[],
+): ReadonlyMap<string, Position> =>
+  new Map(positions.map((position) => [position.sourceId, position]));
+
 type MatchCarriedDecisionsArgs = {
   current: readonly CarryOverFinding[];
   prior: readonly CarryOverFinding[];
+  /** The positions each run pinned. */
+  currentPositions: readonly Position[];
+  priorPositions: readonly Position[];
 };
 
 /** Whether a prior finding holds a reading worth moving forward. Flags count
@@ -72,13 +107,18 @@ const isUntouched = ({ decision, flags }: CarryOverFinding): boolean =>
 /**
  * Pair each new finding with the answered prior finding it repeats verbatim.
  *
- * Three conditions, all required: the same position, a prior finding somebody
- * actually answered (decided, flagged, or both), and an identical fingerprint
- * (same outcome over the same cited evidence).
+ * Four conditions, all required: the same position, a prior finding somebody
+ * actually answered (decided, flagged, or both), an identical fingerprint (same
+ * outcome over the same cited evidence), and the same rules on both runs' pinned
+ * positions. A pin is JSON with no constraint tying it to the finding rows, and
+ * a run migrated from the older basis can hold a finding whose position it does
+ * not list. No rules to compare means no way to say the decision still applies.
  */
 export const matchCarriedDecisions = ({
   current,
   prior,
+  currentPositions,
+  priorPositions,
 }: MatchCarriedDecisionsArgs): CarriedDecision[] => {
   const answeredPrior = new Map<string, CarryOverFinding>();
   for (const finding of prior) {
@@ -90,6 +130,9 @@ export const matchCarriedDecisions = ({
   if (answeredPrior.size === 0) {
     return [];
   }
+
+  const currentById = positionsById(currentPositions);
+  const priorById = positionsById(priorPositions);
 
   const carried: CarriedDecision[] = [];
   for (const finding of current) {
@@ -103,6 +146,15 @@ export const matchCarriedDecisions = ({
     if (
       findingFingerprint(finding.payload, finding.outcome) !==
       findingFingerprint(previous.payload, previous.outcome)
+    ) {
+      continue;
+    }
+    const currentPosition = currentById.get(finding.positionId);
+    const priorPosition = priorById.get(finding.positionId);
+    if (
+      currentPosition === undefined ||
+      priorPosition === undefined ||
+      positionStandard(currentPosition) !== positionStandard(priorPosition)
     ) {
       continue;
     }
@@ -126,7 +178,7 @@ type CarryOverDecisionsArgs = {
  * "Previous review" is the newest completed run for the same document. There
  * is one basis shape and one finding shape now, so any earlier review of the
  * same document is that document's history; whether the conclusions actually
- * repeat is the fingerprint's question, not this query's.
+ * repeat, against the same rules, is the matcher's question, not this query's.
  */
 export const carryOverDecisions = async ({
   tx,
@@ -150,6 +202,34 @@ export const carryOverDecisions = async ({
     .orderBy(desc(documentReviewRuns.createdAt), desc(documentReviewRuns.id))
     .limit(1);
 
+  const runsRead = await readBounded(
+    tx
+      .select({ id: documentReviewRuns.id, basis: documentReviewRuns.basis })
+      .from(documentReviewRuns)
+      .where(
+        and(
+          eq(documentReviewRuns.workspaceId, workspaceId),
+          // sql-perf-allow: bounded by this run and one previous run
+          or(
+            eq(documentReviewRuns.id, runId),
+            inArray(documentReviewRuns.id, previousRun),
+          ),
+        ),
+      ),
+    2,
+  );
+  if (runsRead.type === "overflow") {
+    return panic("Carry-over matched more than this run and one previous run");
+  }
+  const runs = runsRead.rows;
+  const thisRun =
+    runs.find(({ id }) => id === runId) ??
+    panic("Carry-over ran for a review run that does not exist");
+  const priorRun = runs.find(({ id }) => id !== runId);
+  if (priorRun === undefined) {
+    return 0;
+  }
+
   // Both sides in one read: the rows this run just committed, and the rows of
   // the review it supersedes.
   const rows = await tx
@@ -166,11 +246,7 @@ export const carryOverDecisions = async ({
     .where(
       and(
         eq(documentReviewFindings.workspaceId, workspaceId),
-        // sql-perf-allow: bounded by one current run and one previous run, each capped by DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX
-        or(
-          eq(documentReviewFindings.runId, runId),
-          inArray(documentReviewFindings.runId, previousRun),
-        ),
+        inArray(documentReviewFindings.runId, [runId, priorRun.id]),
       ),
     )
     .limit(DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX * 2);
@@ -181,7 +257,12 @@ export const carryOverDecisions = async ({
     (row.runId === runId ? current : prior).push(row);
   }
 
-  const carried = matchCarriedDecisions({ current, prior });
+  const carried = matchCarriedDecisions({
+    current,
+    prior,
+    currentPositions: thisRun.basis.playbook.definitionSnapshot.positions.items,
+    priorPositions: priorRun.basis.playbook.definitionSnapshot.positions.items,
+  });
   if (carried.length === 0) {
     return 0;
   }

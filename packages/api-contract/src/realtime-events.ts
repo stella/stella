@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "./api-date";
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
 import {
   isResourceRef,
@@ -9,6 +10,9 @@ import {
 } from "./resource-ref";
 
 export const REALTIME_EVENT_TYPE = {
+  CHAT_BACKGROUND_TASKS_CHANGED: "chat-background-tasks.changed",
+  CHAT_RUNS_CHANGED: "chat-runs.changed",
+  CHAT_THREADS_CHANGED: "chat-threads.changed",
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
   FLOW_RUN_UPDATE: "flow-run-update",
   NEW_NOTIFICATION: "new-notification",
@@ -33,12 +37,28 @@ const nonEmptyStringSchema = v.pipe(v.string(), v.minLength(1));
 
 const resourceRefSchema = v.custom<ResourceRef>(isResourceRef);
 
+export const RESOURCE_MUTATION_ID_HEADER = "x-stella-mutation-id";
+
+const resourceMutationIdSchema = v.pipe(v.string(), v.uuid());
+
+export const parseResourceMutationId = (value: unknown): string | undefined => {
+  const result = v.safeParse(resourceMutationIdSchema, value);
+  return result.success ? result.output : undefined;
+};
+
+const resourceMutationDigestSchema = v.pipe(
+  v.string(),
+  v.regex(/^[0-9a-f]{64}$/u),
+);
+
 const resourceUpdatedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_UPDATED),
   resource: resourceRefSchema,
 });
 
 const resourceDeletedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_DELETED),
   resource: resourceRefSchema,
 });
@@ -55,6 +75,7 @@ const resourceChangeSchema = v.variant("change", [
 ]);
 
 const resourcesChangedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCES_CHANGED),
   changes: v.pipe(
     v.array(resourceChangeSchema),
@@ -71,6 +92,7 @@ const resourceChangeCountSchema = v.pipe(
 );
 
 const resourceSetUpdatedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED),
   resourceType: v.custom<ResourceType>(isResourceType),
 });
@@ -131,7 +153,46 @@ const newNotificationEventSchema = v.object({
   data: v.null(),
 });
 
-const userRealtimeEventSchema = v.variant("type", [newNotificationEventSchema]);
+/**
+ * User-channel event announcing that one of the recipient's chat runs started,
+ * started or stopped waiting on them, or ended. Content-free for the same
+ * reason as the notification event: the client re-reads its active runs
+ * through the ordinary authorized endpoint. A run that ends with an answer
+ * also makes its chat unread, so a client showing chat read states re-reads
+ * its chat list too.
+ */
+const chatRunsChangedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED),
+  data: v.null(),
+});
+
+/**
+ * User-channel event announcing that the recipient marked one of their chats
+ * read or unread, or pinned or unpinned it, on any device. Content-free: the
+ * client re-reads its chat list through the ordinary authorized endpoint.
+ */
+const chatThreadsChangedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED),
+  data: v.null(),
+});
+
+/**
+ * User-channel event announcing that what one of the recipient's computers
+ * runs in the background for their chats changed, or that the computer
+ * connected or went away. Content-free: an open chat re-reads its own count
+ * through the ordinary authorized endpoint.
+ */
+const chatBackgroundTasksChangedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.CHAT_BACKGROUND_TASKS_CHANGED),
+  data: v.null(),
+});
+
+const userRealtimeEventSchema = v.variant("type", [
+  newNotificationEventSchema,
+  chatRunsChangedEventSchema,
+  chatThreadsChangedEventSchema,
+  chatBackgroundTasksChangedEventSchema,
+]);
 
 export type ResourceChange = v.InferOutput<typeof resourceChangeSchema>;
 
@@ -147,9 +208,59 @@ export type OrganizationRealtimeEvent = v.InferOutput<
 >;
 export type UserRealtimeEvent = v.InferOutput<typeof userRealtimeEventSchema>;
 
+/** A read a client keeps of the person's own state, made again when a user
+ * event says it changed. */
+export const USER_EVENT_READ = {
+  ACTIVE_CHAT_RUNS: "active-chat-runs",
+  CHAT_BACKGROUND_TASKS: "chat-background-tasks",
+  CHAT_THREADS: "chat-threads",
+  NOTIFICATIONS: "notifications",
+} as const;
+
+export type UserEventRead =
+  (typeof USER_EVENT_READ)[keyof typeof USER_EVENT_READ];
+
+/**
+ * What each user event makes a client read again: the one table every client
+ * follows, so none reads less than an event changed. A run that ends with an
+ * answer makes its chat unread, so a runs change reads the chats too.
+ */
+export const USER_EVENT_READS = {
+  [REALTIME_EVENT_TYPE.NEW_NOTIFICATION]: [USER_EVENT_READ.NOTIFICATIONS],
+  [REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED]: [
+    USER_EVENT_READ.ACTIVE_CHAT_RUNS,
+    USER_EVENT_READ.CHAT_THREADS,
+  ],
+  [REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED]: [USER_EVENT_READ.CHAT_THREADS],
+  [REALTIME_EVENT_TYPE.CHAT_BACKGROUND_TASKS_CHANGED]: [
+    USER_EVENT_READ.CHAT_BACKGROUND_TASKS,
+  ],
+} as const satisfies Record<
+  UserRealtimeEvent["type"],
+  readonly UserEventRead[]
+>;
+
 export const newNotificationRealtimeEvent = () =>
   ({
     type: REALTIME_EVENT_TYPE.NEW_NOTIFICATION,
+    data: null,
+  }) as const satisfies UserRealtimeEvent;
+
+export const chatRunsChangedRealtimeEvent = () =>
+  ({
+    type: REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED,
+    data: null,
+  }) as const satisfies UserRealtimeEvent;
+
+export const chatThreadsChangedRealtimeEvent = () =>
+  ({
+    type: REALTIME_EVENT_TYPE.CHAT_THREADS_CHANGED,
+    data: null,
+  }) as const satisfies UserRealtimeEvent;
+
+export const chatBackgroundTasksChangedRealtimeEvent = () =>
+  ({
+    type: REALTIME_EVENT_TYPE.CHAT_BACKGROUND_TASKS_CHANGED,
     data: null,
   }) as const satisfies UserRealtimeEvent;
 
@@ -187,17 +298,21 @@ export const resourcesChangedRealtimeEvent = (
   };
 };
 
-export const resourceSetUpdatedRealtimeEvent = (resourceType: ResourceType) =>
+export const resourceSetUpdatedRealtimeEvent = (
+  resourceType: ResourceType,
+  mutationDigest?: string,
+) =>
   ({
     type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
     resourceType,
+    ...(mutationDigest === undefined ? {} : { mutationDigest }),
   }) as const satisfies ResourceRealtimeEvent;
 
 const takeoverRequestedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED),
   data: v.object({
     requestedBy: nonEmptyStringSchema,
-    requestedAt: v.pipe(v.string(), v.isoTimestamp()),
+    requestedAt: apiDateTimeSchema,
   }),
 });
 
@@ -226,6 +341,31 @@ const desktopEditSessionRealtimeEventSchema = v.variant("type", [
 export type DesktopEditSessionRealtimeEvent = v.InferOutput<
   typeof desktopEditSessionRealtimeEventSchema
 >;
+
+/**
+ * Every event kind each realtime channel carries, read off the channel's own
+ * schema so the list is the channel's contract rather than a copy of it. The
+ * keys are the channels the API fans events out on.
+ */
+export const REALTIME_CHANNEL_EVENT_TYPES = {
+  workspace: workspaceRealtimeEventSchema.options.map(
+    (option) => option.entries.type.literal,
+  ),
+  organization: [organizationRealtimeEventSchema.entries.type.literal],
+  user: userRealtimeEventSchema.options.map(
+    (option) => option.entries.type.literal,
+  ),
+  session: desktopEditSessionRealtimeEventSchema.options.map(
+    (option) => option.entries.type.literal,
+  ),
+} as const satisfies {
+  workspace: readonly WorkspaceRealtimeEvent["type"][];
+  organization: readonly OrganizationRealtimeEvent["type"][];
+  user: readonly UserRealtimeEvent["type"][];
+  session: readonly DesktopEditSessionRealtimeEvent["type"][];
+};
+
+export type RealtimeChannel = keyof typeof REALTIME_CHANNEL_EVENT_TYPES;
 export type DesktopEditSessionClientEvent = Exclude<
   DesktopEditSessionRealtimeEvent,
   { type: typeof REALTIME_EVENT_TYPE.DESKTOP_EDIT_SESSION_CLOSED }

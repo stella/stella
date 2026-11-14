@@ -14,7 +14,7 @@ import type { StyleSelection } from "@/features/style-sets/style-set-picker-dial
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, APIError } from "@/lib/errors/api";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";

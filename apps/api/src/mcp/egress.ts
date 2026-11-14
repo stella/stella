@@ -9,11 +9,10 @@ import { projectionPayload } from "@/api/lib/projection-totality";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { AnonymizedTextFields } from "@/api/mcp/anonymization-core";
 import {
-  COMPAT_SEARCH_OUTPUT_SCHEMA,
   COMPAT_FETCH_OUTPUT_SCHEMA,
+  COMPAT_SEARCH_OUTPUT_SCHEMA,
 } from "@/api/mcp/compat-contract";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import type {
   InternalToolResult,
@@ -32,6 +31,8 @@ import {
   untypedToolDataResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
+import { anonymizeWindowFields } from "@/api/mcp/window-anonymization-cache";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
 
@@ -52,7 +53,7 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * calls (e.g. `read_document({ entity_id })`); redacting them would break the
  * surface's basic usability. Which ids a caller can even see is enforced
  * upstream, by each handler's own workspace-scoped query and
- * `McpRequestContext.accessibleWorkspaceIdSet` (`workspace-access-boundary.ts`),
+ * `AuthorizedMcpRequestContext.accessibleWorkspaceIdSet` (`workspace-access-boundary.ts`),
  * not here. The chat registry adapter (`run-registry-tool.ts`) is the one
  * caller that also crosses into third-party model context: it runs this same
  * pipeline, then separately rewrites ids into opaque chat refs and fails
@@ -61,7 +62,7 @@ const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
  * this pipeline itself never hands output to a model.
  */
 type FinalizeToolEgressOptions<TResponse extends McpToolResponse> = {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   response: TResponse;
 };
@@ -70,11 +71,9 @@ type EgressDependencies = {
   /** Provider boundary for anonymizing tenant-authored text. */
   anonymizeTextFields?: typeof anonymizeTextFields | undefined;
   loadAnonymizationAllowlistCanonicalsByWorkspace?:
-    | typeof loadAnonymizationAllowlistCanonicalsByWorkspace
-    | undefined;
+    typeof loadAnonymizationAllowlistCanonicalsByWorkspace | undefined;
   loadAnonymizationGazetteerEntriesByWorkspace?:
-    | typeof loadAnonymizationGazetteerEntriesByWorkspace
-    | undefined;
+    typeof loadAnonymizationGazetteerEntriesByWorkspace | undefined;
 };
 
 export function finalizeToolEgress<TData>(
@@ -143,8 +142,7 @@ class EgressAnonymizerFailedError extends TaggedError(
 
 /** Why a payload's anonymization did not complete. */
 type EgressAnonymizationError =
-  | AnonymizedFieldBoundaryError
-  | EgressAnonymizerFailedError;
+  AnonymizedFieldBoundaryError | EgressAnonymizerFailedError;
 
 type EgressAnonymize = (
   input: Parameters<typeof anonymizeTextFields>[0],
@@ -228,7 +226,7 @@ const anonymizeTextFieldsByWorkspace = async ({
   fields,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   fields: readonly McpStructuredTextField[];
 }): Promise<Result<void, EgressAnonymizationError>> => {
   if (fields.length === 0) {
@@ -264,18 +262,28 @@ const anonymizeTextFieldsByWorkspace = async ({
     ]);
 
   for (const [workspaceId, group] of byWorkspace) {
-    const anonymized = await anonymize({
-      catalogs: {
-        type: "preloaded",
-        excludedCanonicals: catalogFor(
-          excludedCanonicalsByWorkspace,
-          workspaceId,
-        ),
-        gazetteerEntries: catalogFor(gazetteerByWorkspace, workspaceId),
-      },
-      fields: group.map((field) => field.value),
-      organizationId: context.organizationId,
+    const catalogs = {
+      type: "preloaded",
+      excludedCanonicals: catalogFor(
+        excludedCanonicalsByWorkspace,
+        workspaceId,
+      ),
+      gazetteerEntries: catalogFor(gazetteerByWorkspace, workspaceId),
+    } as const;
+    const fieldValues = group.map((field) => field.value);
+    const anonymized = await anonymizeWindowFields({
+      context,
       workspaceId,
+      source: { catalogs, fields: fieldValues },
+      anonymize: async () => {
+        const result = await anonymize({
+          catalogs,
+          fields: fieldValues,
+          organizationId: context.organizationId,
+          workspaceId,
+        });
+        return result.map((value) => value.fields);
+      },
     });
     // Fail closed: the caller discards the whole payload, so no field of this
     // or any other group leaves unanonymized.
@@ -289,7 +297,7 @@ const anonymizeTextFieldsByWorkspace = async ({
           allowEmptyFallback: false,
           fallback: field.value,
           missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-          value: anonymized.value.fields[index],
+          value: anonymized.value[index],
         }),
       );
     }
@@ -315,7 +323,7 @@ const finalizeStructured = async ({
   plan,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "structured" }>;
 }): Promise<InternalToolResult> => {
@@ -356,7 +364,7 @@ const finalizeCompatSearch = async ({
   plan,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatSearch" }>;
 }): Promise<InternalToolResult> => {
@@ -421,7 +429,7 @@ const finalizeCompatFetch = async ({
   plan,
 }: {
   anonymizer: EgressAnonymizer;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatFetch" }>;
 }): Promise<InternalToolResult> => {
@@ -532,7 +540,7 @@ const anonymizeCompatFetchPayload = async ({
   workspaceId,
 }: {
   anonymize: EgressAnonymize;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   text: string;
   title: string;
   workspaceId: string;

@@ -17,12 +17,24 @@
  *   walk up), so each lockfile is governed by the bunfig.toml beside it. A
  *   changed lockfile with no quarantine there fails: Bun would not gate it.
  * - A name in that file's `minimumReleaseAgeExcludes` is exempt, matched
- *   exactly, whatever its annotation says. The annotations and the removal of
- *   expired entries belong to scripts/check-stll-quarantine-excludes.ts, whose
- *   parser this check reads the file with.
+ *   exactly, until a temporary entry's `quarantine-expires` instant. From then
+ *   on a new pin of it is gated again, though Bun would still skip it: an
+ *   elapsed waiver grants nothing, so it cannot let the next version of that
+ *   package past the quarantine while its removal waits. The annotations
+ *   belong to scripts/check-stll-quarantine-excludes.ts, whose parser this
+ *   check reads the file with; `quarantine-prune.yml` removes elapsed entries.
  * - Only versions from the npm registry have a release age. Workspace, link
  *   and file entries are local; git and tarball sources are reported, not
  *   gated, as Bun does not gate them either.
+ *
+ * Every tracked Cargo.lock is checked the same way against crates.io. Cargo
+ * has no release-age gate, and resolving (`cargo update`) runs no crate code,
+ * so this check between resolve and build stands in for one. Crates are held
+ * to the root bunfig.toml's quarantine; `"cargo:<crate>"` in its
+ * `minimumReleaseAgeExcludes` exempts a crate under the same annotation and
+ * expiry rules (scripts/crates-io-release-age.ts). Workspace members and path
+ * dependencies are local; git sources are reported, not gated. Update crates
+ * with `bun run cargo:update`, which pins young versions back at resolve time.
  *
  * A registry failure fails the check: a pin that could not be verified is not
  * known to be old enough.
@@ -43,9 +55,15 @@ import {
   readInstallPolicy,
   readTemporaryExcludes,
 } from "./check-stll-quarantine-excludes";
+import {
+  cargoExcludeName,
+  createCratesIoClient,
+  readCargoLockPins,
+} from "./crates-io-release-age";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const LOCKFILE_NAME = "bun.lock";
+const BUN_LOCKFILE_NAME = "bun.lock";
+const CARGO_LOCKFILE_NAME = "Cargo.lock";
 const BUNFIG_NAME = "bunfig.toml";
 const NPM_REGISTRY = "https://registry.npmjs.org";
 const EXACT_VERSION =
@@ -153,15 +171,20 @@ type ReleaseAgePolicy = {
   bunfigPath: string;
   excludes: ReadonlySet<string>;
   minimumReleaseAgeSeconds: number;
-  /** Annotated instant of each temporary exclude, for the report. */
+  /** Annotated instant of each temporary exclude; it exempts until then. */
   temporaryExpiries: ReadonlyMap<string, string>;
 };
 
-/** The bunfig.toml Bun reads when installing the lockfile's directory. */
+/**
+ * The bunfig.toml whose quarantine governs a lockfile: for bun.lock the one
+ * Bun reads when installing its directory, for Cargo.lock the root one.
+ */
 export const governingBunfigPath = (lockfilePath: string): string =>
-  path.posix.join(path.posix.dirname(lockfilePath), BUNFIG_NAME);
+  path.posix.basename(lockfilePath) === CARGO_LOCKFILE_NAME
+    ? BUNFIG_NAME
+    : path.posix.join(path.posix.dirname(lockfilePath), BUNFIG_NAME);
 
-const readReleaseAgePolicy = (
+export const readReleaseAgePolicy = (
   bunfigPath: string,
   bunfigText: string | undefined,
 ): ReleaseAgePolicy | undefined => {
@@ -183,6 +206,22 @@ const readReleaseAgePolicy = (
       ]),
     ),
   };
+};
+
+/**
+ * Whether an exclude exempts `name` at `now`. A temporary entry exempts only
+ * until its `quarantine-expires` instant: an elapsed waiver grants nothing.
+ */
+export const isExcludedAt = (
+  policy: ReleaseAgePolicy,
+  name: string,
+  now: Date,
+): boolean => {
+  const expiresAt = policy.temporaryExpiries.get(name);
+  return (
+    policy.excludes.has(name) &&
+    (expiresAt === undefined || now.getTime() < Date.parse(expiresAt))
+  );
 };
 
 type PublishTimeLookup =
@@ -335,6 +374,31 @@ type ReleaseAgeReport = {
   unverified: string[];
 };
 
+type Lookups = { cratesIo: LookupPublishTime; npm: LookupPublishTime };
+
+type LockfileFormat = {
+  ecosystem: keyof Lookups;
+  /** The `minimumReleaseAgeExcludes` entry that exempts a package. */
+  excludeName: (name: string) => string;
+  readPins: (text: string, label: string) => LockfilePins;
+  registry: string;
+};
+
+const LOCKFILE_FORMATS: Readonly<Record<string, LockfileFormat>> = {
+  [BUN_LOCKFILE_NAME]: {
+    ecosystem: "npm",
+    excludeName: (name) => name,
+    readPins: readLockfilePins,
+    registry: "the npm registry",
+  },
+  [CARGO_LOCKFILE_NAME]: {
+    ecosystem: "cratesIo",
+    excludeName: cargoExcludeName,
+    readPins: readCargoLockPins,
+    registry: "crates.io",
+  },
+};
+
 const DAY_SECONDS = 24 * 60 * 60;
 
 const describeAge = (seconds: number): string =>
@@ -344,13 +408,14 @@ const describeAge = (seconds: number): string =>
 
 export const checkLockfileReleaseAges = async ({
   lockfiles,
-  lookup,
+  lookups,
   now,
   packageName,
 }: {
+  /** A `minimumReleaseAgeExcludes` name: `cargo:<crate>` for a crate. */
   packageName?: string;
   lockfiles: readonly LockfileInput[];
-  lookup: LookupPublishTime;
+  lookups: Lookups;
   now: Date;
 }): Promise<ReleaseAgeReport> => {
   const report: ReleaseAgeReport = {
@@ -363,24 +428,30 @@ export const checkLockfileReleaseAges = async ({
 
   let selectedPins = 0;
   for (const lockfile of lockfiles) {
-    const head = readLockfilePins(lockfile.headText, lockfile.path);
+    const format = LOCKFILE_FORMATS[path.posix.basename(lockfile.path)];
+    if (format === undefined) {
+      report.errors.push(`${lockfile.path} is not a lockfile this check reads`);
+      continue;
+    }
+    const head = format.readPins(lockfile.headText, lockfile.path);
     const base =
       lockfile.baseText === undefined
         ? undefined
-        : readLockfilePins(lockfile.baseText, `${lockfile.path} (base)`);
+        : format.readPins(lockfile.baseText, `${lockfile.path} (base)`);
     report.errors.push(...head.errors);
     const known = new Set((base?.pins ?? []).map(pinKey));
     const added = head.pins.filter(
       (pin) =>
         !known.has(pinKey(pin)) &&
-        (packageName === undefined || pin.name === packageName),
+        (packageName === undefined ||
+          format.excludeName(pin.name) === packageName),
     );
     selectedPins += added.length;
     const knownExternal = new Set(base?.external);
     for (const ident of head.external) {
       if (!knownExternal.has(ident)) {
         report.notes.push(
-          `${lockfile.path}: ${ident} is not from the npm registry; it has no release age to check.`,
+          `${lockfile.path}: ${ident} is not from ${format.registry}; it has no release age to check.`,
         );
       }
     }
@@ -392,30 +463,35 @@ export const checkLockfileReleaseAges = async ({
     const policy = readReleaseAgePolicy(bunfigPath, lockfile.bunfigText);
     if (policy === undefined) {
       report.errors.push(
-        `${lockfile.path} adds ${String(added.length)} pin(s) but no release-age ` +
-          `quarantine governs it: Bun reads ${BUNFIG_NAME} only from the ` +
-          `directory it installs in, and ${bunfigPath} sets no ` +
-          `[install] minimumReleaseAge. Add one; ` +
-          `scripts/check-standalone-lockfiles.ts lists what else a standalone ` +
-          `lockfile needs.`,
+        format.ecosystem === "npm"
+          ? `${lockfile.path} adds ${String(added.length)} pin(s) but no release-age ` +
+              `quarantine governs it: Bun reads ${BUNFIG_NAME} only from the ` +
+              `directory it installs in, and ${bunfigPath} sets no ` +
+              `[install] minimumReleaseAge. Add one; ` +
+              `scripts/check-standalone-lockfiles.ts lists what else a standalone ` +
+              `lockfile needs.`
+          : `${lockfile.path} adds ${String(added.length)} pin(s) but no release-age ` +
+              `quarantine governs it: crates are held to the [install] ` +
+              `minimumReleaseAge of ${bunfigPath}, which sets none.`,
       );
       continue;
     }
 
     const ageMs = policy.minimumReleaseAgeSeconds * 1000;
     const quarantine = `${describeAge(policy.minimumReleaseAgeSeconds)} quarantine of ${policy.bunfigPath}`;
+    const lookup = lookups[format.ecosystem];
     const results = await Promise.all(
-      added.map(async (pin) => {
-        if (policy.excludes.has(pin.name)) {
-          return { outcome: undefined, pin };
-        }
-        return { outcome: await lookup(pin), pin };
-      }),
+      added.map(async (pin) =>
+        isExcludedAt(policy, format.excludeName(pin.name), now)
+          ? { outcome: undefined, pin }
+          : { outcome: await lookup(pin), pin },
+      ),
     );
     for (const { outcome: result, pin } of results) {
       const id = `${lockfile.path}: ${pinKey(pin)}`;
+      const excludeName = format.excludeName(pin.name);
       if (result === undefined) {
-        const expiresAt = policy.temporaryExpiries.get(pin.name);
+        const expiresAt = policy.temporaryExpiries.get(excludeName);
         report.checked.push(
           expiresAt === undefined
             ? `${id} excluded from the quarantine by ${policy.bunfigPath}`
@@ -433,7 +509,7 @@ export const checkLockfileReleaseAges = async ({
         report.quarantined.push(
           `${id} was published ${publishedAt}; the ${quarantine} admits it at ${admittedAt.toISOString()}.\n` +
             `    To pin it before then, add a reasoned temporary exclude to ${policy.bunfigPath}:\n` +
-            `      "${pin.name}", # quarantine-expires: ${admittedAt.toISOString()}`,
+            `      "${excludeName}", # quarantine-expires: ${admittedAt.toISOString()}`,
         );
         continue;
       }
@@ -504,7 +580,9 @@ const main = async () => {
       : gitOrExit(["ls-tree", "-r", "-z", "--name-only", headRef])
   )
     .split("\0")
-    .filter((file) => path.posix.basename(file) === LOCKFILE_NAME);
+    .filter((file) =>
+      Object.hasOwn(LOCKFILE_FORMATS, path.posix.basename(file)),
+    );
   const changed = new Set(
     gitOrExit([
       "diff",
@@ -549,7 +627,10 @@ const main = async () => {
 
   const report = await checkLockfileReleaseAges({
     lockfiles,
-    lookup: createRegistryLookup(),
+    lookups: {
+      cratesIo: createCratesIoClient().publishTime,
+      npm: createRegistryLookup(),
+    },
     now,
     ...(packageName === undefined ? {} : { packageName }),
   });

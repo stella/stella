@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds a batch read status for a failed entry; no parser reads it.
 /**
  * The closed vocabulary a batch decision read answers each of its entries in.
  *
@@ -22,14 +23,20 @@ export const DECISION_READ_STATUS = {
    * budget was spent on earlier entries.
    */
   pending: "pending",
+  /**
+   * The read of this one decision failed on the server. Kept to the entry, so
+   * the other entries of the batch still answer.
+   */
+  readFailed: "read_failed",
 } as const;
 
 /**
- * Why an entry carries no decision. Two distinct answers because the next
- * call differs: an unknown id is a search, a pending document is the same
- * read again on its own.
+ * Why an entry carries no decision. Distinct answers because the next call
+ * differs: an unknown id is a search, a pending document is the same read
+ * again on its own, and a failed read is a report rather than a retry.
  */
 export const DECISION_READ_ABSENCE_STATUSES = [
   DECISION_READ_STATUS.notFound,
   DECISION_READ_STATUS.pending,
+  DECISION_READ_STATUS.readFailed,
 ] as const;

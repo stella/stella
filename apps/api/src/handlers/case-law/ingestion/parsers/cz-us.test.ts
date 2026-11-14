@@ -4,9 +4,10 @@ import fc from "fast-check";
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { assertProperty } from "@stll/property-testing";
 
-import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -16,23 +17,26 @@ import {
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
-  VISIBLE_RUN_CASES,
   VISIBLE_FIELD_DOCUMENT,
+  VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
 import {
-  noteTableRtf,
-  furnitureRtf,
-  NOTE_PATHS,
-  LINE_BOUNDARIES,
-  notePathDocument,
   assertNotePath,
+  furnitureRtf,
+  LINE_BOUNDARIES,
+  NOTE_PATHS,
+  notePathDocument,
+  noteTableRtf,
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 test("CZ field results keep visible hyphens and omit instructions", () => {
   const line = usDocumentLinesOf(VISIBLE_FIELD_DOCUMENT).at(0);
@@ -322,9 +326,8 @@ describe("parseUsDecisionHtml", () => {
       const input = baseInput(rtfDecisionHtml);
       const { documentAst } = parseUsDecisionHtml(input);
 
-      const headings = findAllByType(documentAst.blocks, "heading");
-      const takto = headings.find((h) => h.plainText === "takto:");
-      expect(takto).toBeDefined();
+      const takto = documentAst.blocks.find((b) => b.plainText === "takto:");
+      expect(takto).toMatchObject({ type: "paragraph", role: "intro" });
     });
 
     test("detects Odůvodnění separator (spaced variant)", () => {
@@ -348,6 +351,58 @@ describe("parseUsDecisionHtml", () => {
       const holdingTexts = holdings.map((h) => h.plainText);
       expect(holdingTexts.some((t) => t.includes("porušeno právo"))).toBe(true);
       expect(holdingTexts.some((t) => t.includes("zrušuje"))).toBe(true);
+    });
+
+    // A synthetic page with no recorded legacy segmentation, built the way
+    // the other synthetic inputs are.
+    const sbnuRuling = (tail: string[]) =>
+      parseUsDecisionHtml({
+        ...baseInput(""),
+        html: `
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${[
+            "\\pard Nález Ústavního soudu ze dne 3. března 2005 ve věci ústavní stížnosti stěžovatele J. K. proti rozsudku Městského soudu v Praze",
+            "\\par",
+            "Ústavní stížnost se zamítá.",
+            ...tail,
+          ].join("\n")}" />
+          <input id="docIdHidden" value="99999" />
+        </body></html>
+      `,
+      }).documentAst.blocks;
+
+    test("opens the ruling at the SbNU nález caption, which prints no takto:", () => {
+      const blocks = sbnuRuling([
+        "\\par",
+        "Odůvodnění:",
+        "\\par",
+        "1. Stěžovatel se domáhal zrušení rozsudku.",
+      ]);
+
+      expect(findByRole(blocks, "intro")?.plainText).toStartWith(
+        "Nález Ústavního soudu",
+      );
+      expect(findAllByRole(blocks, "holding").map((b) => b.plainText)).toEqual([
+        "Ústavní stížnost se zamítá.",
+      ]);
+    });
+
+    test("closes the ruling at the signatures and the instruction", () => {
+      const blocks = sbnuRuling([
+        "\\par",
+        "V Brně dne 3. března 2005",
+        "\\par",
+        "JUDr. Tomáš Lichovník v. r.",
+        "\\par",
+        "předseda senátu",
+        "\\par",
+        "Poučení: Proti tomuto nálezu se nelze odvolat.",
+      ]);
+
+      expect(findAllByRole(blocks, "holding").map((b) => b.plainText)).toEqual([
+        "Ústavní stížnost se zamítá.",
+      ]);
     });
   });
 
@@ -520,6 +575,44 @@ describe("parseUsDecisionHtml", () => {
       });
     });
 
+    // A concurring judge agrees with the outcome: the opinion is that
+    // judge's argumentation, not a dissent.
+    test.each([
+      ["Odlišné stanovisko sudcu A. B.", "dissent"],
+      ["Odlišné stanovisko sudkyne A. B.", "dissent"],
+      ["Paralelní stanovisko soudkyně A. B.", "argumentation"],
+      ["Konkurujúce stanovisko sudcov A. B. a C. D.", "argumentation"],
+    ] as const)("shares CS/SK opinion roles at %s", (opinionLine, role) => {
+      const lines = [
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        opinionLine,
+        `2. ${DISSENT_TEXT}`,
+      ].map((text) => ({
+        kind: "body" as const,
+        value: normalizeInlineLine([{ type: "text", text }]),
+      }));
+      const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
+        parser: "cz-us",
+        caseNumber: "test",
+      });
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "heading",
+          plainText: opinionLine,
+          role: "section-heading",
+        }),
+      );
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "paragraph",
+          plainText: DISSENT_TEXT,
+          number: 2,
+          role,
+        }),
+      );
+    });
+
     test("keeps the number the court printed on the opinion heading", () => {
       const heading = "3. Odlišné stanovisko soudce Jana Nováka";
       const parsed = parseUsDecisionHtml(baseInput(decisionWith(heading)));
@@ -578,6 +671,70 @@ describe("parseUsDecisionHtml", () => {
 
       const sigs = findAllByRole(documentAst.blocks, "signature");
       expect(sigs.some((s) => s.plainText.includes("JUDr."))).toBe(true);
+    });
+
+    const MAJORITY_TEXT = "Ústavní soud shledal ústavní stížnost důvodnou.";
+    const DISSENT_TEXT = "Se závěrem senátní většiny nesouhlasím.";
+
+    const classifiedRoles = (texts: readonly string[]) =>
+      classifyUsDocumentLines(
+        texts.map((text) => ({
+          kind: "body" as const,
+          value: normalizeInlineLine([{ type: "text", text }]),
+        })),
+      ).map((block) => ({
+        text: block.plainText,
+        role: block.type === "paragraph" ? block.role : block.type,
+      }));
+
+    // The Court's judges sign a separate opinion with their name alone: no
+    // academic title and no "v. r." under the opinion's own closing.
+    test("reads a bare name under a separate opinion's closing as its signature", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "V Brně dne 24. září 2026",
+        "Jan Novák v. r.",
+        "předseda senátu",
+        "Odlišné stanovisko soudce Jana Nováka",
+        DISSENT_TEXT,
+        "V Brně dne 24. září 2026",
+        "Jan Novák",
+      ]);
+
+      expect(roles.at(-2)).toEqual({
+        text: "V Brně dne 24. září 2026",
+        role: "closing",
+      });
+      expect(roles.at(-1)).toEqual({ text: "Jan Novák", role: "signature" });
+      expect(roles).toContainEqual({ text: DISSENT_TEXT, role: "dissent" });
+    });
+
+    test("reads every bare name of a signature block under the closing", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "V Brně dne 24. září 2026",
+        "Petra Svobodová-Dvořáková",
+        "Jan Novák",
+      ]);
+
+      expect(roles.slice(-2)).toEqual([
+        { text: "Petra Svobodová-Dvořáková", role: "signature" },
+        { text: "Jan Novák", role: "signature" },
+      ]);
+    });
+
+    test("leaves a name-shaped line that no closing precedes as opinion text", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "Odlišné stanovisko soudce Jana Nováka",
+        DISSENT_TEXT,
+        "Jan Novák",
+      ]);
+
+      expect(roles.at(-1)).toEqual({ text: "Jan Novák", role: "dissent" });
     });
   });
 
@@ -1311,3 +1468,87 @@ for (const destination of ["header", "footer"] as const) {
     },
   );
 }
+
+describe("CZ printed lines read as paragraphs", () => {
+  /** A printed line of I. ÚS 549/2000, ending at the margin mid-sentence. */
+  const WRAPPED_LINE =
+    "stížnosti stěžovatelů A. M., bytem SRN,  a O. M., bytem, SRN, obou";
+  const rtfOf = (lines: readonly string[]): string =>
+    `{\\rtf1\\ansi \\pard ${lines.join("\\par ")}\\par}`;
+
+  /** Characters the reader trims while reading `count` lines of one paragraph. */
+  const trimmedCharacters = (count: number) => {
+    let characters = 0;
+    const lines = usDocumentLinesOf(
+      readRtfString(
+        rtfOf([...Array.from({ length: count }, () => WRAPPED_LINE), "konec."]),
+      ),
+      {
+        normalize: (nodes) => {
+          const line = normalizeInlineLine(nodes);
+          characters += line.plainText.length;
+          return line;
+        },
+      },
+    );
+    return { characters, lines };
+  };
+
+  test("trims each line of a long paragraph once, not the paragraph per line", () => {
+    const small = trimmedCharacters(200);
+    const large = trimmedCharacters(400);
+
+    expect(small.lines).toHaveLength(1);
+    expect(large.lines).toHaveLength(1);
+    // Every line once as it joins and the paragraph once as it closes:
+    // twice the text, whatever the paragraph's length.
+    const text = (count: number) => count * (WRAPPED_LINE.length + 1);
+    expect(small.characters).toBeGreaterThanOrEqual(text(200));
+    expect(small.characters).toBeLessThanOrEqual(2 * text(200) + 100);
+    expect(large.characters).toBeLessThanOrEqual(2 * text(400) + 100);
+  });
+
+  test("keeps sentences of one width and the ruling after takto: apart", () => {
+    const sentences = Array.from({ length: 4 }, () => [
+      "Ústavní soud posoudil návrh a neshledal jej důvodným.",
+      "Napadené rozhodnutí obecného soudu bylo řádně odůvodněno.",
+    ]).flat();
+    const { documentAst } = parseUsDecisionHtml({
+      html: `
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${rtfOf([
+            "Ústavní soud rozhodl o ústavní stížnosti takto:",
+            "Ústavní stížnost se zamítá.",
+            "Odůvodnění",
+            ...sentences,
+          ])}" />
+        </body></html>
+      `,
+      caseNumber: "I.ÚS 100/25",
+      ecli: undefined,
+      court: "Ústavní soud",
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      )?.plainText,
+    ).toBe("Ústavní stížnost se zamítá.");
+    // The sentence handing over to the ruling is part of the opening.
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "intro",
+      )?.plainText,
+    ).toBe("Ústavní soud rozhodl o ústavní stížnosti takto:");
+    expect(
+      documentAst.blocks
+        .filter(
+          (block) => block.type === "paragraph" && block.role === undefined,
+        )
+        .map((block) => block.plainText),
+    ).toEqual(sentences);
+  });
+});

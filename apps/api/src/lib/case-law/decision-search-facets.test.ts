@@ -18,8 +18,8 @@ import {
   decisionTypeKindBuckets,
   foldStatedDecisionTypeBuckets,
   groupCourtsByTier,
-  presentCourtYear,
   labelSourceBuckets,
+  presentCourtYear,
   type SearchFacetBucket,
 } from "@/api/lib/case-law/decision-search-facets";
 import { STATED_DECISION_TYPE_KINDS } from "@/api/lib/case-law/decision-type-kind";

@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   aggregateLockBaseline,
@@ -6,10 +8,109 @@ import {
   aggregateLockSites,
 } from "../.oxlint-plugins/aggregate-lock-sites.ts";
 import {
+  AGGREGATE_LOCK_NAMESPACES_PATH,
+  aggregateLockNamespaceProblems,
+  aggregateLockNamespacesFromSource,
   aggregateLockSourceIncluded,
   parseAggregateLockBaseline,
   parseAggregateLockGitBatch,
+  parseAggregateLockNamespaces,
+  parseRowLockGrants,
+  parseSchemaTableNames,
+  ROLE_PRIVILEGE_CENSUS_PATH,
+  rowLockHolderProblems,
+  SCHEMA_INDEX_DIR,
 } from "./check-aggregate-locks.ts";
+
+const REPO_ROOT = path.resolve(import.meta.dir, "..");
+
+test("local Postgres cluster lock has an infrastructure owner", () => {
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/dev-postgres-lock.ts"),
+  ).toBe(false);
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/shared-test-postgres.ts"),
+  ).toBe(true);
+});
+
+test("the namespace ledger matches what the owner source declares", () => {
+  expect(
+    aggregateLockNamespacesFromSource(
+      readFileSync(
+        path.join(REPO_ROOT, "apps/api/src/lib/db/aggregate-lock.ts"),
+        "utf-8",
+      ),
+    ),
+  ).toEqual(
+    parseAggregateLockNamespaces(
+      readFileSync(
+        path.join(REPO_ROOT, AGGREGATE_LOCK_NAMESPACES_PATH),
+        "utf-8",
+      ),
+    ),
+  );
+});
+
+test("reads literal, named and identity first keys from an owner source", () => {
+  const source = [
+    "const NAMED_LOCK_NAMESPACE = 0x0f_10_cc_b4;",
+    "",
+    "const advisoryResource = (options: AdvisoryIdentityOptions) => {",
+    "  switch (options.aggregate) {",
+    '    case "literal":',
+    "      return { first: sql`@{0x0f_10_cc_a9}::integer`, second: sql`0` };",
+    '    case "named": {',
+    "      const key = options.id;",
+    "      return { first: sql`@{NAMED_LOCK_NAMESPACE}::integer`, second: sql`0` };",
+    "    }",
+    '    case "text":',
+    "      return { first: sql`hashtext('text')`, second: sql`0` };",
+    '    case "identity":',
+    "      return { first: sql`hashtext(@{options.id})`, second: sql`0` };",
+    "  }",
+    "};",
+    "",
+  ]
+    .join("\n")
+    // The fixture spells interpolations with @ so the lines stay plain strings.
+    .replaceAll("@{", () => String.fromCodePoint(36, 123));
+  expect(aggregateLockNamespacesFromSource(source)).toEqual({
+    identity: "hashtext(<identity>)",
+    literal: "0x0f10cca9::integer",
+    named: "0x0f10ccb4::integer",
+    text: "hashtext('text')",
+  });
+});
+
+test("an aggregate keeps its deployed namespace and a new one takes a fresh one", () => {
+  const previous = {
+    kept: "0x0f10cca9::integer",
+    moved: "0x0f10ccae::integer",
+    removed: "0x0f10ccaf::integer",
+  };
+  expect(
+    aggregateLockNamespaceProblems({
+      current: {
+        kept: "0x0f10cca9::integer",
+        moved: "0x0f10ccb3::integer",
+        reusing: "0x0f10ccaf::integer",
+        fresh: "0x0f10ccb4::integer",
+        duplicate: "0x0f10ccb4::integer",
+      },
+      previous,
+    }),
+  ).toEqual([
+    "duplicate: advisory first-key namespace 0x0f10ccb4::integer is also fresh's; give each aggregate its own.",
+    "moved: advisory first-key namespace changed from 0x0f10ccae::integer to 0x0f10ccb3::integer; workers of the base revision still lock 0x0f10ccae::integer, so keep it.",
+    "reusing: advisory first-key namespace 0x0f10ccaf::integer belongs to removed on the base revision; choose one no revision has used.",
+  ]);
+  expect(
+    aggregateLockNamespaceProblems({
+      current: { kept: "0x0f10cca9::integer", fresh: "0x0f10ccb4::integer" },
+      previous,
+    }),
+  ).toEqual([]);
+});
 
 test("enumerates production source while retaining owner and migration boundaries", () => {
   expect(aggregateLockSourceIncluded("apps/api/src/handlers/new.ts")).toBe(
@@ -84,3 +185,134 @@ for (const primitive of [
     ).not.toHaveLength(0);
   });
 }
+
+const holderFile = "apps/api/src/lib/example.ts";
+const holderTables = parseSchemaTableNames([
+  "## readable_ledger · `readableLedger` · example.ts:1 · rls",
+  "## mutable_rows · `mutableRows` · example.ts:9 · rls",
+]);
+const holderGrants = parseRowLockGrants(
+  JSON.stringify({
+    public: [],
+    roles: [
+      {
+        role: "stella",
+        privileges: [
+          "table:public.readable_ledger:SELECT:EFFECTIVE",
+          "table:public.mutable_rows:SELECT:EFFECTIVE",
+          "column:public.mutable_rows.status:UPDATE:EFFECTIVE",
+        ],
+      },
+      {
+        role: "stella_worker",
+        privileges: ["table:public.readable_ledger:UPDATE:EFFECTIVE"],
+      },
+    ],
+  }),
+);
+const holderProblems = (source: string, holder?: string) => {
+  const sites = aggregateLockSites(holderFile, source);
+  const baseline = aggregateLockBaseline(sites).map((row) => ({
+    ...row,
+    ...(holder === undefined ? {} : { holder }),
+  }));
+  return rowLockHolderProblems({
+    sites,
+    baseline,
+    grants: holderGrants,
+    tables: holderTables,
+  });
+};
+
+test("an application-role row lock needs UPDATE on every table it reaches", () => {
+  const ledgerLock = 'tx.select().from(readableLedger).for("update")';
+  expect(holderProblems(ledgerLock)).toEqual([
+    `${holderFile}:1: locks public.readable_ledger, where role stella has no UPDATE, so PostgreSQL refuses the lock; grant it, lock another row, or declare the baseline row's holder`,
+  ]);
+  // One updatable column is enough, as PostgreSQL decides it.
+  expect(
+    holderProblems('tx.select().from(mutableRows).for("key share")'),
+  ).toEqual([]);
+  expect(
+    holderProblems(
+      'tx.select().from(mutableRows).innerJoin(readableLedger, on).for("update", { of: mutableRows })',
+    ),
+  ).toEqual([]);
+  expect(
+    holderProblems(
+      `sql\`SELECT id FROM \${mutableRows} m JOIN readable_ledger l ON true FOR SHARE\``,
+    ),
+  ).toHaveLength(1);
+});
+
+test("a declared holder is held to its own grants and must be needed", () => {
+  const ledgerLock = 'tx.select().from(readableLedger).for("update")';
+  expect(holderProblems(ledgerLock, "stella_worker")).toEqual([]);
+  expect(holderProblems(ledgerLock, "owner")).toEqual([]);
+  expect(holderProblems(ledgerLock, "stella_reader")).toEqual([
+    `${holderFile}:1: holder "stella_reader" is neither "owner" nor a role in ${ROLE_PRIVILEGE_CENSUS_PATH}`,
+  ]);
+  expect(
+    holderProblems('tx.select().from(mutableRows).for("update")', "owner"),
+  ).toEqual([
+    `${holderFile}:1: declares holder "owner" but role stella can lock what it locks; drop the holder`,
+  ]);
+  expect(
+    holderProblems('tx.select().from(mutableRows).for("update")', "stella"),
+  ).toEqual([`${holderFile}:1: holder "stella" is the default; drop it`]);
+  expect(
+    holderProblems("tx.execute(sql`SELECT pg_advisory_xact_lock(1)`)", "owner"),
+  ).toEqual([
+    expect.stringContaining("Holder on a baseline row that takes no row lock"),
+  ]);
+});
+
+test("a row lock whose table cannot be named needs a declared holder", () => {
+  for (const source of [
+    'await query.for("update")',
+    'tx.select().from(unknownTable).for("update")',
+  ]) {
+    expect(holderProblems(source)).toEqual([
+      expect.stringContaining("cannot tell which table this row lock reaches"),
+    ]);
+    expect(holderProblems(source, "owner")).toEqual([]);
+  }
+});
+
+// The candidate-source read as it stood before acceptance stopped locking it:
+// the application role reads that insert-only table but holds no UPDATE on it.
+test("the census and schema index refuse a lock on candidate sources", () => {
+  const source = [
+    "const liveSources = await tx",
+    "  .select({ id: legalListGenerationCandidateSources.id })",
+    "  .from(legalListGenerationCandidateSources)",
+    "  .where(eq(legalListGenerationCandidateSources.candidateId, candidateId))",
+    '  .for("update");',
+  ].join("\n");
+  const sites = aggregateLockSites(holderFile, source);
+  const census = readFileSync(
+    path.join(REPO_ROOT, ROLE_PRIVILEGE_CENSUS_PATH),
+    "utf-8",
+  );
+  const indexDir = path.join(REPO_ROOT, SCHEMA_INDEX_DIR);
+  const tables = parseSchemaTableNames(
+    readdirSync(indexDir)
+      .filter((name) => name.endsWith(".md"))
+      .map((name) => readFileSync(path.join(indexDir, name), "utf-8")),
+  );
+  expect(tables.get("legalListGenerationCandidateSources")).toBe(
+    "legal_list_generation_candidate_sources",
+  );
+  expect(
+    rowLockHolderProblems({
+      sites,
+      baseline: aggregateLockBaseline(sites),
+      grants: parseRowLockGrants(census),
+      tables,
+    }),
+  ).toEqual([
+    expect.stringContaining(
+      "locks public.legal_list_generation_candidate_sources, where role stella has no UPDATE",
+    ),
+  ]);
+});

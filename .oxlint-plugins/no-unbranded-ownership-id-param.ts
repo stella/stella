@@ -33,9 +33,9 @@ import {
   SAFE_HANDLER_FACTORIES,
 } from "../apps/api/src/lib/safe-handler-factories.ts";
 import {
+  canonicalModuleId,
   getPropertyName as getIdentifierName,
   resolveImport,
-  canonicalModuleId,
 } from "./utils.ts";
 
 const DEFAULT_NAMES = new Set(["workspaceId", "organizationId", "userId"]);

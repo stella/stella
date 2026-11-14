@@ -10,12 +10,12 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
+  type CitationGraphFacts,
   graphFingerprintOf,
+  SIGNIFICANCE_PROMPT_VERSION,
   significanceOutputSchema,
   significanceSystemPrompt,
   significanceUserMessage,
-  SIGNIFICANCE_PROMPT_VERSION,
-  type CitationGraphFacts,
 } from "./significance";
 
 const id = (last: string) =>

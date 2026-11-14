@@ -9,11 +9,11 @@ import {
 } from "@/api/handlers/time-entries/time-entry-columns";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canManageTimeEntry } from "@/api/lib/billing/time-entry-authorization";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const readTimeEntryByIdParamsSchema = workspaceParams({
-  id: tSafeId("timeEntry"),
+  id: resourceIdSchema("timeEntry"),
 });
 
 const readTimeEntryById = createSafeHandler(

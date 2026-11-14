@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_PAGE_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
@@ -16,6 +16,7 @@ import {
   selectDefaultVersionId,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
+import { status } from "@/api/http/status";
 import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
@@ -29,21 +30,26 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
-export const readStatuteBySlugParamsSchema = t.Object({
-  slug: t.String({ minLength: 1, maxLength: STATUTE_SLUG_MAX_LENGTH }),
+export const readStatuteBySlugParamsSchema = v.object({
+  slug: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(STATUTE_SLUG_MAX_LENGTH),
+  ),
 });
 
-export const readStatuteBySlugQuerySchema = t.Object({
+export const readStatuteBySlugQuerySchema = v.object({
   country: tPublicLawCountry,
-  /** Absent means the version in force today, else the latest one. */
-  asOf: t.Optional(t.String({ format: "date" })),
+  asOf: v.optional(apiDateSchema),
 });
 
-type ReadStatuteBySlugQuery = Static<typeof readStatuteBySlugQuerySchema>;
+type ReadStatuteBySlugQuery = v.InferOutput<
+  typeof readStatuteBySlugQuerySchema
+>;
 
 type ReadStatuteBySlugOptions = {
   legislationDb: LegislationReadDb;
-  params: Static<typeof readStatuteBySlugParamsSchema>;
+  params: v.InferOutput<typeof readStatuteBySlugParamsSchema>;
   query: ReadStatuteBySlugQuery;
 };
 

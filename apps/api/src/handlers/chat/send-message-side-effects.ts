@@ -18,9 +18,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type UploadMessageFilesWithRollbackProps = {
   message: PersistableChatMessage;
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -38,6 +40,7 @@ type UploadMessageFilesWithRollbackResult = Result<
 
 export const uploadMessageFilesWithRollback = async ({
   message,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -46,6 +49,7 @@ export const uploadMessageFilesWithRollback = async ({
 }: UploadMessageFilesWithRollbackProps): Promise<UploadMessageFilesWithRollbackResult> => {
   const uploadResult = await uploadMessageFiles({
     message,
+    organizationId,
     recordAuditEvent,
     safeDb,
     threadId,
@@ -74,7 +78,13 @@ export const uploadMessageFilesWithRollback = async ({
     return Result.err(uploadResult.error);
   }
 
-  captureError(uploadResult.error, { threadId });
+  captureError(
+    uploadResult.error,
+    handlerErrorContext(
+      "chat.uploadMessageFilesWithRollback.uploadResult_error",
+      { threadId },
+    ),
+  );
   return Result.err(rollbackResult.error);
 };
 

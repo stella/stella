@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
-  FolderPlusIcon,
   FilePlus2Icon,
+  FolderPlusIcon,
   LayoutTemplateIcon,
   PlusIcon,
   SquareCheckIcon,
@@ -25,6 +25,8 @@ import { stellaToast } from "@stll/ui/toast";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
+import { SharepointImportDialog } from "@/features/sharepoint/sharepoint-import-dialog";
+import { SharepointImportMenuItem } from "@/features/sharepoint/sharepoint-menu-item";
 import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -32,6 +34,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
@@ -83,8 +86,10 @@ export const AddEntityMenu = ({
   showTaskOption = true,
   uploadOnly = false,
 }: AddEntityMenuProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [styleDialogOpen, setStyleDialogOpen] = useState(false);
+  const [sharepointDialogOpen, setSharepointDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const workflowView = useIsWorkflowRunning(workspaceId);
   const workflowDisabled = workflowActionsDisabled(workflowView);
@@ -153,19 +158,29 @@ export const AddEntityMenu = ({
     style: StyleSelection,
   ): Promise<boolean> => {
     const input = {
-      queryKey: entitiesKeys.all(workspaceId),
       name,
       parentId: parentId ? toSafeId<"entity">(parentId) : null,
     };
     const response =
       style.type === "stella"
-        ? await api.entities({ workspaceId })["blank-document"].put(input)
-        : await api
-            .entities({ workspaceId })
-            ["blank-document-from-style-set"].put({
+        ? await idempotentSubmit.run({
+            operation: 'api.entities({workspaceId})["blank-document"]',
+            body: input,
+            send: async (body) =>
+              api.entities({ workspaceId })["blank-document"].put(body),
+          })
+        : await idempotentSubmit.run({
+            operation:
+              'api.entities({workspaceId})["blank-document-from-style-set"]',
+            body: {
               ...input,
               styleSetId: toSafeId<"styleSet">(style.styleSetId),
-            });
+            },
+            send: async (body) =>
+              api
+                .entities({ workspaceId })
+                ["blank-document-from-style-set"].put(body),
+          });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return false;
@@ -225,6 +240,10 @@ export const AddEntityMenu = ({
                 <UploadIcon />
                 {t("common.uploadFiles")}
               </MenuItem>
+              <SharepointImportMenuItem
+                disabled={workflowDisabled}
+                onSelect={() => setSharepointDialogOpen(true)}
+              />
               {canCreateStyledDocument && (
                 <MenuItem
                   disabled={workflowDisabled}
@@ -271,6 +290,12 @@ export const AddEntityMenu = ({
           workspaceId={workspaceId}
         />
       )}
+      <SharepointImportDialog
+        onOpenChange={setSharepointDialogOpen}
+        open={sharepointDialogOpen}
+        parentId={parentId ?? null}
+        workspaceId={workspaceId}
+      />
       {canCreateStyledDocument && (
         <StyleSetPickerDialog
           initialName={t("styleSets.untitledDocument")}

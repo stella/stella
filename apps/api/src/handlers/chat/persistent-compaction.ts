@@ -18,6 +18,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 
 export type ChatThreadCompactionCheckpoint = {
@@ -52,6 +53,7 @@ export const decodeChatCompactionDeltaCursor = (
     : null;
 
 type ReadLatestChatCompactionOnTxProps = {
+  caseLawDb?: Parameters<typeof readChatCopyProjection>[0]["caseLawDb"];
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 };
@@ -65,6 +67,7 @@ type ReadLatestChatCompactionOnTxProps = {
 export const readLatestChatCompactionOnTx = async ({
   threadId,
   tx,
+  caseLawDb,
 }: ReadLatestChatCompactionOnTxProps): Promise<ChatThreadCompactionCheckpoint | null> => {
   const row = await tx.query.chatThreadCompactions.findFirst({
     where: {
@@ -82,22 +85,34 @@ export const readLatestChatCompactionOnTx = async ({
     },
     orderBy: { createdAt: "desc" },
   });
-  return row ?? null;
+  if (row === undefined) {
+    return null;
+  }
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: row,
+    caseLawDb,
+  });
+  return projection.compaction(row, subjectByThread.get(threadId));
 };
 
 type ReadLatestChatCompactionProps = SafeDbOrTx & {
+  caseLawDb?: Parameters<typeof readChatCopyProjection>[0]["caseLawDb"];
   threadId: SafeId<"chatThread">;
 };
 
 export const readLatestChatCompaction = async ({
   threadId,
+  caseLawDb,
   ...handle
 }: ReadLatestChatCompactionProps): Promise<
   Result<ChatThreadCompactionCheckpoint | null, SafeDbError>
 > =>
   await withScopedTx(
     handle,
-    async (tx) => await readLatestChatCompactionOnTx({ threadId, tx }),
+    async (tx) =>
+      await readLatestChatCompactionOnTx({ threadId, tx, caseLawDb }),
   );
 
 type ApplyChatCompactionCheckpointProps = {

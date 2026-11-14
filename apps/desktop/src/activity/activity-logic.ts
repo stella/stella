@@ -12,6 +12,7 @@ export type TimedSegment = {
   document: string | null;
   windowTitle: string | null;
   matterId: string | null;
+  call: boolean;
   endMs: number;
   startMs: number;
 };
@@ -34,6 +35,7 @@ export const timedSegments = (
         document,
         windowTitle,
         matterId,
+        call,
         end,
         start,
       }) => ({
@@ -42,6 +44,7 @@ export const timedSegments = (
         document: document ?? null,
         windowTitle: windowTitle ?? null,
         matterId: matterId ?? null,
+        call: call ?? false,
         endMs: Temporal.Instant.from(end).epochMilliseconds,
         startMs: Temporal.Instant.from(start).epochMilliseconds,
       }),

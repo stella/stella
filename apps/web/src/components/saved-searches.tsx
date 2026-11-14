@@ -20,12 +20,13 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -33,9 +34,11 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import {
@@ -50,8 +53,9 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -111,7 +115,7 @@ export const SavedSearches = ({
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -122,30 +126,42 @@ export const SavedSearches = ({
     setDialog({ type: "closed" });
     await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
   };
-  const onMutationError = (error: Error) => {
-    analytics.captureError(error);
+  const onMutationError = (
+    error: Error,
+    operation: "create" | "rename" | "delete",
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey: "SavedSearches.onMutationError:failure",
+      scope: { type: "handler", handlerId: `saved-search.${operation}` },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
+  const submitIntent = useIdempotentSubmit();
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
       const criteria = toSavedSearchCriteria({ filters, query });
       const { time, workspaceIds, ...requiredCriteria } = criteria;
-      return unwrapEden(
-        await api["saved-searches"].post({
-          name,
-          criteria: {
-            ...requiredCriteria,
-            workspaceIds: workspaceIds.map((workspaceId) =>
-              toSafeId<"workspace">(workspaceId),
-            ),
-            ...(time !== undefined && { time }),
+      return unwrapApiResponse(
+        await submitIntent.run({
+          operation: "saved-searches.create",
+          body: {
+            name,
+            criteria: {
+              ...requiredCriteria,
+              workspaceIds: workspaceIds.map((workspaceId) =>
+                toSafeId<"workspace">(workspaceId),
+              ),
+              ...(time !== undefined && { time }),
+            },
           },
+          send: async (creationPayload) =>
+            api["saved-searches"].post(creationPayload),
         }),
       );
     },
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "create"),
   });
 
   const renameMutation = useMutation({
@@ -156,18 +172,20 @@ export const SavedSearches = ({
       name: string;
       savedSearchId: SavedSearch["id"];
     }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["saved-searches"]({ savedSearchId }).patch({ name }),
       ),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "rename"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (savedSearchId: SavedSearch["id"]) =>
-      unwrapEden(await api["saved-searches"]({ savedSearchId }).delete()),
+      unwrapApiResponse(
+        await api["saved-searches"]({ savedSearchId }).delete(),
+      ),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "delete"),
   });
 
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
@@ -184,7 +202,10 @@ export const SavedSearches = ({
     if (!showList || !savedSearchesError) {
       return;
     }
-    analytics.captureError(savedSearchesError);
+    analytics.captureError(savedSearchesError, {
+      fingerprintKey: "SavedSearches:savedSearchesError",
+      scope: { type: "handler", handlerId: "SavedSearches:savedSearchesError" },
+    });
   }, [analytics, savedSearchesError, showList]);
   const isSaving = createMutation.isPending || renameMutation.isPending;
   const isMutatingSavedSearch = isSaving || deleteMutation.isPending;
@@ -268,9 +289,9 @@ export const SavedSearches = ({
                 variant="ghost"
               >
                 <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {savedSearch.name}
-                </BidiText>
+                </TruncatedText>
               </Button>
               <Button
                 aria-label={t("common.rename")}
@@ -350,16 +371,17 @@ export const SavedSearches = ({
                 : t("search.saveSearchTitle")}
             </DialogTitle>
           </DialogHeader>
-          <form
+          <Form
+            className="gap-0"
             onSubmit={(event) => {
               event.preventDefault();
               saveName();
             }}
           >
             <div className="px-6 pb-6">
-              <label className="sr-only" htmlFor="saved-search-name">
+              <Label className="sr-only" htmlFor="saved-search-name">
                 {t("common.name")}
-              </label>
+              </Label>
               <Input
                 autoFocus
                 dir={contentDir(dialogName)}
@@ -396,7 +418,7 @@ export const SavedSearches = ({
                 {t("common.save")}
               </Button>
             </DialogFooter>
-          </form>
+          </Form>
         </DialogPopup>
       </Dialog>
 

@@ -16,6 +16,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { formatIsoDateForDisplay } from "@/api/lib/date-format";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import { writeFieldValue } from "@/api/lib/fields/write-field";
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -61,8 +62,11 @@ const formatFieldValue = (content: FieldContent): string => {
     case "unsupported":
     case "clip":
       return "(unsupported)";
+    case "record":
+      return recordText(content.state);
     default:
-      return "";
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };
 
@@ -76,9 +80,7 @@ export type ChatFieldWriter = {
   recordAuditEvent: AuditRecorder | undefined;
   userId: SafeId<"user">;
   /** Writes are refused unless the matter's status here is "active". */
-  workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 type WorkspaceToolsContext = {
@@ -190,6 +192,10 @@ export const fieldContentForValue = ({
     case "person":
       return invalid(
         `Property is "${propType}"; set it from the workspace UI.`,
+      );
+    case "record":
+      return invalid(
+        'Property is "record"; its value comes from its data source or AI column, not a write.',
       );
     case "text": {
       if (typeof value !== "string") {
@@ -406,7 +412,7 @@ export const createWorkspaceTools = ({
       // An archived matter stays read-only here as it is over REST and MCP; a
       // matter without a known status is not assumed to be active.
       if (
-        fieldWriter.workspaceStatusById?.get(allowedWorkspaceId) !== "active"
+        fieldWriter.workspaceStatusById.get(allowedWorkspaceId) !== "active"
       ) {
         throw new ChatToolError({
           kind: "unavailable",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  buildHostBridgePrelude,
   SANDBOX_BLOCKED_GLOBALS,
   SANDBOX_BRIDGE_LOCAL_ALIAS,
   SANDBOX_CONSOLE_BRIDGE_GLOBAL,
@@ -9,7 +10,6 @@ import {
   SANDBOX_HOST_BRIDGE_GLOBAL,
   SANDBOX_READ_GLOBAL,
   SANDBOX_THENABLE_PROPERTY_NAMES,
-  buildHostBridgePrelude,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 
 describe("buildHostBridgePrelude", () => {

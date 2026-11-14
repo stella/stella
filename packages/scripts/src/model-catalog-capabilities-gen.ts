@@ -61,9 +61,10 @@ import type {
 } from "./model-catalog-capabilities";
 import { formatInteger } from "./model-catalog-rates-gen";
 import {
-  MODELS_DEV_KEY_BY_PROVIDER,
   loadModelCatalogSnapshot,
+  MODELS_DEV_KEY_BY_PROVIDER,
 } from "./model-catalog-snapshot";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
@@ -518,5 +519,7 @@ const main = async (): Promise<void> => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   await main();
 }

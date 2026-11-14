@@ -34,12 +34,11 @@ jobs:
       affected: ${{ steps.scope.outputs.affected }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           # The pushed range can span several commits; blobless keeps the
           # history cheap and fetches only the files the check reads.
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       - name: Setup Bun
@@ -61,7 +60,7 @@ jobs:
           if [[ "$EVENT_NAME" != "push" ]]; then
             affected=true
           elif ! affected="$(
-            bun scripts/landing-deploy-scope.ts --base "$BEFORE" --head "$GITHUB_SHA"
+            bun scripts/landing-deploy-scope.ts --package @stll/landing --base "$BEFORE" --head "$GITHUB_SHA"
           )"; then
             echo "::warning::Could not scope the landing deploy; deploying."
             affected=true
@@ -84,13 +83,12 @@ jobs:
       artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           # The landing build dates sitemap entries from git history and
           # emits none on a shallow checkout. Blobless keeps the full
           # history cheap: only the checked-out tree's blobs are fetched.
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       - name: Setup Bun
@@ -114,7 +112,7 @@ jobs:
 
       - name: Upload the built site
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.name.outputs.artifact-name }}
           path: apps/landing/dist/
@@ -135,10 +133,9 @@ jobs:
     environment: release-app
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       - name: Setup Bun
@@ -153,16 +150,17 @@ jobs:
       # replace it. Anything that cannot be decided deploys; the deploy side
       # still refuses a build older than the live site.
       - name: Check whether a newer deploy covers this one
+        timeout-minutes: 5
         id: covered
         run: |
           covered=false
-          if ! git fetch --quiet --filter=blob:none origin main; then
+          if ! bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --quiet --filter=blob:none origin main; then
             echo "::warning::Could not fetch main; deploying."
           else
             main_sha="$(git rev-parse FETCH_HEAD)"
             if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
               if affected="$(
-                bun scripts/landing-deploy-scope.ts --base "$GITHUB_SHA" --head "$main_sha"
+                bun scripts/landing-deploy-scope.ts --package @stll/landing --base "$GITHUB_SHA" --head "$main_sha"
               )"; then
                 if [[ "$affected" == "true" ]]; then
                   covered=true
@@ -178,7 +176,7 @@ jobs:
       - name: Mint App token for the private workflows repo
         id: app-token
         if: steps.covered.outputs.covered != 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}

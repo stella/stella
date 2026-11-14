@@ -21,14 +21,16 @@ import type {
 } from "@/api/lib/email/inbound/ingest";
 import { InboundPersistenceError } from "@/api/lib/email/inbound/ingest";
 import { createInboundMailStore } from "@/api/lib/email/inbound/store";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -80,6 +82,7 @@ const candidate = (sender: string): Candidate => {
     message: {
       direction: "out",
       channel: "email",
+      dataBox: null,
       messageId: "<message@example.test>",
       contentHash: "a".repeat(64),
       from: { address: sender, name: null },
@@ -145,9 +148,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db
-        .delete(organization)
-        .where(inArray(organization.id, [orgA, orgB]));
+      await deleteOrganizationsForTest(db, [orgA, orgB]);
       await db
         .delete(user)
         .where(
@@ -214,6 +215,14 @@ if (!databaseUrl || !runPostgresTests) {
           createdAt: new Date(),
         },
       ]);
+      await recordNewOrganizationAccessState(db, {
+        organizationId: orgA,
+        now: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId: orgB,
+        now: new Date(),
+      });
       await db.insert(member).values([
         {
           id: mintAuthProviderIdValue(),

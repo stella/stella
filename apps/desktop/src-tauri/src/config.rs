@@ -47,7 +47,7 @@ fn parse_origins(value: Option<String>) -> Vec<String> {
     .collect()
 }
 
-fn is_loopback_host(parsed: &reqwest::Url) -> bool {
+pub(crate) fn is_loopback_host(parsed: &reqwest::Url) -> bool {
   parsed.host_str().is_some_and(|host| {
     host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
   })
@@ -99,8 +99,9 @@ pub fn normalize_api_base_url(url: &str) -> String {
 }
 
 pub fn normalize_self_host_web_origin(value: &str) -> Result<String, String> {
-  let parsed = reqwest::Url::parse(value.trim())
-    .map_err(|_| "Self-host web origin is not a valid URL.".to_string())?;
+  let parsed = reqwest::Url::parse(value.trim()).map_err(
+    crate::logging::with_cause_logged("Self-host web origin is not a valid URL."),
+  )?;
   reject_non_origin_url(&parsed)?;
 
   if !is_allowed_user_trusted_url(&parsed) {
@@ -112,8 +113,9 @@ pub fn normalize_self_host_web_origin(value: &str) -> Result<String, String> {
 
 pub fn normalize_self_host_api_base_url(value: &str) -> Result<String, String> {
   let normalized = normalize_api_base_url(value.trim());
-  let parsed = reqwest::Url::parse(&normalized)
-    .map_err(|_| "Self-host API URL is not a valid URL.".to_string())?;
+  let parsed = reqwest::Url::parse(&normalized).map_err(
+    crate::logging::with_cause_logged("Self-host API URL is not a valid URL."),
+  )?;
   reject_non_origin_url(&parsed)?;
 
   if !is_allowed_user_trusted_url(&parsed) {

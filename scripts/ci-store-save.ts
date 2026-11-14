@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
   mkdtempSync,
@@ -209,7 +209,10 @@ const saveStore = async ({ key, store }: SaveStoreOptions) => {
     }
   }, 1000);
   try {
-    if (spawnSync("zstd", ["--version"], { stdio: "ignore" }).status !== 0) {
+    if (
+      spawnSync("zstd", ["--version"], { maxBuffer: 2 ** 30, stdio: "ignore" })
+        .status !== 0
+    ) {
       throw new StoreSaveError("zstd unavailable; refusing a gzip cache save");
     }
     directory = mkdtempSync(path.join(tmpdir(), "stella-store-save-"));
@@ -282,7 +285,7 @@ const saveStore = async ({ key, store }: SaveStoreOptions) => {
 };
 
 export const runStoreSaveAction = async () => {
-  // The post hook is a boundary: failed cache maintenance must warn without
+  // The action entry is a boundary: failed cache maintenance must warn without
   // changing the job verdict, even when cleanup or telemetry writing fails.
   const fatal = (error: unknown) => {
     for (const child of activeChildren) {
@@ -299,23 +302,12 @@ export const runStoreSaveAction = async () => {
   process.once("uncaughtException", fatal);
   process.once("unhandledRejection", fatal);
   try {
-    const key = process.env["STATE_key"];
-    const store = process.env["STATE_store"];
-    if (key !== undefined && store !== undefined) {
-      await saveStore({ key, store });
-      return;
+    const key = process.env["INPUT_KEY"];
+    const store = process.env["INPUT_PATH"];
+    if (key === undefined || store === undefined) {
+      throw new StoreSaveError("Missing cache action inputs");
     }
-    const state = process.env["GITHUB_STATE"];
-    const inputKey = process.env["INPUT_KEY"];
-    const inputStore = process.env["INPUT_PATH"];
-    if (
-      state === undefined ||
-      inputKey === undefined ||
-      inputStore === undefined
-    ) {
-      throw new StoreSaveError("Missing cache action state or inputs");
-    }
-    appendFileSync(state, `key=${inputKey}\nstore=${inputStore}\n`);
+    await saveStore({ key, store });
   } catch (error) {
     warning(
       `Cache maintenance failed: ${error instanceof Error ? error.message : String(error)}`,

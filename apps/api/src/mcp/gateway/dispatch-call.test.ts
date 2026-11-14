@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { LoadedChatSkill } from "@/api/lib/agent-skills/skills";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { LIMITS } from "@/api/lib/limits";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Mock the two dispatch collaborators so this file exercises only
@@ -27,7 +28,7 @@ const dependencies = {
   resolveSkillTool: resolveSkillToolMock,
 };
 
-const context = asTestRaw<McpRequestContext>({
+const context = asTestRaw<AuthorizedMcpRequestContext>({
   organizationId: toSafeId<"organization">("org_1"),
   userId: toSafeId<"user">("user_1"),
 });
@@ -44,6 +45,7 @@ const resolvedSkill = asTestRaw<ResolvedSkillTool>({
 const loadedSkill = {
   body: "# Alpha skill body",
   compatibility: "stella>=1",
+  contentHash: "0".repeat(64),
   description: "Alpha",
   id: toSafeId<"agentSkill">("skill_alpha"),
   license: "MIT",
@@ -154,7 +156,7 @@ describe("dispatchGatewayToolCall", () => {
 
     const result = await dispatchGatewayToolCall({
       args: {},
-      context: asTestRaw<McpRequestContext>({
+      context: asTestRaw<AuthorizedMcpRequestContext>({
         ...context,
         grantedScopes: ["stella:skills"],
       }),
@@ -302,5 +304,98 @@ describe("dispatchGatewayToolCall", () => {
     );
 
     expect(rejection).toBe(otherFault);
+  });
+
+  describe("resource windows", () => {
+    const WINDOW = LIMITS.agentSkillResourceModelContextMaxChars;
+    const path = "references/commentary.md";
+
+    const readResource = async (content: string, args: object) => {
+      resolveSkillToolMock.mockResolvedValue(resolvedSkill);
+      readSkillToolMock.mockResolvedValue({
+        type: "resource",
+        content,
+        path,
+        skill: resolvedSkill,
+      });
+      const result = await dispatchGatewayToolCall({
+        args: { resource: path, ...args },
+        context,
+        mode: "advanced",
+        toolName: "skill__alpha",
+        dependencies,
+      });
+      if (result?.type !== "internal") {
+        throw new Error("expected an internal gateway result");
+      }
+      return result.result;
+    };
+
+    const windowOf = (result: Awaited<ReturnType<typeof readResource>>) => {
+      if (result.status !== "success" || result.data.type !== "resource") {
+        throw new Error("expected a resource window");
+      }
+      return result.data;
+    };
+
+    test("serves a long file one window at a time until nextCursor is null", async () => {
+      const content = `${"a".repeat(WINDOW - 1)}😀${"b".repeat(5)}`;
+
+      const first = windowOf(await readResource(content, {}));
+      expect(first).toEqual({
+        type: "resource",
+        charCount: content.length,
+        content: "a".repeat(WINDOW - 1),
+        id: toSafeId<"agentSkill">("skill_alpha"),
+        name: "alpha",
+        nextCursor: expect.any(String),
+        path,
+      });
+
+      const last = windowOf(
+        await readResource(content, { cursor: first.nextCursor }),
+      );
+      expect(last.content).toBe(`😀${"b".repeat(5)}`);
+      expect(last.nextCursor).toBeNull();
+      expect(`${first.content}${last.content}`).toBe(content);
+    });
+
+    test("refuses a cursor once the file changed, and audits the read as failed", async () => {
+      const content = "x".repeat(WINDOW + 1);
+      const { nextCursor } = windowOf(await readResource(content, {}));
+      recordSkillReadAuditMock.mockClear();
+
+      const result = await readResource(`${content}y`, { cursor: nextCursor });
+
+      expect(result).toMatchObject({
+        status: "error",
+        error: { code: "validation_error", message: "Invalid cursor" },
+      });
+      expect(recordSkillReadAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reads: [expect.objectContaining({ outcome: "error", path })],
+        }),
+      );
+    });
+
+    test("refuses a cursor without the resource it continues", async () => {
+      const content = "x".repeat(WINDOW + 1);
+      const { nextCursor } = windowOf(await readResource(content, {}));
+      readSkillToolMock.mockClear();
+
+      const result = await dispatchGatewayToolCall({
+        args: { cursor: nextCursor },
+        context,
+        mode: "advanced",
+        toolName: "skill__alpha",
+        dependencies,
+      });
+
+      expect(result).toMatchObject({
+        type: "internal",
+        result: { status: "error", error: { code: "validation_error" } },
+      });
+      expect(readSkillToolMock).not.toHaveBeenCalled();
+    });
   });
 });

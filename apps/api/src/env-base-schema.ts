@@ -1,9 +1,12 @@
+// parser-output-unchanged: Deployment environment labels telemetry; no parser reads it.
+// parser-output-unchanged: kill-switch overrides are admission state read per request; no parser reads them.
 // parser-output-unchanged: Database login admission configuration does not change parsed ingestion records.
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
 // parser-output-unchanged: Case-law search guidance affects the MCP tool text only, not parsed records.
 // parser-output-unchanged: The derived-AI gate controls post-ingestion analysis only, not parsed records.
+// parser-output-unchanged: The feature grant parameter name drives an API grant refresh only, not parsed records.
 /**
  * Base environment variables shared by all entrypoints
  * (API server, ingestion scripts, CLI tools).
@@ -18,24 +21,24 @@ import * as v from "valibot";
 import { redisSettingsSchema } from "@stll/redis-config";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
-import {
-  DATABASE_COMPONENT_KEYS,
-  hasSecureDatabaseTransport,
-} from "@/api/db-url";
+import { DATABASE_COMPONENT_KEYS } from "@/api/db-components";
+import { hasSecureDatabaseTransport } from "@/api/db-url";
 import { CASE_LAW_DERIVED_AI_MODES } from "@/api/lib/case-law/derived-ai-mode";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
   CORPUS_STORAGE_MODES,
-  type CorpusStorageMode,
   corpusStorageInvariantViolation,
+  type CorpusStorageMode,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
 import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
+import { killSwitchesEnvSchema } from "@/api/lib/kill-switches/registry";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
+import { DEPLOY_ENVIRONMENTS } from "@/api/lib/observability/release-failure-contract";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   isLoopbackHostname,
@@ -121,7 +124,10 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 };
 
 export const envBaseServerSchema = {
+  DEPLOY_ENVIRONMENT: v.optional(v.picklist(DEPLOY_ENVIRONMENTS)),
   API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
+  KILL_SWITCHES: killSwitchesEnvSchema,
+  API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME: v.optional(v.string()),
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),
@@ -139,10 +145,6 @@ export const envBaseServerSchema = {
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
   PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
   PUBLIC_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
-  // REMOVAL CONDITION: delete both CASE_LAW_* inputs after v0.7.22 is no
-  // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
-  CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
-  CASE_LAW_DATABASE_POOL_MAX: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_RESERVED_CONNECTIONS: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_ASSUMED_REPLICAS: v.optional(positiveIntegerValueSchema, "2"),
   PUBLIC_CORPUS_SEARCH_P95_SECONDS: v.optional(positiveIntegerValueSchema, "1"),
@@ -324,7 +326,6 @@ export const resolveApiEnvironmentPlaceholders = ({
 };
 
 type EnvBaseInvariantInput = {
-  CASE_LAW_DATABASE_URL?: string | undefined;
   PUBLIC_LAW_DATABASE_URL?: string | undefined;
   CORPUS_INDEX_Q09_ENDPOINT?: string | undefined;
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT?: string | undefined;
@@ -342,29 +343,13 @@ type EnvBaseInvariantInput = {
   runtimeMode: RuntimeMode;
 };
 
-const rollbackInputInvariantViolation = ({
-  CASE_LAW_DATABASE_URL,
-  PUBLIC_LAW_DATABASE_URL,
-}: EnvBaseInvariantInput): string | null => {
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    PUBLIC_LAW_DATABASE_URL === undefined
-  ) {
-    return "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.";
-  }
-  return null;
-};
-
 const databaseTransportInvariantViolation = ({
-  CASE_LAW_DATABASE_URL,
   DATABASE_URL,
   PUBLIC_LAW_DATABASE_URL,
   runtimeMode,
 }: EnvBaseInvariantInput): string | null => {
   const localDevOpen = runtimeMode.mode === RUNTIME_MODE.open;
-  const hasPublicLawDatabaseUrl =
-    PUBLIC_LAW_DATABASE_URL !== undefined ||
-    CASE_LAW_DATABASE_URL !== undefined;
+  const hasPublicLawDatabaseUrl = PUBLIC_LAW_DATABASE_URL !== undefined;
   if (!localDevOpen && !hasSecureDatabaseTransport(DATABASE_URL)) {
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
@@ -373,12 +358,6 @@ const databaseTransportInvariantViolation = ({
     !hasSecureDatabaseTransport(PUBLIC_LAW_DATABASE_URL)
   ) {
     return "PUBLIC_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
-  }
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    !hasSecureDatabaseTransport(CASE_LAW_DATABASE_URL)
-  ) {
-    return "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
   if (!localDevOpen && hasPublicLawDatabaseUrl) {
     return "Public-law database URLs are only supported in local development.";
@@ -448,15 +427,12 @@ const corpusEndpointInvariantViolation = ({
 };
 
 const publicLawTopologyInvariantViolation = ({
-  CASE_LAW_DATABASE_URL,
   CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
   LEGAL_SEARCH_PROVIDER,
   PUBLIC_LAW_DATABASE_URL,
 }: EnvBaseInvariantInput): string | null => {
-  const hasPublicLawDatabaseUrl =
-    PUBLIC_LAW_DATABASE_URL !== undefined ||
-    CASE_LAW_DATABASE_URL !== undefined;
+  const hasPublicLawDatabaseUrl = PUBLIC_LAW_DATABASE_URL !== undefined;
   if (hasPublicLawDatabaseUrl && LEGAL_SEARCH_PROVIDER !== "corpus-index") {
     return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
@@ -526,7 +502,6 @@ const storageAndIndexInvariantViolation = ({
 export const envBaseInvariantViolation = (
   input: EnvBaseInvariantInput,
 ): string | null =>
-  rollbackInputInvariantViolation(input) ??
   databaseTransportInvariantViolation(input) ??
   redisTransportInvariantViolation(input) ??
   corpusEndpointInvariantViolation(input) ??

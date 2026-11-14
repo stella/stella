@@ -8,7 +8,11 @@ const MARKER = "SENTINEL_FOREIGN_TEXT";
 const failures = {
   Panic: new Panic({ message: MARKER }),
   UnhandledException: new UnhandledException({ cause: new Error(MARKER) }),
-  HandlerError: new HandlerError({ status: 503, message: "Request refused" }),
+  HandlerError: new HandlerError({
+    status: 503,
+    code: "internal_error",
+    message: "Request refused",
+  }),
 };
 
 for (const [label, error] of Object.entries(failures)) {

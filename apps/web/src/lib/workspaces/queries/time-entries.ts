@@ -2,7 +2,9 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { TimeEntrySource, TimeEntryStatus } from "@stll/api-contract";
+import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 
+import { visitCursorPages } from "@/lib/infinite-query";
 import {
   fetchTimeEntries,
   fetchTimeEntrySuggestions,
@@ -33,17 +35,20 @@ type TimeEntriesListKey = {
   hasActiveTimer?: boolean | undefined;
 };
 
-type PersonalTimeEntry = {
-  billable: boolean;
-  dateWorked: string;
-  durationMinutes: number;
-  id: string;
-  narrative: string;
-  narrativeLanguage: string | null;
-  source: TimeEntrySource;
-  status: TimeEntryStatus;
-  timerStartedAt: string | null;
-};
+type PersonalTimeEntry = Pick<
+  TimeEntry,
+  | "userId"
+  | "activityCode"
+  | "billable"
+  | "dateWorked"
+  | "durationMinutes"
+  | "id"
+  | "narrative"
+  | "narrativeLanguage"
+  | "source"
+  | "status"
+  | "timerStartedAt"
+>;
 
 type PersonalTimeEntryPage = {
   items: PersonalTimeEntry[];
@@ -171,6 +176,8 @@ const listPersonalTimeEntries = async ({
   return {
     items: page.items.map(
       ({
+        userId,
+        activityCode,
         billable,
         dateWorked,
         durationMinutes,
@@ -181,6 +188,8 @@ const listPersonalTimeEntries = async ({
         status,
         timerStartedAt,
       }) => ({
+        userId,
+        activityCode,
         billable,
         dateWorked,
         durationMinutes,
@@ -203,8 +212,24 @@ export const timeEntriesOptions = (
 ) =>
   queryOptions({
     queryKey: timeEntriesKeys.list(workspaceId, userId, filters),
-    queryFn: async ({ signal }) =>
-      (await listTimeEntries({ workspaceId, filters, signal })).items,
+    // Every page: a caller filtering a whole matter (approvals, pending
+    // counts) must not stop silently at the API's default page size.
+    queryFn: async ({ signal }) => {
+      const items: Awaited<ReturnType<typeof listTimeEntries>>["items"] = [];
+      await visitCursorPages({
+        getPage: async (cursor) =>
+          await listTimeEntries({
+            workspaceId,
+            filters,
+            ...(cursor !== undefined && { cursor }),
+            signal,
+          }),
+        visit: (page) => {
+          items.push(...page.items);
+        },
+      });
+      return items;
+    },
   });
 
 export const timeEntriesInfiniteOptions = (

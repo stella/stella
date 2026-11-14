@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import { pgTable, text, integer, primaryKey } from "drizzle-orm/pg-core";
+import { integer, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestClock } from "@stll/test-kit";
 
 import { organization } from "@/api/db/auth-schema";
 import { auditLogs, flowRuns, workspaces } from "@/api/db/schema";
@@ -23,6 +24,8 @@ import { isPgError } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestRawExecute } from "@/api/tests/helpers/raw-execute";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const stateClock = createTestClock();
 
 const organizationId = mintAuthProviderId<"organization">();
 const workspaceId = createSafeId<"workspace">();
@@ -97,7 +100,11 @@ test("a successful transition commits one system audit; a stale transition recor
         tx: transactional,
         spec: TRANSITIONS.flowRuns,
         id: runId,
-        options: { from: ["pending"], to: "running" },
+        options: {
+          from: ["pending"],
+          to: "running",
+          set: { startedAt: new Date(stateClock.now()) },
+        },
         recordTransitionAuditEvent: async (auditTx, row) => {
           expect(auditTx).toBe(transactional);
           await recordAuditEvent(auditTx, {
@@ -135,7 +142,11 @@ test("a real audit insert failure rolls back the already applied transition", as
         tx: transactional,
         spec: TRANSITIONS.flowRuns,
         id: runId,
-        options: { from: ["pending"], to: "running" },
+        options: {
+          from: ["pending"],
+          to: "running",
+          set: { startedAt: new Date(stateClock.now()) },
+        },
         recordTransitionAuditEvent: async (auditTx, row) => {
           expect(auditTx).toBe(transactional);
           expect((await auditTx.select().from(flowRuns)).at(0)?.status).toBe(
@@ -212,7 +223,11 @@ test("an audit failure rolls back every row in a batch", async () => {
         tx: transactional,
         spec: TRANSITIONS.flowRuns,
         ids: [runId, secondId],
-        options: { from: ["pending"], to: "cancelled" },
+        options: {
+          from: ["pending"],
+          to: "cancelled",
+          set: { finishedAt: new Date(stateClock.now()) },
+        },
         recordTransitionAuditEvent: async (auditTx, rows) => {
           expect(rows).toHaveLength(2);
           await recordAuditEvent(

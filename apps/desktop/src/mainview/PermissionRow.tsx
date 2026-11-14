@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
 import { Switch } from "@stll/ui/switch";
 
 import type { Permission, PermissionRow as Row } from "../shared/permissions";
@@ -12,6 +13,10 @@ const PERMISSION_COPY = {
   accessibility: {
     description: "permissionAccessibilityDescription",
     label: "permissionAccessibility",
+  },
+  microphone: {
+    description: "permissionMicrophoneDescription",
+    label: "permissionMicrophone",
   },
   notifications: {
     description: "permissionNotificationsDescription",
@@ -24,6 +29,8 @@ const PERMISSION_COPY = {
 } as const satisfies Record<Permission, { description: string; label: string }>;
 
 type PermissionRowProps = {
+  /** Replaces the usual purpose where one feature asks for the permission. */
+  description?: string | undefined;
   onOpenSettings: () => void;
   onRequest: () => void;
   onTurnOff: () => void;
@@ -36,6 +43,7 @@ type PermissionRowProps = {
  * is a switch until macOS says it needs approval in Login Items.
  */
 export const PermissionRow = ({
+  description,
   onOpenSettings,
   onRequest,
   onTurnOff,
@@ -52,14 +60,12 @@ export const PermissionRow = ({
     <div className="flex items-start justify-between gap-4 px-4 py-3">
       <div className="min-w-0 flex-1">
         {usesSwitch ? (
-          <label className="text-sm font-medium" htmlFor={switchId}>
-            {t(copy.label)}
-          </label>
+          <Label htmlFor={switchId}>{t(copy.label)}</Label>
         ) : (
           <p className="text-sm font-medium">{t(copy.label)}</p>
         )}
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          {t(copy.description)}
+          {description ?? t(copy.description)}
         </p>
         {row.status === "denied" ? (
           <p className="text-warning-foreground mt-1 text-sm">
@@ -125,13 +131,13 @@ function permissionControl({
       );
     case "notDetermined":
       return (
-        <Button onClick={onRequest} size="sm" variant="outline">
+        <Button onClick={onRequest} variant="outline">
           {labels.allow}
         </Button>
       );
     case "denied":
       return (
-        <Button onClick={onOpenSettings} size="sm" variant="outline">
+        <Button onClick={onOpenSettings} variant="outline">
           {labels.openSettings}
         </Button>
       );

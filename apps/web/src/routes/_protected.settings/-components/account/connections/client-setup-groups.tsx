@@ -1,6 +1,3 @@
-import { useState } from "react";
-
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -8,23 +5,19 @@ import {
   MCP_HTTP_PATH,
   MCP_LAW_HTTP_PATH,
 } from "@stll/api-contract";
-import { copyToClipboard } from "@stll/clipboard";
 import {
   Accordion,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
 } from "@stll/ui/accordion";
-import { Button } from "@stll/ui/button";
 import {
   CaseLawIcon,
-  CheckIcon,
-  CopyIcon,
   DownloadIcon,
   EyeOffIcon,
   KeyRoundIcon,
-  ServerIcon,
   type LucideIcon,
+  ServerIcon,
 } from "@stll/ui/icons";
 import {
   List,
@@ -40,14 +33,11 @@ import {
   ListItemMedia,
   ListItemTitle,
 } from "@stll/ui/list";
-import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { getAnalytics } from "@/lib/analytics/provider";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { CopyControl } from "@/components/copy-control";
 
 const CLI_INSTALL_COMMAND = "npm i -g @stll/cli";
-const COPIED_FEEDBACK_MS = 1600;
 
 type SetupRow = {
   id: string;
@@ -189,50 +179,21 @@ const SetupList = ({ rows }: { rows: readonly SetupRow[] }) => (
         <ListItemActions>
           {row.note !== undefined && (
             <code
-              className="bg-muted text-muted-foreground hidden max-w-64 truncate rounded-md px-2 py-1 font-mono text-xs md:block"
+              className="bg-muted text-muted-foreground hidden max-w-64 rounded-md px-2 py-1 font-mono text-xs md:block"
               dir="ltr"
-              title={row.value}
             >
-              {row.value}
+              <TruncatedText>{row.value}</TruncatedText>
             </code>
           )}
-          <CopyValueButton value={row.value} />
+          <CopyControl
+            iconClassName="size-4"
+            iconOnly
+            size="icon-sm"
+            text={row.value}
+            variant="ghost"
+          />
         </ListItemActions>
       </ListItem>
     ))}
   </List>
 );
-
-/** Icon button that confirms in place (copy → check) and with a toast. */
-const CopyValueButton = ({ value }: { value: string }) => {
-  const t = useTranslations();
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    const result = await copyToClipboard(value);
-    if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
-      notifyUserError(result.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-    setCopied(true);
-    setTimeout(() => {
-      setCopied(false);
-    }, COPIED_FEEDBACK_MS);
-  };
-
-  return (
-    <Button
-      aria-label={t("common.copy")}
-      onClick={() => {
-        detached(copy(), "connections.copy-value");
-      }}
-      size="icon-sm"
-      type="button"
-      variant="ghost"
-    >
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </Button>
-  );
-};

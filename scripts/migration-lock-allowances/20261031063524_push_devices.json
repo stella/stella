@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The new push device table is empty, so its user and organization foreign keys validate no existing rows; the referenced relations take bounded catalog locks under 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty push device table created in the same migration, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The per-user and owner policies are catalog-only metadata on the new empty push device table, bounded by 1s lock_timeout and 5s statement_timeout."
+}

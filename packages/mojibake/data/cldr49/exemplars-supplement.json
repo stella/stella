@@ -1,0 +1,470 @@
+{
+  "version": "49.0.0",
+  "exemplars": {
+    "aa": {
+      "exemplarCharacters": "[a b t s e c k x i d q r f g o l m n u w h y]",
+      "auxiliary": "[j p v z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ab": {
+      "exemplarCharacters": "[а ә б в г {гә} {гь} ӷ {ӷә} {ӷь} д {дә} е ж {жә} {жь} з ӡ {ӡә} и к {кә} {кь} қ {қә} {қь} ҟ {ҟә} {ҟь} л м н о п ԥ р с т {тә} ҭ {ҭә} у ф х {хә} {хь} ҳ {ҳә} ц {цә} ҵ {ҵә} ч ҷ ҽ ҿ џ {џь} ш {шә} {шь} ы ь ҩ]",
+      "auxiliary": "[{а́} ҕ {ҕә} {ҕь} {е́} {и́} {о́} ҧ {у́} {ы́}]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘‚ \"“„ « » ( ) \\[ \\] \\{ \\} § @ * / \\& #]"
+    },
+    "an": {
+      "exemplarCharacters": "[aá b c d eé f g h ií j k l m n oó p q r s t uúü v w x y z]",
+      "auxiliary": "[· àâä ç èêë ìîï ñ òôö ùû]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ¡ ? ¿ . … '‘’ \"“” « » ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "ann": {
+      "exemplarCharacters": "[aàâ b {ch} d eèê f g iìî j k l m{m̀} nǹ{n̄} oòôọ{ọ̀}ộ p r s {sh} t uùû v w y z]",
+      "auxiliary": "[áǎ c éě h íǐ ḿ ń óǒ{ọ́}{ọ̌} q ṣ úǔ x]",
+      "punctuation": "[, ; ! ? .]"
+    },
+    "apc": {
+      "exemplarCharacters": "[ً ٌ ٍ َ ُ ِ ّ ْ ٰ ء آ أ ؤ إ ئ ا ب ة ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ى ي]",
+      "auxiliary": "[ـ\\u200C\\u200D\\u200E\\u200F پ چ ژ ڜ ڢ ڤ ڥ ٯ ڧ ڨ ک گ ی]",
+      "punctuation": "[\\- ‐‑ – — ، ؛ \\: ! ؟ . … ' \" « » ( ) \\[ \\] \\&]"
+    },
+    "arn": {
+      "exemplarCharacters": "[a {ch} d e f g i k lḻ {ll} m nñṉ {ng} o p r s {sh} tṯ {tr} uü w y]",
+      "auxiliary": "[b c h j q x z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "az-Arab": {
+      "exemplarCharacters": "[آ ؤ ا ب پ ت ث ج چ ح خ د ذ ر ز ژ س ش ص ض ط ظ ع غ ف ق ک گ ل م ن ه و ۆ ۇ ی ؽ]",
+      "auxiliary": "[\\u200C\\u200D\\u200E\\u200F َ ُ ِ ْ إ ك ڭ ى ي]",
+      "punctuation": "[\\- ‐‑ ، ٫ ٬ ؛ \\: ! ؟ . … ‹ › « » ( ) \\[ \\] * / \\\\]"
+    },
+    "bal": {
+      "exemplarCharacters": "[َ ُ ِ ّ ْ آ ا ئ ب پ ت ٹ ج چ د ڈ ر ڑ ز ژ س ش ک گ ل م ن و ۆ ه ی ێ ے]",
+      "auxiliary": "[\\u200C\\u200D ً ٔ ء أ ؤ إ ة ث ح خ ذ ص ض ط ظ ع غ ف ق ں ھ ہ]",
+      "punctuation": "[، ؛ \\: ! ؟ . ' ‹ › \" « »]"
+    },
+    "bal-Arab": {
+      "exemplarCharacters": "[َ ُ ِ ّ ْ آ ا ئ ب پ ت ٹ ج چ د ڈ ر ڑ ز ژ س ش ک گ ل م ن و ۆ ه ی ێ ے]",
+      "auxiliary": "[\\u200C\\u200D ً ٔ ء أ ؤ إ ة ث ح خ ذ ص ض ط ظ ع غ ف ق ں ھ ہ]",
+      "punctuation": "[، ؛ \\: ! ؟ . ' ‹ › \" « »]"
+    },
+    "bew": {
+      "exemplarCharacters": "[a b c d eéèĕ f g h i j k l m n o p q r s t u v w x y z]",
+      "auxiliary": "[áàăâåäãā æ čç ḍ êëē ğġ ḥḫ íìĭîïī ḷḹ ṁṃ ñṅṇ óòŏôöøō œ ṛṝ śšşṣ ṭ úùŭûüū ÿ żẓ ʾ ʿ]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "bgn": {
+      "exemplarCharacters": "[آ ئ ا ب پ ت ث ٹ ج چ ح خ د ڈ ر ز ڑ ژ س ش ص ض ط ظ غ ف ق ک گ ل م ن ھ و ۆ ی ێ]",
+      "auxiliary": "[\\u200C ؤ]",
+      "punctuation": "[‐ – — ، ؛ \\: ! ؟ . … ‘’ \"“” « » ( ) \\[ \\] § @ * \\\\ \\& # † ‡ ′ ″]"
+    },
+    "blt": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "bm-Nkoo": {
+      "exemplarCharacters": "[ߊ ߋ ߌ ߍ ߎ ߏ ߐ ߒ ߓ ߔ ߕ ߖ ߗ ߘ ߙ ߚ ߛ ߜ ߝ ߞ ߟ ߡ ߢ ߣ ߤ ߥ ߦ]",
+      "auxiliary": "[]",
+      "punctuation": "[߸ ߹ ߷]"
+    },
+    "bqi": {
+      "exemplarCharacters": "[ً ٌ ٍ ّ ٔ ء آ أ ؤ ئ ا ب پ ة ت ث ج چ ح خ د ذ ر ز ژ س ش ص ض ط ظ ع غ ف ق ک گ ل م ن ه و ی]",
+      "auxiliary": "[ـ\\u200C\\u200D\\u200E\\u200F َ ُ ِ ْ ٖ ٰ إ ك ى ي]",
+      "punctuation": "[\\- ‐‑ ، ٫ ٬ ؛ \\: ! ؟ . … ‹ › « » ( ) \\[ \\] * / \\\\]"
+    },
+    "bss": {
+      "exemplarCharacters": "[aáâǎā b c d eéêěē ə{ə́}{ə̂}{ə̌}{ə̄} ɛ{ɛ́}{ɛ̂}{ɛ̌}{ɛ̄} g h iíîǐī j k l mḿ nń ŋ oóôǒō ɔ{ɔ́}{ɔ̂}{ɔ̌}{ɔ̄} p s t uúûǔū w y z ʼ]",
+      "auxiliary": "[f q r v x]",
+      "punctuation": "[, ; \\: ! ? . ' \"]"
+    },
+    "byn": {
+      "exemplarCharacters": "[፟ ሀ ሁ ሂ ሃ ሄ ህ ሆ ለ ሉ ሊ ላ ሌ ል ሎ ሏ ሐ ሑ ሒ ሓ ሔ ሕ ሖ ሗ መ ሙ ሚ ማ ሜ ም ሞ ሟ ረ ሩ ሪ ራ ሬ ር ሮ ሯ ሰ ሱ ሲ ሳ ሴ ስ ሶ ሷ ሸ ሹ ሺ ሻ ሼ ሽ ሾ ሿ ቀ ቁ ቂ ቃ ቄ ቅ ቆ ቈ ቊ ቋ ቌ ቍ ቐ ቑ ቒ ቓ ቔ ቕ ቖ ቘ ቚ ቛ ቜ ቝ በ ቡ ቢ ባ ቤ ብ ቦ ቧ ቨ ቩ ቪ ቫ ቬ ቭ ቮ ቯ ተ ቱ ቲ ታ ቴ ት ቶ ቷ ቸ ቹ ቺ ቻ ቼ ች ቾ ቿ ኀ ኁ ኂ ኃ ኄ ኅ ኆ ኈ ኊ ኋ ኌ ኍ ነ ኑ ኒ ና ኔ ን ኖ ኗ ኘ ኙ ኚ ኛ ኜ ኝ ኞ ኟ አ ኡ ኢ ኣ ኤ እ ኦ ኧ ከ ኩ ኪ ካ ኬ ክ ኮ ኰ ኲ ኳ ኴ ኵ ኸ ኹ ኺ ኻ ኼ ኽ ኾ ዀ ዂ ዃ ዄ ዅ ወ ዉ ዊ ዋ ዌ ው ዎ ዐ ዑ ዒ ዓ ዔ ዕ ዖ ዘ ዙ ዚ ዛ ዜ ዝ ዞ ዟ ዠ ዡ ዢ ዣ ዤ ዥ ዦ ዧ የ ዩ ዪ ያ ዬ ይ ዮ ደ ዱ ዲ ዳ ዴ ድ ዶ ዷ ጀ ጁ ጂ ጃ ጄ ጅ ጆ ጇ ገ ጉ ጊ ጋ ጌ ግ ጎ ጐ ጒ ጓ ጔ ጕ ጘ ጙ ጚ ጛ ጜ ጝ ጞ ጟ ⶓ ⶔ ⶕ ⶖ ጠ ጡ ጢ ጣ ጤ ጥ ጦ ጧ ጨ ጩ ጪ ጫ ጬ ጭ ጮ ጯ ጸ ጹ ጺ ጻ ጼ ጽ ጾ ጿ ፈ ፉ ፊ ፋ ፌ ፍ ፎ ፏ ፐ ፑ ፒ ፓ ፔ ፕ ፖ ፗ]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "cad": {
+      "exemplarCharacters": "[aáà {aː}{áː}{àː} b {ch} {chʼ} d eéè {eː}{éː}{èː} h iíì {iː}{íː}{ìː} k {kʼ} m n oóò {oː}{óː}{òː} p s t {tsʼ} {tʼ} uúù {uː}{úː}{ùː} w y ˀ ʼ]",
+      "auxiliary": "[c f g j l q r v x z]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "cch": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "cho": {
+      "exemplarCharacters": "[a{a̱} b {ch} e f h {hl} i{i̱} k l m n o{o̱} p s {sh} t u v ʋ w y]",
+      "auxiliary": "[cč d g j q r š x z]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "cic": {
+      "exemplarCharacters": "[a{a̱} b {ch} f h i{i̱} k l {lh} m n {ng} o{o̱} p s {sh} t w y ʼ]",
+      "auxiliary": "[á{á̱} c d e g í{í̱} j ó{ó̱} q r u v x z]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "co": {
+      "exemplarCharacters": "[aà b c {chj} d eè f g {ghj} h iìï j l m n oò p q r s {sc} {sg} t uùü v z]",
+      "auxiliary": "[â æ ç éêë î k ñ ô œ úû w x yÿ]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "cu": {
+      "exemplarCharacters": "[҇ ꙽ ҃ ҂ а б ⷠ в ⷡ г ⷢ д ⷣ еє ж ⷤ ⷥ ѕ зꙁ ий ії к ⷦ л ⷧ м ⷨ н ⷩ ѻо ⷪ п р ⷬ с ⷭ т у ꙋ ф х ⷯ ѡ ѿ ꙍ ѽ ц ч ⷱ ш щ ⸯ ꙿ ъ ы ь ѣ ю ѫ ꙗѧ ѯ ѱ ѳ ѵѷ ⷴ]",
+      "auxiliary": "[҈ ҉\\u200C\\u200D ꙰ ꙱ ꙲ ︯ ҄ ︮ ꙯ ⷶ ꙣ ⷷ ꙴ ꙃ ꙅ ꙵ ꙶ ꙇ ꙉ ⷸ ꙥ ꙧ ҥ ꙩꙫꙭꙮꚙꚛ ⷫ ҁ ⷵ ⷮ ꙷ ⷹ ꚞ ꙻ ⷰ ꙡ џ ⷲ ⷳ ꙏ ꙸ ꙑ ꙹ ꙺ ⷺ ꙓ ⷻ ꙕ ⷼ ѥ ꚟ ⷽ ꙙ ⷾ ꙛ ѩ ꙝ ѭ ⷿ ꙟ]",
+      "punctuation": "[_ \\- ‐‑ – — ⹃ , ; \\: ! ? . ( ) ꙳ / ꙾]"
+    },
+    "dv": {
+      "exemplarCharacters": "[ހ ށ ނ ރ ބ ޅ ކ އ ވ މ ފ ދ ތ ލ ގ ޏ ސ ޑ ޒ ޓ ޔ ޕ ޖ ޗ ަ ާ ި ީ ު ޫ ެ ޭ ޮ ޯ ް]",
+      "auxiliary": "[\\u200C\\u200D ޙ ޚ ޜ ޢ ޣ ޥ ޛ ޘ ޠ ޡ ޤ ޝ ޞ ޟ ޱ]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "en-Dsrt": {
+      "exemplarCharacters": "[𐐨 𐐩 𐐪 𐐫 𐐬 𐐭 𐐮 𐐯 𐐰 𐐱 𐐲 𐐳 𐐴 𐐵 𐐶 𐐷 𐐸 𐐹 𐐺 𐐻 𐐼 𐐽 𐐾 𐐿 𐑀 𐑁 𐑂 𐑃 𐑄 𐑅 𐑆 𐑇 𐑈 𐑉 𐑊 𐑋 𐑌 𐑍 𐑎 𐑏]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "en-Shaw": {
+      "exemplarCharacters": "[𐑐 𐑑 𐑒 𐑓 𐑔 𐑕 𐑖 𐑗 𐑘 𐑙 𐑚 𐑛 𐑜 𐑝 𐑞 𐑟 𐑠 𐑡 𐑢 𐑣 𐑤 𐑥 𐑦 𐑧 𐑨 𐑩 𐑪 𐑫 𐑬 𐑭 𐑮 𐑯 𐑰 𐑱 𐑲 𐑳 𐑴 𐑵 𐑶 𐑷 𐑸 𐑹 𐑺 𐑻 𐑼 𐑽 𐑾 𐑿]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "frr": {
+      "exemplarCharacters": "[aåäā b c dđ eē f g h i j k l m n oö p r s t uü w]",
+      "auxiliary": "[áàăâã æ ç éèĕêë ğ íìĭîïİī ı ñ óòŏôøō œ q ş ß úùŭûū v x yÿ z]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘‚ \"“„ « » ( ) \\[ \\] \\{ \\} § @ * / \\& #]"
+    },
+    "gez": {
+      "exemplarCharacters": "[፟ ᎐ ᎑ ᎒ ᎓ ᎔ ᎕ ᎖ ᎗ ᎘ ᎙ ሀ ሁ ሂ ሃ ሄ ህ ሆ ለ ሉ ሊ ላ ሌ ል ሎ ሐ ሑ ሒ ሓ ሔ ሕ ሖ መ ሙ ሚ ማ ሜ ም ሞ ሠ ሡ ሢ ሣ ሤ ሥ ሦ ረ ሩ ሪ ራ ሬ ር ሮ ሰ ሱ ሲ ሳ ሴ ስ ሶ ቀ ቁ ቂ ቃ ቄ ቅ ቆ ቈ ቊ ቋ ቌ ቍ በ ቡ ቢ ባ ቤ ብ ቦ ተ ቱ ቲ ታ ቴ ት ቶ ኀ ኁ ኂ ኃ ኄ ኅ ኆ ኈ ኊ ኋ ኌ ኍ ነ ኑ ኒ ና ኔ ን ኖ አ ኡ ኢ ኣ ኤ እ ኦ ከ ኩ ኪ ካ ኬ ክ ኮ ኰ ኲ ኳ ኴ ኵ ወ ዉ ዊ ዋ ዌ ው ዎ ዐ ዑ ዒ ዓ ዔ ዕ ዖ ዘ ዙ ዚ ዛ ዜ ዝ ዞ የ ዩ ዪ ያ ዬ ይ ዮ ደ ዱ ዲ ዳ ዴ ድ ዶ ገ ጉ ጊ ጋ ጌ ግ ጎ ጐ ጒ ጓ ጔ ጕ ጠ ጡ ጢ ጣ ጤ ጥ ጦ ጰ ጱ ጲ ጳ ጴ ጵ ጶ ጸ ጹ ጺ ጻ ጼ ጽ ጾ ፀ ፁ ፂ ፃ ፄ ፅ ፆ ፈ ፉ ፊ ፋ ፌ ፍ ፎ ፐ ፑ ፒ ፓ ፔ ፕ ፖ]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "gn": {
+      "exemplarCharacters": "[aã {ch} eẽ g{g̃} h iĩ j k l m {mb} nñ {nd} {ng} {nt} oõ p r {rr} s t uũ v yỹ ʼ]",
+      "auxiliary": "[b c d f q w x z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ha-Arab": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "hnj": {
+      "exemplarCharacters": "[𞄱 𞄶 𞄲 𞄳 𞄰 𞄴 𞄵 𞅏 𞄼 𞄽 𞄀 𞄁 𞄂 𞄃 𞄄 𞄅 𞄆 𞄇 𞄈 𞄉 𞄊 𞄋 𞄌 𞄍 𞄎 𞄏 𞄐 𞄑 𞄒 𞄓 𞄔 𞄕 𞄖 𞄗 𞄘 𞄙 𞄚 𞄛 𞄜 𞄝 𞄞 𞄟 𞄠 𞄡 𞄢 𞄣 𞄤 𞄥 𞄦 𞄧 𞄨 𞄩 𞄪 𞄫 𞄬 𞅎]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "hnj-Hmnp": {
+      "exemplarCharacters": "[𞄱 𞄶 𞄲 𞄳 𞄰 𞄴 𞄵 𞅏 𞄼 𞄽 𞄀 𞄁 𞄂 𞄃 𞄄 𞄅 𞄆 𞄇 𞄈 𞄉 𞄊 𞄋 𞄌 𞄍 𞄎 𞄏 𞄐 𞄑 𞄒 𞄓 𞄔 𞄕 𞄖 𞄗 𞄘 𞄙 𞄚 𞄛 𞄜 𞄝 𞄞 𞄟 𞄠 𞄡 𞄢 𞄣 𞄤 𞄥 𞄦 𞄧 𞄨 𞄩 𞄪 𞄫 𞄬 𞅎]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "ht": {
+      "exemplarCharacters": "[a {an} b {ch} d eè {en} f g h i j k l m n {ng} oò {on} {ou} {oun} p r s t {ui} v w y z]",
+      "auxiliary": "[x]",
+      "punctuation": "[\\- ‑ , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ / \\& # % ′ ″]"
+    },
+    "io": {
+      "exemplarCharacters": "[a b c d e f g h i j k l m n o p q r s t u v w x y z]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "iu": {
+      "exemplarCharacters": "[ᐃ ᐄ ᐅ ᐆ ᐊ ᐋ ᐱ ᐲ ᐳ ᐴ ᐸ ᐹ ᑉ ᑎ ᑏ ᑐ ᑑ ᑕ ᑖ ᑦ ᑭ ᑮ ᑯ ᑰ ᑲ ᑳ ᒃ ᒋ ᒌ ᒍ ᒎ ᒐ ᒑ ᒡ ᒥ ᒦ ᒧ ᒨ ᒪ ᒫ ᒻ ᓂ ᓃ ᓄ ᓅ ᓇ ᓈ ᓐ ᓕ ᓖ ᓗ ᓘ ᓚ ᓛ ᓪ ᓯ ᓰ ᓱ ᓲ ᓴ ᓵ ᔅ ᔨ ᔩ ᔪ ᔫ ᔭ ᔮ ᔾ ᕆ ᕇ ᕈ ᕉ ᕋ ᕌ ᕐ ᕕ ᕖ ᕗ ᕘ ᕙ ᕚ ᕝ ᕿ ᖀ ᖁ ᖂ ᖃ ᖅ ᖏ ᖑ ᖒ ᖓ ᖔ ᖕ ᙱ ᙲ ᙳ ᙴ ᙵ ᙶ ᖖ ᖠ ᖡ ᖢ ᖣ ᖤ ᖥ ᖦ]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "iu-Latn": {
+      "exemplarCharacters": "[a g i j k lł m n {ng} {nng} p q r s t u v]",
+      "auxiliary": "[b c d e f h o w x y z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "jbo": {
+      "exemplarCharacters": "[a b c d e f g h i j k l m n o p r s t u v x y z]",
+      "auxiliary": "[q w]",
+      "punctuation": "[, . ']"
+    },
+    "kaa": {
+      "exemplarCharacters": "[а ә б в г ғ д её ж з и й к қ л м н ң о ө п р с т уў ү ф х ҳ ц ч ш щ ъ ы ь э ю я]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "kaa-Cyrl": {
+      "exemplarCharacters": "[а ә б в г ғ д её ж з и й к қ л м н ң о ө п р с т уў ү ф х ҳ ц ч ш щ ъ ы ь э ю я]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "kaa-Latn": {
+      "exemplarCharacters": "[aá b c {ch} d e f gǵ h i ı j k l m nń oó p q r s {sh} t uú v w x y z]",
+      "auxiliary": "[àăâåäãā æ ç éèĕêëē íìĭîïī ñ òŏôöøō œ ùŭûüū ÿ]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "kaj": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "kcg": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ken": {
+      "exemplarCharacters": "[aáàǎ b c d eéèě ɛ{ɛ́}{ɛ̀}{ɛ̌} f g {gb} {gh} h i ɨ{ɨ́}{ɨ̀}{ɨ̌} j k {kp} m n {ny} ŋ oóòǒ ɔ{ɔ́}{ɔ̀}{ɔ̌} p r s t uúùǔ ʉ{ʉ́}{ʉ̀}{ʉ̌} w y]",
+      "auxiliary": "[l q v x z]",
+      "punctuation": "[\\- ‑ , ; \\: ! ? . ‘’ “”]"
+    },
+    "kpe": {
+      "exemplarCharacters": "[a b ɓ d e ə ɛ f gĝ {gb} {gw} ɣ h i j k {kp} {kw} l m n {ny} ɲ ŋ {ŋw} o ɔ p t u v w y z]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ku-Arab": {
+      "exemplarCharacters": "[ئ ا ب پ ت ج چ ح خ د ر ز ڕ ژ س ش ع غ ف ڤ ق ک گ ل ڵ م ن ه ە و ۆ ی ێ]",
+      "auxiliary": "[\\u200C\\u200D\\u200E\\u200F ً ٌ ٍ َ ُ ِ ّ ْ ء آ أ ؤ إ ة ث ذ ص ض ط ظ ك ھ ى ي]",
+      "punctuation": "[\\- ‐‑ , ، ؛ \\: ! ؟ . … ‘’ ‹ › \"“” « » ( ) \\[ \\] \\{ \\} ﴿ * / • −]"
+    },
+    "la": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ltg": {
+      "exemplarCharacters": "[aā b cč d eē f gģ h iī j kķ lļ m nņ oō p r sš t uū v y zž]",
+      "auxiliary": "[q ŗ w x]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’‚ \"“”„ ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "lzz": {
+      "exemplarCharacters": "[a b cç{ç̌} d {dz} e f gğ h iİ j kǩ l m n o p{p̌} q r sş t{t̆} {ts} {tz} u v x y z]",
+      "auxiliary": "[ı ö ü w ž ʒǯ]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "mdf": {
+      "exemplarCharacters": "[а б в г д её ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ы ь э ю я]",
+      "auxiliary": "[ӓ ә є җ ѕ і ԕ ҥ ԗ ў ѡ џ ѣ ԙ ѳ ѵѷ]",
+      "punctuation": "[, ; ! ? .]"
+    },
+    "mhn": {
+      "exemplarCharacters": "[aáà b c d eéèë f g h iíì j k l m n oóò p q r s t uúù v w x y z]",
+      "auxiliary": "[]",
+      "punctuation": "[, ; ! ? . ' \"]"
+    },
+    "mic": {
+      "exemplarCharacters": "[aá eé i ɨ j k l m n oó p q s t uú w y ʼ]",
+      "auxiliary": "[b c d f g h r v x z]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "mn-Mong": {
+      "exemplarCharacters": "[ᠠ ᠡ ᠢ ᠣ ᠤ ᠥ ᠦ ᠧ ᠨ ᠩ ᠪ ᠫ ᠬ ᠭ ᠮ ᠯ ᠰ ᠱ ᠲ ᠳ ᠴ ᠵ ᠶ ᠷ ᠸ ᠹ ᠺ ᠻ ᠼ ᠽ ᠾ ᠿ ᡀ ᡁ ᡂ]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "mni-Mtei": {
+      "exemplarCharacters": "[꯬ ꯀ ꯁ ꯂ ꯃ ꯄ ꯅ ꯆ ꯇ ꯈ ꯉ ꯊ ꯋ ꯌ ꯍ ꯎ ꯏ ꯐ ꯑ ꯒ ꯓ ꯔ ꯕ ꯖ ꯗ ꯘ ꯙ ꯚ ꯣ ꯤ ꯥ ꯦ ꯧ ꯨ ꯩ ꯪ ꯛ ꯜ ꯝ ꯞ ꯟ ꯠ ꯡ ꯢ ꯭]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "moh": {
+      "exemplarCharacters": "[aáà {a\\:}{á\\:}{à\\:} eéè {e\\:}{é\\:}{è\\:} h iíì {i\\:}{í\\:}{ì\\:} k n oóò {o\\:}{ó\\:}{ò\\:} r s t w y ʼ]",
+      "auxiliary": "[b c d f g j l m p q u v x z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ms-Arab": {
+      "exemplarCharacters": "[ء آ أ ؤ إ ئ ا ب ة ت ث ج چ ح خ د ذ ر ز س ش ص ض ط ظ ع غ ڠ ف ڤ ق ك ک ݢ ل م ن ڽ ه و ۏ ى ي]",
+      "auxiliary": "[ڬ ۑ]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "mus": {
+      "exemplarCharacters": "[a c eē f h i k l m n o p r s t u v w y ʼ]",
+      "auxiliary": "[b d g j q z]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "mww": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "mww-Hmnp": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "myv": {
+      "exemplarCharacters": "[а б в г д её ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ы ь э ю я]",
+      "auxiliary": "[ӓ ә є җ ѕ і ҥ ў ѡ џ ѣ ѳ ѵѷ]",
+      "punctuation": "[\\- ‐‑ – , ; \\: ! ? . … ’ ” » ( ) \\[ \\] § @ * / \\& #]"
+    },
+    "nr": {
+      "exemplarCharacters": "[a b c d e f g h i j k l m n o p q s t u v w x y z]",
+      "auxiliary": "[r]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "nv": {
+      "exemplarCharacters": "[aáą{ą́} b {ch} {ch’} d {dl} {dz} eéę{ę́} g {gh} h {hw} iíį{į́} j k {k’} {kw} lł m n oóǫ{ǫ́} s {sh} t {t’} {tł} {tł’} {ts} {ts’} w x y z {zh}]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "ny": {
+      "exemplarCharacters": "[a b c d e f g h i j k l m n o p r s t u wŵ y z]",
+      "auxiliary": "[q v x]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "oka": {
+      "exemplarCharacters": "[aá {aˤ}{áˤ} c{c̓}č ə ɣ h ií ɪ{ɪ́} k{k̓} {kʷ}{k̓ʷ} l{l̓} ɬ {ƛ̓} m{m̓} n{n̓} p{p̓} q{q̓} {qʷ}{q̓ʷ} r s t{t̓} uú w{w̓} x{x̌} {xʷ}{x̌ʷ} y{y̓} ʔ ʕ{ʕ̓} {ʕʷ}{ʕ̓ʷ}]",
+      "auxiliary": "[b d e f g j o v z]",
+      "punctuation": "[\\- ‑ , ; \\: ! ? . '‘’ \"“” ( ) \\[ \\] @ * / \\& #]"
+    },
+    "osa": {
+      "exemplarCharacters": "[𐓘{𐓘́}{𐓘́͘}{𐓘̋}{𐓘̋͘}{𐓘̄}{𐓘̄͘}{𐓘͘} 𐓙{𐓙́}{𐓙̋}{𐓙̄} 𐓚{𐓚́}{𐓚̋}{𐓚̄} 𐓛{𐓛͘} 𐓜 𐓝 𐓞 𐓟{𐓟́}{𐓟̋}{𐓟̄} 𐓠{𐓠́}{𐓠̋}{𐓠̄} 𐓡 𐓢 𐓣{𐓣́}{𐓣́͘}{𐓣̋}{𐓣̋͘}{𐓣̄}{𐓣̄͘}{𐓣͘} 𐓤 𐓥 𐓦 𐓧 𐓨 𐓩 𐓪{𐓪́}{𐓪́͘}{𐓪̋}{𐓪̋͘}{𐓪̄}{𐓪̄͘}{𐓪͘} 𐓫{𐓫́}{𐓫̋}{𐓫̄} 𐓬 𐓭 𐓮 𐓯 𐓰 𐓱 𐓲 𐓳 𐓴 𐓵 𐓶{𐓶́}{𐓶̋}{𐓶̄} 𐓷 𐓸 𐓹 𐓺 𐓻]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ * / \\& # † ‡ ′ ″]"
+    },
+    "pap": {
+      "exemplarCharacters": "[a b c d eè f g h i j k l m nñ oò p q r s t uùü v w x y z]",
+      "auxiliary": "[á é í ó ú]",
+      "punctuation": "[\\- ‑ , ; \\: ! ? . … '‘’ \"“” ( ) \\[ \\] § @ / \\& # % ′ ″]"
+    },
+    "pi": {
+      "exemplarCharacters": "[aā b c dḍ e f g h iī j k lḷ mṁṃ nñṅṇ ŋ o p q r sśṣ tṭ uū v w x y z]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "pi-Latn": {
+      "exemplarCharacters": "[aā b c dḍ e f g h iī j k lḷ mṁṃ nñṅṇ ŋ o p q r sśṣ tṭ uū v w x y z]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "pis": {
+      "exemplarCharacters": "[a b d e f g h i j k l m n o p r s t u v w y]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‑ , ; \\: ! ? . '‘’ \"“” ( ) + =]"
+    },
+    "rhg": {
+      "exemplarCharacters": "[𐴤 𐴥 𐴦 𐴧 𐴀 𐴝 𐴞 𐴟 𐴠 𐴡 𐴁 𐴂 𐴃 𐴄 𐴅 𐴆 𐴇 𐴈 𐴉 𐴊 𐴋 𐴌 𐴍 𐴎 𐴏 𐴐 𐴑 𐴒 𐴓 𐴔 𐴕 𐴖 𐴗 𐴘 𐴙 𐴚 𐴛 𐴢 𐴣]",
+      "auxiliary": "[ـ]",
+      "punctuation": "[\\- ‐‑ – — ، ؛ \\: ! ؟ . … ' \" ( ) \\[ \\]]"
+    },
+    "rhg-Rohg": {
+      "exemplarCharacters": "[𐴤 𐴥 𐴦 𐴧 𐴀 𐴝 𐴞 𐴟 𐴠 𐴡 𐴁 𐴂 𐴃 𐴄 𐴅 𐴆 𐴇 𐴈 𐴉 𐴊 𐴋 𐴌 𐴍 𐴎 𐴏 𐴐 𐴑 𐴒 𐴓 𐴔 𐴕 𐴖 𐴗 𐴘 𐴙 𐴚 𐴛 𐴢 𐴣]",
+      "auxiliary": "[ـ]",
+      "punctuation": "[\\- ‐‑ – — ، ؛ \\: ! ؟ . … ' \" ( ) \\[ \\]]"
+    },
+    "rif": {
+      "exemplarCharacters": "[a b c dḍ e ɛ f g ɣ hḥ i j k l m n p q r sṣ tṭ u w x y zẓ]",
+      "auxiliary": "[áàâä ç éèêë îï ñ oóôö œ ß úùûü v ʷ ÿ]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” « » ( ) \\[ \\] \\{ \\} § @ * / \\& # `]"
+    },
+    "sat-Deva": {
+      "exemplarCharacters": "[़ ं अ आ ई उ ए ओ क ग च ज ञ ट ड ण त द न प ब म य र ल व स ह ा ी ु े ो]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "sdh": {
+      "exemplarCharacters": "[ئ ا ب پ ت ج چ ح خ د ر ز ڕ ژ س ش ع غ ف ڤ ق ک گ ل ڵ م ن ھ ە و ۆ ۊ ی ێ]",
+      "auxiliary": "[\\u200C\\u200D\\u200E\\u200F ً ٌ َ ُ ِ ّ ْ ٔ ٰ ء آ أ ؤ إ ة ث ذ ص ض ط ظ ك ه ى ي]",
+      "punctuation": "[\\- ‐‑ ، ٫ ٬ ؛ \\: ! ؟ . … ‹ › « » ( ) \\[ \\] * / \\\\]"
+    },
+    "sgs": {
+      "exemplarCharacters": "[a ā b c č d e ē ė {ė̄} f g h i ī j k l m n o ō p r s š t u ū v z ž]",
+      "auxiliary": "[{ch} {dz} {dž}]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … “„ ( ) \\[ \\] \\{ \\}]"
+    },
+    "sid": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "skr": {
+      "exemplarCharacters": "[ء آ ؤ ئ ا ب ٻ پ ت ث ٹ ج ڄ چ ح خ د ذ ڈ ڊ ݙ ر ز ڑ ژ س ش ص ض ط ظ ع غ ف ق ک گ ڳ ل م ن ں ݨ ھ ہ ۃ و ی ے]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ – — ، ؛ \\: ! ؟ . … ' \" « » ( ) \\[ \\] / ؎ ؏]"
+    },
+    "sma": {
+      "exemplarCharacters": "[aåä b d e f g h i j k l m n oö p r s t u v y]",
+      "auxiliary": "[c ï q w x z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "smj": {
+      "exemplarCharacters": "[aáåä b d e f g h i j k l m nń o p r s t u v]",
+      "auxiliary": "[c ñ ö q w x y z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "sms": {
+      "exemplarCharacters": "[aâåä b cč dđ e f gǧ ǥ h i j kǩ l m n ŋ oõ p r sš t u v zž ʒǯ]",
+      "auxiliary": "[ö q w x y]",
+      "punctuation": "[\\- ‐‑ – , ; \\: ! ? . … ’ ” » ( ) \\[ \\] § @ * / \\\\ \\& #]"
+    },
+    "ss": {
+      "exemplarCharacters": "[a b c d e f g h i j k l m n o p q r s t u v w x y z]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ssy": {
+      "exemplarCharacters": "[a b t s e c k x i d q r f g o l m n u w h y]",
+      "auxiliary": "[j p v z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "suz": {
+      "exemplarCharacters": "[अ आ इ उ ए ओ {क्} {ख्} {ग्} {च्} {छ्} {ज्} {ट्} {ठ्} {ड्} {त्} {थ्} {द्} {न्} {प्} {फ्} ब {ब्} {म्} {य्} {र्} {ल्} {व्} {श्} {स्} {ह्} ्]",
+      "auxiliary": "[]",
+      "punctuation": "[, \\: ! ? । “”]"
+    },
+    "suz-Deva": {
+      "exemplarCharacters": "[अ आ इ उ ए ओ {क्} {ख्} {ग्} {च्} {छ्} {ज्} {ट्} {ठ्} {ड्} {त्} {थ्} {द्} {न्} {प्} {फ्} ब {ब्} {म्} {य्} {र्} {ल्} {व्} {श्} {स्} {ह्} ्]",
+      "auxiliary": "[]",
+      "punctuation": "[, \\: ! ? । “”]"
+    },
+    "tig": {
+      "exemplarCharacters": "[፟ ፡ ፣ ፤ ፥ ፦ ፧ ። ፠ ፨ ᎐ ᎑ ᎒ ᎓ ᎔ ᎕ ᎖ ᎗ ᎘ ᎙ ፲ ፳ ፴ ፵ ፶ ፷ ፸ ፹ ፺ ፻ ፼ ሀ ሁ ሂ ሃ ሄ ህ ሆ ሇ ለ ሉ ሊ ላ ሌ ል ሎ ሏ ⶀ ሐ ሑ ሒ ሓ ሔ ሕ ሖ ሗ መ ሙ ሚ ማ ሜ ም ሞ ሟ ᎀ ᎁ ᎂ ᎃ ⶁ ሠ ሡ ሢ ሣ ሤ ሥ ሦ ሧ ረ ሩ ሪ ራ ሬ ር ሮ ሯ ⶂ ሰ ሱ ሲ ሳ ሴ ስ ሶ ሷ ⶃ ሸ ሹ ሺ ሻ ሼ ሽ ሾ ሿ ⶄ ቀ ቁ ቂ ቃ ቄ ቅ ቆ ቇ ቈ ቊ ቋ ቌ ቍ ቐ ቑ ቒ ቓ ቔ ቕ ቖ ቘ ቚ ቛ ቜ ቝ በ ቡ ቢ ባ ቤ ብ ቦ ቧ ᎄ ᎅ ᎆ ᎇ ⶅ ቨ ቩ ቪ ቫ ቬ ቭ ቮ ቯ ተ ቱ ቲ ታ ቴ ት ቶ ቷ ⶆ ቸ ቹ ቺ ቻ ቼ ች ቾ ቿ ⶇ ኀ ኁ ኂ ኃ ኄ ኅ ኆ ኇ ኈ ኊ ኋ ኌ ኍ ነ ኑ ኒ ና ኔ ን ኖ ኗ ⶈ ኘ ኙ ኚ ኛ ኜ ኝ ኞ ኟ ⶉ አ ኡ ኢ ኣ ኤ እ ኦ ኧ ⶊ ከ ኩ ኪ ካ ኬ ክ ኮ ኯ ኰ ኲ ኳ ኴ ኵ ኸ ኹ ኺ ኻ ኼ ኽ ኾ ዀ ዂ ዃ ዄ ዅ ወ ዉ ዊ ዋ ዌ ው ዎ ዏ ዐ ዑ ዒ ዓ ዔ ዕ ዖ ዘ ዙ ዚ ዛ ዜ ዝ ዞ ዟ ⶋ ዠ ዡ ዢ ዣ ዤ ዥ ዦ ዧ የ ዩ ዪ ያ ዬ ይ ዮ ዯ ደ ዱ ዲ ዳ ዴ ድ ዶ ዷ ⶌ ዸ ዹ ዺ ዻ ዼ ዽ ዾ ዿ ⶍ ጀ ጁ ጂ ጃ ጄ ጅ ጆ ጇ ⶎ ገ ጉ ጊ ጋ ጌ ግ ጎ ጏ ጐ ጒ ጓ ጔ ጕ ጘ ጙ ጚ ጛ ጜ ጝ ጞ ጟ ⶓ ⶔ ⶕ ⶖ ጠ ጡ ጢ ጣ ጤ ጥ ጦ ጧ ⶏ ጨ ጩ ጪ ጫ ጬ ጭ ጮ ጯ ⶐ ጰ ጱ ጲ ጳ ጴ ጵ ጶ ጷ ⶑ ጸ ጹ ጺ ጻ ጼ ጽ ጾ ጿ ፀ ፁ ፂ ፃ ፄ ፅ ፆ ፇ ፈ ፉ ፊ ፋ ፌ ፍ ፎ ፏ ᎈ ᎉ ᎊ ᎋ ፐ ፑ ፒ ፓ ፔ ፕ ፖ ፗ ᎌ ᎍ ᎎ ᎏ ⶒ ፘ ፙ ፚ ⶠ ⶡ ⶢ ⶣ ⶤ ⶥ ⶦ ⶨ ⶩ ⶪ ⶫ ⶬ ⶭ ⶮ ⶰ ⶱ ⶲ ⶳ ⶴ ⶵ ⶶ ⶸ ⶹ ⶺ ⶻ ⶼ ⶽ ⶾ ⷀ ⷁ ⷂ ⷃ ⷄ ⷅ ⷆ ⷈ ⷉ ⷊ ⷋ ⷌ ⷍ ⷎ ⷐ ⷑ ⷒ ⷓ ⷔ ⷕ ⷖ ⷘ ⷙ ⷚ ⷛ ⷜ ⷝ ⷞ]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "tpi": {
+      "exemplarCharacters": "[a b d e f g h i j k l m n o p r s t u w y]",
+      "auxiliary": "[c q v x z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "trv": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "trw": {
+      "exemplarCharacters": "[]",
+      "auxiliary": "[؀؁؂؃\\u200C\\u200D\\u200E\\u200F ً ٌ ٍ َ ُ ِ ّ ْ ٔ ٖ ٗ ٘ ٰ ٻ ٺ ټ ٽ ۃ ي]",
+      "punctuation": "[، ؍ ٫ ٬ ؛ \\: ؟ . ۔ ( ) \\[ \\]]"
+    },
+    "ts": {
+      "exemplarCharacters": "[a b c d e f g h i j k l m n o p q r s t u v w x y z]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "ve": {
+      "exemplarCharacters": "[a b dḓ e f g h i k lḽ m nṅṋ o p r s tṱ u v w x y z]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "vo": {
+      "exemplarCharacters": "[a ä b c d e f g h i j k l m n o ö p r s t u ü v x y z]",
+      "auxiliary": "[q w]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … '‘’ \"“” « » ( ) \\[ \\] \\{ \\} § @ * / \\& #]"
+    },
+    "wa": {
+      "exemplarCharacters": "[aàâå æ b cç d eéèêë f g h iîï j k l m n oô œ p q r s t uùûü v w x yÿ z]",
+      "auxiliary": "[áäãā ē íìī ñ óòöø úǔ]",
+      "punctuation": "[\\- ‐‑ – — , ; \\: ! ? . … ’ \"“” « » ( ) \\[ \\] § @ * / \\& # † ‡]"
+    },
+    "wal": {
+      "exemplarCharacters": "[፟ ᎐ ᎑ ᎒ ᎓ ᎔ ᎕ ᎖ ᎗ ᎘ ᎙ ሀ ሁ ሂ ሃ ሄ ህ ሆ ሇ ለ ሉ ሊ ላ ሌ ል ሎ ሏ ⶀ ሐ ሑ ሒ ሓ ሔ ሕ ሖ ሗ መ ሙ ሚ ማ ሜ ም ሞ ሟ ᎀ ᎁ ᎂ ᎃ ⶁ ሠ ሡ ሢ ሣ ሤ ሥ ሦ ሧ ረ ሩ ሪ ራ ሬ ር ሮ ሯ ⶂ ሰ ሱ ሲ ሳ ሴ ስ ሶ ሷ ⶃ ሸ ሹ ሺ ሻ ሼ ሽ ሾ ሿ ⶄ ቀ ቁ ቂ ቃ ቄ ቅ ቆ ቇ ቈ ቊ ቋ ቌ ቍ ቐ ቑ ቒ ቓ ቔ ቕ ቖ ቘ ቚ ቛ ቜ ቝ በ ቡ ቢ ባ ቤ ብ ቦ ቧ ᎄ ᎅ ᎆ ᎇ ⶅ ቨ ቩ ቪ ቫ ቬ ቭ ቮ ቯ ተ ቱ ቲ ታ ቴ ት ቶ ቷ ⶆ ቸ ቹ ቺ ቻ ቼ ች ቾ ቿ ⶇ ኀ ኁ ኂ ኃ ኄ ኅ ኆ ኇ ኈ ኊ ኋ ኌ ኍ ነ ኑ ኒ ና ኔ ን ኖ ኗ ⶈ ኘ ኙ ኚ ኛ ኜ ኝ ኞ ኟ ⶉ አ ኡ ኢ ኣ ኤ እ ኦ ኧ ⶊ ከ ኩ ኪ ካ ኬ ክ ኮ ኯ ኰ ኲ ኳ ኴ ኵ ኸ ኹ ኺ ኻ ኼ ኽ ኾ ዀ ዂ ዃ ዄ ዅ ወ ዉ ዊ ዋ ዌ ው ዎ ዏ ዐ ዑ ዒ ዓ ዔ ዕ ዖ ዘ ዙ ዚ ዛ ዜ ዝ ዞ ዟ ⶋ ዠ ዡ ዢ ዣ ዤ ዥ ዦ ዧ የ ዩ ዪ ያ ዬ ይ ዮ ዯ ደ ዱ ዲ ዳ ዴ ድ ዶ ዷ ⶌ ዸ ዹ ዺ ዻ ዼ ዽ ዾ ዿ ⶍ ጀ ጁ ጂ ጃ ጄ ጅ ጆ ጇ ⶎ ገ ጉ ጊ ጋ ጌ ግ ጎ ጏ ጐ ጒ ጓ ጔ ጕ ጘ ጙ ጚ ጛ ጜ ጝ ጞ ጟ ⶓ ⶔ ⶕ ⶖ ጠ ጡ ጢ ጣ ጤ ጥ ጦ ጧ ⶏ ጨ ጩ ጪ ጫ ጬ ጭ ጮ ጯ ⶐ ጰ ጱ ጲ ጳ ጴ ጵ ጶ ጷ ⶑ ጸ ጹ ጺ ጻ ጼ ጽ ጾ ጿ ፀ ፁ ፂ ፃ ፄ ፅ ፆ ፇ ፈ ፉ ፊ ፋ ፌ ፍ ፎ ፏ ᎈ ᎉ ᎊ ᎋ ፐ ፑ ፒ ፓ ፔ ፕ ፖ ፗ ᎌ ᎍ ᎎ ᎏ ⶒ ፘ ፙ ፚ ⶠ ⶡ ⶢ ⶣ ⶤ ⶥ ⶦ ⶨ ⶩ ⶪ ⶫ ⶬ ⶭ ⶮ ⶰ ⶱ ⶲ ⶳ ⶴ ⶵ ⶶ ⶸ ⶹ ⶺ ⶻ ⶼ ⶽ ⶾ ⷀ ⷁ ⷂ ⷃ ⷄ ⷅ ⷆ ⷈ ⷉ ⷊ ⷋ ⷌ ⷍ ⷎ ⷐ ⷑ ⷒ ⷓ ⷔ ⷕ ⷖ ⷘ ⷙ ⷚ ⷛ ⷜ ⷝ ⷞ]",
+      "auxiliary": "[]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "wbp": {
+      "exemplarCharacters": "[a d g i j k l m n p r t u w y]",
+      "auxiliary": "[b c e f h o q s v x z]",
+      "punctuation": "[\\- ‐‑ , ; \\: ! ? . ( ) \\[ \\] \\{ \\}]"
+    },
+    "zh-Latn": {
+      "exemplarCharacters": "[āáǎàa b cĉ d ēéěèeê{ê̄}ế{ê̌}ề f g h īíǐìi j k l {m̄}ḿ{m̀}m ńňǹn ŋ ōóǒòo p q r sŝ t ūúǔùuǖǘǚǜü w x y zẑ]",
+      "auxiliary": "[v]",
+      "punctuation": "[\\- ‑ , ! ? . · ' \"]"
+    }
+  }
+}

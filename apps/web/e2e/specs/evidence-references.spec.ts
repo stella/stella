@@ -1,7 +1,8 @@
 import type { APIRequestContext } from "@playwright/test";
-import JSZip from "jszip";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   apiDownloadFileField,
@@ -11,9 +12,15 @@ import {
 } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =
@@ -84,7 +91,7 @@ const waitForFileFieldId = async (
           findFileFieldForProperty(entity, propertyId)?.id ?? null;
         return result.fieldId;
       },
-      { timeout: 30_000 },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
     )
     .not.toBeNull();
   if (result.fieldId === null) {
@@ -118,7 +125,7 @@ const waitForDocumentContaining = async (
         result.xml = xml;
         return true;
       },
-      { timeout: 30_000 },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
     )
     .toBe(true);
   if (result.xml === null) {
@@ -128,8 +135,8 @@ const waitForDocumentContaining = async (
 };
 
 const readDocumentXml = async (docxBuffer: Buffer) => {
-  const zip = await JSZip.loadAsync(docxBuffer);
-  const documentXml = await zip.file("word/document.xml")?.async("text");
+  const zip = await ZipArchive.read(docxBuffer);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("Saved DOCX is missing word/document.xml");
   }
@@ -235,7 +242,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .poll(
           async () =>
             await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-          { timeout: 10_000 },
+          { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
         )
         .toBe(200);
 
@@ -248,7 +255,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         page.locator(".layout-run-text", {
           hasText: "Stella E2E test document.",
         }),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(page.locator("html")).toHaveAttribute(
@@ -270,7 +277,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await expect(evidenceDialog).toBeHidden();
       await expect(
         page.locator('[aria-label="Document content"][contenteditable="true"]'),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await page
         .locator('[aria-label="Document content"][contenteditable="true"]')
@@ -278,7 +285,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await page.keyboard.type(": Faktura");
       await expect(
         page.locator(".layout-run-text", { hasText: "Důkaz 1" }),
-      ).toBeVisible({ timeout: 20_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
       const finalizeResponse = page.waitForResponse(
         (response) =>
@@ -310,7 +317,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
       await expect(
         page.locator('[aria-label="Document content"][contenteditable="true"]'),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await evidenceButton.click();
       const reloadedDialog = page.getByRole("dialog", {
@@ -345,7 +352,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .click();
       await expect(
         page.locator(".layout-run-text", { hasText: "Důkaz 2" }),
-      ).toBeVisible({ timeout: 20_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
       const secondFinalizeResponse = page.waitForResponse(
         (response) =>

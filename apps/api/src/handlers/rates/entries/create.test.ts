@@ -8,8 +8,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
@@ -204,5 +204,26 @@ describe("effective-dated rate selectors", () => {
         eq(rateEntries.rateTableId, rateTableId),
       ),
     ).toBe(0);
+  });
+  test("invalid activity selection returns a typed refusal without leaving a rate entry", async () => {
+    await clearEntries();
+    const activityCodeId = toSafeId<"billingCode">(Bun.randomUUIDv7());
+    expect(await create({ ...window, activityCodeId })).toMatchObject({
+      code: 400,
+      response: { message: "Activity code not found in this matter" },
+    });
+    expect(
+      await testDb.$count(
+        rateEntries,
+        eq(rateEntries.rateTableId, rateTableId),
+      ),
+    ).toBe(0);
+    expect(await create(window)).toHaveProperty("id");
+    expect(
+      await testDb.$count(
+        rateEntries,
+        eq(rateEntries.rateTableId, rateTableId),
+      ),
+    ).toBe(1);
   });
 });

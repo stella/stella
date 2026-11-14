@@ -5,7 +5,8 @@ import type { Temporal } from "@stll/time";
 
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { visitCursorPages } from "@/lib/infinite-query";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -47,30 +48,54 @@ const expensesKeys = {
   ],
 };
 
+const fetchExpensesPage = async ({
+  workspaceId,
+  filters,
+  cursor,
+  signal,
+}: {
+  workspaceId: string;
+  filters: ExpensesFilters;
+  cursor: string | undefined;
+  signal: AbortSignal;
+}) => {
+  const { matterId, userId, ...restFilters } = filters;
+  const response = await api
+    .expenses({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    })
+    .get({
+      query: {
+        ...restFilters,
+        ...(userId !== undefined && { userId: toSafeId<"user">(userId) }),
+        ...(matterId !== undefined && {
+          matterId: toSafeId<"entity">(matterId),
+        }),
+        ...(cursor !== undefined && { cursor }),
+      },
+      fetch: { signal },
+    });
+  return unwrapApiResponse(response);
+};
+
 export const expensesOptions = (
   workspaceId: string,
   filters: ExpensesFilters = {},
 ) =>
   queryOptions({
     queryKey: expensesKeys.list(workspaceId, filters),
+    // Every page, so a matter-wide filter never stops silently at the API's
+    // default page size.
     queryFn: async ({ signal }) => {
-      const { matterId, userId, ...restFilters } = filters;
-      const response = await api
-        .expenses({
-          workspaceId: toSafeId<"workspace">(workspaceId),
-        })
-        .get({
-          query: {
-            ...restFilters,
-            ...(userId !== undefined && { userId: toSafeId<"user">(userId) }),
-            ...(matterId !== undefined && {
-              matterId: toSafeId<"entity">(matterId),
-            }),
-          },
-          fetch: { signal },
-        });
-
-      return unwrapEden(response).items;
+      const items: Awaited<ReturnType<typeof fetchExpensesPage>>["items"] = [];
+      await visitCursorPages({
+        getPage: async (cursor) =>
+          await fetchExpensesPage({ workspaceId, filters, cursor, signal }),
+        visit: (page) => {
+          items.push(...page.items);
+        },
+      });
+      return items;
     },
   });
 

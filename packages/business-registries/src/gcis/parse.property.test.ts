@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { Temporal } from "temporal-polyfill/full";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   expectNullableString,
@@ -50,7 +50,8 @@ const company = fc
 const now = new Date("2026-09-30T00:00:00.000Z");
 
 test("company projections expose validated dates and finite capital with explicit status", () => {
-  fc.assert(
+  assertProperty(
+    "company projections expose validated dates and finite capital with explicit status",
     fc.property(company, (raw) => {
       const output = expectRegistryOutcome(() => parseCompany(raw, now));
       if (output === undefined) {
@@ -87,7 +88,7 @@ test("company projections expose validated dates and finite capital with explici
         status: output.status,
       });
     }),
-    propertyConfig({ seed: propertySeed() }),
+    { seed: propertySeed() },
   );
 });
 
@@ -118,7 +119,8 @@ const expectTypedOutput = (output: GcisCompany) => {
 };
 
 test("company response mutations retain typed dates and capital or registry failures", async () => {
-  await fc.assert(
+  await assertProperty(
+    "company response mutations retain typed dates and capital or registry failures",
     fc.asyncProperty(
       company,
       fc.nat(),
@@ -153,7 +155,7 @@ test("company response mutations retain typed dates and capital or registry fail
         expectTypedOutput(output);
       },
     ),
-    propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+    { seed: propertySeed(), numRuns: 20 },
   );
 });
 

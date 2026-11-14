@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   buildScriptCallGuide,
   classifyScriptName,
-  scriptNameMessage,
   type ScriptCallCatalog,
+  scriptNameMessage,
 } from "@/api/handlers/chat/tools/execute/script-call-guide";
 
 const CATALOG = {
@@ -108,7 +108,8 @@ describe("a read called without its prefix or in another case", () => {
 
   test("only ever runs a read function of the catalog", () => {
     const nameArb = fc.stringMatching(/^[A-Za-z_]{1,24}$/u);
-    fc.assert(
+    assertProperty(
+      "only ever runs a read function of the catalog",
       fc.property(
         fc.array(nameArb, { maxLength: 6 }),
         fc.array(nameArb, { maxLength: 6 }),
@@ -130,7 +131,7 @@ describe("a read called without its prefix or in another case", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

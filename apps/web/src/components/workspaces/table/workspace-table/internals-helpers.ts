@@ -37,6 +37,22 @@ export type EndFillerInput<TRow extends TableRowData = TableTreeNode> = {
   addPropertyColumn: TableColumn<TRow> | null;
 };
 
+// A selection-only grid uses its filler for row actions. Reserve that
+// semantic column before the add-property rail, just as the CSS grid does.
+export const getWorkspaceGridColumnMetadata = <TRow extends TableRowData>({
+  renderColumns,
+  addPropertyColumn,
+}: EndFillerInput<TRow>) => {
+  const hasValueColumn = renderColumns.some(({ id }) => id !== selectColId);
+  const actionsColumnCount = hasValueColumn ? 0 : 1;
+  return {
+    actionsColumnIndex: hasValueColumn ? undefined : renderColumns.length + 1,
+    addPropertyColumnIndex: renderColumns.length + actionsColumnCount + 1,
+    columnCount:
+      renderColumns.length + actionsColumnCount + (addPropertyColumn ? 1 : 0),
+  };
+};
+
 export type ColumnDragPinning = "start" | "end" | "center";
 
 export type ColumnDragData = {

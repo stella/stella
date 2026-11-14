@@ -1,7 +1,8 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
@@ -9,25 +10,31 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  BUFFER_INTENT_DELETE_TIMEOUT_MS,
-  BUFFER_INTENT_WRITE_TIMEOUT_MS,
   abandonBufferIntent,
+  BUFFER_INTENT_DELETE_TIMEOUT_MS,
+  BUFFER_INTENT_TELEMETRY,
+  BUFFER_INTENT_WRITE_TIMEOUT_MS,
+  lockObjectCleanupIntentsForWriter,
+  objectWriterSettlementAfterCleanup,
   reserveBufferIntent,
   reserveObjectCleanupIntent,
-  lockObjectCleanupIntentsForWriter,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
-  objectWriterSettlementAfterCleanup,
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import type { DocumentSource } from "@/api/lib/document-source";
 import {
   documentWriteRefusal,
   DocumentWriteRefusedError,
@@ -56,6 +63,7 @@ import type { OrganizationFileUsageError } from "@/api/lib/files/organization-fi
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -65,13 +73,9 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { withTimeout } from "@/api/lib/with-timeout";
-
-const ENTITY_BUFFER_INTENT_TELEMETRY = {
-  abandon: "buffer-entity-intent-abandon",
-  heartbeat: "buffer-entity-intent-heartbeat",
-  heartbeatUnhandled: "buffer-entity-intent-heartbeat-unhandled",
-};
 
 const cleanupSettlementFailure = failureSink({
   event: "entities.buffer_cleanup_settlement_failed",
@@ -100,6 +104,8 @@ type CreateEntityFromBufferInput = {
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /** Provenance of the first version's bytes; recorded on the audit event too. */
+  source?: DocumentSource | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -112,6 +118,8 @@ export type CreateEntityFromBufferDependencies = {
   enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
   processExtraction: typeof processExtraction;
   requestNativeExtractionRun: typeof requestNativeExtractionRun;
+  enqueueEntitySearchRepairs: typeof enqueueEntitySearchRepairs;
+  flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
 };
 
 const defaultCreateEntityFromBufferDependencies = {
@@ -119,6 +127,8 @@ const defaultCreateEntityFromBufferDependencies = {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
   processExtraction,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
   requestNativeExtractionRun: async (options) =>
     await requestNativeExtractionRun(options),
 } satisfies CreateEntityFromBufferDependencies;
@@ -177,6 +187,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  source,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
@@ -269,7 +280,7 @@ export const createEntityFromBuffer = async ({
     const stopHeartbeat = startBufferIntentHeartbeat({
       safeDb,
       intent,
-      telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
+      telemetry: BUFFER_INTENT_TELEMETRY.entity_create,
     });
     return { type: "user" as const, intent, stopHeartbeat };
   })();
@@ -292,7 +303,13 @@ export const createEntityFromBuffer = async ({
         }),
       );
       if (Result.isError(cleanup)) {
-        captureError(cleanup.error, { entityId, objectKey: s3Key });
+        captureError(
+          cleanup.error,
+          handlerErrorContext("entities.cleanupObject.cleanup_error", {
+            entityId,
+            objectKey: s3Key,
+          }),
+        );
         return false;
       }
       return true;
@@ -381,7 +398,7 @@ export const createEntityFromBuffer = async ({
         // Callers authorize the matter before producing the bytes; the status
         // is read again under the lock so a matter archived or scheduled for
         // deletion in between receives nothing.
-        if (workspaceStatus !== "active") {
+        if (!workspaceAcceptsWrites(workspaceStatus)) {
           throw documentWriteRefusal(
             workspaceStatus === undefined
               ? "workspace-not-found"
@@ -444,6 +461,7 @@ export const createEntityFromBuffer = async ({
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
+          ...(source !== undefined && { source }),
         });
 
         await tx
@@ -487,6 +505,7 @@ export const createEntityFromBuffer = async ({
         // Durable extraction request, committed with the file it reads. The
         // post-commit call below only accelerates the queue handoff.
         await dependencies.requestNativeExtractionRun({ entityId, tx });
+        await dependencies.enqueueEntitySearchRepairs(tx, [entityId]);
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
@@ -505,7 +524,12 @@ export const createEntityFromBuffer = async ({
               },
             },
           },
-          ...(provenance && { metadata: { provenance } }),
+          ...((provenance !== undefined || source !== undefined) && {
+            metadata: {
+              ...(provenance !== undefined && { provenance }),
+              ...(source !== undefined && { source }),
+            },
+          }),
         });
 
         await afterCreate?.(tx, {
@@ -580,7 +604,7 @@ export const createEntityFromBuffer = async ({
             safeDb,
             intent: publication.intent,
             reason: "Server-generated entity transaction failed",
-            telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
+            telemetry: BUFFER_INTENT_TELEMETRY.entity_create,
           });
         }
       }
@@ -606,31 +630,72 @@ export const createEntityFromBuffer = async ({
   // must NOT invoke `maybeStartUploadTriggeredFlows` — only genuine USER uploads
   // fire the file-upload trigger, so a flow-created document can never spawn
   // another flow run. Keep the upload trigger out of this call site.
-  dependencies.processExtraction(entityId).catch(captureError);
+  detached(
+    async () =>
+      dependencies
+        .processExtraction(entityId)
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createEntityFromBuffer.dependencies_processExtraction",
+            ),
+          ),
+        ),
+    "create-from-buffer.process-extraction",
+  );
+  detached(
+    async () =>
+      dependencies
+        .flushEntitySearchRepairs([entityId])
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createEntityFromBuffer.flushEntitySearchRepairs",
+            ),
+          ),
+        ),
+    "create-from-buffer.flush-entity-search-repairs",
+  );
 
-  dependencies
-    .enqueuePdfDerivativeOrMarkFailed({
-      encrypted: encryption.encrypted,
-      entityId,
-      fieldId,
-      mimeType,
-      organizationId,
-      userId,
-      workspaceId,
-    })
-    .catch(captureError);
+  detached(
+    async () =>
+      dependencies
+        .enqueuePdfDerivativeOrMarkFailed({
+          encrypted: encryption.encrypted,
+          entityId,
+          fieldId,
+          mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        })
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("entityBuffer.enqueuePdfDerivative"),
+          ),
+        ),
+    "create-from-buffer.enqueue-pdf-derivative-or-mark-failed",
+  );
 
-  dependencies
-    .enqueueImageThumbnailOrMarkFailed({
-      encrypted: encryption.encrypted,
-      entityId,
-      fieldId,
-      mimeType,
-      organizationId,
-      userId,
-      workspaceId,
-    })
-    .catch(captureError);
+  detached(
+    async () =>
+      dependencies
+        .enqueueImageThumbnailOrMarkFailed({
+          encrypted: encryption.encrypted,
+          entityId,
+          fieldId,
+          mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        })
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("entityBuffer.enqueueThumbnail"),
+          ),
+        ),
+    "create-from-buffer.enqueue-image-thumbnail-or-mark-failed",
+  );
 
   dependencies.broadcastWorkspaceResourceUpdated(
     workspaceId,

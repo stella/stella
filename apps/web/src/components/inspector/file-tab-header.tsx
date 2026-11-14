@@ -2,14 +2,13 @@ import type {
   ComponentProps,
   Dispatch,
   MouseEvent,
-  ReactNode,
   SetStateAction,
 } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Maximize2Icon, Minimize2Icon } from "@stll/ui/icons";
+import { Maximize2Icon, Minimize2Icon, PrinterIcon } from "@stll/ui/icons";
 
 import { fileExtensionSuffix } from "@/components/file-extension-suffix";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
@@ -20,6 +19,7 @@ import type {
   DownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import {
+  type HeaderAction,
   type InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
@@ -31,6 +31,10 @@ import Tooltip from "@/components/tooltip";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { splitFileName } from "@/lib/files/file-name-edit";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
 
 export type MatterOrigin = {
   color: string | null;
@@ -91,27 +95,52 @@ export const getFileTabHeaderProps = ({
     },
   }) satisfies Omit<ComponentProps<typeof InspectorTabHeader>, "actions">;
 
-type FileTabHeaderActionsProps = {
-  /** The persona's own actions, after the file's. */
-  children?: ReactNode;
+type FileTabHeaderActionsOptions = {
   desktopEditTarget: Pick<DesktopOpenTarget, "fileType" | "propertyId"> | null;
   downloadRenditions: readonly DownloadRendition[];
+  /**
+   * The main view's toolbar already offers download and sign for this file,
+   * so the header leaves them out rather than showing them twice.
+   */
+  mainViewHasFileActions: boolean;
   /** The current PDF file the signer may sign, or `null` to offer no signing. */
   pdfSignTarget: PdfSignTarget | null;
+  /** The preview is rendered text, which the print stylesheet prints alone. */
+  printsTextPreview: boolean;
   tab: FileTab;
 };
 
+const PrintTextPreviewButton = () => {
+  const t = useTranslations();
+  const label = t("common.print");
+  return (
+    <Button
+      aria-label={label}
+      onClick={() => {
+        window.print();
+      }}
+      size="icon-xs"
+      tooltip={label}
+      variant="ghost"
+    >
+      <PrinterIcon className="size-3.5" />
+    </Button>
+  );
+};
+
 /**
- * Download, open-in-desktop-app and sign, rendered by both the peek header and the
- * full-view header so the two cannot drift apart.
+ * Download, print, open-in-desktop-app and sign, shared by the peek header and the
+ * full-view header so the two cannot drift apart. Each persona appends its own
+ * actions after these.
  */
-export const FileTabHeaderActions = ({
-  children,
+export const fileTabHeaderActions = ({
   desktopEditTarget,
   downloadRenditions,
+  mainViewHasFileActions,
   pdfSignTarget,
+  printsTextPreview,
   tab,
-}: FileTabHeaderActionsProps) => {
+}: FileTabHeaderActionsOptions): HeaderAction[] => {
   const startDownload = (variant: DownloadVariant) => {
     detached(
       downloadTabFile({
@@ -126,13 +155,31 @@ export const FileTabHeaderActions = ({
       "file-tab-panel.download-tab-file",
     );
   };
-  return (
-    <>
-      <DownloadSplitButton
-        onDownload={startDownload}
-        renditions={downloadRenditions}
-      />
-      {desktopEditTarget !== null ? (
+  const actions: HeaderAction[] = [];
+  if (!mainViewHasFileActions) {
+    actions.push({
+      id: "download",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => (
+        <DownloadSplitButton
+          onDownload={startDownload}
+          renditions={downloadRenditions}
+        />
+      ),
+    });
+  }
+  if (printsTextPreview) {
+    actions.push({
+      id: "print",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => <PrintTextPreviewButton />,
+    });
+  }
+  if (desktopEditTarget !== null) {
+    actions.push({
+      id: "open-in-desktop-app",
+      requires: [REQUIREMENT.desktopAppHost],
+      render: () => (
         <DesktopOpenButton
           entityId={tab.entityId}
           fieldId={tab.id}
@@ -140,11 +187,17 @@ export const FileTabHeaderActions = ({
           propertyId={desktopEditTarget.propertyId}
           workspaceId={tab.workspaceId}
         />
-      ) : null}
-      {pdfSignTarget !== null ? <PdfSignButton target={pdfSignTarget} /> : null}
-      {children}
-    </>
-  );
+      ),
+    });
+  }
+  if (pdfSignTarget !== null && !mainViewHasFileActions) {
+    actions.push({
+      id: "sign",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => <PdfSignButton target={pdfSignTarget} />,
+    });
+  }
+  return actions;
 };
 
 export const MoveToMainButton = ({

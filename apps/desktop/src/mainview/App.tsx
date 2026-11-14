@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -22,10 +23,17 @@ import { FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
+import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
+import {
+  ActivitySettingsPane,
+  ActivitySettingsSkeleton,
+} from "../activity/ActivitySettings";
 import {
   isSupportedLanguage,
   setPreferredLanguage,
@@ -39,8 +47,12 @@ import type {
   AppSnapshot,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
+  DocumentRecoverySnapshot,
   LinkedAccountSnapshot,
+  RecoveryTarget,
 } from "../shared/rpc";
+import { StellaAppIcon } from "../shared/StellaAppIcon";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -49,10 +61,13 @@ import {
 } from "../telemetry/desktop-telemetry";
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
+import { DictationSetting } from "./DictationSetting";
+import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
+import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
-import stellaFavicon from "./stella-favicon.svg";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
@@ -73,7 +88,12 @@ const DEFAULT_UPDATE_SNAPSHOT = {
   updateReady: false,
 } satisfies DesktopUpdateSnapshot;
 
-const PREFERENCES_TABS = ["general", "notifications", "about"] as const;
+const PREFERENCES_TABS = [
+  "general",
+  "activity",
+  "notifications",
+  "about",
+] as const;
 
 type PreferencesTab = (typeof PREFERENCES_TABS)[number];
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
@@ -109,11 +129,7 @@ const getInitialTab = (): PreferencesTab => {
   return isPreferencesTab(tab) ? tab : "general";
 };
 
-const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
-  if (!linkedAccount) {
-    return "S";
-  }
-
+const getAccountInitials = (linkedAccount: LinkedAccountSnapshot) => {
   if (linkedAccount.name?.trim()) {
     return linkedAccount.name
       .split(" ")
@@ -209,6 +225,102 @@ const PanelGroup = ({
     </div>
   </section>
 );
+
+const DocumentRecovery = ({
+  recovery,
+  onRefresh,
+}: {
+  recovery: DocumentRecoverySnapshot;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations("settings");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const act = async (target: RecoveryTarget | "retry") => {
+    setBusy(true);
+    const result = await Result.tryPromise(async () =>
+      target === "retry"
+        ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
+        : invoke("open_recovery_folder", { target }),
+    );
+    setError(result.isErr() ? t("recoveryError") : null);
+    setBusy(false);
+  };
+  if (
+    !recovery.edits.length &&
+    !recovery.unassigned &&
+    !recovery.pending &&
+    recovery.access === "available"
+  ) {
+    return null;
+  }
+  return (
+    <PanelGroup title={t("recoveryTitle")}>
+      <div className="space-y-3 px-4 py-3 text-sm">
+        {recovery.edits.length ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryBody")}</p>
+            <ul className="space-y-1">
+              {recovery.edits.map((edit) => (
+                <li key={edit.id} className="wrap-break-word">
+                  <BidiText>{edit.fileName}</BidiText>
+                  {edit.status === "pending"
+                    ? ` (${t("recoveryFilePending")})`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("account");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenFolder")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.access === "signInRequired" ? (
+          <p className="text-muted-foreground">{t("recoverySignIn")}</p>
+        ) : null}
+        {recovery.unassigned ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("unassigned");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenUnassigned")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.pending ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryPending")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("retry");
+              }}
+              variant="outline"
+            >
+              {t("tryAgain")}
+            </Button>
+          </>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </PanelGroup>
+  );
+};
 
 type TelemetryPreferenceState =
   | { status: "loading" }
@@ -308,7 +420,7 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
             {t(error === "read" ? "errorReadTelemetry" : "errorSaveTelemetry")}
           </p>
           {error === "read" ? (
-            <Button onClick={onRetry} size="sm" variant="outline">
+            <Button onClick={onRetry} variant="outline">
               {t("tryAgain")}
             </Button>
           ) : null}
@@ -331,6 +443,9 @@ const GeneralPane = ({
 }) => {
   const format = useFormatter();
   const t = useTranslations("settings");
+  const tSubscriptions = useTranslations("agentSubscriptions");
+  const tLocalSkills = useTranslations("localSkills");
+  const tLinkedFolders = useTranslations("localLinkedFolders");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -340,14 +455,20 @@ const GeneralPane = ({
       <PanelGroup>
         <div className="flex items-center gap-3 px-4 py-4">
           <Avatar className="size-10 border">
-            <AvatarFallback>{getAccountInitials(linkedAccount)}</AvatarFallback>
+            <AvatarFallback>
+              {linkedAccount ? (
+                getAccountInitials(linkedAccount)
+              ) : (
+                <StellaMark className="size-5" />
+              )}
+            </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
+            <TruncatedText className="text-sm font-medium" render={<p />}>
               {linkedAccount?.name?.trim() ||
                 linkedAccount?.email ||
                 t("stellaDesktop")}
-            </p>
+            </TruncatedText>
           </div>
           <span
             className={cn(
@@ -406,7 +527,6 @@ const GeneralPane = ({
           <Button
             disabled={presentation.status === "loading"}
             onClick={onAccountAction}
-            size="sm"
             variant={presentation.actionVariant}
           >
             {t(presentation.actionKey, { host: presentation.host ?? "" })}
@@ -418,6 +538,24 @@ const GeneralPane = ({
       <PanelGroup>
         <ShortcutSetting />
       </PanelGroup>
+      <DictationSetting
+        renderGroup={(content) => <PanelGroup>{content}</PanelGroup>}
+      />
+      <AgentSubscriptionsSection
+        renderGroup={(content) => (
+          <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalSkillFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLocalSkills("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalLinkedFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLinkedFolders("title")}>{content}</PanelGroup>
+        )}
+      />
       <PanelGroup title={t("permissions")}>
         <PermissionsSection window={DESKTOP_TELEMETRY_WINDOWS.main} />
       </PanelGroup>
@@ -465,6 +603,51 @@ const GeneralPane = ({
           </Combobox>
         </div>
       </PanelGroup>
+      <PanelGroup>
+        <SetupGuideSetting />
+      </PanelGroup>
+    </div>
+  );
+};
+
+/** Starts the setup tour again in its own window. */
+const SetupGuideSetting = () => {
+  const t = useTranslations("settings");
+  const [failed, setFailed] = useState(false);
+  const restart = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_restart"),
+    );
+    if (Result.isError(result)) {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+        window: DESKTOP_TELEMETRY_WINDOWS.main,
+      });
+    }
+    setFailed(Result.isError(result));
+  };
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{t("setupGuide")}</p>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("setupGuideDescription")}
+        </p>
+        {failed ? (
+          <p className="text-destructive-foreground mt-1 text-sm" role="alert">
+            {t("errorSetupGuide")}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        onClick={() => {
+          void restart();
+        }}
+        variant="outline"
+      >
+        {t("setupGuideAction")}
+      </Button>
     </div>
   );
 };
@@ -535,11 +718,7 @@ const AboutPane = ({
     <div className="space-y-4">
       <PanelGroup>
         <div className="flex flex-col items-center px-4 pt-6 pb-2">
-          <img
-            alt="stella"
-            className="size-16 shrink-0 rounded-2xl"
-            src={stellaFavicon}
-          />
+          <StellaAppIcon className="size-16 rounded-2xl" />
           <p className="mt-3 text-sm font-semibold">{t("stellaDesktop")}</p>
           <p className="text-muted-foreground mt-0.5 text-xs">{versionLabel}</p>
         </div>
@@ -548,7 +727,7 @@ const AboutPane = ({
       <PanelGroup title={t("support")}>
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">hello@stll.app</p>
-          <Button onClick={onEmailSupport} size="sm" variant="outline">
+          <Button onClick={onEmailSupport} variant="outline">
             {t("email")}
           </Button>
         </div>
@@ -557,7 +736,6 @@ const AboutPane = ({
           <Button
             className="flex-1"
             onClick={onCopyDiagnostics}
-            size="sm"
             variant="outline"
           >
             {t("copyDiagnostics")}
@@ -565,7 +743,6 @@ const AboutPane = ({
           <Button
             className="flex-1"
             onClick={onRevealSupportRoot}
-            size="sm"
             variant="ghost"
           >
             {t("revealAppData")}
@@ -576,17 +753,88 @@ const AboutPane = ({
   );
 };
 
+type ActivityAvailability = "loading" | "enabled" | "disabled";
+
+/**
+ * Whether the account has the activity feature, which decides the Activity
+ * tab. Reads the feature decision only and again on every activity change,
+ * which the native side also emits when the decision changes.
+ */
+const useActivityAvailability = () => {
+  const [availability, setAvailability] =
+    useState<ActivityAvailability>("loading");
+
+  useEffect(() => {
+    let disposed = false;
+    let request = 0;
+    const read = () => {
+      request += 1;
+      const current = request;
+      invoke<boolean>("is_activity_enabled")
+        .then((enabled) => {
+          if (!disposed && current === request) {
+            setAvailability(enabled ? "enabled" : "disabled");
+          }
+          return undefined;
+        })
+        .catch(() => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+            window: DESKTOP_TELEMETRY_WINDOWS.main,
+          });
+          if (!disposed && current === request) {
+            setAvailability("disabled");
+          }
+        });
+    };
+    read();
+    const stopListening = subscribeDesktopEvent({
+      event: ACTIVITY_CHANGED_EVENT,
+      handler: read,
+      onError: reportSubscriptionFailure,
+      onSubscribed: read,
+    });
+    return () => {
+      disposed = true;
+      stopListening();
+    };
+  }, []);
+
+  return availability;
+};
+
 const App = () => {
   const t = useTranslations("settings");
+  const tActivity = useTranslations("activity");
   const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
+  // Bumped by every pushed snapshot and every preference edit. The backend
+  // pushes `state-changed` after each change, so a command reply applies only
+  // while its revision is current: a reply that lost the race to a newer push
+  // or edit would revert it.
+  const snapshotRevision = useRef(0);
+  // Only the newest edit reports a failure: a newer one carries its value too.
+  const latestEdit = useRef(0);
+  // The backend's latest snapshot, restored when the newest edit fails.
+  const confirmedSnapshot = useRef<AppSnapshot | null>(null);
   const [accountState, setAccountState] = useState<DesktopAccountState>({
     status: "loading",
   });
   const accountRefresh = useRef<() => void>(() => undefined);
   const accountGeneration = useRef(0);
+  const snapshotGeneration = useRef(0);
+  const snapshotRefresh = useRef<() => void>(() => undefined);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
+  const activityAvailability = useActivityAvailability();
+  // A requested Activity tab stays shown while availability loads, so opening
+  // it does not flash General first; it falls back only once activity is off.
+  const showActivityTab =
+    activityAvailability === "enabled" ||
+    (activityAvailability === "loading" && activeTab === "activity");
+  const shownTab =
+    activeTab === "activity" && !showActivityTab ? "general" : activeTab;
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -632,6 +880,8 @@ const App = () => {
           return;
         }
 
+        snapshotRevision.current += 1;
+        confirmedSnapshot.current = detail;
         startTransition(() => {
           setError(null);
           setState(detail);
@@ -641,18 +891,33 @@ const App = () => {
     });
 
     const syncState = async () => {
+      const revision = snapshotRevision.current;
+      const request = ++snapshotGeneration.current;
       try {
         const nextState = await invoke<AppSnapshot>("get_state");
-        if (disposed) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
+        if (!isAppSnapshot(nextState)) {
+          setError(t("errorReadState"));
+          return;
+        }
+        confirmedSnapshot.current = nextState;
         startTransition(() => {
           setError(null);
           setState(nextState);
         });
       } catch (fetchError) {
-        if (disposed) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
@@ -660,10 +925,14 @@ const App = () => {
       }
     };
 
+    snapshotRefresh.current = () => {
+      void syncState();
+    };
     void syncState();
 
     return () => {
       disposed = true;
+      snapshotGeneration.current += 1;
       stopListening();
     };
   }, [t]);
@@ -672,6 +941,12 @@ const App = () => {
     let disposed = false;
     const refresh = () => {
       const request = ++accountGeneration.current;
+      snapshotGeneration.current += 1;
+      snapshotRevision.current += 1;
+      latestEdit.current += 1;
+      confirmedSnapshot.current = null;
+      setState(null);
+      snapshotRefresh.current();
       void invoke<
         Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
       >("account_get_state")
@@ -729,11 +1004,14 @@ const App = () => {
       return;
     }
 
-    const previousPreferences = state.notificationPreferences;
     const nextPreferences = {
-      ...previousPreferences,
+      ...state.notificationPreferences,
       [preferenceKey]: checked,
     };
+    snapshotRevision.current += 1;
+    latestEdit.current += 1;
+    const revision = snapshotRevision.current;
+    const edit = latestEdit.current;
 
     startTransition(() => {
       setState((currentState) =>
@@ -751,21 +1029,22 @@ const App = () => {
         "update_notification_preferences",
         { prefs: nextPreferences },
       );
+      if (revision !== snapshotRevision.current) {
+        return;
+      }
 
+      confirmedSnapshot.current = nextState;
       startTransition(() => {
         setError(null);
         setState(nextState);
       });
     } catch (updateError) {
+      if (edit !== latestEdit.current) {
+        return;
+      }
+      const confirmed = confirmedSnapshot.current;
       startTransition(() => {
-        setState((currentState) =>
-          currentState
-            ? {
-                ...currentState,
-                notificationPreferences: previousPreferences,
-              }
-            : currentState,
-        );
+        setState(confirmed);
         setError(commandErrorMessage(updateError, t("errorUpdatePreferences")));
       });
     }
@@ -827,6 +1106,7 @@ const App = () => {
 
   return (
     <main className="bg-background text-foreground min-h-dvh">
+      <WindowDragRegion />
       <div
         className={cn(
           "mx-auto flex h-dvh max-w-[30rem] flex-col px-4 pb-4",
@@ -834,10 +1114,7 @@ const App = () => {
         )}
       >
         <header className="pb-2">
-          <p className="text-muted-foreground text-2xs font-medium tracking-[0.14em] uppercase">
-            {t("stellaDesktop")}
-          </p>
-          <h1 className="mt-1 text-xl font-semibold">{t("title")}</h1>
+          <h1 className="text-xl font-semibold">{t("title")}</h1>
         </header>
 
         <Tabs
@@ -848,13 +1125,18 @@ const App = () => {
               setActiveTab(nextTab);
             }
           }}
-          value={activeTab}
+          value={shownTab}
         >
           <div className="px-1">
             <TabsList variant="underline">
               <TabsTab className="h-8 px-2 text-sm" value="general">
                 {t("general")}
               </TabsTab>
+              {showActivityTab ? (
+                <TabsTab className="h-8 px-2 text-sm" value="activity">
+                  {tActivity("title")}
+                </TabsTab>
+              ) : null}
               <TabsTab className="h-8 px-2 text-sm" value="notifications">
                 {t("notifications")}
               </TabsTab>
@@ -909,9 +1191,29 @@ const App = () => {
                       void handleLanguageChange(nextLanguage);
                     }}
                   />
+                  {state ? (
+                    <DocumentRecovery
+                      recovery={state.documentRecovery}
+                      onRefresh={() => snapshotRefresh.current()}
+                    />
+                  ) : null}
                 </div>
               </ScrollArea>
             </TabsPanel>
+            {showActivityTab ? (
+              <TabsPanel className="h-full min-h-0" value="activity">
+                <ScrollArea className="h-full">
+                  <div className="p-4">
+                    {/* Activity reads nothing until its access is confirmed. */}
+                    {activityAvailability === "enabled" ? (
+                      <ActivitySettingsPane />
+                    ) : (
+                      <ActivitySettingsSkeleton />
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsPanel>
+            ) : null}
             <TabsPanel className="h-full min-h-0" value="notifications">
               <ScrollArea className="h-full">
                 <div className="space-y-4 p-4">

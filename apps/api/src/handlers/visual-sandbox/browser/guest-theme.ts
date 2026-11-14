@@ -1,8 +1,8 @@
 import * as v from "valibot";
 
 import {
-  visualThemeMessageSchema,
   type VisualTheme,
+  visualThemeMessageSchema,
 } from "@stll/api-contract/visual-theme";
 
 type VisualThemeHandlerOptions = {

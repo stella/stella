@@ -3,9 +3,9 @@ import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
 import {
+  type ChatSourceScope,
   chatSourceScopeKey,
   parseChatSourceScopeHref,
-  type ChatSourceScope,
 } from "@stll/api-contract";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 

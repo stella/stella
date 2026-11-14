@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_COURTS",
+  "key": "pl-courts",
+  "parserVersion": 37,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own."
+  }
+}

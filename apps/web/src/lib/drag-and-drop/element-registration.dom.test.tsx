@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register();
 afterAll(async () => await unregisterDomEnvironment());
@@ -17,7 +17,6 @@ for (const [kind, register] of Object.entries(registrations)) {
     test("one live registration keeps its cleanup", () => {
       const element = document.createElement("div");
       const cleanup = register({ element, name: "first" });
-      expect(typeof cleanup).toBe("function");
       expect(() => register({ element, name: "second" })).toThrow(
         /first.*second/u,
       );

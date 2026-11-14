@@ -23,7 +23,7 @@ type SamplePair = { original: string; label: string };
 const strip = (pairs: readonly SamplePair[]): SamplePair[] =>
   pairs.map(({ original, label }) => ({ original, label }));
 
-// Compared as canonical JSON rather than as source text: oxfmt re-wraps the
+// Compared as canonical JSON rather than as source text: bun fmt re-wraps the
 // literal once a line grows past the print width, so comparing the rendered
 // source would report drift for formatting alone.
 const canonical = (pairs: readonly SamplePair[]): string =>

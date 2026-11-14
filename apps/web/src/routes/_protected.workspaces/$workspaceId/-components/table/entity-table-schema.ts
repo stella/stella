@@ -27,6 +27,7 @@ import type {
 } from "@/components/workspaces/table/table-schema";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { pairPlaybookVerdicts } from "@/lib/workspaces/playbook-verdicts";
+import { propertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 /** Labels the schema needs; the caller resolves them for the reader's locale. */
@@ -39,6 +40,7 @@ type WorkspaceTableLabels = {
   author: string;
   lastUpdated: string;
   version: string;
+  documents: string;
 };
 
 export type WorkspaceTableSchemaParams = {
@@ -122,7 +124,7 @@ export const workspaceTableSchema = ({
   ])) {
     columns.push({
       id: property.id,
-      label: property.name,
+      label: propertyDisplayName(property, labels.documents),
       render: { type: "property", property, verdictProperty },
       size: PROPERTY_COLUMN_SIZE,
       capabilities: { sort: true, hide: true, resize: true, pin: true },

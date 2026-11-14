@@ -82,7 +82,7 @@ describe.skipIf(!enabled)("the rehearsal's writer gap", () => {
         stop.abort();
         await writer;
         await migrator.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-        migrator.release();
+        await migrator.release();
       }
     });
   });

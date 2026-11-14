@@ -4,10 +4,10 @@ import * as v from "valibot";
 
 import {
   VISUAL_PREVIEW_LIMITS,
-  visualPreviewInputSchema,
-  visualPreviewOutputSchema,
   type VisualPreviewInput,
+  visualPreviewInputSchema,
   type VisualPreviewOutput,
+  visualPreviewOutputSchema,
   type VisualPreviewToolOutput,
 } from "@stll/api-contract/visual-preview";
 import type { FailureReason } from "@stll/errors";

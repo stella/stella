@@ -8,8 +8,8 @@ import {
   aggregateExecutionRows,
   aggregateFences,
   aggregateRecorder,
-  plantedDescendingBlockingAcquisition,
   plantedBlockingUpgradeAtHighWater,
+  plantedDescendingBlockingAcquisition,
   plantedWeakerHeldModeReuse,
 } from "@/api/tests/fixtures/aggregate-lock-order";
 

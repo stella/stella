@@ -23,6 +23,27 @@ const owner = {
 };
 
 describe("search history normalization", () => {
+  test("case, canonical Unicode, and whitespace variants deduplicate", () => {
+    const accented = "Řízení\u00a0 O   NÁHRADĚ  ŠKODY";
+    const decomposed = normalizeUnicode("  řízení o náhradě škody  ", "NFD");
+    expect(decomposed).not.toBe(normalizeUnicode(decomposed, "NFC"));
+
+    const first = canonicalSearchHistoryEntry({
+      kind: "search",
+      query: accented,
+    });
+    const second = canonicalSearchHistoryEntry({
+      kind: "search",
+      query: decomposed,
+    });
+
+    expect(first?.match).toBe(second?.match);
+    expect(first?.entry).toEqual({
+      kind: "search",
+      query: "Řízení O NÁHRADĚ ŠKODY",
+    });
+  });
+
   test("search-history normalization is a fixed point", () => {
     assertProperty(
       "search-history normalization is a fixed point",

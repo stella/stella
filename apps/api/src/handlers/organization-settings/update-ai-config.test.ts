@@ -1,12 +1,12 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, spyOn, test } from "bun:test";
+import * as v from "valibot";
 
 import {
-  TANSTACK_AI_PROVIDERS,
   BYOK_DEFAULT_MODELS,
-  MODEL_OVERRIDE_GROUPS,
   MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { resolveDefaultOverrideModels } from "@stll/ai-catalog/model-defaults-ledger";
 
@@ -18,17 +18,24 @@ import type {
   OrgAIConfig,
   OrgAIModelSelection,
 } from "@/api/lib/ai-config";
-import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import { decryptAIConfig as decryptAIConfigResult } from "@/api/lib/ai-config-crypto";
+import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";
 import { toSafeId } from "@/api/lib/branded-types";
-import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateAIConfig from "./update-ai-config";
+
+const testFetchState = createTestFetch();
+
+const decryptAIConfig = async (
+  ...args: Parameters<typeof decryptAIConfigResult>
+) => (await decryptAIConfigResult(...args)).unwrap();
 
 type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
 
@@ -68,14 +75,12 @@ const createSettingsDb = (
       }),
     }),
   });
-  const safeDb: SafeDb = async <T>(
-    operation: (tx: Transaction) => Promise<T>,
-  ) => {
-    operations += 1;
-    return operations === 1
-      ? Result.ok(asTestRaw<T>(row))
-      : Result.ok(await operation(tx));
-  };
+  const safeDb = asTestRaw<SafeDb>(
+    async (operation: (tx: Transaction) => Promise<unknown>) => {
+      operations += 1;
+      return operations === 1 ? Result.ok(row) : Result.ok(await operation(tx));
+    },
+  );
   return { safeDb, written: () => written, operations: () => operations };
 };
 
@@ -434,7 +439,7 @@ describe("Anthropic workspace settings", () => {
   test("workspace update schema rejects unsafe header text and allows explicit clearing", () => {
     for (const anthropicWorkspaceId of ["wrk_safe-ID_01", ""]) {
       expect(
-        Value.Check(updateAIConfig.config.body, {
+        v.is(updateAIConfig.config.body, {
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),
@@ -448,7 +453,7 @@ describe("Anthropic workspace settings", () => {
       "wrk/path",
     ]) {
       expect(
-        Value.Check(updateAIConfig.config.body, {
+        v.is(updateAIConfig.config.body, {
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),
@@ -606,18 +611,22 @@ const openaiDecision = {
   region: "eu",
 } as const;
 
-const createDecisionRequestSpy = () =>
-  spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(
-      async () =>
+const createDecisionRequestSpy = () => {
+  const fetchMock = Object.assign(
+    mock(
+      asFetchMock(async () =>
         Response.json({
           model: "gpt-6-luna",
           answers: [{ type: "predicate", name: "probe", probability: 0.99 }],
           usage: { input_tokens: 10, output_tokens: 0 },
         }),
-      { preconnect: globalThis.fetch.preconnect },
+      ),
     ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchMock);
+  return fetchMock;
+};
 
 describe("decision credential dependencies on settings save", () => {
   test.each(["omitted", "reuse"] as const)(
@@ -660,7 +669,7 @@ describe("decision credential dependencies on settings save", () => {
         expect(db.operations()).toBe(1);
         expect(fetch).not.toHaveBeenCalled();
       } finally {
-        fetch.mockRestore();
+        testFetchState.restore();
       }
     },
   );
@@ -721,7 +730,7 @@ describe("decision credential dependencies on settings save", () => {
           );
         }
       } finally {
-        fetch.mockRestore();
+        testFetchState.restore();
       }
     },
   );

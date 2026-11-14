@@ -6,11 +6,11 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   BILLING_STATUS,
   EXPENSE_CATEGORIES,
+  type ExpenseCategory,
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
-  type ExpenseCategory,
   type TimeEntrySource,
   type TimeEntryStatus,
 } from "@stll/api-contract";
@@ -23,60 +23,64 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { bytea, jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillChildPolicies,
-  agentSkillRevisionPolicies,
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  agentSkillRevisionPolicies,
   aiMemoryPolicies,
-  chatMessageSearchDocumentPolicies,
-  chatMessagePolicies,
-  chatMessageRevisionPolicies,
-  chatTurnPolicies,
-  chatThreadCompactionPolicies,
-  chatThreadNamePolicies,
-  chatThreadPreviewPassagePolicies,
-  chatThreadPolicies,
-  chatThreadSearchDocumentPolicies,
+  authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
   caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  chatBrowserSiteGrantPolicies,
+  chatLimitReminderPolicies,
+  chatMessagePolicies,
+  chatMessageRevisionPolicies,
+  chatMessageSearchDocumentPolicies,
+  chatThreadCompactionPolicies,
+  chatThreadNamePolicies,
+  chatThreadPolicies,
+  chatThreadPreviewPassagePolicies,
+  chatThreadSearchDocumentPolicies,
+  chatToolGrantPolicies,
+  chatTurnPolicies,
   corpusSampleReaderDecisionPolicies,
   corpusSampleReaderPolicies,
   fileChatThreadPolicies,
   globalCaseLawPolicies,
-  publicCaseLawReaderPolicies,
-  publicLawReaderPolicies,
   mcpConnectorAuthorizationReviewPolicies,
   mcpConnectorPolicies,
-  mcpOAuthStatePolicies,
   mcpOAuthClientPolicies,
+  mcpOAuthStatePolicies,
   mcpUserConnectionPolicies,
+  notificationPolicies,
   organizationCheck,
-  authoredNotePolicies,
   organizationOptionalWorkspacePolicies,
   orgPolicies,
   orgReadOnlyPolicies,
+  publicCaseLawReaderPolicies,
+  publicLawReaderPolicies,
   savedSearchPolicies,
-  chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
   stella,
   stellaPublicLawReader,
   templateChatThreadPolicies,
   userFilePolicies,
-  notificationPolicies,
   userOrganizationPolicies,
   userPolicies,
-  workspaceIdCheck,
   workspaceCheck,
+  workspaceIdCheck,
   workspaceViewTemplatePolicies,
-  wsOrganizationPolicies,
-  wsOrganizationUserPolicies,
-  wsOrganizationReadOnlyPolicies,
   wsDataScopePolicies,
+  wsOrganizationPolicies,
+  wsOrganizationReadOnlyPolicies,
   wsOrganizationScopedRequestPolicies,
+  wsOrganizationUserPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "@/api/db/rls";
 import type {
   BankAccount,
@@ -106,7 +110,10 @@ import type {
   SafeIdType,
 } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import type { DocumentSource } from "@/api/lib/document-source";
+import type {
+  DocumentSource,
+  ImportDocumentSource,
+} from "@/api/lib/document-source";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { AgendaAttendeeType } from "@/api/lib/entity-constants";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -213,6 +220,8 @@ export type JustificationBlock =
 export type JustificationContent = {
   version: 1;
   blocks: JustificationBlock[];
+  /** Set on a clause summary, whose wording lives only in its citations. */
+  gradeFrom?: "cited-passages";
 };
 
 /** Re-exported so the schema layer keeps one import surface; the agenda member
@@ -263,8 +272,7 @@ export type SchedulerDailySchedule = {
 };
 
 export type SchedulerSchedule =
-  | SchedulerDailySchedule
-  | SchedulerIntervalSchedule;
+  SchedulerDailySchedule | SchedulerIntervalSchedule;
 
 export type SchedulerPayload = Record<string, unknown>;
 
@@ -352,6 +360,11 @@ export type AccountDeletionStorageCleanup = {
 
 export const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
+});
+
+/** A full transaction id, read as its decimal text. */
+export const xid8 = customType<{ data: string }>({
+  dataType: () => "xid8",
 });
 
 export const safeWorkspaceId = (name: string) =>
@@ -557,10 +570,13 @@ export {
   mcpUserConnectionPolicies,
   organizationCheck,
   authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
   organizationOptionalWorkspacePolicies,
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatLimitReminderPolicies,
+  chatBrowserSiteGrantPolicies,
   chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
@@ -580,6 +596,7 @@ export {
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 };
 
 export type {
@@ -603,6 +620,7 @@ export type {
   DocumentAst,
   DocumentSource,
   EmptyAst,
+  ImportDocumentSource,
   EntityKind,
   FieldContent,
   PersistedChatMessageContent,

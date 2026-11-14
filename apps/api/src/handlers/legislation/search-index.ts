@@ -32,6 +32,7 @@ import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -323,10 +324,13 @@ export const backfillLegislationSearchIndex = async (
     if (Result.isOk(indexed)) {
       return 1;
     }
-    captureError(indexed.error, {
-      documentId: row.id,
-      step: "backfillLegislationSearchIndex",
-    });
+    captureError(
+      indexed.error,
+      handlerErrorContext("legislation.indexRow.indexed_error", {
+        documentId: row.id,
+        step: "backfillLegislationSearchIndex",
+      }),
+    );
     logger.error("legislation.search_index.backfill_failed", {
       documentId: row.id,
       ...errorSystemFields(indexed.error),

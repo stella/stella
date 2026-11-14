@@ -113,6 +113,8 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   // Consumed to decide whether `title` is user-authored; only then is the
   // title exported.
   "titleSource",
+  // Internal derivation metadata, not authored account content.
+  "generationProvenance",
   // Per-thread runtime settings: how the assistant ran, not authored content.
   "webSearchEnabled",
   // Skill selected at thread start: runtime setting that can reference an
@@ -120,6 +122,8 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   "activeSkill",
   "chatModel",
   "chatReasoningEffort",
+  "chatRunTarget",
+  "chatLocalRunTarget",
   // Internal processing flag recording that anonymization ran on a turn.
   "usedAnonymization",
   // Disconnect-compensation token for thread creation; internal machinery.
@@ -139,6 +143,10 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   "compactionAttemptedAt",
   "compactionAttempts",
   "compactionEpoch",
+  // The reader's list state (read marker, pin): how the list shows the
+  // thread, not authored content.
+  "lastReadAt",
+  "pinnedAt",
 ] as const satisfies readonly (keyof ChatThreadRow)[];
 
 // Totality guard, bidirectional: every schema column must be exported or

@@ -1,6 +1,6 @@
 import { getColumnTable, getTableName, is } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgRole } from "drizzle-orm/pg-core";
-import type { AnyPgColumn, PgTable, PgPolicyConfig } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgPolicyConfig, PgTable } from "drizzle-orm/pg-core";
 
 import { entityReferenceClassification } from "./entity-feature-policies";
 
@@ -163,7 +163,7 @@ export const entityFeatureCoverageViolations = (
       continue;
     }
     const expression =
-      policy?.using === undefined ? "" : dialect.sqlToQuery(policy.using).sql;
+      policy?.using !== undefined ? dialect.sqlToQuery(policy.using).sql : "";
     const fenced = (column: AnyPgColumn, relationExpression?: string) =>
       policy?.as === "restrictive" &&
       policy.for === "all" &&

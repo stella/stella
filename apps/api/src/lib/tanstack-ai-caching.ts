@@ -136,14 +136,12 @@ export function markTanStackCacheBreakpoint(
 ): DocumentPart<AnthropicDocumentMetadata>;
 export function markTanStackCacheBreakpoint(
   part:
-    | TextPart<AnthropicTextMetadata>
-    | DocumentPart<AnthropicDocumentMetadata>,
+    TextPart<AnthropicTextMetadata> | DocumentPart<AnthropicDocumentMetadata>,
   options: { decision: CachingDecision },
 ): TextPart<AnthropicTextMetadata> | DocumentPart<AnthropicDocumentMetadata>;
 export function markTanStackCacheBreakpoint(
   part:
-    | TextPart<AnthropicTextMetadata>
-    | DocumentPart<AnthropicDocumentMetadata>,
+    TextPart<AnthropicTextMetadata> | DocumentPart<AnthropicDocumentMetadata>,
   { decision }: { decision: CachingDecision },
 ): TextPart<AnthropicTextMetadata> | DocumentPart<AnthropicDocumentMetadata> {
   const cacheControl = tanStackCacheControl(decision);

@@ -2,6 +2,7 @@ import { Component } from "react";
 import type { ContextType, ErrorInfo, ReactElement } from "react";
 
 import { AnalyticsContext } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 // Every chat surface that contains a render failure locally names itself
@@ -61,13 +62,22 @@ export class ChatRenderErrorBoundary extends Component<
 
   override componentDidCatch(error: Error, _info: ErrorInfo) {
     const { surface } = this.props;
-    this.context.captureError(
-      new ClientTelemetryError({
-        area: surface,
-        message: CHAT_RENDER_SURFACES[surface],
-        cause: error,
-      }),
-    );
+    reportErrorOnce(error, () => {
+      this.context.captureError(
+        new ClientTelemetryError({
+          area: surface,
+          message: CHAT_RENDER_SURFACES[surface],
+          cause: error,
+        }),
+        {
+          fingerprintKey: `ChatRenderErrorBoundary:${surface}`,
+          scope: {
+            type: "handler",
+            handlerId: `ChatRenderErrorBoundary:${surface}`,
+          },
+        },
+      );
+    });
   }
 
   override render() {

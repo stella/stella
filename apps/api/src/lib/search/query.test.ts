@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   buildPlainSearchTsQuery,
+  buildSearchCandidateTsQuery,
   buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
   fileNameSearchText,
@@ -17,6 +18,37 @@ import {
 } from "@/api/lib/search/query";
 
 describe("search query text", () => {
+  test.each([
+    ["contract NOT negligence", "contract:*"],
+    ['"contract law" AND NOT negligence', "contract:* <-> law:*"],
+    ["contract AND (law OR NOT negligence)", "contract:*"],
+    ["contract OR (law AND NOT negligence)", "(contract:*) | (law:*)"],
+    ["NOT (NOT contract OR negligence)", "contract:*"],
+    ["contract OR NOT negligence", null],
+    ["NOT (NOT contract AND negligence)", null],
+  ] as const)(
+    "candidate query preserves the positive constraint of %s",
+    (query, expected) => {
+      const candidate = buildSearchCandidateTsQuery(query);
+      expect(
+        candidate === null
+          ? null
+          : new PgDialect().sqlToQuery(candidate).params.at(0),
+      ).toBe(expected);
+    },
+  );
+
+  test.each(["contract", '"contract law" AND services', "contract OR law"])(
+    "positive candidate queries retain full semantics: %s",
+    (query) => {
+      const dialect = new PgDialect();
+      const candidate = buildSearchCandidateTsQuery(query);
+      expect(candidate === null ? null : dialect.sqlToQuery(candidate)).toEqual(
+        dialect.sqlToQuery(buildSearchTsQuery(query)),
+      );
+    },
+  );
+
   test("extracts positive preview locator candidates without losing phrases", () => {
     expect(
       getSearchPreviewLocatorCandidates(
@@ -69,6 +101,22 @@ describe("search query text", () => {
 
   test("normalizes diacritics for lexeme-based search syntax", () => {
     expect(toPrefixTsQueryText("černý")).toBe("cerny:*");
+  });
+
+  test("accented and unaccented Czech and Slovak queries reach identical lexemes", () => {
+    const pairs = [
+      ["řízení o náhradě škody", "rizeni o nahrade skody"],
+      [
+        "zrušenie bezpodielového spoluvlastníctva",
+        "zrusenie bezpodieloveho spoluvlastnictva",
+      ],
+    ] as const;
+
+    for (const [accented, unaccented] of pairs) {
+      expect(toPrefixTsQueryText(accented)).toBe(
+        toPrefixTsQueryText(unaccented),
+      );
+    }
   });
 
   test("folds stroke letters the way the indexed lexemes were folded", () => {
@@ -162,6 +210,12 @@ describe("search query text", () => {
   test("normalizes diacritics inside advanced query terms", () => {
     expect(toAdvancedTsQueryText("černý AND žaloba")).toBe(
       "(cerny:*) & (zaloba:*)",
+    );
+  });
+
+  test("quoted Czech and Slovak phrases preserve adjacency after accent folding", () => {
+    expect(toAdvancedTsQueryText('"řízení o náhradě" OR "náhrada škody"')).toBe(
+      toAdvancedTsQueryText('"rizeni o nahrade" OR "nahrada skody"'),
     );
   });
 

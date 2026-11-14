@@ -1,19 +1,31 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import {
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 
+import { isChatTurnGenerating } from "@/components/chat/chat-user-actions";
 import {
   createChatRuntime,
   resetChatRequestStateForTests,
   sendThreadChatMessage,
 } from "@/features/chat/chat-runtime";
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
+import { getDesktopLaunch } from "@/features/chat/desktop-launch";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import * as desktopBridge from "@/lib/desktop-bridge";
 import { toSafeId } from "@/lib/safe-id";
 
 // The composer's Stop against a server that owns the turn: the stop reaches
@@ -47,6 +59,8 @@ type OpenChatRequest = {
 type Server = {
   /** Stop requests, in the order the page sent them. */
   cancels: { answer: Deferred; turnId: string }[];
+  /** Settles once the page has sent `count` stop requests. */
+  cancelsReceived: (count: number) => Promise<void>;
   /** Chat requests past the planned turns, held until the test answers. */
   held: Deferred[];
   /** Chat requests, in the order the page sent them. */
@@ -176,7 +190,21 @@ const installServer = (
   turnIds: readonly string[],
   answer: Answer = "streaming",
 ): Server => {
-  const server: Server = { cancels: [], chats: [], held: [], log: [] };
+  const cancelWaiters: { count: number; resolve: () => void }[] = [];
+  const server: Server = {
+    cancels: [],
+    cancelsReceived: async (count) => {
+      if (server.cancels.length >= count) {
+        return;
+      }
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      cancelWaiters.push({ count, resolve: () => resolve(undefined) });
+      await promise;
+    },
+    chats: [],
+    held: [],
+    log: [],
+  };
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       await Promise.resolve();
@@ -186,6 +214,11 @@ const installServer = (
         server.log.push(`cancel ${cancel}`);
         const stopAnswer = deferred();
         server.cancels.push({ answer: stopAnswer, turnId: cancel });
+        for (const waiter of cancelWaiters) {
+          if (server.cancels.length >= waiter.count) {
+            waiter.resolve();
+          }
+        }
         return await stopAnswer.promise;
       }
       const turnId = turnIds[server.chats.length];
@@ -258,6 +291,7 @@ describe("the composer's Stop", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+    mock.restore();
   });
 
   test("stops the turn on the server, then closes the request and reloads", async () => {
@@ -409,6 +443,9 @@ describe("the composer's Stop", () => {
 
     expect(server.log).toEqual([`chat ${TURN_A}`, `cancel ${TURN_A}`]);
     expect(await sent).toEqual(Result.ok(undefined));
+    server.cancels[0]?.answer.resolve(settled(TURN_A, "cancelled"));
+    await tick();
+    expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
   });
 
   test("takes a refused continuation of the stopped turn quietly", async () => {
@@ -519,7 +556,7 @@ describe("the composer's Stop", () => {
     expect(await sent).toEqual(Result.ok(undefined));
   });
 
-  test("shows Stop again when asking whether the stop settled fails", async () => {
+  test("a failed stop poll keeps Stop shown and reloads once the stop settles", async () => {
     const server = installServer([TURN_A]);
     const page = openPage();
     const sent = send(page, "018f0000-0000-7000-8000-000000000008");
@@ -534,22 +571,175 @@ describe("the composer's Stop", () => {
       ),
     );
     // The page asks again after its poll interval (500 ms).
-    for (let poll = 0; poll < 300 && server.cancels.length < 2; poll += 1) {
-      await Bun.sleep(10);
-    }
-    // The fixture must reach the fault: the page asks again.
+    await server.cancelsReceived(2);
+    // The fixture must reach the fault: the page asked again, and the server
+    // held its request open until it accepted the stop.
     expect(server.cancels).toHaveLength(2);
+    expect(server.chats[0]?.aborted()).toBe(true);
     server.cancels[1]?.answer.resolve(
       Response.json({ message: "Unavailable" }, { status: 503 }),
     );
     await tick();
 
-    expect(page.runtime.getSnapshot()).toMatchObject({
-      stop: { status: "failed", turnId: TURN_A },
-      turnAbandoned: false,
+    // The server holds the stop, so the turn is still shown stopping: the
+    // composer keeps Stop, and a sent message waits in the queue.
+    const shown = page.runtime.getSnapshot();
+    expect(shown).toMatchObject({
+      stop: { status: "pending", turnId: TURN_A },
+      turnAbandoned: true,
     });
+    expect(
+      isChatTurnGenerating({
+        hasError: shown.error !== undefined,
+        messages: shown.messages,
+        requestActive: shown.isLoading,
+        sessionGenerating: shown.sessionGenerating,
+        stopStatus: shown.stop.status,
+      }),
+    ).toBe(true);
     expect(page.reloads).toBe(0);
-    server.chats[0]?.end();
+
+    await server.cancelsReceived(3);
+    expect(server.cancels).toHaveLength(3);
+    server.cancels[2]?.answer.resolve(settled(TURN_A, "cancelled"));
+    await tick();
+
+    expect(page.reloads).toBe(1);
+    expect(page.runtime.getSnapshot().stop).toEqual({ status: "idle" });
+    expect(await sent).toEqual(Result.ok(undefined));
+  });
+
+  test("Stop while the turn waits for stella desktop posts nothing, even once a computer connects", async () => {
+    const server = installServer([TURN_A]);
+    spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => undefined);
+    const local: ChatLocalRunTarget = {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+      approvals: "ask",
+      reasoningEffort: null,
+    };
+    // The member's send opened stella desktop; the computer connects only
+    // when the test says so.
+    const connects = Promise.withResolvers<undefined>();
+    const launched = getDesktopLaunch().launch(async () => {
+      await connects.promise;
+      return Result.ok(true);
+    });
+    const page: Page = {
+      errors: [],
+      reloads: 0,
+      runtime: createChatRuntime({
+        activeTurnId: null,
+        context: { getRunTarget: () => local },
+        initialMessages: [],
+        key: { scope: "global", threadId: THREAD_ID },
+        onError: (error) => {
+          page.errors.push(error);
+        },
+        onFinish: () => {},
+        reloadThread: () => {
+          page.reloads += 1;
+        },
+      }),
+    };
+    const sent = send(page, "018f0000-0000-7000-8000-000000000009");
+    await tick();
+    expect(page.runtime.getSnapshot().computerWait).toEqual({
+      status: "opening_desktop",
+    });
+
+    page.runtime.stop();
+    await tick();
+    expect(page.runtime.getSnapshot().computerWait).toBeNull();
+
+    connects.resolve(undefined);
+    expect(await launched).toBe("connected");
+    await tick();
+
+    expect(server.log).toEqual([]);
+    expect(server.cancels).toEqual([]);
+    // The thread is read again, so the unsent message leaves the transcript.
+    expect(page.reloads).toBe(1);
+    expect(await sent).toEqual(Result.ok(undefined));
+  });
+
+  test("a continuation of an accepted turn is not held for stella desktop, and Stop cancels that turn on the server", async () => {
+    const server = installServer([TURN_A], "client-call");
+    spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => undefined);
+    const local: ChatLocalRunTarget = {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+      approvals: "ask",
+      reasoningEffort: null,
+    };
+    const page: Page = {
+      errors: [],
+      reloads: 0,
+      runtime: createChatRuntime({
+        activeTurnId: null,
+        context: { getRunTarget: () => local },
+        initialMessages: [],
+        key: { scope: "global", threadId: THREAD_ID },
+        onError: (error) => {
+          page.errors.push(error);
+        },
+        onFinish: () => {},
+        reloadThread: () => {
+          page.reloads += 1;
+        },
+      }),
+    };
+    const sent = send(page, "018f0000-0000-7000-8000-00000000000a");
+    await tick();
+    expect(server.log).toEqual([`chat ${TURN_A}`]);
+    // A launch is under way when the page posts the turn's client result.
+    const connects = Promise.withResolvers<undefined>();
+    const launched = getDesktopLaunch().launch(async () => {
+      await connects.promise;
+      return Result.ok(true);
+    });
+    const continuation = Result.tryPromise(
+      async () =>
+        await page.runtime.addToolResult({
+          output: {
+            destination: "download",
+            fileName: "NDA.docx",
+            success: true,
+          },
+          tool: "create-document",
+          toolCallId: CLIENT_CALL_ID,
+        }),
+    );
+    await tick();
+
+    // Posted at once, not held: the server's turn owns the computer's wait.
+    expect(server.held).toHaveLength(1);
+    expect(page.runtime.getSnapshot().computerWait).toBeNull();
+
+    page.runtime.stop();
+    await tick();
+    expect(server.log).toEqual([
+      `chat ${TURN_A}`,
+      "chat (held)",
+      `cancel ${TURN_A}`,
+    ]);
+
+    server.held[0]?.resolve(
+      Response.json(
+        {
+          code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
+          message: "Chat turn has no durable execution owner",
+        },
+        { status: 409 },
+      ),
+    );
+    server.cancels[0]?.answer.resolve(settled(TURN_A, "cancelled"));
+    connects.resolve(undefined);
+    expect(await launched).toBe("connected");
+    await tick();
+    expect(await continuation).toEqual(Result.ok(undefined));
     expect(await sent).toEqual(Result.ok(undefined));
   });
 });

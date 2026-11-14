@@ -17,9 +17,9 @@ import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-ba
 import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
-  SCHEDULER_BACKFILL_IDS,
   logSchedulerBackfillStatus,
+  SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
@@ -40,9 +40,19 @@ const CONNECTION_LOCK_TIMEOUT_MS = 30_000;
 /** The part of a reserved Bun SQL connection the backfill uses. */
 type ReservedConnection = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
-  release: () => void;
+  release: () => Promise<void>;
   close: () => Promise<void>;
 };
+
+type ProvisionTaskConnection = Pick<ReservedConnection, "unsafe">;
+type ProvisionTaskConnectionHandle = {
+  connection: ProvisionTaskConnection;
+  setTransactionBudget: ProvisionBackfillSession["setTransactionBudget"];
+};
+type ProvisionTaskWithConnection = <T>(
+  options: Parameters<typeof withLongRunningConnection>[0],
+  work: (handle: ProvisionTaskConnectionHandle) => Promise<T>,
+) => Promise<T>;
 
 type ReservedSessionOptions<T> = {
   reserve: () => Promise<ReservedConnection>;
@@ -106,7 +116,7 @@ export const createCaseLawProvisionStateBackfillTask =
       await sleepWithSignal(milliseconds, undefined, { signal });
     },
   }: {
-    withConnection?: typeof withLongRunningConnection;
+    withConnection?: ProvisionTaskWithConnection;
     readVerdict?: () => Promise<Verdict>;
     clock?: () => number;
     observeStatus?: typeof logSchedulerBackfillStatus;
@@ -140,7 +150,7 @@ export const createCaseLawProvisionStateBackfillTask =
               tableName: "case_law_decisions",
               initialSize: 1,
               config: {
-                ...SCHEDULER_BACKFILL_CONFIG,
+                ...schedulerBackfillConfig(),
                 minSize: 1,
                 maxSize: 1,
                 batchLockTimeoutMs: CONNECTION_LOCK_TIMEOUT_MS,

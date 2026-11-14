@@ -3,9 +3,9 @@ import type * as slimdom from "slimdom";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import {
-  scanMarkers,
-  type NamedCondition,
   type LoopProperty,
+  type NamedCondition,
+  scanMarkers,
 } from "@stll/template-conditions";
 
 import {
@@ -34,9 +34,9 @@ import {
 import type {
   ClauseProvenance,
   EnclosingScope,
-  TemplateData,
-  RichRun,
   RichPatchValue,
+  RichRun,
+  TemplateData,
 } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -45,7 +45,7 @@ import {
   clauseDirectiveContainer,
   validateClauseBodyDirectives,
 } from "./clause-directives";
-import type { ClauseListKind, ClauseParagraph, ClauseBody } from "./types";
+import type { ClauseBody, ClauseListKind, ClauseParagraph } from "./types";
 
 const NESTED_INDENT = "    ";
 

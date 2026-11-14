@@ -26,6 +26,7 @@ import {
 import inventory from "@/api/lib/case-law/decision-type-inventory.json" with { type: "json" };
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
+  decisionTypeKind,
   readDecisionType,
   STATED_DECISION_TYPE_KINDS,
 } from "@/api/lib/case-law/decision-type-kind";
@@ -192,4 +193,14 @@ test("every kind but the catch-all is stated by some table entry", () => {
       (kind) => kind !== DECISION_TYPE_KIND_OTHER && !stated.has(kind),
     ),
   ).toEqual([]);
+});
+
+test("the Czech acknowledgment-judgment code is a judgment in every stored casing", () => {
+  // Ministry of Justice, Instrukce č. 9/2010, příloha č. 16, p. 414:
+  // ROZS.UZN = Rozsudek pro uznání (uznání i zčásti).
+  // https://msp.gov.cz/documents/11715/0/5a-2010-SIS.pdf/568382d4-e886-4663-be74-79a3a9b85041
+  expect(inventory.jurisdictions.CZE).toContain("rozs.uzn");
+  for (const stated of ["rozs.uzn", "ROZS.UZN", "Rozs.Uzn"]) {
+    expect(decisionTypeKind(stated)).toBe("judgment");
+  }
 });

@@ -13,8 +13,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import {
-  DOCUMENT_TIER,
   createPendingDocumentQueue,
+  DOCUMENT_TIER,
 } from "@/api/lib/legal-search/sk-document-queue";
 
 const nextRow = async (

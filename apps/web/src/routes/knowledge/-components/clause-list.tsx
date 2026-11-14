@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   ResponsiveActionToolbar,
@@ -132,7 +133,7 @@ export const ClauseList = ({
       return;
     }
 
-    // Eden may return parsed JSON/CSV text; wrap in Blob
+    // The API client returns parsed JSON or CSV text; wrap in Blob
     const blob =
       format === "csv"
         ? new Blob([String(data)], { type: "text/csv" })
@@ -171,10 +172,7 @@ export const ClauseList = ({
                 />
               </InputGroup>
             </ResponsiveActionToolbarItem>
-            <ResponsiveActionToolbarItem
-              className="ms-auto sm:ms-0"
-              slot="action"
-            >
+            <ResponsiveActionToolbarItem slot="action">
               <div className="flex gap-1">
                 {canCreateClause && (
                   <Button
@@ -322,32 +320,34 @@ const ClauseRow = ({
 
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <TextQuoteIcon className="text-muted-foreground size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {clause.title}
-          </p>
-          <p className="text-muted-foreground text-xs">
-            {categoryName ?? t("common.uncategorized")}
-            {" \u00b7 "}
-            {format.dateTime(new Date(clause.createdAt), {
-              dateStyle: "medium",
+      <Button className="w-full" onClick={onSelect} variant="plain">
+        <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start">
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <TextQuoteIcon className="text-muted-foreground size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<p />}
+            >
+              {clause.title}
+            </TruncatedText>
+            <p className="text-muted-foreground text-xs">
+              {categoryName ?? t("common.uncategorized")}
+              {" \u00b7 "}
+              {format.dateTime(new Date(clause.createdAt), {
+                dateStyle: "medium",
+              })}
+            </p>
+          </div>
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {t("common.versionLabel", {
+              version: String(clause.currentVersion),
             })}
-          </p>
-        </div>
-        <span className="text-muted-foreground shrink-0 text-xs">
-          {t("common.versionLabel", {
-            version: String(clause.currentVersion),
-          })}
+          </span>
         </span>
-      </button>
+      </Button>
     </li>
   );
 };
@@ -391,7 +391,7 @@ const ClauseCategorySidebar = ({
   );
 };
 
-/** Clause-categories CRUD wired to the api treaty. Each op surfaces its own
+/** Clause-categories CRUD wired to the API client. Each op surfaces its own
  *  error toast and resolves to the shared `CategoryOps` contract. */
 const useClauseCategoryOps = (): CategoryOps => {
   const t = useTranslations();

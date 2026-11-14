@@ -1,0 +1,4 @@
+#!/bin/sh
+# The collab task definition runs ["/app/collab"]; exec hands PID 1 and
+# signals to Bun, which never reads a .env from the working directory.
+exec bun --no-env-file /app/collab.js "$@"

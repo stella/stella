@@ -1,8 +1,8 @@
 import {
   OFFICE_CITATION_HREF_PREFIX,
-  parseOfficeCitationHref,
   type OfficeCitationHrefTarget,
   type OfficeCitationLocator,
+  parseOfficeCitationHref,
 } from "@stll/api-contract";
 
 export { OFFICE_CITATION_HREF_PREFIX, parseOfficeCitationHref };

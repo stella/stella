@@ -12,8 +12,8 @@
 //   bun scripts/flaky-test-history.ts scan --out <dir> [--summary <file>]
 //       [--pr-body <file>] [--write-registry]
 //     The scheduled scan: collects the last seven days of evidence, writes the
-//     history artifact and summary, and adds a quarantine entry for each test
-//     that failed and then passed on the same commit for enough commits.
+//     history artifact and summary, and proposes quarantines from retry,
+//     cross-branch, and full-depth main evidence.
 //
 // Network access goes through scripts/gh-retry.sh with GITHUB_REPOSITORY.
 
@@ -34,22 +34,22 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
-import type { FailedTest } from "./ci-failure-digest";
+import { DIGEST_VERSION, type FailedTest } from "./ci-failure-digest";
 import {
   annotationData,
   annotationProperty,
   DAY_MS,
   isExpired,
+  type QuarantineEntry,
+  type QuarantineRecord,
   quarantineRecordSchema,
   readRegistry,
+  type Registry,
   REGISTRY_FILE,
   REPOSITORY_ROOT,
   serializeRegistry,
   splitTestId,
   testId,
-  type QuarantineEntry,
-  type QuarantineRecord,
-  type Registry,
 } from "./flaky-test-quarantine";
 
 export const HISTORY_WINDOW_DAYS = 7;
@@ -62,6 +62,7 @@ export const HISTORY_FILE = "flaky-test-history.json";
 const FAILURE_DIGEST_ARTIFACT = "ci-failures";
 const FLAKE_REPORT_ARTIFACT = "flake-gate-report";
 const CI_WORKFLOW = "ci.yml";
+const FULL_DEPTH_WORKFLOWS = ["main-heavy.yml", "main-pr-depth.yml"] as const;
 const SHOWN_OBSERVATIONS = 10;
 
 // One report artifact per ci-tests matrix job.
@@ -85,6 +86,12 @@ const observationSchema = v.variant("kind", [
     failures: v.number(),
     runs: v.number(),
   }),
+  v.strictObject({
+    kind: v.literal("cross-branch-fail"),
+    ...sourceFields,
+    headBranch: v.string(),
+  }),
+  v.strictObject({ kind: v.literal("main-flip"), ...sourceFields }),
   v.strictObject({ kind: v.literal("quarantined-pass"), ...sourceFields }),
   v.strictObject({
     kind: v.literal("quarantined-fail"),
@@ -98,6 +105,8 @@ export type Observation = v.InferOutput<typeof observationSchema>;
 const OBSERVATION_ROLE = {
   "retry-pass": "flake",
   "repeat-flake": "flake",
+  "cross-branch-fail": "flake",
+  "main-flip": "flake",
   "quarantined-pass": "quarantine",
   "quarantined-fail": "quarantine",
 } as const satisfies Record<Observation["kind"], "flake" | "quarantine">;
@@ -121,7 +130,10 @@ const historySchema = v.strictObject({
 export type History = v.InferOutput<typeof historySchema>;
 
 export type CiRun = {
+  readonly id?: number;
   readonly headSha: string;
+  readonly headBranch?: string | null;
+  readonly fullDepth?: boolean;
   readonly conclusion: string | null;
   readonly url?: string;
   // The latest attempt's start: a re-run moves it past the failed attempt.
@@ -133,10 +145,16 @@ export type CiRun = {
 };
 
 type ArtifactSource = {
+  readonly runId?: number;
   readonly headSha: string;
+  readonly headBranch?: string | null;
+  readonly fullDepth?: boolean;
   readonly createdAt: string;
   readonly url: string;
 };
+
+export const jobFamily = (job: string): string =>
+  job.replace(/^suites \/ /u, "").replace(/ \([^()]+\)$/u, "");
 
 type FlakeResult = {
   readonly file: string;
@@ -266,6 +284,119 @@ export const resolveTestFile = (
   return found.length === 1 ? found.at(0) : undefined;
 };
 
+type AddObservation = (id: string, observation: Observation) => void;
+
+const addFailurePatternEvidence = ({
+  evidence,
+  exists,
+  add,
+}: BuildHistoryOptions & { readonly add: AddObservation }): void => {
+  const failuresByTest = new Map<
+    string,
+    {
+      source: ArtifactSource;
+      job: string;
+      step: string;
+    }[]
+  >();
+  for (const digest of evidence.digests) {
+    for (const failed of digest.tests) {
+      const file = resolveTestFile(failed, exists);
+      if (file === undefined) {
+        continue;
+      }
+      const id = testId({ file, name: failed.name });
+      const failures = failuresByTest.get(id) ?? [];
+      failures.push({
+        source: digest,
+        job: jobFamily(failed.job),
+        step: failed.step,
+      });
+      failuresByTest.set(id, failures);
+    }
+  }
+  for (const [id, failures] of failuresByTest) {
+    const ordered = failures.toSorted((left, right) =>
+      compareCodeUnit(left.source.createdAt, right.source.createdAt),
+    );
+    const groups = Map.groupBy(ordered, ({ job, step }) => `${job}\0${step}`);
+    for (const familyFailures of groups.values()) {
+      const heads = new Set(familyFailures.map(({ source }) => source.headSha));
+      const branches = new Set(
+        familyFailures.flatMap(({ source }) =>
+          source.headBranch === undefined || source.headBranch === null
+            ? []
+            : [source.headBranch],
+        ),
+      );
+      const first = familyFailures.at(0);
+      const last = familyFailures.at(-1);
+      if (
+        first === undefined ||
+        last === undefined ||
+        heads.size < PROPOSAL_THRESHOLD ||
+        branches.size < 2 ||
+        !evidence.runs.some(
+          (run) =>
+            run.fullDepth === true &&
+            run.headBranch === "main" &&
+            Date.parse(run.startedAt) >= Date.parse(first.source.createdAt) &&
+            Date.parse(run.startedAt) <= Date.parse(last.source.createdAt) &&
+            run.successfulChecks?.some(
+              (check) =>
+                jobFamily(check.job) === first.job && check.step === first.step,
+            ) === true,
+        )
+      ) {
+        continue;
+      }
+      for (const { source } of familyFailures) {
+        add(id, {
+          kind: "cross-branch-fail",
+          at: source.createdAt,
+          headSha: source.headSha,
+          headBranch: source.headBranch ?? "",
+          url: source.url,
+        });
+      }
+    }
+
+    for (const familyFailures of groups.values()) {
+      const mainFailures = familyFailures.filter(
+        ({ source }) =>
+          source.fullDepth === true && source.headBranch === "main",
+      );
+      for (let index = 0; index < mainFailures.length - 1; index += 1) {
+        const before = mainFailures[index];
+        const after = mainFailures[index + 1];
+        if (before === undefined || after === undefined) {
+          continue;
+        }
+        const passedBetween = evidence.runs.some(
+          (run) =>
+            run.fullDepth === true &&
+            run.headBranch === "main" &&
+            Date.parse(run.startedAt) > Date.parse(before.source.createdAt) &&
+            Date.parse(run.startedAt) < Date.parse(after.source.createdAt) &&
+            run.successfulChecks?.some(
+              (check) =>
+                jobFamily(check.job) === after.job && check.step === after.step,
+            ) === true,
+        );
+        if (passedBetween) {
+          add(id, {
+            kind: "main-flip",
+            at: after.source.createdAt,
+            headSha: after.source.headSha,
+            url: after.source.url,
+          });
+          break;
+        }
+      }
+    }
+  }
+};
+
 type BuildHistoryOptions = {
   readonly evidence: Evidence;
   readonly exists: (file: string) => boolean;
@@ -299,12 +430,11 @@ export const buildHistory = ({
         continue;
       }
       const id = testId({ file, name: failed.name });
-      const job = failed.job.replace(/ \([^()]+\)$/u, "");
+      const job = jobFamily(failed.job);
       const passed = retries.some((run) => {
         const received = run.successfulChecks?.some(
           (receipt) =>
-            receipt.job.replace(/ \([^()]+\)$/u, "") === job &&
-            receipt.step === failed.step,
+            jobFamily(receipt.job) === job && receipt.step === failed.step,
         );
         if (received !== true) {
           return false;
@@ -335,6 +465,7 @@ export const buildHistory = ({
       });
     }
   }
+  addFailurePatternEvidence({ evidence, exists, add });
   for (const report of evidence.flakeReports) {
     for (const result of report.results) {
       for (const [name, failures] of Object.entries(result.failedTests)) {
@@ -391,6 +522,8 @@ export const buildHistory = ({
 export type Candidate = {
   readonly id: string;
   readonly commits: readonly string[];
+  readonly evidenceKind: "same-commit" | "cross-branch-fail" | "main-flip";
+  readonly branches: number;
   readonly observations: readonly Observation[];
 };
 
@@ -399,6 +532,32 @@ type CandidateOptions = {
   readonly registry: Registry;
   readonly now: Date;
   readonly exists: (file: string) => boolean;
+};
+
+type SelectedEvidence = {
+  readonly kind: Candidate["evidenceKind"];
+  readonly observations: readonly Observation[];
+};
+
+const selectCandidateEvidence = (
+  evidence: readonly Observation[],
+): SelectedEvidence => {
+  const mainFlip = evidence.filter(({ kind }) => kind === "main-flip");
+  if (mainFlip.length > 0) {
+    return { kind: "main-flip", observations: mainFlip };
+  }
+  const crossBranch = evidence.filter(
+    ({ kind }) => kind === "cross-branch-fail",
+  );
+  if (crossBranch.length > 0) {
+    return { kind: "cross-branch-fail", observations: crossBranch };
+  }
+  return {
+    kind: "same-commit",
+    observations: evidence.filter(
+      ({ kind }) => kind === "retry-pass" || kind === "repeat-flake",
+    ),
+  };
 };
 
 export const quarantineCandidates = ({
@@ -423,10 +582,35 @@ export const quarantineCandidates = ({
         ({ kind, at }) =>
           OBSERVATION_ROLE[kind] === "flake" && Date.parse(at) >= since,
       );
-      const commits = [...new Set(evidence.map(({ headSha }) => headSha))];
-      return commits.length >= PROPOSAL_THRESHOLD
-        ? [{ id, commits, observations: evidence }]
-        : [];
+      const selected = selectCandidateEvidence(evidence);
+      const commits = [
+        ...new Set(selected.observations.map(({ headSha }) => headSha)),
+      ];
+      if (
+        selected.kind === "same-commit" &&
+        commits.length < PROPOSAL_THRESHOLD
+      ) {
+        return [];
+      }
+      if (selected.observations.length === 0) {
+        return [];
+      }
+      const branches = new Set(
+        selected.observations.flatMap((observation) =>
+          observation.kind === "cross-branch-fail"
+            ? [observation.headBranch]
+            : [],
+        ),
+      ).size;
+      return [
+        {
+          id,
+          commits,
+          evidenceKind: selected.kind,
+          branches,
+          observations: selected.observations,
+        },
+      ];
     })
     .toSorted((left, right) => compareCodeUnit(left.id, right.id));
 };
@@ -445,6 +629,20 @@ export type Proposal = {
   readonly added: readonly QuarantineEntry[];
   // Candidates whose test file has no matching CODEOWNERS rule.
   readonly unowned: readonly Candidate[];
+};
+
+const candidateReason = (candidate: Candidate): string => {
+  switch (candidate.evidenceKind) {
+    case "cross-branch-fail":
+      return `Cross-branch failure: failed on ${candidate.commits.length} commits across ${candidate.branches} branches while main passed it.`;
+    case "main-flip":
+      return "Main flip: failed, passed, then failed again on main.";
+    case "same-commit":
+      return `Same-commit flake: failed, then passed on the same commit, on ${candidate.commits.length} commits in ${HISTORY_WINDOW_DAYS} days.`;
+    default:
+      candidate.evidenceKind satisfies never;
+      return panic("Unhandled candidate evidence kind");
+  }
 };
 
 export const proposeQuarantine = ({
@@ -466,7 +664,7 @@ export const proposeQuarantine = ({
     added.push({
       id: candidate.id,
       owner,
-      reason: `Failed, then passed on the same commit, on ${candidate.commits.length} commits in ${HISTORY_WINDOW_DAYS} days.`,
+      reason: candidateReason(candidate),
       created,
       expires: isoDay(now.getTime() + PROPOSED_QUARANTINE_DAYS * DAY_MS),
     });
@@ -493,6 +691,10 @@ const describeObservation = (observation: Observation): string => {
       return "failed, then passed on retry";
     case "repeat-flake":
       return `failed ${observation.failures} of ${observation.runs} repeats`;
+    case "cross-branch-fail":
+      return `failed on branch ${markdown(observation.headBranch)} while main passed the job family and step`;
+    case "main-flip":
+      return "failed after an intervening full-depth main pass";
     case "quarantined-pass":
       return "passed (quarantined)";
     case "quarantined-fail":
@@ -675,7 +877,7 @@ export const scanSummary = ({
   return [
     "## Flaky-test history",
     "",
-    `Window: ${HISTORY_WINDOW_DAYS} days. A test is proposed for quarantine after failing, then passing on the same commit, on ${PROPOSAL_THRESHOLD} commits.`,
+    `Window: ${HISTORY_WINDOW_DAYS} days. A test is proposed from a main fail/pass/fail flip, cross-branch failures with an intervening full-depth main pass, or same-commit flake evidence on ${PROPOSAL_THRESHOLD} commits.`,
     ...(skipped > 0
       ? ["", `${skipped} artifacts could not be read and were skipped.`]
       : []),
@@ -703,7 +905,7 @@ export const proposalBody = ({
   flakyChecks,
 }: ProposalBodyOptions): string =>
   [
-    `These tests failed and then passed on the same commit on at least ${PROPOSAL_THRESHOLD} commits in the last ${HISTORY_WINDOW_DAYS} days. Quarantined, they keep running and reporting, but their failures no longer fail pull requests or merge groups.`,
+    `These tests showed a main fail/pass/fail flip, cross-branch failures with an intervening full-depth main pass, or same-commit flake evidence on at least ${PROPOSAL_THRESHOLD} commits in the last ${HISTORY_WINDOW_DAYS} days. Quarantined, they keep running and reporting, but their failures no longer fail pull requests or merge groups.`,
     "",
     `Each entry expires after ${PROPOSED_QUARANTINE_DAYS} days. The owner comes from the last matching rule in \`.github/CODEOWNERS\`.`,
     "",
@@ -762,16 +964,26 @@ export const ghRetry: Gh = async (args) => {
 
 const runPagesSchema = v.array(
   v.object({
+    total_count: v.number(),
     workflow_runs: v.array(
       v.object({
         id: v.number(),
         head_sha: v.string(),
+        head_branch: v.nullable(v.string()),
         conclusion: v.nullable(v.string()),
         run_started_at: v.string(),
       }),
     ),
   }),
 );
+
+type ListedRun = v.InferOutput<
+  typeof runPagesSchema
+>[number]["workflow_runs"][number];
+
+type WorkflowRun = ListedRun & {
+  readonly fullDepth: boolean;
+};
 
 const jobPagesSchema = v.array(
   v.object({
@@ -788,6 +1000,7 @@ const jobPagesSchema = v.array(
 
 const artifactPagesSchema = v.array(
   v.object({
+    total_count: v.number(),
     artifacts: v.array(
       v.object({
         expired: v.boolean(),
@@ -800,16 +1013,20 @@ const artifactPagesSchema = v.array(
   }),
 );
 
-// Digests from before structured test identities parse as unreadable.
-const digestFileSchema = v.array(
-  v.object({
-    job: v.string(),
-    step: v.string(),
-    tests: v.array(
-      v.object({ scope: v.string(), file: v.string(), name: v.string() }),
-    ),
-  }),
-);
+// The `DigestFile` envelope `ci-failure-digest.ts` writes. Digests from
+// before structured test identities parse as unreadable.
+const digestFileSchema = v.object({
+  version: v.literal(DIGEST_VERSION),
+  failures: v.array(
+    v.object({
+      job: v.string(),
+      step: v.string(),
+      tests: v.array(
+        v.object({ scope: v.string(), file: v.string(), name: v.string() }),
+      ),
+    }),
+  ),
+});
 
 const flakeReportFileSchema = v.object({
   results: v.array(
@@ -820,6 +1037,30 @@ const flakeReportFileSchema = v.object({
     }),
   ),
 });
+
+const successfulJobFamilySteps = (
+  raw: string,
+): { readonly job: string; readonly step: string }[] => {
+  const jobs = v
+    .parse(jobPagesSchema, JSON.parse(raw))
+    .flatMap((page) => page.jobs);
+  const steps = jobs.flatMap((job) =>
+    job.steps.map((step) => ({
+      job: job.name,
+      family: jobFamily(job.name),
+      step: step.name,
+      conclusion: step.conclusion,
+    })),
+  );
+  return [...Map.groupBy(steps, ({ family, step }) => `${family}\0${step}`)]
+    .filter(([, familySteps]) =>
+      familySteps.every(({ conclusion }) => conclusion === "success"),
+    )
+    .map(([, familySteps]) => {
+      const first = familySteps.at(0) ?? panic("Empty job-step family");
+      return { job: first.job, step: first.step };
+    });
+};
 
 const readJson = (file: string): unknown =>
   JSON.parse(readFileSync(file, "utf-8"));
@@ -849,6 +1090,119 @@ export type Collected = {
   readonly skipped: number;
 };
 
+type ListWorkflowRunsOptions = Pick<
+  CollectOptions,
+  "gh" | "repository" | "now"
+> & { readonly since: number };
+
+// GitHub stops returning runs after this many results for a filtered listing.
+const RUN_LISTING_CAP = 1000;
+const SECOND_MS = 1000;
+
+const isoSecond = (ms: number): string =>
+  `${new Date(ms).toISOString().slice(0, 19)}Z`;
+
+type ListCreatedRunsOptions = Pick<CollectOptions, "gh" | "repository"> & {
+  readonly workflow: string;
+  readonly date: string;
+  readonly from: number;
+  readonly to: number;
+};
+
+const listCreatedRuns = async ({
+  gh,
+  repository,
+  workflow,
+  date,
+  from,
+  to,
+}: ListCreatedRunsOptions): Promise<Result<ListedRun[], GhCommandError>> => {
+  const branch = workflow === CI_WORKFLOW ? "" : "&branch=main";
+  const response = await gh([
+    "api",
+    "--paginate",
+    "--slurp",
+    `repos/${repository}/actions/workflows/${workflow}/runs?created=${isoSecond(from)}..${isoSecond(to)}${branch}&per_page=100`,
+  ]);
+  if (response.isErr()) {
+    return response;
+  }
+  const pages = v.parse(runPagesSchema, JSON.parse(response.value));
+  let runs = pages.flatMap((page) => page.workflow_runs);
+  const total = pages.at(0)?.total_count ?? 0;
+  if (total > RUN_LISTING_CAP && to - from >= SECOND_MS) {
+    const mid = from + Math.floor((to - from) / (2 * SECOND_MS)) * SECOND_MS;
+    runs = [];
+    for (const [start, end] of [
+      [from, mid],
+      [mid + SECOND_MS, to],
+    ] as const) {
+      const half = await listCreatedRuns({
+        gh,
+        repository,
+        workflow,
+        date,
+        from: start,
+        to: end,
+      });
+      if (half.isErr()) {
+        return half;
+      }
+      runs.push(...half.value);
+    }
+  }
+  if (runs.length !== total) {
+    return Result.err(
+      new GhCommandError({
+        message: `Incomplete workflow run listing for ${workflow} on ${date}: GitHub reported ${total}, but returned ${runs.length}.`,
+      }),
+    );
+  }
+  return Result.ok(runs);
+};
+
+const listWorkflowRuns = async ({
+  gh,
+  repository,
+  now,
+  since,
+}: ListWorkflowRunsOptions): Promise<Result<WorkflowRun[], GhCommandError>> => {
+  const workflowRuns: WorkflowRun[] = [];
+  const start = new Date(since);
+  const firstDay = Date.UTC(
+    start.getUTCFullYear(),
+    start.getUTCMonth(),
+    start.getUTCDate(),
+  );
+  const lastDay = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  for (const workflow of [CI_WORKFLOW, ...FULL_DEPTH_WORKFLOWS]) {
+    for (let day = firstDay; day <= lastDay; day += DAY_MS) {
+      const runs = await listCreatedRuns({
+        gh,
+        repository,
+        workflow,
+        date: isoDay(day),
+        from: day,
+        to: day + DAY_MS - SECOND_MS,
+      });
+      if (runs.isErr()) {
+        return runs;
+      }
+      workflowRuns.push(
+        ...runs.value.map((run) => ({
+          ...run,
+          fullDepth: workflow !== CI_WORKFLOW,
+        })),
+      );
+    }
+  }
+  return Result.ok(workflowRuns);
+};
+
 export const collectEvidence = async ({
   gh,
   repository,
@@ -856,19 +1210,12 @@ export const collectEvidence = async ({
   workdir,
 }: CollectOptions): Promise<Result<Collected, GhCommandError>> => {
   const since = now.getTime() - HISTORY_WINDOW_DAYS * DAY_MS;
-  const sinceIso = new Date(since).toISOString();
-  const runsJson = await gh([
-    "api",
-    "--paginate",
-    "--slurp",
-    `repos/${repository}/actions/workflows/${CI_WORKFLOW}/runs?created=${encodeURIComponent(`>=${sinceIso}`)}&per_page=100`,
-  ]);
-  if (runsJson.isErr()) {
-    return runsJson;
+  const listedRuns = await listWorkflowRuns({ gh, repository, now, since });
+  if (listedRuns.isErr()) {
+    return listedRuns;
   }
-  const workflowRuns = v
-    .parse(runPagesSchema, JSON.parse(runsJson.value))
-    .flatMap((page) => page.workflow_runs);
+  const workflowRuns = listedRuns.value;
+  const runsById = new Map(workflowRuns.map((run) => [run.id, run]));
 
   type Located = ArtifactSource & { readonly dir: string };
   const download = async (
@@ -885,19 +1232,32 @@ export const collectEvidence = async ({
       return listed;
     }
     const located: Located[] = [];
-    for (const artifact of v
-      .parse(artifactPagesSchema, JSON.parse(listed.value))
-      .flatMap((page) => page.artifacts)) {
+    const pages = v.parse(artifactPagesSchema, JSON.parse(listed.value));
+    const artifacts = pages.flatMap((page) => page.artifacts);
+    const total = pages.at(0)?.total_count ?? 0;
+    if (artifacts.length !== total) {
+      return Result.err(
+        new GhCommandError({
+          message: `Incomplete artifact listing for ${name}: GitHub reported ${total}, but returned ${artifacts.length}.`,
+        }),
+      );
+    }
+    for (const artifact of artifacts) {
       const run = artifact.workflow_run;
+      const workflowRun = run === null ? undefined : runsById.get(run.id);
       if (
         artifact.expired ||
         run === null ||
+        workflowRun === undefined ||
         Date.parse(artifact.created_at) < since
       ) {
         continue;
       }
       const source: ArtifactSource = {
+        runId: run.id,
         headSha: run.head_sha,
+        headBranch: workflowRun.head_branch,
+        fullDepth: workflowRun.fullDepth,
         createdAt: artifact.created_at,
         url: `https://github.com/${repository}/actions/runs/${run.id}`,
       };
@@ -939,15 +1299,7 @@ export const collectEvidence = async ({
     return parsed.output;
   };
 
-  // Only a failure its commit later passed is flake evidence; skip the rest.
-  const digests = await download(FAILURE_DIGEST_ARTIFACT, (source) =>
-    workflowRuns.some(
-      (run) =>
-        run.head_sha === source.headSha &&
-        run.conclusion === "success" &&
-        Date.parse(run.run_started_at) > Date.parse(source.createdAt),
-    ),
-  );
+  const digests = await download(FAILURE_DIGEST_ARTIFACT, () => true);
   if (digests.isErr()) {
     return digests;
   }
@@ -955,7 +1307,7 @@ export const collectEvidence = async ({
     const records = readOr(
       digestFileSchema,
       path.join(dir, "ci-failures.json"),
-    );
+    )?.failures;
     return records === undefined
       ? []
       : [
@@ -975,11 +1327,12 @@ export const collectEvidence = async ({
   for (const run of workflowRuns) {
     const needsReceipt =
       run.conclusion === "success" &&
-      parsedDigests.some(
-        (digest) =>
-          digest.headSha === run.head_sha &&
-          Date.parse(run.run_started_at) > Date.parse(digest.createdAt),
-      );
+      (run.fullDepth ||
+        parsedDigests.some(
+          (digest) =>
+            digest.headSha === run.head_sha &&
+            Date.parse(run.run_started_at) > Date.parse(digest.createdAt),
+        ));
     if (!needsReceipt) {
       continue;
     }
@@ -992,19 +1345,7 @@ export const collectEvidence = async ({
     if (jobsJson.isErr()) {
       return jobsJson;
     }
-    receipts.set(
-      run.id,
-      v
-        .parse(jobPagesSchema, JSON.parse(jobsJson.value))
-        .flatMap(({ jobs }) => jobs)
-        .flatMap((job) =>
-          job.steps.flatMap((step) =>
-            step.conclusion === "success"
-              ? [{ job: job.name, step: step.name }]
-              : [],
-          ),
-        ),
-    );
+    receipts.set(run.id, successfulJobFamilySteps(jobsJson.value));
   }
   const flakeReports = await download(FLAKE_REPORT_ARTIFACT, () => true);
   if (flakeReports.isErr()) {
@@ -1021,7 +1362,10 @@ export const collectEvidence = async ({
   return Result.ok({
     evidence: {
       runs: workflowRuns.map((run) => ({
+        id: run.id,
         headSha: run.head_sha,
+        headBranch: run.head_branch,
+        fullDepth: run.fullDepth,
         conclusion: run.conclusion,
         url: `https://github.com/${repository}/actions/runs/${run.id}`,
         startedAt: run.run_started_at,

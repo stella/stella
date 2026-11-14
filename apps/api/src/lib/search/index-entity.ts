@@ -16,7 +16,9 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
+import { recordText } from "@/api/lib/fields/record-text";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -105,6 +107,8 @@ const extractFieldText = (content: FieldContent): string => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record":
+      return recordText(content.state);
     case "file":
       return content.fileName ? fileNameSearchText(content.fileName) : "";
     case "error":
@@ -298,7 +302,10 @@ const buildSearchDocument = async (
     // Decryption fails when CONTENT_ENCRYPTION_KEY was
     // added or rotated after this content was stored.
     // Keep the last complete projection until re-extraction fixes it.
-    captureError(error, { entityId });
+    captureError(
+      error,
+      handlerErrorContext("search.buildSearchDocument", { entityId }),
+    );
     throw error;
   }
 

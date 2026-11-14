@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   claimedBatches,
   holdSharedRunUntilPendingForTest,
-  lintSingleRule,
   lintsAlone,
+  lintSingleRule,
   runSingleRule,
   setLintRunnerForTest,
   sharedLines,
@@ -156,6 +157,65 @@ test("concurrent fix cases each return their isolated result", async () => {
     ),
   );
   expect(results).toEqual([isolated, isolated, isolated]);
+});
+
+test("CI tracing preserves real lint results and keeps source bodies out of stderr", async () => {
+  const marker = "TRACE_FIXTURE_BODY_6200";
+  const source = `const ${marker} = <div className="ml-2 text-right" />;`;
+  const helper = new URL("lint-single-rule.ts", import.meta.url).href;
+  const script = `
+    const { runSingleRule } = await import(${JSON.stringify(helper)});
+    const result = await runSingleRule("no-physical-properties", ${JSON.stringify(source)}, {
+      sourcePath: "source.tsx",
+      fix: true,
+    });
+    process.stdout.write(JSON.stringify(result) + "\\n");
+  `;
+  const runChild = async (ci: string) => {
+    const child = Bun.spawn([process.execPath, "--eval", script], {
+      env: { ...process.env, CI: ci },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    return { stdout, stderr, exitCode, pid: child.pid };
+  };
+  const quiet = await runChild("false");
+  const traced = await runChild("true");
+  expect(quiet.exitCode, quiet.stderr).toBe(0);
+  expect(traced.exitCode, traced.stderr).toBe(0);
+  expect(traced.stdout).toBe(quiet.stdout);
+  expect(JSON.parse(traced.stdout)).toEqual({
+    lines: [],
+    source: `const ${marker} = <div className="ms-2 text-end" />;`,
+  });
+
+  const prefix = "[lint-single-rule] ";
+  expect(quiet.stderr).not.toContain(prefix);
+  expect(traced.stderr).not.toContain(marker);
+  const positiveInteger = v.pipe(v.number(), v.integer(), v.minValue(1));
+  const traceSchema = v.looseObject({
+    worker: positiveInteger,
+    run: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    rule: v.literal("no-physical-properties(no-physical-properties)"),
+    elapsedMs: v.pipe(v.number(), v.minValue(0)),
+    stage: v.pipe(v.string(), v.nonEmpty()),
+    pid: v.optional(positiveInteger),
+  });
+  const traces = traced.stderr
+    .split("\n")
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => v.parse(traceSchema, JSON.parse(line.slice(prefix.length))));
+  expect(traces.length).toBeGreaterThan(0);
+  expect(new Set(traces.map(({ worker }) => worker))).toEqual(
+    new Set([traced.pid]),
+  );
+  expect(new Set(traces.map(({ run }) => run)).size).toBe(1);
+  expect(traces.some(({ pid }) => pid !== undefined)).toBe(true);
 });
 
 test("a held cohort stays one batch across every pre-shared await interleaving", async () => {

@@ -52,17 +52,13 @@ export const isRedistributable = (
 /** Whether a source's full text may be fed to the AI layer. */
 export const allowsDerivedAi = (
   descriptor:
-    | Pick<CorpusSourceDescriptor, "allowsDerivedAi">
-    | null
-    | undefined,
+    Pick<CorpusSourceDescriptor, "allowsDerivedAi"> | null | undefined,
 ): boolean =>
   descriptor === null || descriptor === undefined || descriptor.allowsDerivedAi;
 
 export const decisionTextWithheldReason = (
   descriptor:
-    | Pick<CorpusSourceDescriptor, "allowsDerivedAi">
-    | null
-    | undefined,
+    Pick<CorpusSourceDescriptor, "allowsDerivedAi"> | null | undefined,
 ): DecisionTextWithheldReason | null =>
   allowsDerivedAi(descriptor)
     ? null

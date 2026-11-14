@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
-  hostedUsageWebhookEventSchema,
   type HostedUsageEntitlementPayload,
+  hostedUsageWebhookEventSchema,
 } from "./event-schemas";
 import { POLAR_ENTITLEMENT_STATUSES } from "./polar/contract";
 

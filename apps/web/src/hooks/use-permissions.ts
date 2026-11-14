@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { PermissionInput } from "@stll/permissions";
 
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 /**
  * Returns whether the active member's role grants the requested
@@ -13,8 +16,15 @@ import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
  * the role cache hydrates.
  */
 export const usePermissions = (permissions: PermissionInput): boolean => {
-  const roleView = useQueryView(useQuery(roleOptions));
-  useQueryViewError(roleView);
+  const roleView = queryView(
+    useQuery(
+      resourceQueryOptions(roleOptions, {
+        resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
+        scope: { type: "organization" },
+      }),
+    ),
+  );
+  useQueryViewError(roleView, "usePermissions:query");
 
   if (roleView.type !== "items" || roleView.refetchError !== undefined) {
     return false;

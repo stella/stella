@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { cleanRecapText } from "./thread-recap-text";
 import type { RecapMessage } from "./thread-recap-transcript";
 import {
   buildRecapTranscript,
@@ -96,5 +97,25 @@ describe("chat thread recap message window", () => {
       "first-user",
       "latest-assistant",
     ]);
+  });
+});
+
+describe("chat thread recap text", () => {
+  test("strips the label and wrapping quotes", () => {
+    expect(cleanRecapText(' Recap: "Probrali jste výpověď."')).toBe(
+      "Probrali jste výpověď.",
+    );
+  });
+
+  test("an over-long recap keeps whole sentences, never a cut word", () => {
+    // 105 characters; citation abbreviations must not end a sentence.
+    const sentence =
+      "Probrali jste okamžité zrušení podle § 55 odst. 1 písm. b) zákoníku práce a výpověď podle § 52 písm. g). ";
+
+    expect(cleanRecapText(sentence.repeat(7))).toBe(sentence.repeat(6).trim());
+  });
+
+  test("a single sentence longer than the cap shows no recap", () => {
+    expect(cleanRecapText(`${"slovo ".repeat(200)}konec.`)).toBeNull();
   });
 });

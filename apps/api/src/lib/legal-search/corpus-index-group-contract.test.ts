@@ -19,17 +19,17 @@ import {
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
   caseLawManifestGroups,
-  COURT_PARTITION_FIELD,
   corpusIndexGroupConfig,
   corpusIndexGroupContractForJurisdiction,
   corpusIndexReadTarget,
-  registeredCorpusIndexGroups,
+  COURT_PARTITION_FIELD,
+  type CourtPartitionGroupContract,
   courtPartitionsForCourtFilter,
   enrolledCorpusIndexGroupContracts,
+  type ProvisionKeysGroupContract,
+  registeredCorpusIndexGroups,
   requireCourtPartitionIdentity,
   resolveCorpusIndexGroupContract,
-  type CourtPartitionGroupContract,
-  type ProvisionKeysGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -78,7 +78,15 @@ test("every group declared before a group contract keeps its manifest's exact co
   const baseGroups = CASE_LAW_INDEX_GROUP_NAMES.filter(
     (group) => CASE_LAW_INDEX_GROUP_CONTRACT_OF[group] === "base",
   );
-  expect(baseGroups.toSorted()).toEqual(["aut", "cs_sk", "eu", "hun", "pol"]);
+  expect(baseGroups.toSorted()).toEqual([
+    "aut",
+    "bra",
+    "cs_sk",
+    "eu",
+    "gbr",
+    "hun",
+    "pol",
+  ]);
   for (const manifest of CASE_LAW_MANIFESTS) {
     for (const indexGroup of baseGroups) {
       const contract = resolveCorpusIndexGroupContract({
@@ -350,8 +358,10 @@ test("a global read names created groups exactly and bridges a later group until
     const bridged = globalTarget(manifest, { attested: [], enrolled: [] });
     expect(bridged.route.indexId.split(",")).toEqual([
       id("aut"),
+      `${id("bra")}*`,
       id("cs_sk"),
       id("eu"),
+      `${id("gbr")}*`,
       `${id("hun")}*`,
       id("pol"),
     ]);
@@ -375,18 +385,23 @@ test("a global read names created groups exactly and bridges a later group until
       attested: [],
       enrolled: ["hun"],
     });
-    expect(pending.route.indexId.split(",")).toEqual(
-      ["aut", "cs_sk", "eu", "pol"].map(id),
-    );
+    expect(pending.route.indexId.split(",")).toEqual([
+      id("aut"),
+      `${id("bra")}*`,
+      id("cs_sk"),
+      id("eu"),
+      `${id("gbr")}*`,
+      id("pol"),
+    ]);
     expect(matchesIndexTarget(pending.route.indexId, id("hun"))).toBe(false);
 
     // Attested: HUN by its exact id, and USA once it is attested too.
     const attested = globalTarget(manifest, {
-      attested: ["hun", "usa"],
-      enrolled: ["hun", "usa"],
+      attested: ["bra", "gbr", "hun", "usa"],
+      enrolled: ["bra", "gbr", "hun", "usa"],
     });
     expect(attested.route.indexId.split(",")).toEqual(
-      ["aut", "cs_sk", "eu", "hun", "pol", "usa"].map(id),
+      ["aut", "bra", "cs_sk", "eu", "gbr", "hun", "pol", "usa"].map(id),
     );
     for (const stray of [`${id("hun")}_shadow`, `${id("usa")}_shadow`]) {
       expect(matchesIndexTarget(attested.route.indexId, stray)).toBe(false);
@@ -474,13 +489,17 @@ test("v8 vouches for the groups it was created with, Hungary among them", () => 
     ),
   ).toEqual([
     ["aut", "base"],
+    ["bra", "base"],
+    ["gbr", "base"],
     ["usa", "court_partition_v1"],
   ]);
   const bridged = globalTarget(manifest, { attested: [], enrolled: [] });
   expect(bridged.route.indexId.split(",")).toEqual([
     `${id("aut")}*`,
+    `${id("bra")}*`,
     id("cs_sk"),
     id("eu"),
+    `${id("gbr")}*`,
     id("hun"),
     id("pol"),
   ]);
@@ -493,6 +512,8 @@ test("the registry records exactly the groups a manifest cannot vouch for", () =
         ({ indexGroup, contractVersion }) => [indexGroup, contractVersion],
       ),
     ).toEqual([
+      ["bra", "base"],
+      ["gbr", "base"],
       ["hun", "base"],
       ["usa", "court_partition_v1"],
     ]);
@@ -539,8 +560,10 @@ test("the group map is per generation: Czech keeps cs_sk until v9 and every othe
     ]);
     expect(caseLawIndexGroupNamesAt(order)).toEqual([
       "aut",
+      "bra",
       "cs_sk",
       "eu",
+      "gbr",
       "hun",
       "pol",
       "usa",
@@ -551,14 +574,25 @@ test("the group map is per generation: Czech keeps cs_sk until v9 and every othe
   expect(caseLawIndexGroupCountriesAt(9, "cze")).toEqual(["CZE"]);
   expect(caseLawIndexGroupNamesAt(9)).toEqual([
     "aut",
+    "bra",
     "cze",
     "eu",
+    "gbr",
     "hun",
     "pol",
     "cs_sk",
     "usa",
   ]);
-  for (const country of ["AUT", "EU", "HUN", "POL", "SVK", "USA"]) {
+  for (const country of [
+    "AUT",
+    "BRA",
+    "EU",
+    "GBR",
+    "HUN",
+    "POL",
+    "SVK",
+    "USA",
+  ]) {
     expect([country, caseLawIndexGroupAt(9, country)]).toEqual([
       country,
       caseLawIndexGroupAt(8, country),
@@ -573,9 +607,11 @@ test("the group map is per generation: Czech keeps cs_sk until v9 and every othe
   expect(CASE_LAW_INDEX_GROUP_NAMES).toContain("cze");
   expect(CASE_LAW_INDEX_GROUP_CONTRACT_OF).toEqual({
     aut: "base",
+    bra: "base",
     cs_sk: "base",
     cze: "provision_keys_v1",
     eu: "base",
+    gbr: "base",
     hun: "base",
     pol: "base",
     usa: "court_partition_v1",

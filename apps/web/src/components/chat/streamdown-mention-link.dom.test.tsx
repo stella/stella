@@ -2,8 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { ChatSourceCitationTarget } from "@stll/api-contract";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const originalFetch = globalThis.fetch;
@@ -18,8 +18,7 @@ const { isFolioBlockId } = await import("@stll/folio-react");
 const { toChatSourceCitationHref } = await import("@stll/api-contract");
 const { toSafeId } = await import("@/lib/safe-id");
 const { DocumentIcon } = await import("@/components/document-icon");
-const { getDocumentIconKind } =
-  await import("@/components/document-icon.logic");
+const { documentFormat } = await import("@stll/api-contract/document-format");
 const { DOCX_MIME, PDF_MIME, PPTX_MIME, XLSX_MIME } =
   await import("@/lib/consts");
 const { sourceCitationMimeType } = await import("./citation-file-type.logic");
@@ -116,7 +115,7 @@ describe("inline citation chips draw the cited file's type", () => {
       Object.fromEntries(
         Object.values(TARGETS).map((target) => [
           target.type,
-          getDocumentIconKind(sourceCitationMimeType(target.type)),
+          documentFormat(sourceCitationMimeType(target.type)).kind,
         ]),
       ),
     ).toEqual({ "docx-folio": "word", "pdf-bates": "pdf" });
@@ -168,6 +167,69 @@ describe("inline citation chips draw the cited file's type", () => {
   });
 });
 
+// Reports every observed element visible as soon as it is observed.
+class ImmediatelyVisibleObserver implements IntersectionObserver {
+  readonly root: Element | Document | null = null;
+  readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
+  readonly thresholds: readonly number[] = [0];
+  private readonly callback: IntersectionObserverCallback;
+
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(target: Element): void {
+    const rect = new DOMRect(0, 0, 100, 24);
+    this.callback(
+      [
+        {
+          boundingClientRect: rect,
+          intersectionRect: rect,
+          intersectionRatio: 1,
+          isIntersecting: true,
+          rootBounds: null,
+          target,
+          time: performance.now(),
+        },
+      ],
+      this,
+    );
+  }
+
+  unobserve(): void {}
+
+  disconnect(): void {}
+
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+}
+
+test("an assistant link absent from the source store requests no site icon", async () => {
+  const requests: string[] = [];
+  const previousFetch = globalThis.fetch;
+  const previousObserver = globalThis.IntersectionObserver;
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      requests.push(new Request(input).url);
+      return Response.json({ type: "no-icon" });
+    },
+    { preconnect: () => undefined },
+  );
+  globalThis.IntersectionObserver = ImmediatelyVisibleObserver;
+  try {
+    renderChip("https://encoded-data.attacker.example/page");
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(requests.filter((url) => url.includes("link-icons"))).toEqual([]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.IntersectionObserver = previousObserver;
+  }
+});
+
 test("dot-relative markdown destinations stay clickable with their original href", () => {
   for (const href of ["./document.pdf", "../sources/decision"]) {
     const view = renderChip(href);
@@ -176,4 +238,41 @@ test("dot-relative markdown destinations stay clickable with their original href
     ).toBe(href);
     cleanup();
   }
+});
+
+describe("a bare URL as its own link text", () => {
+  const url = "https://example.com/a/b?x=1";
+  const renderBareUrl = (externalLinks: "citation" | "written") =>
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <p>
+            <StreamdownMentionLink
+              externalLinks={externalLinks}
+              href={url}
+              interactive={false}
+            >
+              {url}
+            </StreamdownMentionLink>
+          </p>
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+
+  test("shows the URL as written, path and query included, in a person's own message", () => {
+    const link = renderBareUrl("written").getByRole("link");
+    expect(link.textContent).toBe(url);
+    expect(link.getAttribute("href")).toBe(url);
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  test("still shows the bare host as a citation chip in an assistant answer", () => {
+    const view = renderBareUrl("citation");
+    expect(view.container.textContent).toContain("example.com");
+    expect(view.container.textContent).not.toContain("/a/b?x=1");
+  });
 });

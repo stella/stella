@@ -13,6 +13,11 @@
  * passage ids, and both drop the other reference-derived fields; the run's
  * reference list keeps ids but not names or content digests.
  *
+ * A finding is judged against the whole run, not only its own position: one
+ * grading call can cover positions from several matters, so any finding's
+ * prose can restate any of the run's reference matters. Its prose is shown
+ * only to a reader who can open all of them.
+ *
  * Every endpoint that returns findings or a run basis goes through here.
  *
  * @yields safeDb errors out to the parent safe-handler.
@@ -23,7 +28,7 @@ import { inArray } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
-import type { SafeId } from "@/api/lib/branded-types";
+import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import type {
@@ -31,8 +36,10 @@ import type {
   PinnedPlaybook,
   PinnedReference,
 } from "@/api/lib/document-review/run-contract";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/lib/workflow/playbook-positions";
 
 /** The matters each reference position's passages came from, by `sourceId`. */
 export const referenceWorkspacesByPosition = (
@@ -53,18 +60,6 @@ export const referenceWorkspacesByPosition = (
   return byPosition;
 };
 
-const referencedWorkspaceIds = (
-  basis: DocumentReviewRunBasis,
-): SafeId<"workspace">[] => {
-  const ids = new Set<string>(basis.references.map((r) => r.workspaceId));
-  for (const workspaceIds of referenceWorkspacesByPosition(basis).values()) {
-    for (const id of workspaceIds) {
-      ids.add(id);
-    }
-  }
-  return [...ids].map(brandPersistedWorkspaceId);
-};
-
 /**
  * The subset of the run's reference matters this reader can open. Read through
  * the reader's own scoped connection, so row security decides.
@@ -78,7 +73,7 @@ export const readableReferenceWorkspaces = async function* ({
   safeDb: SafeDb;
   basis: DocumentReviewRunBasis;
 }) {
-  const ids = referencedWorkspaceIds(basis);
+  const ids = basisReferenceWorkspaceIds(basis);
   if (ids.length === 0) {
     return new Set<string>();
   }
@@ -162,6 +157,7 @@ export type ReaderBasis = {
       positions: Omit<PlaybookPositions, "items"> & {
         items: ReaderPosition[];
       };
+      scope: PlaybookScope | null;
     };
   };
   references: ReaderReference[];
@@ -193,6 +189,10 @@ export const basisForReader = (
             positionForReader(position, readable),
           ),
         },
+        // A basis stored before the snapshot carried a scope has no key
+        // for it; the reader contract is `PlaybookScope | null`, so the
+        // missing key reads as null rather than surfacing undefined.
+        scope: definitionSnapshot.scope ?? null,
       },
     },
     references: referencesForReader(basis.references, readable),
@@ -206,21 +206,24 @@ export type ReaderFinding = ReviewFinding & {
 };
 
 /**
- * One finding for this reader. Tier-graded findings and findings whose
- * reference matters are all readable are returned unchanged.
+ * One finding for this reader, given every matter the run's references came
+ * from (`basisReferenceWorkspaceIds`). Returned unchanged when the reader can
+ * open all of them; otherwise only the target-side fields are kept, whatever
+ * the finding's own standard, since the grading call that wrote it may have
+ * seen any of them. Existing findings record no narrower scope, so this
+ * holds for them too.
  */
 export const findingForReader = (
   finding: ReviewFinding,
   {
-    positionWorkspaces,
+    runSources,
     readable,
   }: {
-    positionWorkspaces: ReadonlyMap<string, readonly string[]>;
+    runSources: readonly string[];
     readable: ReadonlySet<string>;
   },
 ): ReaderFinding => {
-  const sources = positionWorkspaces.get(finding.positionId);
-  if (sources === undefined || sources.every((id) => readable.has(id))) {
+  if (runSources.every((id) => readable.has(id))) {
     return finding;
   }
   return {

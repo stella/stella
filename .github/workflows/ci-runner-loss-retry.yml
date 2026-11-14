@@ -1,0 +1,138 @@
+name: CI Runner Loss Retry
+
+on:
+  workflow_run:
+    workflows: [CI Checks]
+    types: [completed]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  retry:
+    # Only this repository's own pull request runs of CI Checks.
+    if: >-
+      github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/ci.yml'
+      && contains(fromJSON('["pull_request"]'), github.event.workflow_run.event)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Retry jobs after runner loss
+        if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt == 1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            const run = context.payload.workflow_run;
+            const jobs = await github.paginate(
+              "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+              { ...context.repo, run_id: run.id, attempt_number: 1, per_page: 100 },
+            );
+            const runnerLost = job => job.conclusion === "failure"
+              && !(job.steps || []).some(step => step.conclusion === "failure")
+              && (job.steps || []).every(step => !step.status || step.status === "completed")
+              && (!(job.steps || []).length || job.steps.some(step => step.conclusion === "cancelled"));
+            const retryDecision = (jobs, attempt) => {
+              if (attempt !== 1) return { retry: false, reason: "only the first attempt can be retried" };
+              const lost = jobs.filter(job => job.name !== "ci-result" && runnerLost(job));
+              if (!lost.length) return { retry: false, reason: "no runner loss was detected" };
+              const realFailure = jobs.find(job => job.conclusion === "failure"
+                && job.name !== "ci-result" && !runnerLost(job));
+              if (realFailure) return { retry: false, reason: (realFailure.steps || []).some(step => step.conclusion === "failure")
+                ? `${realFailure.name} contains a failed step`
+                : `${realFailure.name} failed without evidence of a lost runner` };
+              return { retry: true, reason: `runner lost for ${lost.map(job => job.name).join(", ")}` };
+            };
+            const decision = retryDecision(jobs, run.run_attempt);
+            if (decision.retry) {
+              await github.rest.actions.reRunWorkflowFailedJobs({
+                ...context.repo,
+                run_id: run.id,
+              });
+            }
+            await core.summary.addRaw(`${decision.retry ? "Retried failed jobs" : "Did not retry"}: ${decision.reason}.\n`).write();
+
+      # Reconcile on either side's completion: a mirror can already have read
+      # an earlier attempt while its outcome step is still in progress.
+      - name: Reconcile metadata mirrors after CI completion
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            const eventRun = context.payload.workflow_run;
+            const numbers = new Set((eventRun.pull_requests || []).map(pr => pr.number));
+            if (!numbers.size) {
+              core.notice("No associated pull request; no metadata mirrors to reconcile.");
+              return;
+            }
+            const repository = `${context.repo.owner}/${context.repo.repo}`;
+            const runs = (await github.paginate(
+              "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs",
+              { ...context.repo, workflow_id: "ci.yml", event: "pull_request", head_sha: eventRun.head_sha, per_page: 100 },
+            )).filter(run => run.head_sha === eventRun.head_sha
+              && run.head_repository?.full_name === repository
+              && (run.pull_requests || []).some(pr => numbers.has(pr.number)));
+            const sources = [];
+            const mirrors = [];
+            const failures = [];
+            for (const run of runs) {
+              if (run.status !== "completed") continue;
+              const jobs = await github.paginate(
+                "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
+                { ...context.repo, run_id: run.id, filter: "all", per_page: 100 },
+              );
+              const result = jobs.filter(job => job.name === "ci-result").sort((left, right) => right.id - left.id).at(0);
+              if (!result || result.status !== "completed") continue;
+              const planned = name => jobs.some(job => job.name === name
+                && job.status === "completed" && job.conclusion !== "skipped");
+              if (planned("ci-metadata-plan")) {
+                mirrors.push({ run, result });
+              } else if (run.run_attempt > 1 && planned("ci-plan")) {
+                const completed = Date.parse(result.completed_at);
+                if (!Number.isFinite(completed)) {
+                  failures.push(`code run ${run.id} has no readable ci-result completion time`);
+                  continue;
+                }
+                sources.push({ run, result, completed });
+              }
+            }
+            for (const mirror of mirrors) {
+              const started = Date.parse(mirror.result.started_at);
+              if (!Number.isFinite(started)) {
+                failures.push(`metadata run ${mirror.run.id} has no readable ci-result start time`);
+                continue;
+              }
+              const stale = sources.some(source => source.run.id < mirror.run.id
+                && source.run.pull_requests.some(pr => mirror.run.pull_requests.some(candidate => candidate.number === pr.number))
+                && source.completed >= started);
+              if (!stale) continue;
+              // A fresh mirror starts after the completed source attempt. Its
+              // own completion event therefore reaches a fixed point, even if
+              // the source passed through rather than evaluating a verdict.
+              const current = (await github.rest.actions.getWorkflowRun({
+                ...context.repo, run_id: mirror.run.id,
+              })).data;
+              if (current.status !== "completed" || current.run_attempt !== mirror.run.run_attempt) continue;
+              try {
+                await github.rest.actions.reRunJobForWorkflowRun({
+                  ...context.repo, job_id: mirror.result.id,
+                });
+                core.notice(`Re-ran ci-result of metadata run ${mirror.run.id} after a newer source attempt completed.`);
+              } catch (error) {
+                const latest = (await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: mirror.run.id,
+                })).data;
+                if (latest.run_attempt > current.run_attempt || latest.status !== "completed") {
+                  core.notice(`Metadata run ${mirror.run.id} is already being re-run.`);
+                } else {
+                  failures.push(`could not re-run ci-result of metadata run ${mirror.run.id}: ${error.message}`);
+                }
+              }
+            }
+            if (failures.length) core.setFailed(failures.join("; "));

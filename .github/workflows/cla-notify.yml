@@ -14,6 +14,7 @@ jobs:
   notify:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Request trusted signature verification
         run: ":"

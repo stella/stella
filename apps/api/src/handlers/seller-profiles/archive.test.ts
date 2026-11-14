@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -45,7 +46,8 @@ describe("seller profile archiving", () => {
           `https://example.test/v1/seller-profiles/${profileId}/archive`,
           { method: "POST" },
         ),
-        route: "/v1/seller-profiles/:sellerProfileId/archive",
+        route:
+          "/v1/seller-profiles/:sellerProfileId/archive" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: organizationId },
         memberRole: sessionMemberRole("owner"),

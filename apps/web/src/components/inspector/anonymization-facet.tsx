@@ -27,6 +27,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { Form } from "@stll/ui/form";
 import {
   ChevronDownIcon as ChevronDown,
   ChevronRightIcon as ChevronRight,
@@ -40,8 +41,11 @@ import { Input } from "@stll/ui/input";
 import { MenuItem, MenuPopup } from "@stll/ui/menu";
 import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
+import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
 import {
@@ -53,17 +57,19 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -176,7 +182,7 @@ type AnonymizationFacetProps = {
    * tab. Inactive document tabs stay mounted (just hidden), so
    * without this gate every parked Anonymization facet would
    * keep the global active counter bumped and the worker
-   * heartbeat firing even after the user switched away.
+   * detection running even after the user switched away.
    * Sidepeek leaves this defaulted (always visible).
    */
   isVisible?: boolean;
@@ -200,44 +206,50 @@ export const AnonymizationFacet = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
-  const termsQueryView = useQueryView(termsQuery);
-  useQueryViewError(termsQueryView);
-  const createMutation = useMutation({
-    mutationFn: async (vars: {
-      workspaceId: string;
-      entries: readonly {
-        canonical: string;
-        label: string;
-        variants?: readonly string[];
-      }[];
-    }) => {
+  const termsQueryView = queryView(termsQuery);
+  useQueryViewError(termsQueryView, "AnonymizationFacet:query");
+  const createMutation = useIdempotentMutation({
+    mutationFn: async (
+      vars: {
+        workspaceId: string;
+        entries: readonly {
+          canonical: string;
+          label: string;
+          variants?: readonly string[];
+        }[];
+      },
+      request,
+    ) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-terms"].put({
-          entries: vars.entries.map((entry) =>
-            entry.variants
-              ? {
-                  canonical: entry.canonical,
-                  label: entry.label,
-                  variants: [...entry.variants],
-                }
-              : {
-                  canonical: entry.canonical,
-                  label: entry.label,
-                },
-          ),
-        });
+        ["anonymization-terms"].put(
+          {
+            entries: vars.entries.map((entry) =>
+              entry.variants
+                ? {
+                    canonical: entry.canonical,
+                    label: entry.label,
+                    variants: [...entry.variants],
+                  }
+                : {
+                    canonical: entry.canonical,
+                    label: entry.label,
+                  },
+            ),
+          },
+          request,
+        );
 
       // No `onError` capture here: the only caller awaits `mutateAsync` inside
       // a try/catch that captures and toasts, so a handler here would report
       // the same failure twice. `deleteMutation` below is fire-and-forget and
       // keeps its handler for that reason.
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
   const deleteMutation = useMutation({
@@ -254,7 +266,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure" },
+      });
     },
   });
 
@@ -311,7 +326,7 @@ export const AnonymizationFacet = ({
     const isInsidePreview = (node: Node | null): boolean => {
       const element =
         node instanceof Element ? node : (node?.parentElement ?? null);
-      return element?.closest(PREVIEW_SURFACES) !== null && element !== null;
+      return element !== null && element.closest(PREVIEW_SURFACES) !== null;
     };
     const handler = () => {
       const selection = window.getSelection();
@@ -386,7 +401,13 @@ export const AnonymizationFacet = ({
         type: "success",
       });
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet.addTerm:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.addTerm:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     }
   };
@@ -401,35 +422,44 @@ export const AnonymizationFacet = ({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: activeFieldId !== null,
   });
-  const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  const allowlistQueryView = queryView(allowlistQuery);
+  useQueryViewError(allowlistQueryView, "AnonymizationFacet:query-2");
   const allowlistEntries = allowlistQuery.data?.entries;
   const matchesReady =
     pipelineStatus === "ready" &&
     termsQuery.status === "success" &&
     allowlistQuery.status === "success";
-  const createAllowlistMutation = useMutation({
-    mutationFn: async (vars: {
-      workspaceId: string;
-      entityId: string | null;
-      canonical: string;
-      label: string;
-      scope: AllowlistScope;
-    }) => {
+  const createAllowlistMutation = useIdempotentMutation({
+    mutationFn: async (
+      vars: {
+        workspaceId: string;
+        entityId: string | null;
+        canonical: string;
+        label: string;
+        scope: AllowlistScope;
+      },
+      request,
+    ) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-allowlist"].put({
-          canonical: vars.canonical,
-          label: vars.label,
-          scope: vars.scope,
-          ...(vars.scope === "document" && vars.entityId
-            ? { entityId: toSafeId<"entity">(vars.entityId) }
-            : {}),
-        });
-      return unwrapEden(response);
+        ["anonymization-allowlist"].put(
+          {
+            canonical: vars.canonical,
+            label: vars.label,
+            scope: vars.scope,
+            ...(vars.scope === "document" && vars.entityId
+              ? { entityId: toSafeId<"entity">(vars.entityId) }
+              : {}),
+          },
+          request,
+        );
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-2",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-2" },
+      });
     },
   });
   const deleteAllowlistMutation = useMutation({
@@ -445,7 +475,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-3",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-3" },
+      });
     },
   });
   // Restrict the visible workspace vocabulary to entries whose
@@ -478,6 +511,12 @@ export const AnonymizationFacet = ({
     if (!activeFieldId || !canDownloadAnonymized) {
       return;
     }
+    // Fail closed: when the open document changed since its last detection,
+    // this starts detection for the current version and the facet leaves its
+    // ready state; the user downloads once that run lands.
+    if (!confirmAnonymizationDetectionCurrent(activeFieldId)) {
+      return;
+    }
     setDownloadStatus("running");
     const download = await Result.tryPromise(async () => {
       const { downloadAnonymizedFile } =
@@ -491,7 +530,13 @@ export const AnonymizationFacet = ({
     }).then((result) => (result.isErr() ? result : result.value));
     setDownloadStatus("idle");
     if (download.isErr()) {
-      analytics.captureError(download.error);
+      analytics.captureError(download.error, {
+        fingerprintKey: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        },
+      });
       notifyUserError(
         download.error,
         UnsupportedAnonymizedExportError.is(download.error)
@@ -747,54 +792,56 @@ export const AnonymizationFacet = ({
         </Button>
       )}
 
-      <form
-        action={submitTerm}
-        className="flex flex-col gap-2 rounded-md border p-3"
-      >
-        <Input
-          autoComplete="off"
-          disabled={createMutation.isPending}
-          onChange={(event) => setPendingValue(event.target.value)}
-          placeholder={t("inspector.anonymization.addPlaceholder")}
-          value={pendingValue}
-        />
-        <div className="flex items-center gap-2">
-          <Combobox<LabelOption>
-            autoHighlight
+      <Form action={submitTerm}>
+        <div className="flex flex-col gap-2 rounded-md border p-3">
+          <Input
+            autoComplete="off"
             disabled={createMutation.isPending}
-            items={[...LABEL_OPTIONS]}
-            itemToStringLabel={formatLabel}
-            onValueChange={(next) => {
-              if (next) {
-                setPendingLabel(next);
-              }
-            }}
-            value={pendingLabel}
-          >
-            <ComboboxInput
-              aria-label={t("inspector.anonymization.labelPickerAriaLabel")}
-              className="h-9 min-w-0 flex-1 text-xs"
-              placeholder={t("inspector.anonymization.labelPickerPlaceholder")}
-            />
-            <ComboboxPopup>
-              <ComboboxList>
-                {(option: LabelOption) => (
-                  <ComboboxItem key={option} value={option}>
-                    {formatLabel(option)}
-                  </ComboboxItem>
-                )}
-              </ComboboxList>
-              <ComboboxEmpty>
-                {t("inspector.anonymization.labelPickerEmpty")}
-              </ComboboxEmpty>
-            </ComboboxPopup>
-          </Combobox>
-          <AddTermSubmitButton
-            disabled={pendingValue.trim().length === 0}
-            label={t("common.add")}
+            onChange={(event) => setPendingValue(event.target.value)}
+            placeholder={t("inspector.anonymization.addPlaceholder")}
+            value={pendingValue}
           />
+          <div className="flex items-center gap-2">
+            <Combobox<LabelOption>
+              autoHighlight
+              disabled={createMutation.isPending}
+              filter={matchesComboboxItem}
+              items={[...LABEL_OPTIONS]}
+              itemToStringLabel={formatLabel}
+              onValueChange={(next) => {
+                if (next) {
+                  setPendingLabel(next);
+                }
+              }}
+              value={pendingLabel}
+            >
+              <ComboboxInput
+                aria-label={t("inspector.anonymization.labelPickerAriaLabel")}
+                className="h-9 min-w-0 flex-1 text-xs"
+                placeholder={t(
+                  "inspector.anonymization.labelPickerPlaceholder",
+                )}
+              />
+              <ComboboxPopup>
+                <ComboboxList>
+                  {(option: LabelOption) => (
+                    <ComboboxItem key={option} value={option}>
+                      {formatLabel(option)}
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+                <ComboboxEmpty>
+                  {t("inspector.anonymization.labelPickerEmpty")}
+                </ComboboxEmpty>
+              </ComboboxPopup>
+            </Combobox>
+            <AddTermSubmitButton
+              disabled={pendingValue.trim().length === 0}
+              label={t("common.add")}
+            />
+          </div>
         </div>
-      </form>
+      </Form>
 
       {(() => {
         if (noOpenDocument) {
@@ -802,7 +849,8 @@ export const AnonymizationFacet = ({
             if (onOpenFullView) {
               return (
                 <Button
-                  className="text-muted-foreground hover:bg-muted/50 hover:text-foreground h-auto w-full justify-start gap-2.5 rounded-md px-3 py-2.5 text-start text-sm leading-relaxed whitespace-normal"
+                  layout="wrap"
+                  className="text-muted-foreground hover:bg-muted/50 hover:text-foreground w-full gap-2.5 rounded-md px-3 py-2.5 text-sm leading-relaxed"
                   onClick={onOpenFullView}
                   type="button"
                   variant="ghost"
@@ -858,31 +906,35 @@ export const AnonymizationFacet = ({
               data-anonymization-canonical={entry.canonical}
               key={entry.id}
             >
-              <button
-                className="flex min-w-0 flex-1 flex-col text-start"
+              <Button
+                className="flex min-w-0 flex-1 flex-col"
                 onClick={() => selectFromSidebar(entry.canonical, entry.label)}
-                type="button"
+                variant="plain"
               >
-                <span className="truncate text-sm font-medium">
+                <TruncatedText className="text-sm font-medium">
                   {entry.canonical}
-                </span>
+                </TruncatedText>
                 <span className="text-muted-foreground text-xs">
                   {formatLabel(entry.label)}
                 </span>
-              </button>
+              </Button>
               <div className="flex items-center gap-1">
                 {hitCount !== undefined && hitCount > 0 && (
                   <Tooltip
                     content={t(
                       "inspector.anonymization.termMatchCountAriaLabel",
-                      { count: String(hitCount) },
+                      {
+                        count: String(hitCount),
+                      },
                     )}
                     render={
                       <span
                         className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
                         aria-label={t(
                           "inspector.anonymization.termMatchCountAriaLabel",
-                          { count: String(hitCount) },
+                          {
+                            count: String(hitCount),
+                          },
                         )}
                         role="group"
                       />
@@ -924,26 +976,28 @@ export const AnonymizationFacet = ({
             const activeCount = rows.filter((r) => !r.isExcluded).length;
             return (
               <div className="rounded-md border" key={label}>
-                <button
+                <Button
                   aria-expanded={isOpen}
-                  className="hover:bg-muted/50 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-start"
+                  className="w-full"
                   onClick={() => toggleGroup(label)}
-                  type="button"
+                  variant="plain"
                 >
-                  <span className="flex min-w-0 items-center gap-2">
-                    {isOpen ? (
-                      <ChevronDown className="text-muted-foreground size-4 shrink-0" />
-                    ) : (
-                      <ChevronRight className="text-muted-foreground size-4 shrink-0" />
-                    )}
-                    <span className="truncate text-sm font-medium">
-                      {formatLabel(label)}
+                  <span className="hover:bg-muted/50 flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-3 py-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {isOpen ? (
+                        <ChevronDown className="text-muted-foreground size-4 shrink-0" />
+                      ) : (
+                        <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+                      )}
+                      <TruncatedText className="text-sm font-medium">
+                        {formatLabel(label)}
+                      </TruncatedText>
+                    </span>
+                    <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
+                      {format.number(activeCount)}
                     </span>
                   </span>
-                  <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
-                    {format.number(activeCount)}
-                  </span>
-                </button>
+                </Button>
                 {isOpen && (
                   <ul className="flex flex-col gap-px border-t">
                     {rows.map((row) => (
@@ -956,27 +1010,33 @@ export const AnonymizationFacet = ({
                         data-anonymization-canonical={row.canonical}
                         key={row.canonical}
                       >
-                        <button
-                          className="min-w-0 flex-1 truncate text-start text-xs"
+                        <Button
+                          className="min-w-0 flex-1"
                           onClick={() =>
                             selectFromSidebar(row.canonical, label)
                           }
-                          type="button"
+                          variant="plain"
                         >
-                          {row.canonical}
-                        </button>
+                          <TruncatedText className="text-xs">
+                            {row.canonical}
+                          </TruncatedText>
+                        </Button>
                         <div className="flex items-center gap-1">
                           {!row.isExcluded && row.count > 0 && (
                             <Tooltip
                               content={t(
                                 "inspector.anonymization.termMatchCountAriaLabel",
-                                { count: String(row.count) },
+                                {
+                                  count: String(row.count),
+                                },
                               )}
                               render={
                                 <span
                                   aria-label={t(
                                     "inspector.anonymization.termMatchCountAriaLabel",
-                                    { count: String(row.count) },
+                                    {
+                                      count: String(row.count),
+                                    },
                                   )}
                                   className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
                                   role="group"
@@ -1030,6 +1090,7 @@ export const AnonymizationFacet = ({
                               primaryDisabled={
                                 createAllowlistMutation.isPending
                               }
+                              primaryContent="icon"
                               primaryLabel={t(
                                 "inspector.anonymization.ignoreAction",
                               )}

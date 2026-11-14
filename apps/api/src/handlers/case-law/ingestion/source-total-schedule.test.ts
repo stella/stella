@@ -4,8 +4,8 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  sourceStoredTotalNextRefreshAt,
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  sourceStoredTotalNextRefreshAt,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { toSafeId } from "@/api/lib/branded-types";
 

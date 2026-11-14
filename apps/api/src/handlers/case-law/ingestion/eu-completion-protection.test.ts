@@ -4,12 +4,12 @@ import type { TextField } from "@stll/api-contract/case-law-text-field";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import {
-  ecjCompletionFingerprint,
   ECJ_COMPLETION_PROTECTED_COLUMNS,
+  ecjCompletionFingerprint,
+  type EcjCompletionStoredDecision,
+  protectEcjCompletion,
   protectEcjFormexParts,
   protectEcjLegacyDocument,
-  protectEcjCompletion,
-  type EcjCompletionStoredDecision,
 } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
 import {
   absentDecisionTextFields,
@@ -17,8 +17,8 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
-  encodeSourceRawEnvelope,
   type DecisionJudgeInput,
+  encodeSourceRawEnvelope,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";

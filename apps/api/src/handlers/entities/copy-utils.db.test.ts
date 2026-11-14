@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-reference-lookup";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -29,7 +30,7 @@ import type {
 import {
   copyEntities,
   ENTITY_SNAPSHOT_COLUMNS,
-  EVERY_LIVE_VERSION_SELECT,
+  EVERY_VERSION_SELECT,
 } from "./copy-utils";
 import type {
   WritableEntitySnapshot,
@@ -61,9 +62,7 @@ beforeAll(
 
 afterAll(async () => {
   if (seededOrganizationIds.length > 0) {
-    await testDb
-      .delete(organization)
-      .where(inArray(organization.id, seededOrganizationIds));
+    await deleteOrganizationsForTest(testDb, seededOrganizationIds);
   }
   await releaseTestDb();
 });
@@ -128,6 +127,24 @@ type VersionFixture = {
   fields?: WritableEntityVersionSnapshot["fields"];
 };
 
+// Synthetic rows are named for readability; the database stores ids as UUIDs,
+// and a copy looks its source cells up by id, so each name maps to one.
+// Seeded rows already carry their UUIDs.
+const FIXTURE_IDS = new Map<string, string>();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const fixtureId = (name: string): string => {
+  if (UUID.test(name)) {
+    return name;
+  }
+  const known = FIXTURE_IDS.get(name);
+  if (known !== undefined) {
+    return known;
+  }
+  const minted = Bun.randomUUIDv7();
+  FIXTURE_IDS.set(name, minted);
+  return minted;
+};
+
 /** A version snapshot with the carried columns a caller does not pin. */
 const version = ({
   id,
@@ -138,7 +155,7 @@ const version = ({
   createdAt = new Date("2026-01-01T00:00:00.000Z"),
   fields: versionFields = [],
 }: VersionFixture): WritableEntityVersionSnapshot => ({
-  id: toSafeId<"entityVersion">(id),
+  id: toSafeId<"entityVersion">(fixtureId(id)),
   versionNumber,
   stamp,
   label,
@@ -150,6 +167,8 @@ const version = ({
   collaborationContributorUserIds: null,
   detectedLanguage: null,
   createdAt,
+  deletedAt: null,
+  deletedBy: null,
   fields: versionFields,
 });
 
@@ -162,8 +181,9 @@ const fileField = ({
   propertyId: SafeId<"property">;
   fileName: string;
 }): WritableEntityVersionSnapshot["fields"][number] => ({
-  id: toSafeId<"field">(id),
+  id: toSafeId<"field">(fixtureId(id)),
   propertyId,
+  aiSettlement: null,
   content: {
     type: "file",
     version: 1,
@@ -195,7 +215,7 @@ const subtree = ({
     kind: "folder",
     name: "Pleadings",
     parentId: null,
-    currentVersionId: toSafeId<"entityVersion">("version_root"),
+    currentVersionId: toSafeId<"entityVersion">(fixtureId("version_root")),
     versions: [version({ id: "version_root" })],
   },
   {
@@ -203,7 +223,7 @@ const subtree = ({
     kind: "document",
     name: "Statement of claim.docx",
     parentId: rootId,
-    currentVersionId: toSafeId<"entityVersion">("version_document"),
+    currentVersionId: toSafeId<"entityVersion">(fixtureId("version_document")),
     versions: [
       version({
         id: "version_document",
@@ -331,7 +351,7 @@ test("a complete subtree commits every copied row", async () => {
     entityVersions: 3,
     extractionRuns: 1,
     fields: 1,
-    searchMarks: 2,
+    searchMarks: 3,
   });
 });
 
@@ -579,7 +599,7 @@ test("a move requires a complete live version snapshot before writing target row
       const sourceSnapshot = await tx.query.entities.findMany({
         where: { id: { eq: document.entityId } },
         columns: ENTITY_SNAPSHOT_COLUMNS,
-        with: EVERY_LIVE_VERSION_SELECT,
+        with: EVERY_VERSION_SELECT,
         limit: 1,
       });
       return await copyEntities({
@@ -661,7 +681,7 @@ test("a move carries every version with its frozen stamp and verification code",
               sourceSnapshot: await tx.query.entities.findMany({
                 where: { id: { eq: document.entityId } },
                 columns: ENTITY_SNAPSHOT_COLUMNS,
-                with: EVERY_LIVE_VERSION_SELECT,
+                with: EVERY_VERSION_SELECT,
                 limit: 1,
               }),
             },

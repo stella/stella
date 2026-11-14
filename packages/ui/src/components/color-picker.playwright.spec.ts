@@ -17,6 +17,12 @@ test("popover presentation closes for presets and stays open for custom input", 
 
   const trigger = page.locator('[data-slot="color-picker-trigger"]');
   const popup = page.locator('[data-slot="color-picker-popup"]');
+  // The caller's named button is the trigger itself, not wrapped in a
+  // second, unnamed one.
+  await expect(
+    page.getByRole("button", { name: "Choose color" }),
+  ).toHaveAttribute("data-slot", "color-picker-trigger");
+  await expect(trigger.getByRole("button")).toHaveCount(0);
   await trigger.click();
   await expect(popup).toBeVisible();
   await popup.getByRole("button", { name: "Blue" }).click();

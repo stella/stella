@@ -5,8 +5,8 @@ import { envBase } from "@/api/env-base";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
-  PUBLISHED_EXPANSION_LANGUAGES,
   probeExpansionDictionary,
+  PUBLISHED_EXPANSION_LANGUAGES,
 } from "@/api/lib/legal-search/expansion";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";

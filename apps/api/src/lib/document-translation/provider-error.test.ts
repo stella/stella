@@ -30,6 +30,7 @@ test("preserves a provider cause through the TanStack transport wrapper", () => 
     cause: Object.assign(new Error("model not found"), { statusCode: 404 }),
     message: "provider request failed",
     status: 502,
+    code: "internal_error",
   });
 
   expect(documentTranslationProviderErrorCode(providerError)).toBe(

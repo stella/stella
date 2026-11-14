@@ -1,23 +1,23 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { billingCodes } from "@/api/db/schema";
 import { billingCodeRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-const updateBillingCodeBodySchema = t.Object({
-  id: tSafeId("billingCode"),
-  code: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
-  label: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  active: t.Optional(t.Boolean()),
-  sortOrder: t.Optional(t.Integer({ minimum: 0 })),
+const updateBillingCodeBodySchema = v.object({
+  id: resourceIdSchema("billingCode"),
+  code: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(20))),
+  label: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  active: v.optional(v.boolean()),
+  sortOrder: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
 const config = {

@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -66,12 +67,15 @@ export const SocialRecoveryPanel = ({
   const [email, setEmail] = useState("");
   const finish = async () => await navigate(afterSignInNavigation(redirectTo));
   const onError = (cause: unknown) => {
-    analytics.captureError(cause);
+    analytics.captureError(cause, {
+      fingerprintKey: "SocialRecoveryPanel:cause",
+      scope: { type: "handler", handlerId: "SocialRecoveryPanel:cause" },
+    });
     notifyUserError(cause, t("errors.actionFailed"));
   };
   const sendCode = useMutation({
     mutationFn: async () => {
-      const parsed = v.parse(emailSchema(), email);
+      const parsed = v.parse(emailSchema(t("validation.invalidEmail")), email);
       const result = await authClient.emailOtp.sendVerificationOtp({
         email: parsed,
         type: "sign-in",
@@ -165,8 +169,14 @@ export const SocialRecoveryPanel = ({
         method: socialProviderName(method),
       })
     : t("auth.socialLink.emailProof");
+  // The provider itself was down: retrying soon is the whole remedy, and
+  // saying so keeps a provider outage from reading as a broken account.
+  const failureDescription =
+    error === "temporarily_unavailable" || error === "server_error"
+      ? t("auth.error.providerUnavailable")
+      : t("auth.error.generic");
   const description =
-    error === "account_not_linked" ? proofDescription : t("auth.error.generic");
+    error === "account_not_linked" ? proofDescription : failureDescription;
 
   return (
     <Frame className="w-full max-w-sm">
@@ -180,8 +190,8 @@ export const SocialRecoveryPanel = ({
       </FrameHeader>
       <FramePanel>
         {error === "account_not_linked" ? (
-          <form
-            className="flex flex-col gap-3"
+          <Form
+            density="snug"
             onSubmit={(event) => {
               event.preventDefault();
               sendCode.mutate();
@@ -204,12 +214,14 @@ export const SocialRecoveryPanel = ({
               className="w-full"
               loading={sendCode.isPending}
               disabled={
-                sendCode.isPending || !v.safeParse(emailSchema(), email).success
+                sendCode.isPending ||
+                !v.safeParse(emailSchema(t("validation.invalidEmail")), email)
+                  .success
               }
             >
               {t("auth.continueWithEmail")}
             </Button>
-          </form>
+          </Form>
         ) : (
           <Button
             className="w-full"

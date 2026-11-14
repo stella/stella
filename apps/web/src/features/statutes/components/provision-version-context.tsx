@@ -50,14 +50,18 @@ export const ProvisionVersionContext = ({
     validFrom: validity.validFrom,
     validTo: validity.validTo,
   });
+  // One line of status: the dot leads the sentence on its first line, the
+  // sentence wraps as text, and the way back to the current wording trails it.
   return (
-    <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-      <StatuteStatusDot
-        expression={validity.expression}
-        status={validity.status}
-        validFrom={validity.validFrom}
-      />
-      <span>
+    <div className="text-muted-foreground flex min-w-0 items-start gap-1.5 text-xs leading-5">
+      <span className="flex h-5 shrink-0 items-center">
+        <StatuteStatusDot
+          expression={validity.expression}
+          status={validity.status}
+          validFrom={validity.validFrom}
+        />
+      </span>
+      <p className="m-0 min-w-0 flex-1 text-pretty">
         {t.rich("statutes.versionAppliedInDecision", {
           court: decisionContext.court,
           caseNumber: decisionContext.caseNumber,
@@ -65,15 +69,18 @@ export const ProvisionVersionContext = ({
           status,
           bdi: (chunks) => <BidiText as="span">{chunks}</BidiText>,
         })}
-      </span>
+      </p>
       {currentVersionId !== undefined && currentVersionId !== documentId && (
-        <Button
-          size="xs"
-          variant="link"
-          onClick={() => onVersionChange(currentVersionId)}
-        >
-          {t("statutes.currentWording")}
-        </Button>
+        // An underlined text action, like the way into the full text below
+        // it, so the status line stays one line of text rather than a toolbar.
+        <span className="text-foreground shrink-0">
+          <Button
+            onClick={() => onVersionChange(currentVersionId)}
+            size="inline"
+          >
+            {t("statutes.currentWording")}
+          </Button>
+        </span>
       )}
     </div>
   );

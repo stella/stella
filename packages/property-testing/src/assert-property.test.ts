@@ -1,12 +1,14 @@
-import { afterEach, expect, spyOn, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
+import { createTestState } from "@stll/test-state";
+
 import {
-  PropertyAssertionError,
-  runProperty,
   assertProperty,
   failureFingerprint,
+  PropertyAssertionError,
   propertyConfig,
+  runProperty,
 } from "./index";
 
 const ENV_KEYS = [
@@ -17,19 +19,10 @@ const ENV_KEYS = [
   "PROPERTY_TEST_TIME_LIMIT_MS",
   "PROPERTY_TEST_REDACT",
 ];
-const original = new Map(ENV_KEYS.map((key) => [key, process.env[key]]));
-afterEach(() => {
-  for (const [key, value] of original) {
-    if (value === undefined) {
-      Reflect.deleteProperty(process.env, key);
-    } else {
-      process.env[key] = value;
-    }
-  }
-});
+const state = createTestState({ file: import.meta.path, config: {} });
 const neutralEnv = (): void => {
   for (const key of ENV_KEYS) {
-    Reflect.deleteProperty(process.env, key);
+    state.deleteEnv(key);
   }
 };
 // Settles the run first, so assertions after it see the finished run.
@@ -100,7 +93,7 @@ test("a failing pin stops generation and carries a reproducible report", () => {
 
 test("replay commands retain the owning runner and property preload", () => {
   neutralEnv();
-  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
+  state.setEnv("PROPERTY_TEST_NUM_RUNS_FACTOR", "10");
   for (const workspace of ["apps/api", "packages/conditions"]) {
     expect(() =>
       runProperty({
@@ -118,34 +111,34 @@ test("replay commands retain the owning runner and property preload", () => {
 
 test("honors an environment replay path only for its matching explicit seed", () => {
   neutralEnv();
-  process.env["PROPERTY_TEST_SEED"] = "123";
-  process.env["PROPERTY_TEST_PATH"] = "4:2";
+  state.setEnv("PROPERTY_TEST_SEED", "123");
+  state.setEnv("PROPERTY_TEST_PATH", "4:2");
   expect(propertyConfig({ seed: 123 }).path).toBe("4:2");
   expect(propertyConfig({ seed: 456, path: "0" }).path).toBe("0");
   expect(propertyConfig({ seed: 456 }).path).toBeUndefined();
-  Reflect.deleteProperty(process.env, "PROPERTY_TEST_SEED");
+  state.deleteEnv("PROPERTY_TEST_SEED");
   expect(propertyConfig({ seed: 123 }).path).toBeUndefined();
 });
 
 test("rejects a malformed replay path only when it would be replayed", () => {
   neutralEnv();
-  process.env["PROPERTY_TEST_SEED"] = "123";
+  state.setEnv("PROPERTY_TEST_SEED", "123");
   for (const malformed of ["-1", "Infinity", "1:x", "1:", " 1", "1.5"]) {
-    process.env["PROPERTY_TEST_PATH"] = malformed;
+    state.setEnv("PROPERTY_TEST_PATH", malformed);
     expect(() => propertyConfig({ seed: 123 })).toThrow(
       "PROPERTY_TEST_PATH must be colon-separated non-negative integers",
     );
     expect(propertyConfig({ seed: 456 }).path).toBeUndefined();
   }
-  process.env["PROPERTY_TEST_PATH"] = "0:12:3";
+  state.setEnv("PROPERTY_TEST_PATH", "0:12:3");
   expect(propertyConfig({ seed: 123 }).path).toBe("0:12:3");
 });
 
 test("time boxes only exploratory generation and leaves interruption non-failing", async () => {
   neutralEnv();
-  process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "50";
+  state.setEnv("PROPERTY_TEST_TIME_LIMIT_MS", "50");
   expect(propertyConfig().plugins).toBeUndefined();
-  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
+  state.setEnv("PROPERTY_TEST_NUM_RUNS_FACTOR", "10");
   const callerPlugin: fc.Plugin<[number]> = () => ({});
   const withCallerPlugin = propertyConfig({ plugins: [callerPlugin] }).plugins;
   expect(withCallerPlugin).toHaveLength(2);
@@ -166,7 +159,7 @@ test("time boxes only exploratory generation and leaves interruption non-failing
   });
   expect(calls).toBeGreaterThan(0);
   expect(calls).toBeLessThan(100);
-  process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "invalid";
+  state.setEnv("PROPERTY_TEST_TIME_LIMIT_MS", "invalid");
   expect(() => propertyConfig()).toThrow(
     "PROPERTY_TEST_TIME_LIMIT_MS must be a positive integer",
   );
@@ -174,13 +167,13 @@ test("time boxes only exploratory generation and leaves interruption non-failing
 
 test("emits one CI marker per failure and omits redacted counterexamples", () => {
   neutralEnv();
-  process.env["CI"] = "true";
-  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "1.1";
+  state.setEnv("CI", "true");
+  state.setEnv("PROPERTY_TEST_NUM_RUNS_FACTOR", "1.1");
   const log = spyOn(console, "error").mockImplementation(() => {});
   try {
     for (const redacted of [false, true]) {
       if (redacted) {
-        process.env["PROPERTY_TEST_REDACT"] = "1";
+        state.setEnv("PROPERTY_TEST_REDACT", "1");
       }
       expect(() =>
         runProperty({
@@ -261,8 +254,8 @@ test("async failures reject with replay details before generated examples", asyn
 
 test("pins retain their own paths under a different environment replay", () => {
   neutralEnv();
-  process.env["PROPERTY_TEST_SEED"] = "456";
-  process.env["PROPERTY_TEST_PATH"] = "999";
+  state.setEnv("PROPERTY_TEST_SEED", "456");
+  state.setEnv("PROPERTY_TEST_PATH", "999");
   expect(() =>
     runProperty({
       file: FILE,
@@ -289,9 +282,9 @@ test("rejects custom reporters instead of allowing a failure to be swallowed", (
 
 test("nightly time limits cannot truncate pinned replays", async () => {
   neutralEnv();
-  process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"] = "10";
-  process.env["PROPERTY_TEST_TIME_LIMIT_MS"] = "1";
-  process.env["PROPERTY_TEST_SEED"] = "456";
+  state.setEnv("PROPERTY_TEST_NUM_RUNS_FACTOR", "10");
+  state.setEnv("PROPERTY_TEST_TIME_LIMIT_MS", "1");
+  state.setEnv("PROPERTY_TEST_SEED", "456");
   let calls = 0;
   const property = fc.asyncProperty(fc.constant(1), async () => {
     calls++;

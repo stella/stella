@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { rootDb, rlsDb } from "@/api/db/root";
+import { rlsDb, rootDb } from "@/api/db/root";
 /**
  * The legal-atlas-runner's single sanctioned database surface.
  *

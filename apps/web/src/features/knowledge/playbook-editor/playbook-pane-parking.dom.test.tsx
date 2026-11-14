@@ -3,9 +3,10 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { PlaybookSnapshot } from "./playbook-editor-sync.logic";
 import type { ParkedPlaybookPane } from "./playbook-pane-parking";

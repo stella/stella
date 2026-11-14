@@ -4,7 +4,7 @@
  *
  * This file is the single source of truth. The prebuild script syncs these
  * patterns into biome/core's files.includes (as `!!`-prefixed globs). Other
- * tools (oxlint, oxfmt, eslint) import this module directly.
+ * tools (oxlint, eslint) import this module directly.
  */
 export const ignorePatterns = [
   // ── Dependencies / VCS ────────────────────────────────────────────

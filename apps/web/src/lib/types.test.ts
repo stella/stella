@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   EML_MIME,
+  isEmailFile,
+  isMarkdownFile,
+  isPlainTextFile,
   MARKDOWN_MIME,
   MSG_MIME,
   PLAIN_TEXT_MIME,
   PPTX_MIME,
   XLSX_MIME,
-  isEmailFile,
-  isMarkdownFile,
-  isPlainTextFile,
 } from "@/lib/consts";
 import { isFileDisplayable } from "@/lib/types";
 

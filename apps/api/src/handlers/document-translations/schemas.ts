@@ -1,8 +1,8 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { DOCUMENT_TRANSLATION_TARGET_LANGUAGES } from "@stll/api-contract/document-translation";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   DOCUMENT_TRANSLATION_COMMENT_POLICIES,
   DOCUMENT_TRANSLATION_ENGINE,
@@ -10,7 +10,7 @@ import {
   type DocumentTranslationCommentPolicy,
 } from "@/api/lib/document-translation/contract";
 
-const targetLanguageCode = t.UnionEnum([
+const targetLanguageCode = v.picklist([
   DOCUMENT_TRANSLATION_TARGET_LANGUAGES[0].code,
   ...DOCUMENT_TRANSLATION_TARGET_LANGUAGES.slice(1).map(({ code }) => code),
 ]);
@@ -28,47 +28,39 @@ type MissingCommentPolicySchemaValue = Exclude<
 
 true satisfies MissingCommentPolicySchemaValue extends never ? true : never;
 
-// Keep the literal union: Elysia coerces an absent Optional(UnionEnum) field
-// to the enum's first member instead of leaving it undefined.
-const optionalCommentPolicySchema = t.Optional(
-  t.Union([
-    t.Literal(COMMENT_POLICY_SCHEMA_VALUES[0]),
-    t.Literal(COMMENT_POLICY_SCHEMA_VALUES[1]),
-    t.Literal(COMMENT_POLICY_SCHEMA_VALUES[2]),
+const optionalCommentPolicySchema = v.optional(
+  v.union([
+    v.literal(COMMENT_POLICY_SCHEMA_VALUES[0]),
+    v.literal(COMMENT_POLICY_SCHEMA_VALUES[1]),
+    v.literal(COMMENT_POLICY_SCHEMA_VALUES[2]),
   ]),
 );
 
 const commonRunProperties = {
-  entityId: tSafeId("entity"),
-  fieldId: tSafeId("field"),
+  entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
   commentPolicy: optionalCommentPolicySchema,
   targetLang: targetLanguageCode,
 };
 
-export const prepareDocumentTranslationBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  fieldId: tSafeId("field"),
+export const prepareDocumentTranslationBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
 });
 
-export const createDocumentTranslationRunBodySchema = t.Union([
-  t.Object(
-    {
-      ...commonRunProperties,
-      engine: t.Literal(DOCUMENT_TRANSLATION_ENGINE.DEEPL),
-      output: t.Literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      ...commonRunProperties,
-      engine: t.Literal(DOCUMENT_TRANSLATION_ENGINE.AI),
-      output: t.Union([
-        t.Literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
-        t.Literal(DOCUMENT_TRANSLATION_OUTPUT.BILINGUAL),
-      ]),
-      entityVersionId: tSafeId("entityVersion"),
-    },
-    { additionalProperties: false },
-  ),
+export const createDocumentTranslationRunBodySchema = v.union([
+  v.strictObject({
+    ...commonRunProperties,
+    engine: v.literal(DOCUMENT_TRANSLATION_ENGINE.DEEPL),
+    output: v.literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
+  }),
+  v.strictObject({
+    ...commonRunProperties,
+    engine: v.literal(DOCUMENT_TRANSLATION_ENGINE.AI),
+    output: v.union([
+      v.literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
+      v.literal(DOCUMENT_TRANSLATION_OUTPUT.BILINGUAL),
+    ]),
+    entityVersionId: resourceIdSchema("entityVersion"),
+  }),
 ]);

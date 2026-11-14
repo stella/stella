@@ -6,13 +6,13 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
@@ -112,13 +112,15 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("stores adapter documentAst output as a jsonb object", async () => {
-      await processDecision({
-        input: ingestionResult,
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
+      (
+        await processDecision({
+          input: ingestionResult,
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
 
       const [row] = await db.execute(sql<JsonbStorageRow>`
         SELECT
@@ -136,24 +138,28 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("keeps adapter documentAst as an object when refreshing a decision", async () => {
-      await processDecision({
-        input: ingestionResult,
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
-      await processDecision({
-        input: plainTextIngestionResult({
-          ...ingestionResult,
-          rawHash: "jsonb-regression-hash-refresh",
-          metadata: { source: "regression-refresh" },
-        }),
-        observationOrder: 2n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:01.000Z"),
-      });
+      (
+        await processDecision({
+          input: ingestionResult,
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
+      (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...ingestionResult,
+            rawHash: "jsonb-regression-hash-refresh",
+            metadata: { source: "regression-refresh" },
+          }),
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        })
+      ).unwrap();
 
       const [row] = await db.execute(sql<JsonbStorageRow>`
         SELECT
@@ -177,21 +183,25 @@ if (!databaseUrl || !runPostgresTests) {
         caseNumber,
         rawHash: "legacy-fence-current",
       });
-      await processDecision({
-        input: initial,
-        observationOrder: 10n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T13:00:00.000Z"),
-      });
+      (
+        await processDecision({
+          input: initial,
+          observationOrder: 10n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T13:00:00.000Z"),
+        })
+      ).unwrap();
 
       const legacyFailure: unknown = await db
-        .execute(sql`
+        .execute(
+          sql`
           UPDATE ${caseLawDecisions}
           SET source_hash = 'legacy-fence-stale'
           WHERE source_id = ${sourceId}
             AND case_number = ${caseNumber}
-        `)
+        `,
+        )
         .then(
           () => null,
           (error: unknown) => error,
@@ -201,13 +211,15 @@ if (!databaseUrl || !runPostgresTests) {
       // that already knows both shapes.
       expect(getPgErrorCode(legacyFailure)).toBe("55000");
 
-      await processDecision({
-        input: { ...initial, rawHash: "legacy-fence-newer" },
-        observationOrder: 11n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T13:00:01.000Z"),
-      });
+      (
+        await processDecision({
+          input: { ...initial, rawHash: "legacy-fence-newer" },
+          observationOrder: 11n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T13:00:01.000Z"),
+        })
+      ).unwrap();
       const ordered = (
         await db
           .select({
@@ -264,20 +276,24 @@ if (!databaseUrl || !runPostgresTests) {
         caseNumber: replayCaseNumber,
         rawHash: "compensation-cas-current",
       });
-      await processDecision({
-        input: replayInput,
-        observationOrder: 20n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T13:01:00.000Z"),
-      });
-      await processDecision({
-        input: replayInput,
-        observationOrder: 21n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T13:01:01.000Z"),
-      });
+      (
+        await processDecision({
+          input: replayInput,
+          observationOrder: 20n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T13:01:00.000Z"),
+        })
+      ).unwrap();
+      (
+        await processDecision({
+          input: replayInput,
+          observationOrder: 21n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T13:01:01.000Z"),
+        })
+      ).unwrap();
       const staleCompensationOrder = (
         await db
           .update(caseLawSources)

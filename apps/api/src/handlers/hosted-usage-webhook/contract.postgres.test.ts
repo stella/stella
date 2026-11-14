@@ -1,4 +1,4 @@
-import { panic, TaggedError, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
@@ -7,10 +7,10 @@ import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   hostedUsageWebhookEvents,
+  USAGE_ENTITLEMENT_STATUSES,
   usageAllocations,
   usageEntitlements,
   usagePolicies,
-  USAGE_ENTITLEMENT_STATUSES,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -29,6 +29,7 @@ import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/w
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -1097,9 +1098,7 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
       expect(
         (await readState(tx, fixture.organizationId)).entitlements,
       ).toHaveLength(1);
-      await tx
-        .delete(organization)
-        .where(eq(organization.id, fixture.organizationId));
+      await deleteOrganizationsForTest(tx, [fixture.organizationId]);
 
       const renewal = await deliver({
         tx,

@@ -1,26 +1,26 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
-  tDefaultVarchar,
-  tUserId,
+  defaultVarcharSchema,
+  userIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export const searchHistoryScopeQuery = t.Object({
+export const searchHistoryScopeQuery = v.object({
   expectedOrganizationId: withDescription(
-    tDefaultVarchar,
+    defaultVarcharSchema,
     "The organizationId from search-history.list.scope. A changed active organization rejects the mutation; this never selects another owner.",
   ),
   expectedUserId: withDescription(
-    tUserId,
+    userIdSchema,
     "The userId from search-history.list.scope. A changed signed-in user rejects the mutation; this never selects another owner.",
   ),
 });
 
 type SearchHistoryScopePrecondition = {
-  query: typeof searchHistoryScopeQuery.static;
+  query: v.InferOutput<typeof searchHistoryScopeQuery>;
   userId: string;
   organizationId: string;
 };

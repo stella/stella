@@ -97,28 +97,34 @@ describe("resolveToolWorkspaceIds", () => {
 describe("intersectAccessibleWorkspaceIds", () => {
   test("strips stale IDs without falling back to accessible", () => {
     expect(
-      intersectAccessibleWorkspaceIds({
-        pinnedIds: [wsA, wsStale, wsB],
-        accessibleWorkspaceIds: [wsA, wsB, wsC],
-      }),
+      asArray(
+        intersectAccessibleWorkspaceIds({
+          pinnedIds: [wsA, wsStale, wsB],
+          accessibleWorkspaceIds: [wsA, wsB, wsC],
+        }),
+      ),
     ).toEqual([wsA, wsB]);
   });
 
   test("regression: all pins stale → returns empty (does NOT widen back to accessible)", () => {
     expect(
-      intersectAccessibleWorkspaceIds({
-        pinnedIds: [wsStale],
-        accessibleWorkspaceIds: [wsA, wsB],
-      }),
+      asArray(
+        intersectAccessibleWorkspaceIds({
+          pinnedIds: [wsStale],
+          accessibleWorkspaceIds: [wsA, wsB],
+        }),
+      ),
     ).toEqual([]);
   });
 
   test("empty pins → empty result", () => {
     expect(
-      intersectAccessibleWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [wsA, wsB],
-      }),
+      asArray(
+        intersectAccessibleWorkspaceIds({
+          pinnedIds: [],
+          accessibleWorkspaceIds: [wsA, wsB],
+        }),
+      ),
     ).toEqual([]);
   });
 });

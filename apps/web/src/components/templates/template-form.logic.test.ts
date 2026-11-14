@@ -8,8 +8,8 @@ import {
   readClauseWarnings,
   readUndecidedConditionLabels,
   runLeadingSingleFlight,
-  visibleItemFields,
   savedFillNotices,
+  visibleItemFields,
 } from "./template-form.logic";
 
 describe("download AI diagnostics", () => {

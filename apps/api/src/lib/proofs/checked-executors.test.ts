@@ -11,8 +11,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import {
   copyOrganizationFile,
-  runCheckedOrganizationFileWrite,
   runCheckedOrganizationFileCopy,
+  runCheckedOrganizationFileWrite,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
 import {
@@ -304,14 +304,23 @@ test("checked scoped handlers use checked dispatch and tenant values with mutabl
     panic("Scoped evidence fixture refused");
   }
   const result = await authorized.value.execute(async (context) => {
-    context.scratch.ctx.session.activeOrganizationId =
-      toSafeId<"organization">("other_org");
-    context.scratch.handler = async function* () {
-      return Result.ok({ organization: "other dispatch" });
+    // Scratch tampered after the proof: another tenant, another handler.
+    const tampered = {
+      ...context.scratch,
+      ctx: {
+        ...context.scratch.ctx,
+        session: {
+          ...context.scratch.ctx.session,
+          activeOrganizationId: toSafeId<"organization">("other_org"),
+        },
+      },
+      async *handler() {
+        return Result.ok({ organization: "other dispatch" });
+      },
     };
     const dispatched = await runCheckedScopedHandler({
       ...context,
-      input: { ...context.input, value: context.scratch },
+      input: { ...context.input, value: tampered },
     });
     expect(context.proof.input.value.ctx.user.id).toBe(userId);
     expect(context.scratch.ctx.set.headers).toMatchObject({

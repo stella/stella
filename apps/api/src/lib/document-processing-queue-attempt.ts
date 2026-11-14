@@ -3,8 +3,8 @@ import { TaggedError } from "better-result";
 import type { documentProcessingRuns } from "@/api/db/schema";
 import { DOCUMENT_PROCESSING_MAX_ATTEMPTS } from "@/api/lib/document-processing-contract";
 import {
-  SEARCHABLE_PDF_FAILURE_CODE,
   SEARCH_INDEX_FAILURE_CODE,
+  SEARCHABLE_PDF_FAILURE_CODE,
 } from "@/api/lib/document-processing-queue-policy";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
 

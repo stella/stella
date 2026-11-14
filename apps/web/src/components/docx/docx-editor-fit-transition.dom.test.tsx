@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { DocxEditorProps, DocxEditorRef } from "./app-docx-editor";
 
@@ -118,11 +118,16 @@ test("numeric zoom transitions to fit-width and refits when the editor viewport 
       throw new Error("Published editor layout or scroll root is unavailable");
     }
 
+    // Fit-width reads the border box (`offsetWidth`) less its scrollbar edge,
+    // so the viewport reports both widths, as a browser does; equal widths
+    // mean no classic scrollbar.
     let viewportWidth = 920;
-    Object.defineProperty(scrollRoot, "clientWidth", {
+    const viewportBox = {
       configurable: true,
       get: () => viewportWidth,
-    });
+    };
+    Object.defineProperty(scrollRoot, "clientWidth", viewportBox);
+    Object.defineProperty(scrollRoot, "offsetWidth", viewportBox);
 
     await act(async () => {
       mounted.rerender(<Harness initialZoom="fit-width" />);
@@ -239,13 +244,13 @@ test("a narrow real editor starts with a collapsed outline, fits the page, and o
       expect(
         mounted.container.querySelector(
           '[data-folio-outline-surface="expanded"]',
-        ),
-      ).toBeNull();
+        ) === null,
+      ).toBe(true);
       expect(
         mounted.container.querySelector(
           '[data-folio-outline-surface="column"]',
-        ),
-      ).toBeNull();
+        ) === null,
+      ).toBe(true);
       expect(editor.getZoom()).toBeLessThan(1);
       expect(pageWidth * editor.getZoom()).toBeLessThanOrEqual(scrollWidth());
       expect(pageWidth * editor.getZoom()).toBeGreaterThan(scrollWidth() - 40);

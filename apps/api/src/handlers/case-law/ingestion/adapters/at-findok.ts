@@ -1,11 +1,15 @@
+// parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result, TaggedError } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
-import { Temporal, parsePlainDate } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import {
@@ -13,28 +17,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceAdapter,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
@@ -53,11 +35,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
@@ -65,8 +47,33 @@ import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  sourceTotalRead,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceAdapter,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
+import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -406,7 +413,21 @@ export const parseFindokManifest = (
 type ManifestLoader = (
   collection: FindokCollection,
   signal?: AbortSignal,
-) => Promise<FindokManifest>;
+) => Promise<{
+  manifest: FindokManifest;
+  publisherRequest: SyncPage["publisherRequest"];
+}>;
+
+/** A cursor the crawl cannot read a page from. */
+const findokCursorError = (
+  message: string,
+  cursor: string | null,
+): AdapterFetchError =>
+  new AdapterFetchError({
+    message,
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    cursor,
+  });
 
 const createManifestLoader = (
   dependencies: AtFindokDependencies,
@@ -421,7 +442,10 @@ const createManifestLoader = (
       cached !== undefined &&
       dependencies.now().getTime() - cached.checkedAt < MANIFEST_CACHE_MS
     ) {
-      return cached.manifest;
+      return {
+        manifest: cached.manifest,
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      };
     }
     const response = await dependencies.request(
       COLLECTIONS[collection].manifestUrl,
@@ -484,7 +508,7 @@ const createManifestLoader = (
       checkedAt: dependencies.now().getTime(),
       manifest,
     });
-    return manifest;
+    return { manifest, publisherRequest: PUBLISHER_REQUEST.ANSWERED };
   };
 };
 
@@ -920,6 +944,19 @@ export const assembleAtFindokDecision = (
     return buildListingOnly(payload, "detail-xml-unparseable", documentXml);
   }
   const parsed = parseResult.value;
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: ADAPTER_KEYS.AT_FINDOK,
+      caseNumber: item.gz,
+      language: LANGUAGE,
+      url: artifactUrl(item.pathPdf),
+      codes: "TEXT_FIDELITY_MISMATCH",
+      fidelity: parsed.textFidelity.status,
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
+      firstDifferenceAt: parsed.textFidelity.firstDifferenceAt,
+    });
+  }
   const headnotes =
     headnoteXml === undefined ? undefined : parseFindokHeadnoteXml(headnoteXml);
   return plainTextIngestionResult({
@@ -963,6 +1000,7 @@ export const assembleAtFindokDecision = (
       headnoteNumbers: headnotes?.headnoteNumbers,
       headnoteStatutes: headnotes?.statutes,
       sourceAttribution: "Findok, Austrian Federal Ministry of Finance, CC0",
+      textFidelity: parsed.textFidelity,
     },
     rawHash: hashContent(raw.sourceRaw),
     documentAst: parsed.documentAst,
@@ -984,7 +1022,7 @@ const listReconciliationPage = async (
       cursor: slice,
     });
   }
-  const manifest = await loadManifest(parts.collection, signal);
+  const { manifest } = await loadManifest(parts.collection, signal);
   const items = itemsForSlice(manifest, parts.year);
   const start = page * RECONCILIATION_PAGE_SIZE;
   return {
@@ -1140,9 +1178,18 @@ const FINDOK_SOURCE_FIELDS_LIST = [
 
 type FindokSourceField = (typeof FINDOK_SOURCE_FIELDS_LIST)[number];
 
-const SEGMENT_BOOKKEEPING = excludedSourceField(
-  "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
-);
+const SEGMENT_BOOKKEEPING = {
+  disposition: "stored",
+  target: {
+    type: "raw",
+    part: FINDOK_PART.DOCUMENT_XML,
+    path: [],
+    reason:
+      "The stored XML preserves segment identifiers, version dates and their original grouping.",
+  },
+} as const satisfies SourceFieldDisposition;
+
+type FindokPublisherRecord = Readonly<Record<FindokSourceField, unknown>>;
 
 const FINDOK_SOURCE_FIELDS = {
   appdat: {
@@ -1155,9 +1202,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionType" },
   },
-  gueltig: excludedSourceField(
-    "the service's own inventory flag: a row it marks invalid is never ingested, so every stored row would carry the same value",
-  ),
+  gueltig: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.LISTING,
+      path: ["gueltig"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   gueltigAb: {
     disposition: "stored",
     target: { type: "metadata", key: "validFrom" },
@@ -1166,9 +1220,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "caseNumber" },
   },
-  inFindokSeit: excludedSourceField(
-    "a rendering of the timestamp the row states beside it in a sortable form",
-  ),
+  inFindokSeit: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.LISTING,
+      path: ["inFindokSeit"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   inFindokSeitDate: {
     disposition: "stored",
     target: { type: "metadata", key: "inFindokSince" },
@@ -1189,9 +1250,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  "Grundk/appdat": excludedSourceField(
-    "the manifest row states the decision date",
-  ),
+  "Grundk/appdat": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/appdatbis": {
     disposition: "stored",
     target: { type: "metadata", key: "validUntil" },
@@ -1200,16 +1268,30 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "officiallyPublished" },
   },
-  "Grundk/behoerde": excludedSourceField(
-    "the manifest row states the deciding authority",
-  ),
+  "Grundk/behoerde": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/betreff": {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  "Grundk/doktyptxt": excludedSourceField(
-    "the manifest row states the same decision type",
-  ),
+  "Grundk/doktyptxt": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/ecli": {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
@@ -1226,7 +1308,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "findokGid" },
   },
-  "Grundk/gz": excludedSourceField("the manifest row states the docket"),
+  "Grundk/gz": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/lastchangedat": {
     disposition: "stored",
     target: { type: "metadata", key: "modified" },
@@ -1243,9 +1334,16 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "statutes" },
   },
-  "Grundk/stammnr": excludedSourceField(
-    "the manifest row states the same serial, which is also the archive's entry name",
-  ),
+  "Grundk/stammnr": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Grundk/uebersex_net": {
     disposition: "stored",
     target: { type: "document" },
@@ -1255,9 +1353,16 @@ const FINDOK_SOURCE_FIELDS = {
     target: { type: "metadata", key: "published" },
   },
   "Segk/dok_fassungsnr": SEGMENT_BOOKKEEPING,
-  "Segk/dokformat": excludedSourceField(
-    "the media type of the body element beside it, which is the one this parser reads",
-  ),
+  "Segk/dokformat": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: FINDOK_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher XML field and its segment/version structure.",
+    },
+  },
   "Segk/fsgnr": SEGMENT_BOOKKEEPING,
   "Segk/gid": SEGMENT_BOOKKEEPING,
   "Segk/id_multifassung": SEGMENT_BOOKKEEPING,
@@ -1279,7 +1384,10 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "legalSentence" },
   },
-} as const satisfies Record<FindokSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof FindokPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** Every field the stored envelope states, read from the payloads themselves. */
 const listFindokSourceFields = (parts: SourceRawParts): readonly string[] => {
@@ -1415,6 +1523,152 @@ const findokListingRevision = (payload: unknown) => {
   };
 };
 
+const createFindokPageFetcher =
+  (
+    dependencies: AtFindokDependencies,
+    loadManifest: ManifestLoader,
+  ): SourceAdapter["fetchPage"] =>
+  async (cursor, _config, signal) => {
+    let publisherRequest: SyncPage["publisherRequest"] = PUBLISHER_REQUEST.NONE;
+    return (
+      await Result.tryPromise({
+        try: async () => {
+          const state = decodeCursor(cursor, dependencies.now());
+          if (state === undefined) {
+            throw findokCursorError(
+              `Invalid Findok cursor: ${cursor ?? "(none)"}`,
+              cursor,
+            );
+          }
+          const parts = sliceParts(state.slice);
+          if (parts === undefined) {
+            panic("validated Findok cursor has an invalid slice");
+          }
+          const manifestRead = await loadManifest(parts.collection, signal);
+          const { manifest } = manifestRead;
+          publisherRequest = manifestRead.publisherRequest;
+          const pageDependencies = {
+            ...dependencies,
+            request: async (
+              ...args: Parameters<AtFindokDependencies["request"]>
+            ) => {
+              if (publisherRequest !== PUBLISHER_REQUEST.ANSWERED) {
+                publisherRequest = PUBLISHER_REQUEST.FAILED;
+              }
+              const response = await dependencies.request(...args);
+              publisherRequest = PUBLISHER_REQUEST.ANSWERED;
+              return response;
+            },
+          };
+          if (
+            state.snapshotId !== null &&
+            state.snapshotId !== manifest.snapshotId
+          ) {
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(cursorForSlice(state.slice)),
+            };
+          }
+          const allItems = itemsForSlice(manifest, parts.year);
+          const expectedTotal = state.total ?? allItems.length;
+          if (expectedTotal !== allItems.length) {
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(cursorForSlice(state.slice)),
+            };
+          }
+          if (allItems.length === 0) {
+            const next = atFindokNextSlice(state.slice, dependencies.now());
+            const nextState = cursorForSlice(
+              next ?? tipSlice(dependencies.now()),
+            );
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(nextState),
+            };
+          }
+          const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
+          if (state.page >= totalPages) {
+            throw findokCursorError(
+              "Findok cursor points past the manifest's last page",
+              cursor,
+            );
+          }
+          const pageItems = allItems.slice(
+            state.page * CRAWL_PAGE_SIZE,
+            (state.page + 1) * CRAWL_PAGE_SIZE,
+          );
+          const digest = listingDigest(state.digest, pageItems);
+          if (state.phase === CURSOR_PHASE.VERIFY) {
+            if (state.page + 1 < totalPages) {
+              return {
+                decisions: [],
+                nextCursor: encodeCursor({
+                  ...state,
+                  digest,
+                  page: state.page + 1,
+                  snapshotId: manifest.snapshotId,
+                  total: expectedTotal,
+                }),
+              };
+            }
+            if (digest !== state.expectedDigest) {
+              return {
+                decisions: [],
+                nextCursor: encodeCursor(cursorForSlice(state.slice)),
+              };
+            }
+            const next = atFindokNextSlice(state.slice, dependencies.now());
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(
+                cursorForSlice(next ?? tipSlice(dependencies.now())),
+              ),
+            };
+          }
+
+          const { decisions, itemBuildFailures } = await buildFindokPageItems({
+            collection: parts.collection,
+            cursor,
+            dependencies: pageDependencies,
+            pageItems,
+            signal,
+          });
+          const collected = state.collected + decisions.length;
+          if (state.page + 1 < totalPages) {
+            return {
+              decisions,
+              itemBuildFailures,
+              nextCursor: encodeCursor({
+                ...state,
+                collected,
+                digest,
+                page: state.page + 1,
+                snapshotId: manifest.snapshotId,
+                total: expectedTotal,
+              }),
+            };
+          }
+          return {
+            decisions,
+            itemBuildFailures,
+            nextCursor: encodeCursor({
+              collected,
+              digest: START_DIGEST,
+              expectedDigest: digest,
+              page: 0,
+              phase: CURSOR_PHASE.VERIFY,
+              slice: state.slice,
+              snapshotId: manifest.snapshotId,
+              total: expectedTotal,
+            }),
+          };
+        },
+        catch: adapterCatch(ADAPTER_KEYS.AT_FINDOK, cursor),
+      })
+    ).map((page) => ({ ...page, publisherRequest }));
+  };
+
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
 ): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
@@ -1484,137 +1738,15 @@ export const createAtFindokAdapter = (
 
     async getTotalCount(signal) {
       try {
-        const ufs = await loadManifest("ufs", signal);
-        const bfg = await loadManifest("bfg", signal);
+        const { manifest: ufs } = await loadManifest("ufs", signal);
+        const { manifest: bfg } = await loadManifest("bfg", signal);
         return sourceTotalRead(ufs.items.length + bfg.items.length);
       } catch (error) {
         return { type: "probe-failed", errorTag: errorTag(error) };
       }
     },
 
-    fetchPage: async (cursor, _config, signal) =>
-      await Result.tryPromise({
-        try: async () => {
-          const state = decodeCursor(cursor, dependencies.now());
-          if (state === undefined) {
-            throw new AdapterFetchError({
-              message: `Invalid Findok cursor: ${cursor ?? "(none)"}`,
-              adapterKey: ADAPTER_KEYS.AT_FINDOK,
-              cursor,
-            });
-          }
-          const parts = sliceParts(state.slice);
-          if (parts === undefined) {
-            panic("validated Findok cursor has an invalid slice");
-          }
-          const manifest = await loadManifest(parts.collection, signal);
-          if (
-            state.snapshotId !== null &&
-            state.snapshotId !== manifest.snapshotId
-          ) {
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(cursorForSlice(state.slice)),
-            };
-          }
-          const allItems = itemsForSlice(manifest, parts.year);
-          const expectedTotal = state.total ?? allItems.length;
-          if (expectedTotal !== allItems.length) {
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(cursorForSlice(state.slice)),
-            };
-          }
-          if (allItems.length === 0) {
-            const next = atFindokNextSlice(state.slice, dependencies.now());
-            const nextState = cursorForSlice(
-              next ?? tipSlice(dependencies.now()),
-            );
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(nextState),
-            };
-          }
-          const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
-          if (state.page >= totalPages) {
-            throw new AdapterFetchError({
-              message: "Findok cursor points past the manifest's last page",
-              adapterKey: ADAPTER_KEYS.AT_FINDOK,
-              cursor,
-            });
-          }
-          const pageItems = allItems.slice(
-            state.page * CRAWL_PAGE_SIZE,
-            (state.page + 1) * CRAWL_PAGE_SIZE,
-          );
-          const digest = listingDigest(state.digest, pageItems);
-          if (state.phase === CURSOR_PHASE.VERIFY) {
-            if (state.page + 1 < totalPages) {
-              return {
-                decisions: [],
-                nextCursor: encodeCursor({
-                  ...state,
-                  digest,
-                  page: state.page + 1,
-                  snapshotId: manifest.snapshotId,
-                  total: expectedTotal,
-                }),
-              };
-            }
-            if (digest !== state.expectedDigest) {
-              return {
-                decisions: [],
-                nextCursor: encodeCursor(cursorForSlice(state.slice)),
-              };
-            }
-            const next = atFindokNextSlice(state.slice, dependencies.now());
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(
-                cursorForSlice(next ?? tipSlice(dependencies.now())),
-              ),
-            };
-          }
-
-          const { decisions, itemBuildFailures } = await buildFindokPageItems({
-            collection: parts.collection,
-            cursor,
-            dependencies,
-            pageItems,
-            signal,
-          });
-          const collected = state.collected + decisions.length;
-          if (state.page + 1 < totalPages) {
-            return {
-              decisions,
-              itemBuildFailures,
-              nextCursor: encodeCursor({
-                ...state,
-                collected,
-                digest,
-                page: state.page + 1,
-                snapshotId: manifest.snapshotId,
-                total: expectedTotal,
-              }),
-            };
-          }
-          return {
-            decisions,
-            itemBuildFailures,
-            nextCursor: encodeCursor({
-              collected,
-              digest: START_DIGEST,
-              expectedDigest: digest,
-              page: 0,
-              phase: CURSOR_PHASE.VERIFY,
-              slice: state.slice,
-              snapshotId: manifest.snapshotId,
-              total: expectedTotal,
-            }),
-          };
-        },
-        catch: adapterCatch(ADAPTER_KEYS.AT_FINDOK, cursor),
-      }),
+    fetchPage: createFindokPageFetcher(dependencies, loadManifest),
   });
 };
 

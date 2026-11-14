@@ -1,21 +1,18 @@
 import { useCallback, useRef } from "react";
 
-import {
-  useIsMutating,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
+import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 
 type UseCreateBBoxesProps = {
@@ -31,15 +28,12 @@ export const useCreateBBoxes = ({
 }: UseCreateBBoxesProps) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const aiAvailabilityQuery = useQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
-  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
-  useQueryViewError(aiAvailabilityView);
+  const aiAvailabilityView = queryView(aiAvailabilityQuery);
+  useQueryViewError(aiAvailabilityView, "useCreateBBoxes:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&
     aiAvailabilityView.refetchError === undefined
@@ -52,12 +46,13 @@ export const useCreateBBoxes = ({
   inflightSetRef.current ??= new Set<string>();
   const inflight = inflightSetRef.current;
 
-  const mutation = useMutation({
+  const mutation = useIdempotentMutation({
+    idempotencyScope: `${workspaceId}:${justification.id}`,
     scope: {
       id: justification.id,
     },
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
-    mutationFn: async () => {
+    mutationFn: async (_variables) => {
       if (justification.boundingBoxes || inflight.has(justification.id)) {
         return undefined;
       }
@@ -70,7 +65,7 @@ export const useCreateBBoxes = ({
           justificationId: toSafeId<"justification">(justification.id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       detached(
@@ -84,7 +79,10 @@ export const useCreateBBoxes = ({
       inflight.delete(justification.id);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateBBoxes:failure",
+        scope: { type: "handler", handlerId: "useCreateBBoxes:failure" },
+      });
     },
   });
 

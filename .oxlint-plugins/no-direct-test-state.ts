@@ -4,30 +4,45 @@ import {
   type Variable,
 } from "@oxlint/plugins";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
 import { BASELINE_PATHS } from "../scripts/baseline-paths.ts";
 import { parseTestBaseline } from "../scripts/check-test-state-baseline.ts";
+import { canonicalModuleId } from "./module-id.ts";
 import {
-  type ScopeContext,
   type FilenameContext,
   filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifierReference,
-  resolveVariable,
-  resolveImport,
-  stableInitializer,
   memberPropertyName,
+  resolveImport,
+  resolveVariable,
+  type ScopeContext,
+  stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
 
 const BASELINE_PATH = BASELINE_PATHS.testState;
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG_MODULE = "apps/api/src/env";
-const FIXTURE_MODULE = "apps/api/src/tests/helpers/test-state";
+const FIXTURE_PACKAGE = "@stll/test-state";
+// Files inside the package import the fixture by relative path, which
+// canonicalises to its source path rather than the package name; the source
+// path comes from the package's own export, so a moved entry cannot drift.
+const FIXTURE_MODULES = new Set([
+  FIXTURE_PACKAGE,
+  canonicalModuleId(
+    repoRelativePath(
+      REPO_ROOT,
+      createRequire(import.meta.url).resolve(FIXTURE_PACKAGE),
+    ),
+    "",
+  ),
+]);
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 
 // Counts are validated by the same parser as the shrink-only membership check.
@@ -206,7 +221,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           mutation:
-            "Use createTestState from apps/api/src/tests/helpers/test-state.ts to mutate test environment or validated configuration; it restores file and test setup automatically.",
+            "Use createTestState from @stll/test-state to mutate test environment or validated configuration; it restores file and test setup automatically.",
           stale:
             "{{file}} now has {{count}} state mutations (baseline {{baseline}}). Shrink scripts/test-state-baseline.json in this change.",
           concurrent:
@@ -300,7 +315,8 @@ export default eslintCompatPlugin({
               }
             }
             if (
-              imported?.moduleId === FIXTURE_MODULE &&
+              imported !== null &&
+              FIXTURE_MODULES.has(imported.moduleId) &&
               imported.imported === "createTestState"
             ) {
               hasFixture = true;

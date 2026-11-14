@@ -9,6 +9,14 @@ import type { TestWorkspace } from "./workspace";
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");
+const PDF_PATH = path.resolve(
+  import.meta.dirname,
+  "../../../api/src/lib/search/__fixtures__/mixed-3pages.pdf",
+);
+const DOCUMENT_FIXTURES = {
+  docx: { mimeType: DOCX_MIME, path: DOCX_PATH },
+  pdf: { mimeType: "application/pdf", path: PDF_PATH },
+};
 
 type EntityFileField = {
   id: string;
@@ -22,6 +30,7 @@ type EntityWithFields = {
 
 type CreateUploadedDocumentRouteOptions = {
   fileName: string;
+  fixture?: keyof typeof DOCUMENT_FIXTURES;
   request: APIRequestContext;
   workspace: TestWorkspace;
 };
@@ -33,17 +42,19 @@ type UploadedDocumentRoute = {
 
 export const createUploadedDocumentRoute = async ({
   fileName,
+  fixture = "docx",
   request,
   workspace,
 }: CreateUploadedDocumentRouteOptions): Promise<UploadedDocumentRoute> => {
+  const file = DOCUMENT_FIXTURES[fixture];
   const uploaded = await apiUploadDocx(
     request,
     workspace.id,
     workspace.filePropertyId,
     {
       name: fileName,
-      mimeType: DOCX_MIME,
-      buffer: await readFile(DOCX_PATH),
+      mimeType: file.mimeType,
+      buffer: await readFile(file.path),
     },
   );
 

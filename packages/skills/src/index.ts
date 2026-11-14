@@ -47,6 +47,12 @@ export type {
   ValidatedSkillResource,
 } from "./format";
 export {
+  readSkillNetworkHosts,
+  requestedNetworkHost,
+  SKILL_NETWORK_HOSTS_MAX,
+  SKILL_NETWORK_HOSTS_METADATA_KEY,
+} from "./network-hosts";
+export {
   readSkillRequiredTools,
   SKILL_REQUIRED_TOOLS_MAX,
   SKILL_REQUIRED_TOOLS_METADATA_KEY,

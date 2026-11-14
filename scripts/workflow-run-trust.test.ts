@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 
-import { definitelyFalse } from "./github-expression";
+import { definitelyFalse, evaluate } from "./github-expression";
 import {
   MAIN_ONLY_BUN_CACHE_SAVE,
   usesDefaultCacheScope,
@@ -24,9 +32,11 @@ const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 // Pin the current scan so missing or newly added entry points need review.
 const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
+  "ci-runner-loss-retry.yml",
   "cla.yml",
   "publish-npm.yml",
   "release-desktop.yml",
+  "release-tag.yml",
   "scheduled-run-alerts.yml",
 ] as const;
 
@@ -77,8 +87,10 @@ const runsAfterSkippedGate = (condition: string, gatedNeeds: string[]) =>
     values: Object.fromEntries(
       gatedNeeds.map((need) => [`needs.${need}.result`, "skipped"]),
     ),
-    fallback: (path) =>
-      gatedNeeds.some((need) => path.startsWith(`needs.${need}.outputs.`))
+    fallback: (expressionPath) =>
+      gatedNeeds.some((need) =>
+        expressionPath.startsWith(`needs.${need}.outputs.`),
+      )
         ? ""
         : undefined,
     status: { always: true },
@@ -190,6 +202,112 @@ const workflowRunWorkflows = () =>
       isRecord(workflow) && triggers(workflow["on"]).includes("workflow_run"),
   );
 
+const PRIVILEGED_MANUAL_JOB =
+  /(?:TAURI_SIGNING_PRIVATE_KEY|AZURE_CLIENT_SECRET|STELLA_[A-Z_]*PRIVATE_KEY|DOCKERHUB_TOKEN|POSTHOG_CLI_API_KEY|create-github-app-token|"(?:attestations|artifact-metadata|deployments|id-token|packages|pages)"\s*:\s*"write")/u;
+
+const canRunOnFeatureDispatch = (
+  name: string,
+  jobs: Record<string, unknown>,
+  seen = new Set<string>(),
+): boolean => {
+  if (seen.has(name)) {
+    return true;
+  }
+  const job = jobs[name];
+  if (!isRecord(job)) {
+    return true;
+  }
+  const condition = conditionOf(job);
+  if (
+    condition.trim() !== "" &&
+    definitelyFalse(condition, {
+      values: {
+        "github.event_name": "workflow_dispatch",
+        "github.ref": "refs/heads/feature",
+        "github.repository": "stella/stella",
+      },
+      fallback: (expressionPath) =>
+        expressionPath.startsWith("github.event.workflow_run.")
+          ? ""
+          : undefined,
+      status: {
+        always: true,
+        success: true,
+        failure: false,
+        cancelled: false,
+      },
+    })
+  ) {
+    return false;
+  }
+  const nextSeen = new Set(seen).add(name);
+  const gatedNeeds = needsOf(job).filter(
+    (need) => !canRunOnFeatureDispatch(need, jobs, nextSeen),
+  );
+  if (gatedNeeds.length === 0) {
+    return true;
+  }
+  return (
+    RUNS_AFTER_SKIP.test(condition) &&
+    runsAfterSkippedGate(condition, gatedNeeds)
+  );
+};
+
+const featureDispatchPrivilegeProblems = (
+  file: string,
+  workflow: unknown,
+): string[] => {
+  if (
+    !isRecord(workflow) ||
+    !triggers(workflow["on"]).includes("workflow_dispatch")
+  ) {
+    return [];
+  }
+  const jobs = isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  return Object.entries(jobs).flatMap(([name, job]) =>
+    isRecord(job) &&
+    PRIVILEGED_MANUAL_JOB.test(JSON.stringify(job)) &&
+    canRunOnFeatureDispatch(name, jobs)
+      ? [`${file}: privileged job '${name}' can run from a feature ref`]
+      : [],
+  );
+};
+
+// These pre-existing diagnostic and maintenance paths intentionally run on a
+// selected ref. Keep each job explicit so new privilege-bearing jobs fail the
+// guard, and remove an allowance when that path moves behind a protected-ref
+// dispatcher.
+const FEATURE_DISPATCH_PRIVILEGE_ALLOWANCES = {
+  "audit-branch-protection.yml: privileged job 'audit-fork-approval' can run from a feature ref":
+    "Exercises the configured fork-approval policy without mutating it.",
+  "catalogue-upstream.yml: privileged job 'catalogue-upstream' can run from a feature ref":
+    "Runs the upstream catalogue comparison for an operator-selected revision.",
+  "ci.yml: privileged job 'e2e-production-shard' can run from a feature ref":
+    "Runs an operator-selected production-mode browser shard.",
+  "ci.yml: privileged job 'e2e-vite-canary' can run from a feature ref":
+    "Runs the Vite compatibility canary for an operator-selected revision.",
+  "ci.yml: privileged job 'marketing-screenshots' can run from a feature ref":
+    "Runs screenshot validation for an operator-selected revision.",
+  "ci.yml: privileged job 'route-smoke' can run from a feature ref":
+    "Runs route smoke checks for an operator-selected revision.",
+  "cla.yml: privileged job 'verify-signatures' can run from a feature ref":
+    "Supports a manual signature-policy diagnostic.",
+  "dated-waiver-healing.yml: privileged job 'heal' can run from a feature ref":
+    "Supports a dry-run waiver-healing diagnostic.",
+  "dependency-audit.yml: privileged job 'remediate' can run from a feature ref":
+    "Supports an operator-triggered dependency remediation branch.",
+  "main-heavy.yml: privileged job 'suites' can run from a feature ref":
+    "Runs heavy CI suites for an explicitly selected revision.",
+  "main-pr-depth.yml: privileged job 'suites' can run from a feature ref":
+    "Runs pull-request depth suites for an explicitly selected revision.",
+  "model-catalog-check.yml: privileged job 'model-catalog-check' can run from a feature ref":
+    "Supports a manual model-catalog compatibility diagnostic.",
+  "nightly-test.yml: privileged job 'marketing-screenshots' can run from a feature ref":
+    "Runs the nightly screenshot suite for an operator-selected revision.",
+  "quarantine-prune.yml: privileged job 'prune' can run from a feature ref":
+    "Supports a dry-run quarantine maintenance diagnostic.",
+} as const;
+
 // Events that start a run nobody is watching. Pull request, merge queue and
 // manual dispatch runs report to the person who started them.
 const UNATTENDED_EVENTS = new Set([
@@ -206,6 +324,8 @@ const UNATTENDED_EVENTS = new Set([
 const UNALERTED_UNATTENDED_WORKFLOWS: Record<string, string> = {
   "bot-refresh-auto-merge.yml":
     "Runs after each pull request's checks; a failure affects one bot pull request and shows on it.",
+  "ci-runner-loss-retry.yml":
+    "Runs after a failed pull request run; if the retry fails, that pull request's own red CI still shows on it.",
   "cla.yml":
     "Its workflow_run leg posts the signature status on the contributor's pull request, where a failure shows.",
   "scheduled-run-alerts.yml":
@@ -218,6 +338,59 @@ const workflowOn = (file: string, workflow: unknown) => {
   }
   return workflow["on"];
 };
+
+// GitHub branch filters: `**` also matches `/`, `*` does not. Any other
+// pattern syntax is refused here, so a new kind cannot pass unevaluated.
+const branchFilterMatches = (pattern: string, branch: string) => {
+  if (/[?+[\]!]/u.test(pattern)) {
+    expect.unreachable(`unsupported branch filter pattern: ${pattern}`);
+  }
+  const source = pattern
+    .split("**")
+    .map((part) =>
+      part
+        .split("*")
+        .map((literal) => literal.replaceAll(/[.^${}()|\\]/gu, "\\$&"))
+        .join("[^/]*"),
+    )
+    .join(".*");
+  return new RegExp(`^${source}$`, "u").test(branch);
+};
+
+const stringList = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+// Tags the release chain pushes, in both shapes release.yml publishes.
+const RELEASE_TAG_SAMPLES = ["v1.2.3", "v1.2.3-rc.1"];
+
+/**
+ * The head_branch a run of this trigger reports: the pushed tag for a tag
+ * push, the pushed branch for a branch push, and main for dispatched,
+ * scheduled and workflow_run runs, which start from the default branch.
+ */
+const headBranches = (file: string, on: unknown, event: string): string[] => {
+  const push = isRecord(on) ? on["push"] : undefined;
+  if (event !== "push" || !isRecord(push)) {
+    return ["main"];
+  }
+  const tags = stringList(push["tags"]).flatMap((pattern) => {
+    const samples = RELEASE_TAG_SAMPLES.filter((tag) =>
+      branchFilterMatches(pattern, tag),
+    );
+    expect(samples, `${file}: tag pattern ${pattern}`).not.toEqual([]);
+    return samples;
+  });
+  const branches = stringList(push["branches"]);
+  return [
+    ...(branches.length > 0 || tags.length > 0 ? branches : ["main"]),
+    ...tags,
+  ];
+};
+
+const branchFilterCovers = (filter: unknown, branch: string) =>
+  stringList(filter).some((pattern) => branchFilterMatches(pattern, branch));
 
 const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
   const alerting = workflows.find(
@@ -237,17 +410,33 @@ const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
     expect.unreachable("scheduled run alerts require a notify job");
   }
   const alertedNames: unknown[] = workflowRun["workflows"];
+  const branchFilter = workflowRun["branches"];
   const condition = conditionOf(jobs["notify"]);
   // GitHub starts the alert run for a listed workflow name; the notify
   // condition must then let a failed run of that file and event through.
-  const alerts = (file: string, workflow: unknown, event: string) =>
+  type FailedRunAlertOptions = {
+    file: string;
+    workflow: unknown;
+    event: string;
+    conclusion?: string;
+    // GitHub starts the alert run only for a head_branch its filter matches.
+    headBranch?: string;
+  };
+  const alerts = ({
+    file,
+    workflow,
+    event,
+    conclusion = "failure",
+    headBranch = "main",
+  }: FailedRunAlertOptions) =>
     isRecord(workflow) &&
     alertedNames.includes(workflow["name"]) &&
+    branchFilterCovers(branchFilter, headBranch) &&
     !definitelyFalse(condition, {
       values: {
         "github.event_name": "workflow_run",
         "github.repository": "owner/repo",
-        "github.event.workflow_run.conclusion": "failure",
+        "github.event.workflow_run.conclusion": conclusion,
         "github.event.workflow_run.event": event,
         "github.event.workflow_run.head_repository.full_name": "owner/repo",
         "github.event.workflow_run.path": `.github/workflows/${file}`,
@@ -259,7 +448,7 @@ const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
         cancelled: false,
       },
     });
-  return { alerts };
+  return { alerts, branchFilter, condition, notify: jobs["notify"] };
 };
 
 const GATE = [
@@ -290,7 +479,7 @@ describe("workflow_run trust", () => {
       return workflow["on"]["workflow_run"];
     };
     expect(trigger("scheduled-run-alerts.yml")).toMatchObject({
-      branches: ["main"],
+      branches: ["main", "v*"],
       types: ["completed"],
     });
     expect(trigger("bot-refresh-auto-merge.yml")).toMatchObject({
@@ -309,11 +498,75 @@ describe("workflow_run trust", () => {
     );
 
     for (const { file, workflow } of releaseChain) {
+      const on = workflowOn(file, workflow);
+      for (const event of triggers(on)) {
+        for (const headBranch of headBranches(file, on, event)) {
+          expect(
+            alerting.alerts({ file, workflow, event, headBranch }),
+            `${file}: ${event} on ${headBranch}`,
+          ).toBe(true);
+        }
+      }
+    }
+    // A tag-push release run reports its tag as head_branch, so a filter
+    // naming only main never starts an alert run for it.
+    const release = releaseChain.find(({ file }) => file === "release.yml");
+    const tagBranches = headBranches(
+      "release.yml",
+      workflowOn("release.yml", release?.workflow),
+      "push",
+    );
+    expect(tagBranches).toEqual(RELEASE_TAG_SAMPLES);
+    for (const tag of tagBranches) {
+      expect(branchFilterCovers(["main"], tag), tag).toBe(false);
+      expect(branchFilterCovers(alerting.branchFilter, tag), tag).toBe(true);
+    }
+  });
+
+  test("only marker workflows alert on cancellation, with trigger name coverage", () => {
+    const workflows = allWorkflows();
+    const alerting = failedRunAlerting(workflows);
+    const cancelledPaths =
+      /conclusion == 'cancelled'\s*&& contains\(fromJSON\('([^']+)'\)/u
+        .exec(alerting.condition)
+        ?.at(1);
+    if (typeof cancelledPaths !== "string") {
+      expect.unreachable("alerts require cancellation paths");
+    }
+    expect(JSON.parse(cancelledPaths).toSorted()).toEqual(
+      workflows
+        .filter(({ source }) => source.includes(RELEASE_CHAIN_MARKER))
+        .map(({ file }) => `.github/workflows/${file}`)
+        .toSorted(),
+    );
+    const steps = alerting.notify["steps"];
+    const send = Array.isArray(steps)
+      ? steps.find(
+          (step: unknown) =>
+            isRecord(step) && step["name"] === "Send failure alert",
+        )
+      : undefined;
+    if (
+      !isRecord(send) ||
+      !isRecord(send["env"]) ||
+      typeof send["env"]["ALERT_KIND"] !== "string"
+    ) {
+      expect.unreachable("alerts require kind");
+    }
+    expect(
+      evaluate(send["env"]["ALERT_KIND"], {
+        values: {
+          "github.event_name": "workflow_run",
+          "github.event.workflow_run.conclusion": "cancelled",
+        },
+      }),
+    ).toBe("Cancelled release run");
+    for (const { file, source, workflow } of workflows) {
       for (const event of triggers(workflowOn(file, workflow))) {
         expect(
-          alerting.alerts(file, workflow, event),
+          alerting.alerts({ file, workflow, event, conclusion: "cancelled" }),
           `${file}: ${event}`,
-        ).toBe(true);
+        ).toBe(source.includes(RELEASE_CHAIN_MARKER));
       }
     }
   });
@@ -335,7 +588,7 @@ describe("workflow_run trust", () => {
         continue;
       }
       for (const event of events) {
-        if (!alerting.alerts(file, workflow, event)) {
+        if (!alerting.alerts({ file, workflow, event })) {
           missing.push(`${file}: ${event}`);
         }
       }
@@ -352,7 +605,7 @@ describe("workflow_run trust", () => {
       expect(
         triggers(workflowOn(file, workflow))
           .filter((event) => UNATTENDED_EVENTS.has(event))
-          .some((event) => alerting.alerts(file, workflow, event)),
+          .some((event) => alerting.alerts({ file, workflow, event })),
         file,
       ).toBe(false);
     }
@@ -361,20 +614,38 @@ describe("workflow_run trust", () => {
   test("the unattended-workflow guard reports a workflow missing from alerts", () => {
     const alerting = failedRunAlerting(allWorkflows());
     const unlisted = { name: "Unlisted nightly", on: { schedule: [] } };
-    expect(alerting.alerts("unlisted-nightly.yml", unlisted, "schedule")).toBe(
-      false,
-    );
+    expect(
+      alerting.alerts({
+        file: "unlisted-nightly.yml",
+        workflow: unlisted,
+        event: "schedule",
+      }),
+    ).toBe(false);
     const nightly = allWorkflows().find(
       ({ file }) => file === "nightly-test.yml",
     )?.workflow;
-    expect(alerting.alerts("nightly-test.yml", nightly, "schedule")).toBe(true);
+    expect(
+      alerting.alerts({
+        file: "nightly-test.yml",
+        workflow: nightly,
+        event: "schedule",
+      }),
+    ).toBe(true);
     // Listed by name but run from another path: the condition refuses it.
-    expect(alerting.alerts("renamed-nightly.yml", nightly, "schedule")).toBe(
-      false,
-    );
-    expect(alerting.alerts("nightly-test.yml", nightly, "pull_request")).toBe(
-      false,
-    );
+    expect(
+      alerting.alerts({
+        file: "renamed-nightly.yml",
+        workflow: nightly,
+        event: "schedule",
+      }),
+    ).toBe(false);
+    expect(
+      alerting.alerts({
+        file: "nightly-test.yml",
+        workflow: nightly,
+        event: "pull_request",
+      }),
+    ).toBe(false);
   });
 
   test("reusable network delivery trusts only the main recorder caller", () => {
@@ -568,6 +839,7 @@ describe("workflow_run trust", () => {
     expect(workflows.map(({ file }) => file).toSorted()).toEqual(
       [
         ...WORKFLOW_RUN_WORKFLOWS,
+        "merge-group-hold.yml",
         "network-baseline-request.yml",
         "pr-lint.yml",
         "release-proof.yml",
@@ -642,21 +914,15 @@ describe("workflow_run trust", () => {
 // (or builds the file name at run time) counts, unless its token is a
 // GitHub App token minted in the job.
 const DISPATCH_CALL =
-  /createWorkflowDispatch|\/dispatches\b|\bgh workflow run\b/u;
+  /createWorkflowDispatch|\/dispatches\b|\bgh workflow run\b|\bgh-dispatch-workflow\.sh\b/u;
 const COMPUTED_WORKFLOW_FILE = /\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\.ya?ml\b/u;
 const APP_TOKEN = /^\$\{\{\s*steps\.[\w-]+\.outputs\.token\s*\}\}$/u;
 // Dispatches whose targets only the failed-run alerting workflow follows,
 // keyed by `<workflow file>#<step name>`, with the workflows each starts.
 const ALERTING_WORKFLOW = "scheduled-run-alerts.yml";
 const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
-  "main-heavy.yml#Dispatch release PR-depth checks": ["main-pr-depth.yml"],
   "network-baseline-request.yml#Request main recording": [
     "network-baseline-record.yml",
-  ],
-  "release-pr.yml#Dispatch the version commit": ["release-tag.yml"],
-  "release-proof.yml#Dispatch pinned release proofs once": [
-    "deploy-staging.yml",
-    "main-heavy.yml",
   ],
   "release.yml#Dispatch release-health.yml": ["release-health.yml"],
 };
@@ -805,6 +1071,10 @@ describe("a followed run is never started with GITHUB_TOKEN", () => {
         env: { GH_TOKEN: githubExpression("secrets.GITHUB_TOKEN") },
       },
       {
+        run: 'bash scripts/gh-dispatch-workflow.sh o/r build.yml main "Build"',
+        env: { GH_TOKEN: githubExpression("github.token") },
+      },
+      {
         run: 'for workflow in build; do gh workflow run "$workflow.yml"; done',
         env: { GH_TOKEN: githubExpression("github.token") },
       },
@@ -840,6 +1110,23 @@ describe("a followed run is never started with GITHUB_TOKEN", () => {
         fixture({ run: "gh workflow run publish.yml" }),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("workflow_dispatch trust", () => {
+  test("privileged manual jobs require the protected main workflow ref", () => {
+    const problems = allWorkflows().flatMap(({ file, workflow }) =>
+      featureDispatchPrivilegeProblems(file, workflow),
+    );
+    const allowances = new Set(
+      Object.keys(FEATURE_DISPATCH_PRIVILEGE_ALLOWANCES),
+    );
+    const current = new Set(problems);
+    const unexpected = problems.filter((problem) => !allowances.has(problem));
+    const stale = [...allowances]
+      .filter((allowance) => !current.has(allowance))
+      .map((allowance) => `stale allowance: ${allowance}`);
+    expect([...unexpected, ...stale]).toEqual([]);
   });
 });
 
@@ -928,4 +1215,499 @@ test("publishing tokens and their artifact chain reject cached Bun setup", () =>
     },
   };
   expect(workflowCacheProblems(artifacts)).toHaveLength(1);
+});
+
+describe("publication follows the production job receipt", () => {
+  const sha = "a".repeat(40);
+  const run = {
+    head_repository: { full_name: "stella/stella" },
+    path: ".github/workflows/release.yml",
+    event: "push",
+    display_title: "Release Artifacts v1.2.3",
+    head_sha: sha,
+    conclusion: "failure",
+  };
+  const check = (upstream: typeof run, conclusion: string) => {
+    const work = mkdtempSync(path.join(tmpdir(), "stella-publication-source-"));
+    try {
+      const stub = path.join(work, "gh-retry.sh");
+      writeFileSync(
+        stub,
+        `case "$*" in
+  *'/jobs?'*) printf '%s' "$JOBS" ;;
+  *) printf '%s' "$RUN" ;;
+esac
+`,
+      );
+      return Bun.spawnSync(
+        [
+          "bash",
+          path.join(import.meta.dir, "check-release-publication-source.sh"),
+          "123",
+          "v1.2.3",
+          sha,
+        ],
+        {
+          env: {
+            ...process.env,
+            GH_RETRY_SCRIPT: stub,
+            GITHUB_REPOSITORY: "stella/stella",
+            RUN: JSON.stringify(upstream),
+            JOBS: JSON.stringify([
+              { jobs: [{ name: "promote-production", conclusion }] },
+            ]),
+          },
+        },
+      );
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  };
+
+  test("desktop and npm accept a green promotion in a red run", () => {
+    expect(check(run, "success").exitCode).toBe(0);
+    for (const conclusion of ["failure", "cancelled", "skipped", "neutral"]) {
+      expect(check(run, conclusion).exitCode, conclusion).toBe(1);
+    }
+  });
+
+  test("publication accepts only the promoted ref and SHA from the trusted workflow", () => {
+    for (const upstream of [
+      { ...run, display_title: "Release Artifacts v1.2.4" },
+      { ...run, head_sha: "b".repeat(40) },
+      { ...run, path: ".github/workflows/ci.yml" },
+      { ...run, head_repository: { full_name: "fork/stella" } },
+      { ...run, event: "pull_request" },
+    ]) {
+      const result = check(upstream, "success");
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain(
+        "does not own the requested ref and SHA",
+      );
+    }
+  });
+});
+
+test("an unreadable upstream run or job list is not a missing receipt", () => {
+  const sha = "a".repeat(40);
+  const run = {
+    head_repository: { full_name: "stella/stella" },
+    path: ".github/workflows/release.yml",
+    event: "push",
+    display_title: "Release Artifacts v1.2.3",
+    head_sha: sha,
+  };
+  const jobs = [
+    { jobs: [{ name: "promote-production", conclusion: "success" }] },
+  ];
+  for (const [label, failing] of [
+    ["run", "runs/123$"],
+    ["jobs", "/jobs?"],
+  ] as const) {
+    const work = mkdtempSync(path.join(tmpdir(), "stella-publication-source-"));
+    try {
+      const stub = path.join(work, "gh-retry.sh");
+      writeFileSync(
+        stub,
+        `[[ "$*" =~ ${failing.replace("?", "\\?")} ]] && exit 1
+case "$*" in
+  *'/jobs?'*) printf '%s' "$JOBS" ;;
+  *) printf '%s' "$RUN" ;;
+esac
+`,
+      );
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          path.join(import.meta.dir, "check-release-publication-source.sh"),
+          "123",
+          "v1.2.3",
+          sha,
+        ],
+        {
+          env: {
+            ...process.env,
+            GH_RETRY_SCRIPT: stub,
+            GITHUB_REPOSITORY: "stella/stella",
+            RUN: JSON.stringify(run),
+            JOBS: JSON.stringify(jobs),
+          },
+        },
+      );
+      expect(result.exitCode, label).toBe(2);
+      expect(result.stderr.toString(), label).toContain("unreadable");
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }
+});
+
+test("npm and desktop fail on an unreadable receipt instead of skipping", () => {
+  for (const file of ["publish-npm.yml", "release-desktop.yml"]) {
+    const source = readFileSync(
+      new URL(`../.github/workflows/${file}`, import.meta.url),
+      "utf-8",
+    );
+    expect(source, file).toContain("|| receipt_status=$?");
+    expect(source, file).toMatch(
+      /case "\$receipt_status" in[\s\S]*?\n\s+1\)[\s\S]*?\n\s+\*\)[\s\S]*?exit 1/u,
+    );
+  }
+});
+
+test("npm and desktop consume the production receipt guard", () => {
+  for (const file of ["publish-npm.yml", "release-desktop.yml"]) {
+    const source = readFileSync(
+      new URL(`../.github/workflows/${file}`, import.meta.url),
+      "utf-8",
+    );
+    expect(source, file).toContain(
+      'bash "$RUNNER_TEMP/check-release-publication-source.sh"',
+    );
+  }
+});
+
+describe("desktop recovery", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/release-desktop.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const jobs =
+    isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  const job = (name: string) => {
+    const value = jobs[name];
+    expect(isRecord(value), name).toBe(true);
+    return isRecord(value) ? value : {};
+  };
+  const stepRun = (jobName: string, stepName: string) => {
+    const steps = job(jobName)["steps"];
+    const step = Array.isArray(steps)
+      ? steps.find(
+          (value: unknown) => isRecord(value) && value["name"] === stepName,
+        )
+      : undefined;
+    const run = isRecord(step) ? step["run"] : undefined;
+    expect(typeof run, `${jobName}/${stepName}`).toBe("string");
+    return typeof run === "string" ? run : "";
+  };
+  test("completion gate checks every required job and permits intentional skips", () => {
+    const gate = job("release-complete");
+    const dependencies = needsOf(gate);
+    expect(dependencies.toSorted()).toEqual(
+      Object.keys(jobs)
+        .filter((name) => name !== "release-complete")
+        .toSorted(),
+    );
+    for (const channel of ["prod", "rc"]) {
+      for (const shouldBuild of ["true", "false"]) {
+        const required = dependencies.filter(
+          (name) =>
+            name !== "resolve" &&
+            (shouldBuild === "true"
+              ? name !== "carry-forward" &&
+                (channel === "prod" ||
+                  !["verify-production", "promote-latest"].includes(name))
+              : name === "carry-forward" && channel === "prod"),
+        );
+        for (const changed of dependencies) {
+          for (const result of ["success", "cancelled", "skipped", "failure"]) {
+            expect(
+              evaluate(conditionOf(gate), {
+                values: {
+                  "needs.resolve.result": "success",
+                  [`needs.${changed}.result`]: result,
+                },
+                status: { always: true, success: false, cancelled: true },
+              }),
+            ).toBe(changed !== "resolve" || result === "success");
+            if (changed === "resolve") {
+              continue;
+            }
+            const needs = Object.fromEntries(
+              dependencies.map((name) => {
+                const expectedResult =
+                  required.includes(name) || name === "resolve"
+                    ? "success"
+                    : "skipped";
+                return [
+                  name,
+                  {
+                    result: name === changed ? result : expectedResult,
+                    ...(name === "resolve"
+                      ? { outputs: { should_build: shouldBuild, channel } }
+                      : {}),
+                  },
+                ];
+              }),
+            );
+            const run = Bun.spawnSync(
+              [
+                "bash",
+                "-c",
+                stepRun(
+                  "release-complete",
+                  "Require all release jobs to complete",
+                ),
+              ],
+              { env: { ...process.env, NEEDS: JSON.stringify(needs) } },
+            );
+            const fails = required.includes(changed) && result !== "success";
+            expect(
+              run.exitCode,
+              `${channel}/${shouldBuild}/${changed}/${result}: ${run.stderr.toString()}`,
+            ).toBe(fails ? 1 : 0);
+            if (fails) {
+              expect(run.stdout.toString()).toContain(
+                `job ${changed} ended ${result}`,
+              );
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test("completion gate fails when it cannot read the job results", () => {
+    for (const needs of ["", "{", "[]", '"success"']) {
+      const run = Bun.spawnSync(
+        [
+          "bash",
+          "-c",
+          stepRun("release-complete", "Require all release jobs to complete"),
+        ],
+        { env: { ...process.env, NEEDS: needs } },
+      );
+      expect(run.exitCode, JSON.stringify(needs)).not.toBe(0);
+    }
+  });
+
+  const current = "v1.2.3";
+  const previous = "v1.2.2";
+  const createFixture = (root: string) => {
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], { cwd: root });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+    };
+    git("init", "-q", "--initial-branch=main", "--template=");
+    git("config", "user.name", "Desktop recovery fixture");
+    git("config", "user.email", "desktop@example.test");
+    git("config", "commit.gpgsign", "false");
+    git("config", "tag.gpgsign", "false");
+    writeFileSync(path.join(root, "VERSION"), "1.2.2\n");
+    git("add", ".");
+    git("commit", "-qm", "previous desktop release");
+    git("tag", previous);
+    writeFileSync(path.join(root, "VERSION"), "1.2.3\n");
+    git("add", "VERSION");
+    git("commit", "-qm", "API release without desktop changes");
+    git("tag", current);
+    mkdirSync(path.join(root, "scripts"));
+    for (const source of [
+      "detect-desktop-release-changes.sh",
+      "release-channel.sh",
+      "promote-desktop-release.sh",
+      "check-desktop-release-policy.sh",
+    ]) {
+      writeFileSync(
+        path.join(root, "scripts", source),
+        readFileSync(new URL(source, import.meta.url), "utf-8"),
+      );
+    }
+    const bin = path.join(root, "bin");
+    mkdirSync(bin);
+    writeFileSync(path.join(root, "latest"), previous);
+    writeFileSync(
+      path.join(root, "latest.json"),
+      JSON.stringify({ version: current.slice(1) }),
+    );
+    writeFileSync(
+      path.join(root, "gh.sh"),
+      `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$TEST_ROOT/gh-calls"
+release_json() {
+  jq -nc --arg tag "$1" '{tag_name:$tag,draft:false,prerelease:false,assets:[{name:"Stella-macos-universal.dmg"},{name:"Stella-windows-x64-setup.exe"},{name:"latest.json"}]}'
+}
+case "$*" in
+  'release view '*) printf '%s\\n' latest.json Stella-macos-universal.dmg Stella-windows-x64-setup.exe ;;
+  'release download '*)
+    mkdir -p assets
+    for asset in Stella-macos-universal.dmg Stella-windows-x64-setup.exe latest.json; do printf fixture > "assets/$asset"; done
+    ;;
+  'release upload '*) printf '%s\\n' "$*" >> "$TEST_ROOT/uploads" ;;
+  'release edit '*)
+    if [[ "$FAIL_LATEST" == true ]]; then echo 'Latest publication failed after asset upload' >&2; exit 1; fi
+    printf '%s' "$CURRENT_TAG" > "$TEST_ROOT/latest"
+    ;;
+  'api repos/stella/stella/releases/tags/'*) release_json "$CURRENT_TAG" ;;
+  'api repos/stella/stella/releases/latest') release_json "$(cat "$TEST_ROOT/latest")" ;;
+  *) echo "Unexpected desktop request: $*" >&2; exit 1 ;;
+esac
+`,
+    );
+    writeFileSync(
+      path.join(bin, "curl"),
+      '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$TEST_ROOT/download-checks"\n',
+      { mode: 0o755 },
+    );
+    writeFileSync(
+      path.join(bin, "aws"),
+      `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$TEST_ROOT/cdn-calls"
+if [[ "$FAIL_CDN" == true ]]; then echo 'Updater publication failed after asset upload' >&2; exit 1; fi
+if [[ "$1 $2" == 's3 cp' ]]; then cp latest.json "$TEST_ROOT/updater"; fi
+`,
+      { mode: 0o755 },
+    );
+    const run = (script: string, env: Record<string, string> = {}) =>
+      Bun.spawnSync(["bash", "-e", "-o", "pipefail", "-c", script], {
+        cwd: root,
+        env: {
+          ...process.env,
+          CURRENT_TAG: current,
+          PREVIOUS_TAG: previous,
+          RELEASE_REF: current,
+          GH_REPO: "stella/stella",
+          GH_TOKEN: "fixture-token",
+          GH_RETRY_SCRIPT: path.join(root, "gh.sh"),
+          GITHUB_OUTPUT: path.join(root, "output"),
+          BUCKET: "fixture-downloads",
+          DIST_ID: "fixture-distribution",
+          CHANNEL: "prod",
+          TEST_ROOT: root,
+          PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
+          FAIL_LATEST: "false",
+          FAIL_CDN: "false",
+          ...env,
+        },
+      });
+    const read = (file: string) => readFileSync(path.join(root, file), "utf-8");
+    const decide = (event: string) => {
+      writeFileSync(path.join(root, "output"), "");
+      const result = run(
+        stepRun("resolve", "Decide whether desktop changed since previous tag"),
+        { EVENT_NAME: event },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return Object.fromEntries(
+        read("output")
+          .trim()
+          .split("\n")
+          .map((line) => line.split("=")),
+      );
+    };
+    return { run, read, decide };
+  };
+  const withFixture = (
+    check: (fixture: ReturnType<typeof createFixture>) => void,
+  ) => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-desktop-recovery-"));
+    try {
+      check(createFixture(root));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  test("a manual rerun repairs updater and Latest publication after installers already exist", () =>
+    withFixture((fixture) => {
+      const mirror = stepRun("manifest", "Mirror latest.json to downloads CDN");
+      const failed = fixture.run(mirror, { FAIL_CDN: "true" });
+      expect(failed.exitCode).toBe(1);
+      expect(failed.stderr.toString()).toContain(
+        "Updater publication failed after asset upload",
+      );
+      expect(fixture.read("latest")).toBe(previous);
+
+      const output = fixture.decide("workflow_dispatch");
+      expect(output["should_build"]).toBe("true");
+      expect(
+        evaluate(conditionOf(job("build")), {
+          values: {
+            "needs.resolve.outputs.should_build": output["should_build"],
+          },
+        }),
+      ).toBe(true);
+      const publicationValues = {
+        "needs.resolve.outputs.should_build": output["should_build"],
+        "needs.resolve.outputs.channel": "prod",
+        "needs.build.result": "success",
+        "needs.verify-production.result": "success",
+        "needs.manifest.result": "failure",
+      };
+      expect(
+        evaluate(conditionOf(job("manifest")), {
+          values: publicationValues,
+          status: { always: true },
+        }),
+      ).toBe(true);
+      expect(
+        evaluate(conditionOf(job("promote-latest")), {
+          status: { always: true },
+          values: publicationValues,
+        }),
+      ).toBe(false);
+      const mirrored = fixture.run(mirror);
+      expect(mirrored.exitCode, mirrored.stderr.toString()).toBe(0);
+      expect(JSON.parse(fixture.read("updater"))).toEqual({
+        version: current.slice(1),
+      });
+      expect(
+        evaluate(conditionOf(job("promote-latest")), {
+          status: { always: true },
+          values: { ...publicationValues, "needs.manifest.result": "success" },
+        }),
+      ).toBe(true);
+      const promoted = fixture.run(
+        stepRun("promote-latest", "Promote release to latest"),
+      );
+      expect(promoted.exitCode, promoted.stderr.toString()).toBe(0);
+      expect(fixture.read("latest")).toBe(current);
+      expect(fixture.read("download-checks")).toContain(
+        "releases/latest/download/Stella-macos-universal.dmg",
+      );
+      expect(fixture.read("download-checks")).toContain(
+        "releases/latest/download/Stella-windows-x64-setup.exe",
+      );
+    }));
+
+  test("a workflow rerun repairs Latest through carry-forward after asset publication succeeded", () =>
+    withFixture((fixture) => {
+      const promote = stepRun("carry-forward", "Promote release to latest");
+      const failed = fixture.run(promote, { FAIL_LATEST: "true" });
+      expect(failed.exitCode).toBe(1);
+      expect(failed.stderr.toString()).toContain(
+        "Latest publication failed after asset upload",
+      );
+      expect(fixture.read("latest")).toBe(previous);
+      const output = fixture.decide("workflow_run");
+      expect(output["should_build"]).toBe("false");
+      expect(output["previous_tag"]).toBe(previous);
+      expect(
+        evaluate(conditionOf(job("carry-forward")), {
+          values: {
+            "needs.resolve.outputs.should_build": output["should_build"],
+            "needs.resolve.outputs.channel": "prod",
+          },
+        }),
+      ).toBe(true);
+      const copied = fixture.run(
+        stepRun("carry-forward", "Copy previous stable desktop assets forward"),
+        { PREVIOUS_TAG: output["previous_tag"] },
+      );
+      expect(copied.exitCode, copied.stderr.toString()).toBe(0);
+      expect(fixture.read("uploads")).toContain(
+        `release upload ${current} assets/`,
+      );
+      expect(fixture.read("uploads")).toContain("--clobber");
+      const recovered = fixture.run(promote);
+      expect(recovered.exitCode, recovered.stderr.toString()).toBe(0);
+      expect(fixture.read("latest")).toBe(current);
+      expect(fixture.read("download-checks")).toContain(
+        "releases/latest/download/Stella-macos-universal.dmg",
+      );
+    }));
 });

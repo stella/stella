@@ -11,14 +11,18 @@ import {
   createCaseLawDecisionRouteParams,
   normalizeCaseLawLanguageSegment,
 } from "@stll/api-contract/case-law-decision-route";
+import type { DecisionTypeKind } from "@stll/api-contract/case-law-decision-types";
 import {
   DECISION_HEADNOTE_KEYWORDS,
-  decisionHeadnoteText,
-  TEXT_FIELD_TYPE,
   type DecisionHeadnotePreview,
+  decisionHeadnoteText,
+  type DecisionTextAvailability,
+  TEXT_FIELD_TYPE,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionSearchMatch } from "@stll/api-contract/search";
+import { NO_QUERY_MARK_TOKENS } from "@stll/decision-reader/query-marks";
+import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -29,13 +33,15 @@ import {
   SEARCH_HIT_MARK,
   TextMark,
 } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
+import { DecisionTextAvailabilityMarker } from "@/features/case-law/components/decision-text-availability";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
-import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
+import { decisionClampLines } from "@/features/case-law/decision-columns.logic";
 import type {
   DecisionColumnId,
   DecisionContentMode,
@@ -51,7 +57,8 @@ import {
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicDecisionLanguageAlternate } from "@/features/case-law/public-decision";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
@@ -59,12 +66,13 @@ import { detached } from "@/lib/detached";
 const EMPTY_VALUE = "—";
 
 /** A cell no search reached: only the reader's find marks its text. */
-const NO_QUERY_TOKENS: readonly string[] = [];
 
 /** One decision as the public list, search and research tables show it. */
 export type Decision = {
   /** Search match semantics; absent on browse rows. */
   match?: DecisionSearchMatch;
+  /** Search hits report text separately from publisher summaries. */
+  textAvailability?: DecisionTextAvailability;
   id: string;
   caseNumber: string;
   /** What `caseNumber` is: a docket, or a reporter or neutral citation. */
@@ -88,6 +96,7 @@ export type Decision = {
   identifiers?: readonly { type: string; value: string }[] | undefined;
   decisionDate: string | null;
   decisionType: string | null;
+  decisionTypeKind: DecisionTypeKind | null;
   sourceUrl?: string | null | undefined;
   /** The search snippet, highlighted, when the row came from a search. */
   headline?: string | null;
@@ -109,7 +118,7 @@ export type DecisionRenderContext = {
    */
   identityLineFields: readonly DecisionIdentityLineField[];
   /** The query's words, so the summary cell can show why the row matched. */
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   /**
    * The query as it was typed, carried into whatever the row opens so the
    * decision's own text marks the words the row marks.
@@ -137,18 +146,21 @@ export const CaseNumberCell = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useLocale();
+  const readingLanguages = useCaseLawReadingLanguages();
   const openDecision = useOpenDecisionTab();
   const { caseNumber, languageAlternates } = decision;
   const target = preferredDecisionTarget(decision, {
     searchQuery: context.searchQuery,
-    uiLocale,
+    readingLanguages,
   });
   const routeParams = createCaseLawDecisionRouteParams(target);
   const displayLanguage = normalizeCaseLawLanguageSegment(
     routeParams.language ?? decision.language,
   );
-  const matchedLanguage = normalizeCaseLawLanguageSegment(decision.language);
+  // A row says which version matched only when a text query matched one: a
+  // browse listing or a filter matched no words, so its row is simply the
+  // version the reader reads first, and there is no match to name.
+  const matchedLanguage = rowMatchedLanguage(decision, context.searchQuery);
   const multilingual = languageAlternates.length > 1;
   const identity = context.identityLineFields
     .map((field) => ({
@@ -177,6 +189,11 @@ export const CaseNumberCell = ({
             <HighlightedText columnId="caseNumber" text={caseNumber} />
           </BidiText>
         </DecisionLink>
+        {decision.textAvailability !== undefined && (
+          <DecisionTextAvailabilityMarker
+            availability={decision.textAvailability}
+          />
+        )}
         {decision.match === "some_terms" && (
           <span className="text-muted-foreground text-xs">
             {t("caseLaw.searchWarnings.partialMatch")}
@@ -219,6 +236,19 @@ export const CaseNumberCell = ({
   );
 };
 
+/**
+ * The language of the version a text query matched, or null when nothing was
+ * searched for: a listing's row is the version chosen for the reader, not a
+ * match.
+ */
+export const rowMatchedLanguage = (
+  decision: Pick<Decision, "language">,
+  searchQuery: string | undefined,
+): string | null =>
+  searchQuery === undefined || searchQuery.trim() === ""
+    ? null
+    : normalizeCaseLawLanguageSegment(decision.language);
+
 /** One fact of the identity line, or null when the decision does not carry it. */
 const identityLineValue = (
   field: DecisionIdentityLineField,
@@ -228,9 +258,9 @@ const identityLineValue = (
   switch (field) {
     case "court":
       return (
-        <BidiText as="span" className="truncate" title={decision.court}>
+        <TruncatedText render={<BidiText as="span" />}>
           {decision.court}
-        </BidiText>
+        </TruncatedText>
       );
     case "date": {
       const date = formatDecisionDate(decision.decisionDate, format);
@@ -330,7 +360,7 @@ type HeadnotePreviewCellProps = {
   context: DecisionRenderContext;
   decision: Decision;
   /** The search's words, marked inside whatever the publisher supplied. */
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
 };
 
 /**
@@ -388,7 +418,7 @@ export const DecisionKeywords = ({
   items: readonly string[];
   /** Terms the row's budget dropped, so a part filing does not read whole. */
   omitted: number;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -403,7 +433,7 @@ export const DecisionKeywords = ({
           // same class, so a change to how the hook is set moves both.
           className={cn(
             SUMMARY_TEXT_CLASS_NAME,
-            "bg-muted shrink-0 rounded px-1.5 py-0.5",
+            "bg-muted shrink-0 rounded-sm px-1.5 py-0.5",
           )}
           key={item}
         >
@@ -437,7 +467,7 @@ const HighlightedProse = ({
   text,
 }: {
   columnId: DecisionColumnId;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   text: string;
 }) => (
   <>
@@ -529,7 +559,7 @@ const DecisionHeadnote = ({
   context: DecisionRenderContext;
   decision: Decision;
   headnote: PresentHeadnote;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
 }) => {
   const expanded = context.expandedHeadnoteIds.has(decision.id);
   // The decision read, and only the one line of it this cell shows: the
@@ -574,7 +604,7 @@ type HeadnoteProseProps = {
   onActivate: () => void;
   preview: PresentHeadnote;
   /** The search's words, marked inside the publisher's own sentence. */
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   view: HeadnoteView;
 };
 
@@ -592,8 +622,7 @@ export const HeadnoteProse = ({
 
   return (
     <div>
-      <BidiText
-        as="p"
+      <TruncatedText
         className={cn(
           SUMMARY_TEXT_CLASS_NAME,
           // The publisher's own line breaks: a headnote written as numbered
@@ -601,17 +630,18 @@ export const HeadnoteProse = ({
           // clamp still counts rendered lines, so a break costs one of the
           // two a compact row shows.
           "whitespace-pre-line",
-          // A row the reader opened is read, not scanned: the density control
-          // still governs every other row on the page.
-          showingWhole ? "" : decisionClampClassName(contentMode),
         )}
+        // A row the reader opened is read, not scanned: the density control
+        // still governs every other row on the page.
+        lines={showingWhole ? "none" : decisionClampLines(contentMode)}
+        render={<BidiText as="p" />}
       >
         <HighlightedProse
           columnId={columnId}
           queryTokens={queryTokens}
           text={showingWhole ? view.text : preview.text}
         />
-      </BidiText>
+      </TruncatedText>
       {preview.truncated && (
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
           {view.type === HEADNOTE_VIEW.FAILED && (
@@ -619,15 +649,20 @@ export const HeadnoteProse = ({
               {t("errors.actionFailed")}
             </span>
           )}
-          <button
-            aria-expanded={showingWhole}
-            // The vertical padding extends the hit area without growing the row.
-            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2"
-            onClick={onActivate}
-            type="button"
-          >
-            {t(HEADNOTE_CONTROL_LABEL_KEYS[view.type])}
-          </button>
+          {/* Muted like the line it closes; the underline marks it as the
+              control, and it brightens while pointed at. */}
+          <span className="text-muted-foreground">
+            <Button
+              aria-expanded={showingWhole}
+              className="group/plain"
+              onClick={onActivate}
+              variant="plain"
+            >
+              <span className="group-hover/plain:text-foreground underline underline-offset-2">
+                {t(HEADNOTE_CONTROL_LABEL_KEYS[view.type])}
+              </span>
+            </Button>
+          </span>
         </div>
       )}
     </div>
@@ -645,21 +680,31 @@ const HighlightedPassage = ({
   contentMode: DecisionContentMode;
   html: string;
 }) => (
-  <p
+  <TruncatedText
     className={cn(
       SUMMARY_TEXT_CLASS_NAME,
       // The grid cell sets `whitespace-nowrap` for the scannable columns, so
       // a passage that does not turn it back off is one long line clipped at
-      // the cell's edge, and the clamp below has a single line to count.
+      // the cell's edge, and the clamp has a single line to count.
       // `wrap-break-word` keeps an unbroken citation inside the cell.
       "wrap-break-word whitespace-normal",
-      decisionClampClassName(contentMode),
-      SEARCH_HIT_DESCENDANT_MARK_CLASS,
     )}
     dangerouslySetInnerHTML={{
       // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
       __html: html,
     }}
+    lines={decisionClampLines(contentMode)}
+    // The paragraph styles the server's marks inside it.
+    render={<p className={SEARCH_HIT_DESCENDANT_MARK_CLASS} />}
+    tooltip={
+      <span
+        className={SEARCH_HIT_DESCENDANT_MARK_CLASS}
+        dangerouslySetInnerHTML={{
+          // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
+          __html: html,
+        }}
+      />
+    }
   />
 );
 
@@ -672,33 +717,43 @@ type DecisionLinkOptions = {
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 };
 
-/** The public decision route as a Link element, on whichever of the two routes the params name. */
+/**
+ * The public decision route as a Link element, on whichever of the two routes
+ * the params name.
+ *
+ * Every prop the caller leaves out stays absent rather than `undefined`. A menu
+ * item renders this element through its `render` prop and supplies its own
+ * label as children; Base UI merges the element's own props over the item's,
+ * so an explicit `children: undefined` would replace the label and draw every
+ * item empty.
+ */
 export const decisionLinkElement = ({
   children,
   className,
   hash,
   onClick,
   params,
-}: DecisionLinkOptions) =>
-  params.language === undefined ? (
+}: DecisionLinkOptions) => {
+  const linkProps = {
+    ...(children === undefined ? {} : { children }),
+    ...(hash === undefined ? {} : { hash }),
+    ...(onClick === undefined ? {} : { onClick }),
+  };
+  return params.language === undefined ? (
     <Link
-      className={className}
-      {...(hash === undefined ? {} : { hash })}
-      {...(onClick === undefined ? {} : { onClick })}
+      {...linkProps}
+      className={cn(className)}
       params={{
         country: params.country,
         court: params.court,
         slug: params.slug,
       }}
       to="/law/$country/cases/$court/$slug"
-    >
-      {children}
-    </Link>
+    />
   ) : (
     <Link
-      className={className}
-      {...(hash === undefined ? {} : { hash })}
-      {...(onClick === undefined ? {} : { onClick })}
+      {...linkProps}
+      className={cn(className)}
       params={{
         country: params.country,
         court: params.court,
@@ -706,10 +761,9 @@ export const decisionLinkElement = ({
         slug: params.slug,
       }}
       to="/law/$country/cases/$court/$language/$slug"
-    >
-      {children}
-    </Link>
+    />
   );
+};
 
 const DecisionLink = ({
   children,
@@ -723,7 +777,7 @@ const DecisionLink = ({
   params: CaseLawDecisionRouteParams;
 }) => decisionLinkElement({ children, className, onClick, params });
 
-const DecisionLanguageMenu = ({
+export const DecisionLanguageMenu = ({
   alternates,
   displayLanguage,
   searchQuery,
@@ -784,7 +838,7 @@ const DecisionLanguageMenu = ({
 };
 
 export const CountryPill = ({ country }: { country: string }) => (
-  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
+  <span className="bg-muted rounded-sm px-1.5 py-0.5 text-xs">
     <HighlightedText columnId="country" text={country} />
   </span>
 );
@@ -829,7 +883,7 @@ export const HeadnoteCell = ({
     decision={decision}
     // This column is what the publisher supplied, not the row's match: only
     // the reader's find marks it, the way every metadata column is marked.
-    queryTokens={NO_QUERY_TOKENS}
+    queryTokens={NO_QUERY_MARK_TOKENS}
   />
 );
 

@@ -52,6 +52,7 @@ test("public statute routes follow the shared jurisdiction admission list", () =
       .filter(isPublicStatuteCountry)
       .map((country) => country.toUpperCase()),
   ).toEqual([...PUBLIC_LEGISLATION_COUNTRIES]);
-  expect(isPublicStatuteCountry("svk")).toBe(false);
+  expect(isPublicStatuteCountry("svk")).toBe(true);
+  expect(isPublicStatuteCountry("pol")).toBe(false);
   expect(isPublicStatuteCountry("xaa")).toBe(false);
 });

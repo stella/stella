@@ -23,6 +23,7 @@ import {
   readActiveCorpusProjectionManifest,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import {
   CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
   type CorpusProjectionIntentLease,
@@ -305,31 +306,46 @@ const readCaseLawMaterials = async (
     tx,
     rows.map(({ jurisdiction }) => jurisdiction),
   );
-  return sortLeasesByReadiness({ leases, intents, states, rows }, (row) => {
-    const input = caseLawProjectionInputFromCanonical({
-      ...row,
-      identifiers:
-        identifiersByDecision.get(row.documentId) ??
-        panic(`Corpus projection material lost identifiers: ${row.documentId}`),
-      vacatedFrom: vacatedByJurisdiction.get(row.jurisdiction) ?? null,
-      provisionKeys:
-        provisionKeysByDecision.get(row.documentId) ??
-        panic(
-          `Corpus projection material lost provision keys: ${row.documentId}`,
-        ),
-    });
-    return {
-      descriptor: deriveCorpusIndexProjectionDescriptor(manifest, input),
-      material: (lease, textS3Key) => ({
-        family: "case_law",
-        lease,
-        manifest,
-        input,
-        textS3Key,
-        astS3Key: row.astS3Key,
-      }),
-    };
+  const rankingSignalsByDecision = await readCaseLawRankingSignals(
+    tx,
+    rows.map(({ documentId }) => documentId),
+  );
+  // The rows were read without a lock, so one can disappear between the two
+  // statements; its lease is then stale, like any other vanished row.
+  const signalled = rows.flatMap((row) => {
+    const rankingSignals = rankingSignalsByDecision.get(row.documentId);
+    return rankingSignals === undefined ? [] : [{ ...row, rankingSignals }];
   });
+  return sortLeasesByReadiness(
+    { leases, intents, states, rows: signalled },
+    (row) => {
+      const input = caseLawProjectionInputFromCanonical({
+        ...row,
+        identifiers:
+          identifiersByDecision.get(row.documentId) ??
+          panic(
+            `Corpus projection material lost identifiers: ${row.documentId}`,
+          ),
+        vacatedFrom: vacatedByJurisdiction.get(row.jurisdiction) ?? null,
+        provisionKeys:
+          provisionKeysByDecision.get(row.documentId) ??
+          panic(
+            `Corpus projection material lost provision keys: ${row.documentId}`,
+          ),
+      });
+      return {
+        descriptor: deriveCorpusIndexProjectionDescriptor(manifest, input),
+        material: (lease, textS3Key) => ({
+          family: "case_law",
+          lease,
+          manifest,
+          input,
+          textS3Key,
+          astS3Key: row.astS3Key,
+        }),
+      };
+    },
+  );
 };
 
 const readLegislationMaterials = async (

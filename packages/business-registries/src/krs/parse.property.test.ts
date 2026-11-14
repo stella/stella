@@ -2,23 +2,23 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
 import {
-  expectRegistryResponse,
-  registryString,
-  registryExtras,
-  forEachRegistryMutation,
-  expectRegistryOutcome,
   expectNullableString,
+  expectRegistryOutcome,
+  expectRegistryResponse,
+  forEachRegistryMutation,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupByKrsNumber } from "./client.js";
 import { parseAddress, parseEntity } from "./parse.js";
 import { normalizeRegon } from "./regon.js";
-import type { KrsRawAdres, KrsLookupResponse } from "./types.js";
+import type { KrsLookupResponse, KrsRawAdres } from "./types.js";
 
 const address = fc
   .record(
@@ -104,7 +104,8 @@ const entity = fc
 test(
   "sparse nested extracts preserve the requested identifier and filed values",
   () => {
-    fc.assert(
+    assertProperty(
+      "sparse nested extracts preserve the requested identifier and filed values",
       fc.property(
         entity,
         registryString,
@@ -153,7 +154,7 @@ test(
           }
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -162,7 +163,8 @@ test(
 test(
   "address parsing trims postal atoms without losing their spelling",
   () => {
-    fc.assert(
+    assertProperty(
+      "address parsing trims postal atoms without losing their spelling",
       fc.property(address, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseAddress(enriched));
@@ -176,7 +178,7 @@ test(
           expectNullableString(value);
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),

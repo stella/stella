@@ -18,34 +18,33 @@ describe.skipIf(!enabled)("expression backfill on PostgreSQL 18", () => {
   fixture.cleanUp(async () => {
     await db.execute(sql.raw(`DROP SCHEMA ${testSchema} CASCADE`));
   });
-  registerExpressionBackfillCases({
-    engine: "postgres",
-    openDatabase: async () => {
-      const version = await db.execute(
-        sql`SELECT current_setting('server_version_num')::int AS version`,
+  const openDatabase = async () => {
+    const version = await db.execute(
+      sql`SELECT current_setting('server_version_num')::int AS version`,
+    );
+    expect(version.at(0)?.["version"]).toBeGreaterThanOrEqual(180_000);
+    expect(version.at(0)?.["version"]).toBeLessThan(190_000);
+    await db.execute(sql.raw(`CREATE SCHEMA ${testSchema}`));
+    for (const table of [
+      "legislation_sources",
+      "legislation_documents",
+      "legislation_work_identifiers",
+      "legislation_work_names",
+      "scheduler_jobs",
+      "scheduler_job_runs",
+      "database_backfill_states",
+      "corpus_index_generations",
+      "corpus_index_projection_states",
+    ]) {
+      // db-await-in-loop: clone only the fixture's tables before selecting its schema.
+      await db.execute(
+        sql.raw(
+          `CREATE TABLE ${testSchema}.${table} (LIKE public.${table} INCLUDING ALL)`,
+        ),
       );
-      expect(version.at(0)?.["version"]).toBeGreaterThanOrEqual(180_000);
-      expect(version.at(0)?.["version"]).toBeLessThan(190_000);
-      await db.execute(sql.raw(`CREATE SCHEMA ${testSchema}`));
-      for (const table of [
-        "legislation_sources",
-        "legislation_documents",
-        "legislation_work_names",
-        "scheduler_jobs",
-        "scheduler_job_runs",
-        "database_backfill_states",
-        "corpus_index_generations",
-        "corpus_index_projection_states",
-      ]) {
-        // db-await-in-loop: clone only the fixture's tables before selecting its schema.
-        await db.execute(
-          sql.raw(
-            `CREATE TABLE ${testSchema}.${table} (LIKE public.${table} INCLUDING ALL)`,
-          ),
-        );
-      }
-      await db.execute(sql.raw(`SET search_path TO ${testSchema}, public`));
-      return db;
-    },
-  });
+    }
+    await db.execute(sql.raw(`SET search_path TO ${testSchema}, public`));
+    return db;
+  };
+  registerExpressionBackfillCases({ engine: "postgres", openDatabase });
 });

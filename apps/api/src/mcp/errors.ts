@@ -14,6 +14,14 @@ export class McpOrganizationAccessError extends TaggedError(
 }> {}
 
 /**
+ * Every error that refuses a caller rather than reporting a server fault. The
+ * transport answers each with the denial its total map names, so a refusal
+ * added here cannot reach a client as a retryable server error.
+ */
+export type McpAccessRefusalError =
+  McpAuthenticationError | McpOrganizationAccessError;
+
+/**
  * An infrastructure failure while verifying the bearer token (JWKS fetch/network
  * outage, JWKS timeout, or any non-rejection fault) rather than a genuine bad or
  * expired token. Distinct from `McpAuthenticationError` so the transport can

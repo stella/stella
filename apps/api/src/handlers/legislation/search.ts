@@ -1,20 +1,21 @@
 import { panic, Result } from "better-result";
 import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status } from "elysia";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
-  PUBLIC_LEGISLATION_COUNTRIES,
   isPublicLegislationCountry,
+  PUBLIC_LEGISLATION_COUNTRIES,
 } from "@stll/api-contract/legislation-publication";
+import { isLegislationWindowStatus } from "@stll/api-contract/legislation-status";
 import {
   SEARCH_PAGINATION_COMPLETE,
-  type SearchPaginationOutcome,
   SEARCH_TOTAL_NOT_COUNTED,
+  type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -22,11 +23,12 @@ import { envBase } from "@/api/env-base";
 import { projectLegislationSearchHit } from "@/api/handlers/legislation/search-response";
 import {
   PUBLIC_JURISDICTIONS_DESCRIPTION,
+  type SearchLegislationBody,
   searchLegislationBodySchema,
   searchLegislationResponseSchema,
-  type SearchLegislationBody,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
@@ -38,10 +40,11 @@ import {
   blendedRankSql,
   noCourtTierSql,
 } from "@/api/lib/legal-search/authority-sql";
+import { canonicalCorpusJson } from "@/api/lib/legal-search/corpus-aggregate-cache";
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import type {
@@ -50,14 +53,14 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  type SearchCursor,
+  type CorpusCandidateRankingInput,
   readCorpusIndexSearchPage,
   SCORED_SCAN_TRANSPORT,
-  type CorpusCandidateRankingInput,
+  type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
-  corpusAppliedProjection,
   type CorpusAppliedProjection,
+  corpusAppliedProjection,
 } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
@@ -92,22 +95,26 @@ import {
   legislationCorpusAppliedRevision,
   legislationCorpusWorkCanRecur,
 } from "@/api/lib/legal-search/legislation-corpus-projection";
-import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
+import {
+  isCurrentVersionOfWork,
+  legislationDocumentStatusToday,
+} from "@/api/lib/legal-search/legislation-current-version";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import {
-  redistributableLegislationSource,
-  publishedLegislationDocumentFor,
   publishedLegislationCountryFor,
+  publishedLegislationDocumentFor,
+  redistributableLegislationSource,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
   inForceToday,
+  legislationStatusToday,
+  type LegislationVersionRef,
   legislationVersionRef,
   legislationVersionRefAt,
   notWithdrawn,
   openedBy,
-  type LegislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
@@ -128,6 +135,7 @@ import type {
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
+import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -155,7 +163,7 @@ import {
 } from "@/api/lib/search/highlight";
 import { isRecord } from "@/api/lib/type-guards";
 
-type LegislationHit = Static<
+type LegislationHit = v.InferOutput<
   typeof searchLegislationSuccessResponseSchema
 >["items"][number];
 
@@ -175,6 +183,10 @@ type SearchLegislationDependencies = {
     isAdmitted: typeof isPublicLegislationCountry;
   };
   readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
+  /** The serving generation already read for this request's coalescing key. */
+  servingGeneration?: Awaited<
+    ReturnType<typeof readLegislationServingGeneration>
+  >;
   now?: () => number;
   emitStage?: typeof emitRequestStage;
   stageTool?: string;
@@ -218,6 +230,12 @@ const toNullableString = (x: unknown): string | null => {
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
+/** `legislationStatusToday` for the `d` alias the Postgres search reads. */
+const statusTodayAtD = legislationStatusToday(
+  legislationVersionRefAt("d"),
+  sql.raw("d.status"),
+);
+
 const buildCorpusIndexQuery = (
   body: SearchLegislationBody,
   match: "strict" | "relaxed" = "strict",
@@ -236,7 +254,10 @@ const buildCorpusIndexQuery = (
   if (body.documentType) {
     clauses.push(`document_type:${quoteCorpusValue(body.documentType)}`);
   }
-  if (body.status) {
+  // The index holds the stored status. Only a publisher statement is read
+  // from it; `current` and `historical` move with the date, so they are
+  // filtered when candidates are re-read (`legislationRequestFilters`).
+  if (body.status && !isLegislationWindowStatus(body.status)) {
     clauses.push(`status:${quoteCorpusValue(body.status)}`);
   }
   if (body.source) {
@@ -293,6 +314,12 @@ type RehydrateLegislationCandidatesOptions = CorpusCandidateRankingInput & {
   ranking?: "authority" | "lexical" | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   readCandidateRows?: typeof readLegislationCandidateRows | undefined;
+  /**
+   * What this request already read. A scan ranks every candidate it has
+   * gathered after each engine round, so without it each round re-reads every
+   * earlier candidate and Work.
+   */
+  hydration?: LegislationHydrationMemo | undefined;
 };
 
 /** Undated search keeps historical wording discoverable; an explicit date
@@ -324,7 +351,7 @@ const legislationRequestFilters = (body: SearchLegislationBody): SQL[] => {
     filters.push(eq(legislationDocuments.documentType, body.documentType));
   }
   if (body.status) {
-    filters.push(eq(legislationDocuments.status, body.status));
+    filters.push(sql`${legislationDocumentStatusToday} = ${body.status}`);
   }
   if (body.source) {
     filters.push(eq(legislationDocuments.sourceId, body.source));
@@ -417,7 +444,7 @@ export const legislationWorkRepresentativesQuery = ({
         ${legislationDocuments.country} AS country,
         ${legislationDocuments.language} AS language,
         ${legislationDocuments.documentType} AS document_type,
-        ${legislationDocuments.status} AS status,
+        ${legislationDocumentStatusToday} AS status,
         ${legislationDocuments.effectiveDate}::text AS effective_date,
         ${legislationDocuments.versionValidFrom}::text AS version_valid_from,
         ${legislationDocuments.versionValidTo}::text AS version_valid_to,
@@ -464,6 +491,34 @@ const representativeRow = (row: RawRow): RepresentativeRow => ({
   sourceUrl: toNullableString(row["source_url"]),
   citationAuthority: Number(row["citation_authority"]) || 0,
   isCurrent: row["is_current"] === true,
+});
+
+type LegislationCandidateRow = Awaited<
+  ReturnType<typeof readLegislationCandidateRows>
+>["rows"][number];
+
+type LegislationCursorWork = Pick<
+  LegislationSearchRow,
+  "sourceId" | "eli" | "language"
+>;
+
+/**
+ * The rows one search request has read, keyed like the reads themselves: a
+ * candidate by id (null when the read returned no row), a Work's
+ * representative by Work key (null when the Work has none), and the cursor's
+ * Work by the cursor id. The request filters, generation and body are fixed
+ * for the request, so a row read once stands for every later round and phase.
+ */
+export type LegislationHydrationMemo = {
+  rows: Map<string, LegislationCandidateRow | null>;
+  representatives: Map<string, RepresentativeRow | null>;
+  cursorWork: Map<string, LegislationCursorWork | null>;
+};
+
+export const createLegislationHydrationMemo = (): LegislationHydrationMemo => ({
+  rows: new Map(),
+  representatives: new Map(),
+  cursorWork: new Map(),
 });
 
 /** `legislationWorkRepresentativesQuery` read, one row per Work that has one. */
@@ -517,7 +572,7 @@ export const legislationCandidateRowsStatement = (
       country: legislationDocuments.country,
       language: legislationDocuments.language,
       documentType: legislationDocuments.documentType,
-      statusValue: legislationDocuments.status,
+      statusValue: legislationDocumentStatusToday.as("status_value"),
       effectiveDate: legislationDocuments.effectiveDate,
       versionValidFrom: legislationDocuments.versionValidFrom,
       versionValidTo: legislationDocuments.versionValidTo,
@@ -537,7 +592,7 @@ export const legislationCandidateRowsStatement = (
       and(
         inArray(legislationDocuments.id, ids),
         ...legislationRequestFilters(body),
-        currentLegislationCorpusProjection(generation),
+        currentLegislationCorpusProjection(generation, ids),
       ),
     )
     // Bounds the content branch and keeps its subplans behind eligibility.
@@ -560,6 +615,55 @@ export const readLegislationCandidateRows = async (
     records: await legislationCandidateRowsStatement(tx, options),
   });
 
+const readCursorWork = async (
+  tx: LegislationReadTransaction,
+  cursorId: string,
+  hydration: LegislationHydrationMemo,
+): Promise<LegislationCursorWork | undefined> => {
+  const known = hydration.cursorWork.get(cursorId);
+  if (known !== undefined) {
+    return known ?? undefined;
+  }
+  const [work] = await tx
+    .select({
+      sourceId: legislationDocuments.sourceId,
+      eli: legislationDocuments.eli,
+      language: legislationDocuments.language,
+    })
+    .from(legislationDocuments)
+    .where(
+      eq(legislationDocuments.id, toSafeId<"legislationDocument">(cursorId)),
+    );
+  hydration.cursorWork.set(cursorId, work ?? null);
+  return work;
+};
+
+/** Representatives of `works`, reading only the Works this request has not. */
+const readMemoizedWorkRepresentatives = async (
+  tx: LegislationReadTransaction,
+  works: readonly LegislationWorkRef[],
+  filters: readonly SQL[],
+  hydration: LegislationHydrationMemo,
+): Promise<RepresentativeRow[]> => {
+  const keys = [...new Set(works.map((work) => legislationWorkRefKey(work)))];
+  const unread = works.filter(
+    (work) => !hydration.representatives.has(legislationWorkRefKey(work)),
+  );
+  if (unread.length > 0) {
+    const read = await readLegislationWorkRepresentatives(tx, unread, filters);
+    for (const work of unread) {
+      hydration.representatives.set(legislationWorkRefKey(work), null);
+    }
+    for (const row of read) {
+      hydration.representatives.set(legislationWorkRefKey(row), row);
+    }
+  }
+  return keys.flatMap((key) => {
+    const row = hydration.representatives.get(key);
+    return row === null || row === undefined ? [] : [row];
+  });
+};
+
 /**
  * The production corpus-index rehydration query, exported so the reader-role
  * suite executes this exact query surface under SET ROLE.
@@ -581,10 +685,16 @@ export const rehydrateLegislationCandidates = async ({
   hitDispositions = createCorpusHitDispositionCounter(),
   readCandidateRows = readLegislationCandidateRows,
   observeStage = async (_stage, operation) => await operation(),
+  hydration = createLegislationHydrationMemo(),
 }: RehydrateLegislationCandidatesOptions) => {
-  const ids = candidates.map((candidate) =>
-    toSafeId<"legislationDocument">(candidate.id),
-  );
+  const ids = [
+    ...new Set(
+      candidates.map((candidate) =>
+        toSafeId<"legislationDocument">(candidate.id),
+      ),
+    ),
+  ];
+  const unreadIds = ids.filter((id) => !hydration.rows.has(id));
   // Reapply the request filters against the current rows: a stale corpus hit
   // (metadata changed, async re-index/delete pending) must not satisfy filters
   // it no longer matches.
@@ -594,10 +704,10 @@ export const rehydrateLegislationCandidates = async ({
     async () =>
       await legislationDb(async (tx) => {
         const candidateRead =
-          ids.length === 0
+          unreadIds.length === 0
             ? { rows: [], dispositions: [] }
             : await readCandidateRows(tx, {
-                ids,
+                ids: unreadIds,
                 generation,
                 body,
               });
@@ -605,33 +715,31 @@ export const rehydrateLegislationCandidates = async ({
           candidateRead.dispositions,
           hitDispositions,
         );
-        const rows = candidateRead.rows;
+        for (const id of unreadIds) {
+          hydration.rows.set(id, null);
+        }
+        for (const row of candidateRead.rows) {
+          hydration.rows.set(String(row.id), row);
+        }
+        const rows = ids.flatMap((id) => {
+          const row = hydration.rows.get(id);
+          return row === null || row === undefined ? [] : [row];
+        });
         const named =
           namedWorks ??
           (await readNamedLegislationWorks(tx, {
             query: body.query,
             country: body.jurisdiction,
           }));
-        const [cursorWork] =
+        const cursorWork =
           cursorId === undefined || !isUuid(cursorId)
-            ? []
-            : await tx
-                .select({
-                  sourceId: legislationDocuments.sourceId,
-                  eli: legislationDocuments.eli,
-                  language: legislationDocuments.language,
-                })
-                .from(legislationDocuments)
-                .where(
-                  eq(
-                    legislationDocuments.id,
-                    toSafeId<"legislationDocument">(cursorId),
-                  ),
-                );
-        const representatives = await readLegislationWorkRepresentatives(
+            ? undefined
+            : await readCursorWork(tx, cursorId, hydration);
+        const representatives = await readMemoizedWorkRepresentatives(
           tx,
           [...rows, ...named],
           requestFilters,
+          hydration,
         );
         return { rows, named, cursorWork, representatives };
       }),
@@ -796,7 +904,7 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
     const filters = sql`
     ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}
     ${body.documentType ? sql`AND d.document_type = ${body.documentType}` : sql``}
-    ${body.status ? sql`AND d.status = ${body.status}` : sql``}
+    ${body.status ? sql`AND ${statusTodayAtD} = ${body.status}` : sql``}
     ${body.source ? sql`AND d.source_id = ${body.source}` : sql``}
     ${body.language ? sql`AND d.language = ${body.language}` : sql``}
     ${body.dateFrom ? sql`AND d.effective_date >= ${body.dateFrom}` : sql``}
@@ -892,7 +1000,7 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
       d.country,
       d.language,
       d.document_type,
-      d.status,
+      ${statusTodayAtD} AS status,
       d.effective_date::text AS effective_date,
       d.version_valid_from::text AS version_valid_from,
       d.version_valid_to::text AS version_valid_to,
@@ -1195,8 +1303,9 @@ const createIndexRecorder = ({
 }) => {
   const scan: IndexScanTiming = { durationMs: 0, candidateCount: 0, rounds: 0 };
   let rejectionAttribution:
-    | { type: "page_read" }
-    | { type: "ranking_callback" } = { type: "page_read" };
+    { type: "page_read" } | { type: "ranking_callback" } = {
+    type: "page_read",
+  };
   let openedAt: number | undefined = now();
   const closeInterval = () => {
     if (openedAt !== undefined) {
@@ -1268,6 +1377,20 @@ type ReadCorpusPhaseOptions = {
   cursor: SearchCursor | null;
 };
 
+/** The Works the query names, read once per request for the strict phase. */
+const readRequestNamedWorks = async (
+  legislationDb: LegislationReadDb,
+  reads: CorpusLegislationReadDependencies,
+  body: SearchLegislationBody,
+) =>
+  await legislationDb(
+    async (tx) =>
+      await reads.readNamedWorks(tx, {
+        query: body.query,
+        country: body.jurisdiction,
+      }),
+  );
+
 const corpusIndexSearch = async ({
   body,
   parsedCursor,
@@ -1293,16 +1416,12 @@ const corpusIndexSearch = async ({
     fingerprint,
     generation,
   };
+  // Shared by both phases: a relaxed pass rescans the strict pass's Works.
+  const hydration = createLegislationHydrationMemo();
   const namedWorks =
     phase.type === "relaxed"
       ? []
-      : await legislationDb(
-          async (tx) =>
-            await reads.readNamedWorks(tx, {
-              query: body.query,
-              country: body.jurisdiction,
-            }),
-        );
+      : await readRequestNamedWorks(legislationDb, reads, body);
 
   const readPhase = async ({
     active,
@@ -1362,6 +1481,7 @@ const corpusIndexSearch = async ({
           ranking: active.type === "strict" ? "authority" : "lexical",
           observeStage,
           readCandidateRows: reads.readCandidateRows,
+          hydration,
         });
         const ranked = await attributeRankingCallbackRejection(
           pendingRanking,
@@ -1630,11 +1750,91 @@ const createSearchStageAccumulator = (
   return { observeStage, recordIndexScan, settle };
 };
 
+type LegislationSearchAnswer = Awaited<ReturnType<typeof runSearchLegislation>>;
+
+/** Answers kept per process; a burst's length, as for case-law search. */
+const LEGISLATION_SEARCH_COALESCER_TTL_MS = 30 * 1000;
+const LEGISLATION_SEARCH_COALESCER_MAX_ENTRIES = 256;
+const LEGISLATION_SEARCH_COALESCER_MAX_BYTES = 16 * 1024 * 1024;
+
+const legislationSearchCoalescer =
+  createPublicSearchCoalescer<LegislationSearchAnswer>({
+    limits: {
+      maxEntries: LEGISLATION_SEARCH_COALESCER_MAX_ENTRIES,
+      maxBytes: LEGISLATION_SEARCH_COALESCER_MAX_BYTES,
+      ttlMs: LEGISLATION_SEARCH_COALESCER_TTL_MS,
+    },
+    now: () => Temporal.Now.instant().epochMilliseconds,
+  });
+
+/**
+ * The identity of a legislation search's answer: the request as normalized
+ * for the caller's page limit and the generation it reads. As for case-law
+ * search, no caller identity enters it, because the corpus is public.
+ */
+export const legislationSearchCoalescingKey = (
+  body: SearchLegislationBody,
+  serving: ServingCorpusIndexGeneration,
+): string =>
+  hashSha256Hex(
+    canonicalCorpusJson({
+      family: "legislation",
+      serving,
+      request: {
+        ...body,
+        limit: normalizeTenantPageLimit(
+          body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+        ),
+      },
+    }),
+  );
+
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
   legislationDb: LegislationReadDb,
   observer: RegistryRequestObservation,
   dependencies = defaultSearchLegislationDependencies,
+) => {
+  // A continuation page is validated before any read, and an injected engine
+  // or generation is a test's or script's own corpus: neither has an answer
+  // to share.
+  if (
+    body.cursor !== undefined ||
+    dependencies.corpusSearch !== undefined ||
+    dependencies.readServingGeneration !== undefined
+  ) {
+    return await runSearchLegislation(
+      body,
+      legislationDb,
+      observer,
+      dependencies,
+    );
+  }
+  const servingRead = await readLegislationServingGeneration(
+    legislationDb,
+    dependencies,
+  );
+  const run = async () =>
+    await runSearchLegislation(body, legislationDb, observer, {
+      ...dependencies,
+      servingGeneration: servingRead,
+    });
+  if (Result.isError(servingRead) || servingRead.value === null) {
+    return await run();
+  }
+  return await legislationSearchCoalescer.search({
+    key: legislationSearchCoalescingKey(body, servingRead.value),
+    cacheable: (answer) =>
+      "items" in answer && answer.paginationOutcome.type === "complete",
+    run,
+  });
+};
+
+const runSearchLegislation = async (
+  body: SearchLegislationBody,
+  legislationDb: LegislationReadDb,
+  observer: RegistryRequestObservation,
+  dependencies: SearchLegislationDependencies,
 ) => {
   const now = dependencies.now ?? (() => performance.now());
   const emitStage = dependencies.emitStage ?? emitRequestStage;
@@ -1733,10 +1933,9 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
-  const servingRead = await readLegislationServingGeneration(
-    legislationDb,
-    dependencies,
-  );
+  const servingRead =
+    dependencies.servingGeneration ??
+    (await readLegislationServingGeneration(legislationDb, dependencies));
   if (Result.isError(servingRead)) {
     return searchIndexUnavailableResponse(servingRead.error);
   }
@@ -1808,7 +2007,9 @@ export const searchLegislationHandler = async (
 
     stageAccumulator.settle();
     const serializationTiming = beginStage("response_serialization");
-    const response: Static<typeof searchLegislationSuccessResponseSchema> = {
+    const response: v.InferOutput<
+      typeof searchLegislationSuccessResponseSchema
+    > = {
       items: projectSearchHits(items, dependencies),
       nextCursor,
       paginationOutcome,

@@ -3,12 +3,16 @@ import { panic } from "better-result";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
-  recordBudgetRejection,
   type BudgetName,
+  recordBudgetRejection,
 } from "@/api/lib/rate-limit/budget-observability";
 
 // Exact rules precede wildcard rules; the framework chooses the first match.
 export const AUTH_FRAMEWORK_BUDGETS = {
+  "/sign-in-methods/send-otp": {
+    name: "auth.framework.address",
+    rule: AUTH_RATE_LIMITS.defaultEmail,
+  },
   "/sign-up/email": {
     name: "auth.sign_up.address",
     rule: AUTH_RATE_LIMITS.signUp,

@@ -82,15 +82,39 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const POLL_MS = 30_000;
-            // The dispatch answers with the run it created, so the run
-            // followed here is exactly the one this dispatch started.
-            const start = async (request) => {
-              const { data } = await github.rest.actions.createWorkflowDispatch({ owner, repo, ...request });
-              const id = data?.workflow_run_id;
-              if (!Number.isSafeInteger(id) || id <= 0) {
-                throw new Error(`Dispatching ${request.workflow_id} returned no run id`);
+            // A dispatch names its run only when asked for run details, and even
+            // then the answer may omit it. The run is then found by listing: this
+            // workflow and branch, dispatched at or after the request, matching the
+            // expected title, and not one already claimed. Undefined after the bounded
+            // search; the caller decides what a missing run means.
+            const dispatchRun = async ({ title, claimed, ...request }) => {
+              const since = new Date(Date.now() - 5_000).toISOString();
+              const { data } = await github.rest.actions.createWorkflowDispatch({
+                owner, repo, ...request, return_run_details: true,
+              });
+              const named = data?.workflow_run_id;
+              if (Number.isSafeInteger(named) && named > 0) return named;
+              for (let attempt = 0; attempt < 6; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, 5_000));
+                const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id: request.workflow_id, branch: request.ref,
+                  event: 'workflow_dispatch', created: `>=${since}`, per_page: 100,
+                });
+                const found = runs
+                  .filter(run => Number.isSafeInteger(run.id) && run.id > 0 && !claimed.has(run.id)
+                    && (title === undefined || run.display_title === title))
+                  .sort((a, b) => a.id - b.id)[0];
+                if (found !== undefined) return found.id;
               }
-              core.notice(`${request.workflow_id}: ${data.html_url}`);
+              return undefined;
+            };
+            const start = async (request) => {
+              const id = await dispatchRun({ claimed: new Set(), ...request });
+              if (id === undefined) {
+                core.setFailed(`The dispatched ${request.workflow_id} run was not found`);
+              } else {
+                core.notice(`${request.workflow_id}: run ${id}`);
+              }
               return id;
             };
             const finish = async (id, polls) => {
@@ -117,10 +141,11 @@ jobs:
               workflow_id: 'marketing-screenshots-capture.yml',
               ref: process.env.BRANCH,
             });
-            if (!succeeded('capture', await finish(capture, 80), 40)) return;
+            if (capture === undefined || !succeeded('capture', await finish(capture, 80), 40)) return;
             const publish = await start({
               workflow_id: 'marketing-screenshots-publish.yml',
               ref: 'main',
               inputs: { capture_run_id: String(capture) },
+              title: `Publish marketing screenshots of run ${capture}`,
             });
-            succeeded('publish', await finish(publish, 40), 20);
+            if (publish !== undefined) succeeded('publish', await finish(publish, 40), 20);

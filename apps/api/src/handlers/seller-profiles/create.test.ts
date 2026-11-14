@@ -1,19 +1,29 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 
 import createSellerProfile from "./create";
 
 type CreateContext = Parameters<typeof createSellerProfile.handler>[0];
 
-const organizationId = toSafeId<"organization">("org_test");
+let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
+beforeAll(async () => {
+  fixture = await getRlsFixture();
+});
+afterAll(releaseRlsFixture);
 
 const createContext = ({
   body,
@@ -30,11 +40,15 @@ const createContext = ({
       request: new Request("https://example.test/v1/seller-profiles", {
         method: "POST",
       }),
-      route: "/v1/seller-profiles",
+      route: "/v1/seller-profiles" satisfies ApiRoutePath,
       safeDb,
-      session: { activeOrganizationId: organizationId },
+      scopedDb: createOrganizationScopedTestDb(fixture.testDb, {
+        organizationId: fixture.ids.orgA,
+        userId: fixture.ids.userA1,
+      }),
+      session: { activeOrganizationId: fixture.ids.orgA },
       memberRole: sessionMemberRole("owner"),
-      user: { id: toSafeId<"user">("user_test") },
+      user: { id: fixture.ids.userA1 },
       recordAuditEvent,
     }),
   );
@@ -103,6 +117,9 @@ describe("seller profile creation", () => {
           expect(values["isDefault"]).toBe(true);
           expect(values["iban"]).toBe("GB82WEST12345698765432");
           expect(values["accountNumber"]).toBe("sensitive-account-number");
+          expect(values["taxId"]).toBe("2120123456");
+          expect(values["registerEntry"]).toBe("Oddiel Sro, vložka 12345/B");
+          expect(values["barRegistration"]).toBe("SAK 0000");
           return {
             returning: async () => [{ id: profileId, isDefault: true }],
           };
@@ -126,6 +143,9 @@ describe("seller profile creation", () => {
           defaultCurrency: "EUR",
           iban: "GB82 WEST 1234 5698 7654 32",
           accountNumber: "sensitive-account-number",
+          taxId: "2120123456",
+          registerEntry: "Oddiel Sro, vložka 12345/B",
+          barRegistration: "SAK 0000",
         },
         safeDb,
         recordAuditEvent,

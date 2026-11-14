@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
@@ -16,6 +15,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
 import { lockDesktopEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -26,12 +26,13 @@ import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   copyEntities,
   ENTITY_SNAPSHOT_COLUMNS,
-  EVERY_LIVE_VERSION_SELECT,
+  EVERY_VERSION_SELECT,
   remapFileIds,
 } from "./copy-utils";
 import { openDesktopEditSessionHandler } from "./open-desktop-edit-session";
@@ -180,7 +181,7 @@ if (!databaseUrl || !runPostgresTests) {
           const source = await setup.db.query.entities.findFirst({
             where: { id: { eq: documentId } },
             columns: ENTITY_SNAPSHOT_COLUMNS,
-            with: EVERY_LIVE_VERSION_SELECT,
+            with: EVERY_VERSION_SELECT,
           });
           if (!source) {
             throw new TypeError("Expected seeded document");
@@ -438,7 +439,7 @@ if (!databaseUrl || !runPostgresTests) {
             const after = await setup.db.query.entities.findFirst({
               where: { id: { eq: documentId } },
               columns: ENTITY_SNAPSHOT_COLUMNS,
-              with: EVERY_LIVE_VERSION_SELECT,
+              with: EVERY_VERSION_SELECT,
             });
             expect(after).toBeDefined();
             if (owner === "version-write" || owner === "restore") {
@@ -522,7 +523,7 @@ if (!databaseUrl || !runPostgresTests) {
             const writerStarted = Promise.withResolvers<undefined>();
             const writeAfterMove = async () => {
               if (owner === "desktop-open") {
-                const sessionDb = drizzle({
+                const sessionDb = createDatabase({
                   client: writer.sql,
                   relations: databaseRelations,
                   logger: {
@@ -659,7 +660,7 @@ if (!databaseUrl || !runPostgresTests) {
             const target = await setup.db.query.entities.findFirst({
               where: { workspaceId: { eq: targetWorkspaceId } },
               columns: ENTITY_SNAPSHOT_COLUMNS,
-              with: EVERY_LIVE_VERSION_SELECT,
+              with: EVERY_VERSION_SELECT,
             });
             expect(target?.name).toBe("Original.txt");
             expect(target?.versions).toHaveLength(1);
@@ -669,9 +670,7 @@ if (!databaseUrl || !runPostgresTests) {
           try {
             await Promise.all(tasks);
           } finally {
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(setup.db, [organizationId]);
             await setup.db.delete(user).where(eq(user.id, userId));
           }
         }

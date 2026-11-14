@@ -8,6 +8,7 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { reportDeliveryFailuresByKind } from "@/api/handlers/chat/chat-delivery-failure";
 import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import {
   persistFailedChatTurn,
@@ -16,6 +17,7 @@ import {
 import type { PersistMessageProps } from "@/api/handlers/chat/chat-message-persistence";
 import {
   AI_ERROR_FAILURE_CODE,
+  AI_ERROR_RETRYABLE,
   isChatTurnNotOwned,
   readChatTurnExecutionStanding,
   renewChatTurnExecutionLease,
@@ -27,15 +29,18 @@ import type {
   ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
+import type { AIErrorKind } from "@/api/lib/ai-error";
 import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ChatRunLogRefusedError } from "@/api/lib/chat/run-log-refusal";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitChatTurnSettlementMetric } from "@/api/lib/observability/request-metrics";
 import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { withSseHeartbeat } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -161,7 +166,7 @@ const eagerlyDeliverTurn = (
             source.current = { status: "closed" };
           }
         };
-        detached(drain(), "chat-turn-run.delivery");
+        detached(async () => drain(), "chat-turn-run.delivery");
       },
       pull: () => {
         room.resolve(undefined);
@@ -217,6 +222,10 @@ const CHAT_TURN_RUN_HEARTBEAT = {
 export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
 const CHAT_TURN_PRODUCTION_FAILED_REASON = "stella.chat-turn.production-failed";
 
+const DURABILITY_FAILED_SINK = failureSink({
+  event: "chat.turn.durability_failed",
+  expected: [],
+});
 const HEARTBEAT_FAILED_SINK = failureSink({
   event: "chat.turn.stop_poll_failed",
   expected: [],
@@ -267,8 +276,7 @@ export const countChatTurnSettlement = (
  * stored outcome is counted, so the count matches the durable row.
  */
 export type ChatTurnStoredSettlement =
-  | { type: "stored"; outcome: ChatTurnOutcome }
-  | { type: "not-owned" };
+  { type: "stored"; outcome: ChatTurnOutcome } | { type: "not-owned" };
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
@@ -364,7 +372,10 @@ export class ChatTurnOwnership {
     this.liveRuns.set(run.execution.executionId, run);
     this.noteChange();
     if (this.relinquishing) {
-      detached(run.relinquish(), "chat-turn-run.relinquish-late-run");
+      detached(
+        async () => run.relinquish(),
+        "chat-turn-run.relinquish-late-run",
+      );
     }
   }
 
@@ -428,7 +439,7 @@ export class ChatTurnOwnership {
         if (!shortened.has(claim)) {
           shortened.add(claim);
           detached(
-            this.followUp(shortenClaimLease(claim)),
+            async () => this.followUp(shortenClaimLease(claim)),
             "chat-turn-run.relinquish-claim",
           );
         }
@@ -483,6 +494,8 @@ export class ChatTurnRun {
     | { status: "closed" } = { status: "not-started" };
   /** A cut requested before the run produced; applied once it does. */
   private pendingAbort: string | undefined;
+  /** What the first explained delivery failure said, if delivery failed. */
+  private deliveryFailure: AIErrorKind = "unknown";
   private provider: ChatTurnObservation["provider"] = "none";
 
   constructor(options: ChatTurnRunOptions) {
@@ -603,10 +616,13 @@ export class ChatTurnRun {
    * Start producing `output`, built against `control`, and serve it. The
    * response is a viewer: closing it detaches delivery while the producer
    * keeps draining into the log under its existing deadlines and ownership.
+   * `viewer` is the credential that asked for it, and the response ends with
+   * that credential the same way.
    */
   produce(
     output: AsyncIterable<StreamChunk>,
     durability: StreamDurability,
+    viewer: SseStreamBinding,
   ): Response {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
@@ -621,10 +637,25 @@ export class ChatTurnRun {
             : this.trackUpstream(output),
           {
             // Run control cuts the provider; delivery drains its terminal events.
-            durability: { adapter: durability },
+            durability: {
+              adapter: reportDeliveryFailuresByKind(durability, (failure) => {
+                // The run log reports its own refusals; any other failure
+                // (the store's) reaches the stream only as its kind.
+                if (!ChatRunLogRefusedError.is(failure.cause)) {
+                  observeFailure(failure.cause, {
+                    sink: DURABILITY_FAILED_SINK,
+                    ctx: { threadId: this.options.owner.threadId },
+                  });
+                }
+                if (this.deliveryFailure === "unknown") {
+                  this.deliveryFailure = failure.kind;
+                }
+              }),
+            },
             headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
           },
         ),
+        viewer,
       ),
       this.options.onDeliveryStalled,
     );
@@ -702,7 +733,11 @@ export class ChatTurnRun {
    * Never throws: a failure it cannot store is reported, and the turn's lease
    * then ends it.
    */
-  async fail(code: ChatTurnFailureCode, retryable: boolean): Promise<void> {
+  async fail(
+    code: ChatTurnFailureCode,
+    retryable: boolean,
+    error: AIErrorKind = "unknown",
+  ): Promise<void> {
     const { status } = this.state;
     if (status === "settled") {
       return panic("A settled chat turn run cannot fail");
@@ -713,6 +748,7 @@ export class ChatTurnRun {
       checkpoint === undefined
         ? await persistFailedChatTurn({
             code,
+            error,
             execution: owner.execution,
             indexThread: owner.indexThread,
             owningAssistantMessage: owner.owningAssistantMessage,
@@ -756,7 +792,16 @@ export class ChatTurnRun {
       return panic(`Cannot fail a producer once ${this.state.status}`);
     }
     try {
-      await this.fail("internal", true);
+      // A delivery failure the stream explained settles the turn with the same
+      // kind, so a reload shows what the live stream did.
+      const kind = this.deliveryFailure;
+      await (kind === "unknown"
+        ? this.fail("internal", true)
+        : this.fail(
+            AI_ERROR_FAILURE_CODE[kind],
+            AI_ERROR_RETRYABLE[kind],
+            kind,
+          ));
       if (source === "not-started") {
         // trackUpstream prepares a completion promise before the iterator is
         // pulled. An unused iterator has no finally to resolve that promise.
@@ -878,7 +923,7 @@ export class ChatTurnRun {
         return;
       }
       const current = beat();
-      detached(current, "chat-turn-run.heartbeat");
+      detached(async () => current, "chat-turn-run.heartbeat");
       beating = Promise.allSettled([current]).finally(() => {
         beating = undefined;
       });

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { decode as decodePayBySquare } from "bysquare/pay";
 import { decompress } from "lzma1";
 
 import { cents } from "@stll/money";
@@ -90,7 +91,7 @@ describe("PAY by square payload", () => {
       "TATRSKBX",
       "0",
       "0",
-      "Hrabovsky & Partneri, s.r.o.",
+      "Hrabovský & Partneri, s.r.o.",
       "",
       "",
     ]);
@@ -121,10 +122,10 @@ describe("PAY by square payload", () => {
       "SK9611000000002918599669",
       "",
     ]);
-    expect(decoded.fields.at(-3)).toBe("Bednar");
+    expect(decoded.fields.at(-3)).toBe("Bednár");
   });
 
-  test("strips diacritics, tabs and overlong text from free text", () => {
+  test("preserves diacritics while replacing tabs and clipping free text", () => {
     const decoded = payable(
       buildPayBySquarePayload({
         documentType: "invoice",
@@ -138,9 +139,9 @@ describe("PAY by square payload", () => {
 
     const note = decoded.fields[10] ?? "";
     const name = decoded.fields.at(-3) ?? "";
-    expect(note.startsWith("Uhrada faktury c")).toBe(true);
+    expect(note.startsWith("Úhrada faktúry č")).toBe(true);
     expect(note.length).toBe(140);
-    expect(name.startsWith("Lubica Stastna z")).toBe(true);
+    expect(name.startsWith("Ľubica Šťastná ž")).toBe(true);
     expect(name.length).toBe(70);
     expect(decoded.fields).toHaveLength(19);
   });
@@ -189,5 +190,61 @@ describe("PAY by square payload", () => {
     if (result.isErr()) {
       expect(result.error.message).toBe(message);
     }
+  });
+});
+
+describe("PAY by square independent decoder compatibility", () => {
+  test("matches the fields of a fixed independently encoded payment", () => {
+    const result = buildPayBySquarePayload({
+      documentType: "invoice",
+      amountMinor: cents(55_555),
+      currency: "EUR",
+      dueDate: "2026-10-14",
+      variableSymbol: "2026001",
+      message: "INV-2026-001",
+      iban: "SK2711000000123456789012",
+      bic: "FIKTSKBA",
+      beneficiaryName: "Fiktívna kancelária, s. r. o.",
+    }).unwrap();
+    if (result.status !== "payable") {
+      throw new Error("Fixture is payable");
+    }
+    const golden =
+      "0807S00012G9GONTOS6FJAS8MPP9KSQJIB44LLS8QHAO1KB2ULONRPMOOAGQBT5QGAVI47VLTHQRT7CHCKHM29BL52F8JUG9BC83A9A6RK8M2IM1HRKKCCFR2BCC1JLI4CFJK9P5VNSV8C3TUL8K4BDJIF9IDOMNTI0TV018CO77KMAC2EG58QJFRVVU293G00";
+    expect(decodePayBySquare(result.payload)).toEqual(
+      decodePayBySquare(golden),
+    );
+  });
+
+  test("normalizes decomposed UTF-8 and clips by code points without splitting characters", () => {
+    const result = buildPayBySquarePayload({
+      documentType: "invoice",
+      amountMinor: cents(123_456),
+      currency: "eur",
+      dueDate: "2027-02-28",
+      variableSymbol: "0001234567",
+      message: `FAKTÚRA-ŽLTÝ-KÔŇ ${"🦉".repeat(150)}`,
+      iban: "SK2711000000123456789012",
+      bic: "fiktskba",
+      beneficiaryName: `Z\u030clta\u0301 fiktívna spoločnosť ${"🦉".repeat(80)}`,
+    }).unwrap();
+    if (result.status !== "payable") {
+      throw new Error("Fixture is payable");
+    }
+    const payment = decodePayBySquare(result.payload).payments.at(0);
+    expect(payment).toMatchObject({
+      amount: 1234.56,
+      currencyCode: "EUR",
+      paymentDueDate: "20270228",
+      variableSymbol: "0001234567",
+      bankAccounts: [{ iban: "SK2711000000123456789012", bic: "FIKTSKBA" }],
+    });
+    expect(
+      payment?.beneficiary.name.startsWith("Žltá fiktívna spoločnosť"),
+    ).toBe(true);
+    expect(payment?.paymentNote?.startsWith("FAKTÚRA-ŽLTÝ-KÔŇ")).toBe(true);
+    expect(Array.from(payment?.beneficiary.name ?? "")).toHaveLength(70);
+    expect(Array.from(payment?.paymentNote ?? "")).toHaveLength(140);
+    expect(payment?.beneficiary.name).not.toContain("\uFFFD");
   });
 });

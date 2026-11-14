@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
@@ -6,9 +6,9 @@ import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import {
-  type AuditAction,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  type AuditAction,
   type AuditActivityCategory,
   type AuditResourceType,
 } from "@/api/lib/audit-log";
@@ -21,6 +21,8 @@ import {
   brandPersistedEntityVersionId,
   brandPersistedFieldId,
 } from "@/api/lib/safe-id-boundaries";
+import { TASK_LINK_AUDIT_CHANGE } from "@/api/lib/tasks/entity-link-audit";
+import { isRecord } from "@/api/lib/type-guards";
 
 export type FieldAuditResource =
   | { type: "field"; fieldId: ReturnType<typeof brandPersistedFieldId> }
@@ -135,6 +137,7 @@ export type ActivityTargetSource =
  * automation row.
  */
 export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
+  [AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF]: null,
   // Audited against the entity the obligation governs, so it reads as that
   // task rather than as a separate record.
   work_obligation: "entity",
@@ -146,6 +149,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   workspace_member: "team",
   workspace_contact: "team",
   case_law_matter_link: "court",
+  legislation_matter_link: "court",
   case_law_decision_annotation: "court",
   statute_annotation: "court",
   // Organization-scoped, so never part of one matter's activity.
@@ -164,6 +168,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   agent_skill_comment: null,
   agent_skill_proposal: null,
   ai_memory: null,
+  // A conflict check names a prospective client; it stays off the matter feed.
+  conflict_check: null,
   announcement: null,
   audit_log: null,
   legal_resolve: null,
@@ -174,6 +180,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   chat_thread: null,
   chat_tool_execution: null,
   chat_tool_grant: null,
+  chat_browser_site_grant: null,
+  chat_local_folder_approval: null,
   clause: null,
   clause_category: null,
   clause_template_link: null,
@@ -181,6 +189,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   contact: null,
   contact_directory: null,
   desktop_edit_session: null,
+  // A mark follows its own sharing scope, never the matter's membership.
+  document_annotation: null,
   document_type: null,
   expense: null,
   feedback_report: null,
@@ -195,11 +205,13 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   personal_api_key: null,
   mcp_connection: null,
   mcp_gateway_tool: null,
+  organization_access_state: null,
   organization_settings: null,
   property: null,
   rate_entry: null,
   rate_table: null,
   report_export: null,
+  data_export: null,
   saved_search: null,
   // Personal history is never shared through a matter's activity feed.
   search_history: null,
@@ -263,6 +275,10 @@ export type VisibleActivityAction =
 
 /** Total over `AuditAction`, so a new action must be narrated or excluded. */
 export const VISIBLE_ACTIVITY_ACTION_BY_ACTION = {
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_CONFIRMATION_SHOWN]: null,
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_ISSUED]: null,
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED]: null,
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_REFUSED]: null,
   access: null,
   [AUDIT_ACTION.SYNTHETIC_SESSION_MINTED]: null,
   cancel: AUDIT_ACTION.CANCEL,
@@ -365,6 +381,99 @@ export const resolveActivityRunId = ({
   runId,
 }: ResolveActivityRunIdOptions): string | null =>
   runId ?? (resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN ? resourceId : null);
+
+/**
+ * What a row is about when its target alone would mislead: deleting a version
+ * is not deleting the document, and linking to a task is not a field update.
+ */
+export type ActivityDetail =
+  | { type: "none" }
+  | { change: "added" | "deleted"; type: "version"; versionNumber: number }
+  | {
+      change: "added" | "removed";
+      /** Null once the linked item is gone or the row never recorded it. */
+      linkedName: string | null;
+      type: "taskLink";
+    };
+
+const auditedVersionNumber = (
+  snapshot: unknown,
+  side: "new" | "old",
+): number | null => {
+  const version = isRecord(snapshot) ? snapshot[side] : null;
+  const versionNumber = isRecord(version) ? version["versionNumber"] : null;
+  return typeof versionNumber === "number" ? versionNumber : null;
+};
+
+type ResolveActivityDetailOptions = {
+  changes: Record<string, unknown> | null;
+  linkChange: string | null;
+  linkedName: string | null;
+  resourceType: string;
+};
+
+export const resolveActivityDetail = ({
+  changes,
+  linkChange,
+  linkedName,
+  resourceType,
+}: ResolveActivityDetailOptions): ActivityDetail => {
+  if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION) {
+    const added = auditedVersionNumber(changes?.["created"], "new");
+    if (added !== null) {
+      return { change: "added", type: "version", versionNumber: added };
+    }
+    const deleted = auditedVersionNumber(changes?.["deleted"], "old");
+    return deleted === null
+      ? { type: "none" }
+      : { change: "deleted", type: "version", versionNumber: deleted };
+  }
+  if (resourceType !== AUDIT_RESOURCE_TYPE.ENTITY) {
+    return { type: "none" };
+  }
+  if (linkChange === TASK_LINK_AUDIT_CHANGE.ADDED) {
+    return { change: "added", linkedName, type: "taskLink" };
+  }
+  if (linkChange === TASK_LINK_AUDIT_CHANGE.REMOVED) {
+    return { change: "removed", linkedName, type: "taskLink" };
+  }
+  return { type: "none" };
+};
+
+/** The item on the far end of a task link row; the row's own target is the task. */
+export const activityLinkedEntityId = ({
+  linkSourceId,
+  linkTargetId,
+  resourceId,
+}: {
+  linkSourceId: string | null;
+  linkTargetId: string | null;
+  resourceId: string;
+}): string | null =>
+  [linkSourceId, linkTargetId].find(
+    (id) => id !== null && id !== resourceId && isUuid(id),
+  ) ?? null;
+
+/** The row's detail in plain words, for the export's fixed English columns. */
+export const activityDetailText = (detail: ActivityDetail): string => {
+  switch (detail.type) {
+    case "none":
+      return "";
+    case "version":
+      return `${detail.change} version ${detail.versionNumber}`;
+    case "taskLink":
+      return [
+        detail.change === "added" ? "linked" : "unlinked",
+        detail.linkedName,
+      ]
+        .filter((part) => part !== null)
+        .join(" ");
+    default: {
+      detail satisfies never;
+      return panic("Unhandled activity detail");
+    }
+  }
+};
 
 type ResolveActivityActionOptions<TAction extends AuditAction> = {
   action: TAction;

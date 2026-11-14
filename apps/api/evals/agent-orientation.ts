@@ -48,8 +48,16 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import {
+  exactDecisionMatches,
+  parseDecisionQuery,
+} from "@stll/api-contract/decision-query-intent";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
+import {
+  decisionConstraints,
+  readDecisionCitation,
+} from "@/api/handlers/legal-resolve/decision-constraints";
 import type { AvailableChatSkill } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -57,6 +65,7 @@ import {
   streamChatChunks,
   toolCallEndInputOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
@@ -240,7 +249,7 @@ const CLI_INSTRUCTION =
   "do this, do not invent one: reply with one short sentence explaining " +
   "why, and no code block.";
 
-const MCP_SYSTEM_PROMPT = getMcpInstructions("default");
+const MCP_SYSTEM_PROMPT = await getMcpInstructions("default");
 
 // --- arg checking -----------------------------------------------------------
 
@@ -395,8 +404,7 @@ type McpTaskSpec = {
    * model is asked to read.
    */
   preflight?:
-    | { type: "capability-described" }
-    | { type: "compat-search-returned" };
+    { type: "capability-described" } | { type: "compat-search-returned" };
   /**
    * The tool names this task exposes, for a task about a client that carries
    * fewer tools than the surface has. Absent exposes the whole default
@@ -425,6 +433,60 @@ const field = (
     : [
         `${key}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(args[key])}`,
       ];
+
+/**
+ * Whether an identifier carries the docket and the court the brief cited,
+ * read the way the resolver reads it: a model may spell the court as it
+ * likes (`Obvodní soud pro Prahu 6`, `OS Praha 6`, before or after the
+ * docket), but dropping it leaves the docket unconstrained, and a court the
+ * resolver cannot read constrains it to nothing.
+ */
+const citedCourtIssues = (
+  args: Record<string, unknown>,
+  { docket, court }: { docket: string; court: string },
+): string[] => {
+  const identifier = args["identifier"];
+  if (typeof identifier !== "string") {
+    return [`identifier: expected a string, got ${JSON.stringify(identifier)}`];
+  }
+  const grammar = decisionDocketGrammarForCountry("CZE");
+  const parsed = parseDecisionQuery(identifier, { grammar });
+  if (parsed.type !== "identifier") {
+    return [`identifier: ${JSON.stringify(identifier)} names no docket`];
+  }
+  const { intent, courtText } = readDecisionCitation({
+    country: "CZE",
+    identifier,
+    intent: parsed,
+    grammar,
+    reporters: null,
+  });
+  const { courts } = decisionConstraints({
+    country: "CZE",
+    intent,
+    reporters: null,
+    courtText,
+    holders: [],
+  });
+  const expectedCourt = `CZE:${court}`;
+  return [
+    // A sheet the brief did not cite would constrain the decision too.
+    ...(exactDecisionMatches(intent, [{ caseNumber: docket, ecli: null }])
+      .length === 1 &&
+    intent.kind === "docket" &&
+    intent.selector.kind === "none"
+      ? []
+      : [`identifier: expected docket ${docket}, read ${intent.value}`]),
+    ...(courts.length === 1 &&
+    courts[0]?.type === "court" &&
+    courts[0].courts.length === 1 &&
+    courts[0].courts[0] === expectedCourt
+      ? []
+      : [
+          `identifier: expected the court ${court}, read ${JSON.stringify(courts)} from ${JSON.stringify(identifier)}`,
+        ]),
+  ];
+};
 
 const nested = (
   args: Record<string, unknown>,
@@ -584,6 +646,9 @@ const CASE_LAW_SECOND_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000032";
 // A published Czech docket, the way a brief cites one. Not UUID-shaped and not
 // guessable, so the task carries it the way a citation in a document would.
 const CASE_LAW_DOCKET = "Pl. ÚS 33/97";
+// A district-court docket shape: one docket number that several district
+// courts hold, so only the court the citation names singles the decision out.
+const CASE_LAW_DISTRICT_DOCKET = "8 C 123/2024";
 // A legislation work is addressed by its ELI, and its provisions by the
 // publisher's own anchors; neither is UUID-shaped, and neither is guessable,
 // so the tasks carry them the way a previous call would have returned them.
@@ -713,6 +778,52 @@ const TASKS: readonly Task[] = [
       flags: { country: "CZE", identifier: CASE_LAW_DOCKET },
     },
   },
+  // A district-court docket a brief cites with its court. The same docket is
+  // held by other courts, so the court belongs in the identifier, where the
+  // resolver reads it as a constraint; the short form is what briefs write.
+  ...(
+    [
+      {
+        id: "resolve-case-law-district-court",
+        court: "Obvodní soud pro Prahu 6",
+        cited: "Obvodní soud pro Prahu 6",
+      },
+      {
+        id: "resolve-case-law-district-court-short-form",
+        court: "Obvodní soud pro Prahu 6",
+        cited: "OS Praha 6",
+      },
+    ] as const
+  ).map(({ id, court, cited }): Task => ({
+    id,
+    request: `A brief cites the judgment ${CASE_LAW_DISTRICT_DOCKET} of ${cited}. The same docket number exists at other courts. Find that decision in the Czech corpus so I can open it.`,
+    cliRequest: `Resolve the Czech decision with identifier "${CASE_LAW_DISTRICT_DOCKET} ${cited}" in country CZE.`,
+    mcp: {
+      toolName: "resolve_case_law_decision",
+      exampleArgs: {
+        country: "CZE",
+        identifier: `${CASE_LAW_DISTRICT_DOCKET} ${cited}`,
+      },
+      checkArgs: (args) => [
+        ...citedCourtIssues(args, {
+          docket: CASE_LAW_DISTRICT_DOCKET,
+          court,
+        }),
+        ...(typeof args["country"] === "string" &&
+        args["country"].toUpperCase() === "CZE"
+          ? []
+          : [`country: expected CZE, got ${JSON.stringify(args["country"])}`]),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["case-law", "resolve"],
+      flags: {
+        country: "CZE",
+        identifier: `${CASE_LAW_DISTRICT_DOCKET} ${cited}`,
+      },
+    },
+  })),
   {
     id: "resolve-law-citation",
     request:

@@ -2,8 +2,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import {
-  correspondenceKeys,
   correspondenceAddressState,
+  correspondenceKeys,
   uniqueCorrespondenceAddresses,
 } from "./correspondence";
 

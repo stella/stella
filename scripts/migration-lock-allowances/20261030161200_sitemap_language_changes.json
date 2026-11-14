@@ -1,0 +1,3 @@
+{
+  "create-trigger": "Recreating the decision-update trigger is a catalog-only change without a row scan. Its SHARE ROW EXCLUSIVE lock wait is bounded by the migration's 1s lock_timeout; a timeout rolls back for the migration runner to retry."
+}

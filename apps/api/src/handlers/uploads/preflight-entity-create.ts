@@ -1,16 +1,21 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { validateEntityCreateCapacity } from "@/api/lib/uploads/entity-create";
 
-const bodySchema = t.Object({
-  entityCount: t.Integer({ minimum: 1, maximum: LIMITS.entitiesCount }),
-  propertyId: t.Optional(t.Nullable(tSafeId("property"))),
-  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+const bodySchema = v.object({
+  entityCount: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(LIMITS.entitiesCount),
+  ),
+  propertyId: v.optional(v.nullable(resourceIdSchema("property"))),
+  parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
 });
 
 // Answers whether the upload that follows would fit, so it asks for the grant

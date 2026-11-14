@@ -1,0 +1,11 @@
+{
+  "timer": "Cronômetro",
+  "running": "Em andamento",
+  "paused": "Pausado",
+  "noMatter": "Sem caso",
+  "noDescription": "Sem descrição",
+  "more": "{count, plural, one {mais # cronômetro} other {mais # cronômetros}}",
+  "startedElsewhere": "Um cronômetro foi iniciado em outro dispositivo",
+  "pause": "Pausar",
+  "resume": "Retomar"
+}

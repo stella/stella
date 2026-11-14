@@ -1,7 +1,6 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -12,10 +11,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const DAILY_TARGET_MAX_MINUTES = 1440;
-export const dailyTargetBody = t.Object({
-  minutes: t.Nullable(
-    Type.Integer({ minimum: 1, maximum: DAILY_TARGET_MAX_MINUTES }),
-    { description: "Daily target in minutes; null clears the target" },
+export const dailyTargetBody = v.object({
+  minutes: v.pipe(
+    v.nullable(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(DAILY_TARGET_MAX_MINUTES),
+      ),
+    ),
+    v.description("Daily target in minutes; null clears the target"),
   ),
 });
 

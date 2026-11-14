@@ -40,7 +40,6 @@ process.env["CORPUS_STORAGE_MODE"] = "dual-write";
 const DECISION_ID = toSafeId<"caseLawDecision">(
   "00000000-0000-0000-0000-0000000000d1",
 );
-const AST_KEY = "cze/cz-ns/decision-d1.ast.zst";
 
 const noTombstones: CorpusTombstoneReader = async () =>
   await Promise.resolve(new Set());
@@ -67,6 +66,7 @@ describe("readRowAst", () => {
   let bucket: string;
   let compress: (bytes: Uint8Array) => Promise<Uint8Array>;
   let fake: FakeS3;
+  let astKey: string;
 
   const rowWith = (
     overrides: Partial<DecisionAnalysisRow> = {},
@@ -77,7 +77,7 @@ describe("readRowAst", () => {
     country: "CZE",
     decisionType: "rozsudek",
     documentAst: null,
-    astS3Key: AST_KEY,
+    astS3Key: astKey,
     contentHash: "c".repeat(64),
     analysis: null,
     redactedAt: null,
@@ -103,10 +103,11 @@ describe("readRowAst", () => {
   });
 
   beforeEach(async () => {
+    astKey = `cze/cz-ns/${Bun.randomUUIDv7()}.ast.zst`;
     fake = startFakeS3();
     fake.put(
       bucket,
-      AST_KEY,
+      astKey,
       await compress(new TextEncoder().encode(JSON.stringify(storedAst))),
       "application/zstd",
     );

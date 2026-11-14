@@ -8,7 +8,7 @@
  * difference is between a reviewer watching a spinner and a reviewer reading
  * the list while it fills.
  *
- * Eden types the blocking call but cannot type a stream, so the frames are
+ * The API client types the blocking call but not a stream's frames, so they are
  * parsed here: the event name against a closed union (a rename on the server
  * is one edit in `REVIEW_PROPOSAL_EVENT`), the payload against the shape each
  * one carries.
@@ -17,7 +17,10 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { parseApiErrorValue } from "@stll/api-contract";
+import {
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  parseApiErrorValue,
+} from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import type {
@@ -26,7 +29,9 @@ import type {
   ReviewSkippedTerm,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import { apiUrl } from "@/lib/api-url";
+import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { Position } from "@/lib/knowledge/playbook-types";
 import { readSSEEvents } from "@/lib/sse-events";
 
@@ -80,7 +85,8 @@ const isProposalEventName = (name: string): name is ReviewProposalEventName =>
  * and re-stating its whole schema here would be a hand-kept mirror that drifts
  * the first time the server adds a field. What this guards against is a frame
  * that is not a position — a truncated body, a version skew that changed the
- * envelope — not a field-level disagreement Eden would not catch either.
+ * envelope — not a field-level disagreement the API client's types would not
+ * catch either.
  */
 const isProposedPosition = (value: unknown): boolean =>
   typeof value === "object" &&
@@ -250,13 +256,35 @@ export type StreamReviewProposalArgs = {
 
 /**
  * A refused stream. Everything a caller can be refused for — a matter they
- * cannot open, a model the organization has not enabled, an exhausted budget —
- * is decided before the first byte and answered with an ordinary status code,
- * so it reaches the caller here rather than as an `error` frame.
+ * cannot open, a model the organization has not enabled, an exhausted budget,
+ * documents too large for the model — is decided before the first byte and
+ * answered with an ordinary status code, so it reaches the caller here rather
+ * than as an `error` frame.
  */
 export type StreamReviewProposalResult =
-  | { ok: true }
-  | { ok: false; error: ToAPIErrorProps | null };
+  { ok: true } | { ok: false; error: ToAPIErrorProps | null };
+
+type ProposalRefusalMessageOptions = {
+  refusal: ToAPIErrorProps | null;
+  unexpectedErrorMessage: string;
+  documentsTooLargeMessage: string;
+};
+
+/** What the reviewer reads for a failed proposal. The same code also names a
+ *  single file over the byte limit, so the wording for a proposal, which reads
+ *  several documents at once, is chosen here and not in the global error map. */
+export const proposalRefusalMessage = ({
+  refusal,
+  unexpectedErrorMessage,
+  documentsTooLargeMessage,
+}: ProposalRefusalMessageOptions): string => {
+  if (refusal === null) {
+    return unexpectedErrorMessage;
+  }
+  return toAPIError(refusal).code === DOCUMENT_TOO_LARGE_ERROR_CODE
+    ? documentsTooLargeMessage
+    : userErrorMessage(refusal, unexpectedErrorMessage);
+};
 
 const proposalStreamUrl = (workspaceId: string): `/${string}` =>
   `/workspaces/${workspaceId}/document-reviews/positions/stream`;

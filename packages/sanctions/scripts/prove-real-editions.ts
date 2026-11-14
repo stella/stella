@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 // Fixture-backed common-name completeness proof and edition resource measurements.
 // No publisher requests: --directory must contain local editions using fixture filenames.
 import assert from "node:assert/strict";

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the PDF text-layer read moved unchanged into libpdf-utils.ts (readPdfTextPages): the same load, pages and extraction.
 /**
  * Slovak Courts PDF parser.
  *
@@ -36,35 +37,60 @@
  *   Mgr. ...                          (signature)
  */
 
-import { PDF, SecurityError } from "@libpdf/core";
+import { SecurityError } from "@libpdf/core";
 
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  Inline,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import {
+  rewriteInlineWhitespace,
+  stripInlinePrefix,
+  stripInlineSuffix,
+} from "@stll/legal-ast/inline-line";
+import { LINE_JOIN } from "@stll/legal-ast/line-wrap";
+import {
+  PRINTED_LABEL_KIND,
+  printedLabelOpensParagraph,
+  readPrintedLabel,
+} from "@stll/legal-ast/printed-paragraph-labels";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
+  isSkOpeningFormula,
+  isSkPortalMetadataRow,
   isSkReasoningMarker,
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
   skSectionHeading,
+  skTitleFormulaStart,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
+import { collapseLetterSpacing } from "@stll/text-normalize";
 
+import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import {
+  type PdfPrintedLine,
+  readPdfLineJoins,
+} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   buildBoldRanges,
   isBoldFont,
   normalizeSpanText,
+  readPdfTextPages,
   segmentsToInlines,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
 import type {
   PdfSegment,
   PdfSpan,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -85,7 +111,7 @@ type ParseSkDecisionOutput = {
   fulltext: string;
 };
 
-type PdfLine = {
+type PdfLine = PdfPrintedLine & {
   text: string;
   segments: PdfSegment[];
   /** True when the PRIMARY (first) span is bold. Used for
@@ -94,6 +120,8 @@ type PdfLine = {
   fontSize: number;
   /** 0-based page index from PDF extraction. */
   pageIndex: number;
+  /** PDF coordinates, used to retain the publisher's blank paragraph lines. */
+  position?: { y: number; height: number };
 };
 
 /**
@@ -124,13 +152,16 @@ export const parseSkDecisionPdf = async (
   input: ParseSkDecisionInput,
 ): Promise<ParseSkDecisionOutput> => {
   const lines = await extractLines(input.pdfBytes);
-  const blocks = buildSkDecisionPdfBlocks({ lines, metadata: input });
+  const blocks = courtParagraphNumbers(
+    buildSkDecisionPdfBlocks({ lines, metadata: input }),
+    { parser: "sk-courts", caseNumber: input.caseNumber },
+  );
 
-  // Synthesize decision title if none detected
+  // Metadata may title extracted content, but cannot manufacture a document.
   const hasTitle = blocks.some(
     (b) => b.type === "heading" && b.role === "decision-title",
   );
-  if (!hasTitle && input.decisionType) {
+  if (blocks.length > 0 && !hasTitle && input.decisionType) {
     const title =
       input.decisionType.charAt(0).toUpperCase() + input.decisionType.slice(1);
     blocks.unshift({
@@ -143,13 +174,6 @@ export const parseSkDecisionPdf = async (
       plainText: title,
     });
   }
-
-  const validationHtml = buildValidationHtml(lines.map((l) => l.text));
-  validateAndLog(
-    { parser: "sk-courts", caseNumber: input.caseNumber },
-    validationHtml,
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
@@ -189,13 +213,10 @@ const ANONYMIZED_PLACEHOLDER = "anonymizované";
  * segments with anonymization markers for redaction gaps.
  */
 const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
-  const pdf = await PDF.load(pdfBytes);
-  const pages = pdf.getPages();
+  const pages = await readPdfTextPages(pdfBytes);
   const lines: PdfLine[] = [];
 
-  for (const [pageIdx, page] of pages.entries()) {
-    const result = page.extractText();
-
+  for (const [pageIdx, result] of pages.entries()) {
     // Detect left margin from most common line start X.
     const leftMargin = detectLeftMargin(result.lines);
 
@@ -211,8 +232,13 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
         continue;
       }
 
+      // The line as structure detection reads it. The segments keep the
+      // gaps as printed, so the paragraph they join into is read once over
+      // its line breaks (see `readLetterSpacing`).
       const text = segments
-        .map((s) => s.text)
+        .map((s) =>
+          s.anonymized === true ? s.text : collapseLetterSpacing(s.text),
+        )
         .join(" ")
         .replace(/ {2,}/gu, " ")
         .trim();
@@ -230,6 +256,8 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
         bold,
         fontSize,
         pageIndex: pageIdx,
+        layout: { ...line.bbox, pageIndex: pageIdx },
+        position: { y: line.bbox.y, height: line.bbox.height },
       });
     }
   }
@@ -326,7 +354,9 @@ const buildSpanSegments = (
   //    for bold detection. Building text from individual
   //    spans breaks words that @libpdf splits across
   //    multiple spans (e.g., "N" + "apadnuté").
-  const lineText = normalizeSpanText(lineBbox.text);
+  // The gaps stay as the page sets them until each segment is cleaned: a
+  // wider gap is the word boundary between two letter-spaced words.
+  const lineText = lineBbox.text.replaceAll("\u00A0", " ").trim();
   if (lineText) {
     // Build a bold map: for each char offset, is it bold?
     // Walk spans and line text in parallel.
@@ -363,9 +393,11 @@ const buildSpanSegments = (
     }
   }
 
-  // Clean up: trim each segment text
+  // The gaps stay as printed: the wider gap between two letter-spaced words
+  // (`t ý m  s p á c h a l :`) is the word boundary, and a spaced word can
+  // run over a line break (`… 7.8.2006    j` / `e    n e p l a t n á.`).
   for (const seg of segments) {
-    seg.text = seg.text.replace(/ {2,}/gu, " ").trim();
+    seg.text = seg.text.trim();
   }
 
   return segments.filter((s) => s.text !== "");
@@ -377,25 +409,28 @@ const buildSpanSegments = (
  * the same paragraph: same font, same bold, not a structural
  * marker (numbered item, section heading, title).
  */
-/**
- * Patterns that always start a new paragraph during line
- * merging. Closing/signature patterns are NOT here because
- * judge titles (JUDr., Mgr.) and city names appear in
- * intro text too; those are only treated as signatures
- * when they appear after the instruction section.
- */
-// Roman numeral pattern excludes case citations like
-// "II. ÚS 177/04" via negative lookahead for "ÚS".
-const STARTS_NEW_PARAGRAPH_RE =
-  /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\([a-z]\)\s)/u;
+/** A line set larger than this is the decision title. */
+const TITLE_FONT_SIZE = 14;
+const PARAGRAPH_GAP_LINE_HEIGHTS = 1.5;
+const FONT_LINE_HEIGHT_RATIO = 1.25;
 
-function isStructuralStart(line: PdfLine, section: Section): boolean {
-  if (line.fontSize > 14) {
+function isStructuralStart(
+  line: PdfLine,
+  above: string | undefined,
+  section: Section,
+): boolean {
+  if (line.fontSize > TITLE_FONT_SIZE) {
     return true; // title
   }
+  if (line.bold && skSectionHeading(line.text, section) !== null) {
+    return true;
+  }
+  // A printed label opens a paragraph where the shared grammar says. A dash
+  // also needs the layout (a full line above it goes on a name), which the
+  // line-wrap reader weighs.
   if (
-    STARTS_NEW_PARAGRAPH_RE.test(line.text) ||
-    (line.bold && skSectionHeading(line.text, section) !== null)
+    readPrintedLabel(line.text)?.kind !== PRINTED_LABEL_KIND.BULLET &&
+    printedLabelOpensParagraph({ above, line: line.text })
   ) {
     return true;
   }
@@ -406,7 +441,7 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
   ) {
     return true;
   }
-  if (isSkDecisionTitle(line.text)) {
+  if (isSkDecisionTitle(line.text) || isSkOpeningFormula(line.text)) {
     return true;
   }
   // Closing formula and signature always start a new block
@@ -419,11 +454,99 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
   return false;
 }
 
+/**
+ * Whether each line continues the sentence of the line before it, as the
+ * shared line-wrap reader decides: the line above was full, ended by the
+ * layout inside a sentence, as in `dňa` / `2. júla 2014` or `exekútora` /
+ * `JUDr. A. B.`. A printed label (`2.`, `5.5.`, `a)`, `-`) opens a paragraph
+ * where the shared label grammar says: not inside a date wrapped after its
+ * day, not after a word its number belongs to (`v bode`). Whether a
+ * continued line still opens a signature is `continuesPastStart`'s call.
+ * Section markers and the title are not running prose, so they neither
+ * count toward the page's line width nor continue anything. Ordinary bold
+ * emphasis remains prose.
+ */
+const sentenceContinuations = (lines: readonly PdfLine[]) =>
+  readPdfLineJoins(
+    lines.map((line) => {
+      if (
+        line.fontSize > TITLE_FONT_SIZE ||
+        isSkHoldingMarker(line.text) ||
+        isSkReasoningMarker(line.text) ||
+        isSkInstructionMarker(line.text)
+      ) {
+        return null;
+      }
+      return line;
+    }),
+  );
+
+/**
+ * Whether a structural-looking line the line-wrap reader continues opens
+ * nothing after all: an academic title is a wrapped sentence's next word
+ * (`exekútora` / `JUDr. A. B.`), unless the paragraph above is the closing
+ * formula or a signature, after which a title opens the next signature.
+ */
+const continuesPastStart = (line: PdfLine, afterSignatures: boolean): boolean =>
+  !afterSignatures && SK_JUDGE_TITLE_RE.test(line.text);
+
+type ParagraphGapOptions = {
+  previous: PdfLine | undefined;
+  current: PdfLine;
+};
+
+const hasParagraphGap = ({
+  previous,
+  current,
+}: ParagraphGapOptions): boolean => {
+  if (
+    previous?.pageIndex !== current.pageIndex ||
+    previous.position === undefined ||
+    current.position === undefined
+  ) {
+    return false;
+  }
+  // PDF y runs upwards. A blank line separates paragraphs on the same
+  // page; a page turn alone says nothing about a paragraph boundary.
+  // Font metrics bound ordinary leading: paragraph gaps must not enlarge
+  // their own threshold when short paragraphs dominate the document.
+  return (
+    previous.position.y - current.position.y >
+    Math.max(
+      previous.position.height,
+      current.position.height,
+      FONT_LINE_HEIGHT_RATIO * Math.max(previous.fontSize, current.fontSize),
+    ) *
+      PARAGRAPH_GAP_LINE_HEIGHTS
+  );
+};
+
+type ReaderBreakOptions = ParagraphGapOptions & {
+  join: ReturnType<typeof sentenceContinuations>[number] | undefined;
+};
+
+/**
+ * The shared PDF reader's break is layout evidence (pitch, margins, short
+ * final lines). Without page geometry on both lines its text-only fallback
+ * cannot end a paragraph that the font-metric gap continues.
+ */
+const readerEndsParagraph = ({
+  previous,
+  current,
+  join,
+}: ReaderBreakOptions): boolean =>
+  previous?.layout !== undefined &&
+  current.layout !== undefined &&
+  join === LINE_JOIN.BREAK;
+
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
+  const continuations = sentenceContinuations(lines);
   let section: Section = "preamble";
+  /** Whether the paragraph being built is the closing formula or a signature. */
+  let inSignatures = false;
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     if (line.bold && isSkHoldingMarker(line.text)) {
       section = "holding";
     }
@@ -437,18 +560,30 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       section = "closing";
     }
     const prev = merged.at(-1);
+    // `lines[-1]` is undefined, so the first line never opens on a gap.
+    const paragraphGap = hasParagraphGap({
+      previous: lines[index - 1],
+      current: line,
+    });
 
     // Start a new paragraph if:
     // - first line
     // - bold changed
     // - font size changed
-    // - line is a structural start (numbered, section marker)
+    // - line is a structural start (numbered, section marker), unless
+    //   it continues the previous line's sentence (`continuesPastStart`)
     // - previous line was bold (section markers are standalone)
     // Font size tolerance: libpdf/core may report
     // slightly different sizes across pages (e.g., 10.0
     // vs 9.98) due to PDF matrix rounding.
     const fontSizeChanged =
       Math.abs(line.fontSize - (prev?.fontSize ?? 0)) > 0.5;
+    const structuralStart =
+      isStructuralStart(line, lines[index - 1]?.text, section) &&
+      !(
+        continuations[index] !== LINE_JOIN.BREAK &&
+        continuesPastStart(line, inSignatures)
+      );
 
     // SK ÚS PDFs sometimes bold a short continuation
     // (e.g., "zrušuje.", "1 014,41 eur ...") that belongs
@@ -457,24 +592,29 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     // section marker. This preserves the prev.bold rule
     // that prevents merging after section headings.
     const boldContinuation =
-      prev &&
-      !prev.bold &&
-      line.bold &&
-      !fontSizeChanged &&
-      !isStructuralStart(line, section);
+      prev && !prev.bold && line.bold && !fontSizeChanged && !structuralStart;
 
     const startNew =
       !prev ||
       (line.bold !== prev.bold && !boldContinuation) ||
       fontSizeChanged ||
-      isStructuralStart(line, section) ||
-      prev.bold;
+      paragraphGap ||
+      structuralStart ||
+      prev.bold ||
+      readerEndsParagraph({
+        previous: lines[index - 1],
+        current: line,
+        join: continuations[index],
+      });
 
     if (startNew) {
       merged.push({
         ...line,
         segments: [...line.segments],
       });
+      inSignatures =
+        SK_CLOSING_RE.test(line.text) ||
+        (inSignatures && SK_JUDGE_TITLE_RE.test(line.text));
     } else {
       // Continuation: append text and segments.
       // Keep latest pageIndex for page boundary detection.
@@ -503,10 +643,34 @@ export const buildSkDecisionPdfBlocks = ({
     `Súd: ${metadata.court}`,
     `Spisová značka: ${metadata.caseNumber}`,
   ]);
-  if (metadata.ecli) {
-    repeatedHeaders.add(`ECLI: ${metadata.ecli}`);
+  const ecliHeader = metadata.ecli ? `ECLI: ${metadata.ecli}` : undefined;
+  if (ecliHeader !== undefined) {
+    repeatedHeaders.add(ecliHeader);
   }
+  // The publisher's first-page metadata table is bounded by court/docket
+  // and ECLI. Strip the intervening labelled rows only inside that table,
+  // never a matching phrase in the decision body or an unknown header row.
+  // Without an ECLI the table has no known end, so nothing is stripped.
+  const tableEnd =
+    ecliHeader === undefined
+      ? -1
+      : lines.findIndex((line) => line.text.trim() === ecliHeader);
+  const table = lines.slice(0, tableEnd + 1);
+  const metadataRow =
+    /^(?:Identifikačné číslo súdneho spisu: \d+|Dátum vydania rozhodnutia: \d{1,2}\.\s*\d{1,2}\.\s*\d{4}|Meno a priezvisko sudcu, VSÚ: .+)$/u;
   let firstBodyLine = 0;
+  if (
+    table.at(0)?.text.trim() === `Súd: ${metadata.court}` &&
+    table.at(1)?.text.trim() === `Spisová značka: ${metadata.caseNumber}` &&
+    table.every(
+      (line) =>
+        line.pageIndex === 0 &&
+        (repeatedHeaders.has(line.text.trim()) ||
+          metadataRow.test(line.text.trim())),
+    )
+  ) {
+    firstBodyLine = table.length;
+  }
   while (
     firstBodyLine < lines.length &&
     repeatedHeaders.has(lines.at(firstBodyLine)?.text.trim() ?? "")
@@ -515,7 +679,9 @@ export const buildSkDecisionPdfBlocks = ({
   }
   // Digits at page boundaries can be amounts or numbered points; without
   // a source-backed pagination signal they remain source content.
-  return classifyLines(mergeWrappedLines(lines.slice(firstBodyLine)));
+  return classifyLines(
+    mergeWrappedLines(lines.slice(firstBodyLine)).map(readLetterSpacing),
+  );
 };
 
 // ── Classification ────────────────────────────────────────
@@ -531,32 +697,145 @@ const boldInline = (text: string): Inline[] => [
 
 type Section = SkDocumentSection;
 
+/** A paragraph's lines joined, with the inlines it reads as. */
+type ReadPdfLine = PdfLine & { inlines: Inline[] };
+
+type AppendDecisionTitleOptions = {
+  blocks: Block[];
+  line: ReadPdfLine;
+  makeId: () => string;
+  makeAnchor: (anchor: string) => string;
+};
+
+const appendDecisionTitle = ({
+  blocks,
+  line,
+  makeId,
+  makeAnchor,
+}: AppendDecisionTitleOptions): void => {
+  const previous = blocks.at(-1);
+  if (previous?.type === "heading" && previous.role === "decision-title") {
+    previous.plainText += ` ${line.text}`;
+    previous.inlines.push({ type: "text", text: " " }, ...line.inlines);
+    return;
+  }
+  blocks.push({
+    id: makeId(),
+    anchorId: makeAnchor("h-title"),
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: line.inlines,
+    plainText: line.text,
+  });
+};
+
+const SPACES_RE = / {2,}/gu;
+
+/**
+ * A paragraph read through the letter-spacing owner once its lines are
+ * joined, so a spaced word broken over a line reads whole, and its runs of
+ * spaces squeezed. The paragraph's text is what its inlines read.
+ */
+const readLetterSpacing = (line: PdfLine): ReadPdfLine => {
+  const inlines = rewriteInlineWhitespace(
+    readInlineLetterSpacing(segmentsToInlines(line.segments)),
+    (text) => text.replaceAll(SPACES_RE, " "),
+  );
+  return { ...line, inlines, text: plainTextOf(inlines).trim() };
+};
+
+/**
+ * Read the formula off a title it was set in one run with: the title keeps
+ * its words, and the formula follows as the court's opening words, each with
+ * the inline formatting it was printed in.
+ */
+const separateOpeningFormula = ({
+  blocks,
+  makeId,
+  makeAnchor,
+}: Omit<AppendDecisionTitleOptions, "line">): void => {
+  const title = blocks.at(-1);
+  if (title?.type !== "heading" || title.role !== "decision-title") {
+    return;
+  }
+  const text = plainTextOf(title.inlines);
+  const start = skTitleFormulaStart(text);
+  if (start === undefined) {
+    return;
+  }
+  const formulaInlines = stripInlinePrefix(title.inlines, start);
+  title.inlines = stripInlineSuffix(title.inlines, text.length - start);
+  title.plainText = plainTextOf(title.inlines).trim();
+  blocks.push({
+    id: makeId(),
+    anchorId: makeAnchor("p-formula"),
+    type: "paragraph",
+    role: "opening-formula",
+    inlines: formulaInlines,
+    plainText: plainTextOf(formulaInlines).trim(),
+  });
+};
+
+/**
+ * A plain paragraph's role by its section: the holding's, the portal's
+ * metadata box as front matter (one role for every row, kept as printed and
+ * never the decision's body), and the opening paragraph's intro.
+ */
+const paragraphRoleOf = (
+  section: Section,
+  text: string,
+  blocks: readonly Block[],
+): ParagraphRole | undefined => {
+  if (section === "holding") {
+    return "holding";
+  }
+  if (section !== "preamble") {
+    return undefined;
+  }
+  if (isSkPortalMetadataRow(text)) {
+    return "front-matter";
+  }
+  return blocks.length <= 1 ? "intro" : undefined;
+};
+
 /**
  * Classify extracted PDF lines into AST blocks.
  *
  * Bold and font size come directly from PDF font metadata;
  * no heuristic regex splitting needed.
  */
-const classifyLines = (lines: readonly PdfLine[]): Block[] => {
+const classifyLines = (lines: readonly ReadPdfLine[]): Block[] => {
   const makeId = createIdGenerator();
   let blockCount = 0;
   const blocks: Block[] = [];
+  const makeAnchor = createBlockAnchorAllocator();
   let section: Section = "preamble";
 
   for (const line of lines) {
     const { text, bold, fontSize } = line;
 
-    // Decision title: large font or matching decision type
-    if (section === "preamble" && (fontSize > 14 || isSkDecisionTitle(text))) {
+    // The formula the court decides under is set in the title's type but
+    // is the court's opening words, not part of the title.
+    if (section === "preamble" && isSkOpeningFormula(text)) {
       blocks.push({
         id: makeId(),
-        anchorId: "h-title",
-        type: "heading",
-        level: 1,
-        role: "decision-title",
-        inlines: segmentsToInlines(line.segments),
+        anchorId: makeAnchor(`p${++blockCount}`),
+        type: "paragraph",
+        role: "opening-formula",
+        inlines: line.inlines,
         plainText: text,
       });
+      continue;
+    }
+
+    // Decision title: large font or matching decision type
+    if (
+      section === "preamble" &&
+      (fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(text))
+    ) {
+      appendDecisionTitle({ blocks, line, makeId, makeAnchor });
+      separateOpeningFormula({ blocks, makeId, makeAnchor });
       continue;
     }
 
@@ -565,7 +844,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "holding";
       blocks.push({
         id: makeId(),
-        anchorId: "h-holding",
+        anchorId: makeAnchor("h-holding"),
         type: "heading",
         level: 2,
         role: "section-heading",
@@ -579,7 +858,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "reasoning";
       blocks.push({
         id: makeId(),
-        anchorId: "h-reasoning",
+        anchorId: makeAnchor("h-reasoning"),
         type: "heading",
         level: 2,
         role: "section-heading",
@@ -595,7 +874,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       if (isStandalone) {
         blocks.push({
           id: makeId(),
-          anchorId: "h-instruction",
+          anchorId: makeAnchor("h-instruction"),
           type: "heading",
           level: 2,
           role: "section-heading",
@@ -607,9 +886,9 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
         // (common in SK ÚS PDFs). Emit as paragraph.
         blocks.push({
           id: makeId(),
-          anchorId: `p${++blockCount}`,
+          anchorId: makeAnchor(`p${++blockCount}`),
           type: "paragraph",
-          inlines: segmentsToInlines(line.segments),
+          inlines: line.inlines,
           plainText: text,
         });
       }
@@ -624,10 +903,10 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "closing";
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "paragraph",
         role: "closing",
-        inlines: segmentsToInlines(line.segments),
+        inlines: line.inlines,
         plainText: text,
       });
       continue;
@@ -637,10 +916,10 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     if (section === "closing") {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "paragraph",
         role: "signature",
-        inlines: segmentsToInlines(line.segments),
+        inlines: line.inlines,
         plainText: text,
       });
       continue;
@@ -649,10 +928,10 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     if (section === "instruction" && SK_JUDGE_TITLE_RE.test(text)) {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "paragraph",
         role: "signature",
-        inlines: segmentsToInlines(line.segments),
+        inlines: line.inlines,
         plainText: text,
       });
       continue;
@@ -662,10 +941,10 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     if (sectionHeading !== null) {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "heading",
         level: sectionHeading.level,
-        inlines: segmentsToInlines(line.segments),
+        inlines: line.inlines,
         plainText: text,
       });
       continue;
@@ -684,30 +963,29 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     ) {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "heading",
         level: 3,
-        inlines: segmentsToInlines(line.segments),
+        inlines: line.inlines,
         plainText: text,
       });
       continue;
     }
 
     // Regular paragraph with section-appropriate role
-    const inlines = segmentsToInlines(line.segments);
+    const inlines = line.inlines;
 
     const block: Block = {
       id: makeId(),
-      anchorId: `p${++blockCount}`,
+      anchorId: makeAnchor(`p${++blockCount}`),
       type: "paragraph",
       inlines,
       plainText: text,
     };
 
-    if (section === "holding") {
-      block.role = "holding";
-    } else if (section === "preamble" && blocks.length <= 1) {
-      block.role = "intro";
+    const role = paragraphRoleOf(section, text, blocks);
+    if (role !== undefined) {
+      block.role = role;
     }
 
     blocks.push(block);

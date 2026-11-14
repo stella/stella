@@ -17,6 +17,7 @@ import {
   type BrowserControlCommand,
   type BrowserControlElement,
   type BrowserControlResult,
+  type BrowserControlSnapshot,
   type BrowserObservedTab,
   parseBrowserControlResult,
 } from "@stll/api-contract/browser-control";
@@ -196,8 +197,9 @@ export const launchExtensionHarness = async ({
           if (tab?.id === undefined) {
             return false;
           }
+          // The stella page registers itself with its first message.
           await chrome.storage.session.set({
-            browserController: { controllerId: id, origin, tabId: tab.id },
+            browserController: { controllerId: id, origin },
           });
           return true;
         },
@@ -344,6 +346,27 @@ export const openInNewControlledTab = async (
   return successful(await send({ action: "snapshot" }));
 };
 
+/**
+ * Reads on from `snapshot` with each window's `next` cursor until `until`
+ * holds; every window read on the way, the first included.
+ */
+export const readOn = async (
+  send: (command: BrowserControlCommand) => Promise<BrowserControlResult>,
+  snapshot: BrowserControlSnapshot,
+  until: (window: BrowserControlSnapshot) => boolean,
+): Promise<BrowserControlSnapshot[]> => {
+  const windows = [snapshot];
+  for (let current = snapshot; !until(current); ) {
+    const { next } = current.window;
+    if (next === undefined) {
+      return panic("The page ended before the window looked for.");
+    }
+    current = successful(await send({ action: "snapshot", cursor: next }));
+    windows.push(current);
+  }
+  return windows;
+};
+
 export const successful = (result: BrowserControlResult) => {
   expect(result.status, JSON.stringify(result)).toBe("success");
   if (result.status !== "success") {
@@ -370,9 +393,9 @@ export const targetOf = ({
   ref,
   role,
 }: BrowserControlElement) => ({
+  context,
+  href,
   name,
   ref,
   role,
-  ...(context === undefined ? {} : { context }),
-  ...(href === undefined ? {} : { href }),
 });

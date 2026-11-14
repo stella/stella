@@ -1,20 +1,24 @@
-import { Value } from "@sinclair/typebox/value";
+import { Ajv } from "ajv";
+import addFormats from "ajv-formats";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { VIEW_LAYOUT_TYPES } from "@stll/api-contract";
 
 import {
-  projectAvtViewInputSchemas,
   isAvtLayoutVisible,
+  projectAvtViewInputSchemas,
   projectViewEligibility,
 } from "@/api/lib/auth/feature-access/view-eligibility";
+import type { JsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   tCreateViewInputSchema,
   tUpdateViewBodySchema,
 } from "@/api/lib/views-schema";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
+import { compileWireSchema } from "@/api/tests/helpers/wire-json-schema";
 
 const filesystem = {
   type: "filesystem",
@@ -26,6 +30,20 @@ const filesystem = {
 };
 const avt = { ...filesystem, type: "avt", listId: null };
 const id = "019c0c90-0000-7000-8000-000000000103";
+
+// The projection rewrites the advertised JSON Schema, so what it admits is
+// read by a JSON Schema validator: the reading an agent's client applies.
+// Route renderings keep their `x-` extension keywords, which are annotations.
+const ajv = new Ajv({ allowUnionTypes: true, strict: false });
+addFormats(ajv);
+
+const accepts = (schema: JsonSchema, value: unknown): boolean => {
+  const plain: unknown = structuredClone(schema);
+  if (!isRecord(plain)) {
+    return panic("Expected an object schema");
+  }
+  return compileWireSchema(ajv, plain)(value);
+};
 
 describe("conditional view schema projection", () => {
   for (const [name, { config, ordinary, featured }] of Object.entries({
@@ -41,7 +59,7 @@ describe("conditional view schema projection", () => {
     },
     convert: {
       config: {
-        body: t.Object({ targetType: t.UnionEnum([...VIEW_LAYOUT_TYPES]) }),
+        body: v.object({ targetType: v.picklist([...VIEW_LAYOUT_TYPES]) }),
       },
       ordinary: { targetType: "filesystem" },
       featured: { targetType: "avt" },
@@ -55,11 +73,13 @@ describe("conditional view schema projection", () => {
       if (full.body === undefined || projected.body === undefined) {
         panic("Expected body schemas");
       }
-      expect(Value.Check(full.body, featured)).toBe(true);
-      expect(Value.Check(projected.body, featured)).toBe(false);
-      expect(Value.Check(projected.body, ordinary)).toBe(true);
+      // The route itself still admits both; only the advertisement narrows.
+      expect(v.is(config.body, featured)).toBe(true);
+      expect(accepts(full.body, featured)).toBe(true);
+      expect(accepts(projected.body, featured)).toBe(false);
+      expect(accepts(projected.body, ordinary)).toBe(true);
       if (name === "update") {
-        expect(Value.Check(projected.body, { name: "View" })).toBe(true);
+        expect(accepts(projected.body, { name: "View" })).toBe(true);
       }
     });
   }

@@ -2,8 +2,8 @@
 //
 // A messages snapshot written by hand in a test agrees with TanStack's engine
 // only until the engine changes. Valid-path snapshots come from
-// the builders in `apps/api/src/tests/helpers/chat-fixtures.ts`, which run the
-// engine's own converters. This guard rejects a `MESSAGES_SNAPSHOT` object
+// the owning API and web fixture builders, which run the engine's own
+// converters. This guard rejects a `MESSAGES_SNAPSHOT` object
 // literal in any chat test or test helper outside that owner, unless it is an
 // argument of `unsafeFixture(reason, ...)`, the explicit escape for malformed
 // input and exhaustive state matrices. Hand-built UI state matrices are not
@@ -15,27 +15,28 @@
 // or element access, and any of these behind `as const`, `satisfies`, a type
 // assertion, parentheses or `!`.
 //
-// Test files that predate the builders are listed in
-// scripts/chat-fixture-guard-ledger.json with how many snapshots each builds
-// by hand. The ledger only shrinks: a file with more literals than its entry
-// (or with none listed) fails, and a file with fewer fails until its entry is
-// lowered or removed.
-//
 // Modes:
 //   bun scripts/chat-fixture-guard.ts              check the tree (CI gate)
 //   bun scripts/chat-fixture-guard.ts --self-test  prove the detector fires
-//   bun scripts/chat-fixture-guard.ts --write      rewrite the ledger from the tree
 
-import { panic } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import {
+  type Expression,
+  type Node,
+  type ObjectProperty as Property,
+  parseSource,
+  type SpreadElement,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const LEDGER_REL = "scripts/chat-fixture-guard-ledger.json";
-const OWNER_REL = "apps/api/src/tests/helpers/chat-fixtures.ts";
+const OWNER_RELS = [
+  "apps/api/src/tests/helpers/chat-fixtures.ts",
+  "apps/web/src/features/chat/chat-test-fixtures.ts",
+] as const;
 const SCAN_GLOBS = [
   "apps/api/src/**/*.test.ts",
   "apps/api/src/tests/**/*.ts",
@@ -58,195 +59,144 @@ export type SnapshotLiteral = { line: number; path: string };
 const MAX_BINDING_HOPS = 8;
 
 /** `node` without the wrappers that leave its value unchanged. */
-const unwrap = (node: ts.Expression): ts.Expression => {
+const unwrap = (node: Node): Node => {
   let current = node;
   while (
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isTypeAssertionExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current)
+    current.type === "TSAsExpression" ||
+    current.type === "TSSatisfiesExpression" ||
+    current.type === "TSTypeAssertion" ||
+    current.type === "ParenthesizedExpression" ||
+    current.type === "TSNonNullExpression"
   ) {
     current = current.expression;
   }
   return current;
 };
 
-/** A property name's text, however it is quoted, or undefined if computed
- *  from anything but a literal. */
-const propertyNameText = (name: ts.PropertyName): string | undefined => {
+const literalText = (node: Node): string | undefined => {
   if (
-    ts.isIdentifier(name) ||
-    ts.isStringLiteral(name) ||
-    ts.isNoSubstitutionTemplateLiteral(name) ||
-    ts.isNumericLiteral(name)
+    node.type === "Literal" &&
+    (typeof node.value === "string" || typeof node.value === "number")
   ) {
-    return name.text;
+    return String(node.value);
   }
-  if (ts.isComputedPropertyName(name)) {
-    const expression = unwrap(name.expression);
-    return ts.isStringLiteral(expression) ||
-      ts.isNoSubstitutionTemplateLiteral(expression)
-      ? expression.text
-      : undefined;
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
   }
   return undefined;
 };
-
-/** The initializer of the nearest `const`/`let`/`var` named `name` that
- *  encloses `from`, without a type checker. */
-const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
-  /** The initializer `name` is declared with directly in `scope`, as a
-   *  variable or a parameter default, if any. */
-  const declaredIn = (scope: ts.Node): ts.Expression | undefined => {
-    if (ts.isFunctionLike(scope)) {
-      const parameter = scope.parameters.find(
-        (candidate) =>
-          ts.isIdentifier(candidate.name) && candidate.name.text === name,
-      );
-      if (parameter?.initializer !== undefined) {
-        return parameter.initializer;
-      }
-    }
-    const statements =
-      ts.isSourceFile(scope) || ts.isBlock(scope) || ts.isModuleBlock(scope)
-        ? scope.statements
-        : [];
-    for (const statement of statements) {
-      if (!ts.isVariableStatement(statement)) {
-        continue;
-      }
-      for (const declaration of statement.declarationList.declarations) {
-        if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.name.text === name &&
-          declaration.initializer !== undefined
-        ) {
-          return declaration.initializer;
-        }
-      }
-    }
-    return undefined;
-  };
-  const scope = ts.findAncestor(
-    from.parent,
-    (candidate) => declaredIn(candidate) !== undefined,
-  );
-  return scope === undefined ? undefined : declaredIn(scope);
-};
-
-const isSnapshotType = (node: ts.Expression, hops = 0): boolean => {
-  const value = unwrap(node);
-  if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) {
-    return value.text === SNAPSHOT_TYPE;
-  }
-  if (ts.isPropertyAccessExpression(value)) {
-    return value.name.text === SNAPSHOT_TYPE;
-  }
-  if (ts.isElementAccessExpression(value)) {
-    const key = unwrap(value.argumentExpression);
-    return (
-      (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)) &&
-      key.text === SNAPSHOT_TYPE
-    );
-  }
-  if (ts.isIdentifier(value) && hops < MAX_BINDING_HOPS) {
-    const bound = bindingOf(value, value.text);
-    return bound !== undefined && isSnapshotType(bound, hops + 1);
-  }
-  return false;
-};
-
-/** Whether `property` sets the object's `type` to the snapshot type. */
-const isSnapshotDiscriminant = (property: ts.ObjectLiteralElementLike) => {
-  if (ts.isPropertyAssignment(property)) {
-    return (
-      propertyNameText(property.name) === "type" &&
-      isSnapshotType(property.initializer)
-    );
-  }
-  return (
-    ts.isShorthandPropertyAssignment(property) &&
-    property.name.text === "type" &&
-    isSnapshotType(property.name)
-  );
-};
-
-const isEscapeCall = (node: ts.Node): boolean =>
-  ts.isCallExpression(node) &&
-  ts.isIdentifier(node.expression) &&
-  node.expression.text === ESCAPE_CALL;
-
-const isInsideEscape = (node: ts.Node): boolean =>
-  ts.findAncestor(node.parent, isEscapeCall) !== undefined;
 
 /** The snapshot object literals `source` builds outside the escape. */
 export const findSnapshotLiterals = (
   relativePath: string,
   source: string,
 ): SnapshotLiteral[] => {
-  const file = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  const found: SnapshotLiteral[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isObjectLiteralExpression(node) &&
-      node.properties.some(isSnapshotDiscriminant) &&
-      !isInsideEscape(node)
-    ) {
-      found.push({
-        line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
-        path: relativePath,
-      });
+  const file = parseSource(relativePath, source);
+  const parents = new Map<Node, readonly Node[]>();
+  walk(file.program, (node, ancestors) => {
+    parents.set(node, [...ancestors]);
+  });
+  const bindingOf = (from: Node, name: string): Expression | undefined => {
+    for (const scope of (parents.get(from) ?? []).toReversed()) {
+      if (
+        scope.type === "FunctionDeclaration" ||
+        scope.type === "FunctionExpression" ||
+        scope.type === "ArrowFunctionExpression"
+      ) {
+        const parameter = scope.params.find(
+          (candidate) =>
+            candidate.type === "AssignmentPattern" &&
+            candidate.left.type === "Identifier" &&
+            candidate.left.name === name,
+        );
+        if (parameter?.type === "AssignmentPattern") {
+          return parameter.right;
+        }
+      }
+      const statements =
+        scope.type === "Program" ||
+        scope.type === "BlockStatement" ||
+        scope.type === "TSModuleBlock"
+          ? scope.body
+          : [];
+      for (const statement of statements) {
+        const declaration =
+          statement.type === "ExportNamedDeclaration"
+            ? statement.declaration
+            : statement;
+        if (declaration?.type !== "VariableDeclaration") {
+          continue;
+        }
+        for (const variable of declaration.declarations) {
+          if (
+            variable.id.type === "Identifier" &&
+            variable.id.name === name &&
+            variable.init
+          ) {
+            return variable.init;
+          }
+        }
+      }
     }
-    ts.forEachChild(node, visit);
+    return undefined;
   };
-  visit(file);
+  const isSnapshotType = (node: Expression, hops = 0): boolean => {
+    const value = unwrap(node);
+    const text = literalText(value);
+    if (text !== undefined) {
+      return text === SNAPSHOT_TYPE;
+    }
+    if (value.type === "MemberExpression") {
+      return value.computed
+        ? literalText(unwrap(value.property)) === SNAPSHOT_TYPE
+        : value.property.type === "Identifier" &&
+            value.property.name === SNAPSHOT_TYPE;
+    }
+    if (value.type === "Identifier" && hops < MAX_BINDING_HOPS) {
+      const bound = bindingOf(value, value.name);
+      return bound !== undefined && isSnapshotType(bound, hops + 1);
+    }
+    return false;
+  };
+  const isSnapshotDiscriminant = (property: Property | SpreadElement) => {
+    if (
+      property.type !== "Property" ||
+      property.method ||
+      property.kind !== "init"
+    ) {
+      return false;
+    }
+    let key: string | undefined;
+    if (property.computed) {
+      key = literalText(unwrap(property.key));
+    } else if (property.key.type === "Identifier") {
+      key = property.key.name;
+    } else {
+      key = literalText(property.key);
+    }
+    return key === "type" && isSnapshotType(property.value);
+  };
+  const found: SnapshotLiteral[] = [];
+  walk(file.program, (node, ancestors) => {
+    if (
+      node.type !== "ObjectExpression" ||
+      !node.properties.some(isSnapshotDiscriminant)
+    ) {
+      return;
+    }
+    if (
+      ancestors.some(
+        (ancestor) =>
+          ancestor.type === "CallExpression" &&
+          ancestor.callee.type === "Identifier" &&
+          ancestor.callee.name === ESCAPE_CALL,
+      )
+    ) {
+      return;
+    }
+    found.push({ line: file.locate(node.start).line, path: relativePath });
+  });
   return found;
-};
-
-/** Hand-built snapshot literals per grandfathered file. */
-type Ledger = Readonly<Record<string, number>>;
-
-export type GuardReport = {
-  /** Files whose literal count fell below their entry. */
-  stale: string[];
-  /** Literals in files over their entry (all of a file's, if it has none). */
-  unlisted: SnapshotLiteral[];
-};
-
-const countByFile = (
-  found: readonly SnapshotLiteral[],
-): Map<string, number> => {
-  const counts = new Map<string, number>();
-  for (const { path: file } of found) {
-    counts.set(file, (counts.get(file) ?? 0) + 1);
-  }
-  return counts;
-};
-
-/** Compares what the tree builds by hand with the ledger. */
-export const compareWithLedger = ({
-  found,
-  ledger,
-}: {
-  found: readonly SnapshotLiteral[];
-  ledger: Ledger;
-}): GuardReport => {
-  const counts = countByFile(found);
-  return {
-    stale: Object.entries(ledger).flatMap(([file, allowed]) =>
-      (counts.get(file) ?? 0) < allowed ? [file] : [],
-    ),
-    unlisted: found.filter(
-      ({ path: file }) => (counts.get(file) ?? 0) > (ledger[file] ?? 0),
-    ),
-  };
 };
 
 const scanTree = async (): Promise<SnapshotLiteral[]> => {
@@ -258,7 +208,7 @@ const scanTree = async (): Promise<SnapshotLiteral[]> => {
     })) {
       if (
         seen.has(relativePath) ||
-        relativePath === OWNER_REL ||
+        OWNER_RELS.some((owner) => relativePath === owner) ||
         relativePath.includes("node_modules")
       ) {
         continue;
@@ -276,56 +226,20 @@ const scanTree = async (): Promise<SnapshotLiteral[]> => {
   );
 };
 
-const readLedger = (): Ledger => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(path.join(REPO_ROOT, LEDGER_REL), "utf-8"),
-  );
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return panic(`${LEDGER_REL} must map file paths to literal counts`);
-  }
-  const ledger: Record<string, number> = {};
-  for (const [file, count] of Object.entries(parsed)) {
-    if (typeof count !== "number" || !Number.isInteger(count)) {
-      return panic(`${LEDGER_REL}: ${file} needs an integer literal count`);
-    }
-    ledger[file] = count;
-  }
-  return ledger;
-};
-
 const check = async (): Promise<number> => {
   const found = await scanTree();
-  const ledger = readLedger();
-  const { stale, unlisted } = compareWithLedger({ found, ledger });
-  if (stale.length === 0 && unlisted.length === 0) {
+  if (found.length === 0) {
     console.log(
-      `chat fixture guard: OK. ${String(Object.keys(ledger).length)} listed files still build snapshots by hand; no new ones.`,
+      "chat fixture guard: OK. No test builds a messages snapshot by hand.",
     );
     return 0;
   }
-  for (const { line, path: file } of unlisted) {
+  for (const { line, path: file } of found) {
     console.error(
-      `  ${file}:${String(line)}: a hand-built messages snapshot beyond the file's ledger entry. Build it with ${OWNER_REL}, or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
-    );
-  }
-  for (const file of stale) {
-    console.error(
-      `  ${file}: builds fewer snapshots by hand than ${LEDGER_REL} allows; lower or remove its entry.`,
+      `  ${file}:${String(line)}: a hand-built messages snapshot. Build it with an owning fixture builder (${OWNER_RELS.join(", ")}), or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
     );
   }
   return 1;
-};
-
-const write = async (): Promise<number> => {
-  const counts = Object.fromEntries(countByFile(await scanTree()));
-  writeFileSync(
-    path.join(REPO_ROOT, LEDGER_REL),
-    `${JSON.stringify(counts, null, 2)}\n`,
-  );
-  console.log(
-    `chat fixture guard: wrote ${String(Object.keys(counts).length)} files.`,
-  );
-  return 0;
 };
 
 const selfTest = (): number => {
@@ -434,25 +348,6 @@ const selfTest = (): number => {
     "const s = { type: EventType.RUN_FINISHED, runId: 'r' };",
     0,
   );
-  const report = compareWithLedger({
-    found: [
-      { line: 1, path: "listed.test.ts" },
-      { line: 2, path: "grown.test.ts" },
-      { line: 3, path: "grown.test.ts" },
-      { line: 4, path: "new.test.ts" },
-    ],
-    ledger: { "grown.test.ts": 1, "listed.test.ts": 1, "migrated.test.ts": 2 },
-  });
-  if (
-    JSON.stringify(report.stale) !== JSON.stringify(["migrated.test.ts"]) ||
-    JSON.stringify([
-      ...new Set(report.unlisted.map(({ path: file }) => file)),
-    ]) !== JSON.stringify(["grown.test.ts", "new.test.ts"])
-  ) {
-    failures.push(
-      `ledger comparison must report the migrated, the grown and the new file: ${JSON.stringify(report)}`,
-    );
-  }
   if (failures.length === 0) {
     console.log("chat-fixture-guard --self-test: PASS");
     return 0;
@@ -464,9 +359,5 @@ const selfTest = (): number => {
 };
 
 if (import.meta.main) {
-  const mode = process.argv[2];
-  if (mode === "--self-test") {
-    process.exit(selfTest());
-  }
-  process.exit(mode === "--write" ? await write() : await check());
+  process.exit(process.argv[2] === "--self-test" ? selfTest() : await check());
 }

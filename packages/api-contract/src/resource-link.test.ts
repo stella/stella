@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   findCanonicalChatResourceHrefs,
@@ -10,7 +10,7 @@ import {
   replaceCanonicalChatResourceHrefs,
   toChatResourceHref,
 } from "./resource-link";
-import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
+import { RESOURCE_TYPE, resourceRef } from "./resource-ref";
 import { toSafeId } from "./safe-id";
 
 describe("chat resource links", () => {
@@ -147,7 +147,8 @@ describe("chat resource links", () => {
   });
 
   test("keeps opaque IDs separate from trailing prose punctuation", () => {
-    fc.assert(
+    assertProperty(
+      "keeps opaque IDs separate from trailing prose punctuation",
       fc.property(
         fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
         (id) => {
@@ -169,12 +170,13 @@ describe("chat resource links", () => {
           ).toBe("See matter_ref.");
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("treats Unicode punctuation as a bare-link boundary", () => {
-    fc.assert(
+    assertProperty(
+      "treats Unicode punctuation as a bare-link boundary",
       fc.property(
         fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
         fc.constantFrom("—", "–", "…", "。", "،"),
@@ -197,12 +199,13 @@ describe("chat resource links", () => {
           ).toBe(`See matter_ref${punctuation}next`);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("treats opening citation delimiters as bare-link boundaries", () => {
-    fc.assert(
+    assertProperty(
+      "treats opening citation delimiters as bare-link boundaries",
       fc.property(
         fc.string({ minLength: 1, maxLength: 64, unit: "binary" }),
         fc.constantFrom("[", "{", "("),
@@ -225,7 +228,7 @@ describe("chat resource links", () => {
           ).toBe(`See matter_ref${delimiter}1`);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 

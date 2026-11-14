@@ -15,7 +15,7 @@ import {
 } from "./api-typecheck-inputs";
 import { apiTypecheckInputIssues } from "./api-typecheck-partition";
 
-test("workspace covering inputs stay stable as files move and imports change within a root", () => {
+test("workspace covering inputs stay stable as files move and imports change within a root", async () => {
   const root = realpathSync(
     mkdtempSync(path.join(tmpdir(), "api-covering-inputs-")),
   );
@@ -39,7 +39,7 @@ test("workspace covering inputs stay stable as files move and imports change wit
         scripts: { "typecheck:src": "bun check --project=tsconfig.src.json" },
       }),
     );
-    const inputs = apiProgramTypecheckInputs(project, [source, shared]);
+    const inputs = await apiProgramTypecheckInputs(project, [source, shared]);
     const added = [
       path.join(api, "src/new.test.ts"),
       path.join(api, "src/handlers/visual-sandbox/browser/value.ts"),
@@ -47,10 +47,10 @@ test("workspace covering inputs stay stable as files move and imports change wit
       path.join(root, "packages/shared/tests/new.test.ts"),
     ];
     expect(
-      apiProgramTypecheckInputs(project, [source, shared, ...added]),
+      await apiProgramTypecheckInputs(project, [source, shared, ...added]),
     ).toEqual(inputs);
     expect(
-      apiProgramTypecheckInputs(project, [
+      await apiProgramTypecheckInputs(project, [
         source,
         path.join(root, "packages/shared/moved.ts"),
       ]),
@@ -67,7 +67,7 @@ test("workspace covering inputs stay stable as files move and imports change wit
       uncoveredApiTypecheckFiles({ files: [other], inputs, project }),
     ).toEqual([other]);
     expect(
-      apiProgramTypecheckInputs(project, [source, shared, other]),
+      await apiProgramTypecheckInputs(project, [source, shared, other]),
     ).toContain("$TURBO_ROOT$/packages/other/**");
     const programs = new Map([
       ["@stll/api#typecheck:src", [source, shared, ...added]],
@@ -80,7 +80,7 @@ test("workspace covering inputs stay stable as files move and imports change wit
         }),
       );
     writeInputs([...inputs, "extra/**"]);
-    expect(apiTypecheckInputIssues(root, programs)).toEqual([]);
+    expect(await apiTypecheckInputIssues(root, programs)).toEqual([]);
     for (const excluded of [
       "!src/**/*.test.ts",
       "!src/not-yet-created/**",
@@ -89,11 +89,14 @@ test("workspace covering inputs stay stable as files move and imports change wit
       "!$TURBO_ROOT$/.npmrc",
     ]) {
       writeInputs([...inputs, excluded]);
-      expect(apiTypecheckInputIssues(root, programs)).toHaveLength(1);
+      expect(await apiTypecheckInputIssues(root, programs)).toHaveLength(1);
     }
     writeInputs(inputs.filter((input) => input !== "**"));
     expect(
-      apiTypecheckInputIssues(root, new Map([["@stll/api#typecheck:src", []]])),
+      await apiTypecheckInputIssues(
+        root,
+        new Map([["@stll/api#typecheck:src", []]]),
+      ),
     ).toHaveLength(1);
   } finally {
     rmSync(root, { recursive: true, force: true });

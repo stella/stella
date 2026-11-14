@@ -10,10 +10,11 @@ import {
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 
+const { StrictMode } = await import("react");
 const { cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
 const { INSPECTOR_PANE_DEFAULT_WIDTH, INSPECTOR_PANE_KEYBOARD_STEP } =
@@ -24,6 +25,14 @@ const {
   useSharedInspectorPaneWidth,
 } = await import("@/components/inspector/pane-width-storage");
 const { deviceStorage } = await import("@/lib/account/browser-storage");
+
+const { inspectorStateEntry, inspectorMinimizedEntry } =
+  await import("@/components/inspector/inspector-storage-keys");
+const { writePersistedState, removePersistedState } =
+  await import("@/lib/persisted-state/registry");
+const { ProtectedPendingSkeleton } =
+  await import("@/routes/-protected-pending-skeleton");
+const pendingScope = { organizationId: "pending-org", userId: "pending-user" };
 
 const storage = deviceStorage("local");
 
@@ -48,6 +57,7 @@ const Dock = ({ openedFrom }: { openedFrom: Surface }) => {
 };
 
 beforeEach(() => {
+  globalThis.history.replaceState(null, "", "/workspaces");
   for (const key of [
     INSPECTOR_PANE_WIDTH_STORAGE_KEY,
     LEGACY_MATTER_KEY,
@@ -59,6 +69,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  removePersistedState(inspectorStateEntry, pendingScope).unwrap();
+  removePersistedState(inspectorMinimizedEntry, pendingScope).unwrap();
 });
 
 afterAll(async () => {
@@ -157,4 +169,76 @@ test("no source outside the owner keeps an inspector width of its own", async ()
   }
 
   expect(offenders).toEqual([]);
+});
+
+test("released shared width migrates into the registry envelope without changing the preference", () => {
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "640");
+  render(<Dock openedFrom="matter" />);
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
+    "640",
+  );
+  expect(
+    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
+  ).toEqual({ version: 1, value: 640 });
+});
+
+test("safe-mode StrictMode mounting preserves the saved width until a user resize", () => {
+  const savedWidth = 640;
+  const saved = JSON.stringify({ version: 1, value: savedWidth });
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, saved);
+  globalThis.history.replaceState(null, "", "/workspaces?safe=1");
+
+  render(
+    <StrictMode>
+      <Dock openedFrom="matter" />
+    </StrictMode>,
+  );
+
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
+    String(INSPECTOR_PANE_DEFAULT_WIDTH),
+  );
+  expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe(saved);
+  fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowLeft" });
+  expect(
+    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
+  ).toEqual({
+    version: 1,
+    value: INSPECTOR_PANE_DEFAULT_WIDTH + INSPECTOR_PANE_KEYBOARD_STEP,
+  });
+});
+
+test("the member loading frame reserves the saved inspector before tabs mount", () => {
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "320");
+  writePersistedState(inspectorStateEntry, pendingScope, {
+    tabs: [
+      {
+        type: "chat",
+        id: "00000000-0000-4000-8000-000000000001",
+        label: "Chat",
+        contextMatterIds: [],
+      },
+    ],
+    groups: [],
+    groupAssignments: {},
+    activeId: "00000000-0000-4000-8000-000000000001",
+    collapsedGroupIds: [],
+  }).unwrap();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, false).unwrap();
+  const { container, rerender } = render(
+    <ProtectedPendingSkeleton inspectorScope={pendingScope} />,
+  );
+  const dockWidth = () =>
+    container
+      .querySelector('[data-slot="inspector-pending-dock"]')
+      ?.getAttribute("style");
+  expect(dockWidth()).toBe("width: 320px;");
+  rerender(
+    <ProtectedPendingSkeleton
+      inspectorScope={{ ...pendingScope, userId: "another-user" }}
+    />,
+  );
+  expect(dockWidth()).toBeNull();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, true).unwrap();
+  rerender(<ProtectedPendingSkeleton inspectorScope={pendingScope} />);
+  expect(dockWidth()).toBeNull();
 });

@@ -1,10 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import { panic } from "better-result";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 
 import {
-  filenameForContext,
   getImportedName,
   getImportLocalName,
   getPropertyName,
@@ -50,22 +46,11 @@ import {
 // function takes them as an options parameter; a plain fake stands in for
 // them in the test. When the real module wraps an external boundary, mock
 // the npm package it calls, or expose a test seam on the wrapper.
-//
-// Grandfathering: `scripts/internal-module-mock-ledger.json` lists every
-// `<file>::<specifier>` pair that mocked a workspace module when the rule
-// landed. A listed pair is not reported; a pair in the ledger with no
-// matching mock in its file is reported as stale, so the only sanctioned
-// ledger edit is deleting a line the rule has already named. The ratchet
-// (`scripts/ratchet.ts`, `internal-module-mock-ledger-entries`) fails when
-// the ledger grows.
 
 const RULE_NAME = "no-internal-module-mock";
 const MOCK_SOURCE = "bun:test";
 const MOCK_BINDING = "mock";
 const MODULE_METHOD = "module";
-const LEDGER_RELATIVE_PATH = "../scripts/internal-module-mock-ledger.json";
-const LEDGER_DISPLAY_PATH = "scripts/internal-module-mock-ledger.json";
-const PAIR_SEPARATOR = "::";
 
 // Specifier prefixes that resolve inside this repository. `@stll/` is the
 // workspace scope (AGENTS.md: every `apps/*` and `packages/*` child is
@@ -86,65 +71,8 @@ export const isRuntimeEngineSpecifier = (specifier: string): boolean =>
   specifier.startsWith(`${RUNTIME_ENGINE_PACKAGE}/`) ||
   specifier.startsWith(`${RUNTIME_ENGINE_PACKAGE}-`);
 
-// Ledger entries grouped by the file they belong to, read once per process.
-// The ledger holds repo-relative POSIX paths; the linted filename is absolute,
-// so entries are matched by path suffix.
-let ledgerByFile: ReadonlyMap<string, ReadonlySet<string>> | null = null;
-
-const readLedger = (): ReadonlyMap<string, ReadonlySet<string>> => {
-  if (ledgerByFile !== null) {
-    return ledgerByFile;
-  }
-  const ledgerPath = path.join(import.meta.dirname, LEDGER_RELATIVE_PATH);
-  const parsed: unknown = JSON.parse(readFileSync(ledgerPath, "utf-8"));
-  if (
-    !Array.isArray(parsed) ||
-    !parsed.every((entry) => typeof entry === "string")
-  ) {
-    panic(`${LEDGER_DISPLAY_PATH} must be a JSON array of strings`);
-  }
-  // Sorted and duplicate-free, so a line cannot hide in the list and a merge
-  // conflict on the ledger resolves by position.
-  for (const [index, entry] of parsed.entries()) {
-    const previous = parsed[index - 1];
-    if (typeof previous === "string" && previous >= entry) {
-      panic(
-        `${LEDGER_DISPLAY_PATH} must be sorted and duplicate-free: "${entry}" follows "${previous}"`,
-      );
-    }
-  }
-  const grouped = new Map<string, Set<string>>();
-  for (const entry of parsed) {
-    const separator = entry.indexOf(PAIR_SEPARATOR);
-    if (separator === -1) {
-      panic(
-        `${LEDGER_DISPLAY_PATH}: "${entry}" is not a "<file>::<specifier>" pair`,
-      );
-    }
-    const file = entry.slice(0, separator);
-    const specifier = entry.slice(separator + PAIR_SEPARATOR.length);
-    const specifiers = grouped.get(file) ?? new Set<string>();
-    specifiers.add(specifier);
-    grouped.set(file, specifiers);
-  }
-  ledgerByFile = grouped;
-  return grouped;
-};
-
-type LedgerFile = { file: string; specifiers: ReadonlySet<string> };
-
-const ledgerFileFor = (filename: string): LedgerFile | null => {
-  for (const [file, specifiers] of readLedger()) {
-    if (filename === file || filename.endsWith(`/${file}`)) {
-      return { file, specifiers };
-    }
-  }
-  return null;
-};
-
 type MockBinding =
-  | { kind: "direct"; local: string }
-  | { kind: "namespace"; local: string };
+  { kind: "direct"; local: string } | { kind: "namespace"; local: string };
 
 // Every binding of `bun:test`'s `mock` this import declaration introduces:
 // the plain and aliased named imports, and the namespace import. All of them
@@ -219,33 +147,24 @@ export default eslintCompatPlugin({
             "a fabrication, so the test keeps passing when the real module's " +
             "contract changes. Inject the dependency (handler context or an " +
             "options parameter) and pass a plain fake, or mock the external " +
-            "package the module wraps. Only pairs already listed in " +
-            `${LEDGER_DISPLAY_PATH} are grandfathered, and that list only shrinks.`,
+            "package the module wraps.",
           runtimeEngineMock:
             '`mock.module("{{specifier}}")` replaces the TanStack AI runtime, ' +
             "so the code under test reads chunks the real engine never emits " +
             "(it normalizes them to AG-UI spec shape and moves non-spec fields " +
             "into `metadata.tanstack`). Build a fake `AnyTextAdapter` and " +
             "inject it through the model resolver seam (`resolveTextModel`) " +
-            "so the real `chat()` runs. There is no grandfathering for this " +
-            "target.",
+            "so the real `chat()` runs.",
           unresolvableSpecifier:
             "`mock.module(...)` must name its target with a string literal so " +
             "the rule can tell a workspace module from an external boundary.",
-          staleLedgerEntry:
-            `${LEDGER_DISPLAY_PATH} lists "{{pair}}" but this file no longer ` +
-            "mocks that module. Delete the line in the same change.",
         },
       },
       createOnce(context) {
-        let ledgerFile: LedgerFile | null = null;
-        let seen = new Set<string>();
         let bindings: MockBinding[] = [];
 
         return {
           before() {
-            ledgerFile = ledgerFileFor(filenameForContext(context));
-            seen = new Set();
             bindings = [];
           },
           // Imports are hoisted, so a call written above its import still
@@ -279,32 +198,11 @@ export default eslintCompatPlugin({
             if (!isWorkspaceSpecifier(specifier)) {
               return;
             }
-            seen.add(specifier);
-            if (ledgerFile?.specifiers.has(specifier) === true) {
-              return;
-            }
             context.report({
               node,
               messageId: "workspaceMock",
               data: { specifier },
             });
-          },
-          "Program:exit"(node) {
-            if (ledgerFile === null) {
-              return;
-            }
-            for (const specifier of ledgerFile.specifiers) {
-              if (seen.has(specifier)) {
-                continue;
-              }
-              context.report({
-                node,
-                messageId: "staleLedgerEntry",
-                data: {
-                  pair: `${ledgerFile.file}${PAIR_SEPARATOR}${specifier}`,
-                },
-              });
-            }
           },
         };
       },

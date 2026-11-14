@@ -1,15 +1,15 @@
 import {
   renderLazyCatalogEntry,
-  toolDefinition,
   type SchemaInput,
   type ServerTool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
+  type CodeModeTool,
   createCodeMode,
+  type CreateCodeModeResult,
   generateTypeStubs,
   toolsToBindings,
-  type CodeModeTool,
-  type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
 
@@ -36,12 +36,17 @@ import {
   type ScriptCallCatalog,
 } from "@/api/handlers/chat/tools/execute/script-call-guide";
 import {
+  type ResolveCurrentChatExecutionContext,
+  resolveCurrentChatRegistryContext,
+} from "@/api/handlers/chat/tools/registry-adapter/current-execution-context";
+import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
+import type { RunRegistryReadToolProps } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
@@ -332,6 +337,10 @@ type BuildChatCodeModeProps = Omit<
   scriptCallTools: () => ChatScriptCallTools;
   /** The turn's source chips; every script read is held to them. */
   sourceScopes?: readonly ChatSourceScope[] | undefined;
+  /** Rebuild live authority before each registry read in a delayed script. */
+  resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
+  /** Keeps the reads a chat app presents for the turn's `show_app`. */
+  recordAppRead?: RunRegistryReadToolProps["recordAppRead"];
 };
 
 export const buildChatCodeMode = (
@@ -340,12 +349,25 @@ export const buildChatCodeMode = (
   const {
     sourceScopes = [],
     documentedReads,
+    recordAppRead,
     refRegistry,
+    resolveCurrentExecutionContext,
     scriptCallTools,
     toolDefectMemo,
     ...contextDeps
   } = props;
   const context = buildMcpContextFromChat(contextDeps);
+  const resolveReadContext = async () => {
+    if (resolveCurrentExecutionContext === undefined) {
+      return Result.ok(context);
+    }
+    return (
+      await resolveCurrentChatRegistryContext({
+        contextDeps,
+        resolveCurrentExecutionContext,
+      })
+    ).map(buildMcpContextFromChat);
+  };
 
   return createChatCodeModeSurface({
     featureAccessContext: context,
@@ -356,12 +378,17 @@ export const buildChatCodeMode = (
         toolName,
         args: toolArgs,
         toolDefectMemo,
-        read: async () =>
-          await runRegistryReadTool({
+        read: async () => {
+          const currentContext = await resolveReadContext();
+          if (Result.isError(currentContext)) {
+            return Result.err(currentContext.error);
+          }
+          return await runRegistryReadTool({
             toolName,
             args: toolArgs,
-            context,
+            context: currentContext.value,
             refRegistry,
+            recordAppRead,
             scopeArgs: async (args) =>
               await scopeCorpusRead({
                 scopes: sourceScopes,
@@ -369,7 +396,8 @@ export const buildChatCodeMode = (
                 args,
                 resolveCountries: corpusResourceCountries,
               }),
-          }),
+          });
+        },
       }),
     // A script that calls a direct tool, an unprefixed read or a tool this
     // chat does not offer is told the call to make instead.

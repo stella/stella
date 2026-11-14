@@ -5,27 +5,21 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { CommandIcon, XIcon } from "@stll/ui/icons";
+import { XIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
-import { cn } from "@stll/ui/utils";
 
 import type {
   PastedTextAttrs,
   PastedTextSource,
 } from "@/components/chat-pasted-text-extension";
-import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
+import {
+  ChatAttachmentChip,
+  ChatCommandChip,
+} from "@/components/chat/chat-draft-attachment-chips";
 import { ReferenceChip } from "@/components/references/reference-chip";
-
-const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
-
-// Shared chip shell so the interactive paste trigger and the
-// static command chip stay visually identical.
-const CHIP_BASE_CLASS = cn(
-  "inline-flex max-w-full items-center gap-1 align-middle",
-  "bg-muted/60 rounded-md border px-1.5 py-0.5",
-  "text-foreground text-xs font-medium",
-);
 
 const PASTED_TEXT_SOURCE_VALUES: readonly string[] = [
   "paste",
@@ -96,14 +90,8 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   if (attrs.source === "command") {
     return (
       <NodeViewWrapper className="inline" data-source="command">
-        <span
-          className={cn(CHIP_BASE_CLASS, "select-none")}
-          contentEditable={false}
-        >
-          <CommandIcon className="text-muted-foreground size-3 shrink-0" />
-          <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
-            {chipLabel}
-          </span>
+        <span className="select-none" contentEditable={false}>
+          <ChatCommandChip label={chipLabel} />
         </span>
       </NodeViewWrapper>
     );
@@ -172,9 +160,9 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
         <PopoverPopup className="w-(--available-width) max-w-md" side="top">
           <div className="flex max-h-72 flex-col gap-2 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground truncate">
+              <TruncatedText className="text-muted-foreground">
                 {chipLabel}
-              </span>
+              </TruncatedText>
               <Button
                 aria-label={t("common.remove")}
                 className="size-5 p-0"
@@ -185,17 +173,25 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
                 <XIcon className="size-3" />
               </Button>
             </div>
-            <textarea
-              aria-label={t("common.edit")}
-              className="bg-muted/40 focus-visible:ring-ring text-2xs max-h-60 min-h-32 resize-none overflow-auto rounded-md border p-2 font-mono whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
-              dir={contentDir(draftText)}
-              onBlur={commitDraft}
-              onChange={(event) => {
-                setDraftText(event.target.value);
-              }}
-              spellCheck={false}
-              value={draftText}
-            />
+            {/* The box is drawn here and the control is `unstyled`: raw
+                pasted text reads in small monospace. A fixed-height field
+                scrolls a long paste inside itself, with no resize grip, so
+                the popover keeps its size. */}
+            <div className="bg-muted/40 focus-within:ring-ring text-2xs rounded-md border font-mono whitespace-pre-wrap focus-within:ring-2">
+              <Textarea
+                aria-label={t("common.edit")}
+                dir={contentDir(draftText)}
+                onBlur={commitDraft}
+                onChange={(event) => {
+                  setDraftText(event.target.value);
+                }}
+                fieldSizing="fixed"
+                rows={8}
+                spellCheck={false}
+                unstyled
+                value={draftText}
+              />
+            </div>
           </div>
         </PopoverPopup>
       </Popover>

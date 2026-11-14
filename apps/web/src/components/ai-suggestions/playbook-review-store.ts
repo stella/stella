@@ -24,6 +24,7 @@ import type {
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   mergeStreamedPosition,
+  proposalRefusalMessage,
   REVIEW_PROPOSAL_EVENT,
   streamReviewProposal,
 } from "@/components/ai-suggestions/document-review-proposal-stream";
@@ -57,11 +58,7 @@ export const reviewSessionKey = (
  * only source of progress, findings and failure.
  */
 type ReviewStatus =
-  | "idle"
-  | "proposing-positions"
-  | "editing-positions"
-  | "starting"
-  | "error";
+  "idle" | "proposing-positions" | "editing-positions" | "starting" | "error";
 
 /**
  * Whether the facet may still adopt the document's latest server run. A
@@ -78,8 +75,7 @@ type ReviewRestoreMode = "allowed" | "dismissed";
  * facet renders it read-only and offers the way back.
  */
 export type ReviewRunSelection =
-  | { type: "tracked" }
-  | { type: "history"; runId: string };
+  { type: "tracked" } | { type: "history"; runId: string };
 
 export const TRACKED_RUN_SELECTION: ReviewRunSelection = { type: "tracked" };
 
@@ -152,6 +148,7 @@ type StartReviewArgs = {
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
+  documentsTooLargeMessage: string;
   /** What the proposal is followed by: the run, or the confirm step. */
   startMode: ReviewStartMode;
   /** The picked playbook's enabled positions, when there is one. */
@@ -333,6 +330,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
       entityId,
       fileFieldId,
       unexpectedErrorMessage,
+      documentsTooLargeMessage,
       startMode,
       seededPositions,
     }) => {
@@ -507,10 +505,11 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
         refusal !== null ||
         proposalStatus === "failed"
       ) {
-        const message =
-          refusal === null
-            ? unexpectedErrorMessage
-            : userErrorMessage(refusal, unexpectedErrorMessage);
+        const message = proposalRefusalMessage({
+          refusal,
+          unexpectedErrorMessage,
+          documentsTooLargeMessage,
+        });
         set((state) => {
           const current = state.sessions[key];
           if (current?.requestId !== requestId) {

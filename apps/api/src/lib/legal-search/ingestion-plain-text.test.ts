@@ -3,15 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   presentTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import {
-  toPlainTextIngestionResult,
   EMPTY_AST,
   type IngestionResult,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 

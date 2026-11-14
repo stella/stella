@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "UK_FCL",
+  "key": "uk-fcl",
+  "parserVersion": 6,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Date a tribunal decision by its decision date, so a document named a decision is read rather than refused. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own."
+  }
+}

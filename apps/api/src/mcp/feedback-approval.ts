@@ -8,8 +8,9 @@
  * organization, within the approval window: content cannot be swapped between
  * the report a human was shown and the one that is sent.
  */
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import { createSha256 } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
@@ -37,7 +38,7 @@ const signature = ({
   secret,
   userId,
 }: ApprovalSubject & { expiresAt: number }): string =>
-  createHmac("sha256", secret)
+  new Bun.CryptoHasher("sha256", secret)
     .update(
       [
         APPROVAL_PREFIX,
@@ -65,7 +66,12 @@ export const checkFeedbackApproval = (
   if (expiresAtText === undefined) {
     return "invalid";
   }
-  const expiresAt = Number(expiresAtText);
+  const expiresAt = parseIntegerToken(expiresAtText, {
+    sign: "unsigned",
+  }).unwrapOr(null);
+  if (expiresAt === null) {
+    return "invalid";
+  }
   const expected = `${APPROVAL_PREFIX}.${expiresAtText}.${signature({ ...subject, expiresAt })}`;
   if (
     expected.length !== subject.approval.length ||

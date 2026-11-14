@@ -15,8 +15,8 @@
  */
 
 import {
-  languageDisplayName,
   foreignLanguageOf,
+  languageDisplayName,
 } from "@/api/lib/document-review/target-language";
 import type { ReviewTargetLanguage } from "@/api/lib/document-review/target-language";
 

@@ -16,6 +16,7 @@ import {
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
 import {
   isPublicLawPathIndexable,
+  PUBLIC_CRAWL_ASSETS,
   publicToolCrawlPaths,
 } from "@/public-crawl-policy";
 
@@ -39,10 +40,13 @@ const {
   fetchPublicSitemapShards,
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
+const {
+  createSitemapReadFailureResponse,
+  createSitemapUpstreamBusyError,
+  SitemapUpstreamBusyError,
+} = await import("@/lib/public-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { ssrCacheClassHeaders } = await import("@/route-response-policy");
-const { isWorkspaceDocumentRoutePath } =
-  await import("@/components/workspaces/entity-utils");
 const { Route: robotsRoute, robotsHandlers } =
   await import("@/routes/robots[.]txt");
 
@@ -357,6 +361,52 @@ describe("public law sitemap", () => {
     ]);
   });
 
+  test.each([
+    ["17", "17"],
+    [String(Number.MAX_SAFE_INTEGER), String(Number.MAX_SAFE_INTEGER)],
+    ["1e100", "60"],
+    ["9007199254740992", "60"],
+    ["Infinity", "60"],
+    ["NaN", "60"],
+    ["1.5", "60"],
+    ["0", "60"],
+    ["-1", "60"],
+    ["", "60"],
+  ])("normalizes retry delay %s to decimal seconds", (header, expected) => {
+    const error = createSitemapUpstreamBusyError({
+      action: "readPublicSitemap",
+      response: new Response("busy", {
+        status: 429,
+        headers: { "Retry-After": header },
+      }),
+    });
+
+    const response = createSitemapReadFailureResponse(error);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe(expected);
+    expect(response.headers.get("Retry-After")).toMatch(/^[1-9][0-9]*$/u);
+  });
+
+  test.each([429, 503])(
+    "an upstream %s refusal rejects with a retryable busy error",
+    async (status) => {
+      const fetchImpl = async () => new Response("busy", { status });
+
+      const error = await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: { bucket: "all", country: "cze", month: "05", year: "2026" },
+        }),
+      );
+
+      expect(SitemapUpstreamBusyError.is(error)).toBe(true);
+      expect(createSitemapReadFailureResponse(error).status).toBe(503);
+      expect(
+        createSitemapReadFailureResponse(error).headers.get("Retry-After"),
+      ).toBe("60");
+    },
+  );
+
   test("fetches public sitemap shards from the public case-law API only", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (input: Request | URL | string) => {
@@ -468,6 +518,9 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/07.xml</loc>",
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
+    expect(xml).toMatch(
+      /<sitemap>\s*<loc>http:\/\/localhost:3000\/sitemaps\/law\.xml<\/loc>\s*<\/sitemap>/u,
+    );
     expect(xml).not.toContain("cursor=");
     expect(xml).not.toContain("/xaa/");
     expect(xml).not.toContain("workspace");
@@ -679,6 +732,24 @@ describe("public law sitemap", () => {
     ).toThrow("Public sitemap exceeded 5 bytes.");
   });
 
+  test("the default sitemap ceiling refuses more than fifty mebibytes", () => {
+    const protocolLimitBytes = 50 * 1024 * 1024;
+    const xml = " ".repeat(protocolLimitBytes + 1);
+    expect(() => assertPublicLawSitemapXmlWithinProtocolLimits(xml)).toThrow(
+      `Public sitemap exceeded ${protocolLimitBytes} bytes.`,
+    );
+  });
+
+  test("the sitemap byte ceiling counts UTF-8 bytes", () => {
+    const xml = "<url>č</url>";
+    expect(new TextEncoder().encode(xml).byteLength).toBeGreaterThan(
+      xml.length,
+    );
+    expect(() =>
+      assertPublicLawSitemapXmlWithinProtocolLimits(xml, xml.length),
+    ).toThrow(`Public sitemap exceeded ${xml.length} bytes.`);
+  });
+
   test("root sitemap indexes fail before exceeding the protocol byte limit", () => {
     expect(() =>
       createPublicLawSitemapIndexXml(
@@ -794,6 +865,7 @@ describe("public law sitemap", () => {
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
+      ...PUBLIC_CRAWL_ASSETS.map(({ path }) => `Allow: ${path}$`),
     ]);
     // A jurisdiction whose pages are not public stays behind Disallow: /.
     expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(
@@ -956,14 +1028,13 @@ describe("public law sitemap", () => {
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
     );
 
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id/document"),
-    ).toBe(true);
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id"),
-    ).toBe(false);
+    // The document page comes from the route matches (see
+    // use-workspace-view-params.dom.test.tsx), read in beforeLoad.
     expect(source).toContain(
-      "const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname)",
+      "return { documentOnScreen: getCurrentWorkspaceDocument(matches) };",
+    );
+    expect(source).toContain(
+      "const isDocumentRoute = context.documentOnScreen !== undefined;",
     );
     expect(source).toContain("if (isDocumentRoute)");
     expect(source).toContain("timeEntrySummaryOptions(");
@@ -1049,12 +1120,8 @@ describe("public law sitemap", () => {
     expect(navSource).toContain("getWorkspacePrimaryNavItems");
     expect(navSource).toContain('if (item.id === "caseLaw")');
     expect(navSource).toContain("return includePublicLaw");
-    expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
-    // The server-rendered shell must use the isomorphic host/env gate;
-    // the browser-only preview hook would mismatch hydration there.
-    expect(publicShellSource).toContain("isPublicLawSsrRouteEnabled");
-    expect(publicShellSource).not.toContain("isPublicLawRouteEnabled");
-    expect(publicShellSource).not.toContain("usePublicLawPreviewEnabled");
+    expect(appSidebarSource).toContain("isPublicLawEnabled");
+    expect(publicShellSource).toContain("isPublicLawEnabled");
   });
 
   test("direct case-law callers are filtered by the shared dark-launch helper", async () => {
@@ -1074,19 +1141,22 @@ describe("public law sitemap", () => {
       readSource("apps/web/src/components/search-dialog.tsx"),
     ]);
 
-    expect(chatLinkGateSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatLinkGateSource).toContain("isPublicLawEnabled");
     expect(chatOpenSource).toContain("openPublicLawLink");
     expect(chatStatuteOpenSource).toContain("openPublicLawLink");
     expect(chatOpenSource).toContain("defaultCaseLawCountryForLocale");
-    expect(chatMentionSource).toContain("usePublicLawPreviewEnabled");
+    expect(chatMentionSource).toContain("isPublicLawEnabled");
     expect(chatMentionSource).toContain("defaultCaseLawCountryForLocale");
     expect(chatMentionSource).toContain("country !== null");
-    expect(searchSource).toContain("isPublicLawPreviewEnabled");
-    expect(searchSource).toContain("usePublicLawPreviewEnabled");
+    expect(searchSource).toContain("isPublicLawEnabled");
   });
 
   test("start client orders i18n around hydration per path kind", async () => {
-    const source = await readSource("apps/web/src/client.tsx");
+    const [entry, source] = await Promise.all([
+      readSource("apps/web/src/client.tsx"),
+      readSource("apps/web/src/client-runtime.tsx"),
+    ]);
+    expect(entry).toContain('import("@/client-runtime")');
 
     // Public SSR paths hydrate first (against the server's English) and
     // load the persisted locale after first paint; app paths keep the

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
-import { timeEntryAmount, MoneyTotals } from "@stll/money";
+import { MoneyTotals, timeEntryAmount } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";

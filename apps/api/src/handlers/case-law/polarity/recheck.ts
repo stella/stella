@@ -11,9 +11,9 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import {
+  isValidPolarity,
   POLARITY,
   POLARITY_PRECEDENCE,
-  isValidPolarity,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";

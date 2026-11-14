@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { findUnusedKeys, unusedKeysBaselineAfter } from "./i18n-usage";
+import {
+  findKeyUsages,
+  findUnusedKeys,
+  unusedKeysBaselineAfter,
+} from "./i18n-usage";
 
 const KEYS = [
   "chat.newChat",
@@ -63,5 +67,66 @@ describe("unusedKeysBaselineAfter", () => {
         unused: ["b.still-unused", "c.newly-unused"],
       }),
     ).toEqual(["b.still-unused"]);
+  });
+});
+
+describe("findKeyUsages", () => {
+  test("points at the lines that name a key, directly, by namespace or by a segment prefix", () => {
+    const files = [
+      {
+        path: "cancel.tsx",
+        text: 'const x = 1;\nconst label = t("common.cancel");',
+      },
+      {
+        path: "skills.tsx",
+        text: [
+          'const tSkills = useTranslations("knowledge.agentSkills");',
+          "const y = 2;",
+          'tSkills("importTitle");',
+        ].join("\n"),
+      },
+      {
+        path: "scope.tsx",
+        text: `const heading = t(\`chat.skills.scope.\${scope}\`);`,
+      },
+    ];
+
+    const usages = findKeyUsages({
+      keys: [
+        "common.cancel",
+        "knowledge.agentSkills.importTitle",
+        "chat.skills.scope.team",
+      ],
+      files,
+    });
+
+    expect(usages.get("common.cancel")).toEqual([
+      {
+        path: "cancel.tsx",
+        line: 2,
+        code: 'const label = t("common.cancel");',
+      },
+    ]);
+    expect(usages.get("knowledge.agentSkills.importTitle")).toEqual([
+      { path: "skills.tsx", line: 3, code: 'tSkills("importTitle");' },
+    ]);
+    expect(usages.get("chat.skills.scope.team")).toEqual([
+      {
+        path: "scope.tsx",
+        line: 1,
+        code: `const heading = t(\`chat.skills.scope.\${scope}\`);`,
+      },
+    ]);
+  });
+
+  test("a template prefix inside a key segment keeps the key used but shows no line", () => {
+    const text = `const id = \`c\${index}\`;`;
+    expect(findUnusedKeys(["chat.newChat"], [text])).toEqual([]);
+    expect(
+      findKeyUsages({
+        keys: ["chat.newChat"],
+        files: [{ path: "ids.ts", text }],
+      }).get("chat.newChat"),
+    ).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   type DecisionQueryIntent,
@@ -6,6 +6,7 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import type { CaseLawSearchWarning } from "@stll/api-contract/search";
 
+import type { RelaxedTopUpState } from "@/api/handlers/case-law/decisions/search-relaxed";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { caseLawSearchWarnings } from "@/api/lib/case-law/search-warnings";
 import { caseLawQueryLanguage } from "@/api/lib/legal-search/corpus-index-read-contract";
@@ -34,7 +35,7 @@ import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-wor
  * or the same query means two things depending on a deployment flag.
  */
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
+type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema>;
 
 /** Every request key that is not the query itself or the index it selects. */
 type SearchOptionKey = Exclude<keyof SearchDecisionsBody, "country" | "query">;
@@ -43,7 +44,7 @@ type SearchOptionKey = Exclude<keyof SearchDecisionsBody, "country" | "query">;
  * Whether an option cuts the result set or only shapes it.
  *
  * `narrows` is what an empty page can be blamed on and what a reader can drop
- * to widen one; `shapes` orders, trims or paginates a set it does not cut.
+ * to widen one; `shapes` orders, trims, paginates or summarizes a set it does not cut.
  * `country` is neither and is absent above: it is required and selects the
  * index rather than filtering within it, so no reader can drop it.
  *
@@ -59,12 +60,15 @@ const SEARCH_OPTION_EFFECT = {
   courts: "narrows",
   category: "narrows",
   hasLegalSentence: "narrows",
+  docketRegisters: "narrows",
+  senate: "narrows",
   provision: "narrows",
   cursor: "shapes",
   dateFrom: "narrows",
   dateTo: "narrows",
   decisionType: "narrows",
   excerpt: "shapes",
+  facets: "shapes",
   language: "narrows",
   limit: "shapes",
   offset: "shapes",
@@ -91,6 +95,8 @@ const NARROWING_FILTERS = {
   courts: ({ courts }) => courts !== undefined,
   category: ({ category }) => category !== undefined,
   hasLegalSentence: ({ hasLegalSentence }) => hasLegalSentence !== undefined,
+  docketRegisters: ({ docketRegisters }) => docketRegisters !== undefined,
+  senate: ({ senate }) => senate !== undefined,
   provision: ({ provision }) => provision !== undefined,
   dateFrom: ({ dateFrom }) => dateFrom !== undefined,
   dateTo: ({ dateTo }) => dateTo !== undefined,
@@ -202,11 +208,16 @@ type SearchAnswerOptions = {
    * hits, so "nothing matched" would be false there.
    */
   countsResultSet: boolean;
+  /** How the partial-match phase ended; `not_run` when it had no place here. */
+  relaxedTopUp?: RelaxedTopUpState;
 };
 
 export type SearchAnswer = {
   queryUsed: string;
+  relaxedHitCount: number;
   warnings: CaseLawSearchWarning[];
+  /** Present only when partial matches were due and could not be read. */
+  relaxedTopUp?: "skipped";
 };
 
 /**
@@ -219,12 +230,18 @@ export const searchAnswer = ({
   hitCount,
   partialHitCount = 0,
   countsResultSet,
+  relaxedTopUp = "not_run",
 }: SearchAnswerOptions): SearchAnswer => ({
   queryUsed: interpretation.queryUsed,
+  relaxedHitCount: partialHitCount,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
     partialHitCount,
     filters: narrowingFilters(body),
-    emptyResultSet: countsResultSet && hitCount === 0,
+    // With the partial matches unread, an empty page has not shown that
+    // nothing matched.
+    emptyResultSet:
+      countsResultSet && hitCount === 0 && relaxedTopUp !== "skipped",
   }),
+  ...(relaxedTopUp === "skipped" ? { relaxedTopUp } : {}),
 });

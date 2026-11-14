@@ -1,4 +1,4 @@
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 
@@ -26,7 +26,7 @@ export type ShortcutRebinding = {
   readonly groups: ShortcutGroup[];
   readonly rebind: (
     id: ShortcutId,
-    hotkey: Hotkey,
+    hotkey: HotkeyChord,
   ) => Promise<RebindError | null>;
   readonly reset: (id: ShortcutId) => Promise<void>;
 };
@@ -65,7 +65,7 @@ export const useShortcutRebinding = (): ShortcutRebinding => {
 
   const rebind = async (
     id: ShortcutId,
-    hotkey: Hotkey,
+    hotkey: HotkeyChord,
   ): Promise<RebindError | null> => {
     const validated = validateRebind({ id, hotkey, groups, overrides });
     if (Result.isError(validated)) {

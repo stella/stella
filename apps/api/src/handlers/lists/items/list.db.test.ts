@@ -12,6 +12,7 @@ import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -20,8 +21,8 @@ import {
   entities,
   entityVersions,
   legalListFactDetails,
-  legalListItemSources,
   legalListItems,
+  legalListItemSources,
   legalLists,
   workspaces,
 } from "@/api/db/schema";
@@ -40,11 +41,11 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -235,9 +236,7 @@ testState.beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testDb
-    .delete(organization)
-    .where(inArray(organization.id, [organizationId]));
+  await deleteOrganizationsForTest(testDb, [organizationId]);
   // The user outlives its organization; later suites in a shared batch
   // must not see it.
   await testDb.delete(user).where(inArray(user.id, [userId]));

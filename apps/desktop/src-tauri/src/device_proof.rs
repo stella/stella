@@ -8,6 +8,8 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+use crate::logging::{json_cause_logged, with_cause_logged};
+
 pub(crate) const RECONNECT: &str =
   "Desktop device key is unavailable; disconnect and reconnect the desktop account";
 
@@ -30,13 +32,13 @@ impl DeviceKey {
       &SystemRandom::new(),
     )
     .map(|key| Self(Some(Arc::new(key))))
-    .map_err(|_| RECONNECT.into())
+    .map_err(with_cause_logged(RECONNECT))
   }
 
   pub(crate) fn generate() -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
     EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &SystemRandom::new())
       .map(|key| zeroize::Zeroizing::new(key.as_ref().to_vec()))
-      .map_err(|_| "Could not create desktop device key".into())
+      .map_err(with_cause_logged("Could not create desktop device key"))
   }
 
   fn public_jwk(&self) -> Result<PublicJwk, String> {
@@ -53,7 +55,7 @@ impl DeviceKey {
   pub(crate) fn thumbprint(&self) -> Result<String, String> {
     // RFC 7638 lexicographic member order is preserved by PublicJwk.
     let canonical = serde_json::to_vec(&self.public_jwk()?)
-      .map_err(|_| "Could not encode desktop device key")?;
+      .map_err(json_cause_logged("Could not encode desktop device key"))?;
     Ok(URL_SAFE_NO_PAD.encode(Sha256::digest(canonical)))
   }
 
@@ -84,12 +86,12 @@ impl DeviceKey {
     let encode = |value: &serde_json::Value| {
       serde_json::to_vec(value)
         .map(|bytes| URL_SAFE_NO_PAD.encode(bytes))
-        .map_err(|_| "Could not encode desktop device proof".to_string())
+        .map_err(json_cause_logged("Could not encode desktop device proof"))
     };
     let signing_input = format!("{}.{}", encode(&header)?, encode(&payload)?);
     let signature = key
       .sign(&SystemRandom::new(), signing_input.as_bytes())
-      .map_err(|_| "Could not sign desktop device proof")?;
+      .map_err(with_cause_logged("Could not sign desktop device proof"))?;
     Ok(format!(
       "{signing_input}.{}",
       URL_SAFE_NO_PAD.encode(signature.as_ref())
@@ -124,6 +126,10 @@ impl DeviceKeyStorage for KeychainStorage {
 }
 
 fn decode_key(value: &str) -> Result<DeviceKey, String> {
+  #[expect(
+    clippy::map_err_ignore,
+    reason = "the decode error quotes a byte of the stored private key"
+  )]
   let bytes = zeroize::Zeroizing::new(
     URL_SAFE_NO_PAD
       .decode(value.as_bytes())
@@ -167,6 +173,46 @@ async fn prepare_with(
 
 pub(crate) async fn prepare(has_link: bool) -> Result<DeviceKey, String> {
   prepare_with(&mut KeychainStorage, has_link).await
+}
+
+/// A device key for switching to another account. Each account lifecycle has
+/// its own key, so a switch signs with a new one and keeps it in memory until
+/// the member confirms and the current link, with its key, has ended.
+#[derive(Clone)]
+pub(crate) struct FreshDeviceKey {
+  key: DeviceKey,
+  pkcs8: zeroize::Zeroizing<Vec<u8>>,
+}
+
+impl FreshDeviceKey {
+  pub(crate) fn generate() -> Result<Self, String> {
+    let pkcs8 = DeviceKey::generate()?;
+    Ok(Self {
+      key: DeviceKey::from_pkcs8(&pkcs8)?,
+      pkcs8,
+    })
+  }
+
+  pub(crate) fn key(&self) -> &DeviceKey {
+    &self.key
+  }
+
+  /// Stores the key as this device's key. The caller has ended the previous
+  /// link and holds the account request lease.
+  pub(crate) async fn adopt(&self) -> Result<(), String> {
+    adopt_with(&mut KeychainStorage, self).await
+  }
+}
+
+async fn adopt_with(
+  storage: &mut impl DeviceKeyStorage,
+  fresh: &FreshDeviceKey,
+) -> Result<(), String> {
+  storage
+    .save(zeroize::Zeroizing::new(
+      URL_SAFE_NO_PAD.encode(&*fresh.pkcs8),
+    ))
+    .await
 }
 
 async fn unlink_with(
@@ -248,6 +294,29 @@ pub(crate) mod tests {
     let replacement = prepare_with(&mut storage, false).await.unwrap();
     assert_ne!(replacement.thumbprint().unwrap(), original);
     assert_eq!(storage.writes, 2);
+  }
+
+  #[tokio::test]
+  async fn a_switch_key_becomes_the_device_key_only_once_adopted() {
+    let mut storage = MemoryStorage::default();
+    let current = prepare_with(&mut storage, false)
+      .await
+      .unwrap()
+      .thumbprint()
+      .unwrap();
+    let fresh = FreshDeviceKey::generate().unwrap();
+    let switched = fresh.key().thumbprint().unwrap();
+    assert_ne!(switched, current);
+    assert_eq!(
+      required_from(&storage).await.unwrap().thumbprint().unwrap(),
+      current,
+      "a switch key in memory leaves the stored key in place"
+    );
+    adopt_with(&mut storage, &fresh).await.unwrap();
+    assert_eq!(
+      required_from(&storage).await.unwrap().thumbprint().unwrap(),
+      switched
+    );
   }
 
   #[tokio::test]

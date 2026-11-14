@@ -4,9 +4,9 @@ import path from "node:path";
 
 import {
   CANONICAL_JSON_PATHS,
+  canonicalJsonOrderError,
   ORDER_MEANINGFUL_JSON,
   SHARED_LEDGER_PATHS,
-  canonicalJsonOrderError,
 } from "./shared-json-ledgers";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");

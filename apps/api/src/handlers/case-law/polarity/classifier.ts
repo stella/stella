@@ -32,8 +32,9 @@ import {
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
@@ -126,13 +127,22 @@ export const classifyCitation = async ({
   if (ruleMatch) {
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
-      incrementMatchCount({
-        observedAt,
-        ruleId: ruleMatch.ruleId,
-        scopedDb,
-      }).catch((error: unknown) => {
-        captureError(error, { ruleId: ruleMatch.ruleId });
-      });
+      detached(
+        async () =>
+          incrementMatchCount({
+            observedAt,
+            ruleId: ruleMatch.ruleId,
+            scopedDb,
+          }).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("polarity.persistRuleMatch", {
+                ruleId: ruleMatch.ruleId,
+              }),
+            );
+          }),
+        "polarity-classifier.increment-match-count",
+      );
     }
     return {
       polarity: ruleMatch.polarity,
@@ -175,15 +185,25 @@ export const classifyCitation = async ({
     context.includes(keyPhrase) &&
     keyPhrase.trim().length >= MIN_PROMOTION_PHRASE_LENGTH
   ) {
-    trackSurfaceForm({
-      keyPhrase,
-      language,
-      observedAt,
-      polarity,
-      scopedDb,
-    }).catch((error: unknown) => {
-      captureError(error, { language, polarity });
-    });
+    detached(
+      async () =>
+        trackSurfaceForm({
+          keyPhrase,
+          language,
+          observedAt,
+          polarity,
+          scopedDb,
+        }).catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("polarity.persistModelMatch", {
+              language,
+              polarity,
+            }),
+          );
+        }),
+      "polarity-classifier.track-surface-form",
+    );
   }
 
   return {

@@ -2,10 +2,10 @@ import { Result } from "better-result";
 
 import { stellaToast } from "@stll/ui/toast";
 
-import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 
 type OpenPublicLawLinkOptions<Resolved> = {
   /** What the link names, or null when nothing answers to it. */
@@ -23,7 +23,7 @@ export const openPublicLawLink = async <Resolved>({
   resolve,
 }: OpenPublicLawLinkOptions<Resolved>) => {
   const t = getTranslator();
-  if (!isPublicLawPreviewEnabled()) {
+  if (!isPublicLawEnabled()) {
     stellaToast.add({ title: t("common.comingSoon"), type: "neutral" });
     return;
   }
@@ -38,12 +38,15 @@ export const openPublicLawLink = async <Resolved>({
   });
 
   if (Result.isError(result)) {
-    getAnalytics().captureError(result.error.cause);
+    getAnalytics().captureError(result.error.cause, {
+      fingerprintKey: "openPublicLawLink:cause",
+      scope: { type: "handler", handlerId: "openPublicLawLink:cause" },
+    });
     notifyUserError(result.error.cause, t("errors.actionFailed"));
     return;
   }
 
   if (!result.value) {
-    notifyUserError(undefined, t("errors.actionFailed"));
+    notifyUserProblem(t("errors.actionFailed"));
   }
 };

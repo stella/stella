@@ -10,28 +10,31 @@ import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
 } from "@stll/api-contract/search";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  corpusCountryQuotas,
+  rankCorpusCountries,
+} from "@/api/lib/legal-search/case-law-multi-country";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
-  corpusCountryQuotas,
   readCompatStatute,
-  rankCorpusCountries,
   resolveCompatCorpusCountries,
 } from "@/api/mcp/compat-corpus";
 import { LAW_COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -109,7 +112,7 @@ const createContext = ({
   practiceJurisdictions?: { countryCode: string; isPrimary: boolean }[] | null;
   searchProvider?: () => unknown;
   workspaceReadFails?: boolean;
-} = {}): McpRequestContext => {
+} = {}): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
       organizationSettings: {
@@ -197,7 +200,7 @@ const createContext = ({
     }),
   });
 
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
     accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
@@ -225,7 +228,7 @@ const createContext = ({
     },
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 type CompatPayload = {
@@ -247,7 +250,7 @@ const run = async ({
   mode = "default",
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   handler: McpToolHandler;
   mode?: McpMode;
 }): Promise<CompatPayload> => {
@@ -319,11 +322,19 @@ beforeEach(() => {
       }),
   );
   searchLegislationHandlerMock.mockReset();
-  searchLegislationHandlerMock.mockResolvedValue({
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-    items: [statuteHit],
-    nextCursor: null,
-  });
+  // Likewise each country's statute request returns only that country's statutes.
+  searchLegislationHandlerMock.mockImplementation(
+    async (input: unknown) =>
+      await Promise.resolve({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        items:
+          asTestRaw<{ jurisdiction: string }>(input).jurisdiction ===
+          statuteHit.country
+            ? [statuteHit]
+            : [],
+        nextCursor: null,
+      }),
+  );
   readGatedDecisionMock.mockReset();
   readGatedDecisionMock.mockResolvedValue({
     ...decisionHit,
@@ -396,7 +407,8 @@ describe("practice jurisdictions rank the corpus countries", () => {
   };
 
   test("the ranked list is exactly the admitted countries, each once", () => {
-    fc.assert(
+    assertProperty(
+      "the ranked list is exactly the admitted countries, each once",
       fc.property(
         admittedArbitrary,
         practisedArbitrary,
@@ -406,12 +418,13 @@ describe("practice jurisdictions rank the corpus countries", () => {
           expect(ranked.toSorted()).toEqual(admitted.toSorted());
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("primary leads, then practised, then the rest, each in admitted order", () => {
-    fc.assert(
+    assertProperty(
+      "primary leads, then practised, then the rest, each in admitted order",
       fc.property(
         admittedArbitrary,
         practisedArbitrary,
@@ -431,7 +444,7 @@ describe("practice jurisdictions rank the corpus countries", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -697,7 +710,8 @@ describe("compat search reaching the public corpus", () => {
       "XX",
       "",
     );
-    await fc.assert(
+    await assertProperty(
+      "the searched countries are the admitted ones whatever the practice jurisdictions",
       fc.asyncProperty(
         fc.option(
           fc.array(
@@ -718,7 +732,7 @@ describe("compat search reaching the public corpus", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

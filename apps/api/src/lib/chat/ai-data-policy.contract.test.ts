@@ -15,18 +15,18 @@ import type {
 } from "@/api/lib/tanstack-ai-generate";
 import type {
   createTanStackTextAdapterFactory,
-  getTanStackTextModelById,
   getStructuredOutputFallbackModelId,
-  isModelSelectionAvailableForTask,
+  getTanStackTextModelById,
   getTanStackTextModelForTask,
-  getTanStackTextModelInfoForTask,
   getTanStackTextModelInfoById,
+  getTanStackTextModelInfoForTask,
+  isModelSelectionAvailableForTask,
   requireTanStackAIAvailableForTask,
 } from "@/api/lib/tanstack-ai-models";
 import type { decide, decideMany } from "@/api/lib/workflow/decisions/decide";
 import type {
-  resolveDecisionModel,
   hasInstanceDecisionModel,
+  resolveDecisionModel,
 } from "@/api/lib/workflow/decisions/decision-model";
 
 type GenerationOptions = [

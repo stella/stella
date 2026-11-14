@@ -9,17 +9,17 @@ import {
   isMorphologyDictionaryContentHash,
   isSurfaceForm,
   MAX_FORMS_PER_BUCKET,
-  NO_EXPANSION_DICTIONARY_IDENTITY,
-  SURFACE_FORM_MAX_LENGTH,
-  SURFACE_FORM_MIN_LENGTH,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
   parseExpansionDictionary,
   parseExpansionDictionaryIdentity,
   parseExpansionDictionaryOffLoop,
   sameExpansionDictionary,
   serializeExpansionDictionary,
   serializeExpansionDictionaryIdentity,
+  SURFACE_FORM_MAX_LENGTH,
+  SURFACE_FORM_MIN_LENGTH,
 } from "@/api/lib/legal-search/morphology/dictionary";
 
 test("serialize and parse are the same contract", () => {

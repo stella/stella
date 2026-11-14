@@ -8,16 +8,18 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { SearchIcon } from "@stll/ui/icons";
+import { openFilePicker } from "@stll/ui/file-picker";
+import { SearchIcon, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
@@ -29,19 +31,26 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import { FileDropZone } from "@/components/file-drop-zone";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 
 import {
   listSkippedImportFiles,
+  nameSkippedFiles,
+  pickSkillPackFile,
   summarizeSkillImportFailures,
 } from "./import-skill-dialog.logic";
 import type { SkippedImportFile } from "./import-skill-dialog.logic";
 
 const MAX_SELECTED_SKILLS = 20;
+/** What the file chooser offers: a skill pack or a bare markdown skill. */
+const SKILL_PACK_ACCEPT = ".zip,.md,application/zip,text/markdown";
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
@@ -119,6 +128,7 @@ const ImportSkillDialogBody = ({
   onImported,
   onOpenChange,
 }: ImportSkillDialogProps & { onBusyChange: (busy: boolean) => void }) => {
+  const submit = useIdempotentSubmit();
   const format = useFormatter();
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
@@ -137,7 +147,7 @@ const ImportSkillDialogBody = ({
       const response = await api.skills["discover-url"].post({
         url: url.trim(),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (result) => {
       setDiscovery(result);
@@ -158,16 +168,20 @@ const ImportSkillDialogBody = ({
     onMutate: () => onBusyChange(true),
     onSettled: () => onBusyChange(false),
     mutationFn: async (source: SkillDiscovery) => {
-      const response = await api.skills["import-urls"].post({
-        items: source.skills
-          .filter((skill) => selected.has(skill.sourceUrl))
-          .map((skill) => ({
-            integrity: skill.integrity,
-            sourceUrl: skill.sourceUrl,
-          })),
-        scope,
+      const response = await submit.run({
+        operation: "skill-import-urls",
+        send: async (body) => api.skills["import-urls"].post(body),
+        body: {
+          items: source.skills
+            .filter((skill) => selected.has(skill.sourceUrl))
+            .map((skill) => ({
+              integrity: skill.integrity,
+              sourceUrl: skill.sourceUrl,
+            })),
+          scope,
+        },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (result, source) => {
       if (result.installed.length > 0) {
@@ -229,6 +243,46 @@ const ImportSkillDialogBody = ({
     },
   });
 
+  const uploadPack = useMutation({
+    onMutate: () => onBusyChange(true),
+    onSettled: () => onBusyChange(false),
+    mutationFn: async (file: File) =>
+      await invokeCapability("skills.upload", async (request) =>
+        unwrapApiResponse(
+          await api.skills.upload.post({ file, scope }, request),
+        ),
+      ),
+    onSuccess: (result) => {
+      onImported();
+      stellaToast.add({
+        title: tSkills("importedSkills", { count: 1 }),
+        type: "success",
+      });
+      const skipped = nameSkippedFiles(result.name, result.skippedFiles);
+      if (skipped.length === 0) {
+        onOpenChange(false);
+        return;
+      }
+      // Keep the dialog open on the list of files the pack left out.
+      setDiscovery(null);
+      setSelected(new Set());
+      setSkippedFiles(skipped);
+    },
+    onError: (error) => {
+      notifyUserError(error, t("common.unexpectedError"));
+    },
+  });
+
+  const uploadFiles = (files: readonly File[]) => {
+    const pack = pickSkillPackFile(files);
+    if (pack === null) {
+      notifyUserProblem(tSkills("uploadHelp"));
+      return;
+    }
+    setSkippedFiles([]);
+    uploadPack.mutate(pack);
+  };
+
   const updateUrl = (nextUrl: string) => {
     setUrl(nextUrl);
     setDiscovery(null);
@@ -263,7 +317,8 @@ const ImportSkillDialogBody = ({
     );
   };
 
-  const busy = discover.isPending || importSkills.isPending;
+  const busy =
+    discover.isPending || importSkills.isPending || uploadPack.isPending;
 
   return (
     <DialogPopup className="sm:max-w-2xl" showCloseButton={!busy}>
@@ -281,221 +336,262 @@ const ImportSkillDialogBody = ({
         <p className="text-muted-foreground text-sm">{tSkills("importHelp")}</p>
       </DialogHeader>
 
-      <DialogPanel className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            aria-label={tSkills("importSkill")}
-            className="min-h-11 flex-1 sm:min-h-0"
-            dir="ltr"
-            disabled={busy}
-            onChange={(event) => updateUrl(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                url.trim().length > 0 &&
-                !discover.isPending
-              ) {
-                discover.mutate();
-              }
-            }}
-            placeholder={tSkills("urlPlaceholder")}
-            type="url"
-            value={url}
-          />
-          <Button
-            className="min-h-11 sm:min-h-0"
-            disabled={url.trim().length === 0 || busy}
-            onClick={() => discover.mutate()}
-            type="button"
-            variant="outline"
-          >
-            {discover.isPending ? (
-              <Loader
-                className="size-4"
-                label={t("common.loading")}
-                size="sm"
-              />
-            ) : (
-              <SearchIcon className="size-4" />
-            )}
-            {tSkills("discoverSkills")}
-          </Button>
-        </div>
-
-        {discovery && discovery.skills.length === 0 && (
-          <div className="flex flex-col gap-2 py-4">
-            <p className="text-muted-foreground text-sm">
-              {tSkills("discoveryEmpty")}
-            </p>
-            {discovery.invalidSkillCount > 0 && (
-              <p className="text-muted-foreground text-xs">
-                {tSkills("discoverySkippedInvalid", {
-                  count: discovery.invalidSkillCount,
-                })}
-              </p>
-            )}
+      <FileDropZone
+        coverage="content"
+        enabled={!busy}
+        exceptionScope={{
+          type: "handler",
+          handlerId: "knowledge.skill-import.drop",
+        }}
+        label={tSkills("dropPack")}
+        onDrop={uploadFiles}
+      >
+        <DialogPanel className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              aria-label={tSkills("importSkill")}
+              className="min-h-11 flex-1 sm:min-h-0"
+              dir="ltr"
+              disabled={busy}
+              onChange={(event) => updateUrl(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  url.trim().length > 0 &&
+                  !discover.isPending
+                ) {
+                  discover.mutate();
+                }
+              }}
+              placeholder={tSkills("urlPlaceholder")}
+              type="url"
+              value={url}
+            />
+            <Button
+              className="min-h-11 sm:min-h-0"
+              disabled={url.trim().length === 0 || busy}
+              onClick={() => discover.mutate()}
+              type="button"
+              variant="outline"
+            >
+              {discover.isPending ? (
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
+              ) : (
+                <SearchIcon className="size-4" />
+              )}
+              {tSkills("discoverSkills")}
+            </Button>
           </div>
-        )}
 
-        {discovery && discovery.skills.length > 0 && (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-muted-foreground text-xs font-medium">
-                {tSkills("discoveredSkills", {
-                  count: discovery.skills.length,
-                })}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button
+              aria-busy={uploadPack.isPending || undefined}
+              className="min-h-11 sm:min-h-0"
+              disabled={busy}
+              onClick={() =>
+                openFilePicker({
+                  accept: SKILL_PACK_ACCEPT,
+                  onPick: uploadFiles,
+                })
+              }
+              type="button"
+              variant="outline"
+            >
+              {uploadPack.isPending ? (
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
+              ) : (
+                <UploadIcon className="size-4" />
+              )}
+              {tSkills("uploadPack")}
+            </Button>
+            <p className="text-muted-foreground text-xs">
+              {tSkills("uploadHelp")}
+            </p>
+          </div>
+
+          {canManageTeam && (
+            <div className="flex items-center justify-end gap-2">
+              <Label htmlFor="import-skill-scope" variant="muted">
+                <span className="font-normal">
+                  {t("knowledge.skills.form.scope")}
+                </span>
+              </Label>
+              <Select
+                disabled={busy}
+                onValueChange={(value) => {
+                  if (value === "team" || value === "private") {
+                    setScope(value);
+                  }
+                }}
+                value={scope}
+              >
+                <SelectTrigger className="w-44" id="import-skill-scope">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectItem value="private">
+                    {t("knowledge.skills.form.scopePrivate")}
+                  </SelectItem>
+                  <SelectItem value="team">
+                    {t("knowledge.skills.form.scopeTeam")}
+                  </SelectItem>
+                </SelectPopup>
+              </Select>
+            </div>
+          )}
+
+          {discovery && discovery.skills.length === 0 && (
+            <div className="flex flex-col gap-2 py-4">
+              <p className="text-muted-foreground text-sm">
+                {tSkills("discoveryEmpty")}
               </p>
-              {selected.size <
-                Math.min(discovery.skills.length, MAX_SELECTED_SKILLS) && (
-                <Button
-                  disabled={busy}
-                  onClick={selectAll}
-                  size="xs"
-                  type="button"
-                  variant="ghost"
-                >
-                  {t("common.selectAll")}
-                </Button>
+              {discovery.invalidSkillCount > 0 && (
+                <p className="text-muted-foreground text-xs">
+                  {tSkills("discoverySkippedInvalid", {
+                    count: discovery.invalidSkillCount,
+                  })}
+                </p>
               )}
             </div>
+          )}
 
-            {discovery.skills.length > MAX_SELECTED_SKILLS && (
-              <p className="text-muted-foreground text-xs">
-                {tSkills("selectionLimit", {
-                  count: format.number(MAX_SELECTED_SKILLS),
-                })}
-              </p>
-            )}
-
-            <div className="border-border flex max-h-80 flex-col overflow-y-auto rounded-lg border">
-              {discovery.skills.map((skill, index) => {
-                const checked = selected.has(skill.sourceUrl);
-                const checkboxId = `import-skill-${index}`;
-                const selectionFull =
-                  selected.size >= MAX_SELECTED_SKILLS && !checked;
-                return (
-                  <label
-                    className="hover:bg-muted/50 flex min-h-11 items-start gap-3 p-3"
-                    htmlFor={checkboxId}
-                    key={skill.sourceUrl}
+          {discovery && discovery.skills.length > 0 && (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-muted-foreground text-xs font-medium">
+                  {tSkills("discoveredSkills", {
+                    count: discovery.skills.length,
+                  })}
+                </p>
+                {selected.size <
+                  Math.min(discovery.skills.length, MAX_SELECTED_SKILLS) && (
+                  <Button
+                    disabled={busy}
+                    onClick={selectAll}
+                    size="xs"
+                    type="button"
+                    variant="ghost"
                   >
-                    <Checkbox
-                      checked={checked}
-                      className="mt-0.5"
-                      disabled={busy || selectionFull}
-                      id={checkboxId}
-                      onCheckedChange={(next) =>
-                        toggleSkill(skill.sourceUrl, next)
-                      }
-                    />
-                    <span className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="text-foreground text-sm font-medium">
-                        <bdi>{skill.name}</bdi>
-                      </span>
-                      <BidiText
-                        as="span"
-                        className="text-muted-foreground text-sm"
-                      >
-                        {skill.description}
-                      </BidiText>
-                      <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
-                        {skill.path && (
-                          <code dir="ltr">
-                            <bdi dir="ltr">{skill.path}</bdi>
-                          </code>
-                        )}
-                        {skill.version && (
-                          <span>
-                            {tSkills("version", {
-                              version: isolateBidi(skill.version),
-                            })}
-                          </span>
-                        )}
-                        {skill.license && (
-                          <span>
-                            {tSkills("license", {
-                              license: isolateBidi(skill.license),
-                            })}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-
-            {discovery.invalidSkillCount > 0 && (
-              <p className="text-muted-foreground text-xs">
-                {tSkills("discoverySkippedInvalid", {
-                  count: discovery.invalidSkillCount,
-                })}
-              </p>
-            )}
-
-            {canManageTeam && (
-              <div className="flex items-center justify-end gap-2">
-                <label
-                  className="text-muted-foreground text-xs"
-                  htmlFor="import-skill-scope"
-                >
-                  {t("knowledge.skills.form.scope")}
-                </label>
-                <Select
-                  disabled={busy}
-                  onValueChange={(value) => {
-                    if (value === "team" || value === "private") {
-                      setScope(value);
-                    }
-                  }}
-                  value={scope}
-                >
-                  <SelectTrigger className="w-44" id="import-skill-scope">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="private">
-                      {t("knowledge.skills.form.scopePrivate")}
-                    </SelectItem>
-                    <SelectItem value="team">
-                      {t("knowledge.skills.form.scopeTeam")}
-                    </SelectItem>
-                  </SelectPopup>
-                </Select>
+                    {t("common.selectAll")}
+                  </Button>
+                )}
               </div>
-            )}
-          </>
-        )}
-        {skippedFiles.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <p className="text-muted-foreground text-xs font-medium">
-              {tSkills("skippedFiles", { count: skippedFiles.length })}
-            </p>
-            <div className="border-border overflow-hidden rounded-lg border">
-              <ScrollArea className="max-h-60">
-                <ul className="flex flex-col">
-                  {skippedFiles.map((file) => (
-                    <li
-                      className="flex flex-wrap items-baseline gap-x-2 px-3 py-2 text-xs"
-                      key={`${file.skillName} ${file.path}`}
+
+              {discovery.skills.length > MAX_SELECTED_SKILLS && (
+                <p className="text-muted-foreground text-xs">
+                  {tSkills("selectionLimit", {
+                    count: format.number(MAX_SELECTED_SKILLS),
+                  })}
+                </p>
+              )}
+
+              <div className="border-border flex max-h-80 flex-col overflow-y-auto rounded-lg border p-1">
+                {discovery.skills.map((skill, index) => {
+                  const checked = selected.has(skill.sourceUrl);
+                  const checkboxId = `import-skill-${index}`;
+                  const selectionFull =
+                    selected.size >= MAX_SELECTED_SKILLS && !checked;
+                  return (
+                    <Label
+                      className="items-start"
+                      htmlFor={checkboxId}
+                      key={skill.sourceUrl}
+                      variant="choice"
                     >
-                      <span className="text-foreground font-medium">
-                        <bdi>{file.skillName}</bdi>
+                      <Checkbox
+                        checked={checked}
+                        className="mt-0.5"
+                        disabled={busy || selectionFull}
+                        id={checkboxId}
+                        onCheckedChange={(next) =>
+                          toggleSkill(skill.sourceUrl, next)
+                        }
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span className="text-foreground text-sm font-medium">
+                          <bdi>{skill.name}</bdi>
+                        </span>
+                        <BidiText
+                          as="span"
+                          className="text-muted-foreground text-sm"
+                        >
+                          {skill.description}
+                        </BidiText>
+                        <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+                          {skill.path && (
+                            <code dir="ltr">
+                              <bdi dir="ltr">{skill.path}</bdi>
+                            </code>
+                          )}
+                          {skill.version && (
+                            <span>
+                              {tSkills("version", {
+                                version: isolateBidi(skill.version),
+                              })}
+                            </span>
+                          )}
+                          {skill.license && (
+                            <span>
+                              {tSkills("license", {
+                                license: isolateBidi(skill.license),
+                              })}
+                            </span>
+                          )}
+                        </span>
                       </span>
-                      <code dir="ltr">
-                        <bdi dir="ltr">{file.path}</bdi>
-                      </code>
-                      <span className="text-muted-foreground">
-                        {t(SKIPPED_FILE_REASON_MESSAGE_KEY[file.reason])}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
+                    </Label>
+                  );
+                })}
+              </div>
+
+              {discovery.invalidSkillCount > 0 && (
+                <p className="text-muted-foreground text-xs">
+                  {tSkills("discoverySkippedInvalid", {
+                    count: discovery.invalidSkillCount,
+                  })}
+                </p>
+              )}
+            </>
+          )}
+          {skippedFiles.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs font-medium">
+                {tSkills("skippedFiles", { count: skippedFiles.length })}
+              </p>
+              <div className="border-border overflow-hidden rounded-lg border">
+                <ScrollArea className="max-h-60">
+                  <ul className="flex flex-col">
+                    {skippedFiles.map((file) => (
+                      <li
+                        className="flex flex-wrap items-baseline gap-x-2 px-3 py-2 text-xs"
+                        key={`${file.skillName} ${file.path}`}
+                      >
+                        <span className="text-foreground font-medium">
+                          <bdi>{file.skillName}</bdi>
+                        </span>
+                        <code dir="ltr">
+                          <bdi dir="ltr">{file.path}</bdi>
+                        </code>
+                        <span className="text-muted-foreground">
+                          {t(SKIPPED_FILE_REASON_MESSAGE_KEY[file.reason])}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+              </div>
             </div>
-          </div>
-        )}
-      </DialogPanel>
+          )}
+        </DialogPanel>
+      </FileDropZone>
 
       <DialogFooter>
         <DialogClose render={<Button disabled={busy} variant="ghost" />}>

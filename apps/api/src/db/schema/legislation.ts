@@ -2,12 +2,14 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import {
   LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_IDENTITY_MODES,
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
+import type { StoredStatuteVersionChanges } from "@stll/api-contract/statute-version-changes";
 
 import {
   LEGISLATION_AMENDMENT_CHANGE_KINDS,
@@ -25,16 +27,18 @@ import {
   corpusSampleReaderPolicies,
   globalCaseLawPolicies,
   isNotNull,
-  isNull,
   jsonb,
   p,
-  pUuid,
   publicLawReaderPolicies,
+  pUuid,
   safeUuid,
+  safeWorkspaceId,
   sql,
   stellaPublicLawReader,
-  tsvector,
   timestamptz,
+  tsvector,
+  user,
+  wsPolicies,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -42,6 +46,7 @@ import type {
   DocumentAst,
   EmptyAst,
 } from "./common";
+import { workspaces } from "./contacts";
 import {
   CORPUS_INDEX_JOB_OPERATION_SQL_VALUES,
   CORPUS_INDEX_JOB_STATUS_SQL_VALUES,
@@ -154,6 +159,18 @@ export const legislationSources = p.pgTable(
      * and an id whose prefix does not match.
      */
     expressionNamespace: p.varchar("expression_namespace", { length: 32 }),
+    /** Selected before the first document; existing sources retain window identity. */
+    identityMode: p
+      .varchar("identity_mode", {
+        length: 32,
+        enum: [
+          LEGISLATION_IDENTITY_MODES.legacy,
+          LEGISLATION_IDENTITY_MODES.publisher,
+        ],
+      })
+      .notNull()
+      .default(LEGISLATION_IDENTITY_MODES.legacy),
+
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -165,6 +182,14 @@ export const legislationSources = p.pgTable(
     p.check(
       "legislation_sources_expression_namespace_shape",
       sql`${t.expressionNamespace} IS NULL OR ${t.expressionNamespace} ~ ${sql.raw(`'${LEGISLATION_EXPRESSION_NAMESPACE_PATTERN}'`)}`,
+    ),
+    p.check(
+      "legislation_sources_identity_mode_values",
+      sql`${t.identityMode} IN (${sqlValues(Object.values(LEGISLATION_IDENTITY_MODES))})`,
+    ),
+    p.check(
+      "legislation_sources_publisher_namespace",
+      sql`${t.identityMode} <> 'publisher-expression' OR ${t.expressionNamespace} IS NOT NULL`,
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
@@ -200,6 +225,17 @@ export const legislationDocuments = p.pgTable(
     effectiveDate: p.date("effective_date"),
     versionValidFrom: p.date("version_valid_from"),
     versionValidTo: p.date("version_valid_to"),
+    /** Derived by the database from the source, so partial identity indexes cannot drift. */
+    identityMode: p
+      .varchar("identity_mode", {
+        length: 32,
+        enum: [
+          LEGISLATION_IDENTITY_MODES.legacy,
+          LEGISLATION_IDENTITY_MODES.publisher,
+        ],
+      })
+      .notNull()
+      .default(LEGISLATION_IDENTITY_MODES.legacy),
     /**
      * The publisher's own identity for this version, prefixed with the
      * source's namespace. Set once, from null, and never changed afterwards
@@ -250,6 +286,7 @@ export const legislationDocuments = p.pgTable(
       .default(0)
       .notNull(),
     citationCount: p.integer("citation_count").default(0).notNull(),
+    // Retained until the next schema release; remove with its case-law counterpart.
     citationAuthorityComputedAt: timestamptz("citation_authority_computed_at"),
     textS3Key: p.varchar("text_s3_key", { length: 512 }),
     normalizedS3Key: p.varchar("normalized_s3_key", { length: 512 }),
@@ -273,6 +310,14 @@ export const legislationDocuments = p.pgTable(
       .bigint("payload_revision", { mode: "bigint" })
       .default(1n)
       .notNull(),
+    /**
+     * What this consolidation changed against the eligible one before it, and
+     * the payload revisions of both it was computed from; null until computed.
+     * Derived state, owned by `legislation-version-changes.ts`: written after
+     * ingestion stores a version and by its backfill, never by the payload
+     * write itself, so it advances no payload revision.
+     */
+    changeSummary: jsonb("change_summary").$type<StoredStatuteVersionChanges>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -296,15 +341,35 @@ export const legislationDocuments = p.pgTable(
       "legislation_documents_window_disposition_basis_pairing",
       WINDOW_DISPOSITION_BASIS_PAIRING,
     ),
+    p.check(
+      "legislation_documents_identity_mode_values",
+      sql`${t.identityMode} IN (${sqlValues(Object.values(LEGISLATION_IDENTITY_MODES))})`,
+    ),
+    p.check(
+      "legislation_documents_publisher_identity_required",
+      sql`${t.identityMode} <> 'publisher-expression' OR ${t.publisherExpressionId} IS NOT NULL`,
+    ),
     p
-      .uniqueIndex("legislation_documents_eli_version_lang_idx")
+      .uniqueIndex("legislation_documents_publisher_identity_idx")
+      .on(t.sourceId, t.eli, t.language, t.publisherExpressionId)
+      .where(sql`${t.identityMode} = 'publisher-expression'`),
+    p
+      .uniqueIndex("legislation_documents_legacy_version_lang_idx")
+      .on(t.sourceId, t.eli, t.versionValidFrom, t.language)
+      .where(
+        sql`${t.identityMode} = 'legacy-window' AND ${t.versionValidFrom} IS NOT NULL`,
+      ),
+    p
+      .uniqueIndex("legislation_documents_legacy_current_lang_idx")
+      .on(t.sourceId, t.eli, t.language)
+      .where(
+        sql`${t.identityMode} = 'legacy-window' AND ${t.versionValidFrom} IS NULL`,
+      ),
+    p
+      .index("legislation_documents_work_version_lang_idx")
       .on(t.sourceId, t.eli, t.versionValidFrom, t.language)
       .where(isNotNull(t.versionValidFrom)),
-    p
-      .uniqueIndex("legislation_documents_eli_current_lang_idx")
-      .on(t.sourceId, t.eli, t.language)
-      .where(isNull(t.versionValidFrom)),
-    // `legislation_documents_eli_version_lang_idx` plus the two fields that
+    // The work/version access path plus the two fields that
     // decide whether a version may apply, so the listing's per-Work probes of
     // its eligible dated versions (first opening, wording count, last change)
     // stay index-only. Trailing keys rather than INCLUDE because the Drizzle
@@ -450,6 +515,76 @@ export const legislationDocuments = p.pgTable(
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
     ...corpusSampleReaderPolicies(),
+  ],
+);
+
+/** A reproducible provision version pinned to a tenant matter. */
+export const legislationMatterLinks = p.pgTable(
+  "legislation_matter_links",
+  {
+    id: pUuid<"legislationMatterLink">().primaryKey(),
+    documentId: safeUuid<"legislationDocument">("document_id").notNull(),
+    statuteId: p.varchar("statute_id", { length: 512 }).notNull(),
+    provisionId: p.text("provision_id").notNull(),
+    appliedVersion: p.date("applied_version").notNull(),
+    jurisdiction: p.varchar({ length: 3 }).notNull(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    linkedBy: p
+      .text("linked_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "legislation_matter_links_document_fk",
+        columns: [t.documentId],
+        foreignColumns: [legislationDocuments.id],
+      })
+      .onDelete("restrict"),
+    p
+      .uniqueIndex("legislation_matter_links_provision_ws_idx")
+      .on(t.documentId, t.provisionId, t.workspaceId),
+    p.index("legislation_matter_links_workspace_idx").on(t.workspaceId),
+    ...wsPolicies({ columns: t }),
+  ],
+);
+
+/** Publisher-stated aliases bound immutably to a source's language-neutral Work. */
+export const legislationWorkIdentifiers = p.pgTable(
+  "legislation_work_identifiers",
+  {
+    sourceId: safeUuid<"legislationSource">("source_id").notNull(),
+    identifier: p.varchar({ length: 512 }).notNull(),
+    eli: p.varchar({ length: 512 }).notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.sourceId, t.identifier] }),
+    p
+      .foreignKey({
+        name: "legislation_work_identifiers_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [legislationSources.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("legislation_work_identifiers_identifier_idx")
+      .on(t.identifier, t.sourceId, t.eli),
+    p.check(
+      "legislation_work_identifiers_nonempty",
+      sql`length(${t.identifier}) > 0 AND length(${t.eli}) > 0`,
+    ),
+    p.pgPolicy("legislation_work_identifier_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

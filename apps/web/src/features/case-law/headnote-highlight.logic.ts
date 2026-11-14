@@ -17,7 +17,8 @@
  * read it from `@stll/decision-reader/query-marks`.
  */
 
-import { wordPrefixMatchEnd } from "@stll/decision-reader/query-marks";
+import { queryMarkRanges } from "@stll/decision-reader/query-marks";
+import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
 
 /**
  * A run of the original text, and whether the query asked for it. `start` is
@@ -33,47 +34,30 @@ export type HighlightSegment = {
 /**
  * The text split into marked and unmarked runs, in order. Slices come out of
  * the original string, so diacritics, casing and every other character survive
- * exactly as the publisher wrote them; only the matching is case-folded.
+ * exactly as the publisher wrote them; only the matching is folded.
  *
  * With no tokens the whole text is one unmarked segment, which is what a
  * browse listing and a saved research table want.
  */
 export const highlightSegments = (
   text: string,
-  tokens: readonly string[],
+  tokens: QueryMarkTokens,
 ): readonly HighlightSegment[] => {
-  if (tokens.length === 0 || text.length === 0) {
-    return text.length === 0 ? [] : [{ start: 0, text, match: false }];
-  }
-
-  const lowered = text.toLowerCase();
-  // Case folding is not always length-preserving (U+0130 lowercases to two
-  // code units), and an index into the folded string then addresses the wrong
-  // character of the original. Slicing the original is what preserves the
-  // publisher's diacritics, so where the two lengths disagree the text is
-  // returned unmarked rather than sliced at a shifted offset.
-  if (lowered.length !== text.length) {
-    return [{ start: 0, text, match: false }];
+  if (text.length === 0) {
+    return [];
   }
   const segments: HighlightSegment[] = [];
   let plainFrom = 0;
-  let index = 0;
-  while (index < text.length) {
-    const end = wordPrefixMatchEnd(lowered, index, tokens);
-    if (end === null || end === index) {
-      index += 1;
-      continue;
-    }
-    if (index > plainFrom) {
+  for (const { end, start } of queryMarkRanges(text, tokens)) {
+    if (start > plainFrom) {
       segments.push({
         start: plainFrom,
-        text: text.slice(plainFrom, index),
+        text: text.slice(plainFrom, start),
         match: false,
       });
     }
-    segments.push({ start: index, text: text.slice(index, end), match: true });
+    segments.push({ start, text: text.slice(start, end), match: true });
     plainFrom = end;
-    index = end;
   }
   if (plainFrom < text.length) {
     segments.push({

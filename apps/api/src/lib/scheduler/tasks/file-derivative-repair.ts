@@ -1,7 +1,8 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -28,6 +29,7 @@ import {
 import type { FileDerivativeKind } from "@/api/lib/file-derivative-queue";
 import { shouldGenerateImageThumbnail } from "@/api/lib/files/image-derivative";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   brandPersistedFieldId,
   brandPersistedUserId,
@@ -73,8 +75,7 @@ const UNRECOGNIZED_STATE = { status: "unrecognized" } as const;
  * below without a case.
  */
 type ReadDerivativeState =
-  | NonNullable<DerivativeState>
-  | typeof UNRECOGNIZED_STATE;
+  NonNullable<DerivativeState> | typeof UNRECOGNIZED_STATE;
 
 const storedDerivativeStateSchema = v.union([
   v.object({ status: v.literal("not-required") }),
@@ -272,7 +273,7 @@ const selectRepairPage = async (
           entityVersions.createdAt,
           new Date(Temporal.Now.instant().epochMilliseconds - SETTLE_MS),
         ),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         sql`${fields.content}->>'type' = 'file'`,
         DERIVATIVE_UNSETTLED,
       ),
@@ -303,7 +304,11 @@ const requeueRow = async (
       new UnrecognizedDerivativeStateError({
         message: `Persisted ${kind} derivative state is unreadable to this build`,
       }),
-      { fieldId: row.fieldId, kind, workspaceId: row.workspaceId },
+      handlerErrorContext("tasks.requeueRow", {
+        fieldId: row.fieldId,
+        kind,
+        workspaceId: row.workspaceId,
+      }),
     );
   }
   let requeued = 0;

@@ -5,12 +5,13 @@ import { createChatPastedTextPart } from "@stll/api-contract/chat";
 
 import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import {
+  canSendWithoutQueueing,
   createInitialSendQueueState,
   describeQueuedMessage,
-  reduceSendQueue,
-  snapshotChatRequestOptions,
   type QueuedChatEntry,
+  reduceSendQueue,
   type SendQueueState,
+  snapshotChatRequestOptions,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -70,6 +71,7 @@ const applyRenderTick = (
   state: SendQueueState,
   isGenerating: boolean,
   status: ChatClientState,
+  awaitingMember = false,
 ) => {
   const synced = reduceSendQueue(state, {
     type: "generation-status-synced",
@@ -79,8 +81,53 @@ const applyRenderTick = (
     type: "turn-boundary-checked",
     isGenerating,
     status,
+    awaitingMember,
   });
 };
+
+describe("a turn that waits on the member", () => {
+  /** A turn runs, a prompt is queued, then the turn pauses on the member. */
+  const pausedWithQueued = () => {
+    let state = createInitialSendQueueState(CONVERSATION_ID);
+    state = applyRenderTick(state, true, "streaming").state;
+    state = reduceSendQueue(state, {
+      type: "message-enqueued",
+      entry: makeEntry("follow-up"),
+    }).state;
+    const paused = applyRenderTick(state, false, "ready", true);
+    return paused;
+  };
+
+  test("a pause for an approval or question does not send what was queued", () => {
+    const paused = pausedWithQueued();
+    expect(paused.dispatchedEntry).toBeNull();
+    expect(paused.state.queue.map(({ id }) => id)).toEqual(["follow-up"]);
+    // Further renders while the card waits keep holding it.
+    const still = applyRenderTick(paused.state, false, "ready", true);
+    expect(still.dispatchedEntry).toBeNull();
+  });
+
+  test("the queue drains once the member answered and that turn ended", () => {
+    const paused = pausedWithQueued();
+    // The answer resumes the turn; the card is gone while it runs.
+    const resumed = applyRenderTick(paused.state, true, "streaming");
+    expect(resumed.dispatchedEntry).toBeNull();
+    const ended = applyRenderTick(resumed.state, false, "ready");
+    expect(ended.dispatchedEntry?.id).toBe("follow-up");
+  });
+
+  test("the queue drains once the wait ends without a turn, as after a stop", () => {
+    const paused = pausedWithQueued();
+    const stopped = applyRenderTick(paused.state, false, "ready", false);
+    expect(stopped.dispatchedEntry?.id).toBe("follow-up");
+  });
+
+  test("a wait that ends in an error still holds the queue", () => {
+    const paused = pausedWithQueued();
+    const failed = applyRenderTick(paused.state, false, "error", false);
+    expect(failed.dispatchedEntry).toBeNull();
+  });
+});
 
 describe("reduceSendQueue", () => {
   test("idle state: dispatching the oldest message on an empty queue is a no-op", () => {
@@ -150,6 +197,7 @@ describe("reduceSendQueue", () => {
         type: "turn-boundary-checked",
         isGenerating: false,
         status,
+        awaitingMember: false,
       });
 
       expect(result.dispatchedEntry).toBeNull();
@@ -203,6 +251,9 @@ describe("reduceSendQueue", () => {
   test("conversation switch clears the queue and the generating flags", () => {
     const state: SendQueueState = {
       conversationId: CONVERSATION_ID,
+      drainHeld: true,
+      editSessionIds: ["edited"],
+      heldForMember: true,
       isGenerating: true,
       queue: [makeEntry("a"), makeEntry("b")],
       wasGenerating: true,
@@ -215,6 +266,9 @@ describe("reduceSendQueue", () => {
 
     expect(result.state).toEqual({
       conversationId: "conversation-2",
+      drainHeld: false,
+      editSessionIds: [],
+      heldForMember: false,
       isGenerating: false,
       queue: [],
       wasGenerating: false,
@@ -238,6 +292,7 @@ describe("reduceSendQueue", () => {
       type: "turn-boundary-checked",
       isGenerating: false,
       status: "ready",
+      awaitingMember: false,
     });
 
     expect(first.dispatchedEntry).toEqual(entry);
@@ -374,6 +429,109 @@ describe("queued-message-promoted", () => {
     });
     expect(sent.dispatchedEntry?.id).toBe("b");
     expect(sent.state.isGenerating).toBe(true);
+  });
+});
+
+describe("an open message edit holds the queue", () => {
+  test("a closed session's release leaves a newer session of the message holding", () => {
+    const reopened = reduceSendQueue(
+      reduceSendQueue(
+        reduceSendQueue(createInitialSendQueueState(CONVERSATION_ID), {
+          type: "message-edit-opened",
+          sessionId: "first",
+        }).state,
+        { type: "message-edit-closed", sessionId: "first" },
+      ).state,
+      { type: "message-edit-opened", sessionId: "second" },
+    ).state;
+
+    const lateRelease = reduceSendQueue(reopened, {
+      type: "message-edit-closed",
+      sessionId: "first",
+    });
+    expect(lateRelease.state.editSessionIds).toEqual(["second"]);
+    expect(canSendWithoutQueueing(lateRelease.state)).toBe(false);
+  });
+
+  const opened = (state: SendQueueState, sessionId = "edited") =>
+    reduceSendQueue(state, { type: "message-edit-opened", sessionId }).state;
+  const closed = (state: SendQueueState, sessionId = "edited") =>
+    reduceSendQueue(state, { type: "message-edit-closed", sessionId });
+  const enqueued = (state: SendQueueState, id: string) =>
+    reduceSendQueue(state, { type: "message-enqueued", entry: makeEntry(id) })
+      .state;
+
+  test("a turn that ends while the form is open drains only once it closes", () => {
+    const streaming = applyRenderTick(
+      createInitialSendQueueState(CONVERSATION_ID),
+      true,
+      "streaming",
+    ).state;
+    const held = opened(enqueued(streaming, "a"));
+
+    const ended = applyRenderTick(held, false, "ready");
+    expect(ended.dispatchedEntry).toBeNull();
+    expect(canSendWithoutQueueing(ended.state)).toBe(false);
+
+    const released = closed(ended.state);
+    expect(released.dispatchedEntry?.id).toBe("a");
+    expect(released.state.queue).toEqual([]);
+    expect(released.state.editSessionIds).toEqual([]);
+  });
+
+  test("a prompt sent while an idle queue is held goes once the form closes", () => {
+    const held = opened(createInitialSendQueueState(CONVERSATION_ID));
+    expect(canSendWithoutQueueing(held)).toBe(false);
+    const waiting = enqueued(held, "a");
+    expect(
+      reduceSendQueue(waiting, { type: "oldest-dispatch-started" })
+        .dispatchedEntry,
+    ).toBeNull();
+
+    expect(closed(waiting).dispatchedEntry?.id).toBe("a");
+  });
+
+  test("an accepted edit's turn runs first; the queue drains when it ends", () => {
+    const waiting = enqueued(
+      opened(createInitialSendQueueState(CONVERSATION_ID)),
+      "a",
+    );
+    const accepted = reduceSendQueue(waiting, {
+      type: "message-edit-accepted",
+      sessionId: "edited",
+    });
+    expect(accepted.dispatchedEntry).toBeNull();
+    expect(accepted.state.isGenerating).toBe(true);
+    // The form unmounts after its edit was accepted: nothing is sent into
+    // the edit's turn.
+    const unmounted = closed(accepted.state);
+    expect(unmounted.dispatchedEntry).toBeNull();
+
+    const streaming = applyRenderTick(unmounted.state, true, "streaming");
+    expect(
+      applyRenderTick(streaming.state, false, "ready").dispatchedEntry?.id,
+    ).toBe("a");
+  });
+
+  test("the queue stays held while another edit form is open", () => {
+    const waiting = enqueued(
+      opened(
+        opened(createInitialSendQueueState(CONVERSATION_ID), "one"),
+        "two",
+      ),
+      "a",
+    );
+
+    const firstClosed = closed(waiting, "one");
+    expect(firstClosed.dispatchedEntry).toBeNull();
+    expect(closed(firstClosed.state, "two").dispatchedEntry?.id).toBe("a");
+  });
+
+  test("closing a form the queue does not know changes nothing", () => {
+    const state = createInitialSendQueueState(CONVERSATION_ID);
+    const result = closed(state, "unknown");
+    expect(result.state).toBe(state);
+    expect(result.dispatchedEntry).toBeNull();
   });
 });
 

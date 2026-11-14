@@ -3,9 +3,13 @@ import { Result } from "better-result";
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
-import { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
+import {
+  proposalHandlerError,
+  proposeReferencePositions,
+} from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
-import { aiHandlerError } from "@/api/lib/ai-error";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
@@ -53,6 +57,10 @@ export const createProposePositions = ({
       request,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const organizationId = session.activeOrganizationId;
       const prepared = yield* yield* prepareProposal({
         body,
@@ -93,12 +101,7 @@ export const createProposePositions = ({
         // `WorkflowIntegrationError.cause` carries the provider's own failure —
         // classify against that so an exhausted quota or a rejected key answers
         // with the status that names it instead of an opaque 500.
-        return Result.err(
-          aiHandlerError(proposal.error.cause, {
-            status: 502,
-            message: "Position proposal failed",
-          }),
-        );
+        return Result.err(proposalHandlerError(proposal.error.cause));
       }
       // The words leave through their own rows, never through this answer: the
       // proposed positions are pinned first and answered as ids. Seeds lead the

@@ -2,8 +2,8 @@
 // client (drag/drop + file-picker validation) and the server (attachment
 // validation) so the two ends can never drift apart.
 //
-// The megabytes value is the source; the server derives its human-readable
-// Elysia limit ("10m") and byte budget from it, and the client validates
+// The megabytes value is the source; the server derives its limit messages
+// and byte budget from it, and the client validates
 // selected files against the byte budget.
 
 /** Max chat context-file attachment size, in whole megabytes. */
@@ -21,14 +21,15 @@ export const CHAT_CONTEXT_FILE_MAX_BYTES =
  * only the user's next message (the paused turn's Continue included) opens a
  * new window.
  *
- * 50 tool calls is half the agent loop's own iteration ceiling and over ten
- * times the largest turn the recorded conversations hold (4 calls). 4M prompt
- * tokens is twenty model calls at the largest prompt compaction lets a call
- * reach (200k); a turn of 72k-token calls reaches the tool-call cap first.
+ * 200 tool calls is half the agent loop's own iteration ceiling and fifty
+ * times the largest turn the recorded conversations hold (4 calls), so long
+ * research and drafting runs finish without asking. 16M prompt tokens is
+ * eighty model calls at the largest prompt compaction lets a call reach
+ * (200k); a turn of 80k-token calls reaches the tool-call cap first.
  */
 export const CHAT_TURN_BUDGET = {
-  maxToolCalls: 50,
-  maxPromptTokens: 4_000_000,
+  maxToolCalls: 200,
+  maxPromptTokens: 16_000_000,
 } as const satisfies ChatTurnBudget;
 
 export type ChatTurnBudget = {

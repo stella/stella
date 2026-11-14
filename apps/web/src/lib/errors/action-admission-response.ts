@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 
+import type { ScopedResponse } from "@stll/api-client";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
@@ -11,7 +13,7 @@ type ObserveActionAdmissionResponseOptions = {
 };
 
 export const observeActionAdmissionResponse = async (
-  response: Response,
+  response: ScopedResponse,
   { notifyRefusal, captureError }: ObserveActionAdmissionResponseOptions,
 ): Promise<void> => {
   if (
@@ -25,6 +27,9 @@ export const observeActionAdmissionResponse = async (
   const observed = await Result.tryPromise({
     try: async () => {
       const value: unknown = await response.clone().json();
+      if (notifyStepUp(value)) {
+        return;
+      }
       notifyRefusal(toAPIError({ status: response.status, value }));
     },
     // Parser failures can contain response data; capture only the observer boundary.

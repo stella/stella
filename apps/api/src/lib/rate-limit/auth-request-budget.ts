@@ -10,12 +10,13 @@ import * as v from "valibot";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import type { AuthRateLimitReservation } from "@/api/lib/rate-limit/auth-admission-reservations";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
-  recordBudgetRejection,
   type BudgetObservation,
+  recordBudgetRejection,
 } from "@/api/lib/rate-limit/budget-observability";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -132,7 +133,7 @@ export const resolveAuthRequestBudgetIdentity = async ({
     }
     return {
       type: "account",
-      key: sha256Hex(JSON.stringify(["account", email.trim().toLowerCase()])),
+      key: sha256Hex(JSON.stringify(["account", normalizeEmail(email)])),
     };
   }
   if (path === "/oauth2/token") {

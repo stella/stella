@@ -47,7 +47,7 @@ document_translation_units.{...entityFeatureWorkspaceGateColumns()}  spread     
 document_translation_units.id                                        pUuid               pk,not null       document-translations.ts:177
 document_translation_units.organization_id                           safeOrganizationId  fk,not null       document-translations.ts:178
 document_translation_units.workspace_id                              safeWorkspaceId     fk,not null       document-translations.ts:181
-document_translation_units.run_id                                    safeUuid            not null          document-translations.ts:184
+document_translation_units.run_id                                    safeUuid            fk,not null       document-translations.ts:184
 document_translation_units.unit_key                                  varchar             not null          document-translations.ts:185
 document_translation_units.ordinal                                   integer             not null          document-translations.ts:186
 document_translation_units.source_text                               text                not null          document-translations.ts:187

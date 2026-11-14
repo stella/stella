@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { RenderInvoicePdfOptions } from "../render";
+import type { RenderInvoicePdfOptions } from "../render-helpers";
 import { buildInvoiceTemplateData } from "./data";
 import defaultTemplatePath from "./invoice.typ" with { type: "file" };
 import type { PdfA3Attachment } from "./pdfa";
@@ -30,9 +30,8 @@ type TypstInvoiceRender =
   | Extract<TypstRenderOutcome, { status: "rejected" }>;
 
 /**
- * Spike renderer: lays the invoice out with a Typst template in a sandboxed
- * WASM worker, then post-processes it into a PDF/A-3b candidate with the
- * given attachments. Not wired to any route; `render.ts` stays the live path.
+ * Lays the invoice out with a Typst template in a bounded WASM worker, then
+ * post-processes it into a PDF/A-3b document with the given attachments.
  */
 export const renderInvoiceWithTypst = async ({
   invoice,

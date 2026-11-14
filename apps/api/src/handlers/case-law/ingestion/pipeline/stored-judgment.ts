@@ -1,15 +1,15 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
+import type { ProcessSupplementOptions } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   IngestionResult,
   StoredRawReadError,
   StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { ProcessSupplementOptions } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/ingestion-types";
 
 type RebuildStoredJudgmentOptions = {
   judgmentId: SafeId<"caseLawDecision">;
@@ -19,7 +19,7 @@ type RebuildStoredJudgmentOptions = {
 };
 
 type RebuiltJudgment =
-  | { type: "rebuilt"; result: IngestionResult }
+  | { type: "rebuilt"; result: IngestionResult; sourceRawS3Key: string }
   | { type: "unreadable"; detail: string }
   /** Object storage did not answer; nothing is known about the payload. */
   | { type: "read-failed"; error: StoredRawReadError };
@@ -113,6 +113,7 @@ export const rebuildStoredJudgment = async ({
   }
   return {
     type: "rebuilt",
+    sourceRawS3Key: row.sourceRawS3Key,
     result: {
       ...reparsed.result,
       sourceRawBytes: raw,

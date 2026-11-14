@@ -3,16 +3,18 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
 import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
 import {
   auditLogs,
+  legalReaderAnnotations,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -23,6 +25,7 @@ import {
   WRITE_TOOL_REF_FIELD_MAP,
 } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
+import { HttpStatusResponse } from "@/api/http/status";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -47,10 +50,14 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import type { InternalToolStructuredError } from "@/api/mcp/tool-types";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -85,17 +92,19 @@ const consumeRateLimitMock = mock(async () => ({
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
 const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
-const { featureOmittedCapabilityIds, mapHandlerResult } =
-  await import("@/api/mcp/capability-tools");
+const {
+  featureOmittedCapabilityIds,
+  mapHandlerResult,
+  loadCapabilityEndpoint,
+} = await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
-const { synthesizeCapabilityContext } =
+const { capabilityHandlerContext } =
   await import("@/api/mcp/capability-context");
 const { listStaticMcpToolDefinitions } =
   await import("@/api/mcp/static-tool-definitions");
 const { listMcpResources, readMcpResource } =
   await import("@/api/mcp/resources");
-const { ElysiaCustomStatusResponse } = await import("elysia");
 const { readCapabilityCatalog } =
   await import("@stll/cli/capability-catalog-data");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
@@ -111,12 +120,13 @@ const requiresVerificationGrant = (entry: (typeof capabilityCatalog)[number]) =>
 
 type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 
+const admittedClientCredential = await admittedOAuthCredentialForTest("client");
+
 /**
  * The tool's payload as a client reads it: capability executor's `{ result }`
  * envelope is unwrapped, as the CLI and the MCP apps do.
  */
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
-const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
+const parseToolPayload = (result: ToolCallResult) => {
   const item = result.content.at(0);
   if (!item || item.type !== "text") {
     throw new Error("Expected a text MCP response");
@@ -127,22 +137,15 @@ const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
     isRecord(envelope) &&
     Object.keys(envelope).length === 1 &&
     Object.hasOwn(envelope, "result");
-  return asTestRaw<T>(
-    isCapabilityEnvelope &&
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "result" in parsed
-      ? parsed.result
-      : parsed,
-  );
+  return isCapabilityEnvelope &&
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "result" in parsed
+    ? parsed.result
+    : parsed;
 };
 
-type ErrorEnvelope = {
-  code: string;
-  message: string;
-  hint?: string;
-  issues?: unknown;
-};
+type ErrorEnvelope = Omit<InternalToolStructuredError, "type">;
 
 const errorEnvelope = (result: ToolCallResult): ErrorEnvelope => {
   const payload = parseToolPayload(result);
@@ -181,7 +184,7 @@ const visibleReferenceDatabase = (ids: readonly string[]) =>
     },
   });
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => {
     const builder = {
       select: () => builder,
@@ -195,6 +198,7 @@ const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
 );
 
 const createContext = ({
+  credential,
   credentialPermissions,
   grantedScopes = [
     "stella:read",
@@ -211,19 +215,21 @@ const createContext = ({
   workspaceIds = ["ws_1"],
   toolConfirmation,
 }: {
-  createOperationDatabaseScope?: McpRequestContext["createOperationDatabaseScope"];
-  credentialPermissions?: McpRequestContext["credentialPermissions"];
+  credential?: AuthorizedMcpRequestContext["credential"];
+  createOperationDatabaseScope?: AuthorizedMcpRequestContext["createOperationDatabaseScope"];
+  credentialPermissions?: AuthorizedMcpRequestContext["credentialPermissions"];
   grantedScopes?: readonly string[];
-  memberRole?: McpRequestContext["memberRole"];
-  pinServerValidatedWorkspaceId?: McpRequestContext["pinServerValidatedWorkspaceId"];
-  scopedDb?: McpRequestContext["scopedDb"];
-  safeDb?: McpRequestContext["safeDb"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  pinServerValidatedWorkspaceId?: AuthorizedMcpRequestContext["pinServerValidatedWorkspaceId"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
+  safeDb?: AuthorizedMcpRequestContext["safeDb"];
   archivedWorkspaceIds?: string[];
   workspaceIds?: string[];
-  toolConfirmation?: McpRequestContext["toolConfirmation"];
-} = {}): McpRequestContext => {
+  toolConfirmation?: AuthorizedMcpRequestContext["toolConfirmation"];
+} = {}): AuthorizedMcpRequestContext => {
   const accessibleWorkspaceIdSet = new Set(workspaceIds);
-  return {
+  return authorizedMcpContextForTest({
+    ...(credential === undefined ? {} : { credential }),
     testDependencies: {
       loadOrgSettingsForAuth: loadOrgSettingsMock,
       consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
@@ -285,7 +291,7 @@ const createContext = ({
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const call = async (toolName: string, args: Record<string, unknown>) =>
@@ -319,9 +325,11 @@ const callCapability = async (args: Record<string, unknown>) =>
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
-  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockReset();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
 });
@@ -335,6 +343,10 @@ describe("list verification access grants across MCP tools", () => {
   const resourceId = "a2222222-2222-4222-8222-222222222222";
   const params = { matterId };
   const inputs = {
+    "lists.fact-extractions.create": {
+      params,
+      body: { listId: resourceId, entityIds: [resourceId] },
+    },
     "lists.verifications.create": {
       params,
       body: {
@@ -348,6 +360,19 @@ describe("list verification access grants across MCP tools", () => {
       query: { entityId: resourceId, fileFieldId: resourceId },
     },
     "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.graph.get": {
+      params,
+      query: { listId: resourceId },
+    },
+    "lists.graph.nodes.list": { params, query: { text: "delivery" } },
+    "lists.graph.neighbours.list": {
+      params,
+      query: { nodeKind: "fact", nodeId: resourceId },
+    },
+    "lists.graph.paths.list": {
+      params,
+      query: { nodeKind: "claim", nodeId: resourceId, depth: 2 },
+    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
@@ -363,6 +388,40 @@ describe("list verification access grants across MCP tools", () => {
     "lists.verifications.claim-reviews.bulk.create": {
       params,
       body: { runId: resourceId, claimIds: [resourceId] },
+    },
+    "lists.verifications.claim-reviews.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
+    "lists.verifications.claim-rechecks.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claimId: resourceId,
+        requestKey: "synthetic-recheck",
+      },
+    },
+    "lists.verifications.claim-rechecks.bulk.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claims: [{ claimId: resourceId, requestKey: "synthetic-recheck" }],
+      },
+    },
+    "lists.verifications.claim-comments.create": {
+      params,
+      body: { runId: resourceId, claimId: resourceId, body: "Synthetic note" },
+    },
+    "lists.verifications.claim-comments.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
+    "lists.verifications.claim-comments.update": {
+      params: { ...params, annotationId: resourceId },
+      body: { change: "body", body: "Synthetic note" },
+    },
+    "lists.verifications.claim-comments.delete": {
+      params: { ...params, annotationId: resourceId },
     },
     "lists.items.fact-details.update": {
       params,
@@ -390,7 +449,24 @@ describe("list verification access grants across MCP tools", () => {
       params,
       body: { filePropertyName: "Documents" },
     },
+    "lists.source-documents.list": {
+      params,
+      body: { listId: resourceId, documentEntityIds: [resourceId] },
+    },
+    "lists.source-documents.update": {
+      params,
+      body: {
+        listId: resourceId,
+        documentEntityId: resourceId,
+        sourceKind: "testimony",
+      },
+    },
   } as const;
+  // Irreversible capabilities only run, or validate, once the human confirmed.
+  const confirmation = (capability: string) =>
+    capability === "lists.verifications.claim-comments.delete"
+      ? { confirm: true }
+      : {};
 
   let previousGrants = env.API_FEATURE_ACCESS_GRANTS;
   let previousDeploymentFlag = env.FEATURE_LEGAL_LISTS;
@@ -509,6 +585,18 @@ describe("list verification access grants across MCP tools", () => {
           },
         },
       },
+      // The review history names its run's reviewers; none here.
+      selectDistinct: () => {
+        resourceLookups += 1;
+        const query: unknown[] = [];
+        return Object.assign(query, {
+          from: () => query,
+          innerJoin: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: () => query,
+        });
+      },
       selectDistinctOn: () => {
         resourceLookups += 1;
         const query: unknown[] = [];
@@ -520,12 +608,34 @@ describe("list verification access grants across MCP tools", () => {
         });
       },
       // Row locks (the sample loader's matter lock) read no rows here.
-      execute: async () => {
+      execute: async (statement: SQL) => {
         resourceLookups += 1;
-        return [];
+        return aggregateExecutionRows(statement, false);
       },
-      insert: () => ({ values: async () => [] }),
-      update: () => {
+      // Writes land nowhere: a history append, and a document's source kind
+      // upserted on its list, which counts as the write it is.
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: async () => [],
+          onConflictDoUpdate: async () => {
+            mutations += 1;
+            return [];
+          },
+        }),
+      }),
+      // A reader comment is written through its own guarded predicate; no
+      // stored comment has the synthetic id, so the write reaches no row.
+      delete: () => {
+        resourceLookups += 1;
+        return { where: () => ({ returning: async () => [] }) };
+      },
+      update: (table: unknown) => {
+        if (table === legalReaderAnnotations) {
+          resourceLookups += 1;
+          return {
+            set: () => ({ where: () => ({ returning: async () => [] }) }),
+          };
+        }
         mutations += 1;
         return {
           set: () => ({
@@ -632,9 +742,9 @@ describe("list verification access grants across MCP tools", () => {
         args: { domain, limit: MAX_LIST_LIMIT },
       });
       listed.push(
-        ...parseToolPayload<{ items: { id: string }[] }>(result).items.map(
-          ({ id }) => id,
-        ),
+        ...asTestRaw<{ items: { id: string }[] }>(
+          parseToolPayload(result),
+        ).items.map(({ id }) => id),
       );
     }
     for (const capability of Object.keys(inputs)) {
@@ -722,8 +832,12 @@ describe("list verification access grants across MCP tools", () => {
       expect(hidden.isError).not.toBe(true);
     }
     expect(projectedLayouts).toBeGreaterThan(0);
-    const enabledResources = listMcpResources("default", granted);
-    const hiddenResources = listMcpResources("default", denied);
+    const enabledResources = await listMcpResources("default", {
+      context: granted,
+    });
+    const hiddenResources = await listMcpResources("default", {
+      context: denied,
+    });
     expect(enabledResources.length).toBeGreaterThan(0);
     // The production feature declares capability endpoints; its shared static
     // references remain available and contain no dedicated capability names.
@@ -774,7 +888,7 @@ describe("list verification access grants across MCP tools", () => {
         args: { capability: "views.list", input: { params: { matterId } } },
       });
       expect(result.isError).not.toBe(true);
-      const payload = parseToolPayload<unknown[]>(result);
+      const payload = asTestRaw<unknown[]>(parseToolPayload(result));
       expect(payload).toEqual(
         caller.userId === undefined
           ? [
@@ -801,7 +915,7 @@ describe("list verification access grants across MCP tools", () => {
       args: { capability: "views.list", input: { params: { matterId } } },
     });
     expect(denied.isError).not.toBe(true);
-    expect(parseToolPayload<unknown[]>(denied)).toEqual([
+    expect(asTestRaw<unknown[]>(parseToolPayload(denied))).toEqual([
       { id: view.id, eligibility: "unavailable" },
     ]);
   });
@@ -839,9 +953,9 @@ describe("list verification access grants across MCP tools", () => {
         args: { domain, limit: MAX_LIST_LIMIT },
       });
       listed.push(
-        ...parseToolPayload<{ items: { id: string }[] }>(result).items.map(
-          ({ id }) => id,
-        ),
+        ...asTestRaw<{ items: { id: string }[] }>(
+          parseToolPayload(result),
+        ).items.map(({ id }) => id),
       );
     }
     for (const [capability, input] of Object.entries(inputs)) {
@@ -855,10 +969,17 @@ describe("list verification access grants across MCP tools", () => {
       expect(described.isError).not.toBe(true);
       const result = await handleCapabilityCall({
         context: fixture.context,
-        args: { capability, input, validate_only: true },
+        args: {
+          capability,
+          input,
+          validate_only: true,
+          ...confirmation(capability),
+        },
       });
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability });
     }
     expect(fixture.resourceLookups()).toBeGreaterThan(0);
@@ -882,8 +1003,8 @@ describe("list verification access grants across MCP tools", () => {
         context: fixture.context,
         args: { domain: "lists", limit: MAX_LIST_LIMIT },
       });
-      const ids = parseToolPayload<{ items: { id: string }[] }>(
-        listed,
+      const ids = asTestRaw<{ items: { id: string }[] }>(
+        parseToolPayload(listed),
       ).items.map(({ id }) => id);
       for (const [capability, input] of Object.entries(inputs)) {
         expect(ids).not.toContain(capability);
@@ -923,27 +1044,68 @@ describe("list verification access grants across MCP tools", () => {
       const fixture = verificationContext();
       const result = await handleCapabilityCall({
         context: fixture.context,
-        args: { capability, input },
+        args: { capability, input, ...confirmation(capability) },
       });
       if (capability === "lists.items.sources.verification.update") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload<{ id: string }>(result)).toEqual({
+        expect(asTestRaw<{ id: string }>(parseToolPayload(result))).toEqual({
           id: resourceId,
+        });
+        expect(fixture.mutations()).toBe(1);
+        continue;
+      }
+      // The fixture holds the list and document every id probe asks for,
+      // and no classified document, so the document reads as a record.
+      if (capability === "lists.source-documents.update") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          listId: resourceId,
+          documentEntityId: resourceId,
+          sourceKind: "testimony",
         });
         expect(fixture.mutations()).toBe(1);
         continue;
       }
       expect(fixture.resourceLookups()).toBeGreaterThan(0);
       expect(fixture.mutations()).toBe(0);
-      if (capability === "lists.verifications.list") {
+      if (
+        capability === "lists.verifications.list" ||
+        capability === "lists.verifications.claim-comments.list" ||
+        capability === "lists.verifications.claim-reviews.list"
+      ) {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload<{ items: unknown[] }>(result)).toMatchObject({
+        expect(
+          asTestRaw<{ items: unknown[] }>(parseToolPayload(result)),
+        ).toMatchObject({
           items: [],
+        });
+      } else if (capability === "lists.source-documents.list") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          documents: [{ documentEntityId: resourceId, sourceKind: "document" }],
+        });
+      } else if (capability === "lists.graph.nodes.list") {
+        // Nothing in the fixture's matter matches.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          nodes: [],
+          nextCursor: null,
         });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload<{ runs: unknown[] }>(result)).toEqual({
+        expect(
+          asTestRaw<{ runs: unknown[] }>(parseToolPayload(result)),
+        ).toEqual({
           runs: [],
+        });
+      } else if (capability === "lists.verifications.graph.get") {
+        // The fixture's list holds nothing verified yet.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          listId: resourceId,
+          statements: [],
+          claims: [],
+          nextCursor: null,
         });
       } else {
         expect(errorEnvelope(result).code).toBe("not_found");
@@ -951,6 +1113,125 @@ describe("list verification access grants across MCP tools", () => {
         expect(errorEnvelope(result).message).not.toBe("Not found");
       }
     }
+  });
+});
+
+describe("account export capability authority", () => {
+  const entries = capabilityCatalog.filter((entry) =>
+    entry.id.startsWith("account-exports."),
+  );
+  const oauthCredential = admittedClientCredential;
+
+  const listedAccountIds = async (context: AuthorizedMcpRequestContext) => {
+    const result = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "list_capabilities",
+      args: { domain: "account-exports", limit: 50 },
+      context,
+    });
+    return asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    ).items.map(({ id }) => id);
+  };
+
+  test("catalog binds session capabilities to explicit account grants", () => {
+    const accountEntries = capabilityCatalog.filter(
+      (entry) => entry.accountScope !== undefined,
+    );
+    expect(accountEntries.map(({ id }) => id).toSorted()).toEqual(
+      capabilityCatalog
+        .filter((entry) => entry.handlerKind === "session")
+        .map(({ id }) => id)
+        .toSorted(),
+    );
+    expect(
+      accountEntries.find(({ id }) => id === "organizations.create")
+        ?.accountScope,
+    ).toBe("stella:organization_create");
+    for (const entry of accountEntries) {
+      expect(entry.accountScope).toBe(entry.scope);
+    }
+    expect(
+      entries.filter(({ access }) => access === "write").map(({ id }) => id),
+    ).toEqual(["account-exports.create"]);
+    for (const entry of entries) {
+      expect(entry.handlerKind).toBe("session");
+      expect(entry.scope).toBe(ACCOUNT_EXPORT_SCOPES[entry.access]);
+    }
+  });
+
+  test("account exports require a credential", async () => {
+    const context = createContext({
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    expect(await listedAccountIds(context)).toEqual([]);
+    for (const entry of entries) {
+      const described = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        args: { capability: entry.id },
+        context,
+      });
+      expect(errorEnvelope(described).code).toBe("not_found");
+      const invoked = await handleCapabilityCall({
+        args: { capability: entry.id, validate_only: true },
+        context,
+      });
+      expect(errorEnvelope(invoked).code).toBe("not_found");
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("read-only OAuth consent discovers reads and refuses requests", async () => {
+    const context = createContext({
+      credential: oauthCredential,
+      grantedScopes: ["stella:read", ACCOUNT_EXPORT_SCOPES.read],
+    });
+    expect((await listedAccountIds(context)).toSorted()).toEqual(
+      entries
+        .filter(({ access }) => access === "read")
+        .map(({ id }) => id)
+        .toSorted(),
+    );
+    for (const entry of entries.filter(({ access }) => access === "write")) {
+      const result = await handleCapabilityCall({
+        args: { capability: entry.id, validate_only: true },
+        context,
+      });
+      expect(errorEnvelope(result).code).toBe("not_found");
+    }
+  });
+
+  test("consented OAuth subject validates both access classes without building an export", async () => {
+    const context = createContext({
+      credential: oauthCredential,
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    expect((await listedAccountIds(context)).toSorted()).toEqual(
+      entries.map(({ id }) => id).toSorted(),
+    );
+    for (const entry of entries) {
+      const result = await handleCapabilityCall({
+        args: {
+          capability: entry.id,
+          validate_only: true,
+          input:
+            entry.inputSchema?.params === undefined
+              ? {}
+              : {
+                  params: { exportId: "00000000-0000-4000-8000-000000000001" },
+                },
+        },
+        context,
+      });
+      expect(
+        asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid,
+        entry.id,
+      ).toBe(true);
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1095,7 +1376,7 @@ describe("capability handler refusal metadata", () => {
           mappedError(
             mapHandlerResult({
               id: "properties.update",
-              result: new ElysiaCustomStatusResponse(status, {
+              result: new HttpStatusResponse(status, {
                 code: "handler_specific_code",
                 message: "A corrective action is required",
                 hint: "Correct the matter and invoke the capability again.",
@@ -1134,7 +1415,7 @@ describe("capability handler refusal metadata", () => {
     const error = mappedError(
       mapHandlerResult({
         id: "properties.update",
-        result: new ElysiaCustomStatusResponse(422, {
+        result: new HttpStatusResponse(422, {
           message: "Invalid input",
           hint: { raw: "private details" },
           retryable: "false",
@@ -1189,9 +1470,9 @@ describe("documents.compare capability contract", () => {
       domain: "documents",
       limit: 50,
     });
-    const listedPayload = parseToolPayload<{
+    const listedPayload = asTestRaw<{
       items: { id: string; scope: string; access: string }[];
-    }>(listed);
+    }>(parseToolPayload(listed));
     expect(listedPayload.items).toContainEqual(
       expect.objectContaining({
         id: "documents.compare",
@@ -1203,7 +1484,7 @@ describe("documents.compare capability contract", () => {
     const described = await call("describe_capability", {
       capability: "documents.compare",
     });
-    const describedPayload = parseToolPayload<{
+    const describedPayload = asTestRaw<{
       id: string;
       scope: string;
       handlerKind: string;
@@ -1216,7 +1497,7 @@ describe("documents.compare capability contract", () => {
           };
         };
       };
-    }>(described);
+    }>(parseToolPayload(described));
     // The endpoint now backs the curated compare_documents tool. It stays in
     // the catalog and stays generically invocable, the way every other
     // tool-backed capability does; the disposition is what tells an agent that
@@ -1283,9 +1564,46 @@ describe("documents.compare capability contract", () => {
     ]);
     for (const result of results) {
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability: "documents.compare" });
     }
+  });
+
+  test("a credential without the config grant is refused before any reference read", async () => {
+    const database = visibleReferenceDatabase([
+      DOCUMENT_ID,
+      "55555555-5555-4555-8555-555555555555",
+      TARGET_VERSION_ID,
+    ]);
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "documents.compare",
+        input: {
+          params: { matterId: MATTER_ID, documentId: DOCUMENT_ID },
+          body: {
+            filePropertyId: "55555555-5555-4555-8555-555555555555",
+            selection: { type: "previous", targetVersionId: TARGET_VERSION_ID },
+            mode: "strict",
+            granularity: "word",
+            baseTrackedChanges: "keep",
+            targetTrackedChanges: "accept",
+            output: { type: "version" },
+          },
+        },
+        validate_only: true,
+      },
+      context: createContext({
+        credentialPermissions: { searchHistory: ["read"] },
+        grantedScopes: ["stella:documents_write"],
+        scopedDb: database.scopedDb,
+        workspaceIds: [MATTER_ID],
+      }),
+    });
+
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(database.getCallCount()).toBe(0);
   });
 
   test("rejects a one-to-many selection above the advertised target bound", async () => {
@@ -1313,7 +1631,7 @@ describe("documents.compare capability contract", () => {
 describe("list_capabilities", () => {
   test("returns id/summary/scope items and paginates by cursor", async () => {
     const first = await call("list_capabilities", { limit: 5 });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       items: {
         id: string;
         summary: string;
@@ -1325,7 +1643,7 @@ describe("list_capabilities", () => {
       }[];
       nextCursor: string | null;
       limit: number;
-    }>(first);
+    }>(parseToolPayload(first));
     expect(payload.items).toHaveLength(5);
     expect(payload.limit).toBe(5);
     expect(payload.nextCursor).not.toBeNull();
@@ -1346,7 +1664,9 @@ describe("list_capabilities", () => {
       limit: 5,
       cursor: payload.nextCursor,
     });
-    const secondPayload = parseToolPayload<{ items: { id: string }[] }>(second);
+    const secondPayload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(second),
+    );
     // Keyset by id: page two starts strictly after page one's last id.
     const lastOfFirst = payload.items.at(-1)?.id ?? "";
     expect(
@@ -1360,7 +1680,9 @@ describe("list_capabilities", () => {
       domain: "time-entries",
       limit: 50,
     });
-    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
     expect(payload.items.length).toBeGreaterThan(0);
     for (const item of payload.items) {
       expect(item.id.startsWith("time-entries.")).toBe(true);
@@ -1372,14 +1694,154 @@ describe("list_capabilities", () => {
       access: "write",
       limit: 50,
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       items: { id: string; summary: string }[];
-    }>(result);
+    }>(parseToolPayload(result));
     const ids = new Set(payload.items.map((i) => i.id));
     const catalogById = new Map(capabilityCatalog.map((e) => [e.id, e]));
     for (const id of ids) {
       expect(catalogById.get(id)?.access).toBe("write");
     }
+  });
+
+  test.each(["", " ", "  ", "\t\n", "\u00a0\u2003"])(
+    "blank query %j preserves id-order pages and cursor binding",
+    async (query) => {
+      const first = asTestRaw<{ nextCursor: string | null }>(
+        parseToolPayload(await call("list_capabilities", { limit: 1 })),
+      );
+      const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+      for (const args of [{ limit: 1 }, { limit: 1, cursor }]) {
+        expect(await call("list_capabilities", { ...args, query })).toEqual(
+          await call("list_capabilities", args),
+        );
+      }
+    },
+  );
+
+  test("surrounding query whitespace preserves relevance cursor binding", async () => {
+    const first = asTestRaw<{ nextCursor: string | null }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 1 }),
+      ),
+    );
+    const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+    expect(
+      await call("list_capabilities", { query: "  time entries ", cursor }),
+    ).toEqual(
+      await call("list_capabilities", { query: "time entries", cursor }),
+    );
+  });
+
+  test("ranks suggestion capabilities by id before description-only matches", async () => {
+    const result = await call("list_capabilities", {
+      query: "suggestion",
+      limit: 20,
+    });
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
+    const ids = payload.items.map(({ id }) => id);
+    const idMatches = ids.filter((id) => id.includes("suggestion"));
+
+    expect(idMatches).toEqual(
+      expect.arrayContaining([
+        "time-entries.suggestions.decisions.create",
+        "time-entries.suggestions.list",
+      ]),
+    );
+    expect(ids.slice(0, idMatches.length)).toEqual(idMatches);
+    expect(ids).toContain("templates.fields.suggest");
+    expect(ids.indexOf("templates.fields.suggest")).toBeGreaterThanOrEqual(
+      idMatches.length,
+    );
+  });
+
+  test("pages a query in relevance order without repeats", async () => {
+    const all = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 100 }),
+      ),
+    ).items.map(({ id }) => id);
+    expect(all.length).toBeGreaterThan(3);
+
+    type CapabilityPage = {
+      items: { id: string }[];
+      nextCursor: string | null;
+    };
+    const paged: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
+        parseToolPayload(
+          await call("list_capabilities", {
+            query: "time entries",
+            limit: 2,
+            ...(cursor === null ? {} : { cursor }),
+          }),
+        ),
+      );
+      paged.push(...page.items.map(({ id }) => id));
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    expect(paged).toEqual(all);
+  });
+
+  test("a query cursor must name an entry of that ranking", async () => {
+    const result = await call("list_capabilities", {
+      query: "suggestion",
+      cursor: encodePaginationCursor(["invoices.list"]),
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("a cursor resumes only the query that issued it", async () => {
+    const first = asTestRaw<{
+      items: { id: string }[];
+      nextCursor: string | null;
+    }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 1 }),
+      ),
+    );
+    const issued = first.nextCursor ?? expect.unreachable("Need a second page");
+    const sameId = first.items[0]?.id ?? expect.unreachable("Need an item");
+
+    // Reusing it under another query, or without one, is refused even though
+    // its id also appears in those listings.
+    for (const args of [
+      { query: "time", cursor: issued },
+      { cursor: issued },
+      { query: "time entries", cursor: encodePaginationCursor([sameId]) },
+    ]) {
+      const result = await call("list_capabilities", args);
+      expect(result.isError).toBe(true);
+    }
+    const resumed = await call("list_capabilities", {
+      query: "time entries",
+      cursor: issued,
+    });
+    expect(resumed.isError).not.toBe(true);
+  });
+
+  test("without a query a cursor for a hidden entry resumes after its id", async () => {
+    const first = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", { domain: "time-entries", limit: 50 }),
+      ),
+    ).items.map(({ id }) => id);
+    const anchor = first[1] ?? expect.unreachable("Need two time-entries");
+    const resumed = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", {
+          domain: "time-entries",
+          limit: 50,
+          // A cursor id that sorts just after the anchor but names no entry.
+          cursor: encodePaginationCursor([`${anchor}~`]),
+        }),
+      ),
+    ).items.map(({ id }) => id);
+    expect(resumed).toEqual(first.filter((id) => id > `${anchor}~`));
   });
 });
 
@@ -1390,13 +1852,13 @@ describe("describe_capability", () => {
     const result = await call("describe_capability", {
       capability: "time-entries.create",
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       id: string;
       access: string;
       handlerKind: string;
       scope: string;
       inputSchema: { body?: unknown };
-    }>(result);
+    }>(parseToolPayload(result));
     expect(payload.id).toBe("time-entries.create");
     expect(payload.access).toBe("write");
     expect(payload.handlerKind).toBe("workspace");
@@ -1411,10 +1873,63 @@ describe("describe_capability", () => {
     const result = await call("describe_capability", {
       capability: "views.create",
     });
-    const payload = parseToolPayload<{ inputSchema: { body?: unknown } }>(
-      result,
+    const payload = asTestRaw<{ inputSchema: { body?: unknown } }>(
+      parseToolPayload(result),
     );
     expect(payload.inputSchema.body).toBeDefined();
+  });
+
+  test("advertises every capability's input exactly as the catalog does", async () => {
+    // The executors read `matterId` and refuse `workspaceId`, so a described
+    // schema naming the internal field would send an agent into a refusal.
+    // The catalog (and the CLI generated from it) is the reference spelling.
+    const { expandSchemaDefs } =
+      await import("../../../../packages/cli/src/expand-schema-defs.ts");
+    // The default context leaves conditional features off, the state the
+    // catalog is exported in; a capability its caller may not reach is hidden
+    // by describe, and only a feature-required one may be.
+    const baseContext = createContext();
+    const context = {
+      ...baseContext,
+      credential: await admittedOAuthCredentialForTest("catalog-schema-probe"),
+      grantedScopes: [
+        ...baseContext.grantedScopes,
+        ...capabilityCatalog.flatMap((entry) =>
+          entry.accountScope === undefined ? [] : [entry.accountScope],
+        ),
+      ],
+    } satisfies AuthorizedMcpRequestContext;
+    const drift: string[] = [];
+    for (const entry of capabilityCatalog) {
+      if (entry.inputSchema === undefined) {
+        continue;
+      }
+      const described = asTestRaw<{ inputSchema?: unknown }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            mode: "advanced",
+            toolName: "describe_capability",
+            args: { capability: entry.id },
+            context,
+          }),
+        ),
+      );
+      if (described.inputSchema === undefined) {
+        if (!("featureAccess" in entry) || entry.featureAccess !== "required") {
+          drift.push(entry.id);
+        }
+        continue;
+      }
+      if (
+        !Bun.deepEquals(
+          described.inputSchema,
+          expandSchemaDefs(entry.inputSchema),
+        )
+      ) {
+        drift.push(entry.id);
+      }
+    }
+    expect(drift).toEqual([]);
   });
 
   test("unknown id -> not_found with a suggestion hint", async () => {
@@ -1443,10 +1958,9 @@ describe("capability executor gates", () => {
   });
 
   test("token/public capabilities are not invokable", async () => {
-    // No token/public capability exists in the catalog today; assert the guard
-    // by confirming the catalog holds only workspace/root kinds (defensive).
     const kinds = new Set(capabilityCatalog.map((e) => e.handlerKind));
-    expect([...kinds].toSorted()).toEqual(["root", "workspace"]);
+    expect(kinds.has("token")).toBe(false);
+    expect(kinds.has("public")).toBe(false);
   });
 
   test("waived capability -> feature_disabled", async () => {
@@ -1520,7 +2034,9 @@ describe("capability executor gates", () => {
     });
 
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "uploads.create",
@@ -1620,19 +2136,21 @@ describe("capability executor gates", () => {
       const listed: CapabilityPage["items"] = [];
       let cursor: string | null = null;
       do {
-        const page: CapabilityPage = parseToolPayload<CapabilityPage>(
-          await handleMcpToolCall({
-            mode: "advanced",
-            args: {
-              limit: MAX_LIST_LIMIT,
-              ...(cursor === null ? {} : { cursor }),
-            },
-            context: createContext({
-              grantedScopes: MCP_OAUTH_SCOPES,
-              toolConfirmation: TOOL_CONFIRMATION.unavailable,
+        const page: CapabilityPage = asTestRaw<CapabilityPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              mode: "advanced",
+              args: {
+                limit: MAX_LIST_LIMIT,
+                ...(cursor === null ? {} : { cursor }),
+              },
+              context: createContext({
+                grantedScopes: MCP_OAUTH_SCOPES,
+                toolConfirmation: TOOL_CONFIRMATION.unavailable,
+              }),
+              toolName: "list_capabilities",
             }),
-            toolName: "list_capabilities",
-          }),
+          ),
         );
         listed.push(...page.items);
         cursor = page.nextCursor;
@@ -1906,12 +2424,142 @@ describe("capability executor workspace resolution", () => {
       }),
     });
 
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
     expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
   });
 });
 
-describe("synthesized capability authorization lifetime", () => {
+describe("handlerCtx capability authorization lifetime", () => {
+  test("non-replay capabilities discard submission keys after the RPC body is consumed", async () => {
+    const request = new Request("http://localhost/mcp", {
+      method: "POST",
+      body: JSON.stringify({ method: "tools/call" }),
+      headers: {
+        "Idempotency-Key": "rpc-submission",
+        "X-Request-Id": "rpc-request",
+      },
+    });
+    expect(await request.json()).toEqual({ method: "tools/call" });
+    const handlerCtx = await capabilityHandlerContext({
+      capabilityId: "playbooks.list",
+      context: createContext(),
+      input: { body: {}, params: {}, query: {} },
+      request,
+      workspaceId: undefined,
+    });
+    expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
+    expect(handlerCtx.request.headers.get("X-Request-Id")).toBe("rpc-request");
+    expect(request.headers.get("Idempotency-Key")).toBe("rpc-submission");
+  });
+
+  test("every replay-capable create preserves its retry key through the MCP context", async () => {
+    const replayCapabilities: string[] = [];
+    for (const entry of capabilityCatalog.filter(({ id }) =>
+      id.endsWith(".create"),
+    )) {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      expect(endpoint).not.toBeNull();
+      if (endpoint === null) {
+        continue;
+      }
+      const request = new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "Idempotency-Key": "same-submission" },
+      });
+      const handlerCtx = await capabilityHandlerContext({
+        capabilityId: entry.id,
+        ...(endpoint.config.idempotency === undefined
+          ? {}
+          : { idempotency: endpoint.config.idempotency }),
+        context: createContext(),
+        input: { body: {}, params: {}, query: {} },
+        request,
+        workspaceId: undefined,
+      });
+      if (endpoint.config.idempotency?.type === "replay") {
+        replayCapabilities.push(entry.id);
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBe(
+          "same-submission",
+        );
+      } else {
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
+      }
+      expect(request.headers.get("Idempotency-Key")).toBe("same-submission");
+    }
+    expect(replayCapabilities.length).toBeGreaterThan(1);
+    expect(replayCapabilities).toContain("organizations.create");
+  });
+
+  test("replay-enabled handlers receive the per-call transport key after the RPC body is consumed", async () => {
+    const request = new Request("http://localhost/mcp", {
+      method: "POST",
+      body: JSON.stringify({ method: "tools/call" }),
+      headers: { "Idempotency-Key": "batch-item-key" },
+    });
+    await request.json();
+    const handlerCtx = await capabilityHandlerContext({
+      capabilityId: "saved-time-narratives.create",
+      idempotency: { type: "replay" },
+      context: createContext(),
+      input: { body: { name: "Narrative" }, params: {}, query: {} },
+      request,
+      workspaceId: undefined,
+    });
+    expect(handlerCtx.request.headers.get("Idempotency-Key")).toBe(
+      "batch-item-key",
+    );
+    expect(handlerCtx.body).toEqual({ name: "Narrative" });
+  });
+
+  test("catalog replay support matches every live handler declaration", async () => {
+    for (const entry of capabilityCatalog) {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      expect(endpoint).not.toBeNull();
+      expect(entry.idempotency).toEqual(endpoint?.config.idempotency);
+    }
+  });
+
+  test("a declared receipt replay returns the original structured capability result", async () => {
+    const endpoint = await loadCapabilityEndpoint(
+      "saved-time-narratives.create",
+    );
+    expect(endpoint).not.toBeNull();
+    if (endpoint === null) {
+      return;
+    }
+    expect(endpoint.config.idempotency).toEqual({ type: "replay" });
+    const context = createContext();
+    context.request = new Request("http://localhost/mcp", {
+      method: "POST",
+      headers: { "Idempotency-Key": "batch-item-key" },
+    });
+    context.testDependencies = {
+      ...context.testDependencies,
+      loadCapabilityEndpoint: async () => ({
+        ...endpoint,
+        handler: async () =>
+          Response.json(
+            { id: "retained-narrative", name: "Narrative" },
+            { headers: { "Idempotency-Replayed": "true" } },
+          ),
+      }),
+    };
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "saved-time-narratives.create",
+        input: { body: { name: "Narrative", narrative: "Review documents" } },
+      },
+      context,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toEqual({
+      id: "retained-narrative",
+      name: "Narrative",
+    });
+  });
+
   test("preserves MCP provenance in recorders rebound to another workspace", async () => {
     let inserted: Record<string, unknown>[] = [];
     const context = createContext({ workspaceIds: ["ws_1", "ws_2"] });
@@ -1923,7 +2571,7 @@ describe("synthesized capability authorization lifetime", () => {
         type: "credential",
       },
     };
-    const synthesized = await synthesizeCapabilityContext({
+    const handlerCtx = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -1938,7 +2586,7 @@ describe("synthesized capability authorization lifetime", () => {
       }),
     });
 
-    await synthesized.createAuditRecorder({
+    await handlerCtx.createAuditRecorder({
       workspaceId: toSafeId<"workspace">("ws_2"),
     })(tx, {
       action: "create",
@@ -1970,7 +2618,7 @@ describe("synthesized capability authorization lifetime", () => {
         scopedDb: emptyScopedDb,
       }),
     });
-    const synthesized = await synthesizeCapabilityContext({
+    const handlerCtx = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -1979,12 +2627,12 @@ describe("synthesized capability authorization lifetime", () => {
     });
 
     expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
-    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
-    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    await handlerCtx.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    await handlerCtx.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
     expect(pinnedWorkspaceIds).toEqual(["ws_1", "ws_2"]);
 
     expect(
-      await synthesized.getWorkspaceAccess(
+      await handlerCtx.getWorkspaceAccess(
         toSafeId<"workspace">("ws_inaccessible"),
       ),
     ).toBeNull();
@@ -1997,7 +2645,7 @@ describe("synthesized capability authorization lifetime", () => {
 
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
     // type-aware lint; capture the rejection explicitly instead.
-    const rejection = await synthesizeCapabilityContext({
+    const rejection = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2025,7 +2673,7 @@ describe("capability executor execution", () => {
       },
       context: createContext(),
     });
-    const payload = parseToolPayload<string>(result);
+    const payload = asTestRaw<string>(parseToolPayload(result));
     expect(typeof payload).toBe("string");
     expect(payload).toContain("Date,");
     expect(loadOrgSettingsMock).toHaveBeenCalled();
@@ -2058,7 +2706,7 @@ describe("capability executor execution", () => {
       context: createContext({ safeDb, scopedDb }),
     });
     expect(
-      parseToolPayload<{ id: string; name: string }>(result),
+      asTestRaw<{ id: string; name: string }>(parseToolPayload(result)),
     ).toMatchObject({
       id: "cc_1",
       name: "Test Category",
@@ -2149,7 +2797,7 @@ describe("capability executor upload purpose gate", () => {
 
   // A pending upload the finalize gate reads its purpose from.
   const storedPurposeDb = (purpose: string) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
+    asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) => {
         const builder = {
           select: () => builder,
@@ -2187,7 +2835,9 @@ describe("capability executor upload purpose gate", () => {
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
     });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("a document upload needs the documents consent, not the domain scope alone", async () => {
@@ -2205,10 +2855,52 @@ describe("capability executor upload purpose gate", () => {
     expect(refused.code).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
-      parseToolPayload<{ valid: boolean }>(
-        await invoke(["stella:matters_write", "stella:documents_write"]),
+      asTestRaw<{ valid: boolean }>(
+        parseToolPayload(
+          await invoke(["stella:matters_write", "stella:documents_write"]),
+        ),
       ).valid,
     ).toBe(true);
+  });
+
+  // The executor refuses an uncovered purpose before dispatch; the handler
+  // checks the same consent against the scopes the MCP session carries.
+  test("the upload handler holds an MCP call to its purpose's consent too", async () => {
+    const reserved: unknown[] = [];
+    const reservationDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+      async (run: (tx: unknown) => unknown) =>
+        await run({
+          insert: () => ({
+            values: async (row: unknown) => {
+              reserved.push(row);
+            },
+          }),
+        }),
+    );
+    const endpoint = await loadCapabilityEndpoint("uploads.create");
+    const invoke = async (grantedScopes: string[]) =>
+      await endpoint?.handler(
+        await capabilityHandlerContext({
+          capabilityId: "uploads.create",
+          context: createContext({
+            grantedScopes,
+            safeDb: toSafeDbMock(reservationDb),
+          }),
+          input: { body: skillPackBody, params: {}, query: {} },
+          request: new Request("http://localhost/mcp", { method: "POST" }),
+          workspaceId: toSafeId<"workspace">("ws_1"),
+        }),
+      );
+
+    expect(await invoke(["stella:matters_write"])).toMatchObject({
+      code: 403,
+      response: { message: "This upload needs the stella:skills scope" },
+    });
+    expect(reserved).toEqual([]);
+    expect(
+      await invoke(["stella:matters_write", "stella:skills"]),
+    ).toMatchObject({ uploadId: expect.any(String) });
+    expect(reserved).toMatchObject([{ purpose: "agent_skill" }]);
   });
 
   test("finalize takes the purpose from the stored upload, not from the caller", async () => {
@@ -2250,8 +2942,10 @@ describe("capability executor upload purpose gate", () => {
     expect(refused.code).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
-      parseToolPayload<{ valid: boolean }>(
-        await invoke(["stella:matters_write", "stella:documents_write"]),
+      asTestRaw<{ valid: boolean }>(
+        parseToolPayload(
+          await invoke(["stella:matters_write", "stella:documents_write"]),
+        ),
       ).valid,
     ).toBe(true);
   });
@@ -2306,7 +3000,9 @@ describe("capability executor upload purpose gate", () => {
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
     });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("finalize spends the stored purpose's permission", async () => {
@@ -2420,7 +3116,7 @@ describe("capability executor credential permission set", () => {
 
 describe("case-law ingestion status admin gate (fix-2)", () => {
   test("a non-admin member -> permission_denied (gate now in the handler)", async () => {
-    // The admin/owner gate moved from a route onBeforeHandle into the handler
+    // The admin/owner gate moved from a route-level hook into the handler
     // config (auditLog: ["read"], held only by owner/admin), so the generic
     // invoke path enforces it too.
     const result = await handleCapabilityCall({
@@ -2453,7 +3149,9 @@ describe("capability executor validate_only permission preflight", () => {
       context: createContext({ memberRole: "owner" }),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({ valid: true, capability: "case-law.ingestion.get" });
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -2525,6 +3223,7 @@ describe("capability executor rate limit (fix-3)", () => {
     const error = errorEnvelope(result);
     expect(error.code).toBe("rate_limited");
     expect(error.hint).toContain("60 seconds");
+    expect(error.retryAfterMs).toBe(60_000);
     // Refused before the handler ran: the org-settings loader was not consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -2584,7 +3283,9 @@ describe("capability executor archived-workspace gate (fix-4)", () => {
       context: archivedCtx(),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "matters.unarchive",
@@ -2640,7 +3341,9 @@ describe("capability executor validate_only ordering (fix-5)", () => {
       context: createContext(),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "time-entries.csv.export",
@@ -2739,7 +3442,7 @@ describe("capability executor file-response gate (fix-6)", () => {
   });
 
   test("verification limit refusals preserve codes, recovery metadata and receipts", () => {
-    for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+    for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
       for (const retryable of [true, false]) {
         const refusal = {
           code,
@@ -2750,7 +3453,7 @@ describe("capability executor file-response gate (fix-6)", () => {
         const result = runWithRequestId("req_refusal", () =>
           mapHandlerResult({
             id: "documents.verifications.start",
-            result: new ElysiaCustomStatusResponse(429, refusal),
+            result: new HttpStatusResponse(429, refusal),
           }),
         );
         expect(mappedError(result)).toMatchObject({
@@ -2767,10 +3470,13 @@ describe("capability executor file-response gate (fix-6)", () => {
       const result = runWithRequestId("req_refusal", () =>
         mapHandlerResult({
           id: "x.y",
-          result: new ElysiaCustomStatusResponse(refusal.status, {
+          result: new HttpStatusResponse(refusal.status, {
             code,
             message: refusal.message,
             hint,
+            ...(code === "action_concurrency_busy"
+              ? { retryAfterMs: 1250 }
+              : {}),
           }),
         }),
       );
@@ -2780,6 +3486,7 @@ describe("capability executor file-response gate (fix-6)", () => {
           message: refusal.message,
           hint,
           retryable: refusal.retryable,
+          ...(code === "action_concurrency_busy" ? { retryAfterMs: 1250 } : {}),
           requestId: "req_refusal",
         }),
       );
@@ -2789,13 +3496,13 @@ describe("capability executor file-response gate (fix-6)", () => {
   test("(layer b) mapHandlerResult maps a status response onto the envelope", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
+      result: new HttpStatusResponse(404, { message: "Gone" }),
     });
     expect(mappedError(mapped).code).toBe("not_found");
   });
 });
 
-// --- file-input capabilities refused (t.File over JSON) ----------------------
+// --- file-input capabilities refused (file fields over JSON) -----------------
 
 describe("capability executor file-input gate", () => {
   test("template upload recovery names the dedicated MCP tool instead of the rejected capability", async () => {
@@ -2813,7 +3520,7 @@ describe("capability executor file-input gate", () => {
   });
 
   test("a required-file capability is refused pre-execution, naming its alternative", async () => {
-    // entities.upload's body carries a required t.File(); JSON cannot deliver a
+    // entities.upload's body carries a required file field; JSON cannot deliver a
     // File, so the gate refuses before validation/dispatch — and the hint
     // carries the presigned flow's real capability ids from the catalog, so the
     // agent gets a next call instead of a dead end.
@@ -2868,7 +3575,9 @@ describe("capability executor file-input gate", () => {
     });
     // Reached validation: the input is accepted, not refused by a transport
     // gate. The old boolean returned `feature_disabled` here.
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("the withheld file field is refused, not silently dropped", async () => {
@@ -2896,9 +3605,9 @@ describe("capability executor file-input gate", () => {
       capability: "entities.upload",
     });
     expect(
-      parseToolPayload<{
+      asTestRaw<{
         transport: { type: string; invocable: boolean; fileField: string };
-      }>(flagged).transport,
+      }>(parseToolPayload(flagged)).transport,
     ).toMatchObject({
       type: "file-input",
       invocable: false,
@@ -2909,13 +3618,13 @@ describe("capability executor file-input gate", () => {
       capability: "templates.prefill",
     });
     expect(
-      parseToolPayload<{
+      asTestRaw<{
         transport: {
           invocable: boolean;
           fileField: string;
           fileFieldRequired: boolean;
         };
-      }>(fileless).transport,
+      }>(parseToolPayload(fileless)).transport,
     ).toMatchObject({
       invocable: true,
       fileField: "file",
@@ -2926,8 +3635,9 @@ describe("capability executor file-input gate", () => {
       capability: "time-entries.create",
     });
     expect(
-      parseToolPayload<{ transport: { type: string; fileField: null } }>(plain)
-        .transport,
+      asTestRaw<{ transport: { type: string; fileField: null } }>(
+        parseToolPayload(plain),
+      ).transport,
     ).toMatchObject({ type: "json", fileField: null });
   });
 
@@ -2945,7 +3655,7 @@ describe("capability executor file-input gate", () => {
         )
         .map((e) => e.id),
     );
-    // The snapshot is compact JSON, so a `t.File()` field is literally
+    // The snapshot is compact JSON, so a file field is literally
     // `"format":"binary"`. Entries whose schema exceeded the byte cap carry no
     // schema here; the exporter checks those against the LIVE schema, which is
     // why that check cannot live only in this test.
@@ -3046,7 +3756,7 @@ describe("capability executor argument shape validation", () => {
   test("sibling meta-tools normalize declared numbers but not ordinary strings", async () => {
     // list_capabilities shares the declared numeric normalization boundary.
     const list = await call("list_capabilities", { limit: "5" });
-    expect(parseToolPayload<{ limit: number }>(list).limit).toBe(5);
+    expect(asTestRaw<{ limit: number }>(parseToolPayload(list)).limit).toBe(5);
     // Ordinary strings remain untouched: a numeric capability id is invalid.
     const described = await call("describe_capability", { capability: 42 });
     expect(errorEnvelope(described).code).toBe("validation_error");
@@ -3122,9 +3832,9 @@ describe("capability executor enforces the advertised input schema", () => {
     const described = await call("describe_capability", {
       capability: CAPABILITY,
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       inputSchema: { query?: { properties?: Record<string, unknown> } };
-    }>(described);
+    }>(parseToolPayload(described));
     const limit = payload.inputSchema.query?.properties?.["limit"];
     if (typeof limit !== "object" || limit === null) {
       throw new Error("Expected contacts.list to advertise query.limit");
@@ -3132,9 +3842,10 @@ describe("capability executor enforces the advertised input schema", () => {
     return asTestRaw<Record<string, unknown>>(limit);
   };
 
-  test("describe renders a bounded integer, not a coercion union", async () => {
-    // Elysia's t.Integer compiles to a string|integer union with the bounds
-    // hoisted above it; that shape is unreadable and unenforceable.
+  test("describe renders the bounded integer a query string carries", async () => {
+    // The route reads the limit from a query string (`numberFromString`); an
+    // agent is shown the number that string carries, with its bounds, never the
+    // decimal-string pattern the wire schema checks.
     expect(await advertisedLimit()).toEqual({
       type: "integer",
       minimum: 1,
@@ -3160,8 +3871,8 @@ describe("capability executor enforces the advertised input schema", () => {
 
   test("the advertised maximum itself validates, string form included", async () => {
     const maximum = Number((await advertisedLimit())["maximum"]);
-    // The string form is what a REST caller sends; flattening the coercion
-    // union must not cost the conversion the union was there for.
+    // The string form is what a REST caller sends; a number an agent sends is
+    // written as that same string before the route's own schema reads it.
     const results = await Promise.all(
       [maximum, String(maximum)].map(
         async (limit) =>
@@ -3177,7 +3888,9 @@ describe("capability executor enforces the advertised input schema", () => {
     );
     for (const result of results) {
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability: CAPABILITY });
     }
   });
@@ -3186,7 +3899,7 @@ describe("capability executor enforces the advertised input schema", () => {
 // --- Shared agent-boundary input normalization --------------------------------
 
 describe("capability executor input normalization", () => {
-  test("unknown keys removed by the REST cleaner are rejected for agents", async () => {
+  test("unknown keys the route schema drops are rejected for agents", async () => {
     const result = await handleCapabilityCall({
       args: {
         capability: "templates.lookup-formats.create",
@@ -3195,7 +3908,7 @@ describe("capability executor input normalization", () => {
             registry: "ares",
             name: "Company number",
             format: "{value}",
-            unknownExtra: "would fail additionalProperties:false without Clean",
+            unknownExtra: "dropped by the route schema at REST",
           },
         },
         validate_only: true,
@@ -3223,7 +3936,9 @@ describe("capability executor input normalization", () => {
       context: createContext(),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "work-obligations.queues.list",
@@ -3252,8 +3967,9 @@ describe("capability executor input normalization", () => {
   });
 
   test("workspaceId still resolves when the config params schema omits it", async () => {
-    // The route macro owns workspaceId at REST; Clean must not break the
-    // resolution for configs that do not declare it (raw-params read).
+    // A workspace route reads workspaceId from its path before its params
+    // schema runs; reporting undeclared params must not break the resolution
+    // for configs that do not declare it (raw-params read).
     const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
@@ -3261,7 +3977,7 @@ describe("capability executor input normalization", () => {
       },
       context: createContext(),
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(asTestRaw<string>(parseToolPayload(result))).toContain("Date,");
   });
 });
 
@@ -3310,7 +4026,9 @@ describe("capability executor deployment feature gate", () => {
       domain: "time-entries",
       limit: 50,
     });
-    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
     expect(payload.items).toHaveLength(0);
   });
 
@@ -3322,7 +4040,7 @@ describe("capability executor deployment feature gate", () => {
       },
       context: createContext(),
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(asTestRaw<string>(parseToolPayload(result))).toContain("Date,");
   });
 
   test("discovery omits deployment-disabled and ungranted verification capabilities", async () => {
@@ -3335,11 +4053,13 @@ describe("capability executor deployment feature gate", () => {
     };
     let cursor: string | null = null;
     do {
-      const page: CapabilityPage = parseToolPayload(
-        await call("list_capabilities", {
-          limit: 50,
-          ...(cursor === null ? {} : { cursor }),
-        }),
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
+        parseToolPayload(
+          await call("list_capabilities", {
+            limit: 50,
+            ...(cursor === null ? {} : { cursor }),
+          }),
+        ),
       );
       for (const item of page.items) {
         listed.add(item.id);
@@ -3368,16 +4088,24 @@ describe("capability executor deployment feature gate", () => {
           !isFeatureEnabled(snapshot, entry.featureId, context),
       )
       .map(({ id }) => id);
-    expect([...new Set([...disabledIds, ...ungrantedIds])].toSorted()).toEqual(
-      hidden,
-    );
+    // Account capabilities require their declared consent, which this caller lacks.
+    const accountConsentIds = capabilityCatalog
+      .filter((entry) => entry.accountScope !== undefined)
+      .map(({ id }) => id);
+    expect(
+      [
+        ...new Set([...disabledIds, ...ungrantedIds, ...accountConsentIds]),
+      ].toSorted(),
+    ).toEqual(hidden);
   });
 
   test("describe exposes the feature flag on an enabled entry", async () => {
     const result = await call("describe_capability", {
       capability: "time-entries.csv.export",
     });
-    const payload = parseToolPayload<{ feature: string | null }>(result);
+    const payload = asTestRaw<{ feature: string | null }>(
+      parseToolPayload(result),
+    );
     expect(payload.feature).toBe("FEATURE_TIME_BILLING");
   });
 });
@@ -3388,7 +4116,7 @@ describe("status-to-envelope mapping", () => {
   test("a handler 409 maps to conflict, preserving the handler's message", () => {
     const mapped = mapHandlerResult({
       id: "case-law.matter-links.create",
-      result: new ElysiaCustomStatusResponse(409, {
+      result: new HttpStatusResponse(409, {
         message: "Decision already linked to this matter",
       }),
     });
@@ -3400,7 +4128,7 @@ describe("status-to-envelope mapping", () => {
   test("a handler 422 maps to validation_error, preserving the message", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(422, {
+      result: new HttpStatusResponse(422, {
         message: "dateFrom must precede dateTo",
       }),
     });
@@ -3412,7 +4140,7 @@ describe("status-to-envelope mapping", () => {
   test("a handler 401 maps to permission_denied", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
+      result: new HttpStatusResponse(401, { message: "Unauthorized" }),
     });
     expect(mappedError(mapped).code).toBe("permission_denied");
   });
@@ -3420,7 +4148,7 @@ describe("status-to-envelope mapping", () => {
   test("a 5xx stays internal_error with a generic message (no leak)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(502, {
+      result: new HttpStatusResponse(502, {
         message: "upstream gotenberg at 10.0.3.7 refused",
       }),
     });
@@ -3493,8 +4221,8 @@ describe("feature access discovery guard: real capability catalog", () => {
         args: { limit: 50 },
         context,
       });
-      const listedIds = parseToolPayload<{ items: { id: string }[] }>(
-        list,
+      const listedIds = asTestRaw<{ items: { id: string }[] }>(
+        parseToolPayload(list),
       ).items.map((item) => item.id);
       for (const { id, featureAccess } of capabilityCatalog) {
         if (featureAccess === "conditional") {
@@ -3533,7 +4261,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       context,
     });
     expect(
-      parseToolPayload<{ items: unknown[] }>(list).items.length,
+      asTestRaw<{ items: unknown[] }>(parseToolPayload(list)).items.length,
     ).toBeGreaterThan(0);
     const described = await handleMcpToolCall({
       mode: "advanced",
@@ -3541,7 +4269,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       args: { capability: "time-entries.create" },
       context,
     });
-    expect(parseToolPayload<{ id: string }>(described).id).toBe(
+    expect(asTestRaw<{ id: string }>(parseToolPayload(described)).id).toBe(
       "time-entries.create",
     );
   });
@@ -3650,7 +4378,9 @@ test.each(["default-deny", "granted", "colleague"] as const)(
           expect(result.isError).not.toBe(true);
           if (validate_only) {
             expect(
-              parseToolPayload<{ valid: boolean; capability: string }>(result),
+              asTestRaw<{ valid: boolean; capability: string }>(
+                parseToolPayload(result),
+              ),
             ).toEqual({
               valid: true,
               capability: "time-entries.csv.export",
@@ -3744,8 +4474,8 @@ for (const grants of [
       args: { domain: "lists", limit: MAX_LIST_LIMIT },
       context,
     });
-    const listed = parseToolPayload<{ items: { id: string }[] }>(
-      list,
+    const listed = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(list),
     ).items.map((item) => item.id);
     for (const entry of entries) {
       expect(entry.featureAccess).toBe("required");
@@ -3762,7 +4492,9 @@ for (const grants of [
         context,
       });
       if (enabled) {
-        expect(parseToolPayload<{ id: string }>(schema).id).toBe(entry.id);
+        expect(asTestRaw<{ id: string }>(parseToolPayload(schema)).id).toBe(
+          entry.id,
+        );
         continue;
       }
       // A hidden capability answers exactly like an unknown id, and its hint
@@ -3798,8 +4530,12 @@ for (const grants of [
 }
 
 describe("capability executor access isolation", () => {
+  const credential = admittedClientCredential;
   const enabledContext = () => {
-    const context = createContext({ grantedScopes: [...MCP_OAUTH_SCOPES] });
+    const context = createContext({
+      credential,
+      grantedScopes: [...MCP_OAUTH_SCOPES],
+    });
     const grants = Object.fromEntries(
       Object.keys(FEATURE_REGISTRY).map((featureId) => [
         featureId,
@@ -3926,11 +4662,11 @@ describe("personal search history capabilities", () => {
       "search-history.clear",
     ]) {
       const result = await call("describe_capability", { capability });
-      const payload = parseToolPayload<{
+      const payload = asTestRaw<{
         id: string;
         handlerKind: string;
         inputSchema: unknown;
-      }>(result);
+      }>(parseToolPayload(result));
       expect(payload.id).toBe(capability);
       expect(payload.handlerKind).toBe("root");
       if (capability === "search-history.list") {
@@ -3963,15 +4699,25 @@ describe("personal search history capabilities", () => {
   });
 
   test("lists own history without a kind filter when kind is omitted", async () => {
-    const queries: string[] = [];
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const database = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          where: (condition: SQL) => {
-            queries.push(new PgDialect().sqlToQuery(condition).sql);
-            return { orderBy: () => ({ limit: async () => [] }) };
-          },
-        }),
+      select: (projection: SelectedFields) => ({
+        from: (table: PgTable) => {
+          const query = new QueryBuilder().select(projection).from(table);
+          return {
+            where: (condition: SQL) => {
+              const scopedQuery = query.where(condition);
+              return Object.assign(scopedQuery, {
+                orderBy: () => ({
+                  limit: async () => {
+                    queries.push(scopedQuery.toSQL());
+                    return [];
+                  },
+                }),
+              });
+            },
+          };
+        },
       }),
     });
     const result = await handleCapabilityCall({
@@ -3988,9 +4734,10 @@ describe("personal search history capabilities", () => {
       scope: { organizationId: "org_1", userId: "user_1" },
     });
     expect(queries).toHaveLength(1);
-    expect(queries.at(0)).not.toContain('"kind"');
-    expect(queries.at(0)).toContain('"organization_id"');
-    expect(queries.at(0)).toContain('"user_id"');
+    expect(queries.at(0)?.sql).not.toMatch(/"kind"\s*=\s*\$/u);
+    expect(queries.at(0)?.sql).toContain('"organization_id"');
+    expect(queries.at(0)?.sql).toContain('"user_id"');
+    expect(queries.at(0)?.params).toEqual(["org_1", "user_1"]);
   });
 
   test("deletes and clears own history through the shared handlers", async () => {
@@ -4097,7 +4844,13 @@ describe("personal search history capabilities", () => {
           return {
             where: () => ({
               returning: async () => [
-                { id: entryId, kind: "search", lookupKey },
+                {
+                  id: entryId,
+                  kind: "search",
+                  lookupKey,
+                  baseLookupKey: null,
+                  country: "CZE",
+                },
               ],
             }),
           };

@@ -9,8 +9,8 @@
     "methodId": "generativelanguage.models.streamGenerateContent"
   },
   "source": {
-    "retrievedAt": "2026-10-09",
-    "sha256": "f4f7c3e683416973abc6db9994926446903faea3bd471fa03da386ece77bef11",
+    "retrievedAt": "2026-10-22",
+    "sha256": "525ca786eaff2f59ea2c18321fefe33b9a92f422ba07fe8d5a705863c0402419",
     "url": "https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta"
   }
 }

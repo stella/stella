@@ -11,8 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";
 
 type ClauseVersionDiffSources =
-  | { type: "not-found" }
-  | { type: "ok"; prevText: string; currentText: string };
+  { type: "not-found" } | { type: "ok"; prevText: string; currentText: string };
 
 type DiffSourcesProps = {
   scopedDb: ScopedDb;

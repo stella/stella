@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals } from "@/api/db/schema";
@@ -16,25 +16,27 @@ import { isDecidedProposalStatus } from "@/api/lib/agent-skills/proposal-status"
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const updateSkillProposalParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
-  proposalId: tSafeId("agentSkillProposal"),
+const updateSkillProposalParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
+  proposalId: resourceIdSchema("agentSkillProposal"),
 });
 
-const updateSkillProposalBodySchema = t.Object({
-  body: t.Optional(
-    t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
+const updateSkillProposalBodySchema = v.object({
+  body: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.agentSkillBodyMaxChars),
+    ),
   ),
-  summary: t.Optional(
-    t.String({ maxLength: LIMITS.agentSkillProposalSummaryMaxChars }),
+  summary: v.optional(
+    v.pipe(v.string(), v.maxLength(LIMITS.agentSkillProposalSummaryMaxChars)),
   ),
-  // Authoring statuses only: a decision is made through
-  // skills.proposals.review, never by writing the status here.
-  status: t.Optional(t.Union([t.Literal("draft"), t.Literal("proposed")])),
+  status: v.optional(v.picklist(["draft", "proposed"])),
 });
 
 const config = {

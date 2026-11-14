@@ -90,7 +90,11 @@ export type KanbanSubgroupCellContext<TRow> = {
   /** Number of rows in this lane/column intersection, including zero. */
   count: number;
   laneValue: string | null;
-  /** The band this cell's column belongs to, or `null` outside any band. */
+  /**
+   * The band this cell's column belongs to, or `null` outside any band. Lets
+   * a host that drives its own drag-and-drop (see `dragOverBandId` on the
+   * board) map a cell's droppable id back to the band it should report.
+   */
   band: KanbanColumnBand | null;
 };
 
@@ -160,15 +164,13 @@ export type KanbanSubgroupBoardProps<TRow> = {
    * card straight into that intersection. None by default.
    */
   renderLaneColumnAction?:
-    | ((context: KanbanSubgroupLaneColumnActionContext) => ReactNode)
-    | undefined;
+    ((context: KanbanSubgroupLaneColumnActionContext) => ReactNode) | undefined;
   /**
    * The line above a band's columns. Defaults to `KanbanColumnBandHeader`
    * with the band's label and count.
    */
   renderBandHeader?:
-    | ((context: KanbanSubgroupBandHeaderContext) => ReactNode)
-    | undefined;
+    ((context: KanbanSubgroupBandHeaderContext) => ReactNode) | undefined;
   /**
    * A lane's slot while its band is collapsed. Defaults to the band's name
    * set vertically over the count; a host that accepts drops into a collapsed
@@ -181,19 +183,38 @@ export type KanbanSubgroupBoardProps<TRow> = {
     | undefined;
   /** Accessible name for a band's collapse toggle. */
   formatBandToggleLabel?:
-    | ((band: KanbanColumnBand, collapsed: boolean) => string)
-    | undefined;
+    ((band: KanbanColumnBand, collapsed: boolean) => string) | undefined;
   /**
    * Controlled band collapse. Omit both and the board keeps the collapsed
    * bands itself; a persisted view supplies both.
    */
   isBandCollapsed?: ((band: KanbanColumnBand) => boolean) | undefined;
   onBandCollapsedChange?:
-    | ((band: KanbanColumnBand, collapsed: boolean) => void)
-    | undefined;
+    ((band: KanbanColumnBand, collapsed: boolean) => void) | undefined;
   formatCount?: ((count: number) => ReactNode) | undefined;
   footer?: ReactNode;
   className?: string | undefined;
+  /**
+   * The band whose folded slot (or, for a peeked band, whose open part) the
+   * host's own drag is currently over, or `null` when it is over neither.
+   * Omit (`undefined`) when the host does not drive drags itself — the
+   * board's native `dragover`/`dragenter`/`dragleave` listeners already feed
+   * the peek controller in that case. A host drives its own drag when it
+   * builds the drop targets itself (for example a `KanbanSortableBoard`,
+   * whose `onDragOver` reports the active `over` droppable); it maps that
+   * droppable back to a band id — a folded cell's context and an open
+   * cell's context (see `KanbanSubgroupCellContext.band`) both carry the
+   * band — and passes it here. The controller treats "over the band" as
+   * entering the open band when it is already peeked, and as hovering its
+   * folded slot otherwise; leaving it is reported the same way.
+   */
+  dragOverBandId?: string | null | undefined;
+  /**
+   * Whether the host's own drag (see `dragOverBandId`) is in progress.
+   * Flipping to `false` ends any peek immediately, mirroring the native
+   * `dragend`/`drop` listeners the board installs for its own drags.
+   */
+  isDragging?: boolean | undefined;
 } & KanbanSubgroupCollapseControl;
 
 /**
@@ -231,6 +252,8 @@ export const KanbanSubgroupBoard = <TRow,>({
   onBandCollapsedChange,
   footer,
   className,
+  dragOverBandId,
+  isDragging,
 }: KanbanSubgroupBoardProps<TRow>) => {
   const [collapsedLaneValues, setCollapsedLaneValues] = useState(
     () => new Set<string | null>(),
@@ -275,6 +298,43 @@ export const KanbanSubgroupBoard = <TRow,>({
       window.removeEventListener("drop", end);
     };
   }, [peek]);
+  // A host that drives its own drag (dnd-kit, rather than the board's native
+  // listeners) reports the band its drag is over directly. `undefined` means
+  // the host does not drive drags at all, so no comparison against the
+  // previous id ever runs.
+  const previousDragOverBandId = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      dragOverBandId === undefined ||
+      isDragging === false ||
+      dragOverBandId === previousDragOverBandId.current
+    ) {
+      return;
+    }
+    const previous = previousDragOverBandId.current;
+    previousDragOverBandId.current = dragOverBandId;
+    if (previous !== null) {
+      if (peekingBandId === previous) {
+        peek.openDragLeave(previous);
+      } else {
+        peek.slotDragLeave(previous);
+      }
+    }
+    if (dragOverBandId !== null) {
+      if (peekingBandId === dragOverBandId) {
+        peek.openDragEnter(dragOverBandId);
+      } else {
+        peek.slotDragOver(dragOverBandId);
+      }
+    }
+  }, [dragOverBandId, isDragging, peek, peekingBandId]);
+  useEffect(() => {
+    if (isDragging === false) {
+      previousDragOverBandId.current = null;
+      peek.dragEnded();
+    }
+  }, [isDragging, peek]);
+
   const { cellsByLaneValue, countByColumnValue, ungroupedCells } =
     useMemo(() => {
       const laneCells = new Map<string | null, KanbanBoardCell<TRow>[]>();

@@ -1,16 +1,19 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { and, desc, eq, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
-  avtViewAccessStatus,
   avtLayoutVisibilityCondition,
+  avtViewAccessStatus,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
@@ -18,13 +21,12 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE: "active",
   ACTIVE_AND_ARCHIVED: "active-and-archived",
 } as const;
-
-const NON_DELETING_WORKSPACE_STATUSES = ["active", "archived"] as const;
 
 export const workspaceNavigationCursor = createTimestampIdCursorCodec({
   column: workspaces.lastActivityAt,
@@ -40,18 +42,22 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.workspaceNavigationPageSizeMax,
-      }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.workspaceNavigationPageSizeMax),
+        ),
+      ),
     ),
-    statusScope: t.Optional(
-      t.Union([
-        t.Literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE),
-        t.Literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED),
+    statusScope: v.optional(
+      v.union([
+        v.literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE),
+        v.literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED),
       ]),
     ),
   }),
@@ -82,8 +88,8 @@ const readWorkspaceNavigation = createSafeRootHandler(
     const conditions = [
       eq(workspaces.organizationId, session.activeOrganizationId),
       statusScope === WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE
-        ? eq(workspaces.status, "active")
-        : inArray(workspaces.status, NON_DELETING_WORKSPACE_STATUSES),
+        ? eq(workspaces.status, WORKSPACE_STATUS.active)
+        : visibleWorkspaceSql(),
     ];
 
     if (query.cursor) {

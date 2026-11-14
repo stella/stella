@@ -22,6 +22,16 @@ try {
   const failures = jobs.flatMap((job) => (job.steps || [])
     .filter((step) => step.conclusion === "failure")
     .map((step) => \`\${job.name} / \${step.number}: \${step.name} (\${job.html_url})\`));
+  // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
+  // step and no such evidence the jobs API may still be catching up, so cancel as before.
+  const lost = jobs.filter((job) => job.conclusion === "failure"
+    && !(job.steps || []).some((step) => step.conclusion === "failure")
+    && (job.steps || []).every((step) => !step.status || step.status === "completed")
+    && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
+  if (!failures.length && lost.length) {
+    core.notice(\`\${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.\`);
+    return;
+  }
   failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
   diagnostic = \`\${context.job}: cancelling failed merge group; failed steps: \${failures.length ? failures.join("; ") : "not yet available from the jobs API"}\`;
 } catch {

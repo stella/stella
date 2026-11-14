@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   dailyTargetBody,
   setDailyTarget,
 } from "@/api/lib/billing/daily-target";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 
@@ -24,7 +24,7 @@ const updateMemberDailyTarget = createSafeRootHandler(
       reason: "billing_admin",
       consumesServices: false,
     },
-    params: t.Object({ userId: tSafeId("user") }),
+    params: v.object({ userId: resourceIdSchema("user") }),
     body: dailyTargetBody,
   },
   async function* ({

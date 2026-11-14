@@ -40,6 +40,9 @@ describe.serial("suppression IDs follow their configured spelling", () => {
     // Only reporting needs bounded batches: oxlint truncates a large JSON
     // diagnostic report, while the fix and fixed-point runs report no errors.
     const BATCH = 250;
+    // Each reporting batch is its own oxlint run on purpose: concurrent batches
+    // of one configuration would share a run whose combined report exceeds that
+    // limit, so it would be rejected and every batch would rerun alone.
     for (let start = 0; start < entries.length; start += BATCH) {
       const batch = entries.slice(start, start + BATCH);
       const batchSource = batch
@@ -47,6 +50,7 @@ describe.serial("suppression IDs follow their configured spelling", () => {
           ([alias]) => `// oxlint-disable-next-line ${alias}${reason}\nvoid 0;`,
         )
         .join("\n");
+      // oxlint-disable-next-line no-serial-lint-case/no-serial-lint-case -- bounded reporting batches must not share one oxlint run
       expect(await lintSingleRule(RULE, batchSource, options)).toHaveLength(
         batch.length,
       );

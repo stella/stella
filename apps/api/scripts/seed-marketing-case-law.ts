@@ -9,7 +9,12 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import { decisionAnalysisSchema } from "@stll/legal-ast/analysis";
 import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
-import scenes from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
+import {
+  MARKETING_CASE_LAW,
+  MARKETING_CASE_LAW_COPY,
+} from "@stll/playwright-tools/marketing-case-law";
+import { MARKETING_LOCALE_ACCOUNTS } from "@stll/playwright-tools/marketing-locales";
+import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 
 import {
   caseLawDecisions,
@@ -36,7 +41,8 @@ import { sourceIdFor } from "./seed-case-law";
 import { seedId } from "./seed-utils";
 
 const RECORDED_AT = new Date("2026-01-15T09:00:00Z");
-const FIXTURE_FILES = ["cz-ns", "cz-us"] as const;
+// Fixtures with numbered paragraphs, which the filmed readers mark.
+const FIXTURE_FILES = ["cz-ns", "cz-nss", "cz-us", "sk-us"] as const;
 const fixtureSchema = v.object({
   source: v.looseObject({ adapter_key: v.string() }),
   decisions: v.array(
@@ -51,7 +57,12 @@ const fixtureSchema = v.object({
 
 // The screenshot seed owns these completed local conversations. Both the
 // public analysis and private marks use the same checked-in paragraph anchors.
-const seedCorpusAnalyses = async () => {
+// The analysis lives on the shared decision row, so each locale films its own
+// decisions (@stll/playwright-tools/marketing-case-law).
+const seedCorpusAnalyses = async (locale: MarketingLocale) => {
+  const scenes = MARKETING_CASE_LAW[locale];
+  const copy = MARKETING_CASE_LAW_COPY[locale];
+  const { language } = MARKETING_LOCALE_ACCOUNTS[locale];
   const fixtures = await Promise.all(
     FIXTURE_FILES.map(async (name) =>
       v.parse(
@@ -152,14 +163,14 @@ const seedCorpusAnalyses = async () => {
         systemPrompt: systemPrompt.value,
       });
       const analysis = v.parse(decisionAnalysisSchema, {
-        version: 3,
+        version: 4,
         generatedAt: RECORDED_AT.toISOString(),
         model: "deterministic-dev-fixture",
         inputFingerprint: input.fingerprint,
         tree: [
           {
             id: `marketing-issue-${decision.id}`,
-            label: "Legal issue",
+            label: copy.issueLabel,
             category: "reasoning",
             startAnchorId: highlight.anchorId,
             endAnchorId: highlight.anchorId,
@@ -178,7 +189,7 @@ const seedCorpusAnalyses = async () => {
             // The reader draws its outline only for two or more headings, so
             // the shot needs the decision's closing section as a second one.
             id: `marketing-outcome-${decision.id}`,
-            label: "Outcome",
+            label: copy.outcomeLabel,
             category: "outcome",
             startAnchorId: lastBlock.anchorId,
             endAnchorId: lastBlock.anchorId,
@@ -187,18 +198,33 @@ const seedCorpusAnalyses = async () => {
           },
         ],
         holding: {
-          text: scene.answer,
-          language: "en",
-          anchors: [
+          spans: [
             {
-              startAnchorId: highlight.anchorId,
-              endAnchorId: highlight.anchorId,
+              text: scene.answer,
+              anchors: [
+                {
+                  startAnchorId: highlight.anchorId,
+                  endAnchorId: highlight.anchorId,
+                },
+              ],
             },
           ],
+          language,
         },
         abstract: {
-          text: `${scene.answer} ${scene.followUpAnswer}`,
-          language: "en",
+          spans: [
+            {
+              text: scene.answer,
+              anchors: [
+                {
+                  startAnchorId: highlight.anchorId,
+                  endAnchorId: highlight.anchorId,
+                },
+              ],
+            },
+            { text: ` ${scene.followUpAnswer}`, anchors: [] },
+          ],
+          language,
         },
         topics: [],
       });
@@ -220,17 +246,21 @@ const seedCorpusAnalyses = async () => {
 
 type SeedMarketingCaseLawOptions = {
   db: MaintenanceDb;
+  locale: MarketingLocale;
   organizationId: SafeId<"organization">;
   userId: string;
 };
 
 export const seedMarketingCaseLaw = async ({
   db,
+  locale,
   organizationId,
   userId,
 }: SeedMarketingCaseLawOptions) => {
   requireLocalDevOpen("Seeding marketing case-law stories");
-  const stories = await seedCorpusAnalyses();
+  const { threadTitlePrefix } = MARKETING_CASE_LAW_COPY[locale];
+  const stories = await seedCorpusAnalyses(locale);
+  const readerMarks: (typeof legalReaderAnnotations.$inferInsert)[] = [];
   await withAggregateTransaction(db, async (tx) => {
     for (const { scene, decision, highlight, underline } of stories) {
       const key = `marketing-case-law-${organizationId}-${userId}-${decision.id}`;
@@ -291,7 +321,7 @@ export const seedMarketingCaseLaw = async ({
         userId,
         workspaceId: null,
         subjectDecisionId: decision.id,
-        title: `Case review · ${decision.caseNumber}`,
+        title: `${threadTitlePrefix} · ${decision.caseNumber}`,
         titleSource: "user",
         createdAt: RECORDED_AT,
         updatedAt: last.createdAt,
@@ -343,53 +373,62 @@ export const seedMarketingCaseLaw = async ({
           block: underline,
         },
       ] as const;
-      const annotations = marks.map((mark, index) => {
-        const startOffset =
-          mark.kind === "comment"
-            ? Math.max(0, mark.block.plainText.length - 100)
-            : 0;
-        const quote = mark.block.plainText.slice(
-          startOffset,
-          startOffset + (mark.kind === "comment" ? 100 : 180),
-        );
-        return {
-          id: seedId<"legalReaderAnnotation">(`${key}-mark-${index}`),
-          organizationId,
-          userId,
-          targetType: "decision",
-          targetId: decision.id,
-          kind: mark.kind,
-          visibility: "shared",
-          color: mark.color,
-          style: mark.style,
-          blockAnchorId: mark.block.anchorId,
-          startOffset,
-          endOffset: startOffset + quote.length,
-          quote,
-          body: mark.body,
-          createdAt: RECORDED_AT,
-          updatedAt: RECORDED_AT,
-        } as const;
-      });
-      await tx
-        .insert(legalReaderAnnotations)
-        .values(annotations)
-        .onConflictDoUpdate({
-          target: legalReaderAnnotations.id,
-          set: {
-            kind: sql`excluded.kind`,
-            color: sql`excluded.color`,
-            style: sql`excluded.style`,
-            body: sql`excluded.body`,
-            blockAnchorId: sql`excluded.block_anchor_id`,
-            startOffset: sql`excluded.start_offset`,
-            endOffset: sql`excluded.end_offset`,
-            quote: sql`excluded.quote`,
-            updatedAt: sql`excluded.updated_at`,
-            visibility: sql`excluded.visibility`,
-          },
-          setWhere: sql`${legalReaderAnnotations.organizationId} = ${organizationId} AND ${legalReaderAnnotations.userId} = ${userId}`,
-        });
+      readerMarks.push(
+        ...marks.map((mark, index) => {
+          const startOffset =
+            mark.kind === "comment"
+              ? Math.max(0, mark.block.plainText.length - 100)
+              : 0;
+          const quote = mark.block.plainText.slice(
+            startOffset,
+            startOffset + (mark.kind === "comment" ? 100 : 180),
+          );
+          return {
+            id: seedId<"legalReaderAnnotation">(`${key}-mark-${index}`),
+            organizationId,
+            userId,
+            targetType: "decision",
+            targetId: decision.id,
+            kind: mark.kind,
+            visibility: "shared",
+            color: mark.color,
+            style: mark.style,
+            blockAnchorId: mark.block.anchorId,
+            startOffset,
+            endOffset: startOffset + quote.length,
+            quote,
+            body: mark.body,
+            createdAt: RECORDED_AT,
+            updatedAt: RECORDED_AT,
+          } as const;
+        }),
+      );
     }
+  });
+  await withAggregateTransaction(db, async (tx) => {
+    // Reader marks force row-level security, so the transaction takes the
+    // application role and names its author the way a request does.
+    await tx.execute(
+      sql`SELECT set_config('role', 'stella', true), set_config('app.organization_id', ${organizationId}, true), set_config('app.user_id', ${userId}, true)`,
+    );
+    await tx
+      .insert(legalReaderAnnotations)
+      .values(readerMarks)
+      .onConflictDoUpdate({
+        target: legalReaderAnnotations.id,
+        set: {
+          kind: sql`excluded.kind`,
+          color: sql`excluded.color`,
+          style: sql`excluded.style`,
+          body: sql`excluded.body`,
+          blockAnchorId: sql`excluded.block_anchor_id`,
+          startOffset: sql`excluded.start_offset`,
+          endOffset: sql`excluded.end_offset`,
+          quote: sql`excluded.quote`,
+          updatedAt: sql`excluded.updated_at`,
+          visibility: sql`excluded.visibility`,
+        },
+        setWhere: sql`${legalReaderAnnotations.organizationId} = ${organizationId} AND ${legalReaderAnnotations.userId} = ${userId}`,
+      });
   });
 };

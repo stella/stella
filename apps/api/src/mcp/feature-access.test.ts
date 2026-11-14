@@ -28,7 +28,7 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { disabledFeatureCapabilityIds } from "@/api/mcp/capability-tools";
 import { isMcpFeatureInputEnabled } from "@/api/mcp/feature-access";
 import {
   getGatewayMcpToolDefinition,
@@ -42,9 +42,10 @@ import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
-  listMcpTools,
   handleMcpToolCall,
+  listMcpTools,
 } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -91,7 +92,7 @@ const contextFor = (
     | "ordinary",
 ) => {
   const scopedDb = mock(async () => []);
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     organizationId:
       kind === "other-organization" ? "org_other" : organizationId,
     userId: kind === "colleague" ? "user_other" : userId,
@@ -210,7 +211,7 @@ describe("feature descriptor discovery and admission", () => {
       expect(writeResult.isErr() && writeResult.error.kind).toBe("unavailable");
       expect(scopedDb).not.toHaveBeenCalled();
       expect(
-        listMcpResources("default", context).some(
+        (await listMcpResources("default", { context })).some(
           (resource) => resource.uri === "stella://about",
         ),
       ).toBe(false);
@@ -223,10 +224,10 @@ describe("feature descriptor discovery and admission", () => {
         status: "error",
         error: { message: expect.stringContaining("Unknown resource") },
       });
-      expect(getMcpInstructions("default", context)).not.toContain(
-        "stella://about",
+      expect(await getMcpInstructions("default", context)).not.toContain(
+        "stella-product-identity",
       );
-      expect(getMcpInstructions("default", context)).not.toContain(
+      expect(await getMcpInstructions("default", context)).not.toContain(
         "prepare_feedback",
       );
       expect(chatScriptReadToolNames(context)).not.toContain("list_matters");
@@ -258,7 +259,7 @@ describe("feature descriptor discovery and admission", () => {
         }),
       ).toBeDefined();
       expect(
-        listMcpResources("default", context).some(
+        (await listMcpResources("default", { context })).some(
           (resource) => resource.uri === "stella://about",
         ),
       ).toBe(true);
@@ -266,8 +267,8 @@ describe("feature descriptor discovery and admission", () => {
         (await readMcpResource("stella://about", "default", context)).contents
           .length,
       ).toBeGreaterThan(0);
-      expect(getMcpInstructions("default", context)).toContain(
-        "stella://about",
+      expect(await getMcpInstructions("default", context)).toContain(
+        "stella-product-identity",
       );
       expect(chatScriptReadToolNames(context)).toContain("list_matters");
       expect(chatCodeModeSystemPrompt([], context)).toContain("list_matters");
@@ -371,17 +372,46 @@ for (const kind of [
       const deniedText = await deniedCall.text();
       expect(deniedText).toContain("unknown_tool");
       expect(deniedText).not.toContain("missing_scope");
-      expect(toolsText).not.toContain("list_matters");
-      expect(toolsText).not.toContain("prepare_feedback");
-      expect(toolsText).not.toContain("time-entries.create");
+      expect(toolsText).not.toContain('"name":"list_matters"');
+      expect(toolsText).not.toContain('"name":"prepare_feedback"');
+
       expect(resourceText).not.toContain("stella://about");
       expect(toolsText).toContain(
-        '"featureAccess":{"capabilities":[],"tools":[]}',
+        '"featureAccess":{"capabilities":[],"disabled":',
       );
+      const disabled = toolsText.split('"disabled":').at(1);
+      expect(disabled).toContain('"list_matters"');
+      expect(disabled).toContain('"prepare_feedback"');
+      expect(disabled).toContain('"save_matter"');
+      expect(disabled).toContain('"time-entries.create"');
     }
     expect(scopedDb).not.toHaveBeenCalled();
   });
 }
+
+test("disabled capability evidence excludes conditional operations and ignores scopes", async () => {
+  const { context } = contextFor("hidden");
+  const disabled = await disabledFeatureCapabilityIds({
+    ...context,
+    grantedScopes: [],
+    testDependencies: {
+      ...context.testDependencies,
+      featureAccessBindings: {
+        ...bindings,
+        capabilities: new Map([
+          ...bindings.capabilities,
+          ["tasks.create", featureId],
+        ]),
+      },
+    },
+  });
+  expect(disabled).toContain("time-entries.create");
+  expect(disabled).not.toContain("tasks.create");
+  const enabled = await disabledFeatureCapabilityIds(
+    contextFor("enabled").context,
+  );
+  expect(enabled).not.toContain("time-entries.create");
+});
 
 describe("mixed native task inputs", () => {
   test("denied list input stops before workspace lookup on MCP and chat", async () => {
@@ -389,7 +419,7 @@ describe("mixed native task inputs", () => {
     const writable = {
       ...context,
       grantedScopes: ["stella:read", "stella:matters_write"],
-    } satisfies McpRequestContext;
+    } satisfies AuthorizedMcpRequestContext;
     const result = await handleMcpToolCall({
       context: writable,
       toolName: "save_task",
@@ -473,7 +503,8 @@ describe("mixed native task inputs", () => {
       for (const args of [
         { item_type: "fact" },
         { list_id: "list" },
-        { list_description: "Description" },
+        { description: "Description" },
+        { description: null },
       ]) {
         expect(isMcpFeatureInputEnabled({ context, definition, args })).toBe(
           featureIds.includes(LEGAL_LISTS_FEATURE_ID),

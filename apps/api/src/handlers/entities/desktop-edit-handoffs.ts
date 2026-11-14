@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { desktopEditHandoffs } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -18,7 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { authorizeDesktopHandoff } from "@/api/lib/business-registries/desktop/handoff-auth";
 import type { DesktopHandoffAuthorizationDependencies } from "@/api/lib/business-registries/desktop/handoff-auth";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   consumeDesktopEditHandoff,
   createDesktopEditHandoffSafeDb,
@@ -31,8 +31,8 @@ import {
   hashDesktopEditHandoffToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
@@ -42,6 +42,11 @@ import { resolveDesktopEditHandoffStatus } from "./desktop-edit-handoffs.logic";
 import { openDesktopEditSessionHandler } from "./open-desktop-edit-session";
 
 const HANDOFF_TOKEN_PATTERN = "^[0-9a-f]{64}$";
+
+const DESKTOP_EDIT_HANDOFF_FAILED = failureSink({
+  event: "desktop_edit.handoff_failed",
+  expected: [],
+});
 
 const stripTrailingSlashes = (value: string) => {
   let end = value.length;
@@ -55,50 +60,52 @@ const DESKTOP_EDIT_API_BASE_URL = stripTrailingSlashes(
   env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
 );
 
-const linkedAccountSchema = t.Nullable(
-  t.Object({
-    email: t.String({ maxLength: 320 }),
-    name: t.Nullable(t.String({ maxLength: 256 })),
-    verifiedAt: t.String({ maxLength: 64 }),
+const linkedAccountSchema = v.nullable(
+  v.object({
+    email: v.pipe(v.string(), v.maxLength(320)),
+    name: v.nullable(v.pipe(v.string(), v.maxLength(256))),
+    verifiedAt: v.pipe(v.string(), v.maxLength(64)),
   }),
 );
 
-const createDesktopEditHandoffBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  force: t.Optional(t.Boolean()),
+const createDesktopEditHandoffBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  force: v.optional(v.boolean()),
   linkedAccount: linkedAccountSchema,
-  propertyId: tSafeId("property"),
+  propertyId: resourceIdSchema("property"),
 });
 
 const desktopEditHandoffStatusParamsSchema = workspaceParams({
-  handoffId: tSafeId("desktopEditHandoff"),
+  handoffId: resourceIdSchema("desktopEditHandoff"),
 });
 
-export const redeemDesktopEditHandoffBodySchema = t.Object({
-  handoffToken: t.String({
-    minLength: 64,
-    maxLength: 64,
-    pattern: HANDOFF_TOKEN_PATTERN,
-  }),
+export const redeemDesktopEditHandoffBodySchema = v.object({
+  handoffToken: v.pipe(
+    v.string(),
+    v.minLength(64),
+    v.maxLength(64),
+    v.regex(new RegExp(HANDOFF_TOKEN_PATTERN, "u")),
+  ),
 });
 
-export const acknowledgeDesktopEditHandoffOpenedParamsSchema = t.Object({
-  handoffId: tSafeId("desktopEditHandoff"),
+export const acknowledgeDesktopEditHandoffOpenedParamsSchema = v.object({
+  handoffId: resourceIdSchema("desktopEditHandoff"),
 });
 
-export const acknowledgeDesktopEditHandoffOpenedBodySchema = t.Object({
-  handoffToken: t.String({
-    minLength: 64,
-    maxLength: 64,
-    pattern: HANDOFF_TOKEN_PATTERN,
-  }),
-  sessionId: tSafeId("desktopEditSession"),
+export const acknowledgeDesktopEditHandoffOpenedBodySchema = v.object({
+  handoffToken: v.pipe(
+    v.string(),
+    v.minLength(64),
+    v.maxLength(64),
+    v.regex(new RegExp(HANDOFF_TOKEN_PATTERN, "u")),
+  ),
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
-type AcknowledgeDesktopEditHandoffOpenedParams = Static<
+type AcknowledgeDesktopEditHandoffOpenedParams = v.InferOutput<
   typeof acknowledgeDesktopEditHandoffOpenedParamsSchema
 >;
-type AcknowledgeDesktopEditHandoffOpenedBody = Static<
+type AcknowledgeDesktopEditHandoffOpenedBody = v.InferOutput<
   typeof acknowledgeDesktopEditHandoffOpenedBodySchema
 >;
 
@@ -269,21 +276,29 @@ export const redeemDesktopEditHandoffHandler = async (
     dependencies,
   );
   if (authorization.isErr()) {
-    return status(authorization.error.status, {
-      code: authorization.error.code,
-      message: authorization.error.message,
-      retryable: authorization.error.retryable,
-    });
+    return observedStatus(
+      { sink: DESKTOP_EDIT_HANDOFF_FAILED, cause: authorization.error },
+      authorization.error.status,
+      {
+        code: authorization.error.code,
+        message: authorization.error.message,
+        retryable: authorization.error.retryable,
+      },
+    );
   }
   const consumed = await consumeDesktopEditHandoff({
     handoffToken,
     identity: authorization.value,
   });
   if (consumed.isErr()) {
-    return status(consumed.error.status, {
-      code: consumed.error.code,
-      message: consumed.error.message,
-    });
+    return observedStatus(
+      { sink: DESKTOP_EDIT_HANDOFF_FAILED, cause: consumed.error },
+      consumed.error.status,
+      {
+        code: consumed.error.code,
+        message: consumed.error.message,
+      },
+    );
   }
   const handoff = consumed.value;
   if (!handoff) {
@@ -337,20 +352,20 @@ export const redeemDesktopEditHandoffHandler = async (
 
   if (Result.isError(result)) {
     const error = result.error;
+    const answer = {
+      sink: DESKTOP_EDIT_HANDOFF_FAILED,
+      cause: error,
+      ctx: { workspaceId: handoff.workspaceId },
+    };
 
     if (HandlerError.is(error)) {
-      return status(error.status, {
+      return observedStatus(answer, error.status, {
         ...(error.code ? { code: error.code } : {}),
         message: error.message,
       });
     }
 
-    logger.error("Desktop edit handoff redemption failed", {
-      "error.type": errorTag(error),
-      workspaceId: handoff.workspaceId,
-    });
-
-    return status(500, { message: "Internal server error" });
+    return observedStatus(answer, 500, { message: "Internal server error" });
   }
 
   broadcastWorkspaceResourceUpdated(
@@ -384,9 +399,11 @@ export const acknowledgeDesktopEditHandoffOpenedHandler = async ({
 }) => {
   const authorization = await authorizeDesktopAccount(request);
   if (authorization.isErr()) {
-    return status(authorization.error.status, {
-      message: authorization.error.message,
-    });
+    return observedStatus(
+      { sink: DESKTOP_EDIT_HANDOFF_FAILED, cause: authorization.error },
+      authorization.error.status,
+      { message: authorization.error.message },
+    );
   }
   const acknowledged = await markDesktopEditHandoffOpened({
     identity: authorization.value,

@@ -1,10 +1,11 @@
 import {
   infiniteQueryOptions,
-  queryOptions,
   type QueryClient,
+  queryOptions,
 } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
@@ -13,7 +14,7 @@ import {
   APIError,
   shouldRetryAPIRequest,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
 import { memberKnowledgeKeys } from "@/lib/knowledge/knowledge-cache";
 import {
@@ -27,6 +28,7 @@ import {
 } from "@/lib/resource-query-roots.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 // ── Key factory ─────────────────────────────────────
 
@@ -361,7 +363,7 @@ export const templatesOptions = (
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: "",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -379,7 +381,7 @@ export const templateDetailOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     // A template id that is not this org's never becomes one: fail the 404
     // straight away so a stale `?template=` link falls back to the list
@@ -399,7 +401,7 @@ export const templatePreviewOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .preview.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -510,7 +512,7 @@ export const templateVersionsOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .versions.get({ query, fetch: { signal } });
 
-      const page = unwrapEden(response);
+      const page = unwrapApiResponse(response);
       if (!("items" in page)) {
         // 404 body shape; the error channel already covers real 404s.
         throw new APIError({ status: 404, message: "Template not found" });
@@ -533,7 +535,7 @@ export const templateClausesOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .clauses.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -552,7 +554,7 @@ export const templateClausePreviewOptions = (
         templateId: toSafeId<"template">(templateId),
       }).get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -570,7 +572,7 @@ export const templateCheckOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .check.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -585,7 +587,7 @@ export const templateRecipesOptions = (organizationId: string) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -600,7 +602,7 @@ export const templateCategoriesOptions = (organizationId: string) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -613,7 +615,7 @@ export const clauseCategoriesOptions = (organizationId: string) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -649,7 +651,7 @@ export const clausesOptions = (
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -662,7 +664,7 @@ export const clauseDetailOptions = (organizationId: string, clauseId: string) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -687,7 +689,7 @@ export const playbooksOptions = (
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -706,7 +708,7 @@ export const recentPlaybooksOptions = (
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -720,7 +722,7 @@ export const documentTypesOptions = (organizationId: string) =>
     queryFn: async ({ signal }) => {
       const response = await api["document-types"].get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -734,7 +736,7 @@ export const playbookStartersOptions = (organizationId: string) =>
     queryFn: async ({ signal }) => {
       const response = await api.playbooks.starters.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -743,18 +745,26 @@ export const playbookDetailOptions = (
   organizationId: string,
   playbookId: string,
 ) =>
-  queryOptions({
-    queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-        .get({ fetch: { signal } });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .playbooks({
+            playbookId: toSafeId<"playbookDefinition">(playbookId),
+          })
+          .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+        return unwrapApiResponse(response);
+      },
+      retry: shouldRetryAPIRequest,
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      resources: [RESOURCE_TYPE.PLAYBOOK],
+      scope: { type: "organization" },
     },
-    retry: shouldRetryAPIRequest,
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 // Approval-version history for a playbook: a small, bounded, per-parent
 // collection (one row per approve call), so a plain list is enough — no
@@ -770,7 +780,7 @@ export const playbookVersionsOptions = (
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
         .versions.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -796,7 +806,7 @@ export const flowsOptions = (
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -809,7 +819,7 @@ export const flowDetailOptions = (organizationId: string, flowId: string) =>
         .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -817,27 +827,33 @@ export const flowDetailOptions = (organizationId: string, flowId: string) =>
 // ── Skills queries ───────────────────────────────────
 
 export const skillsOptions = (organizationId: string, userId: string) =>
-  infiniteQueryOptions({
-    queryKey: knowledgeKeys.skills.list(organizationId, userId, {
-      limit: SKILLS_PAGE_SIZE,
-    }),
-    queryFn: async ({ pageParam, signal }) => {
-      const query: { limit: number; cursor?: string } = {
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: knowledgeKeys.skills.list(organizationId, userId, {
         limit: SKILLS_PAGE_SIZE,
-      };
-      if (pageParam !== "") {
-        query.cursor = pageParam;
-      }
-      const response = await api.skills.get({
-        query,
-        fetch: { signal },
-      });
-      return unwrapEden(response);
+      }),
+      queryFn: async ({ pageParam, signal }) => {
+        const query: { limit: number; cursor?: string } = {
+          limit: SKILLS_PAGE_SIZE,
+        };
+        if (pageParam !== "") {
+          query.cursor = pageParam;
+        }
+        const response = await api.skills.get({
+          query,
+          fetch: { signal },
+        });
+        return unwrapApiResponse(response);
+      },
+      initialPageParam: "",
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      resources: [RESOURCE_TYPE.AGENT_SKILL],
+      scope: { type: "organization" },
     },
-    initialPageParam: "",
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 /**
  * The caller's skills chat cannot offer, with the tools each lacks. The
@@ -862,7 +878,7 @@ export const chatUnavailableSkillsOptions = (
         fetch: { signal },
         ...(chat === undefined ? {} : { query: chat }),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -878,7 +894,7 @@ export const skillDetailOptions = (
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -897,7 +913,7 @@ export const skillRevisionsOptions = (
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
         .revisions.get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -925,7 +941,7 @@ export const skillRevisionOptions = (
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
         .revisions({ revisionId: toSafeId<"agentSkillRevision">(revisionId) })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     enabled: revisionId !== null,
     staleTime: STALE_TIME.FIVE.MINUTES,
@@ -945,7 +961,7 @@ export const skillProposalsOptions = (
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
         .proposals.get({ query: {}, fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -975,7 +991,7 @@ export const skillProposalOptions = (
           proposalId: toSafeId<"agentSkillProposal">(proposalId),
         })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     enabled: proposalId !== null,
     staleTime: STALE_TIME.FIVE.MINUTES,
@@ -995,21 +1011,27 @@ export const skillCommentsOptions = (
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
         .comments.get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
 // ── MCP queries ─────────────────────────────────────
 
 export const mcpConnectorsOptions = (organizationId: string) =>
-  queryOptions({
-    queryKey: knowledgeKeys.mcp.connectors(organizationId),
-    queryFn: async ({ signal }) => {
-      const response = await api.mcp.connectors.get({ fetch: { signal } });
-      return unwrapEden(response);
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: knowledgeKeys.mcp.connectors(organizationId),
+      queryFn: async ({ signal }) => {
+        const response = await api.mcp.connectors.get({ fetch: { signal } });
+        return unwrapApiResponse(response);
+      },
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+      scope: { type: "organization" },
     },
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 export type McpConnectorsResponse = Awaited<
   ReturnType<NonNullable<ReturnType<typeof mcpConnectorsOptions>["queryFn"]>>
@@ -1020,7 +1042,7 @@ export const mcpConnectionsOptions = (organizationId: string, userId: string) =>
     queryKey: knowledgeKeys.mcp.connections(organizationId, userId),
     queryFn: async ({ signal }) => {
       const response = await api.mcp.connections.get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });

@@ -35,8 +35,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Step, Steps } from "@stll/ui/steps";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
@@ -46,10 +48,10 @@ import type { PlaybookSnapshot } from "@/features/knowledge/playbook-editor/play
 import {
   canAutosave,
   draftToAdopt,
-  resolvePaneSaveStatus,
-  resolveServerFollow,
-  resolveSavedPlaybookState,
   resolveLocalPlaybookIntent,
+  resolvePaneSaveStatus,
+  resolveSavedPlaybookState,
+  resolveServerFollow,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
 import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
@@ -61,9 +63,9 @@ import type {
 import {
   buildPlaybookSavePayload,
   createPlaybookBaseline,
+  detailSeedGate,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
-  detailSeedGate,
   invalidPositionIds,
   latchedSeedGate,
   refetchSupersededDetail,
@@ -73,16 +75,16 @@ import {
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
+  clearPlaybookPaneDraft,
   readParkedPlaybookPane,
   useParkedPlaybookPaneSavePending,
-  clearPlaybookPaneDraft,
 } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
 import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
 import {
-  usePlaybookSaveQueue,
   usePlaybookDetailSaveSubscription,
+  usePlaybookSaveQueue,
 } from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
 import type {
   SaveOutcome,
@@ -92,11 +94,16 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
+import {
+  useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   duplicatePosition,
   extractToGraded,
@@ -106,8 +113,8 @@ import {
   newGradedPosition,
   type Position,
   type PositionErrors,
-  type PositionSeverity,
   positionReferencePassages,
+  type PositionSeverity,
   positionTiers,
   validatePosition,
 } from "@/lib/knowledge/playbook-types";
@@ -118,8 +125,9 @@ import {
   knowledgeKeys,
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 import { usePlaybookPaneLifecycle } from "./use-playbook-pane-lifecycle";
@@ -136,9 +144,9 @@ const VERSION_CONFLICT_TOAST_TIMEOUT_MS = 10_000;
 const POSITION_REMOVED_TOAST_TIMEOUT_MS = 10_000;
 
 // A 409 the optimistic-concurrency guard raised, off either channel the
-// editor uses: Eden's error field on a direct call, or the `APIError`
-// `unwrapEden` throws inside a mutation.
-const isEdenVersionConflict = (error: ApiErrorInput): boolean =>
+// editor uses: the API client's error field on a direct call, or the `APIError`
+// `unwrapApiResponse` throws inside a mutation.
+const isApiVersionConflict = (error: ApiErrorInput): boolean =>
   normalizeApiError(error).code === API_VERSION_CONFLICT_ERROR_CODE;
 
 const isThrownVersionConflict = (error: unknown): boolean =>
@@ -363,7 +371,7 @@ const PlaybookEditorLoader = ({
         ? false
         : OPEN_EDITOR_REFETCH_INTERVAL_MS,
   });
-  const detailView = useQueryView(detailQuery, {
+  const detailView = queryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
   });
   const seed = resolveDetailSeed({
@@ -662,6 +670,7 @@ const PlaybookEditorForm = ({
   host,
   onReload,
 }: PlaybookEditorFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const isEdit = playbookId !== null;
@@ -738,8 +747,8 @@ const PlaybookEditorForm = ({
     initial.draft.documentTypeKey,
   );
   const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
-  const documentTypesDataView = useQueryView(documentTypesDataQuery);
-  useQueryViewError(documentTypesDataView);
+  const documentTypesDataView = queryView(documentTypesDataQuery);
+  useQueryViewError(documentTypesDataView, "PlaybookEditorForm:query");
   const documentTypesData =
     documentTypesDataView.type === "items"
       ? documentTypesDataView.items
@@ -1096,7 +1105,7 @@ const PlaybookEditorForm = ({
         );
       }
       if (refused === "approval" || !autosaves) {
-        notifyUserError(undefined, failure.title, {
+        notifyUserProblem(failure.title, {
           description: failure.description,
         });
       }
@@ -1108,7 +1117,7 @@ const PlaybookEditorForm = ({
         "playbook-editor.refetch-after-conflict",
       );
     }
-    notifyUserError(undefined, failure.title, {
+    notifyUserProblem(failure.title, {
       description: failure.description,
       ...(onReload
         ? {
@@ -1140,12 +1149,17 @@ const PlaybookEditorForm = ({
       draft: savedDraft,
       persistedIds: baseline.persistedIds,
     });
-    // Each branch awaits its own Eden call and inspects `.error` before
-    // touching `.data`: Eden resolves rather than throwing, so a failed
+    // Each branch awaits its own API call and inspects `.error` before
+    // touching `.data`: the client resolves rather than throwing, so a failed
     // request reads as success anywhere the response is not checked.
     const response =
       playbookId === null
-        ? await api.playbooks.post(payload)
+        ? await idempotentSubmit.run({
+            operation: "api.playbooks",
+            body: payload,
+            send: async (creationPayload) =>
+              api.playbooks.post(creationPayload),
+          })
         : await api
             .playbooks({
               playbookId: toSafeId<"playbookDefinition">(playbookId),
@@ -1157,7 +1171,7 @@ const PlaybookEditorForm = ({
               ...(expectedUpdatedAt === null ? {} : { expectedUpdatedAt }),
             });
     if (response.error) {
-      return isEdenVersionConflict(response.error)
+      return isApiVersionConflict(response.error)
         ? { type: "conflict", error: response.error }
         : { type: "failed", error: response.error };
     }
@@ -1229,15 +1243,12 @@ const PlaybookEditorForm = ({
   const handleSave = async (): Promise<boolean> => {
     if (nameMissing) {
       setAttemptedSave(true);
-      notifyUserError(undefined, t("knowledge.playbooks.nameRequired"));
+      notifyUserProblem(t("knowledge.playbooks.nameRequired"));
       return false;
     }
     if (invalidIds.length > 0) {
       revealInvalidPositions();
-      notifyUserError(
-        undefined,
-        t("knowledge.playbooks.fixErrorsBeforeSaving"),
-      );
+      notifyUserProblem(t("knowledge.playbooks.fixErrorsBeforeSaving"));
       return false;
     }
 
@@ -1340,7 +1351,7 @@ const PlaybookEditorForm = ({
       organizationId,
       playbookId,
       onReadError: (error) => {
-        notifyUserError(undefined, t("common.unexpectedError"), {
+        notifyUserError(error, t("common.unexpectedError"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       },
@@ -1461,7 +1472,7 @@ const PlaybookEditorForm = ({
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(id) })
         .approve.post({ expectedUpdatedAt });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data) => {
       setStatus("approved");
@@ -1653,7 +1664,7 @@ const PlaybookEditorForm = ({
                 </Select>
                 <Link
                   className="text-muted-foreground hover:text-foreground text-xs"
-                  to="/admin/document-types"
+                  to="/settings/organization/document-types"
                 >
                   {t("knowledge.playbooks.manageTypes")}
                 </Link>
@@ -1904,6 +1915,8 @@ const OutlineRail = ({
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();
+  const formattingLocale = useFormattingLocale();
+  const markerStyle = useStepsMarkerStyle();
   return (
     <nav
       aria-label={t("knowledge.playbooks.outline")}
@@ -1912,11 +1925,15 @@ const OutlineRail = ({
       <p className="text-foreground-label mb-2 px-2 text-xs font-semibold">
         {t("knowledge.playbooks.outline")}
       </p>
-      <ol className="space-y-0.5">
-        {positions.map((position, index) => {
+      <Steps
+        lang={formattingLocale}
+        markerStyle={markerStyle}
+        variant="compact"
+      >
+        {positions.map((position) => {
           const issue = position.issue.trim();
           return (
-            <li key={position.sourceId}>
+            <Step key={position.sourceId}>
               <Button
                 className={cn(
                   "hover:bg-muted h-8 w-full items-center justify-start rounded-md px-2 text-start font-normal focus-visible:ring-offset-0 focus-visible:ring-inset sm:h-8",
@@ -1926,12 +1943,9 @@ const OutlineRail = ({
                 size="xs"
                 variant="ghost"
               >
-                <span className="text-foreground-ghost text-3xs w-5 shrink-0 font-semibold tracking-[0.04em] tabular-nums">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span
+                <TruncatedText
                   className={cn(
-                    "min-w-0 flex-1 truncate text-sm leading-5",
+                    "flex-1 text-sm leading-5",
                     issue
                       ? "text-foreground font-medium"
                       : "text-muted-foreground italic",
@@ -1939,7 +1953,7 @@ const OutlineRail = ({
                   dir="auto"
                 >
                   {issue || t("knowledge.playbooks.untitledPosition")}
-                </span>
+                </TruncatedText>
                 {position.mode === "graded" && (
                   <span
                     className="size-2 shrink-0 rounded-full"
@@ -1949,10 +1963,10 @@ const OutlineRail = ({
                   />
                 )}
               </Button>
-            </li>
+            </Step>
           );
         })}
-      </ol>
+      </Steps>
     </nav>
   );
 };

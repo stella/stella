@@ -13,13 +13,26 @@ import { cn } from "../lib/utils";
  * so the row does not resize while the write lands.
  */
 export type ReviewDecisionState =
-  | "pending"
-  | "accepted"
-  | "rejected"
-  | "dismissed"
-  | "applying";
+  "pending" | "accepted" | "rejected" | "dismissed" | "applying";
 
 export type ReviewDecisionSize = "xs" | "sm";
+
+/**
+ * How loudly the pair speaks. `primary` fills Accept, for a surface with one
+ * item under review; `quiet` keeps both outlined and ghosted, for a list of
+ * items whose one accent is a batch action such as "Accept all".
+ */
+export type ReviewDecisionEmphasis = "primary" | "quiet";
+
+const ACCEPT_VARIANT = {
+  primary: "default",
+  quiet: "outline",
+} as const satisfies Record<ReviewDecisionEmphasis, string>;
+
+const REJECT_VARIANT = {
+  primary: "outline",
+  quiet: "ghost",
+} as const satisfies Record<ReviewDecisionEmphasis, string>;
 
 type ReviewDecisionActionsProps = {
   state: ReviewDecisionState;
@@ -28,6 +41,7 @@ type ReviewDecisionActionsProps = {
   onRevert?: (() => void) | undefined;
   onReopen?: (() => void) | undefined;
   size?: ReviewDecisionSize;
+  emphasis?: ReviewDecisionEmphasis;
   /** Labels are supplied by the host: this package carries no catalogs. */
   acceptLabel?: ReactNode;
   rejectLabel?: ReactNode;
@@ -48,6 +62,7 @@ export const ReviewDecisionActions = ({
   onRevert,
   onReopen,
   size = "sm",
+  emphasis = "primary",
   acceptLabel,
   rejectLabel,
   revertLabel,
@@ -61,6 +76,7 @@ export const ReviewDecisionActions = ({
     acceptLabel,
     acceptTooltip,
     disabled,
+    emphasis,
     onAccept,
     onReject,
     onReopen,
@@ -87,14 +103,18 @@ export const ReviewDecisionActions = ({
 };
 
 type RenderControlsOptions = Required<
-  Pick<ReviewDecisionActionsProps, "disabled" | "size" | "state">
+  Pick<ReviewDecisionActionsProps, "disabled" | "emphasis" | "size" | "state">
 > &
-  Omit<ReviewDecisionActionsProps, "className" | "disabled" | "size" | "state">;
+  Omit<
+    ReviewDecisionActionsProps,
+    "className" | "disabled" | "emphasis" | "size" | "state"
+  >;
 
 const renderControls = ({
   acceptLabel,
   acceptTooltip,
   disabled,
+  emphasis,
   onAccept,
   onReject,
   onReopen,
@@ -118,7 +138,7 @@ const renderControls = ({
               onClick={onAccept}
               size={size}
               tooltip={acceptTooltip}
-              variant="default"
+              variant={ACCEPT_VARIANT[emphasis]}
             >
               <CheckIcon />
               {acceptLabel}
@@ -130,7 +150,7 @@ const renderControls = ({
               onClick={onReject}
               size={size}
               tooltip={rejectTooltip}
-              variant="outline"
+              variant={REJECT_VARIANT[emphasis]}
             >
               <XIcon />
               {rejectLabel}

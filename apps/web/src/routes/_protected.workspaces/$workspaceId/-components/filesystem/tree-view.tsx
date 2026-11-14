@@ -19,22 +19,25 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   EyeOffIcon,
   FileIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
+import { MiddleTruncate } from "@stll/ui/middle-truncate";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import { RecordFieldValue } from "@stll/workspace-ui/field-value";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
@@ -49,7 +52,6 @@ import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { InlineEdit } from "@/components/inline-edit";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
-import Tooltip from "@/components/tooltip";
 import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
 import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -67,7 +69,7 @@ import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   draggable,
@@ -84,6 +86,11 @@ import type {
 } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import {
+  applySelectionGesture,
+  SELECTION_GESTURE,
+  selectionGestureForModifiers,
+} from "@/lib/workspaces/multi-selection.logic";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -573,9 +580,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     setExpandedIds((prev) => new Set(prev).add(entityId));
   };
 
-  const handleSubfolderCreated = (entityId: string, parentId: string) => {
+  const handleSubfolderCreated = (
+    entityId: string,
+    parentId: string | null,
+  ) => {
     setEditingEntityId(entityId);
-    setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
+    setExpandedIds((prev) => {
+      const next = new Set(prev).add(entityId);
+      return parentId === null ? next : next.add(parentId);
+    });
   };
 
   const flattenedRows = useMemo(
@@ -608,35 +621,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     entityId: string,
     mods: { meta: boolean; shift: boolean },
   ) => {
-    const selectedEntityId = toSafeId<"entity">(entityId);
-    setSelectedIds((prev) => {
-      if (mods.shift && anchorIdRef.current !== null) {
-        const from = orderedEntityIds.indexOf(
-          toSafeId<"entity">(anchorIdRef.current),
-        );
-        const to = orderedEntityIds.indexOf(selectedEntityId);
-        if (from !== -1 && to !== -1) {
-          const [lo, hi] = from <= to ? [from, to] : [to, from];
-          return new Set(orderedEntityIds.slice(lo, hi + 1));
-        }
-      }
-      // A plain or cmd/ctrl click makes this row the new range anchor.
-      anchorIdRef.current = selectedEntityId;
-      if (mods.meta) {
-        const next = new Set(prev);
-        if (next.has(selectedEntityId)) {
-          next.delete(selectedEntityId);
-        } else {
-          next.add(selectedEntityId);
-        }
-        return next;
-      }
+    const next = applySelectionGesture({
+      selection: { selectedIds, anchorId: anchorIdRef.current },
       // Plain click: sole selection (clicking the only selected row clears it).
-      if (prev.size === 1 && prev.has(selectedEntityId)) {
-        return new Set();
-      }
-      return new Set([selectedEntityId]);
+      gesture: selectionGestureForModifiers(
+        mods,
+        SELECTION_GESTURE.exclusiveToggle,
+      ),
+      id: entityId,
+      orderedIds: orderedEntityIds,
     });
+    anchorIdRef.current = next.anchorId;
+    setSelectedIds(new Set(next.selectedIds));
   };
 
   const rowsViewportRef = useRef<HTMLDivElement>(null);
@@ -807,24 +803,20 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <Tooltip
-                    content={t("workspaces.copyToMatter.rootFolder")}
-                    render={
-                      <button
-                        aria-label={t("workspaces.copyToMatter.rootFolder")}
-                        className="text-muted-foreground hover:text-foreground text-xs"
-                        onClick={() => {
-                          detached(
-                            navigateToFolder(),
-                            "tree-view.navigate-to-folder",
-                          );
-                        }}
-                        type="button"
-                      />
-                    }
+                  <Button
+                    aria-label={t("workspaces.copyToMatter.rootFolder")}
+                    onClick={() => {
+                      detached(
+                        navigateToFolder(),
+                        "tree-view.navigate-to-folder",
+                      );
+                    }}
+                    size="inline"
+                    tooltip={t("workspaces.copyToMatter.rootFolder")}
+                    variant="muted"
                   >
                     <EntityKindIcon className="size-3.5" kind="folder" />
-                  </Tooltip>
+                  </Button>
                 </BreadcrumbItem>
                 {breadcrumbs.map((crumb, i) => {
                   const isLast = i === breadcrumbs.length - 1;
@@ -856,8 +848,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           }
                           if (isLast) {
                             return (
-                              <button
-                                className="text-xs font-medium whitespace-pre"
+                              <Button
                                 onClick={() => {
                                   detached(
                                     navigateToFolder(),
@@ -869,25 +860,28 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                                   setBreadcrumbEditValue(crumb.name);
                                   setEditingEntityId(crumb.id);
                                 }}
-                                type="button"
+                                size="inline"
+                                variant="link"
                               >
-                                {crumb.name}
-                              </button>
+                                <span className="text-xs font-medium whitespace-pre">
+                                  {crumb.name}
+                                </span>
+                              </Button>
                             );
                           }
                           return (
-                            <button
-                              className="text-muted-foreground hover:text-foreground text-xs"
+                            <Button
                               onClick={() => {
                                 detached(
                                   navigateToFolder(crumb.id),
                                   "tree-view.navigate-to-folder",
                                 );
                               }}
-                              type="button"
+                              size="inline"
+                              variant="muted"
                             >
-                              {crumb.name}
-                            </button>
+                              <span className="text-xs">{crumb.name}</span>
+                            </Button>
                           );
                         })()}
                       </BreadcrumbItem>
@@ -901,7 +895,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       </div>
       <div
         className={cn(
-          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs",
+          "text-muted-foreground mt-1 flex items-center gap-2 rounded-sm border border-dashed px-3 py-1.5 text-xs",
           isDragActive ? "visible" : "hidden",
           isRootDropTarget
             ? "border-primary bg-primary/10 text-foreground"
@@ -1049,11 +1043,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         parentId={currentFolderId}
         showTaskOption={false}
         render={
-          <button
+          <Button
             aria-label={t("common.add")}
             className="sr-only"
             tabIndex={-1}
-            type="button"
+            variant="plain"
           />
         }
         workspaceId={workspaceId}
@@ -1138,18 +1132,27 @@ const ColumnHeaderCell = ({
       onContextMenu={containedEventHandler(handleContextMenu)}
       ref={containerRef}
     >
-      <button
+      <Button
         className={cn(
-          "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
-          align === "end" ? "justify-end text-end" : "justify-start text-start",
-          isActive && "text-foreground",
+          "flex min-w-0 shrink",
+          align === "end" ? "justify-end" : "justify-start",
         )}
         onClick={() => onSort(propertyId)}
-        type="button"
+        variant="plain"
       >
-        <span className="truncate">{label}</span>
-        {isActive && <SortIcon className="size-3 shrink-0" />}
-      </button>
+        <span
+          className={cn(
+            "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
+            align === "end"
+              ? "justify-end text-end"
+              : "justify-start text-start",
+            isActive && "text-foreground",
+          )}
+        >
+          <TruncatedText className="font-medium">{label}</TruncatedText>
+          {isActive && <SortIcon className="size-3 shrink-0" />}
+        </span>
+      </Button>
       <div
         aria-hidden="true"
         className="absolute -end-2 top-0 z-10 h-full w-2 cursor-col-resize touch-none select-none"
@@ -1166,16 +1169,7 @@ const ColumnHeaderCell = ({
           }}
           open={isContextOpen}
         >
-          <MenuTrigger
-            render={
-              <button
-                aria-label={t("common.options")}
-                className="sr-only"
-                tabIndex={-1}
-                type="button"
-              />
-            }
-          />
+          <MenuAnchor />
           <MenuPopup anchor={contextAnchor ?? undefined}>
             <MenuItem
               onClick={() => {
@@ -1219,7 +1213,7 @@ type FilesystemRowProps = {
   ) => void;
   onClearSelection: () => void;
   onSelect: (entityId: string, mods: { meta: boolean; shift: boolean }) => void;
-  onSubfolderCreated: (entityId: string, parentId: string) => void;
+  onSubfolderCreated: (entityId: string, parentId: string | null) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
   getAncestorIds: (id: string) => string[];
@@ -1609,13 +1603,7 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText
-            as="span"
-            className="overflow-hidden text-ellipsis whitespace-pre"
-            title={name}
-          >
-            {name}
-          </BidiText>
+          <MiddleTruncate value={name} />
           {folderStatistics && formattedFolderSize && (
             <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs tabular-nums">
               <span>
@@ -1626,7 +1614,7 @@ export const FilesystemRow = ({
                   { count: folderStatistics.fileCount },
                 )}
               </span>
-              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100">
+              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100">
                 <span aria-hidden="true">·</span>
                 <span>{formattedFolderSize}</span>
               </span>
@@ -1646,7 +1634,7 @@ export const FilesystemRow = ({
 
   const extraCells = extraColumns.map((col) => (
     <span
-      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
+      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs whitespace-nowrap"
       key={col.id}
     >
       <ExtraColumnCell column={col} entity={node} />
@@ -1654,12 +1642,12 @@ export const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded-sm px-2 text-start text-sm",
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
   const rowButtonCls =
-    "min-w-0 rounded text-start outline-none focus-visible:bg-muted/70";
+    "min-w-0 rounded-sm text-start outline-none focus-visible:bg-muted/70";
 
   // Content area: Name + Type + extras (interactive, clickable)
   // gridColumn spans all content columns (excluding the actions column)
@@ -1728,8 +1716,8 @@ export const FilesystemRow = ({
       {contentCells}
     </div>
   ) : (
-    <button
-      className={rowButtonCls}
+    <Button
+      className="min-w-0"
       onClick={(event) => {
         if (!isFolder) {
           const intent = getFileRowClickIntent({
@@ -1785,11 +1773,12 @@ export const FilesystemRow = ({
         }
         openInInspector();
       }}
+      focusRing="inside"
       style={contentSpanStyle}
-      type="button"
+      variant="plain"
     >
       {contentCells}
-    </button>
+    </Button>
   );
 
   return (
@@ -1837,7 +1826,7 @@ const formatDateValue = (
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   if (column.type === "metadata") {
     switch (column.id) {
       case FILESYSTEM_CREATED_BY_ID:
@@ -1859,17 +1848,27 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (field?.content.type === "date") {
     const formatted = formatDateValue(field.content.value, locale);
     return (
-      <span className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs">
         {formatted || "-"}
-      </span>
+      </TruncatedText>
+    );
+  }
+
+  // A record's state (candidates to choose, a count, review) is part of
+  // what it says; the flat text would hide it behind "-".
+  if (field?.content.type === "record") {
+    return (
+      <TruncatedText className="text-muted-foreground text-xs">
+        <RecordFieldValue content={field.content} variant="table" />
+      </TruncatedText>
     );
   }
 
   const value = getFieldValue(field);
 
   return (
-    <span className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs">
       {value || "-"}
-    </span>
+    </TruncatedText>
   );
 };

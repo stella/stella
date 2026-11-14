@@ -1,10 +1,11 @@
-import { App } from "@modelcontextprotocol/ext-apps";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { Result, TaggedError } from "better-result";
 
 import {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
@@ -12,19 +13,23 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
 import { formatAppError, LocalizedAppError } from "../shared/app-error";
-import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
-import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
-  isUploadRecord,
-  createUploadTranslator,
+  applyUploadHostStyles,
+  createViewportApp,
+  parseAppToolPayload,
+} from "../shared/bridge";
+import { appLocale, setAppDocumentLocale } from "../shared/locale";
+import { callAppServerTool } from "../shared/server-tool-call";
+import { mountAppViewport } from "../shared/size";
+import {
+  bindUploadSdkErrors,
   connectUploadApp,
   createUploadSubscriptions,
-  bindUploadSdkErrors,
+  createUploadTranslator,
+  isUploadRecord,
 } from "../shared/upload-bridge";
 import { createUploadTargetController } from "./upload-target";
 import type { UploadTarget } from "./upload-target";
-
-const UPLOAD_TIMEOUT_MS = 1_800_000;
 
 class UploadAppError extends TaggedError("UploadAppError")<{
   message: string;
@@ -112,7 +117,7 @@ const uploadSelectedFile = async ({
       method: "PUT",
       headers: reservation.headers,
       body: file,
-      timeout: { type: "headers", ms: UPLOAD_TIMEOUT_MS },
+      timeout: { type: "headers", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
     });
     if (!put.ok) {
       return Result.err(
@@ -171,7 +176,7 @@ const uploadSelectedFile = async ({
 };
 
 export const createDocumentUploadRuntime = (
-  app = new App({ name: "stella document upload", version: "1.0.0" }),
+  app: App = createViewportApp("stella document upload"),
 ) => {
   let locale = appLocale(undefined);
   const t = createUploadTranslator(() => locale);
@@ -214,21 +219,18 @@ export const createDocumentUploadRuntime = (
     input: Record<string, unknown>,
     confirm?: true,
   ): Promise<Result<unknown, UploadError>> => {
-    const called = await Result.tryPromise(
-      async () =>
-        await protocol.callServerTool({
-          name: MCP_CAPABILITY_EXECUTORS.write,
-          arguments: {
-            capability,
-            input,
-            ...(confirm === true ? { confirm: true } : {}),
-          },
-        }),
-    );
-    if (Result.isError(called)) {
-      return Result.err(new UploadAppError({ message: called.error.message }));
+    const called = await callAppServerTool(protocol, {
+      name: MCP_CAPABILITY_EXECUTORS.write,
+      arguments: {
+        capability,
+        input,
+        ...(confirm === true ? { confirm: true } : {}),
+      },
+    });
+    if (called.status === "unreachable") {
+      return Result.err(new LocalizedAppError({ key: "bridgeUnavailable" }));
     }
-    const result = called.value;
+    const result = called.result;
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
       return Result.err(
@@ -349,11 +351,23 @@ export const createDocumentUploadRuntime = (
       }
       publish({ uploadPhase: "idle" });
     },
-    connect: async () =>
+    connect: async (onConnected?: () => void) =>
       await connectUploadApp({
         app,
         onContext: applyHostContext,
         onError: (message) => setStatus(() => message, "error"),
+        onConnected,
       }),
+    /** Bounds the inline height and offers fullscreen through the shared viewport. */
+    mountViewport: () => {
+      const stopViewport = mountAppViewport({
+        app,
+        onFailure: () => setStatus(() => t("bridgeUnavailable"), "error"),
+      });
+      app.onteardown = () => {
+        stopViewport();
+        return {};
+      };
+    },
   };
 };

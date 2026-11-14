@@ -5,10 +5,11 @@ import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-p
 import { toSafeId } from "@/api/lib/branded-types";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+import { filterPlaybooksByPresentLabels } from "@/api/lib/workflow/route-playbooks";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -39,6 +40,7 @@ const opened = {
     definitionSnapshot: {
       name: "Vendor agreement review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   materializedPropertyIds: [propertyId],
@@ -212,6 +214,73 @@ describe("auto-run playbooks handler", () => {
       refusals: [],
     });
     expect(startWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  test("applicability is resolved on the approved scope, not the edited live one", async () => {
+    // The playbook was approved for NDAs and edited to leases afterwards;
+    // the matter's only classified document is an NDA. Applicability runs
+    // the real label filter over whatever the handler hands it, so the run
+    // only happens if the handler pins the scope first: handed the live
+    // scope, the filter drops the playbook and nothing runs.
+    const livePlaybook = {
+      id: playbookId,
+      name: "NDA review",
+      positions: { version: 3, items: [] },
+      scope: { documentTypeKey: "lease" },
+    };
+    loadLatestApprovedVersionsMock.mockResolvedValue(
+      new Map([
+        [
+          playbookId,
+          {
+            id: toSafeId<"playbookDefinitionVersion">("pv_approved_scope"),
+            name: "NDA review",
+            positions: { version: 3, items: [] },
+            scope: { documentTypeKey: "nda" },
+          },
+        ],
+      ]),
+    );
+    resolveApplicablePlaybooksMock.mockImplementation(
+      async ({ playbooks }: { playbooks: readonly (typeof livePlaybook)[] }) =>
+        filterPlaybooksByPresentLabels({
+          playbooks,
+          labelByKey: new Map([
+            ["nda", "NDA"],
+            ["lease", "Lease"],
+          ]),
+          presentLabels: new Set(["NDA"]),
+        }),
+    );
+    startWorkflowMock.mockResolvedValue({ status: "skipped" });
+
+    const { scopedDb, safeDb } = createScopedDbMock({
+      query: {
+        playbookDefinitions: { findMany: async () => [livePlaybook] },
+      },
+    });
+    const result = await autoRunPlaybooks.handler(
+      createTestHandlerContext<AutoRunCtx>({
+        audit: NO_AUDIT,
+        safeDb,
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      playbooksRun: 1,
+      runPropertyCount: 1,
+      documentRunCount: 1,
+      refusals: [],
+    });
+    // What applicability and the opener received is the playbook carrying
+    // its approved scope; the edited live scope appears nowhere downstream.
+    expect(
+      resolveApplicablePlaybooksMock.mock.calls.at(0)?.[0].playbooks,
+    ).toEqual([{ ...livePlaybook, scope: { documentTypeKey: "nda" } }]);
+    expect(openPlaybookRunMock.mock.calls.at(0)?.[0].definition.scope).toEqual({
+      documentTypeKey: "nda",
+    });
   });
 
   test("configuration refusals survive alongside successfully started playbooks", async () => {

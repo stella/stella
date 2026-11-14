@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import type {
-  ChatTurnOutcome,
   ChatMessageRole,
+  ChatTurnOutcome,
   PersistableChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";

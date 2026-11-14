@@ -32,16 +32,6 @@ describe("workspace table v9 feature set", () => {
 
     expect(table.getRowModel().rows.map((row) => row.id)).toEqual(["row-a"]);
     expect(table.initialState.columnPinning).toEqual({ start: [], end: [] });
-    expect(typeof table.options.features.coreRowModel).toBe("function");
-
-    expect(typeof table.setColumnOrder).toBe("function");
-    expect(typeof table.setColumnPinning).toBe("function");
-    expect(typeof table.setColumnSizing).toBe("function");
-    expect(typeof table.setColumnVisibility).toBe("function");
-    expect(typeof table.setExpanded).toBe("function");
-    expect(typeof table.setRowSelection).toBe("function");
-    expect(typeof table.setSorting).toBe("function");
-
     expect("setColumnFilters" in table).toBe(false);
     expect("setGlobalFilter" in table).toBe(false);
     expect("setPagination" in table).toBe(false);

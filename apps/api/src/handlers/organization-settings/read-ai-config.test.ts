@@ -4,9 +4,9 @@ import { resolveDefaultOverrideModels } from "@stll/ai-catalog/model-defaults-le
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

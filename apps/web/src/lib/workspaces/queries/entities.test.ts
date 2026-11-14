@@ -19,6 +19,9 @@ const propertyContent = (
   if (type === "money") {
     return { version: 1, type, currency: null };
   }
+  if (type === "record") {
+    return { version: 1, type, shape: { type: "tool-output" } };
+  }
   return { version: 1, type };
 };
 
@@ -53,6 +56,18 @@ describe("entity query keys", () => {
 });
 
 describe("entity query field selection", () => {
+  test("defaults to the requested columns", () => {
+    expect(
+      entitiesKeys
+        .window({
+          workspaceId: "workspace-1",
+          filters: [],
+          sorts: [],
+          fieldIds: ["notes"],
+        })
+        .at(-1),
+    ).toMatchObject({ fieldMode: "visible", fieldIds: ["notes"] });
+  });
   test("keeps file metadata even when file columns are hidden", () => {
     expect(
       visibleEntityFieldIds({

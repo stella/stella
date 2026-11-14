@@ -3,6 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   AUTOFIX_BOT,
   AUTOFIX_COMMIT_SUBJECT,
+  BRIDGE_VERSION_ALLOWED,
+  isAutofixablePath,
+  isBridgeVersionAllowedPath,
   planAutofix,
   settledAncestor,
 } from "./autofix-push-scope";
@@ -53,6 +56,43 @@ describe("push-scoped autofix plan", () => {
     expect(plan.needed).toBe(true);
   });
 
+  test("a push with no fixable, generated, or prunable file needs no job", () => {
+    const plan = planAutofix({
+      pullRequestFiles: ["assets/logo.png"],
+      pushFiles: ["assets/logo.png"],
+    });
+
+    expect(plan).toEqual({
+      generators: [],
+      scoped: [],
+      refix: false,
+      prune: false,
+      needed: false,
+    });
+  });
+
+  test("Rust bridge files are not formatter inputs", () => {
+    expect(isAutofixablePath("apps/desktop/src-tauri/src/bridge.rs")).toBe(
+      false,
+    );
+    expect(isAutofixablePath("apps/desktop/src-tauri/src/types.rs")).toBe(
+      false,
+    );
+  });
+
+  test("the bridge allowance admits exactly the files its fixer writes", () => {
+    expect([...BRIDGE_VERSION_ALLOWED]).toEqual([
+      "apps/desktop/src-tauri/src/types.rs",
+      "apps/desktop/fixtures/rpc/app-snapshot.json",
+    ]);
+    for (const file of BRIDGE_VERSION_ALLOWED) {
+      expect(isBridgeVersionAllowedPath(file)).toBe(true);
+    }
+    expect(
+      isBridgeVersionAllowedPath("apps/desktop/src-tauri/src/bridge.rs"),
+    ).toBe(false);
+  });
+
   test("a push that changes nothing the pull request owns needs no job", () => {
     const plan = planAutofix({
       pullRequestFiles: [DOC],
@@ -70,7 +110,7 @@ describe("push-scoped autofix plan", () => {
 
   test.each([
     "oxlint.config.ts",
-    ".oxfmtrc.json",
+    "bunfig.toml",
     ".oxlint-plugins/rules/example.ts",
     "apps/api/tsconfig.json",
     "bun.lock",

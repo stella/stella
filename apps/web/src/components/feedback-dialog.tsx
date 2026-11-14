@@ -1,7 +1,7 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -10,7 +10,6 @@ import {
   FEEDBACK_KINDS,
   FEEDBACK_LIMITS,
 } from "@stll/api-contract/feedback";
-import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
@@ -30,7 +29,6 @@ import {
   FieldLabel,
 } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { CopyIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -40,8 +38,9 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { CopyControl } from "@/components/copy-control";
 import { COMMUNITY_CHANNELS } from "@/components/feedback-community-items";
 import {
   buildFeedbackRequestBody,
@@ -59,32 +58,38 @@ import type {
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { FeedbackReportSource } from "@/lib/analytics/types";
-import { api, publicFeedbackApi } from "@/lib/api";
+import { api, apiClient } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const RATE_LIMITED_STATUS = 429;
 
 type FeedbackRequestBody = ReturnType<typeof buildFeedbackRequestBody>;
 
-const submitFeedbackReport = async (
-  channel: FeedbackChannel,
-  body: FeedbackRequestBody,
-): Promise<FeedbackReceiptView> => {
+type SubmitFeedbackReportOptions = {
+  channel: FeedbackChannel;
+  body: FeedbackRequestBody;
+};
+
+const submitFeedbackReport = async ({
+  channel,
+  body,
+}: SubmitFeedbackReportOptions): Promise<FeedbackReceiptView> => {
   switch (channel) {
     case FEEDBACK_CHANNELS.account:
-      return unwrapEden(await api.feedback.post(body));
+      return unwrapApiResponse(await api.feedback.post(body));
     case FEEDBACK_CHANNELS.public: {
       // The intake parses the raw text itself so it can reject unknown keys.
-      const data = unwrapEden(
-        await publicFeedbackApi.post(JSON.stringify(body)),
+      const data = unwrapApiResponse(
+        await apiClient.public.feedback.post(JSON.stringify(body)),
       );
       const receipt = v.safeParse(feedbackReceiptSchema, data);
       if (!receipt.success) {
-        // `unwrapEden` has already turned every refusal into an `APIError`;
+        // `unwrapApiResponse` has already turned every refusal into an `APIError`;
         // a success without a receipt breaks the intake's own contract.
         return panic(
           "Feedback intake answered without a receipt",
@@ -171,17 +176,19 @@ const FeedbackReport = ({
     steps: v.pipe(v.string(), v.trim(), v.maxLength(FEEDBACK_LIMITS.steps)),
   });
 
+  const submitIntent = useIdempotentSubmit();
   const submit = useMutation({
     mutationFn: async (report: v.InferOutput<typeof schema>) =>
-      await submitFeedbackReport(
-        channel,
-        buildFeedbackRequestBody({
+      await submitIntent.run({
+        operation: `feedback.create:${channel}`,
+        body: buildFeedbackRequestBody({
           clientVersion: __APP_VERSION__,
           errorReference,
           report,
           route,
         }),
-      ),
+        send: async (body) => await submitFeedbackReport({ channel, body }),
+      }),
     onSuccess: (_response, report) => {
       analytics.captureFeedbackReportSubmitted({
         area: report.area,
@@ -190,7 +197,10 @@ const FeedbackReport = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "FeedbackReport:failure",
+        scope: { type: "handler", handlerId: "FeedbackReport:failure" },
+      });
       const rateLimited =
         APIError.is(error) && error.status === RATE_LIMITED_STATUS;
       notifyUserError(
@@ -393,17 +403,6 @@ type FeedbackReceiptProps = {
 
 const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-
-  const handleCopy = async () => {
-    const copied = await copyToClipboard(response.receipt);
-    if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
 
   return (
     <>
@@ -421,20 +420,21 @@ const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
             <span className="text-muted-foreground text-xs">
               {t("feedback.receiptLabel")}
             </span>
-            <bdi className="text-foreground truncate font-mono text-sm">
+            <TruncatedText
+              className="text-foreground font-mono text-sm"
+              render={<bdi />}
+            >
               {response.receipt}
-            </bdi>
+            </TruncatedText>
           </div>
-          <Button
-            aria-label={t("feedback.copyReceipt")}
-            onClick={() => {
-              detached(handleCopy(), "feedback-dialog.copy-receipt");
-            }}
+          <CopyControl
+            iconClassName="size-4"
+            iconOnly
+            label={t("feedback.copyReceipt")}
             size="icon"
+            text={response.receipt}
             variant="ghost"
-          >
-            <CopyIcon />
-          </Button>
+          />
         </div>
         {response.warning !== undefined && (
           <p className="text-muted-foreground text-xs text-pretty">

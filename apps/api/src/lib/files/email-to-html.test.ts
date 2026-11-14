@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import { load } from "cheerio";
+import { readFileSync } from "node:fs";
 import PostalMime from "postal-mime";
 
 import { MAX_EMAIL_CITATION_BLOCKS } from "@stll/api-contract";
@@ -8,21 +8,27 @@ import {
   EML_MIME_TYPE,
   resolveEmailMimeType,
 } from "@stll/api-contract/email-mime-types";
+import { load } from "@stll/html";
 
 import {
   buildEmailPreview,
   EmailParseError,
   emailToHtml,
   emailToPreview,
+  isEmailAttachmentPreviewable,
+  type ParsedEmail,
   parsedEmailToText,
   parseEmail,
-  type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
-  sanitizeEmailBodyHtml,
   resolveEmailAttachmentMimeType,
-  isEmailAttachmentPreviewable,
+  sanitizeEmailBodyHtml,
 } from "./email-to-html";
+
+const HTML_EMAIL_BODY = readFileSync(
+  new URL("fixtures/html-email-body.html", import.meta.url),
+  "utf-8",
+);
 
 const toArrayBuffer = (value: string): ArrayBuffer => {
   const encoded = new TextEncoder().encode(value);
@@ -36,7 +42,7 @@ const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
 const SVG_BASE64 = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
-).toString("base64");
+).toBase64();
 
 test("email parsing preserves typed failures and their cause", async () => {
   const cause = new Error("Parser unavailable");
@@ -148,7 +154,7 @@ describe("renderEmailHtml", () => {
     date: "Mon, 02 Jun 2026 10:00:00 +0000",
     body: {
       type: "html",
-      html: '<p>Hello <b>world</b></p><script>alert(1)</script><a href="javascript:alert(2)" onclick="steal()">x</a><a href="https://calendar.example/event">calendar</a><img src="cid:logo"><img src="https://tracker.example/p.gif">',
+      html: HTML_EMAIL_BODY,
     },
     inlineImages: [
       { cid: "logo", mimeType: "image/png", dataBase64: PNG_BASE64 },

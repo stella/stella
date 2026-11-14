@@ -9,14 +9,30 @@ import type {
   McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
+import { sleep } from "@stll/concurrency/sleep";
 import { createDetached } from "@stll/errors";
 
 import type { PresentationApp } from "../manifest";
-import { setAppDocumentLocale } from "./locale";
+import {
+  appFailure,
+  createAppRequestId,
+  formatAppFailure,
+  toolAppFailure,
+} from "./app-error";
+import type { AppFailure } from "./app-error";
+import { appLocale, setAppDocumentLocale } from "./locale";
+import { type AppToolResult, callAppServerTool } from "./server-tool-call";
+import { mountAppViewport } from "./size";
+import { projectAppToolArguments } from "./tool-input";
 
-type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
+export type { AppToolResult } from "./server-tool-call";
+
+export const createViewportApp = (name: string) =>
+  new App({ name, version: "1.0.0" }, {}, { autoResize: false });
 
 export const parseAppToolPayload = (result: AppToolResult): unknown => {
   if (result.structuredContent !== undefined) {
@@ -61,11 +77,11 @@ export const applyUploadHostStyles = (
 };
 
 type OpenPresentationLinkOptions = {
-  app: Pick<App, "openLink">;
+  app: Pick<App, "openLink" | "callServerTool">;
   url: string;
   fail: (message: string | null) => void;
 };
-const openPresentationLink = async ({
+export const openPresentationLink = async ({
   app,
   url,
   fail,
@@ -75,8 +91,32 @@ const openPresentationLink = async ({
     fail(null);
     return;
   }
+  parsed.hash = parsed.hash
+    .slice(1)
+    .split("&")
+    .filter((part) => !new URLSearchParams(part).has("sh"))
+    .join("&");
+  const fresh = await callAppServerTool(app, {
+    name: MCP_WEB_HANDOFF_TOOL_NAME,
+    arguments: { url: parsed.href },
+  });
+  const payload =
+    fresh.status === "answered" && fresh.result.isError !== true
+      ? fresh.result.structuredContent
+      : undefined;
+  const freshUrlValue =
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    "url" in payload
+      ? payload.url
+      : undefined;
+  const freshUrl =
+    typeof freshUrlValue === "string"
+      ? parseLegalCitationHttpUrl(freshUrlValue)
+      : null;
   const opened = await Result.tryPromise(async () =>
-    app.openLink({ url: parsed.href }),
+    app.openLink({ url: freshUrl?.href ?? parsed.href }),
   );
   if (Result.isError(opened)) {
     fail(opened.error.message);
@@ -87,9 +127,15 @@ const openPresentationLink = async ({
 
 type ResultState<View> =
   | { status: "idle" }
-  | { status: "loading" }
+  /** `continuing`: the server said the work is still running. */
+  | { status: "loading"; phase?: "continuing" }
   | { status: "ready"; view: View }
-  | { status: "error"; message: string | null };
+  | {
+      status: "error";
+      message: string;
+      failure: AppFailure;
+      previous: { status: "empty" } | { status: "ready"; view: View };
+    };
 type ToolName = PresentationApp["callableTools"][number];
 type AppSnapshot<View> = {
   context: McpUiHostContext;
@@ -99,7 +145,164 @@ type AppSnapshot<View> = {
 };
 type ReadCall = { name: ToolName; arguments: Record<string, unknown> };
 
+/** The last page shown, with the arguments that produced it. */
+type ShownPage<View> =
+  | { status: "empty" }
+  | {
+      status: "ready";
+      view: View;
+      input: Record<string, unknown>;
+      tool: ToolName;
+    };
+const shownPage = <View>(
+  view: View,
+  { input, tool }: AppSnapshot<View>,
+): ShownPage<View> => ({ status: "ready", view, input, tool });
+
+type FailedSnapshotOptions<View> = {
+  snapshot: AppSnapshot<View>;
+  shown: ShownPage<View>;
+  failure: AppFailure;
+};
+/**
+ * A refused request (invalid arguments) keeps the page already shown, and
+ * paging continues from that page's arguments rather than the refused ones.
+ * Any other failure shows no page.
+ */
+const failedSnapshot = <View>({
+  snapshot,
+  shown,
+  failure,
+}: FailedSnapshotOptions<View>): AppSnapshot<View> => {
+  const message = formatAppFailure(
+    failure,
+    appLocale(snapshot.context.locale).t,
+  );
+  if (failure.type !== "invalid_arguments" || shown.status !== "ready") {
+    return {
+      ...snapshot,
+      result: {
+        status: "error",
+        failure,
+        previous: { status: "empty" },
+        message,
+      },
+    };
+  }
+  return {
+    context: snapshot.context,
+    input: shown.input,
+    tool: shown.tool,
+    result: {
+      status: "error",
+      failure,
+      previous: { status: "ready", view: shown.view },
+      message,
+    },
+  };
+};
+
+type PresentationHost = Pick<
+  App,
+  | "callServerTool"
+  | "addEventListener"
+  | "removeEventListener"
+  | "getHostContext"
+  | "getHostCapabilities"
+  | "connect"
+  | "openLink"
+  | "requestDisplayMode"
+  | "onerror"
+  | "onteardown"
+>;
+
+/** How long an app follows a read the server is still working on. */
+const CONTINUATION_FOLLOW_MS = 120_000;
+
+const runningAnswerSchema = v.object({
+  status: v.literal("running"),
+  continuationToken: v.string(),
+  retryAfterMs: v.number(),
+});
+
+const readRunningAnswer = (payload: unknown) => {
+  const parsed = v.safeParse(runningAnswerSchema, payload);
+  return parsed.success ? parsed.output : undefined;
+};
+
+type RunningAnswer = NonNullable<ReturnType<typeof readRunningAnswer>>;
+
+type FollowRunningReadOptions = {
+  app: Pick<App, "callServerTool">;
+  manifest: PresentationApp;
+  first: RunningAnswer;
+  request: { name: ToolName; input: Record<string, unknown> };
+  wait: (ms: number) => Promise<void>;
+  /** False once anything newer replaced the read this is following. */
+  isCurrent: () => boolean;
+  onFailure: (failure: AppFailure) => void;
+  onAnswer: (result: AppToolResult, requestId: string) => void;
+};
+
+/**
+ * Keep asking for a read the server is still working on until it answers,
+ * something newer replaces it, or the follow window ends.
+ */
+const followRunningRead = async ({
+  app,
+  manifest,
+  first,
+  request,
+  wait,
+  isCurrent,
+  onFailure,
+  onAnswer,
+}: FollowRunningReadOptions): Promise<void> => {
+  let running = first;
+  for (
+    let waitedMs = 0;
+    waitedMs < CONTINUATION_FOLLOW_MS;
+    waitedMs += running.retryAfterMs
+  ) {
+    await wait(running.retryAfterMs);
+    if (!isCurrent()) {
+      return;
+    }
+    const polled = await requestPresentationTool({
+      app,
+      manifest,
+      request: {
+        name: request.name,
+        arguments: {
+          ...request.input,
+          continuation_token: running.continuationToken,
+        },
+      },
+    });
+    if (!isCurrent()) {
+      return;
+    }
+    if (polled.status === "error") {
+      onFailure(polled.failure);
+      return;
+    }
+    const still =
+      polled.result.isError === true
+        ? undefined
+        : readRunningAnswer(parseAppToolPayload(polled.result));
+    if (still === undefined) {
+      onAnswer(polled.result, polled.requestId);
+      return;
+    }
+    running = still;
+  }
+  onFailure(appFailure("unavailable", createAppRequestId(), true));
+};
+
 type PresentationBridgeOptions<View> = {
+  host?: PresentationHost;
+  /** A wait between polls of a read the server is still working on. */
+  wait?: (ms: number) => Promise<void>;
   title?: (context: McpUiHostContext) => string;
   manifest: PresentationApp;
   parse: (payload: unknown, input: Record<string, unknown>) => View | undefined;
@@ -109,36 +312,179 @@ type RequestPresentationToolOptions = {
   app: Pick<App, "callServerTool">;
   manifest: PresentationApp;
   request: ReadCall;
+  onRequest?: (arguments_: Record<string, unknown>) => void;
 };
-const requestPresentationTool = async ({
+export const requestPresentationTool = async ({
   app,
   manifest,
   request,
+  onRequest,
 }: RequestPresentationToolOptions) => {
+  const requestId = createAppRequestId();
   if (!manifest.callableTools.some((name) => name === request.name)) {
-    return undefined;
-  }
-  const called = await Result.tryPromise(async () =>
-    app.callServerTool(request),
-  );
-  if (Result.isError(called)) {
     return {
-      isError: true,
-      content: [{ type: "text" as const, text: called.error.message }],
-    };
+      status: "error",
+      failure: appFailure("unavailable", requestId),
+    } as const;
   }
-  return called.value;
+  // The server normalizes and validates; a refusal returns as a tool error.
+  const arguments_ = projectAppToolArguments(request.name, request.arguments);
+  onRequest?.(arguments_);
+  const called = await callAppServerTool(app, {
+    name: request.name,
+    arguments: arguments_,
+  });
+  if (called.status === "unreachable") {
+    return {
+      status: "error",
+      failure: appFailure("unavailable", requestId, true),
+    } as const;
+  }
+  return {
+    status: "ready",
+    result: called.result,
+    requestId,
+    arguments: arguments_,
+  } as const;
 };
+
+type LocalizedRequestToolOptions = RequestPresentationToolOptions & {
+  formatFailure: (failure: AppFailure) => string;
+};
+const requestLocalizedPresentationTool = async ({
+  app,
+  manifest,
+  request,
+  formatFailure,
+}: LocalizedRequestToolOptions): Promise<AppToolResult> => {
+  const called = await requestPresentationTool({ app, manifest, request });
+  if (called.status === "ready" && called.result.isError !== true) {
+    return called.result;
+  }
+  const failure =
+    called.status === "error"
+      ? called.failure
+      : toolAppFailure(parseAppToolPayload(called.result), called.requestId);
+  return {
+    isError: true,
+    structuredContent: { appFailure: failure },
+    content: [
+      {
+        type: "text",
+        text: formatFailure(failure),
+      },
+    ],
+  };
+};
+
+type PresentationDisplayModeOptions = {
+  app: Pick<App, "requestDisplayMode">;
+  context: McpUiHostContext;
+  mode: "fullscreen" | "inline";
+  isCurrent: () => boolean;
+  fail: (message: string | null) => void;
+  hostContext: (context: McpUiHostContext) => void;
+};
+const requestPresentationDisplayMode = async ({
+  app,
+  context,
+  mode,
+  isCurrent,
+  fail,
+  hostContext,
+}: PresentationDisplayModeOptions) => {
+  if (!context.availableDisplayModes?.includes(mode)) {
+    return;
+  }
+  const requested = await Result.tryPromise(async () =>
+    app.requestDisplayMode({ mode }),
+  );
+  if (!isCurrent()) {
+    return;
+  }
+  if (Result.isError(requested)) {
+    fail(requested.error.message);
+    return;
+  }
+  hostContext({ displayMode: requested.value.mode });
+};
+
+type HostContextSnapshotOptions<View> = {
+  snapshot: AppSnapshot<View>;
+  context: McpUiHostContext;
+  manifest: PresentationApp;
+};
+const mergeHostContextSnapshot = <View>({
+  snapshot,
+  context,
+  manifest,
+}: HostContextSnapshotOptions<View>) => {
+  const merged = { ...snapshot.context, ...context };
+  const name = merged.toolInfo?.tool.name;
+  return {
+    context: merged,
+    input: snapshot.input,
+    tool: manifest.linkedTools.find((entry) => entry === name) ?? snapshot.tool,
+    result:
+      snapshot.result.status === "error"
+        ? {
+            status: "error",
+            failure: snapshot.result.failure,
+            previous: snapshot.result.previous,
+            message: formatAppFailure(
+              snapshot.result.failure,
+              appLocale(merged.locale).t,
+            ),
+          }
+        : snapshot.result,
+  } satisfies AppSnapshot<View>;
+};
+
+type PresentationListeners = {
+  app: PresentationHost;
+  hostContext: (context: McpUiHostContext) => void;
+  toolInput: (event: AppEventMap["toolinput"]) => void;
+  toolResult: (event: AppEventMap["toolresult"]) => void;
+  toolCancelled: (event: AppEventMap["toolcancelled"]) => void;
+  teardown: () => void;
+};
+const bindPresentationListeners = ({
+  app,
+  hostContext,
+  toolInput,
+  toolResult,
+  toolCancelled,
+  teardown,
+}: PresentationListeners) => {
+  app.addEventListener("hostcontextchanged", hostContext);
+  app.addEventListener("toolinput", toolInput);
+  app.addEventListener("toolresult", toolResult);
+  app.addEventListener("toolcancelled", toolCancelled);
+  app.onteardown = () => {
+    app.removeEventListener("hostcontextchanged", hostContext);
+    app.removeEventListener("toolinput", toolInput);
+    app.removeEventListener("toolresult", toolResult);
+    app.removeEventListener("toolcancelled", toolCancelled);
+    teardown();
+    return {};
+  };
+};
+
+const withRead = <View>(
+  { context }: AppSnapshot<View>,
+  tool: ToolName,
+  input: Record<string, unknown>,
+  result: ResultState<View>,
+): AppSnapshot<View> => ({ context, input, tool, result });
 
 export const createPresentationBridge = <View>({
   manifest,
   parse,
   title,
+  host,
+  wait = sleep,
 }: PresentationBridgeOptions<View>) => {
-  const app = new App(
-    { name: `stella ${manifest.directory}`, version: "1.0.0" },
-    {},
-  );
+  const app = host ?? createViewportApp(`stella ${manifest.directory}`);
   setAppDocumentLocale(undefined);
   const listeners = new Set<() => void>();
   let snapshot: AppSnapshot<View> = {
@@ -147,165 +493,169 @@ export const createPresentationBridge = <View>({
     tool: manifest.linkedTools[0],
     result: { status: "idle" },
   };
+  let stopViewport: (() => void) | undefined;
   let generation = 0;
   let lastCall: ReadCall | undefined;
-  const publish = (result: ResultState<View>) => {
-    snapshot = {
-      context: snapshot.context,
-      input: snapshot.input,
-      tool: snapshot.tool,
-      result,
-    };
+  let shown: ShownPage<View> = { status: "empty" };
+  const notify = () => {
     for (const listener of listeners) {
       listener();
     }
   };
-  const receive = (result: Awaited<ReturnType<App["callServerTool"]>>) => {
+  const publish = (result: ResultState<View>) => {
+    if (result.status === "ready") {
+      shown = shownPage(result.view, snapshot);
+    }
+    snapshot = withRead(snapshot, snapshot.tool, snapshot.input, result);
+    notify();
+  };
+  const publishFailure = (failure: AppFailure) => {
+    snapshot = failedSnapshot({ snapshot, shown, failure });
+    publish(snapshot.result);
+  };
+  const publishUnavailable = () =>
+    publishFailure(appFailure("unavailable", createAppRequestId(), true));
+  const detached = createDetached(publishUnavailable);
+  const receive = (result: AppToolResult, requestId = createAppRequestId()) => {
+    const payload = parseAppToolPayload(result);
     if (result.isError === true) {
-      publish({
-        status: "error",
-        message:
-          result.content.find((part) => part.type === "text")?.text ?? null,
-      });
+      publishFailure(toolAppFailure(payload, requestId));
       return;
     }
-    const view = parse(parseAppToolPayload(result), snapshot.input);
-    publish(
-      view === undefined
-        ? { status: "error", message: null }
-        : { status: "ready", view },
-    );
+    const running = readRunningAnswer(payload);
+    if (running !== undefined) {
+      const currentGeneration = generation;
+      publish({ status: "loading", phase: "continuing" });
+      detached(
+        followRunningRead({
+          app,
+          manifest,
+          first: running,
+          request: { name: snapshot.tool, input: snapshot.input },
+          wait,
+          isCurrent: () => currentGeneration === generation,
+          onFailure: publishFailure,
+          onAnswer: receive,
+        }),
+        "presentationBridge.followRunningRead",
+      );
+      return;
+    }
+    const view = parse(payload, snapshot.input);
+    if (view === undefined) {
+      publishFailure(appFailure("invalid_response", requestId));
+      return;
+    }
+    publish({ status: "ready", view });
   };
   const hostContext = (context: McpUiHostContext) => {
-    const merged = { ...snapshot.context, ...context };
-    const name = merged.toolInfo?.tool.name;
-    snapshot = {
-      context: merged,
-      input: snapshot.input,
-      tool:
-        name === undefined
-          ? snapshot.tool
-          : (manifest.linkedTools.find((entry) => entry === name) ??
-            snapshot.tool),
-      result: snapshot.result,
-    };
-    applyHostPresentation(merged, title?.(merged));
-    for (const listener of listeners) {
-      listener();
-    }
+    snapshot = mergeHostContextSnapshot({ snapshot, context, manifest });
+    applyHostPresentation(snapshot.context, title?.(snapshot.context));
+    notify();
   };
   const toolInput = ({ arguments: input }: AppEventMap["toolinput"]) => {
+    shown = { status: "empty" };
     generation += 1;
     lastCall = undefined;
-    snapshot = {
-      context: snapshot.context,
-      tool: snapshot.tool,
-      input: input ?? {},
-      result: { status: "loading" },
-    };
-    for (const listener of listeners) {
-      listener();
-    }
+    snapshot = withRead(snapshot, snapshot.tool, input ?? {}, {
+      status: "loading",
+    });
+    notify();
   };
   const toolResult = (result: AppEventMap["toolresult"]) => {
     hostContext(app.getHostContext() ?? {});
     generation += 1;
     receive(result);
   };
-  const toolCancelled = ({ reason }: AppEventMap["toolcancelled"]) => {
+  const toolCancelled = (_event: AppEventMap["toolcancelled"]) => {
     generation += 1;
-    publish({ status: "error", message: reason ?? null });
+    publishFailure(appFailure("cancelled", createAppRequestId()));
   };
-  app.addEventListener("hostcontextchanged", hostContext);
-  app.addEventListener("toolinput", toolInput);
-  app.addEventListener("toolresult", toolResult);
-  app.addEventListener("toolcancelled", toolCancelled);
-  app.onteardown = () => {
-    generation += 1;
-    app.removeEventListener("hostcontextchanged", hostContext);
-    app.removeEventListener("toolinput", toolInput);
-    app.removeEventListener("toolresult", toolResult);
-    app.removeEventListener("toolcancelled", toolCancelled);
-    listeners.clear();
-    return {};
-  };
-  const reportAppError: NonNullable<typeof app.onerror> = ({ message }) =>
-    publish({ status: "error", message });
-  Reflect.set(app, "onerror", reportAppError);
+  bindPresentationListeners({
+    app,
+    hostContext,
+    toolInput,
+    toolResult,
+    toolCancelled,
+    teardown: () => {
+      generation += 1;
+      stopViewport?.();
+      listeners.clear();
+    },
+  });
+  Reflect.set(app, "onerror", publishUnavailable);
 
-  // Paged reads and previews own their request state; a late failure must not replace a newer opening.
+  // Paged reads and previews own their request state.
   const requestTool = async (request: ReadCall) =>
-    requestPresentationTool({ app, manifest, request });
+    requestLocalizedPresentationTool({
+      app,
+      manifest,
+      request,
+      formatFailure: (failure) =>
+        formatAppFailure(failure, appLocale(snapshot.context.locale).t),
+    });
   const requestDisplayMode = async (
     mode: "fullscreen" | "inline",
     onError?: (message: string | null) => void,
   ) => {
-    const fail =
-      onError ??
-      ((message: string | null) => publish({ status: "error", message }));
-    if (!snapshot.context.availableDisplayModes?.includes(mode)) {
-      return;
-    }
     const currentGeneration = generation;
-    const requested = await Result.tryPromise(async () =>
-      app.requestDisplayMode({ mode }),
-    );
-    if (currentGeneration !== generation) {
-      return;
-    }
-    if (Result.isError(requested)) {
-      fail(requested.error.message);
-      return;
-    }
-    hostContext({ displayMode: requested.value.mode });
+    return requestPresentationDisplayMode({
+      app,
+      context: snapshot.context,
+      mode,
+      isCurrent: () => currentGeneration === generation,
+      fail: onError ?? publishUnavailable,
+      hostContext,
+    });
   };
   const call = async (request: ReadCall): Promise<void> => {
-    // The typed call list and its runtime check share the manifest the CI census reads.
-    if (!manifest.callableTools.some((name) => name === request.name)) {
-      publish({ status: "error", message: null });
-      return;
-    }
-    lastCall = request;
     const currentGeneration = ++generation;
-    publish({ status: "loading" });
-    const called = await Result.tryPromise(async () =>
-      app.callServerTool(request),
-    );
+    const called = await requestPresentationTool({
+      app,
+      manifest,
+      request,
+      onRequest: (args) => {
+        lastCall = { name: request.name, arguments: args };
+        snapshot = withRead(snapshot, request.name, args, snapshot.result);
+        publish({ status: "loading" });
+      },
+    });
     if (currentGeneration !== generation) {
       return;
     }
-    if (Result.isError(called)) {
-      publish({ status: "error", message: called.error.message });
+    if (called.status === "error") {
+      publishFailure(called.failure);
       return;
     }
-    snapshot = {
-      context: snapshot.context,
-      input: request.arguments,
-      tool: request.name,
-      result: snapshot.result,
-    };
-    receive(called.value);
+    receive(called.result, called.requestId);
   };
   const openLink = async (
     url: string,
     onError?: (message: string | null) => void,
-  ): Promise<void> => {
-    const fail =
-      onError ??
-      ((message: string | null) => publish({ status: "error", message }));
-    await openPresentationLink({ app, url, fail });
-  };
+  ): Promise<void> =>
+    await openPresentationLink({
+      app,
+      url,
+      fail: onError ?? publishUnavailable,
+    });
   const connect = async (): Promise<void> => {
     applyHostPresentation(snapshot.context, title?.(snapshot.context));
     const connected = await Result.tryPromise(async () => app.connect());
     if (Result.isError(connected)) {
-      publish({ status: "error", message: connected.error.message });
+      publishUnavailable();
       return;
     }
     hostContext(app.getHostContext() ?? {});
+    if (app instanceof App && stopViewport === undefined) {
+      stopViewport = mountAppViewport({
+        app,
+        onFailure: publishUnavailable,
+        onDisplayModeChange: hostContext,
+      });
+    }
   };
   return {
-    detached: createDetached(() => publish({ status: "error", message: null })),
+    detached,
     connect,
     requestTool,
     requestFullscreen: async (onError?: (message: string | null) => void) =>
@@ -316,11 +666,9 @@ export const createPresentationBridge = <View>({
     call,
     openLink,
     retry: async () => {
-      if (lastCall !== undefined) {
-        await call(lastCall);
-      } else {
-        await call({ name: snapshot.tool, arguments: snapshot.input });
-      }
+      await call(
+        lastCall ?? { name: snapshot.tool, arguments: snapshot.input },
+      );
     },
     subscribe: (listener: () => void) => {
       listeners.add(listener);

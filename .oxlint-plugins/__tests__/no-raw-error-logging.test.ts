@@ -45,18 +45,26 @@ process.stderr.write(\`failure: \${type}\`);`,
 });
 
 test("allows the legacy raw-message key in its exact owner and test sources", async () => {
-  for (const sourcePath of [
-    "apps/api/src/lib/errors/utils.ts",
-    "apps/api/src/worker.test.ts",
-  ]) {
-    expect(
-      await lintSingleRule(
-        "no-raw-error-logging",
-        'fields["error.msg"] = message;',
-        { sourcePath, cwd: "scratch" },
-      ),
-    ).toEqual([]);
-  }
+  const results = await Promise.all(
+    ["apps/api/src/lib/errors/utils.ts", "apps/api/src/worker.test.ts"].map(
+      async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule(
+            "no-raw-error-logging",
+            'fields["error.msg"] = message;',
+            { sourcePath, cwd: "scratch" },
+          ),
+          expected: [],
+        };
+      },
+    ),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("does not exempt a utils basename from another directory", async () => {

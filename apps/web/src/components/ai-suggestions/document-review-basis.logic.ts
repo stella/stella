@@ -39,8 +39,7 @@ type ReviewSkipReason =
  * against the API, so a drift fails to compile at the call site.
  */
 export type ReviewPerspective =
-  | { type: "neutral" }
-  | ({ type: "party" } & ReviewParty);
+  { type: "neutral" } | ({ type: "party" } & ReviewParty);
 
 export const NEUTRAL_PERSPECTIVE: ReviewPerspective = { type: "neutral" };
 

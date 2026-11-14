@@ -9,7 +9,7 @@ import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { agentSkills } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,
@@ -300,7 +300,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     expect(providerSignal.aborted).toBe(false);
     lease.abort();
 
-    expect(await generation).toMatchObject({ type: "failed" });
+    expect((await generation).unwrap()).toMatchObject({ type: "failed" });
     expect(providerSignal.aborted).toBe(true);
   });
 });

@@ -8,11 +8,16 @@ import {
 } from "@/api/db/schema";
 import { settleCaseLawCorpusMirrorTx } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { withSourceRawRetry } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
+import { recordParsedGenerationTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
-import { processResultForCorpusOutcome } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import {
+  PROCESS_DECISION_STATUS,
+  processResultForCorpusOutcome,
+} from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { pgPayloadCarriesDocumentFor } from "@/api/lib/case-law/stored-payload";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
@@ -29,15 +34,16 @@ type EnqueueCorpusMirrorOptions = {
 /**
  * Queue the decision's payload for the corpus pack, when the plan mirrors
  * it there. A decision with no batch of its own is flushed here, and its
- * outcome answered; one in a caller's batch answers null and is settled
- * when the caller flushes.
+ * outcome answered; a caller's batch settles queued payloads when it flushes.
  */
 export const enqueueCorpusMirror = async ({
   scopedDb,
   write,
   corpus,
   corpusBatch,
-}: EnqueueCorpusMirrorOptions): Promise<ProcessResult | null> => {
+}: EnqueueCorpusMirrorOptions): Promise<
+  Result<ProcessResult, StoredCorpusValidationError>
+> => {
   const {
     decisionId,
     signal,
@@ -86,7 +92,7 @@ export const enqueueCorpusMirror = async ({
           ...(signal === undefined ? {} : { signal }),
           ...(s3Policy === undefined ? {} : { s3Policy }),
         });
-      batch.enqueue({
+      const enqueued = batch.enqueue({
         decisionId,
         jurisdiction: corpusPayload.jurisdiction,
         payload: corpusPayload,
@@ -116,6 +122,7 @@ export const enqueueCorpusMirror = async ({
                   subject: { family: "case_law", entityId: decisionId },
                 });
               }
+              await recordParsedGenerationTx(tx, { write, phase: "mirror" });
               return { type: "applied" };
             },
             decisionId,
@@ -159,25 +166,36 @@ export const enqueueCorpusMirror = async ({
           return { type: "settled" };
         },
       });
+      if (enqueued.isErr()) {
+        return enqueued;
+      }
       if (corpusBatch === undefined) {
         // Nobody else will flush this batch, so this decision is its own:
         // one transfer, one member set, the same path a page takes.
         const flushed = await batch.flush();
-        return withSourceRawRetry(
-          s3UploadFailed,
-          processResultForCorpusOutcome(
-            Result.isError(flushed)
-              ? { type: "failed", error: flushed.error }
-              : flushed.value.get(decisionId),
-            {
-              decisionId,
-              caseNumber: result.caseNumber,
-              country: result.country,
-            },
+        return Result.ok(
+          withSourceRawRetry(
+            s3UploadFailed,
+            processResultForCorpusOutcome(
+              Result.isError(flushed)
+                ? { type: "failed", error: flushed.error }
+                : flushed.value.get(decisionId),
+              {
+                decisionId,
+                caseNumber: result.caseNumber,
+                country: result.country,
+              },
+            ),
           ),
         );
       }
     }
   }
-  return null;
+  return Result.ok(
+    withSourceRawRetry(s3UploadFailed, {
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      inserted: true,
+      searchVectorFailed: false,
+    }),
+  );
 };

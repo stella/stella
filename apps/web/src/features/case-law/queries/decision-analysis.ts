@@ -6,17 +6,18 @@ import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
   type CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  caseLawAnalysisProgressSchema,
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import {
-  providerDiagnosticSchema,
   type ProviderDiagnostic,
+  providerDiagnosticSchema,
 } from "@stll/api-contract/provider-setup";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   type DecisionAnalysis,
-  type PersistedDecisionAnalysis,
   parsePersistedDecisionAnalysis,
+  type PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
@@ -26,8 +27,7 @@ import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 /** Whose AI key the failed run called the provider with. */
 export type AnalysisFailureKey =
-  | { source: "organization"; provider: string }
-  | { source: "platform" };
+  { source: "organization"; provider: string } | { source: "platform" };
 
 /**
  * Why the reader has no analysis: the server will not make one, the last run
@@ -146,8 +146,10 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "generating") {
-    // The run holds only a sentinel on the row; the tree arrives whole.
-    return { status: "generating", tree: [] };
+    const parsed = v.safeParse(caseLawAnalysisProgressSchema, value);
+    return parsed.success
+      ? { status: "generating", tree: parsed.output.partialTree }
+      : null;
   }
 
   if (status === "error") {

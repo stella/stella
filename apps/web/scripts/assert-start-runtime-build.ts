@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEPENDENCY_WASI_WORKERS,
   referencedAssetPath,
   resolveSourceWorkerEntry,
   SOURCE_WORKER_FILE_GLOB,
@@ -38,6 +39,12 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "PDF page text worker",
+    pattern: "dist/client/assets/pdf-page-text-worker-????????.js",
+    sourceEntry: "src/workers/pdf-page-text-worker.ts",
+  },
+  {
+    expectedCount: 1,
     label: "PDF page editor worker",
     pattern: "dist/client/assets/pdf-page-editor-worker-????????.js",
     sourceEntry: "src/workers/pdf-page-editor-worker.ts",
@@ -65,6 +72,13 @@ const RUNTIME_ASSET_CONTRACTS = [
     pattern: "dist/client/assets/render-worker-????????-????????.js",
   },
   {
+    expectedCount: 2,
+    // The PPTX and XLSX model workers ship inline and start from a blob URL,
+    // so they inherit the cross-origin-isolated document's policy.
+    label: "Office inline model workers",
+    pattern: "dist/client/assets/worker-source-????????-????????.js",
+  },
+  {
     expectedCount: 1,
     label: "Office font metrics worker",
     pattern: "dist/client/assets/font-metrics.worker-????????.js",
@@ -86,12 +100,16 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
-    // The threaded WASI runtime of the engine starts its threads from this
-    // emitted worker; the app is cross-origin isolated (COOP/COEP), so the
-    // threaded build runs in the browser.
-    label: "Engine WASI browser thread worker",
-    pattern: "dist/client/assets/wasi-worker-browser-????????.js",
+    // Loaded instead of the threaded build on pages without cross-origin
+    // isolation (Safari, the desktop webview).
+    label: "Aho-Corasick single-thread search WASM",
+    pattern: "dist/client/assets/aho-corasick.single-thread-????????.wasm",
   },
+  ...Object.values(DEPENDENCY_WASI_WORKERS).map(({ assetStem, label }) => ({
+    expectedCount: 1,
+    label,
+    pattern: `dist/client/assets/${assetStem}-????????.js`,
+  })),
   {
     expectedCount: 1,
     // @vscode/diff (the markdown editor's baseline diff) loads its binary via
@@ -103,6 +121,28 @@ const RUNTIME_ASSET_CONTRACTS = [
     expectedCount: 1,
     label: "RegexSet search WASM",
     pattern: "dist/client/assets/regex-set.wasm32-wasi-????????.wasm",
+  },
+  {
+    expectedCount: 1,
+    // Loaded instead of the threaded build on pages without cross-origin
+    // isolation (Safari, the desktop webview).
+    label: "RegexSet single-thread search WASM",
+    pattern: "dist/client/assets/regex-set.single-thread-????????.wasm",
+  },
+  {
+    expectedCount: 1,
+    // @stll/scan-engine starts its own module worker with
+    // `new URL("scan-engine.worker.ts", import.meta.url)` the first time the
+    // page editor cleans a scan.
+    label: "scan cleanup engine worker",
+    pattern: "dist/client/assets/scan-engine.worker-????????.js",
+  },
+  {
+    expectedCount: 1,
+    // Fetched by that worker (and the engine's in-thread fallback) through
+    // `new URL("../generated/scan_engine_bg.wasm", import.meta.url)`.
+    label: "scan cleanup engine WASM",
+    pattern: "dist/client/assets/scan_engine_bg-????????.wasm",
   },
   {
     expectedCount: 1,

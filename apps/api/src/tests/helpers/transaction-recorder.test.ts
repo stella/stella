@@ -9,8 +9,8 @@ import {
 import {
   assertLockRanks,
   FLOW_LOCK_RANKS,
-  type TransactionTrace,
   type TransactionEvent,
+  type TransactionTrace,
 } from "./transaction-recorder";
 
 const traceFor = (

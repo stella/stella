@@ -1,0 +1,4 @@
+{
+  "add-column": "Nullable publisher text columns without defaults require no row scan or table rewrite; lock acquisition is bounded by 5s and the statement by 30s.",
+  "replace-view": "Re-expand the paired decision views for additive publisher columns while retaining their existing row predicates and grants; replacement changes view metadata under 5s lock_timeout and 30s statement_timeout without scanning corpus rows."
+}

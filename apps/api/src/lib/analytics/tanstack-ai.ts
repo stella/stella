@@ -1,12 +1,13 @@
 import {
-  EventType,
   type ChatMiddleware,
   type ChatMiddlewareContext,
+  EventType,
   type TokenUsage,
 } from "@tanstack/ai";
 import { Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import type { AIErrorKind } from "@stll/api-contract";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
@@ -34,17 +35,19 @@ import {
   finishReasonOf,
   type TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { sanitizeHandoffDiagnosticText } from "@/api/lib/errors/handoff-diagnostics";
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import {
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForTask,
-  resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
+  resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
@@ -57,12 +60,13 @@ import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getServerAnalytics } from "./client";
 import {
-  SERVER_ANALYTICS_EVENTS,
-  type ServerAnalytics,
+  type AIFailureReason,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
   type SafeAIAnalyticsMetadata,
+  SERVER_ANALYTICS_EVENTS,
+  type ServerAnalytics,
   type TokenBucket,
 } from "./server-analytics";
 
@@ -157,6 +161,11 @@ export type TanStackAIAnalyticsCallbacks = {
   ) => TanStackAIAnalyticsCallbacks;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
+};
+
+type TanStackAIFeatureAnalytics = TanStackAIAnalyticsCallbacks & {
+  /** A request refused before any model call: a failure, but no generation. */
+  captureRefusal: (error: unknown) => void;
 };
 
 const SERVER_DISTINCT_ID = "server";
@@ -382,18 +391,41 @@ const recordTanStackConsumption = async ({
   });
 
   if (Result.isError(result)) {
-    captureTelemetryError(result.error, {
-      organization_id: metering.organizationId,
-      source: "usage.tanstack_ai",
-      trace_id: config.traceId,
-    });
+    captureTelemetryError(
+      result.error,
+      handlerErrorContext("analytics.recordTanStackConsumption.result_error", {
+        organization_id: metering.organizationId,
+        source: "usage.tanstack_ai",
+        trace_id: config.traceId,
+      }),
+    );
   }
 };
 
-export const createTanStackAIAnalyticsCallbacks = (
-  { analytics = getServerAnalytics(), ...config }: TanStackAIAnalyticsProps,
-  resolvedModel?: Omit<ResolvedTanStackTextModelInfo, "availability">,
-): TanStackAIAnalyticsCallbacks => {
+/**
+ * What a root callbacks instance and every `forModel` descendant share. A
+ * caller binds a model with `forModel`, the descendant's middleware records
+ * a failed run, and the caller's own catch reports the same failure on the
+ * root: both report into one ledger, so the failure is recorded once.
+ */
+type CallbacksFamily = {
+  readonly analytics: ServerAnalytics;
+  readonly generationFailures: GenerationFailureLedger;
+};
+
+/** Failure records the family has made. Only the family root creates it. */
+type GenerationFailureLedger = {
+  /** A failure of this family has been recorded, from any member. */
+  recorded: boolean;
+};
+
+const createFamilyMember = (
+  family: CallbacksFamily,
+  config: Omit<TanStackAIAnalyticsProps, "analytics">,
+  resolvedModel:
+    Omit<ResolvedTanStackTextModelInfo, "availability"> | undefined,
+): TanStackAIFeatureAnalytics => {
+  const { analytics } = family;
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelTask = config.modelTask ?? "chat";
   // Group attachment is derived centrally so call sites cannot forget it:
@@ -437,7 +469,6 @@ export const createTanStackAIAnalyticsCallbacks = (
     runs.set(ctx.runId, created);
     return created;
   };
-  let hasCapturedGenerationError = false;
 
   const resolveAnalyticsModelInfo =
     (): ResolvedTanStackTextModelInfo | null => {
@@ -454,7 +485,10 @@ export const createTanStackAIAnalyticsCallbacks = (
                 selectedModelId,
                 config.orgAIConfig,
                 modelTask,
-                { dataClass: config.dataClass, modelTier: config.modelTier },
+                {
+                  dataClass: config.dataClass,
+                  modelTier: config.modelTier,
+                },
               )
             : getTanStackTextModelInfoForTask(modelTask, config.orgAIConfig, {
                 dataClass: config.dataClass,
@@ -477,17 +511,73 @@ export const createTanStackAIAnalyticsCallbacks = (
       return modelInfo;
     };
 
+  const captureGenerationFailed = ({
+    error,
+    failureReason,
+    failureKind,
+    providerStatus,
+    resolvedModelInfo,
+  }: {
+    error: unknown;
+    failureReason: AIFailureReason;
+    failureKind: AIErrorKind;
+    providerStatus: string | undefined;
+    resolvedModelInfo: ResolvedTanStackTextModelInfo | null;
+  }) => {
+    analytics.capture({
+      distinctId,
+      ...groups,
+      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      properties: {
+        ...pickSafeMetadata(config.properties),
+        error_message_kind: "non_standard",
+        error_type: errorTag(error),
+        failure_reason: failureReason,
+        failure_kind: failureKind,
+        ...(providerStatus === undefined
+          ? {}
+          : { provider_status: providerStatus }),
+        feature: config.feature,
+        latency_bucket: bucketLatency(
+          (performance.now() - startedAt) / ONE_SECOND_MS,
+        ),
+        ...(resolvedModelInfo
+          ? {
+              model: resolvedModelInfo.modelId,
+              model_key_source: resolvedModelInfo.keySource,
+              provider: resolvedModelInfo.provider,
+              ...(resolvedModelInfo.region
+                ? { region: resolvedModelInfo.region }
+                : {}),
+            }
+          : {}),
+      },
+    });
+  };
+
+  const captureRefusal = (error: unknown) => {
+    captureGenerationFailed({
+      error,
+      failureReason: "validation",
+      failureKind: "unknown",
+      providerStatus: undefined,
+      resolvedModelInfo: resolveAnalyticsModelInfo(),
+    });
+  };
+
   const captureGenerationError = (
     error: unknown,
     context?: { durationMs: number; run: RunAnalyticsState | undefined },
   ) => {
-    // Each middleware terminal hook owns one run. The catch-path fallback
-    // has no run identity, and the SDK rethrows a different Error instance.
-    // Preserve fallback deduplication without suppressing concurrent runs.
-    if (context === undefined && hasCapturedGenerationError) {
+    // Each middleware terminal hook owns one run, so every failed run is
+    // recorded, concurrent ones included. The catch-path fallback has no run
+    // identity, and the SDK rethrows a different Error instance: it records
+    // only when no member of the family has recorded a failure, since the
+    // run that failed may have been bound by `forModel` on a descendant.
+    if (context === undefined && family.generationFailures.recorded) {
       return;
     }
-    hasCapturedGenerationError = true;
+    family.generationFailures.recorded = true;
     const resolvedModelInfo = resolveAnalyticsModelInfo();
 
     // Classified kinds (quota, billing, retired model, provider outage) are
@@ -519,7 +609,9 @@ export const createTanStackAIAnalyticsCallbacks = (
       context?.run?.providerStopReason ?? refusedFinish?.providerStopReason;
     const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
-      "ai.error_kind": sanitizeQueryErrorText(kind),
+      "ai.error_kind": sanitizeHandoffDiagnosticText(
+        sanitizeQueryErrorText(kind),
+      ),
       "ai.feature": config.feature,
       ...(typeof finishReason === "string"
         ? { "ai.finish_reason": finishReason }
@@ -545,11 +637,14 @@ export const createTanStackAIAnalyticsCallbacks = (
       logger.warn("tanstack_ai.generation.failed", attributes);
     } else {
       logger.error("tanstack_ai.generation.failed", attributes);
-      captureTelemetryError(error, {
-        feature: config.feature,
-        organization_id: analyticsOrganizationId ?? "",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        error,
+        handlerErrorContext(`analytics.generation.${config.feature}.${kind}`, {
+          feature: config.feature,
+          organization_id: analyticsOrganizationId ?? "",
+          trace_id: config.traceId,
+        }),
+      );
     }
 
     // Standard-schema failure record for LLM observability: the error class
@@ -585,34 +680,12 @@ export const createTanStackAIAnalyticsCallbacks = (
       },
     });
 
-    analytics.capture({
-      distinctId,
-      ...groups,
-      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-      properties: {
-        ...pickSafeMetadata(config.properties),
-        error_message_kind: "non_standard",
-        error_type: errorTag(error),
-        failure_reason: "provider",
-        failure_kind: kind,
-        ...(providerStatus === undefined
-          ? {}
-          : { provider_status: providerStatus }),
-        feature: config.feature,
-        latency_bucket: bucketLatency(
-          (performance.now() - startedAt) / ONE_SECOND_MS,
-        ),
-        ...(resolvedModelInfo
-          ? {
-              model: resolvedModelInfo.modelId,
-              model_key_source: resolvedModelInfo.keySource,
-              provider: resolvedModelInfo.provider,
-              ...(resolvedModelInfo.region
-                ? { region: resolvedModelInfo.region }
-                : {}),
-            }
-          : {}),
-      },
+    captureGenerationFailed({
+      error,
+      failureReason: "provider",
+      failureKind: kind,
+      providerStatus,
+      resolvedModelInfo,
     });
   };
 
@@ -676,10 +749,13 @@ export const createTanStackAIAnalyticsCallbacks = (
     });
     if (Result.isError(usageSnapshot)) {
       // The payload itself is unreadable: neither side effect can use it.
-      captureTelemetryError(usageSnapshot.error, {
-        source: "usage.tanstack_ai",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        usageSnapshot.error,
+        handlerErrorContext("analytics.meterUsage.usageSnapshot_error", {
+          source: "usage.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
       return;
     }
     run.outputTokens = usageSnapshot.value.completionTokens;
@@ -746,10 +822,13 @@ export const createTanStackAIAnalyticsCallbacks = (
         catch: (error) => error,
       });
       if (Result.isError(consumptionArgs)) {
-        captureTelemetryError(consumptionArgs.error, {
-          source: "usage.tanstack_ai",
-          trace_id: config.traceId,
-        });
+        captureTelemetryError(
+          consumptionArgs.error,
+          handlerErrorContext("analytics.meterUsage.consumptionArgs_error", {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          }),
+        );
       } else {
         const consumption = recordTanStackConsumption(
           consumptionArgs.value,
@@ -757,11 +836,14 @@ export const createTanStackAIAnalyticsCallbacks = (
           // A rejected deferred settles inside the stream lifecycle;
           // capture it here so it cannot surface as an unhandled
           // rejection there.
-          captureTelemetryError(error, {
-            organization_id: metering.organizationId,
-            source: "usage.tanstack_ai",
-            trace_id: config.traceId,
-          });
+          captureTelemetryError(
+            error,
+            handlerErrorContext("analytics.consumption", {
+              organization_id: metering.organizationId,
+              source: "usage.tanstack_ai",
+              trace_id: config.traceId,
+            }),
+          );
         });
         ctx.defer(consumption);
       }
@@ -787,17 +869,20 @@ export const createTanStackAIAnalyticsCallbacks = (
       catch: (error) => error,
     });
     if (Result.isError(captured)) {
-      captureTelemetryError(captured.error, {
-        source: "analytics.tanstack_ai",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        captured.error,
+        handlerErrorContext("analytics.meterUsage.captured_error", {
+          source: "analytics.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
     }
   };
 
   return {
     captureError: captureGenerationError,
-    forModel: (model) =>
-      createTanStackAIAnalyticsCallbacks({ ...config, analytics }, model),
+    captureRefusal,
+    forModel: (model) => createFamilyMember(family, config, model),
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",
@@ -892,3 +977,18 @@ export const createTanStackAIAnalyticsCallbacks = (
     },
   };
 };
+
+/**
+ * Callbacks for one feature's model calls. `forModel` binds a request to a
+ * resolved model and keeps the family's shared state, so a failure is
+ * recorded once whichever member reports it.
+ */
+export const createTanStackAIAnalyticsCallbacks = ({
+  analytics = getServerAnalytics(),
+  ...config
+}: TanStackAIAnalyticsProps): TanStackAIFeatureAnalytics =>
+  createFamilyMember(
+    { analytics, generationFailures: { recorded: false } },
+    config,
+    undefined,
+  );

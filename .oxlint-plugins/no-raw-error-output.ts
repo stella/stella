@@ -1,19 +1,19 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   filenameForContext,
   getPropertyName,
+  type ImportedFromOptions,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isImportedFrom,
   isStringLiteral as isStringValueLiteral,
-  resolveVariable,
   resolveImport,
+  resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type ImportedFromOptions,
-  type AstNode,
 } from "./utils.ts";
 
 const ERRORS_PACKAGE = "@stll/errors";

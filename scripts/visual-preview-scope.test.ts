@@ -1,164 +1,46 @@
-import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+
 import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import * as v from "valibot";
+  previewAffected,
+  previewPaths,
+  VISUAL_PREVIEW_WORKFLOW,
+} from "./visual-preview-scope";
 
-const workflow = v.parse(
-  v.object({
-    on: v.object({ pull_request: v.object({ paths: v.array(v.string()) }) }),
-    jobs: v.object({
-      preview: v.object({
-        steps: v.array(
-          v.object({ id: v.optional(v.string()), run: v.optional(v.string()) }),
-        ),
-      }),
-    }),
-  }),
-  Bun.YAML.parse(
-    readFileSync(
-      new URL("../.github/workflows/visual-preview.yml", import.meta.url),
-      "utf-8",
-    ),
-  ),
-);
-const source = v.parse(
-  v.string(),
-  workflow.jobs.preview.steps.find(({ id }) => id === "scope")?.run,
-);
+const source = readFileSync(VISUAL_PREVIEW_WORKFLOW, "utf-8");
+const paths = previewPaths(source);
 
-type ScopeOptions = {
-  event: string;
-  changedFiles: readonly string[];
-  fetchStatus?: number;
-  diffStatus?: number;
-};
-
-const runScope = ({
-  event,
-  changedFiles,
-  fetchStatus = 0,
-  diffStatus = 0,
-}: ScopeOptions) => {
-  const directory = mkdtempSync(path.join(tmpdir(), "visual-preview-scope-"));
-  const bin = path.join(directory, "bin");
-  const output = path.join(directory, "output");
-  const calls = path.join(directory, "calls");
-  const bash = Bun.which("bash") ?? panic("Scope tests require bash");
-  mkdirSync(bin);
-  symlinkSync(
-    Bun.which("grep") ?? panic("Scope tests require grep"),
-    path.join(bin, "grep"),
+test("every repository script and action the preview runs is in its path filter", () => {
+  // Local paths only: `owner/.github/actions/…@sha` is another repository.
+  const referenced = new Set(
+    [
+      ...source.matchAll(
+        /(?:^|[\s"'])(?:\.\/)?((?:scripts|\.github\/actions)\/[\w.-]+(?:\/[\w.-]+)*)/gmu,
+      ),
+    ].map(([, file]) => file ?? ""),
   );
-  writeFileSync(output, "");
-  writeFileSync(calls, "");
-  writeFileSync(
-    path.join(bin, "git"),
-    `#!/bin/sh
-printf '%s\\n' "$*" >> "$CALL_LOG"
-case "$1" in
-  fetch) exit "$FETCH_STATUS" ;;
-  diff) printf '%s\\n' "$CHANGED_FILES"; exit "$DIFF_STATUS" ;;
-  *) exit 91 ;;
-esac
-`,
-    { mode: 0o755 },
-  );
-  try {
-    expect(Bun.which("rg", { PATH: bin })).toBeNull();
-    const result = Bun.spawnSync([bash, "-e", "-c", source], {
-      env: {
-        PATH: bin,
-        EVENT_NAME: event,
-        BASE_SHA: "a".repeat(40),
-        GITHUB_OUTPUT: output,
-        CALL_LOG: calls,
-        CHANGED_FILES: changedFiles.join("\n"),
-        FETCH_STATUS: String(fetchStatus),
-        DIFF_STATUS: String(diffStatus),
-      },
-    });
-    return {
-      exitCode: result.exitCode,
-      output: readFileSync(output, "utf-8"),
-      calls: readFileSync(calls, "utf-8"),
-      stderr: result.stderr.toString(),
-    };
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-};
-
-test("preview scope runs without ripgrep across events and every declared input", () => {
-  const relevant = workflow.on.pull_request.paths.map((input) =>
-    input.endsWith("/**") ? input.replace(/\/\*\*$/u, "/fixture.ts") : input,
-  );
-  const cases = [
-    ...relevant.map((input) => ({ changedFiles: [input], required: true })),
-    { changedFiles: [], required: false },
-    {
-      changedFiles: ["docs/readme.md", "apps/web/src/main.tsx"],
-      required: false,
-    },
-    {
-      changedFiles: ["apps/visual-preview-other/file.ts", "bun.lock.backup"],
-      required: false,
-    },
-    {
-      changedFiles: [
-        "docs/readme.md",
-        "apps/visual-preview/file with spaces.ts",
-      ],
-      required: true,
-    },
-  ];
-  for (const event of ["merge_group", "pull_request", "workflow_dispatch"]) {
-    for (const { changedFiles, required } of cases) {
-      const result = runScope({ event, changedFiles });
-      expect(result.exitCode, result.stderr).toBe(0);
-      expect(result.output, `${event}: ${changedFiles.join(", ")}`).toBe(
-        `required=${event !== "merge_group" || required}\n`,
-      );
-      if (event !== "merge_group") {
-        expect(result.calls).toBe("");
-      }
-    }
-  }
+  expect(referenced.size).toBeGreaterThan(3);
+  // A directory (an action, a script folder) is covered when its files are.
+  const uncovered = [...referenced].filter((file) => {
+    const probe = /\.[a-z]+$/u.test(file) ? file : `${file}/action.yml`;
+    return !previewAffected({ changed: [probe], paths });
+  });
+  expect(uncovered).toEqual([]);
 });
 
-test("merge-group Git failures cannot publish a successful preview skip", () => {
-  for (const changedFiles of [
-    [],
-    ["apps/visual-preview/fixture.ts"],
-    ["docs/readme.md"],
-  ]) {
-    for (const failure of [{ fetchStatus: 17 }, { diffStatus: 19 }]) {
-      const result = runScope({
-        event: "merge_group",
-        changedFiles,
-        ...failure,
-      });
-      expect(result.exitCode).toBe(failure.fetchStatus ?? failure.diffStatus);
-      expect(result.output).toBe("");
-    }
-  }
-  for (const event of ["pull_request", "workflow_dispatch"]) {
-    const result = runScope({
-      event,
-      changedFiles: [],
-      fetchStatus: 17,
-      diffStatus: 19,
-    });
-    expect(result.exitCode).toBe(0);
-    expect(result.output).toBe("required=true\n");
-    expect(result.calls).toBe("");
-  }
+test("a merge group runs the preview only for a path of the filter", () => {
+  expect(
+    previewAffected({
+      changed: [".github/actions/setup-playwright/run-in-image.sh"],
+      paths,
+    }),
+  ).toBe(true);
+  expect(previewAffected({ changed: ["apps/web/src/main.tsx"], paths })).toBe(
+    false,
+  );
+});
+
+test("the merge-group selection reads the filter instead of a copy", () => {
+  expect(source).toContain('bun scripts/visual-preview-scope.ts "$BASE_SHA"');
+  expect(source).not.toMatch(/grep -E '\^\(apps\/visual-preview/u);
 });

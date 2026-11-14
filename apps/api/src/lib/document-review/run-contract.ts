@@ -12,12 +12,16 @@ import {
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
+import type { ReadsExactly } from "@stll/api-contract/review-decision";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/lib/workflow/playbook-positions";
 import { VERDICT_TIERS } from "@/api/lib/workflow/verdict-tiers";
 
 /** Lifecycle of one review execution. `queued` on insert, `running` once the
@@ -71,6 +75,8 @@ export const DOCUMENT_REVIEW_RUN_ERROR_CODES = [
   "unsupported_format",
   /** No model is configured or usage is unavailable for this organization. */
   "ai_unavailable",
+  /** The documents cannot fit the model's request, even trimmed. */
+  "document_too_large",
   /** The extraction or grading pass failed. */
   "playbook_check_failed",
   /** The reference comparison pass failed. */
@@ -114,6 +120,23 @@ export const DOCUMENT_REVIEW_DECISION = {
   ACCEPTED: "accepted",
   DISMISSED: "dismissed",
 } as const satisfies ConstantMap<DocumentReviewDecision>;
+
+/** What each decision means in the shared vocabulary is the owner's
+ *  (`REVIEW_STATUS_DECISION.finding`). */
+true satisfies ReadsExactly<"finding", DocumentReviewDecision>;
+
+/** The longest reason a reviewer may give for a finding decision: the
+ *  history table's own length check. */
+export const DOCUMENT_REVIEW_DECISION_REASON_MAX = 2000;
+
+/**
+ * The transaction-local setting the decide handler puts its reviewer's
+ * reason in for the one change it makes; the history trigger
+ * (`stella_document_review_finding_decision_history`) writes it onto that
+ * change's event. No other writer sets it, so their events carry none.
+ */
+export const DOCUMENT_REVIEW_DECISION_REASON_SETTING =
+  "app.review_decision_reason";
 
 /**
  * Reviewer flags a finding carries, alongside its decision.
@@ -169,13 +192,33 @@ export const PLAYBOOK_PIN_PROVENANCE = {
  * carried even when `versionId` is set so a run stays intelligible after the
  * definition (and its versions) are deleted; there is deliberately no foreign
  * key from a run to a playbook. `definitionId` is null exactly when the
- * provenance is `ephemeral`: there is no definition to point at yet.
+ * provenance is `ephemeral`: there is no definition to point at yet. The
+ * scope is part of the snapshot, not just the positions: a run grades the
+ * approved positions against the documents the approved scope picks, so a
+ * scope edited after approval must not redirect a run still pinned to that
+ * approval.
  */
 export type PinnedPlaybook = {
   definitionId: SafeId<"playbookDefinition"> | null;
   versionId: SafeId<"playbookDefinitionVersion"> | null;
   provenance: PlaybookPinProvenance;
-  definitionSnapshot: { name: string; positions: PlaybookPositions };
+  definitionSnapshot: {
+    name: string;
+    positions: PlaybookPositions;
+    scope: PlaybookScope | null;
+  };
+};
+
+/** A pin as a stored run carries it. Runs stored before the snapshot carried
+ *  the scope have no `scope` key, so a reader treats a missing scope as
+ *  `null`; every pin written since sets it. */
+export type StoredPinnedPlaybook = Omit<
+  PinnedPlaybook,
+  "definitionSnapshot"
+> & {
+  definitionSnapshot: Omit<PinnedPlaybook["definitionSnapshot"], "scope"> & {
+    scope?: PlaybookScope | null;
+  };
 };
 
 /** One reference document pinned to the exact version it was read from. */
@@ -203,7 +246,7 @@ export type PinnedReference = {
  * two places and force every reader to branch on it.
  */
 export type DocumentReviewRunBasis = {
-  playbook: PinnedPlaybook;
+  playbook: StoredPinnedPlaybook;
   references: PinnedReference[];
   perspective: ReviewPerspective;
 };

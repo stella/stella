@@ -1,11 +1,9 @@
-import Elysia from "elysia";
-
 import presignUpload from "@/api/handlers/uploads/create";
 import abortUpload from "@/api/handlers/uploads/delete";
 import entityCreateTree from "@/api/handlers/uploads/entity-create-tree";
 import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-create";
 import finalizeUpload from "@/api/handlers/uploads/update";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
@@ -36,42 +34,26 @@ import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
  * Semantic resource updates run after entity tree creation and finalize so
  * entity and file projections refresh after durable writes.
  */
-export const uploadsRoute = new Elysia({
-  prefix: "/uploads/:workspaceId",
-})
-  .use(workspaceAccessMacro)
-  .use(permissionMacro)
-  .use(
-    rateLimit({
-      duration: API_RATE_LIMITS.upload.duration,
-      max: API_RATE_LIMITS.upload.max,
-      budget: { name: "api.upload.address", keyKind: "address" },
-      ...createRedisRateLimit({
-        failurePolicy: "fail_open_local",
-        scope: "upload-presigned",
+export const uploadsRoute = routes(
+  {
+    "/presign": { POST: presignUpload },
+    "/entity-create/preflight": { POST: preflightEntityCreate },
+    "/entity-create/tree": { POST: entityCreateTree },
+    "/:uploadId/finalize": { POST: finalizeUpload },
+    "/:uploadId/abort": { POST: abortUpload },
+  },
+  {
+    prefix: "/uploads/:workspaceId",
+    middleware: [
+      rateLimit({
+        duration: API_RATE_LIMITS.upload.duration,
+        max: API_RATE_LIMITS.upload.max,
+        budget: { name: "api.upload.address", keyKind: "address" },
+        ...createRedisRateLimit({
+          failurePolicy: "fail_open_local",
+          scope: "upload-presigned",
+        }),
       }),
-    }),
-  )
-  .guard({
-    validateWorkspaceAccess: true,
-  })
-  .post("/presign", presignUpload.handler, {
-    body: presignUpload.config.body,
-    permissions: presignUpload.config.permissions,
-  })
-  .post("/entity-create/preflight", preflightEntityCreate.handler, {
-    body: preflightEntityCreate.config.body,
-    permissions: preflightEntityCreate.config.permissions,
-  })
-  .post("/entity-create/tree", entityCreateTree.handler, {
-    body: entityCreateTree.config.body,
-    permissions: entityCreateTree.config.permissions,
-  })
-  .post("/:uploadId/finalize", finalizeUpload.handler, {
-    params: finalizeUpload.config.params,
-    permissions: finalizeUpload.config.permissions,
-  })
-  .post("/:uploadId/abort", abortUpload.handler, {
-    params: abortUpload.config.params,
-    permissions: abortUpload.config.permissions,
-  });
+    ],
+  },
+);

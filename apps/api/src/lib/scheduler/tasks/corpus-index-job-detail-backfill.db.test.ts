@@ -5,10 +5,10 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   caseLawDecisions,
   caseLawIndexJobs,
   caseLawSources,
+  CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   legislationDocuments,
   legislationIndexJobs,
   legislationSources,

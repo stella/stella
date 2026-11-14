@@ -4,18 +4,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  runFixResolutionRanges,
   type RefreshLockfile,
+  runFixResolutionRanges,
 } from "./fix-resolution-ranges";
 import {
   analyzeResolutionRanges,
   applyOverridePins,
   collectDeclaredRanges,
+  type DeclaredRanges,
   inspectManifestChange,
   lockRangeSources,
   planResolutionRepairs,
   rangeFloor,
-  type DeclaredRanges,
   type ResolutionViolation,
 } from "./resolution-ranges";
 
@@ -34,7 +34,6 @@ const analyze = (
   entries: Readonly<Record<string, Readonly<Record<string, string>>>>,
 ): readonly ResolutionViolation[] =>
   analyzeResolutionRanges({
-    allowedBelowFloor: new Map(),
     declared: declaredRanges(entries),
     rootManifest: { resolutions },
   });
@@ -153,19 +152,8 @@ describe("resolution range analysis", () => {
     ).toEqual([]);
   });
 
-  it("skips an allowlisted below-floor override", () => {
-    expect(
-      analyzeResolutionRanges({
-        allowedBelowFloor: new Map([["alpha", "held at 3.0.0 on purpose"]]),
-        declared: declaredRanges({ "workspace apps/web": { alpha: "^3.1.0" } }),
-        rootManifest: { resolutions: { alpha: "3.0.0" } },
-      }),
-    ).toEqual([]);
-  });
-
   it("checks overrides alongside resolutions", () => {
     const violations = analyzeResolutionRanges({
-      allowedBelowFloor: new Map(),
       declared: declaredRanges({ "workspace apps/web": { alpha: "^3.1.0" } }),
       rootManifest: { overrides: { alpha: "3.0.0" } },
     });
@@ -208,7 +196,6 @@ describe("resolution repair planning", () => {
     return planResolutionRepairs({
       declared,
       violations: analyzeResolutionRanges({
-        allowedBelowFloor: new Map(),
         declared,
         rootManifest: { resolutions },
       }),

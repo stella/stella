@@ -28,6 +28,8 @@ concurrency:
 jobs:
   drift:
     name: Check template-source runtime credentials
+    # A manual run uses main's script, like the scheduled one.
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 

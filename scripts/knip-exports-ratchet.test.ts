@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   checkRegressions,
   collectIssueSymbols,
@@ -77,7 +79,7 @@ test("refuses to run when a generated knip entry is missing", () => {
 
 test("generated knip entry census matches the generator-owned list", () => {
   expect(generatedKnipConfigPaths(readFileSync("knip.json", "utf-8"))).toEqual(
-    KNIP_GENERATED_ENTRY_FILES,
+    KNIP_GENERATED_ENTRY_FILES.toSorted(compareCodeUnit),
   );
 });
 

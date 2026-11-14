@@ -19,10 +19,13 @@ export const MCP_STATIC_TOOL_NAMES = [
   "open_case_law_decision",
   "read_case_law_decision_blocks",
   "preview_cited_provision",
+  "list_case_law_courts",
   "search_legislation",
   "read_statute",
   "read_statute_provisions",
   "read_provision_history",
+  "search_guidance",
+  "read_guidance",
   "resolve_case_law_decision",
   "resolve_law_citation",
   "list_templates",
@@ -75,12 +78,14 @@ export const MCP_STATIC_TOOL_NAMES = [
   "add_matter_member",
   "remove_matter_member",
   "update_organization_settings",
+  "create_organization",
   "prepare_feedback",
   "submit_feedback",
   "list_capabilities",
   "describe_capability",
   "read_capability",
   "write_capability",
+  "mint_web_handoff",
 ] as const;
 
 export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];

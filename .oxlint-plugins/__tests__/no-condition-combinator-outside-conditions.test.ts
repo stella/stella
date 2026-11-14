@@ -45,19 +45,28 @@ test("accepts node construction and documented computed-access boundary", async 
 });
 
 test("exempts condition owners and test sources", async () => {
-  for (const sourcePath of [
-    "packages/conditions/src/read.ts",
-    "packages/workspace-ui/src/read.ts",
-    "apps/web/src/condition.test.ts",
-  ]) {
-    expect(
-      await lintSingleRule(
-        "no-condition-combinator-outside-conditions",
-        "const a = node.combinator;",
-        { sourcePath },
-      ),
-    ).toEqual([]);
-  }
+  const results = await Promise.all(
+    [
+      "packages/conditions/src/read.ts",
+      "packages/workspace-ui/src/read.ts",
+      "apps/web/src/condition.test.ts",
+    ].map(async (lintCase, index) => {
+      const sourcePath = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "no-condition-combinator-outside-conditions",
+          "const a = node.combinator;",
+          { sourcePath },
+        ),
+        expected: [],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("does not trust same-named folds from another module", async () => {

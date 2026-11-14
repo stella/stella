@@ -15,12 +15,14 @@ import { TooltipProvider } from "@stll/ui/tooltip";
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
+import { WebHangRecoveryNotice } from "@/components/web-hang-recovery-notice";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
+  buildMessageLocale,
   bundledEnglishMessages,
   synchronizeFormatterTimeZone,
   useI18nStore,
@@ -39,6 +41,7 @@ const DialogTranslations = ({ children }: PropsWithChildren) => {
       labels={{
         close: t("common.close"),
         unsavedChanges: t("common.unsavedChangesEscape"),
+        unsavedChangesClose: t("common.unsavedChangesClose"),
       }}
     >
       {children}
@@ -115,7 +118,16 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
         weekStart,
       });
 
-  const messageLocale = preHydrationEnglish ? "en" : locale;
+  // Messages render in the UI language with the reader's digits, so a
+  // plural's `#` matches every number formatted with format.number.
+  const messageLocale = preHydrationEnglish
+    ? "en"
+    : buildMessageLocale({
+        lang: locale,
+        region,
+        regionalFormat,
+        numberingSystem,
+      });
   // The provider can finish hydrating while a nested Suspense boundary still
   // holds server markup. Remount the context subtree when browser formatting
   // becomes active so that deferred descendants mount from one coherent
@@ -184,6 +196,7 @@ export const AppProviders = ({
           <ThemeProvider>
             <TooltipProvider>
               <ToastProvider>
+                <WebHangRecoveryNotice />
                 <WebReaderPresentationProvider>
                   {children}
                 </WebReaderPresentationProvider>

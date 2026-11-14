@@ -1,9 +1,10 @@
 /**
  * The judges a decision names, against the real schema.
  *
- * Three things only the database decides are exercised here: which name finds
- * a roster row, that a replacement leaves nothing of the previous write
- * behind, and that a roster import links the names that were waiting for it.
+ * Four things only the database decides are exercised here: which name finds
+ * a roster row, which roster row a declined name is, that a replacement leaves
+ * nothing of the previous write behind, and that a roster import links the
+ * names that were waiting for it.
  */
 
 import type { PGlite } from "@electric-sql/pglite";
@@ -20,9 +21,10 @@ import {
 } from "@/api/db/schema";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
-  relinkUnmatchedDecisionJudges,
+  relinkUnmatchedDecisionJudgesPage,
   replaceDecisionJudges,
 } from "@/api/handlers/case-law/judges/decision-judges";
+import type { RelinkUnmatchedDecisionJudgesPage } from "@/api/handlers/case-law/judges/decision-judges";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -39,6 +41,7 @@ const OTHER_COURT = "Nejvyšší soud";
 const sourceId = createSafeId<"caseLawSource">();
 const decisionId = createSafeId<"caseLawDecision">();
 const otherCourtDecisionId = createSafeId<"caseLawDecision">();
+const benchDecisionId = createSafeId<"caseLawDecision">();
 
 const RAPPORTEUR = "JUDr. Vojtěch Šimáček";
 const DISSENTING = "Mgr. Ludmila Nováková";
@@ -97,6 +100,15 @@ beforeAll(async () => {
       country: COUNTRY,
       language: "cs",
       languageGroupKey: "judges-decision",
+    },
+    {
+      id: benchDecisionId,
+      sourceId,
+      caseNumber: "III. ÚS 290/26",
+      court: COURT,
+      country: COUNTRY,
+      language: "cs",
+      languageGroupKey: "judges-bench",
     },
     {
       id: otherCourtDecisionId,
@@ -203,24 +215,169 @@ test(
     await insertJudge(LATE_ARRIVAL, OTHER_COURT);
 
     expect(
-      await relinkUnmatchedDecisionJudges(asTx(), {
+      await relinkUnmatchedDecisionJudgesPage(asTx(), {
         country: COUNTRY,
         court: COURT,
+        after: null,
+        size: 10,
       }),
-    ).toEqual({ linked: 1 });
+    ).toEqual({ linked: 1, cursor: decisionId, done: true });
 
     expect((await storedJudges(decisionId)).at(0)?.judgeId).toBe(lateId);
     expect(
       (await storedJudges(otherCourtDecisionId)).at(0)?.judgeId,
     ).toBeNull();
 
-    // Nothing is left to link, so a second run links nothing.
+    // Nothing is left to link, so a second walk covers nothing and keeps the
+    // cursor it was given.
     expect(
-      await relinkUnmatchedDecisionJudges(asTx(), {
+      await relinkUnmatchedDecisionJudgesPage(asTx(), {
         country: COUNTRY,
         court: COURT,
+        after: null,
+        size: 10,
       }),
-    ).toEqual({ linked: 0 });
+    ).toEqual({ linked: 0, cursor: null, done: true });
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test(
+  "the relink walks a court's decisions page by page and links each one once",
+  async () => {
+    const PAGED = "Kateřina Ronovská";
+    const pagedIds = [
+      createSafeId<"caseLawDecision">(),
+      createSafeId<"caseLawDecision">(),
+      createSafeId<"caseLawDecision">(),
+    ].toSorted();
+    await db.insert(caseLawDecisions).values(
+      pagedIds.map((id, index) => ({
+        id,
+        sourceId,
+        caseNumber: `IV. ÚS ${index + 10}/2026`,
+        court: COURT,
+        country: COUNTRY,
+        language: "cs",
+        languageGroupKey: `judges-paged-${index}`,
+      })),
+    );
+    for (const id of pagedIds) {
+      await replaceDecisionJudges(asTx(), {
+        decisionId: id,
+        judges: [
+          { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: PAGED },
+          { role: DECISION_JUDGE_ROLE.DISSENTING, nameAsPrinted: PAGED },
+        ],
+      });
+    }
+    const pagedJudgeId = await insertJudge(PAGED);
+
+    // A page of one decision still settles both of that decision's rows, so
+    // the cursor never leaves half a decision behind it.
+    const pages: RelinkUnmatchedDecisionJudgesPage[] = [];
+    let after: SafeId<"caseLawDecision"> | null = null;
+    while (true) {
+      const page = await relinkUnmatchedDecisionJudgesPage(asTx(), {
+        country: COUNTRY,
+        court: COURT,
+        after,
+        size: 1,
+      });
+      pages.push(page);
+      if (page.done) {
+        break;
+      }
+      after = page.cursor;
+    }
+
+    expect(pages).toEqual([
+      ...pagedIds.map((id) => ({ linked: 2, cursor: id, done: false })),
+      { linked: 0, cursor: pagedIds.at(-1) ?? null, done: true },
+    ]);
+    for (const id of pagedIds) {
+      expect((await storedJudges(id)).map(({ judgeId }) => judgeId)).toEqual([
+        pagedJudgeId,
+        pagedJudgeId,
+      ]);
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test("a declined bench is stored under the roster's names, and a name it cannot place is left out", async () => {
+  const svatonId = await insertJudge("Jan Svatoň");
+  const hulmakId = await insertJudge("Milan Hulmák");
+  const zemanovaId = await insertJudge("Daniela Zemanová");
+  // Two rows a declined "Jana Zemana" could be: neither is chosen.
+  await insertJudge("Jan Zeman");
+  await insertJudge("Jana Zemanová");
+
+  await replaceDecisionJudges(asTx(), {
+    decisionId: benchDecisionId,
+    judges: [
+      // The opening sentence: "z předsedy Jana Svatoně (soudce
+      // zpravodaje), soudce Milana Hulmáka a soudkyně Daniely Zemanové".
+      {
+        role: DECISION_JUDGE_ROLE.PRESIDING,
+        czechDeclinedName: "Jana Svatoně",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+        czechDeclinedName: "Jana Svatoně",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Milana Hulmáka",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Daniely Zemanové",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Petra Nováka",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Jana Zemana",
+      },
+      // The record card, surname first, after the sentence as the adapter
+      // orders them.
+      { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Svatoň Jan" },
+    ],
+  });
+
+  expect(await storedJudges(benchDecisionId)).toEqual([
+    {
+      role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+      name: "Milan Hulmák",
+      nameKey: judgeNameKey("Milan Hulmák"),
+      judgeId: hulmakId,
+      position: 0,
+    },
+    {
+      role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+      name: "Daniela Zemanová",
+      nameKey: judgeNameKey("Daniela Zemanová"),
+      judgeId: zemanovaId,
+      position: 1,
+    },
+    {
+      role: DECISION_JUDGE_ROLE.PRESIDING,
+      name: "Jan Svatoň",
+      nameKey: judgeNameKey("Jan Svatoň"),
+      judgeId: svatonId,
+      position: 0,
+    },
+    // The card and the sentence name one rapporteur, so one row, under
+    // the name the sentence resolved to.
+    {
+      role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+      name: "Jan Svatoň",
+      nameKey: judgeNameKey("Jan Svatoň"),
+      judgeId: svatonId,
+      position: 0,
+    },
+  ]);
+});

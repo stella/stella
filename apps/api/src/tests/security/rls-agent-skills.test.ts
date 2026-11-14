@@ -17,8 +17,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
   createScopedQuery,
+  TestDatabase,
 } from "@/api/tests/security/test-utils";
 
 const testId = <T extends SafeIdType>() => toSafeId<T>(Bun.randomUUIDv7());
@@ -167,7 +167,7 @@ const readPolicies = async (policyNames: readonly string[]) =>
   `);
 
 describe("agent skill policy migrations", () => {
-  test("the write policy migration leaves the policies as the schema declares them", async () => {
+  test("the write policy migrations leave the policies as the schema declares them", async () => {
     const policyNames = [
       "agent_skill_insert",
       "agent_skill_update",
@@ -178,6 +178,7 @@ describe("agent skill policy migrations", () => {
     ];
     const fromSchema = await readPolicies(policyNames);
     await applyMigration("20260925230000_agent_skill_write_policies");
+    await applyMigration("20261016100500_agent_skill_binding");
     const migrated = await readPolicies(policyNames);
 
     expect(fromSchema.rows).toHaveLength(policyNames.length);

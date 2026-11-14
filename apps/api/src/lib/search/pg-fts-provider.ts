@@ -12,8 +12,8 @@ import { escapeAndHighlight } from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
-  buildDocumentSearchQueries,
   buildContentSearchQueries,
+  buildDocumentSearchQueries,
 } from "@/api/lib/search/pg-fts-search-query";
 import { parseEntityKind } from "@/api/lib/search/types";
 import type {

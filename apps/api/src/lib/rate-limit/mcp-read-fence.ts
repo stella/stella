@@ -4,10 +4,10 @@ import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
 import {
+  type AdmissionRedisClient,
   createAdmissionRedis,
   resolveAdmissionRedisClient,
   sendAdmissionRedisCommand,
-  type AdmissionRedisClient,
 } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -44,7 +44,7 @@ const unavailable = (cause?: unknown) =>
     ? cause
     : new ActionAdmissionError({
         message: "Read coordination is unavailable",
-        reason: "unavailable",
+        reason: "store_unavailable",
         cause,
       });
 
@@ -72,7 +72,12 @@ export const resolveMcpReadFencePolicy = (): Result<
     policy.public.organizationBytes === undefined ||
     policy.public.userBytes === undefined
   ) {
-    return Result.err(unavailable());
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Read coordination configuration is incomplete",
+        reason: "configuration_incomplete",
+      }),
+    );
   }
   return Result.ok({
     windowMs: policy.windowMs,
@@ -174,7 +179,12 @@ export const chargeMcpReadBytes = async ({
       limits.public.userBytes,
     ].every((value) => Number.isSafeInteger(value) && value > 0)
   ) {
-    return Result.err(unavailable());
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Read coordination configuration is incomplete",
+        reason: "configuration_incomplete",
+      }),
+    );
   }
   const classes =
     readClass === "both" ? (["tenant", "public"] as const) : [readClass];

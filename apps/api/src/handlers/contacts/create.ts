@@ -1,79 +1,55 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { count, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { contactCreateFieldsSchema } from "@stll/api-contract/contact-write";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
-import {
-  bankAccountSchema,
-  billingAddressSchema,
-  contactAddressSchema,
-  contactEmailSchema,
-  contactMetadataSchema,
-  contactPhoneSchema,
-} from "@/api/db/schema-validators";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
+import { mintContactId } from "@/api/handlers/contacts/contact-id";
+import { fingerprintContactImport } from "@/api/handlers/contacts/contact-import-receipt";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthToColumns,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
-import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
-import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
-import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
+import { externalRefSchema } from "@/api/lib/imports/external-ref";
+import {
+  externalRefValues,
+  readExternalRefIds,
+} from "@/api/lib/imports/upsert-by-external-id";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
-export const createContactBodySchema = t.Object({
-  id: tSafeId("contact"),
-  type: createContactTypeSchema,
-  prefix: t.Optional(t.String({ maxLength: 32 })),
-  firstName: t.Optional(t.String({ maxLength: 256 })),
-  middleName: t.Optional(t.String({ maxLength: 256 })),
-  lastName: t.Optional(t.String({ maxLength: 256 })),
-  suffix: t.Optional(t.String({ maxLength: 32 })),
-  dateOfBirth: t.Optional(dateOfBirthSchema),
-  nationalityCodes: t.Optional(nationalityCodesSchema),
-  organizationName: t.Optional(t.String({ maxLength: 512 })),
-  displayName: t.String({ minLength: 1, maxLength: 512 }),
-  notes: t.Optional(t.String()),
-  emails: t.Optional(t.Array(contactEmailSchema, { maxItems: 20 })),
-  phones: t.Optional(t.Array(contactPhoneSchema, { maxItems: 20 })),
-  addresses: t.Optional(t.Array(contactAddressSchema, { maxItems: 10 })),
-  metadata: t.Optional(contactMetadataSchema),
-  tags: t.Optional(t.Array(t.String(), { maxItems: 50 })),
-  color: t.Optional(t.String({ maxLength: 32 })),
-  registrationNumber: t.Optional(t.String({ maxLength: 64 })),
-  taxId: t.Optional(t.String({ maxLength: 64 })),
-  bankAccounts: t.Optional(t.Array(bankAccountSchema, { maxItems: 10 })),
-  billingAddress: t.Optional(billingAddressSchema),
-  defaultHourlyRate: t.Optional(tMinorUnitAmount(0)),
-  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
-  paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
-  originatingAttorneyId: t.Optional(tUserId),
-  responsibleAttorneyId: t.Optional(tUserId),
+export const createContactBodySchema = v.strictObject({
+  ...contactCreateFieldsSchema.entries,
+  external: v.optional(externalRefSchema),
 });
 
-export type CreateContactBody = Static<typeof createContactBodySchema>;
+export type CreateContactBody = v.InferOutput<typeof createContactBodySchema>;
 
 export type CreateContactHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -103,6 +79,7 @@ export type InsertContactRowProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -116,12 +93,14 @@ export const insertContactRow = async ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: InsertContactRowProps) => {
+  const id = contactId ?? mintContactId();
   const [row] = await tx
     .insert(contacts)
     .values({
-      id: body.id,
+      id,
       organizationId,
       type: body.type,
       prefix: body.prefix,
@@ -143,7 +122,11 @@ export const insertContactRow = async ({
       tags: body.tags,
       color: body.color,
       registrationNumber: body.registrationNumber,
-      taxId: body.taxId,
+      ...contactTaxIdentifiers({
+        taxId: body.taxId ?? null,
+        vatId: body.vatId ?? null,
+      }),
+      vatPayer: body.vatPayer,
       bankAccounts: body.bankAccounts,
       billingAddress: body.billingAddress,
       defaultHourlyRate:
@@ -152,8 +135,14 @@ export const insertContactRow = async ({
           : cents(body.defaultHourlyRate),
       currency: body.currency,
       paymentTermDays: body.paymentTermDays,
+      invoiceLanguage: body.invoiceLanguage,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
+      ...externalRefValues({
+        external: body.external ?? null,
+        externalChangeKey: fingerprintContactImport([body]),
+        importedAt: new Date(),
+      }),
       createdBy: userId,
     })
     .returning();
@@ -183,6 +172,7 @@ export const insertContactRow = async ({
 type CreateContactOutcome =
   | { kind: "limit_reached" }
   | { kind: "invalid_attorney" }
+  | { kind: "external_ref_taken"; contactId: SafeId<"contact"> }
   | { kind: "created"; row: typeof contacts.$inferSelect | undefined };
 
 // Shared contact-creation logic reused by the HTTP handler and the
@@ -193,6 +183,7 @@ export const createContactHandler = async function* ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: CreateContactHandlerProps) {
   const personDetailsError = validatePersonDetails(body);
@@ -210,6 +201,21 @@ export const createContactHandler = async function* ({
       );
       if (wouldExceed) {
         return { kind: "limit_reached" };
+      }
+
+      // The capacity lock serializes contact creation in the organization,
+      // so this read cannot race another create of the same ref.
+      if (body.external !== undefined) {
+        const existing = await readExternalRefIds({
+          tx,
+          table: contacts,
+          organizationId,
+          refs: [body.external],
+        });
+        const [takenContactId] = existing.values();
+        if (takenContactId !== undefined) {
+          return { kind: "external_ref_taken", contactId: takenContactId };
+        }
       }
 
       const attorneyIds: string[] = [];
@@ -234,6 +240,7 @@ export const createContactHandler = async function* ({
         organizationId,
         userId,
         recordAuditEvent,
+        ...(contactId === undefined ? {} : { contactId }),
         body,
       });
 
@@ -244,6 +251,15 @@ export const createContactHandler = async function* ({
   if (outcome.kind === "limit_reached") {
     return Result.err(
       new HandlerError({ status: 400, message: "Contacts limit reached" }),
+    );
+  }
+
+  if (outcome.kind === "external_ref_taken") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: `Contact ${outcome.contactId} already has this external source and id`,
+      }),
     );
   }
 
@@ -258,22 +274,29 @@ export const createContactHandler = async function* ({
 
   const created = outcome.row ?? panic("Contact insert returned no row");
 
-  flushContactSearchRepairs([created.id]).catch(captureError);
+  detached(
+    async () =>
+      flushContactSearchRepairs([created.id]).catch(
+        createErrorCapture(
+          handlerErrorContext("createContactHandler.flushContactSearchRepairs"),
+        ),
+      ),
+    "contacts-create.flush-contact-search-repairs",
+  );
 
+  announceContactSetChanged(organizationId);
   return Result.ok(created);
 };
 
 const createContact = createSafeRootHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
-      "Create a contact in the organization address book. type (person or " +
-      "organization), displayName, and the contact id are supplied in the " +
-      "body; names, emails, phones, addresses, tags, registration and tax " +
-      "numbers, bank and billing details, default hourly rate, payment " +
-      "terms, and originating or responsible attorneys are optional. Refused " +
-      "once the organization holds its maximum number of contacts, or when " +
-      "an attorney id is not a member of the organization.",
+      "Create an organization address-book contact. Supply type " +
+      "(person or organization) and displayName; other fields are optional. " +
+      "Refuses the contact limit, attorney IDs outside this organization, " +
+      "and an external source/id already used by another contact.",
     permissions: { contact: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "save_contact" },
@@ -288,6 +311,7 @@ const createContact = createSafeRootHandler(
       body,
     });
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createContact;

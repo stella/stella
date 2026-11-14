@@ -41,23 +41,23 @@ import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
+  type AbsenceEvidence,
   isReadRefusal,
   readAbsent,
+  type ReadOutcome,
   readOutcomeOfStatus,
   readPresent,
+  type ReadRefusalScope,
   readRefused,
   readUnavailable,
-  type AbsenceEvidence,
-  type ReadOutcome,
-  type ReadRefusalScope,
   type ReadUnavailableCause,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 import {
   fetchPublisher,
-  rethrowCycleStop,
   type PublisherFetchInit,
+  rethrowCycleStop,
 } from "./retry";
 
 /**

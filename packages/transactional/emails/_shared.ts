@@ -3,11 +3,15 @@ import type React from "react";
 export const ICON_URL = "https://assets.stll.app/email/stella-icon.png";
 export const BRAND_FOOTER_TEXT = "stella | open source legal workspace";
 
+// The emails' palette. Mail clients drop CSS custom properties, so the theme
+// tokens cannot reach an email; every email takes its colours from here.
 export const brand = {
   blue: "#205ea6",
   foreground: "#111827",
+  foregroundOnAccent: "#ffffff",
   textPrimary: "#374151",
   textMuted: "#6b7280",
+  textFaint: "#9ca3af",
   border: "#e5e7eb",
   backgroundPage: "#f6f9fc",
   backgroundCard: "#ffffff",
@@ -70,7 +74,7 @@ export const sharedStyles = {
   },
   brandFooter: {
     margin: "0",
-    color: "#9ca3af",
+    color: brand.textFaint,
     fontSize: "12px",
     lineHeight: "18px",
     textAlign: "center",

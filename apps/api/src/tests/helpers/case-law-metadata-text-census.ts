@@ -1,5 +1,6 @@
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { AT_RIS_APPLICATIONS } from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
+import { UK_FCL_SOURCE_FIELDS } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
 /**
  * What the display-text residue census does with every metadata key an
  * enrolled adapter's fixture emits.
@@ -14,10 +15,10 @@ import { AT_RIS_APPLICATIONS } from "@/api/handlers/case-law/ingestion/adapters/
  * publisher identifier stored as the publisher spells it.
  */
 import {
-  metadataUrlKeys,
+  META_URL_DIAGNOSTICS,
   metadataUrlChildSchema,
   metadataUrlItemSchema,
-  META_URL_DIAGNOSTICS,
+  metadataUrlKeys,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -40,6 +41,16 @@ const excluded = (reason: string): MetadataTextDisposition => ({
 });
 
 export const METADATA_TEXT_DISPOSITIONS = {
+  detailFieldEvidence: INSPECTED,
+  identifiers: INSPECTED,
+  xmlFields: INSPECTED,
+  feedFields: INSPECTED,
+  inlineReferences: INSPECTED,
+  contentHash: excluded(PUBLISHER_ID),
+  updated: INSPECTED,
+  courtSlug: excluded(PUBLISHER_ID),
+  header: INSPECTED,
+  images: INSPECTED,
   abstractCelex: excluded(PUBLISHER_ID),
   abstractState: INSPECTED,
   additionalCaseNumbers: INSPECTED,
@@ -102,6 +113,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   chamber: INSPECTED,
   chambers: INSPECTED,
   citation: INSPECTED,
+  citationRestriction: INSPECTED,
   citedDecisions: INSPECTED,
   citedProvisions: INSPECTED,
   clarificationOfLegalRegulation: INSPECTED,
@@ -163,6 +175,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   decisionNumberAsListed: INSPECTED,
   decisionTextDocument: INSPECTED,
   decisionType: INSPECTED,
+  decisionTypeAvailability: INSPECTED,
   decisionTypeKey: INSPECTED,
   decisionTypeRaw: INSPECTED,
   decisionTypes: INSPECTED,
@@ -278,7 +291,9 @@ export const METADATA_TEXT_DISPOSITIONS = {
   linkedRulings: INSPECTED,
   lodgedOn: INSPECTED,
   lowerCourtJudgments: INSPECTED,
+  rejectedLegalReferences: INSPECTED,
   manifestations: INSPECTED,
+  manifestationType: INSPECTED,
   manifestationUri: INSPECTED,
   meansOfAppeal: INSPECTED,
   mentionedStatutes: INSPECTED,
@@ -361,6 +376,16 @@ export const METADATA_TEXT_DISPOSITIONS = {
   publishedDate: INSPECTED,
   publishedInCollection: INSPECTED,
   publishedInReports: INSPECTED,
+  nssReporterNumber: INSPECTED,
+  nssReporterYear: INSPECTED,
+  nssReporterIssue: INSPECTED,
+  nssKeywordSearchCode: INSPECTED,
+  nssRegistryCaseNumber: INSPECTED,
+  nssRegistryReferral: INSPECTED,
+  nssRegistryReferralDate: INSPECTED,
+  nssRegistryAgainstCases: INSPECTED,
+  nssRegistryStatus: INSPECTED,
+  nssRegistryAnnotation: INSPECTED,
   publisher: INSPECTED,
   publisherBlocked: INSPECTED,
   publisherCaseNumber: INSPECTED,
@@ -438,6 +463,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   templateId: excluded(PUBLISHER_ID),
   templateVersionId: excluded(PUBLISHER_ID),
   textComplete: INSPECTED,
+  textFidelity: INSPECTED,
   textNumbers: INSPECTED,
   textSections: INSPECTED,
   textSelection: INSPECTED,
@@ -464,6 +490,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   volumeOfLawReports: INSPECTED,
   webTitle: INSPECTED,
   wordDocumentUrl: INSPECTED,
+  workExpressions: INSPECTED,
   yearOfLawReports: INSPECTED,
   zverejnenoNaWebu: INSPECTED,
 } as const satisfies Record<string, MetadataTextDisposition>;
@@ -471,8 +498,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
 export const isClassifiedMetadataKey = (
   key: string,
 ): key is
-  | keyof typeof METADATA_TEXT_DISPOSITIONS
-  | typeof META_URL_DIAGNOSTICS =>
+  keyof typeof METADATA_TEXT_DISPOSITIONS | typeof META_URL_DIAGNOSTICS =>
   key === META_URL_DIAGNOSTICS ||
   Object.hasOwn(METADATA_TEXT_DISPOSITIONS, key);
 
@@ -539,6 +565,26 @@ type MetadataTextAddressDisposition = { address: string; reason: string };
 export const metadataTextAddressDispositionsForAdapter = (
   adapterKey: string,
 ): readonly MetadataTextAddressDisposition[] => {
+  if (adapterKey === ADAPTER_KEYS.UK_FCL) {
+    const reason =
+      "Source XML retains identifiers and reference attributes as text.";
+    return [
+      ...Object.entries(UK_FCL_SOURCE_FIELDS).flatMap(([label, { target }]) => {
+        const attributes =
+          target.key === "xmlFields" ? ["{}href", "{}value"] : ["href"];
+        return [
+          { address: `metadata.${target.key}.${label}`, reason },
+          { address: `metadata.${target.key}.${label}[*].text`, reason },
+          ...attributes.map((attribute) => ({
+            address: `metadata.${target.key}.${label}[*].attributes.${attribute}`,
+            reason,
+          })),
+        ];
+      }),
+      { address: "metadata.inlineReferences[*].attributes.{}href", reason },
+    ];
+  }
+
   if (Object.hasOwn(AT_RIS_APPLICATIONS, adapterKey)) {
     return [
       {

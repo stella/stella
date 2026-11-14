@@ -1,13 +1,16 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
-import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
+import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -54,38 +57,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  STORED_RAW_REPARSE_REJECTION,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
@@ -104,6 +75,39 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -452,10 +456,7 @@ export type PlUodoSkipReason =
   (typeof PL_UODO_SKIP_REASON)[keyof typeof PL_UODO_SKIP_REASON];
 
 export type PlUodoCourtLevel =
-  | "supreme-administrative"
-  | "regional-administrative"
-  | "supreme"
-  | "common";
+  "supreme-administrative" | "regional-administrative" | "supreme" | "common";
 
 export type PlUodoCourt = {
   /** The court's full official name, which is what the row is filed under. */
@@ -1341,8 +1342,9 @@ const assembleAuthorityDecision = ({
   const decisionDate = dayOf(row.time);
   const sourceUrl = documentPageUrl(urn);
   const resource = body?.resource ?? plUodoBodyResourceOf(row);
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const documentUrl =
-    resource?.ref === undefined ? undefined : bodyPdfUrl(urn, resource.ref);
+    resource?.ref !== undefined ? bodyPdfUrl(urn, resource.ref) : undefined;
 
   // A parse failure is not the decision's failure: the body is stored
   // verbatim below, so its text is recoverable by re-parsing what was kept.
@@ -1863,11 +1865,15 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlUodoPublisherRecord = Readonly<
+  Record<PlUodoSourceField | keyof PlUodoRow, unknown>
+>;
+
 const PL_UODO_SOURCE_FIELDS = {
-  type: excludedSourceField(
+  type: legacyExcludedSourceField(
     "the record format's own name; every record the search returns carries the same value",
   ),
-  version: excludedSourceField(
+  version: legacyExcludedSourceField(
     "the version of the record format, not a fact about the document",
   ),
   id: metadataField("portalEventId"),
@@ -1944,7 +1950,10 @@ const PL_UODO_SOURCE_FIELDS = {
   "resources{}.size": metadataField("resources"),
   "resources{}.checksum": metadataField("resources"),
   body: { disposition: "stored", target: { type: "document" } },
-} as const satisfies Record<PlUodoSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlUodoPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** The structures inside a record whose own keys the inventory names. */
 const NESTED_OBJECTS = ["publication", "publicator"] as const;
@@ -2375,7 +2384,11 @@ const plUodoFetchPage = async (
   const encoded = encodePlUodoCursor(position);
   // Parked on a day that has not closed: this cycle has nothing to ask.
   if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({
+      decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+      nextCursor: encoded,
+    });
   }
   const listing: Record<string, unknown>[] = [];
   let url = "";
@@ -2425,6 +2438,7 @@ const plUodoFetchPage = async (
               },
             }),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: encoded,
       });
     }
@@ -2505,6 +2519,7 @@ const plUodoFetchPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlUodoCursor(
       reachedTip ? { ...next, parkedOn: todayUtc() } : next,
     ),

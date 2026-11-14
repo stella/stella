@@ -1,7 +1,7 @@
 import { LockIcon } from "@stll/ui/icons";
 import {
-  TooltipPopup,
   Tooltip as TooltipRoot,
+  TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";

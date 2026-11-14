@@ -26,7 +26,9 @@ export type AnalyticsValue = {
   client: ReturnType<typeof createPostHogAnalytics>["client"] | null;
 };
 
-export const createAnalyticsValue = (): AnalyticsValue => {
+export const createAnalyticsValue = (
+  routeTemplates: readonly string[],
+): AnalyticsValue => {
   const posthogConfig = {
     host: env.VITE_POSTHOG_HOST,
     key: env.VITE_POSTHOG_KEY,
@@ -38,6 +40,7 @@ export const createAnalyticsValue = (): AnalyticsValue => {
         host: posthogConfig.host,
         key: posthogConfig.key,
         uiHost: env.VITE_POSTHOG_UI_HOST,
+        routeTemplates,
       })
     : { analytics: noopAnalytics, client: null };
 

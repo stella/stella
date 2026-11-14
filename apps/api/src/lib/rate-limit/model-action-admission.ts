@@ -74,7 +74,9 @@ export const createModelActionAdmitter =
           organizationStateDb,
           run: async (admission) => await run({ signal, admission }),
         }),
-    });
+    }).then((outcome) =>
+      Result.isError(outcome) ? Result.err(outcome.error) : outcome.value,
+    );
 
 type DetachedModelActionOptions<TStarted> = {
   /** Runs admitted before the caller resumes; its value answers the caller. */
@@ -141,7 +143,7 @@ export const createDetachedModelActionStarter = (
           panic("Unhandled detached model action phase");
       }
     };
-    detached(run(), "model-action.background");
+    detached(async () => run(), "model-action.background");
     return await answered.promise;
   };
 };

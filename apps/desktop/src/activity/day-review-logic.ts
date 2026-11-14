@@ -3,24 +3,16 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import {
+  type AppTotal,
   appTotals,
   documentName,
   roundedTenthsOfHour,
-  totalDurationMs,
-  type AppTotal,
   type TimedSegment,
+  totalDurationMs,
 } from "./activity-logic";
 import type { ActivityManualAssignment } from "./activity-types";
 
 type ActivityRange = { start: string; end: string };
-type CanAssignOptions = {
-  editable: boolean;
-  timeBillingEnabled: boolean;
-};
-
-export const canAssign = ({ editable, timeBillingEnabled }: CanAssignOptions) =>
-  editable && timeBillingEnabled;
-
 export type MatchConfidence = "strong" | "likely" | "manual" | "unmatched";
 export type MatchedSegment = TimedSegment & {
   matter: DesktopTimeEntryMatterCandidate | null;
@@ -28,11 +20,24 @@ export type MatchedSegment = TimedSegment & {
   evidence: string[];
   drafted: boolean;
 };
+/** What an app's windows showed and for how long, the longest-used title
+ * first. */
+export type AppEvidence = {
+  identifier: string;
+  name: string;
+  details: {
+    title: string;
+    durationMs: number;
+    /** The matter that holds most of the title's time; `null` when time no
+     * matter claimed holds as much or more. */
+    matter: DesktopTimeEntryMatterCandidate | null;
+  }[];
+};
 export type DayReviewGroup = {
   id: string;
   matter: DesktopTimeEntryMatterCandidate | null;
   confidence: MatchConfidence;
-  evidence: string[];
+  evidence: AppEvidence[];
   apps: AppTotal[];
   segments: MatchedSegment[];
   ranges: ActivityRange[];
@@ -223,6 +228,151 @@ const groupConfidence = (
   return "unmatched";
 };
 
+// `host: name` from terminals and remote sessions; `page · site` and
+// `page - site` from web pages.
+const SHARED_CONTEXT = [
+  { pattern: /^([^\s:]+): (.+)$/u, context: 1, own: 2 },
+  // A site may contain hyphens (`my-site.com`); only a spaced hyphen separates.
+  {
+    pattern: /^(.+?) (?:·|\||-|–|—) ((?:(?! - )[^·|–—])+)$/u,
+    context: 2,
+    own: 1,
+  },
+] as const;
+
+/** Context that several titles share says nothing about any of them, so it
+ * is dropped: each title maps to its own part. */
+export const cleanSharedContext = (evidence: readonly string[]) => {
+  const cleaned = new Map(evidence.map((title) => [title, title]));
+  let titles = [...evidence];
+  for (const { pattern, context, own } of SHARED_CONTEXT) {
+    const counts = new Map<string, number>();
+    for (const title of titles) {
+      const key = pattern.exec(title)?.at(context);
+      if (key) {
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    const strip = (title: string) => {
+      const match = pattern.exec(title);
+      const key = match?.at(context);
+      const rest = match?.at(own);
+      return key && rest && (counts.get(key) ?? 0) > 1 ? rest : title;
+    };
+    for (const [original, current] of cleaned) {
+      cleaned.set(original, strip(current));
+    }
+    titles = [...new Set(titles.map(strip))];
+  }
+  return cleaned;
+};
+
+/** Titles a narrative template names per app before it stops. */
+export const EVIDENCE_DETAIL_LIMIT = 3;
+
+const TITLE_SEPARATORS = [" - ", " – ", " \u2014 "] as const;
+
+/** Browsers title a window `page - Browser - Profile`; the app icon already
+ * names the browser, so the title keeps only the page. */
+export const withoutAppSuffix = (title: string, appName: string) => {
+  let cut = title.length;
+  for (const separator of TITLE_SEPARATORS) {
+    const needle = `${separator}${appName}`;
+    for (
+      let index = title.indexOf(needle);
+      index > 0;
+      index = title.indexOf(needle, index + 1)
+    ) {
+      const rest = title.slice(index + needle.length);
+      if (
+        rest === "" ||
+        TITLE_SEPARATORS.some((next) => rest.startsWith(next))
+      ) {
+        cut = Math.min(cut, index);
+        break;
+      }
+    }
+  }
+  return title.slice(0, cut);
+};
+
+export const appEvidence = (
+  segments: readonly MatchedSegment[],
+): AppEvidence[] =>
+  appTotals(segments).flatMap(({ identifier, name }) => {
+    // A segment counts once per title, however many of its details name it.
+    const byTitle = new Map<string, Set<MatchedSegment>>();
+    for (const segment of segments) {
+      if (segment.appIdentifier !== identifier) {
+        continue;
+      }
+      for (const detail of segment.evidence) {
+        const title = withoutAppSuffix(detail, name);
+        const titled = byTitle.get(title) ?? new Set();
+        titled.add(segment);
+        byTitle.set(title, titled);
+      }
+    }
+    const cleaned = cleanSharedContext([...byTitle.keys()]);
+    const merged = new Map<string, Set<MatchedSegment>>();
+    for (const [title, titled] of byTitle) {
+      const own = cleaned.get(title) ?? title;
+      merged.set(own, new Set([...(merged.get(own) ?? []), ...titled]));
+    }
+    const details = [...merged]
+      .filter(([title]) => title.toLowerCase() !== name.toLowerCase())
+      .map(([title, titled]) => ({
+        title,
+        durationMs: totalDurationMs([...titled]),
+        matter: leadingMatter([...titled]),
+      }))
+      .sort(
+        (left, right) =>
+          right.durationMs - left.durationMs ||
+          left.title.localeCompare(right.title),
+      );
+    return details.length > 0 ? [{ identifier, name, details }] : [];
+  });
+
+/** How some segments' time splits: the matter holding the most of it, and
+ * the time no matter claimed. */
+export const matterShare = (segments: readonly MatchedSegment[]) => {
+  const totals = new Map<
+    string,
+    { durationMs: number; matter: DesktopTimeEntryMatterCandidate }
+  >();
+  let unmatchedMs = 0;
+  for (const segment of segments) {
+    const durationMs = segment.endMs - segment.startMs;
+    if (segment.matter === null) {
+      unmatchedMs += durationMs;
+      continue;
+    }
+    const total = totals.get(segment.matter.id);
+    totals.set(segment.matter.id, {
+      durationMs: (total?.durationMs ?? 0) + durationMs,
+      matter: segment.matter,
+    });
+  }
+  const [leading = null] = [...totals.values()].sort(
+    (left, right) =>
+      right.durationMs - left.durationMs ||
+      left.matter.id.localeCompare(right.matter.id),
+  );
+  return { leading, unmatchedMs };
+};
+
+/** The matter holding the most of some segments' time, or `null` when time
+ * no matter claimed holds as much or more. */
+export const leadingMatter = (
+  segments: readonly MatchedSegment[],
+): DesktopTimeEntryMatterCandidate | null => {
+  const { leading, unmatchedMs } = matterShare(segments);
+  return leading !== null && leading.durationMs > unmatchedMs
+    ? leading.matter
+    : null;
+};
+
 /** Splitting at every review boundary prevents assignments or receipts from
  * claiming time beyond the exact range the user selected. */
 export const matchDay = ({
@@ -316,7 +466,7 @@ export const matchDay = ({
       continue;
     }
     const durationMs = totalDurationMs(group);
-    const evidence = [...new Set(group.flatMap((segment) => segment.evidence))];
+    const evidence = appEvidence(group);
     const confidence = groupConfidence(group);
     groups.push({
       id,

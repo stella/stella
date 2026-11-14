@@ -1,40 +1,41 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, withDescription } from "@/api/lib/custom-schema";
+import { resourceIdSchema, withDescription } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { checkEntityCreateCapacityForInsert } from "@/api/lib/uploads/entity-create";
 
-const createEntityBodySchema = t.Object({
-  kind: t.Optional(
+const createEntityBodySchema = v.object({
+  kind: v.optional(
     withDescription(
       entityKindSchema,
       "Entity kind to create; defaults to 'document'. Only valid when creating.",
     ),
   ),
-  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
-  name: t.String({ minLength: 1, maxLength: 255 }),
+  parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
 });
 
-type CreateEntityBodySchema = Static<typeof createEntityBodySchema>;
+type CreateEntityBodySchema = v.InferOutput<typeof createEntityBodySchema>;
 
 export type CreateEntitiesHandlerProps = {
   safeDb: SafeDb;
@@ -53,12 +54,12 @@ export const createEntitiesHandler = async function* ({
 }: CreateEntitiesHandlerProps) {
   const parentId = body.parentId ?? null;
   const kind = body.kind;
-  const name = body.name.trim();
+  const trimmedName = body.name.trim();
 
   // `entities.name` is the canonical display label and is non-null
   // for every kind. Reject empty names here so the row never
   // reaches the DB without one.
-  if (name.length === 0) {
+  if (trimmedName.length === 0) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -66,6 +67,8 @@ export const createEntitiesHandler = async function* ({
       }),
     );
   }
+
+  const name = normalizeEntityName(trimmedName);
 
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
@@ -151,7 +154,15 @@ export const createEntitiesHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+  detached(
+    async () =>
+      flushEntitySearchRepairs([txResult.entityId]).catch(
+        createErrorCapture(
+          handlerErrorContext("createEntitiesHandler.flushEntitySearchRepairs"),
+        ),
+      ),
+    "entities-create.flush-entity-search-repairs",
+  );
 
   return Result.ok({ entityId: txResult.entityId });
 };

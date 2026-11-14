@@ -1,14 +1,14 @@
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
+  isAllowedFirstPartySkillPackageSkip,
+  isSkillResourceFolder,
   SKILL_FILE_NAME,
   SKILL_RESOURCE_EXTENSIONS,
-  isSkillResourceFolder,
-  isAllowedFirstPartySkillPackageSkip,
   validateSkillPackage,
 } from "../src/format";
 import type { SkillPackageFile } from "../src/format";

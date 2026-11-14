@@ -58,6 +58,51 @@ export const resolvePdfSignTarget = ({
   };
 };
 
+type ResolveSavedPdfSignTargetOptions = {
+  /** Fields read from the exact version named by the upload's saved receipt. */
+  fields: readonly {
+    id: string;
+    propertyId: string;
+    content: {
+      type: string;
+      id?: string | undefined;
+      mimeType?: string | null | undefined;
+    };
+  }[];
+  savedFileId: string;
+  /** The document the editor was allowed to sign before it saved. */
+  target: { entityId: string; workspaceId: string };
+};
+
+/**
+ * The uploaded file within the immutable version returned by the save. The
+ * caller already held a sign target, so the permission it implies carries
+ * over; the matched file's own property is checked by {@link resolvePdfSignTarget}.
+ */
+export const resolveSavedPdfSignTarget = ({
+  fields,
+  savedFileId,
+  target,
+}: ResolveSavedPdfSignTargetOptions) => {
+  const field = fields.find(
+    ({ content }) => content.type === "file" && content.id === savedFileId,
+  );
+  return resolvePdfSignTarget({
+    canUpdateEntity: true,
+    entityId: target.entityId,
+    file:
+      field === undefined
+        ? null
+        : {
+            fieldId: field.id,
+            mimeType: field.content.mimeType,
+            propertyId: field.propertyId,
+          },
+    isCurrentVersion: true,
+    workspaceId: target.workspaceId,
+  });
+};
+
 /** Poll cadence while the desktop app holds the signing dialog open. */
 export const PDF_SIGNING_POLL_INTERVAL_MS = 2000;
 

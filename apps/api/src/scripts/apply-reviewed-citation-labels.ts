@@ -47,9 +47,9 @@ import {
 } from "@/api/lib/case-law/maintenance-lane";
 import { DOCTRINE_LABEL_DOMAIN } from "@/api/scripts/apply-reviewed-citation-labels-doctrine";
 import {
-  REVIEWED_LABEL_OUTCOME,
   applyReviewedCitationLabels,
   planReviewedCitationLabels,
+  REVIEWED_LABEL_OUTCOME,
   reviewedCitationLabelsFileSchema,
   reviewedLabelResultLines,
 } from "@/api/scripts/apply-reviewed-citation-labels-plan";

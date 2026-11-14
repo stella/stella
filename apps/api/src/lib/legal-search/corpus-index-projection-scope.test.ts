@@ -1,15 +1,15 @@
-import { expect, test, expectTypeOf } from "bun:test";
+import { expect, expectTypeOf, test } from "bun:test";
 
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   CORPUS_PROJECTION_WORK_SCOPE_MAX_ENTITY_COUNT,
-  entityIdsForCorpusProjectionWorkScope,
-  indexIdForCorpusProjectionWorkScope,
   type CorpusProjectionAppendScopedWorkOptions,
   type CorpusProjectionScopedWorkOptions,
+  entityIdsForCorpusProjectionWorkScope,
+  indexIdForCorpusProjectionWorkScope,
 } from "./corpus-index-projection-scope";
 
 const DECISION_ID = toSafeId<"caseLawDecision">(

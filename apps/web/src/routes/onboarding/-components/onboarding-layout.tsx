@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon } from "@stll/ui/icons";
 
-import Tooltip from "@/components/tooltip";
 import { OnboardingProgress } from "@/routes/onboarding/-components/onboarding-progress";
 
 const ONBOARDING_GRADIENT_DARK_URL = "/branding/onboarding-gradient-dark.svg";
@@ -47,20 +47,16 @@ export const OnboardingLayout = ({
           style={{ maxWidth: contentMaxWidth }}
         >
           {onBack && (
-            <Tooltip
-              content={t("common.goBack")}
-              render={
-                <button
-                  aria-label={t("common.goBack")}
-                  className="text-muted-foreground hover:text-foreground absolute -top-12 flex size-8 items-center justify-center rounded-md"
-                  onClick={onBack}
-                  style={{ insetInlineStart: "-12px" }}
-                  type="button"
-                >
-                  <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-                </button>
-              }
-            />
+            <Button
+              aria-label={t("common.goBack")}
+              className="absolute -top-12"
+              onClick={onBack}
+              size="icon-sm"
+              style={{ insetInlineStart: "-12px" }}
+              variant="muted"
+            >
+              <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
+            </Button>
           )}
           <OnboardingProgress
             currentStep={currentStep}

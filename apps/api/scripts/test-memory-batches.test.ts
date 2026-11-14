@@ -22,8 +22,8 @@ import {
   TEST_BATCH_RSS_HEADROOM_RATIO,
   TEST_RSS_TABLE_MAX_AGE_DAYS,
   testRssArtifact,
-  unmeasuredTestPeakRss,
   type TestRssTable,
+  unmeasuredTestPeakRss,
 } from "./test-batch-plan";
 import { partitionTestFiles } from "./test-file-shards";
 
@@ -381,6 +381,16 @@ test("measurement mode composes fresh children without consulting normal estimat
       ),
   ).toEqual(testPaths.toSorted().map((file) => [file]));
 });
+test("every measured file names a current API test file", () => {
+  // The refresh drops deleted files, but a change that deletes or renames a
+  // test between refreshes must drop its row itself.
+  const current = new Set(API_TEST_PATHS);
+  const stale = Object.keys(measuredTestRssTable().files).filter(
+    (file) => !current.has(file),
+  );
+  expect(stale).toEqual([]);
+});
+
 test("a partial or property-only plan classifies every measured file like a full plan", () => {
   const measured = Object.keys(measuredTestRssTable().files);
   const dbClass = (testPaths: readonly string[], propertyOnly: boolean) => {

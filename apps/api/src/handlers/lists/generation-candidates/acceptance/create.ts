@@ -1,13 +1,15 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
+  legalListFactDetails,
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
@@ -22,25 +24,30 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { writeFactSourceEdges } from "@/api/lib/lists/graph/fact-source-edges";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import type { CreateTaskFactDetails } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  runId: tSafeId("legalListGenerationRun"),
-  candidateId: tSafeId("legalListGenerationCandidate"),
-  sectionId: t.Optional(tSafeId("legalListSection")),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  runId: resourceIdSchema("legalListGenerationRun"),
+  candidateId: resourceIdSchema("legalListGenerationCandidate"),
+  sectionId: v.optional(resourceIdSchema("legalListSection")),
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Accept one candidate from a generation run: create the item it proposes " +
     "as a task in the matter, optionally in a named section, and copy the " +
     "candidate's sources onto the new item with their locators and quotes. " +
+    "An accepted fact also gets the candidate's fact details, scored as " +
+    "included unless the candidate holds it. " +
     "The candidate is claimed before the item is created, so two concurrent " +
     "accepts cannot both produce one, and the run flips to committed once no " +
     "candidate is left pending. A candidate whose sources have disappeared " +
@@ -56,7 +63,7 @@ const config = {
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 
-type AcceptanceBody = Static<typeof bodySchema>;
+type AcceptanceBody = v.InferOutput<typeof bodySchema>;
 
 /** Candidate source ids are unique uuids, so byte order is a total order. */
 const byCandidateSourceId = (
@@ -332,6 +339,29 @@ const releaseLostClaim = async (
   );
 };
 
+/** A fact candidate's proposal as the item's details; unstated scoring is
+ *  included. */
+const acceptedFactDetails = (
+  candidate: Pick<
+    ClaimedCandidate,
+    | "occurredOn"
+    | "occurredOnPrecision"
+    | "evidenceKind"
+    | "medium"
+    | "confidence"
+    | "interpretationNote"
+    | "scoring"
+  >,
+): CreateTaskFactDetails => ({
+  occurredOn: candidate.occurredOn,
+  occurredOnPrecision: candidate.occurredOnPrecision,
+  evidenceKind: candidate.evidenceKind,
+  medium: candidate.medium,
+  confidence: candidate.confidence,
+  interpretationNote: candidate.interpretationNote,
+  scoring: candidate.scoring ?? "included",
+});
+
 type CreateCandidateTaskOptions = {
   body: AcceptanceBody;
   candidate: ClaimedCandidate;
@@ -392,6 +422,11 @@ const createCandidateTask = async ({
         ...(body.sectionId && { listSectionId: body.sectionId }),
       },
       ...(workObligationSource ? { workObligationSource } : {}),
+      // Written with the item, so verification never reads an accepted fact
+      // before its details exist.
+      ...(candidate.itemType === LIST_ITEM_TYPE.FACT
+        ? { factDetails: acceptedFactDetails(candidate) }
+        : {}),
     }),
   );
 };
@@ -483,8 +518,12 @@ const finalizeAcceptance = async ({
         eq(legalListGenerationCandidateSources.listId, body.listId),
         eq(legalListGenerationCandidateSources.workspaceId, workspaceId),
       ),
-    )
-    .for("update");
+    );
+  // No row lock here: the application role holds no UPDATE on candidate
+  // sources, which every row-locking clause needs. None is needed either:
+  // the rows are insert-only, the run and candidate locks above hold off a
+  // cascade from either, and a cited document deleted meanwhile fails the
+  // item-source insert's foreign key check, so no copy outlives it.
   const claimedSourceIds = new Set(claimedSources.map((source) => source.id));
   if (
     liveSources.length === 0 ||
@@ -493,9 +532,13 @@ const finalizeAcceptance = async ({
   ) {
     return { status: "source-missing" as const };
   }
+  const itemSources = liveSources.map((source) => ({
+    id: createSafeId<"legalListItemSource">(),
+    source,
+  }));
   await tx.insert(legalListItemSources).values(
-    liveSources.map((source) => ({
-      id: createSafeId<"legalListItemSource">(),
+    itemSources.map(({ id, source }) => ({
+      id,
       workspaceId,
       listId: body.listId,
       itemEntityId: entityId,
@@ -506,6 +549,57 @@ const finalizeAcceptance = async ({
       createdBy: userId,
     })),
   );
+  // The candidate row is locked above, so its proposal cannot change under
+  // this read; the item's own type is read too, since an item an earlier
+  // attempt committed may have been retyped since.
+  const proposal = (
+    await tx
+      .select({
+        itemType: legalListGenerationCandidates.itemType,
+        liveItemType: entities.listItemType,
+        occurredOn: legalListGenerationCandidates.occurredOn,
+        occurredOnPrecision: legalListGenerationCandidates.occurredOnPrecision,
+        evidenceKind: legalListGenerationCandidates.evidenceKind,
+        medium: legalListGenerationCandidates.medium,
+        confidence: legalListGenerationCandidates.confidence,
+        interpretationNote: legalListGenerationCandidates.interpretationNote,
+        scoring: legalListGenerationCandidates.scoring,
+      })
+      .from(legalListGenerationCandidates)
+      .innerJoin(
+        entities,
+        and(
+          eq(entities.id, entityId),
+          eq(entities.workspaceId, legalListGenerationCandidates.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(legalListGenerationCandidates.id, body.candidateId),
+          eq(legalListGenerationCandidates.runId, body.runId),
+          eq(legalListGenerationCandidates.listId, body.listId),
+          eq(legalListGenerationCandidates.workspaceId, workspaceId),
+        ),
+      )
+  ).at(0);
+  if (
+    proposal?.itemType === LIST_ITEM_TYPE.FACT &&
+    proposal.liveItemType === LIST_ITEM_TYPE.FACT
+  ) {
+    // The item is normally created with its details. This covers an item an
+    // interrupted earlier attempt committed without them, so an accepted fact
+    // never scores by the row's absence; a row already there wins.
+    await tx
+      .insert(legalListFactDetails)
+      .values({
+        ...acceptedFactDetails(proposal),
+        itemEntityId: entityId,
+        workspaceId,
+        listId: body.listId,
+        updatedBy: userId,
+      })
+      .onConflictDoNothing({ target: legalListFactDetails.itemEntityId });
+  }
   const accepted = await tx
     .update(legalListGenerationCandidates)
     .set({
@@ -534,6 +628,13 @@ const finalizeAcceptance = async ({
       message: "Candidate claim was lost",
     });
   }
+  // After the candidate reads as accepted, so each edge names the
+  // extraction run that proposed its passage.
+  await writeFactSourceEdges(tx, workspaceId, {
+    type: "fact-sources",
+    sourceIds: itemSources.map(({ id }) => id),
+    producer: { type: "extraction", runId: body.runId },
+  });
 
   await commitSettledRun(tx, {
     runId: body.runId,

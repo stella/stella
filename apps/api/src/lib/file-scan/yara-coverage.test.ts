@@ -7,10 +7,9 @@
 import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { yaraRuleNames } from "@/api/lib/file-scan/yara";
@@ -39,21 +38,14 @@ const pdf = async (payload = ""): Promise<Fixture> => {
 
 /** DEFLATE-compressed, as a real OOXML writer produces. */
 const docx = async (files: Record<string, string>): Promise<Fixture> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
-    "[Content_Types].xml",
-    '<?xml version="1.0"?><Types></Types>',
-  );
-  writeZipEntry(zip, "word/document.xml", "<document/>");
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", '<?xml version="1.0"?><Types></Types>');
+  zip.set("word/document.xml", "<document/>");
   for (const [name, content] of Object.entries(files)) {
-    writeZipEntry(zip, name, content);
+    zip.set(name, content);
   }
   return {
-    buffer: await zip.generateAsync({
-      type: "uint8array",
-      compression: "DEFLATE",
-    }),
+    buffer: await zip.generate(),
     declaredMimeType: DOCX_MIME,
     fileName: "f.docx",
   };
@@ -141,6 +133,25 @@ const POSITIVE_FIXTURES: Record<string, () => Promise<Fixture> | Fixture> = {
         'relationships/oleObject" Target="https://e.example/p" ' +
         'TargetMode="External"/></Relationships>',
     }),
+  html_external_reference: async () => ({
+    buffer: encoder.encode(
+      '<!doctype html><html><img src="https://example.test/image.png"></html>',
+    ),
+    declaredMimeType: "text/html",
+    fileName: "f.html",
+  }),
+  odf_external_reference: async () =>
+    await docx({
+      "content.xml":
+        '<draw:image xlink:href="https://example.test/image.png"/>',
+    }),
+  rtf_external_reference: async () => ({
+    buffer: encoder.encode(
+      '{\\rtf1{\\field{\\*\\fldinst INCLUDEPICTURE "https://example.test/a.png"}}}',
+    ),
+    declaredMimeType: "application/rtf",
+    fileName: "f.rtf",
+  }),
   ooxml_dde: async () =>
     await docx({
       "word/document.xml":
@@ -156,6 +167,25 @@ const scanFixture = async (fixture: Fixture): Promise<readonly string[]> =>
   Result.unwrap(await scanFile(fixture)).findings.map((f) => f.rule);
 
 describe("yara rule coverage", () => {
+  test.each([
+    ["f.md", "text/markdown", "![image](url(https://example.test/a.png))"],
+    [
+      "f.css",
+      "text/css",
+      "body { background: url(https://example.test/a.png) }",
+    ],
+  ])(
+    "does not classify %s as HTML",
+    async (fileName, declaredMimeType, source) => {
+      expect(
+        await scanFixture({
+          buffer: encoder.encode(source),
+          declaredMimeType,
+          fileName,
+        }),
+      ).not.toContain("html_external_reference");
+    },
+  );
   test("every compiled rule has a positive fixture", () => {
     const uncovered = yaraRuleNames.filter(
       (rule) => !(rule in POSITIVE_FIXTURES),
@@ -218,6 +248,13 @@ describe("benign fixtures match no rule", () => {
       buffer: encoder.encode("Smlouva o dílo\nArticle 1\n"),
       declaredMimeType: "text/plain",
       fileName: "notes.txt",
+    }),
+    "rtf body text and hyperlink field": () => ({
+      buffer: encoder.encode(
+        '{\\rtf1 important link{\\field{\\*\\fldinst HYPERLINK "https://example.test/terms"}}}',
+      ),
+      declaredMimeType: "application/rtf",
+      fileName: "f.rtf",
     }),
   };
 

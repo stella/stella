@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, isNotNull, ne, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
@@ -8,8 +8,8 @@ import {
   contacts,
   organizationSettings,
   sanctionsContactMarks,
-  sanctionsOrganizationMarks,
   sanctionsContactScreenings,
+  sanctionsOrganizationMarks,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

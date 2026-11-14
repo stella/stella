@@ -5,10 +5,10 @@ import * as v from "valibot";
 
 import {
   affectedPackages,
+  type CheckInputs,
   readCheckInputs,
   readSelectionGraph,
   selectChecks,
-  type CheckInputs,
 } from "./ci-affected-selection";
 import { GENERATORS } from "./generated-files";
 import { shardPackages, TEST_JOB_SHARDS } from "./test-shards";
@@ -175,7 +175,7 @@ test("merge batch selection equals the union of each constituent selection", () 
   expect([...batch.selected].toSorted()).toEqual([...union].toSorted());
 });
 
-test("test matrix admission has one graph owner and no independent path filter", () => {
+test("admission to the test matrix has one graph owner and no independent path filter", () => {
   const planner = readFileSync(
     path.join(root, "scripts/ci-api-test-plan.ts"),
     "utf-8",

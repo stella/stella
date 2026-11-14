@@ -10,10 +10,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -37,9 +37,13 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { ContactPicker } from "@/components/contact-picker";
+import {
+  CONTACT_PICKER_SUGGESTIONS,
+  ContactPicker,
+} from "@/components/contact-picker";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -48,16 +52,16 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
-  PARTY_ROLES,
   PARTY_ROLE_LABEL_KEYS,
+  PARTY_ROLES,
   toPartyRole,
 } from "@/lib/workspaces/party-roles";
 import type { PartyRole } from "@/lib/workspaces/party-roles";
@@ -82,19 +86,18 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
     type: ContactType,
     settled: () => void,
   ) => {
-    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
         onSettled: settled,
-        onSuccess: () => {
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          handleSetClient({ id, displayName: name });
+          handleSetClient({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -112,10 +115,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   };
 
   const handleSetClient = (contact: { id: string; displayName: string }) => {
+    if (!workspace) {
+      return;
+    }
     updateWorkspace.mutate(
       {
         workspaceId,
-        update: { type: "clientId", value: contact.id },
+        update: {
+          type: "clientId",
+          value: contact.id,
+          expectedClientId: workspace.client?.id ?? null,
+        },
       },
       {
         onSuccess: () => {
@@ -191,13 +201,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
                 <BuildingIcon className="text-muted-foreground size-4" />
               </span>
             )}
-            <Link
-              className="min-w-0 truncate text-sm font-medium hover:underline"
-              params={{ contactId: client.id }}
-              to="/contacts/$contactId"
+            <TruncatedText
+              className="text-sm font-medium hover:underline"
+              render={
+                <Link
+                  params={{ contactId: client.id }}
+                  to="/contacts/$contactId"
+                />
+              }
             >
               <BidiText>{client.displayName}</BidiText>
-            </Link>
+            </TruncatedText>
           </div>
         </section>
       )}
@@ -223,7 +237,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
 
 const PartiesList = ({ workspaceId }: PartiesSectionProps) => {
   const t = useTranslations();
-  const view = useQueryView(useQuery(workspaceContactsOptions(workspaceId)), {
+  const view = queryView(useQuery(workspaceContactsOptions(workspaceId)), {
     isEmpty: ({ contacts, overflow }) => contacts.length === 0 && !overflow,
   });
   switch (view.type) {
@@ -351,6 +365,7 @@ const ChangeClientDialog = ({
               setIsOpen(false);
             }}
             placeholder={t("workspaces.parties.changeClient")}
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
         </DialogPanel>
       </DialogPopup>
@@ -384,19 +399,18 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
     type: ContactType,
     settled: () => void,
   ) => {
-    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
         onSettled: settled,
-        onSuccess: () => {
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          setSelectedContact({ id, displayName: name });
+          setSelectedContact({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -424,6 +438,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
         update: {
           type: "clientId",
           value: selectedContact.id,
+          expectedClientId: null,
         },
       },
       {
@@ -508,6 +523,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
                     displayName: contact.displayName,
                   })
                 }
+                suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
               />
             )}
           </div>
@@ -565,7 +581,10 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "PartyRow:failure",
+        scope: { type: "handler", handlerId: "PartyRow:failure" },
+      });
     },
   });
 
@@ -650,6 +669,7 @@ const AddPartyDialog = ({
   workspaceId,
   showTriggerLabel = true,
 }: AddPartyDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
@@ -664,17 +684,26 @@ const AddPartyDialog = ({
       isPrimary?: boolean;
       notes?: string | null;
     }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(ws) })
-        .contacts.put({
+      const response = await idempotentSubmit.run({
+        operation: JSON.stringify([
+          'api.workspaces({workspaceId:toSafeId<"workspace">(ws)}).contacts',
+          { workspaceId: toSafeId<"workspace">(ws) },
+        ]),
+        body: {
           ...body,
           contactId: toSafeId<"contact">(body.contactId),
-        });
+        },
+        send: api.workspaces({ workspaceId: toSafeId<"workspace">(ws) })
+          .contacts.put,
+      });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AddPartyDialog:failure",
+        scope: { type: "handler", handlerId: "AddPartyDialog:failure" },
+      });
     },
   });
   const [isOpen, setIsOpen] = useState(false);

@@ -207,3 +207,69 @@ test("an identity column is generated and never null; a computed one may be", ()
     { flags: ["generated", "null"], key: "total" },
   ]);
 });
+
+test("named table constraints retain every local foreign-key column", () => {
+  const indexed = indexSchemaSource({
+    fileName: "links.ts",
+    source: `
+export const links = p.pgTable("links", {
+  sourceId: p.uuid("source_id").notNull(),
+  decisionId: p.uuid("decision_id").notNull(),
+  organizationId: p.uuid("organization_id"),
+  title: p.text(),
+}, (table) => [
+  p.foreignKey({
+    name: "links_source_fk",
+    columns: [table.sourceId],
+    foreignColumns: [sources.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "links_decision_organization_fk",
+    columns: [table.decisionId, table.organizationId],
+    foreignColumns: [decisions.id, decisions.organizationId],
+  }),
+]);`,
+  });
+  expect(
+    indexed.at(0)?.columns.map(({ key, flags }) => ({ key, flags })),
+  ).toEqual([
+    { key: "sourceId", flags: ["fk", "not null"] },
+    { key: "decisionId", flags: ["fk", "not null"] },
+    { key: "organizationId", flags: ["fk", "null"] },
+    { key: "title", flags: ["null"] },
+  ]);
+});
+
+test.each(["pgTable", "pgView"])(
+  "indexes %s columns derived from a private factory",
+  (builder) => {
+    const source = `
+const populationColumns = () => ({
+  /** The source counted by this bucket. */
+  sourceId: safeUuid("source_id").notNull(),
+  total: p.integer().notNull(),
+});
+export const population = p.${builder}("population", populationColumns());
+`;
+    const indexed = indexSchemaSource({ fileName: "population.ts", source });
+    expect(
+      indexed.map(({ exportName, sqlName }) => ({ exportName, sqlName })),
+    ).toEqual([{ exportName: "population", sqlName: "population" }]);
+    expect(
+      indexed.at(0)?.columns.map(({ key, sqlName, line, summary }) => ({
+        key,
+        sqlName,
+        line,
+        summary,
+      })),
+    ).toEqual([
+      {
+        key: "sourceId",
+        sqlName: "source_id",
+        line: 4,
+        summary: "The source counted by this bucket.",
+      },
+      { key: "total", sqlName: "total", line: 5, summary: "" },
+    ]);
+  },
+);

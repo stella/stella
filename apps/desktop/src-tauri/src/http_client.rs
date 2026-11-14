@@ -3,7 +3,6 @@
 
 #![allow(
   clippy::disallowed_types,
-  clippy::disallowed_methods,
   reason = "the desktop HTTP owner constructs identified clients; callers use DesktopHttpClient"
 )]
 
@@ -11,6 +10,23 @@ use std::time::Duration;
 
 const DESKTOP_HTTP_USER_AGENT: &str = "stella-desktop";
 const LOCAL_CLIENT_IDENTITY_HEADER: &str = "x-stella-local-client";
+const LOCAL_CLIENT_IDENTITY: &str = concat!("desktop/", env!("CARGO_PKG_VERSION"));
+
+/// The identity every desktop request carries, for the one connection that
+/// is not made through reqwest: the runner's WebSocket upgrade.
+pub(crate) fn identity_headers()
+-> [(reqwest::header::HeaderName, reqwest::header::HeaderValue); 2] {
+  [
+    (
+      reqwest::header::USER_AGENT,
+      reqwest::header::HeaderValue::from_static(DESKTOP_HTTP_USER_AGENT),
+    ),
+    (
+      reqwest::header::HeaderName::from_static(LOCAL_CLIENT_IDENTITY_HEADER),
+      reqwest::header::HeaderValue::from_static(LOCAL_CLIENT_IDENTITY),
+    ),
+  ]
+}
 
 #[derive(Default)]
 pub struct HttpClientOptions {
@@ -25,14 +41,15 @@ pub struct DesktopHttpClient(reqwest::Client);
 
 impl DesktopHttpClient {
   pub fn new(options: HttpClientOptions) -> reqwest::Result<Self> {
+    #[allow(
+      clippy::disallowed_methods,
+      reason = "construct the identified desktop client"
+    )]
     let mut builder = reqwest::Client::builder()
       .user_agent(DESKTOP_HTTP_USER_AGENT)
       .default_headers(reqwest::header::HeaderMap::from_iter([(
         reqwest::header::HeaderName::from_static(LOCAL_CLIENT_IDENTITY_HEADER),
-        reqwest::header::HeaderValue::from_static(concat!(
-          "desktop/",
-          env!("CARGO_PKG_VERSION")
-        )),
+        reqwest::header::HeaderValue::from_static(LOCAL_CLIENT_IDENTITY),
       )]))
       .redirect(options.redirect)
       // Application retry owners rebuild possession proofs for each attempt.
@@ -92,13 +109,15 @@ pub(crate) fn device_proof_request(
     None => builder,
   };
   let (client, request) = builder.build_split();
-  let mut request = request.map_err(|_| "Could not build desktop account request")?;
+  let mut request = request.map_err(crate::logging::request_cause_logged(
+    "Could not build desktop account request",
+  ))?;
   let proof = key.proof(&request, bearer, nonce)?;
   request.headers_mut().insert(
     "DPoP",
-    proof
-      .parse()
-      .map_err(|_| "Could not encode desktop device proof")?,
+    proof.parse().map_err(crate::logging::with_cause_logged(
+      "Could not encode desktop device proof",
+    ))?,
   );
   Ok(DeviceProofRequest { client, request })
 }
@@ -109,7 +128,9 @@ pub(crate) fn unsigned_request(
   let (client, request) = builder.build_split();
   Ok(DeviceProofRequest {
     client,
-    request: request.map_err(|_| "Could not build desktop request")?,
+    request: request.map_err(crate::logging::request_cause_logged(
+      "Could not build desktop request",
+    ))?,
   })
 }
 

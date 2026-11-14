@@ -1,4 +1,4 @@
-import { App } from "@modelcontextprotocol/ext-apps";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { Result, TaggedError } from "better-result";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
@@ -6,14 +6,20 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
 import { formatAppError, LocalizedAppError } from "../shared/app-error";
-import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
-import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
-  isUploadRecord,
-  createUploadTranslator,
+  applyUploadHostStyles,
+  createViewportApp,
+  parseAppToolPayload,
+} from "../shared/bridge";
+import { appLocale, setAppDocumentLocale } from "../shared/locale";
+import { callAppServerTool } from "../shared/server-tool-call";
+import { mountAppViewport } from "../shared/size";
+import {
+  bindUploadSdkErrors,
   connectUploadApp,
   createUploadSubscriptions,
-  bindUploadSdkErrors,
+  createUploadTranslator,
+  isUploadRecord,
 } from "../shared/upload-bridge";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
@@ -222,7 +228,7 @@ const putFile = async ({
 };
 
 export const createFileComparisonRuntime = (
-  app = new App({ name: "stella file comparison", version: "1.0.0" }),
+  app: App = createViewportApp("stella file comparison"),
 ) => {
   let locale = appLocale(undefined);
   const t = createUploadTranslator(() => locale);
@@ -262,17 +268,14 @@ export const createFileComparisonRuntime = (
     if (Result.isError(targetFile)) {
       return Result.err(targetFile.error);
     }
-    const called = await Result.tryPromise(
-      async () =>
-        await app.callServerTool({
-          name: FILE_COMPARISON_TRANSPORT.prepareToolName,
-          arguments: { base: baseFile.value, target: targetFile.value },
-        }),
-    );
-    if (Result.isError(called)) {
-      return Result.err(wrapped(called.error));
+    const called = await callAppServerTool(app, {
+      name: FILE_COMPARISON_TRANSPORT.prepareToolName,
+      arguments: { base: baseFile.value, target: targetFile.value },
+    });
+    if (called.status === "unreachable") {
+      return Result.err(new LocalizedAppError({ key: "bridgeUnavailable" }));
     }
-    const result = called.value;
+    const result = called.result;
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
       return Result.err(
@@ -403,11 +406,23 @@ export const createFileComparisonRuntime = (
       }
       publish({ uploadPhase: "idle" });
     },
-    connect: async () =>
+    connect: async (onConnected?: () => void) =>
       await connectUploadApp({
         app,
         onContext: applyHostContext,
         onError: (message) => setStatus(() => message, "error"),
+        onConnected,
       }),
+    /** Bounds the inline height and offers fullscreen through the shared viewport. */
+    mountViewport: () => {
+      const stopViewport = mountAppViewport({
+        app,
+        onFailure: () => setStatus(() => t("bridgeUnavailable"), "error"),
+      });
+      app.onteardown = () => {
+        stopViewport();
+        return {};
+      };
+    },
   };
 };

@@ -1,21 +1,24 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
-  publicCaseLawPageCountry,
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  publicCaseLawPageCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { classifyFailure } from "@stll/errors";
 
 import {
-  publishedCaseLawDecisions,
   caseLawSitemapShards,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadUnderSchemaLane } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -24,12 +27,18 @@ import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution"
 import {
   decisionBucketSqlFor,
   SITEMAP_ALL_BUCKET,
+  SITEMAP_MULTILINGUAL_URL_WEIGHT,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
+  sitemapDocumentRepresentativeFor,
+  sitemapHasLanguageAlternatesFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 
 const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$";
 const SITEMAP_YEAR_PATTERN = "^(?:\\d{4}|undated)$";
@@ -48,14 +57,41 @@ const SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT =
   1;
 const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
-export const sitemapShardDecisionsQuerySchema = t.Object({
-  country: t.String({ pattern: SITEMAP_COUNTRY_PATTERN }),
-  year: t.String({ pattern: SITEMAP_YEAR_PATTERN }),
-  month: t.String({ pattern: SITEMAP_MONTH_PATTERN }),
-  bucket: t.Optional(t.String({ pattern: SITEMAP_BUCKET_PATTERN })),
+const SITEMAP_CAPACITY_EXCEEDED = failureSink({
+  event: "case_law.sitemap_capacity_exceeded",
+  expected: [],
 });
 
-type SitemapShardDecisionsQuery = Static<
+/**
+ * A sitemap that would outgrow the protocol's bounds is refused rather than
+ * served truncated: the answer could not be built within its own contract.
+ */
+const capacityExceeded = (message: string) =>
+  observedStatus(
+    {
+      sink: SITEMAP_CAPACITY_EXCEEDED,
+      cause: classifyFailure(
+        new HandlerError({ status: 500, message }),
+        "response_invalid",
+      ),
+    },
+    500,
+    { message },
+  );
+
+export const sitemapShardDecisionsQuerySchema = v.object({
+  country: v.pipe(
+    v.string(),
+    v.regex(new RegExp(SITEMAP_COUNTRY_PATTERN, "u")),
+  ),
+  year: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_YEAR_PATTERN, "u"))),
+  month: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_MONTH_PATTERN, "u"))),
+  bucket: v.optional(
+    v.pipe(v.string(), v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u"))),
+  ),
+});
+
+type SitemapShardDecisionsQuery = v.InferOutput<
   typeof sitemapShardDecisionsQuerySchema
 >;
 
@@ -169,11 +205,37 @@ export const readSitemapDecisionAlternates = async (
     )
     .limit(SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT);
 
+/**
+ * One shard's URLs, in no order. The page is chosen first, from what the
+ * month's index and the language group's index hold, so a bucket of a split
+ * month does not read the heap of every other bucket; only the rows on the page
+ * are then fetched.
+ */
 export const sitemapShardDecisionsQuery = (
   tx: CaseLawPublicReadTransaction,
   conditions: readonly SQL[],
-) =>
-  tx
+) => {
+  const page = tx
+    .select({ pageId: sql`${publishedCaseLawDecisions.id}`.as("page_id") })
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        redistributableCaseLawSource,
+        ...conditions,
+        sitemapDocumentRepresentativeFor(publishedCaseLawDecisions),
+      ),
+    )
+    .orderBy(
+      desc(publishedCaseLawDecisions.updatedAt),
+      desc(publishedCaseLawDecisions.id),
+    )
+    .limit(LIMITS.caseLawSitemapShardUrlLimit + 1)
+    .as("sitemap_shard_page");
+  return tx
     .select({
       id: publishedCaseLawDecisions.id,
       caseNumber: publishedCaseLawDecisions.caseNumber,
@@ -182,19 +244,17 @@ export const sitemapShardDecisionsQuery = (
       court: publishedCaseLawDecisions.court,
       language: publishedCaseLawDecisions.language,
       languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      hasLanguageAlternates: sitemapHasLanguageAlternatesFor(
+        publishedCaseLawDecisions,
+      ),
       updatedAt: publishedCaseLawDecisions.updatedAt,
     })
-    .from(publishedCaseLawDecisions)
+    .from(page)
     .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(and(redistributableCaseLawSource, ...conditions))
-    .orderBy(
-      desc(publishedCaseLawDecisions.updatedAt),
-      desc(publishedCaseLawDecisions.id),
-    )
-    .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, page.pageId),
+    );
+};
 
 /**
  * The public sitemap index, read from the snapshot the scheduled refresh
@@ -233,9 +293,9 @@ export const listSitemapShardsHandler = async (
   );
 
   if (shards.length > LIMITS.caseLawSitemapIndexEntryLimit - 1) {
-    return status(500, {
-      message: "Case-law sitemap shard count exceeds sitemap index capacity.",
-    });
+    return capacityExceeded(
+      "Case-law sitemap shard count exceeds sitemap index capacity.",
+    );
   }
 
   return {
@@ -254,6 +314,7 @@ export const listSitemapShardsHandler = async (
 export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
+  lane: Parameters<typeof caseLawPublicReadUnderSchemaLane>[2] = {},
 ) => {
   const unavailable = publicLawCountryUnavailable(query.country, {
     domain: "caseLaw",
@@ -272,52 +333,75 @@ export const listSitemapShardDecisionsHandler = async (
     return status(400, { message: "Invalid sitemap shard" });
   }
 
-  const queryResult = await caseLawDb(async (tx) => {
-    const rows = await sitemapShardDecisionsQuery(tx, conditions);
+  // A shard read scans one country-month of the corpus and can run for many
+  // seconds, while crawlers keep one in flight almost always: it holds the
+  // corpus schema lane so a schema upgrade drains it rather than queueing its
+  // DDL behind it. While an upgrade holds the lane this rejects, and the
+  // route (`tryCaseLawPublicRead`) answers a retryable 503 and Retry-After.
+  const queryResult = await caseLawPublicReadUnderSchemaLane(
+    caseLawDb,
+    async (tx) => {
+      const rows = (await sitemapShardDecisionsQuery(tx, conditions)).toSorted(
+        (left, right) =>
+          right.updatedAt.getTime() - left.updatedAt.getTime() ||
+          compareCodeUnit(right.id, left.id),
+      );
 
-    if (rows.length > LIMITS.caseLawSitemapShardUrlLimit) {
-      return { type: "capacityExceeded" as const };
-    }
-
-    const languageGroupKeys = [
-      ...new Set(
-        rows
-          .map((row) => row.languageGroupKey)
-          .filter((value): value is string => value !== null),
-      ),
-    ];
-    const alternateRows: SitemapDecisionRow[] = [];
-    // Bound rows per batch at the realistic max language variants for the up to
-    // SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE group keys in the batch (+1 to
-    // detect overflow). Without this, one languageGroupKey matching many rows
-    // would make the read unbounded. Hitting the cap is a data-integrity anomaly
-    // (a group exceeding the expected variant count), not a normal case: warn and
-    // proceed with what loaded rather than 500 the whole sitemap.
-    for (const groupKeyBatch of chunkItems(
-      languageGroupKeys,
-      SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
-    )) {
-      const batchRows = await readSitemapDecisionAlternates(tx, groupKeyBatch);
-      if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
-        logger.warn("case_law.sitemap.language_alternate_overflow", {
-          country: scopedQuery.country,
-          year: scopedQuery.year,
-          month: scopedQuery.month,
-          bucket: scopedQuery.bucket ?? SITEMAP_ALL_BUCKET,
-          groupKeys: groupKeyBatch.length,
-          limit: SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT,
-        });
+      const weightedTotal = rows.reduce(
+        (total, row) =>
+          total +
+          (row.hasLanguageAlternates ? SITEMAP_MULTILINGUAL_URL_WEIGHT : 1),
+        0,
+      );
+      if (weightedTotal > LIMITS.caseLawSitemapShardUrlLimit) {
+        return { type: "capacityExceeded" as const };
       }
-      alternateRows.push(...batchRows);
-    }
 
-    return { type: "rows" as const, rows, alternateRows };
-  });
+      const languageGroupKeys = [
+        ...new Set(
+          rows
+            .filter((row) => row.hasLanguageAlternates)
+            .map((row) => row.languageGroupKey)
+            .filter((value): value is string => value !== null),
+        ),
+      ];
+      const alternateRows: SitemapDecisionRow[] = [];
+      // Bound rows per batch at the realistic max language variants for the up to
+      // SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE group keys in the batch (+1 to
+      // detect overflow). Without this, one languageGroupKey matching many rows
+      // would make the read unbounded. Hitting the cap is a data-integrity anomaly
+      // (a group exceeding the expected variant count), not a normal case: warn and
+      // proceed with what loaded rather than 500 the whole sitemap.
+      for (const groupKeyBatch of chunkItems(
+        languageGroupKeys,
+        SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
+      )) {
+        const batchRows = await readSitemapDecisionAlternates(
+          tx,
+          groupKeyBatch,
+        );
+        if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
+          logger.warn("case_law.sitemap.language_alternate_overflow", {
+            country: scopedQuery.country,
+            year: scopedQuery.year,
+            month: scopedQuery.month,
+            bucket: scopedQuery.bucket ?? SITEMAP_ALL_BUCKET,
+            groupKeys: groupKeyBatch.length,
+            limit: SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT,
+          });
+        }
+        alternateRows.push(...batchRows);
+      }
+
+      return { type: "rows" as const, rows, alternateRows };
+    },
+    lane,
+  );
 
   if (queryResult.type === "capacityExceeded") {
-    return status(500, {
-      message: "Case-law sitemap shard exceeds sitemap URL capacity.",
-    });
+    return capacityExceeded(
+      "Case-law sitemap shard exceeds sitemap URL capacity.",
+    );
   }
 
   const { alternateRows, rows } = queryResult;

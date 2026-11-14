@@ -72,6 +72,7 @@ describe("applyChatToolGrants", () => {
     const tools: ChatToolMap = { web_search: original };
 
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [],
       grants: [grant({ toolName: "web_search", mcpConnectorId: null })],
       tools,
@@ -95,12 +96,48 @@ describe("applyChatToolGrants", () => {
     };
 
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [],
       grants: [grant({ toolName: "web_search", mcpConnectorId: null })],
       tools,
     });
 
     expect(granted["fetch_url"]?.needsApproval).toBe(true);
+  });
+
+  test("a granted tool keeps its gate on the request that answers its approval", () => {
+    const tools: ChatToolMap = {
+      web_search: policyTool("web_search", CHAT_TOOL_POLICY_KIND.external),
+      fetch_url: policyTool("fetch_url", CHAT_TOOL_POLICY_KIND.external),
+    };
+    const grants = [
+      grant({ toolName: "web_search", mcpConnectorId: null }),
+      grant({ toolName: "fetch_url", mcpConnectorId: null }),
+    ];
+
+    const answering = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(["web_search"]),
+      externalConnectors: [],
+      grants,
+      tools,
+    });
+    const next = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
+      externalConnectors: [],
+      grants,
+      tools,
+    });
+
+    expect({
+      answering: {
+        fetch_url: answering["fetch_url"]?.needsApproval,
+        web_search: answering["web_search"]?.needsApproval,
+      },
+      next: { web_search: next["web_search"]?.needsApproval },
+    }).toEqual({
+      answering: { fetch_url: undefined, web_search: true },
+      next: { web_search: undefined },
+    });
   });
 
   test("a stored grant never covers a tool that asks on every call", () => {
@@ -117,6 +154,7 @@ describe("applyChatToolGrants", () => {
     };
 
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [],
       grants: Object.keys(tools).map((toolName) =>
         grant({ toolName, mcpConnectorId: null }),
@@ -144,6 +182,7 @@ describe("applyChatToolGrants", () => {
     };
 
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [
         connector(connectorId, ["mcp__connector__search"]),
         connector(otherConnectorId, ["mcp__other__search"]),
@@ -162,6 +201,7 @@ describe("applyChatToolGrants", () => {
     const builtIn = policyTool("web_search", CHAT_TOOL_POLICY_KIND.external);
 
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [
         connector(connectorId, ["mcp__connector__web_search"], ["web_search"]),
       ],
@@ -179,6 +219,7 @@ describe("applyChatToolGrants", () => {
     );
 
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [],
       grants: [grant({ toolName: "read_document", mcpConnectorId: null })],
       tools: { read_document: internal },

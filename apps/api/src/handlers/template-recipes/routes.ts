@@ -1,24 +1,12 @@
-import Elysia from "elysia";
-
 import createTemplateRecipe from "@/api/handlers/template-recipes/create";
 import deleteTemplateRecipe from "@/api/handlers/template-recipes/delete";
 import listTemplateRecipes from "@/api/handlers/template-recipes/list";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
-export const templateRecipesRoute = new Elysia({
-  prefix: "/template-recipes",
-})
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .get("/", listTemplateRecipes.handler, {
-    permissions: listTemplateRecipes.config.permissions,
-  })
-  .put("/", createTemplateRecipe.handler, {
-    body: createTemplateRecipe.config.body,
-    permissions: createTemplateRecipe.config.permissions,
-  })
-  .delete("/:recipeId", deleteTemplateRecipe.handler, {
-    params: deleteTemplateRecipe.config.params,
-    permissions: deleteTemplateRecipe.config.permissions,
-  });
+export const templateRecipesRoute = routes(
+  {
+    "/": { GET: listTemplateRecipes, PUT: createTemplateRecipe },
+    "/:recipeId": { DELETE: deleteTemplateRecipe },
+  },
+  { prefix: "/template-recipes" },
+);

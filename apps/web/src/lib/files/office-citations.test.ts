@@ -3,9 +3,9 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   beginOfficeCitationActivation,
   isVerifiedOfficeCitationTarget,
+  type OfficeCitationNavigation,
   registerOfficeCitationNavigation,
   requestOfficeCitationNavigation,
-  type OfficeCitationNavigation,
 } from "@/lib/files/office-citations";
 
 const navigation = {

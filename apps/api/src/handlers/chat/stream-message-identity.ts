@@ -6,6 +6,10 @@ import {
 import type { StreamChunk, ToolCall } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import {
+  CHAT_TOOL_DECLINED_ERROR,
+  isDeclinedChatToolCall,
+} from "@stll/api-contract/chat";
 import { Temporal } from "@stll/time";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -88,7 +92,7 @@ export const findDeniedApprovals = (
       parts.flatMap((part): [string, DeniedApproval][] =>
         part.type === "tool-call" &&
         "approval" in part &&
-        part.approval.approved === false
+        isDeclinedChatToolCall(part)
           ? [[part.id, part.approval]]
           : [],
       ),
@@ -158,8 +162,9 @@ export type StoredHistory = {
   rewrittenOnAcceptance: readonly ClientMessage[];
   /**
    * Every stored message the run was handed except the one it continues, by
-   * id, as served. Read at the first snapshot: only a snapshot shows the
-   * history, and most runs carry none.
+   * id, as served. Read at the first snapshot: only a snapshot repeats the
+   * history, and most runs carry none. The page already holds each of these,
+   * so a snapshot leaves them out (`withoutServedHistory`).
    */
   loadServed: () => Promise<
     Result<ReadonlyMap<string, ClientMessage>, SafeDbError>
@@ -208,16 +213,27 @@ const servedSnapshotMessage = (message: ClientMessage): SnapshotMessage => {
 };
 
 /**
- * `messages` with every message `served` holds as the page serves it. The
- * tool messages answering its calls and the reasoning ahead of it are the
- * engine's copy of what its served parts already carry, so they are left
- * out.
+ * `messages` without the stored history the page already holds: every
+ * message `served` holds other than one acceptance `rewritten`, which keeps
+ * its served form. The engine's copies of what served messages carry go too:
+ * the tool messages answering their calls and the reasoning ahead of them.
+ *
+ * The page keeps a message a snapshot leaves out (the web app's
+ * `keepPostedMessagesInSnapshots`), so repeating the history adds nothing but
+ * size: a snapshot that carried it would grow with the thread until the
+ * delivery log could no longer store it as one entry. A rewritten message is
+ * the exception because the page restores an omitted message from the copy it
+ * posted, from before the rewrite; it is one message, so it does not grow with
+ * the thread. What remains besides it is the message the run continues and
+ * what the run itself wrote, which a page load cannot know yet.
  */
-const withServedHistory = ({
+const withoutServedHistory = ({
   messages,
+  rewritten,
   served,
 }: {
   messages: readonly SnapshotMessage[];
+  rewritten: ReadonlySet<string>;
   served: ReadonlyMap<string, ClientMessage>;
 }): SnapshotMessage[] => {
   const servedCallIds = new Set(
@@ -243,19 +259,22 @@ const withServedHistory = ({
     while (presented.at(-1)?.role === "reasoning") {
       presented.pop();
     }
-    presented.push(servedSnapshotMessage(stored));
+    if (rewritten.has(message.id)) {
+      presented.push(servedSnapshotMessage(stored));
+    }
   }
   return presented;
 };
 
 /**
- * Presents the history a run was handed as the thread's page serves it, never
- * as the engine holds it: every snapshot carries each stored message the run
- * does not continue in its served form, so a snapshot and a page load agree
- * field for field, and a turn whose acceptance rewrote a message the page
- * holds opens with that message as stored.
+ * Presents the history a run was handed as the thread's page holds it, never
+ * as the engine holds it: no snapshot repeats a stored message the run does
+ * not continue, so the page keeps each as a page load serves it and a
+ * snapshot's size does not grow with the thread. A turn whose acceptance
+ * rewrote a message the page holds opens with that message as stored, and
+ * every snapshot carries it so.
  *
- * @yields Each chunk of `source`, its snapshots showing the stored history.
+ * @yields Each chunk of `source`, its snapshots without the stored history.
  */
 export const presentStoredHistory = async function* ({
   history: { loadServed, rewrittenOnAcceptance },
@@ -272,6 +291,9 @@ export const presentStoredHistory = async function* ({
           messages: rewrittenOnAcceptance.map(servedSnapshotMessage),
           timestamp: Temporal.Now.instant().epochMilliseconds,
         };
+  const rewritten: ReadonlySet<string> = new Set(
+    rewrittenOnAcceptance.map(({ id }) => id),
+  );
   let served: ReadonlyMap<string, ClientMessage> | undefined;
   for await (const chunk of source) {
     if (opening !== undefined && chunk.type !== EventType.RUN_STARTED) {
@@ -299,7 +321,11 @@ export const presentStoredHistory = async function* ({
     }
     yield {
       ...chunk,
-      messages: withServedHistory({ messages: chunk.messages, served }),
+      messages: withoutServedHistory({
+        messages: chunk.messages,
+        rewritten,
+        served,
+      }),
     };
   }
   if (opening !== undefined) {
@@ -563,6 +589,7 @@ const keepDeniedApprovals = ({
       return [message];
     }
     const toolCallMetadata = readToolCallMetadata(message) ?? {};
+    const denials = deniedOutputs({ deniedApprovals, messages });
     const { parts } = modelMessageToUIMessage(
       {
         content: typeof message.content === "string" ? message.content : null,
@@ -579,9 +606,7 @@ const keepDeniedApprovals = ({
     const inUIForm = {
       ...message,
       parts: parts.map((part) =>
-        part.type === "tool-call"
-          ? asStoredDenial(part, deniedApprovals)
-          : part,
+        part.type === "tool-call" ? asStoredDenial(part, denials) : part,
       ),
     };
     return [inUIForm];
@@ -609,19 +634,66 @@ type UIToolCallPart = Extract<
   { type: "tool-call" }
 >;
 
-/** A rebuilt call as the stored thread holds it when its approval was denied. */
+/** A denied call's approval and the output the engine settled it with. */
+type DeniedOutput = { approval: DeniedApproval; output: unknown };
+
+/**
+ * The output each denied call settles with, as the engine stores it: the
+ * content of the tool message answering it, parsed as the engine's stream
+ * processor parses a result, or the engine's own denial when no message
+ * answers it yet.
+ */
+const deniedOutputs = ({
+  deniedApprovals,
+  messages,
+}: {
+  deniedApprovals: ReadonlyMap<string, DeniedApproval>;
+  messages: readonly SnapshotMessage[];
+}): ReadonlyMap<string, DeniedOutput> => {
+  const answers = new Map(
+    messages.flatMap((message): [string, unknown][] =>
+      message.role === "tool" ? [[message.toolCallId, message.content]] : [],
+    ),
+  );
+  return new Map(
+    [...deniedApprovals].map(([callId, approval]): [string, DeniedOutput] => [
+      callId,
+      { approval, output: storedResultOutput(answers.get(callId)) },
+    ]),
+  );
+};
+
+/** A tool message's content as the engine stores it on the call it
+ *  answers: JSON text parsed, anything else as it is; the engine's denial
+ *  when no message answers the call. */
+const storedResultOutput = (content: unknown): unknown => {
+  if (content === undefined) {
+    return { error: CHAT_TOOL_DECLINED_ERROR };
+  }
+  if (typeof content !== "string") {
+    return content;
+  }
+  return Result.try((): unknown => JSON.parse(content)).unwrapOr(content);
+};
+
+/**
+ * A rebuilt call as the stored thread holds it when its approval was denied:
+ * settled as an error carrying the denial (`declineToolCall`), so the
+ * snapshot and a reload show the same call.
+ */
 const asStoredDenial = (
   part: UIToolCallPart,
-  deniedApprovals: ReadonlyMap<string, DeniedApproval>,
+  denials: ReadonlyMap<string, DeniedOutput>,
 ): UIToolCallPart => {
-  const approval = deniedApprovals.get(part.id);
-  if (approval === undefined) {
+  const denial = denials.get(part.id);
+  if (denial === undefined) {
     return part;
   }
   const denied: UIToolCallPart = {
     ...part,
-    approval,
-    state: "approval-responded",
+    approval: denial.approval,
+    output: denial.output,
+    state: "error",
   };
   return denied;
 };

@@ -15,10 +15,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  CHECK_BUDGETS_PATH,
   CHECK_POOL_JOBS,
   checkPoolRegistryPath,
 } from "./ci-check-pool-registry";
-import { parseVerifyArgs, runAutofixSteps, runVerifySteps } from "./verify";
+import {
+  LOCAL_RUNNER_TEMP_ENTRIES,
+  parseVerifyArgs,
+  runAutofixSteps,
+  runVerifySteps,
+} from "./verify";
 import {
   admitLocal,
   BOTH_GATES_MESSAGE,
@@ -26,7 +32,11 @@ import {
   withCheckAdmission,
 } from "./verify-admission";
 import { VerifyError } from "./verify-error";
-import { readVerifyWorkflow, type VerifyWorkflowStep } from "./verify-workflow";
+import {
+  readHarnessRunnerTempEntries,
+  readVerifyWorkflow,
+  type VerifyWorkflowStep,
+} from "./verify-workflow";
 
 const root = path.resolve(import.meta.dirname, "..");
 const HOST_EXECUTABLES = ["load-admit", "remote-check", "serial-install"];
@@ -327,12 +337,20 @@ test("fix mode executes exact autofix workflow blocks", () => {
   expect(steps.some(({ run }) => run.includes("refresh-test-durations"))).toBe(
     false,
   );
-  expect(steps.some(({ run }) => run.includes("oxfmt"))).toBe(true);
+  expect(steps.some(({ run }) => run.includes("bun fmt"))).toBe(true);
   expect(
     steps.some(({ run }) => run.includes("fix-tauri-package-alignment.ts")),
   ).toBe(true);
   expect(parseVerifyArgs(["--fix"])).toMatchObject({ mode: "fix-check" });
 });
+test.each(["verify", "autofix"] as const)(
+  "the local runner creates every RUNNER_TEMP entry %s steps take from unmarked CI steps",
+  (mode) => {
+    expect(readHarnessRunnerTempEntries({ root, mode })).toEqual([
+      ...LOCAL_RUNNER_TEMP_ENTRIES[mode],
+    ]);
+  },
+);
 test("preparation and fixer failures abort before subsequent commands", () => {
   for (const mode of ["verify", "autofix"] as const) {
     const steps = readVerifyWorkflow({ root, mode });
@@ -455,7 +473,7 @@ for (const conflict of [false, true]) {
       writeFileSync(path.join(fixture, "target.txt"), "user edit\n");
       const patch =
         "diff --git a/target.txt b/target.txt\n--- a/target.txt\n+++ b/target.txt\n@@ -1 +1 @@\n-user edit\n+fixed user edit\n";
-      const receipt = `STELLA_VERIFY_PATCH=${Buffer.from(patch).toString("base64")}`;
+      const receipt = `STELLA_VERIFY_PATCH=${Buffer.from(patch).toBase64()}`;
       writeFileSync(
         path.join(fixture, "remote.sh"),
         `#!/bin/sh\nif [ "$1" = --probe ]; then exit 0; fi\nprintf '%s\\0' "$@" > remote-argv\n${conflict ? "printf 'concurrent edit\\n' > target.txt\n" : ""}printf '%s\\n' '${receipt}'\n`,
@@ -733,7 +751,9 @@ case "$1" in
   */verify.ts|*fixture-typegen.ts|*autofix-protected-paths.ts) exec '${process.execPath}' "$@" ;;
   run) if [[ "$2" == typegen ]]; then exec '${process.execPath}' "$@"; fi ;;
   *check-tauri-package-alignment.ts) printf false ;;
-  scripts/*|apps/*|packages/*|test|--bun|--no-install) ;;
+  scripts/*|apps/*|packages/*|test|fmt|--bun|--no-install) ;;
+  # Offline checks load the network preload ahead of their entry.
+  --preload) [[ "$2" == ./scripts/offline-network-preload.ts ]] || { echo "Unexpected fixture preload: $2" >&2; exit 127; } ;;
   *) echo "Unexpected fixture Bun command: $1" >&2; exit 127 ;;
 esac
 printf '%s executed' "$TEST_ENTRY" > "$TEST_ENTRY_RECEIPT"
@@ -776,6 +796,10 @@ exit 0
                   path.join(fixture, checkPoolRegistryPath(job)),
                 );
               }
+              copyFileSync(
+                path.join(root, CHECK_BUDGETS_PATH),
+                path.join(fixture, CHECK_BUDGETS_PATH),
+              );
               continue;
             }
             writeFileSync(
@@ -791,6 +815,7 @@ exit 0
           });
           for (const file of [
             "scripts/autofix-plan.ts",
+            "scripts/autofix-select-paths.ts",
             "scripts/autofix-push-scope.ts",
             "scripts/autofix-baseline-prune.ts",
             "scripts/baseline-shrink.ts",
@@ -821,6 +846,10 @@ exit 0
             JSON.stringify({
               scripts: { typegen: "bun scripts/fixture-typegen.ts" },
             }),
+          );
+          copyFileSync(
+            path.join(root, "bun.lock"),
+            path.join(fixture, "bun.lock"),
           );
           writeFileSync(
             path.join(fixture, "scripts/fixture-typegen.ts"),
@@ -905,6 +934,7 @@ exit 0
                 HOME: home,
                 PATH: bin,
                 CI: ci,
+                GITHUB_WORKSPACE: undefined,
                 TEST_ENTRY: entry,
                 TEST_ENTRY_RECEIPT: path.join(fixture, `${entry}-receipt`),
                 TEST_INSTALL_RECEIPT: path.join(fixture, "install-receipt"),

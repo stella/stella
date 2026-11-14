@@ -1,19 +1,12 @@
-import Elysia from "elysia";
-
 import previewExternalSource, {
   previewExternalFile,
 } from "@/api/handlers/external-preview/preview";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
-export const externalPreviewRoute = new Elysia({ prefix: "/external-preview" })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .get("/", previewExternalSource.handler, {
-    permissions: previewExternalSource.config.permissions,
-    query: previewExternalSource.config.query,
-  })
-  .get("/file", previewExternalFile.handler, {
-    permissions: previewExternalFile.config.permissions,
-    query: previewExternalFile.config.query,
-  });
+export const externalPreviewRoute = routes(
+  {
+    "/": { GET: previewExternalSource },
+    "/file": { GET: previewExternalFile },
+  },
+  { prefix: "/external-preview" },
+);

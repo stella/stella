@@ -75,11 +75,9 @@ export type DocxEditorSlotBindings = {
   onBlockedUnlock?: (() => void) | undefined;
   onClose: () => void;
   onCollaborationPublishableChange?:
-    | ((publishable: boolean) => void)
-    | undefined;
+    ((publishable: boolean) => void) | undefined;
   onCompatibilityChange?:
-    | ((compatibility: DocxCompatibility) => void)
-    | undefined;
+    ((compatibility: DocxCompatibility) => void) | undefined;
   onError?: ((error: Error) => void) | undefined;
   onSaved?: ((fieldId: string) => void) | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;

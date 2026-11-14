@@ -24,15 +24,15 @@ export const FolderExpandToggle = ({
   size = "icon-xs",
 }: FolderExpandToggleProps) => {
   const t = useTranslations();
+  const label = allExpanded
+    ? t("workspaces.filesystem.collapseAll")
+    : t("workspaces.filesystem.expandAll");
   return (
     <Button
+      aria-label={label}
       onClick={onToggle}
       size={size}
-      title={
-        allExpanded
-          ? t("workspaces.filesystem.collapseAll")
-          : t("workspaces.filesystem.expandAll")
-      }
+      tooltip={label}
       variant="ghost"
     >
       <EntityKindIcon

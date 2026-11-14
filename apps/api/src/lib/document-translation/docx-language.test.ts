@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { readDocxDeclaredSourceLanguage } from "./docx-language";
 
@@ -45,7 +44,7 @@ const createDocx = async ({
   themeLanguages?: LanguageDeclarations;
   themeLanguage?: string;
 }): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const runs = documentRuns ?? [
     { text: "Text", ...(documentLanguage ? { val: documentLanguage } : {}) },
   ];
@@ -58,8 +57,7 @@ const createDocx = async ({
       return `<w:r>${runProperties}<w:t>${run.text}</w:t></w:r>`;
     })
     .join("");
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     `<w:document xmlns:w="${W_NS}"><w:body><w:p>${runXml}</w:p></w:body></w:document>`,
   );
@@ -67,8 +65,7 @@ const createDocx = async ({
     defaultLanguages ?? (defaultLanguage ? { val: defaultLanguage } : {}),
   );
   if (defaultAttributes) {
-    writeZipEntry(
-      zip,
+    zip.set(
       "word/styles.xml",
       `<w:styles xmlns:w="${W_NS}"><w:docDefaults><w:rPrDefault>` +
         `<w:rPr><w:lang ${defaultAttributes}/></w:rPr>` +
@@ -79,15 +76,14 @@ const createDocx = async ({
     themeLanguages ?? (themeLanguage ? { val: themeLanguage } : {}),
   );
   if (themeAttributes) {
-    writeZipEntry(
-      zip,
+    zip.set(
       "word/settings.xml",
       `<w:settings xmlns:w="${W_NS}">` +
         `<w:themeFontLang ${themeAttributes}/>` +
         `</w:settings>`,
     );
   }
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 describe("DOCX declared source language", () => {

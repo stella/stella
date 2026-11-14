@@ -37,7 +37,7 @@ import {
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { publicCountriesFor } from "@stll/api-contract/public-country-capability";
 
-import { unredactedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, unredactedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,

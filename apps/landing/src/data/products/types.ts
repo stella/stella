@@ -4,6 +4,7 @@
 import type { ProductPreviewKey } from "../../components/react/previews/keys";
 import type Messages from "../../i18n/messages/messages.gen";
 import type { TranslationKey } from "../../i18n/utils";
+import type { ProductCaptureId } from "../product-captures";
 import type { ProductStorySceneId } from "../product-story";
 import type { ProductSlug } from "./pillars";
 
@@ -31,8 +32,7 @@ export type ProductMedia =
   | { type: "placeholder"; note: string; aspect?: string }
   | {
       type: "image";
-      src: string;
-      darkSrc: string;
+      captureId: ProductCaptureId;
       altKey: TranslationKey;
       aspect?: string;
     }
@@ -81,10 +81,10 @@ export type FrameVariant = "wash" | "bloom" | "ripple";
 // Accent hues reused from scenes and tokens that already exist in the landing;
 // no invented colors. Keyed by pillar mood, applied per product.
 export const frameAccents = {
-  // Agent scene chip color (AGENT_ACCENT in CliMcpPreview).
-  ember: "#d97757",
-  // Teams companion window accent (--teams-accent in CliMcpPreview).
-  iris: "#6264a7",
+  // Agent scene chip color (AGENT_ACCENT in CliMcpPreview; global.css).
+  ember: "var(--accent-ember)",
+  // Teams companion window accent (--teams-accent in CliMcpPreview; global.css).
+  iris: "var(--accent-iris)",
   // Terminal accent token (global.css).
   sky: "var(--terminal-accent)",
   // Theme-switched hero/auth gradient endpoint token (global.css).
@@ -114,8 +114,7 @@ export type ProductLink =
   | { to: "docx-editor" };
 
 type ProductLinkId =
-  | `product:${ProductSlug}`
-  | Exclude<ProductLink["to"], "product">;
+  `product:${ProductSlug}` | Exclude<ProductLink["to"], "product">;
 
 type ProductLinkForId<TId extends ProductLinkId> =
   TId extends `product:${infer TSlug extends ProductSlug}`

@@ -5,8 +5,8 @@ import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import {
   LOOKUP_FORMAT_PREFERENCE,
-  templateLookupFormatUserDefaults,
   templateLookupFormats,
+  templateLookupFormatUserDefaults,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { LookupRegistry } from "@/api/lib/docx/types";

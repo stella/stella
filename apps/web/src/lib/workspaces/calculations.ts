@@ -110,7 +110,10 @@ export const toCalculationValue = (
       return textValue(field.content.value ?? "");
     case "clip":
       return textValue(field.content.url);
+    // A record column aggregates through its projection columns, which hold
+    // the scalars a calculation reads.
     case "file":
+    case "record":
     case "error":
     case "pending":
     case "unsupported":

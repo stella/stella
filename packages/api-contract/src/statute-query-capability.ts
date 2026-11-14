@@ -21,8 +21,10 @@ const NO_QUERY_GRAMMAR = {
 /** Every public country, classified; the key set is the public country list. */
 export const STATUTE_QUERY_CAPABILITIES = {
   aut: NO_QUERY_GRAMMAR,
+  bra: NO_QUERY_GRAMMAR,
   cze: { type: "supported", defaultCollection: "sb" },
   eu: NO_QUERY_GRAMMAR,
+  gbr: NO_QUERY_GRAMMAR,
   hun: NO_QUERY_GRAMMAR,
   pol: NO_QUERY_GRAMMAR,
   svk: { type: "supported", defaultCollection: "zz" },

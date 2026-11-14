@@ -1,5 +1,5 @@
+import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import * as outbound from "@/api/lib/safe-outbound-fetch";
 
 type RequestExport = {
   [Name in keyof typeof outbound]: (typeof outbound)[Name] extends (

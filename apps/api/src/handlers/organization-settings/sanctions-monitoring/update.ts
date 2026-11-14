@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -23,7 +23,7 @@ export default createSafeRootHandler(
       reason: "contact_directory",
       consumesServices: false,
     },
-    body: t.Object({ mode: t.UnionEnum(["enabled", "disabled"]) }),
+    body: v.object({ mode: v.picklist(["enabled", "disabled"]) }),
   },
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     const result = yield* Result.await(

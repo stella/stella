@@ -1,7 +1,9 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
+
+import { useFormatter } from "@/i18n/formatting-context";
 
 type SearchMatchControlsProps = {
   activeIndex: number;

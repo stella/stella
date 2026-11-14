@@ -1,0 +1,3030 @@
+{
+  "package": "@stll/business-registries",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ares",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "brreg",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "companiesHouse",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "denue",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "edgar",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "entityChecks",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "gcis",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "krs",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "orsr",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "prh",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "rechercheEntreprises",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "rpo",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "shared",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "sudreg",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "vies",
+          "kind": "namespace",
+          "space": "value"
+        },
+        {
+          "name": "zefix",
+          "kind": "namespace",
+          "space": "value"
+        }
+      ]
+    },
+    "./ares": {
+      "type": "module",
+      "file": "./src/ares/index.d.ts",
+      "exports": [
+        {
+          "name": "AresAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "AresAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresBodyMember",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresCodeListItem",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresCodeListResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresCourtFile",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "AresErrorResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresNotFoundError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "AresRawAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "AresResRecord",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresResResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresSearchEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresSearchResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresStatutoryBody",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresTooBroadError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "AresValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "AresVrBodyMember",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresVrPrimaryRecord",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresVrResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AresVrStatutoryBody",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "LookupOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizeAresOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "getAresCourtName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupByIco",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeIco",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseResRecord",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchEntry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateIco",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./ares/court-names": {
+      "type": "module",
+      "file": "./src/ares/court-names.d.ts",
+      "exports": [
+        {
+          "name": "ARES_COURT_GENITIVE_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ARES_COURT_INSTRUMENTAL_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getAresCourtName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getAresCourtNameGenitive",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getAresCourtNameInstrumental",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./ares/default-format": {
+      "type": "module",
+      "file": "./src/ares/default-format.d.ts",
+      "exports": [
+        {
+          "name": "ARES_DEFAULT_FORMAT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ARES_DEFAULT_FORMAT_PARTS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ARES_FILE_REFERENCE_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ARES_IDENTIFIER_SPACED_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatAresIdentifierSpaced",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isAresCommercialCompany",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./ares/legal-forms": {
+      "type": "module",
+      "file": "./src/ares/legal-forms.d.ts",
+      "exports": [
+        {
+          "name": "getAresLegalFormName",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./browser": {
+      "type": "module",
+      "file": "./src/browser.d.ts",
+      "exports": [
+        {
+          "name": "StdnumNotInitializedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "initialize",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./brreg": {
+      "type": "module",
+      "file": "./src/brreg/index.d.ts",
+      "exports": [
+        {
+          "name": "BrregAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "BrregAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregEntity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregEntityStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "BrregErrorResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregIndustryCode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregNotFoundError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "BrregOfficer",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregOfficerEntity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregOfficerPerson",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregOfficerTrustee",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregRawAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregRawEnhet",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregRawInstitusjonellSektor",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregRawNaeringskode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregRawOrgForm",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregRawRolesResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "BrregSearchResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BrregTooBroadError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "BrregValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "LookupOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByOrgnr",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupOfficersByOrgnr",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeOrgnr",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseEnhet",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseOfficer",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseRolesResponse",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchEntry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateOrgnr",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./brreg/default-format": {
+      "type": "module",
+      "file": "./src/brreg/default-format.d.ts",
+      "exports": [
+        {
+          "name": "BRREG_DEFAULT_FORMAT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "BRREG_DEFAULT_FORMAT_CLAUSES",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./brreg/identifier-format": {
+      "type": "module",
+      "file": "./src/brreg/identifier-format.d.ts",
+      "exports": [
+        {
+          "name": "BRREG_IDENTIFIER_SPACED_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatBrregIdentifierSpaced",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./cnpj": {
+      "type": "module",
+      "file": "./src/cnpj/index.d.ts",
+      "exports": [
+        {
+          "name": "normalizeCnpj",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateCnpj",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./companies-house": {
+      "type": "module",
+      "file": "./src/companies-house/index.d.ts",
+      "exports": [
+        {
+          "name": "CompaniesHouseAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "CompaniesHouseAccounts",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseAuthError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "CompaniesHouseClientConfig",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseConfirmationStatement",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseEntityStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "CompaniesHouseNotFoundError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "CompaniesHouseOfficer",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHousePreviousName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawAccounts",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawCompanyProfile",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawConfirmationStatement",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawOfficer",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawOfficersResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawPreviousName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawSearchItem",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRawSearchResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "CompaniesHouseSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompaniesHouseValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "NormalizeCompaniesHouseOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByCompanyNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupOfficersByCompanyNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeCompanyNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseCompanyProfile",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseOfficer",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseOfficersResponse",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchItem",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchResponse",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateCompanyNumber",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./companies-house/default-format": {
+      "type": "module",
+      "file": "./src/companies-house/default-format.d.ts",
+      "exports": [
+        {
+          "name": "COMPANIES_HOUSE_DEFAULT_FORMAT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPANIES_HOUSE_DEFAULT_FORMAT_CLAUSES",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./cpf": {
+      "type": "module",
+      "file": "./src/cpf/index.d.ts",
+      "exports": [
+        {
+          "name": "normalizeCpf",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateCpf",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./default-formats": {
+      "type": "module",
+      "file": "./src/default-formats.d.ts",
+      "exports": [
+        {
+          "name": "BUSINESS_REGISTRY_FORMAT_CAPABILITIES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CLAUSE_DRIVEN_REGISTRY_SLUGS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ClauseDrivenRegistrySlug",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PREVIOUS_DEFAULT_FORMATS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "REGISTRY_DEFAULT_FORMAT_CLAUSES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "REGISTRY_FORMAT_SLUGS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "RegistryFormatCapability",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RegistryFormatRun",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RegistryFormatSlug",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isBuiltInRegistryFormat",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isClauseDrivenRegistry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseRegistryFormatMarkdown",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "stripRegistryFormatMarkdown",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./denue": {
+      "type": "module",
+      "file": "./src/denue/index.d.ts",
+      "exports": [
+        {
+          "name": "DenueAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "DenueAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DenueAuthError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "DenueClientOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DenueCoordinates",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DenueError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "DenueEstablishment",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DenueRawEstablishment",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DenueRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "DenueResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DenueSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DenueValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByEstablishmentId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeEstablishmentId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeStateCode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseEstablishment",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchEntry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateEstablishmentId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateStateCode",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./edgar": {
+      "type": "module",
+      "file": "./src/edgar/index.d.ts",
+      "exports": [
+        {
+          "name": "EdgarAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "EdgarAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarClientConfig",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarEntityStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "EdgarFiling",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarFormerName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarNotFoundError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "EdgarRawAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarRawAddresses",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarRawFilings",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarRawFormerName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarRawRecentFilings",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarRawSubmission",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EdgarRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "EdgarValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ParseSubmissionOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByCik",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeCik",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "padCik",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSubmission",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateCik",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./edgar/identifier-format": {
+      "type": "module",
+      "file": "./src/edgar/identifier-format.d.ts",
+      "exports": [
+        {
+          "name": "EIN_DASHED_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatEinDashed",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./entity-checks": {
+      "type": "module",
+      "file": "./src/entity-checks/index.d.ts",
+      "exports": [
+        {
+          "name": "CZ_INSOLVENCY_MATCH_BASES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CZ_INSOLVENCY_PHASES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CZ_INSOLVENCY_SOURCE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CZ_VAT_FINDING_TYPES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CZ_VAT_RELIABILITY_SOURCE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CZ_VAT_SUBJECT_TYPES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CzInsolvencyFinding",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CzVatPayerRecord",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CzVatReliabilityFinding",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ENTITY_CHECK_KINDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ENTITY_CHECK_NOT_COVERED_REASONS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ENTITY_CHECK_SUBJECT_TYPES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ENTITY_CHECK_UNAVAILABLE_REASONS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "EntityCheckInputError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "EntityCheckKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EntityCheckResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EntityCheckSubject",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "runEntityCheck",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./format-clauses": {
+      "type": "module",
+      "file": "./src/format-clauses.d.ts",
+      "exports": [
+        {
+          "name": "RegistryFormatClause",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "clausesForTokens",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatFromClauses",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "templateForTokens",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./gcis": {
+      "type": "module",
+      "file": "./src/gcis/index.d.ts",
+      "exports": [
+        {
+          "name": "GcisAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "GcisCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GcisCompanyStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GcisError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "GcisRawCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GcisRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "GcisResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GcisSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GcisValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByTaxId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeTaxId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseCompany",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchEntry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateTaxId",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./krs": {
+      "type": "module",
+      "file": "./src/krs/index.d.ts",
+      "exports": [
+        {
+          "name": "KrsAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "KrsAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsEntity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsEntityStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "KrsErrorResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsIdentifiers",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsLookupResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawAdres",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawDane",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawDanePodmiotu",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawDzial1",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawDzial6",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawIdentifiers",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawNaglowekA",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawOdpis",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawSiedziba",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRawSiedzibaIAdres",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRegisterCode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRegisteredSeat",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KrsRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "KrsValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "LookupOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByKrsNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeKrsNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseStatus",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateKrsNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateNip",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateRegon",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./krs/default-format": {
+      "type": "module",
+      "file": "./src/krs/default-format.d.ts",
+      "exports": [
+        {
+          "name": "KRS_DEFAULT_FORMAT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "KRS_DEFAULT_FORMAT_CLAUSES",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./krs/number": {
+      "type": "module",
+      "file": "./src/krs/number.d.ts",
+      "exports": [
+        {
+          "name": "normalizeKrsNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateKrsNumber",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./krs/regon": {
+      "type": "module",
+      "file": "./src/krs/regon.d.ts",
+      "exports": [
+        {
+          "name": "normalizeRegon",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./orsr": {
+      "type": "module",
+      "file": "./src/orsr/index.d.ts",
+      "exports": [
+        {
+          "name": "OrsrAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "OrsrAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrCompanyStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrCourtFile",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrDocument",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "OrsrFullRecord",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrHistoryEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawCorporateBody",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawDeposit",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawEquity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawErrorResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawExtractResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawFileReference",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawLegalForm",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawLegalPerson",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawSearchHit",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawSearchResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawStakeholderMember",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRawStatutoryBodyMember",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRecordPart",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRelatedLegalPerson",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "OrsrSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrStakeholder",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrStatutoryBody",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrStatutoryMember",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OrsrValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByIco",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupFullRecordByIco",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeIco",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseExtract",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchHit",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateIco",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./orsr/court-file": {
+      "type": "module",
+      "file": "./src/orsr/court-file.d.ts",
+      "exports": [
+        {
+          "name": "formatOrsrCourtFile",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatOrsrInsert",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./orsr/court-names": {
+      "type": "module",
+      "file": "./src/orsr/court-names.d.ts",
+      "exports": [
+        {
+          "name": "ORSR_COURT_GENITIVE_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getOrsrCourtName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getOrsrCourtNameGenitive",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./orsr/default-format": {
+      "type": "module",
+      "file": "./src/orsr/default-format.d.ts",
+      "exports": [
+        {
+          "name": "ORSR_DEFAULT_FORMAT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ORSR_DEFAULT_FORMAT_CLAUSES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ORSR_INSERT_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ORSR_SECTION_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./orsr/identifier-format": {
+      "type": "module",
+      "file": "./src/orsr/identifier-format.d.ts",
+      "exports": [
+        {
+          "name": "ORSR_IDENTIFIER_SPACED_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatOrsrIdentifierSpaced",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./prh": {
+      "type": "module",
+      "file": "./src/prh/index.d.ts",
+      "exports": [
+        {
+          "name": "PrhAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PrhAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhBusinessLine",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhCompaniesResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhCompanyName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhCompanyStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PrhErrorResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawBusinessLine",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawCompanyForm",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawCompanySituation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawLocalizedDescription",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawPostOffice",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRawSourcedValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PrhSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PrhValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByBusinessId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeBusinessId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseCompany",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchEntry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateBusinessId",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./prh/default-format": {
+      "type": "module",
+      "file": "./src/prh/default-format.d.ts",
+      "exports": [
+        {
+          "name": "PRH_DEFAULT_FORMAT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PRH_DEFAULT_FORMAT_CLAUSES",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./recherche-entreprises": {
+      "type": "module",
+      "file": "./src/recherche-entreprises/index.d.ts",
+      "exports": [
+        {
+          "name": "LookupOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RechercheEntreprisesAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesDirector",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RechercheEntreprisesErrorResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesEstablishment",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesEstablishmentStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesLegalEntityStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesRawDirigeant",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesRawDirigeantOrganisation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesRawDirigeantPerson",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesRawEtablissement",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesRawUniteLegale",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RechercheEntreprisesSearchResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RechercheEntreprisesValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "hasCanonicalShape",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupBySiren",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupBySiret",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeSiren",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseCompany",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseEstablishment",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchEntry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateSiren",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateSiret",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./recherche-entreprises/default-format": {
+      "type": "module",
+      "file": "./src/recherche-entreprises/default-format.d.ts",
+      "exports": [
+        {
+          "name": "RECHERCHE_ENTREPRISES_DEFAULT_FORMAT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "RECHERCHE_ENTREPRISES_DEFAULT_FORMAT_CLAUSES",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./recherche-entreprises/identifier-format": {
+      "type": "module",
+      "file": "./src/recherche-entreprises/identifier-format.d.ts",
+      "exports": [
+        {
+          "name": "SIREN_SPACED_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SIRET_SPACED_TOKEN",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatSirenSpaced",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatSiretSpaced",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./rpo": {
+      "type": "module",
+      "file": "./src/rpo/index.d.ts",
+      "exports": [
+        {
+          "name": "LookupOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RpoAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RpoAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RpoClientError",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RpoEntity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RpoError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RpoRawEntity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RpoRawSearchHit",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RpoRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RpoSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RpoValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RpoView",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "entityUrl",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isIcoShape",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupByIco",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchHit",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./shared": {
+      "type": "module",
+      "file": "./src/shared/index.d.ts",
+      "exports": [
+        {
+          "name": "CANONICAL_ID_SCHEMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CanonicalId",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EntityNotFound",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EntityStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KnownCanonicalIdScheme",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryBirthDate",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryCapital",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryEntity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryEntityFields",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryField",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryIdentifier",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryKeyPeopleGroup",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryKeyPerson",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryRecord",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistrySearchFields",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistrySearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedRegistryWarning",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RegistryAdapterShape",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RegistryAuthRequiredError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RegistryClientOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RegistryDataPaywalledError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RegistryDescriptor",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RegistryError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RegistryLicenceIncompatibleError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RegistryRateLimitedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RegistryUnavailableError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RegistryValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "clampSearchLimit",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isEntityNotFound",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "mapEntityStatus",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./shared/request-observer": {
+      "type": "module",
+      "file": "./src/shared/request-observer.d.ts",
+      "exports": [
+        {
+          "name": "RegistryRequestObservation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "observeRegistryRequest",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./sudreg": {
+      "type": "module",
+      "file": "./src/sudreg/index.d.ts",
+      "exports": [
+        {
+          "name": "LookupOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SudregAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SudregAddress",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SudregCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SudregError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SudregParseError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SudregRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SudregValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "SudregWarning",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "lookupByMbs",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeMbs",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseAddress",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseCompanyPage",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateMbs",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./vies": {
+      "type": "module",
+      "file": "./src/vies/index.d.ts",
+      "exports": [
+        {
+          "name": "ParsedVatNumber",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "VAT_FORMAT_RULES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "VatFormatRule",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ViesAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ViesApproximate",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ViesError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ViesRawResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ViesRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ViesUserError",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ViesValidation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ViesValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ViesValidationStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ViesVatNumber",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isKnownVatCountry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isViesParticipant",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "knownVatCountries",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeVatNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseValidation",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseVatNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateVat",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateVatFormat",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./vies/validation": {
+      "type": "module",
+      "file": "./src/vies/validation.d.ts",
+      "exports": [
+        {
+          "name": "ParsedVatNumber",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "VAT_FORMAT_RULES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "VatFormatRule",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isKnownVatCountry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isViesParticipant",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "knownVatCountries",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeVatNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseVatNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateVatFormat",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./zefix": {
+      "type": "module",
+      "file": "./src/zefix/index.d.ts",
+      "exports": [
+        {
+          "name": "LookupOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SearchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ZefixAPIError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ZefixCompany",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ZefixCompanyStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ZefixError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ZefixRawFirm",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ZefixRequestError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ZefixSearchResponse",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ZefixSearchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ZefixValidationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "formatUid",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "lookupByUid",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeUid",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseFirm",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseSearchEntry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "searchByName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedEntity",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toNormalizedSearchResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validateUid",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/ares/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport { AresAPIError, AresRequestError } from \"./errors.js\";\nimport type { AresCompany, AresSearchResult } from \"./types.js\";\nexport type LookupOptions = RegistryClientOptions & {\n    includeVr?: boolean;\n    onVrError?: (error: AresAPIError | AresRequestError) => void;\n};\nexport declare const lookupByIco: (ico: string, options: LookupOptions) => Promise<AresCompany | null>;\nexport type SearchOptions = RegistryClientOptions & {\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<AresSearchResult[]>;\n",
+    "./src/ares/court-names.d.ts": "export declare const ARES_COURT_INSTRUMENTAL_TOKEN: \"court instrumental\";\nexport declare const ARES_COURT_GENITIVE_TOKEN: \"court genitive\";\nexport declare const getAresCourtName: (court: string) => string;\nexport declare const getAresCourtNameInstrumental: (court: string) => null | string;\nexport declare const getAresCourtNameGenitive: (court: string) => null | string;\n",
+    "./src/ares/default-format.d.ts": "export declare const ARES_FILE_REFERENCE_TOKEN: \"file reference\";\nexport declare const ARES_IDENTIFIER_SPACED_TOKEN: \"registry number spaced\";\nexport declare const formatAresIdentifierSpaced: (identifier: string) => string;\nexport declare const isAresCommercialCompany: (legalForm: null | string) => boolean;\nexport declare const ARES_DEFAULT_FORMAT_PARTS: Record<\"address\" | \"identifier\" | \"name\" | \"registration\", string>;\nexport declare const ARES_DEFAULT_FORMAT: string;\n",
+    "./src/ares/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class AresError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class AresAPIError extends AresError {\n    readonly httpStatus: number;\n    readonly aresCode: null | string;\n    readonly aresDescription: null | string;\n    constructor({ cause, message, httpStatus, aresCode, aresDescription, }: {\n        aresCode?: null | string;\n        aresDescription?: null | string;\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n    });\n}\nexport declare class AresNotFoundError extends AresError {\n    readonly ico: string;\n    readonly canonicalId: string;\n    readonly registrySlug: string;\n    constructor(ico: string);\n}\nexport declare class AresTooBroadError extends AresError {\n    constructor(query: string);\n}\nexport declare class AresValidationError extends AresError {\n    constructor(message: string);\n}\nexport declare class AresRequestError extends AresError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/ares/index.d.ts": "export { lookupByIco, searchByName } from \"./client.js\";\nexport { getAresCourtName } from \"./court-names.js\";\nexport type { LookupOptions, SearchOptions } from \"./client.js\";\nexport { AresAPIError, AresError, AresNotFoundError, AresRequestError, AresTooBroadError, AresValidationError, } from \"./errors.js\";\nexport { parseAddress, parseResRecord, parseSearchEntry } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { NormalizeAresOptions } from \"./normalized.js\";\nexport type { AresAddress, AresBodyMember, AresCodeListItem, AresCodeListResponse, AresCompany, AresCourtFile, AresErrorResponse, AresRawAddress, AresResRecord, AresResResponse, AresSearchEntry, AresSearchResponse, AresSearchResult, AresStatutoryBody, AresVrBodyMember, AresVrPrimaryRecord, AresVrResponse, AresVrStatutoryBody, } from \"./types.js\";\nexport { normalizeIco, validateIco } from \"./validation.js\";\n",
+    "./src/ares/legal-forms.d.ts": "export declare const getAresLegalFormName: (code: string) => null | string;\n",
+    "./src/ares/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { AresCompany, AresSearchResult } from \"./types.js\";\nexport type NormalizeAresOptions = {\n    vrLoaded: boolean;\n};\nexport declare const toNormalizedEntity: (company: AresCompany, options: NormalizeAresOptions) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (result: AresSearchResult) => NormalizedRegistrySearchResult;\n",
+    "./src/ares/parse.d.ts": "import type { AresAddress, AresCompany, AresRawAddress, AresResRecord, AresSearchEntry, AresSearchResult, AresVrResponse } from \"./types.js\";\nexport declare const parseAddress: (raw: AresRawAddress) => AresAddress;\nexport declare const formatTextAddress: (raw: AresRawAddress) => null | string;\nexport declare const parseResRecord: (record: AresResRecord) => AresCompany;\nexport declare const enrichWithVr: (company: AresCompany, vrResponse: AresVrResponse) => AresCompany;\nexport declare const parseSearchEntry: (entry: AresSearchEntry) => AresSearchResult;\n",
+    "./src/ares/types.d.ts": "export type AresRawAddress = {\n    cisloDomovni?: null | number;\n    cisloOrientacni?: null | number;\n    cisloOrientacniPismeno?: string;\n    kodStatu?: string;\n    nazevCastiObce?: string;\n    nazevKraje?: string;\n    nazevMestskehoObvodu?: string;\n    nazevObce?: string;\n    nazevOkresu?: string;\n    nazevStatu?: string;\n    nazevUlice?: string;\n    psc?: null | number;\n    pscTxt?: string;\n    textovaAdresa?: string;\n};\nexport type AresResRecord = {\n    czNace?: string[];\n    czNacePrevazujici?: string;\n    datumAktualizace?: string;\n    datumVzniku?: string;\n    datumZapisu?: string;\n    ico: string;\n    obchodniJmeno: string;\n    pravniForma?: string;\n    primarniZaznam: boolean;\n    sidlo?: AresRawAddress;\n    statistickeUdaje?: {\n        kategorieZamestnancu?: string;\n        klasifikaceEkonomickychCinnosti?: {\n            kodNace?: string;\n        };\n    };\n};\nexport type AresResResponse = {\n    icoId: string;\n    zaznamy: AresResRecord[];\n};\nexport type AresVrAddressEntry = {\n    adresa?: AresRawAddress;\n    datumVymazu?: string;\n    datumZapisu?: string;\n};\nexport type AresVrNameEntry = {\n    datumVymazu?: string;\n    datumZapisu?: string;\n    hodnota: string;\n};\nexport type AresVrSpisZn = {\n    datumVymazu?: string;\n    datumZapisu?: string;\n    oddil?: string;\n    soud?: string;\n    vlozka?: number | string;\n};\nexport type AresVrDeposit = {\n    hodnota?: string;\n    typObnos?: string;\n};\nexport type AresVrShareCapital = {\n    datumVymazu?: string;\n    datumZapisu?: string;\n    vklad?: AresVrDeposit;\n};\nexport type AresVrLegalFormEntry = {\n    datumVymazu?: string;\n    datumZapisu?: string;\n    hodnota?: string;\n};\nexport type AresVrPhysicalPerson = {\n    datumNarozeni?: string;\n    jmeno?: string;\n    prijmeni?: string;\n    statniObcanstvi?: string;\n    titulPredJmenem?: string;\n    titulZaJmenem?: string;\n};\nexport type AresVrLegalEntity = {\n    adresa?: AresRawAddress;\n    ico?: string;\n    obchodniJmeno?: string;\n};\nexport type AresVrBodyMember = {\n    adresa?: AresRawAddress;\n    clenstvi?: {\n        clenstvi?: {\n            vznikClenstvi?: string;\n            zanikClenstvi?: string;\n        };\n        funkce?: {\n            nazev?: string;\n        };\n    };\n    datumVymazu?: string;\n    fyzickaOsoba?: AresVrPhysicalPerson;\n    nazevAngazma?: string;\n    osoba?: {\n        fyzickaOsoba?: AresVrPhysicalPerson;\n        nazevAngazma?: string;\n        pravnickaOsoba?: AresVrLegalEntity;\n    };\n    pravnickaOsoba?: AresVrLegalEntity;\n};\nexport type AresVrStatutoryBody = {\n    clenoveOrganu?: AresVrBodyMember[];\n    datumVymazu?: string;\n    nazevOrganu?: string;\n    zpusobJednani?: {\n        datumVymazu?: string;\n        hodnota?: string;\n    }[];\n};\nexport type AresVrPrimaryRecord = {\n    adresy?: AresVrAddressEntry[];\n    datumVzniku?: {\n        hodnota?: string;\n    }[];\n    datumZapisu?: string;\n    ico?: {\n        hodnota?: string;\n    }[];\n    obchodniJmeno?: AresVrNameEntry[];\n    ostatniOrgany?: AresVrStatutoryBody[];\n    pravniForma?: AresVrLegalFormEntry[] | string;\n    primarniZaznam: boolean;\n    spisovaZnacka?: AresVrSpisZn[];\n    statutarniOrgany?: AresVrStatutoryBody[];\n    zakladniKapital?: AresVrShareCapital[];\n};\nexport type AresVrResponse = {\n    datumAktualizace?: string;\n    icoId: string;\n    stavSubjektu?: string;\n    zaznamy: AresVrPrimaryRecord[];\n};\nexport type AresSearchEntry = {\n    ico?: string;\n    obchodniJmeno: string;\n    pravniForma?: string;\n    sidlo?: AresRawAddress;\n};\nexport type AresSearchResponse = {\n    ekonomickeSubjekty: AresSearchEntry[];\n    pocetCelkem: number;\n};\nexport type AresCodeListItem = {\n    kod: string;\n    nazev?: {\n        nazev?: string;\n    }[];\n    platnostDo?: string;\n    platnostOd?: string;\n};\nexport type AresCodeListResponse = {\n    ciselniky?: {\n        polozkyCiselniku?: AresCodeListItem[];\n    }[];\n    pocetCelkem: number;\n};\nexport type AresAddress = {\n    country: null | string;\n    district: null | string;\n    houseNumber: null | string;\n    municipality: null | string;\n    municipalityPart: null | string;\n    orientationLetter: null | string;\n    orientationNumber: null | string;\n    postalCode: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type AresCourtFile = {\n    court: string;\n    insert: string;\n    section: string;\n};\nexport type AresBodyMember = {\n    address: null | string;\n    name: string;\n    role: null | string;\n    since: null | string;\n};\nexport type AresStatutoryBody = {\n    members: AresBodyMember[];\n    organName: string;\n};\nexport type AresCompany = {\n    actingClause: null | string;\n    address: AresAddress | null;\n    courtFile: AresCourtFile | null;\n    czNace: string[];\n    dateEstablished: null | string;\n    dateRegistered: null | string;\n    ico: string;\n    legalForm: null | string;\n    name: string;\n    registryUrl: string;\n    shareCapital: null | string;\n    status: null | string;\n    statutoryBodies: AresStatutoryBody[];\n    vrEnrichmentStatus: \"complete\" | \"not_found\" | \"not_requested\" | \"unavailable\";\n};\nexport type AresSearchResult = {\n    address: null | string;\n    ico: string;\n    name: string;\n};\nexport type AresErrorResponse = {\n    kod?: string;\n    popis?: string;\n    subKod?: string;\n};\n",
+    "./src/ares/validation.d.ts": "export declare const normalizeIco: (input: string) => string;\nexport declare const validateIco: (input: string) => boolean;\n",
+    "./src/browser.d.ts": "export { initialize, StdnumNotInitializedError } from \"@stll/stdnum/browser\";\n",
+    "./src/brreg/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport type { BrregEntity, BrregSearchResult } from \"./types.js\";\nexport type LookupOptions = RegistryClientOptions & {\n    includeSubEntities?: boolean;\n};\nexport declare const lookupByOrgnr: (orgnr: string, options: LookupOptions) => Promise<BrregEntity | null>;\nexport type SearchOptions = RegistryClientOptions & {\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<BrregSearchResult[]>;\n",
+    "./src/brreg/default-format.d.ts": "import type { RegistryFormatClause } from \"../format-clauses.js\";\nexport declare const BRREG_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[];\nexport declare const BRREG_DEFAULT_FORMAT: string;\n",
+    "./src/brreg/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class BrregError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class BrregAPIError extends BrregError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class BrregNotFoundError extends BrregError {\n    readonly orgnr: string;\n    readonly canonicalId: string;\n    readonly registrySlug: string;\n    constructor(orgnr: string);\n}\nexport declare class BrregTooBroadError extends BrregError {\n    constructor(query: string);\n}\nexport declare class BrregValidationError extends BrregError {\n    constructor(message: string);\n}\nexport declare class BrregRequestError extends BrregError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/brreg/identifier-format.d.ts": "export declare const BRREG_IDENTIFIER_SPACED_TOKEN: \"registry number spaced\";\nexport declare const formatBrregIdentifierSpaced: (identifier: string) => string;\n",
+    "./src/brreg/index.d.ts": "export { lookupByOrgnr, searchByName } from \"./client.js\";\nexport type { LookupOptions, SearchOptions } from \"./client.js\";\nexport { BrregAPIError, BrregError, BrregNotFoundError, BrregRequestError, BrregTooBroadError, BrregValidationError, } from \"./errors.js\";\nexport { parseAddress, parseEnhet, parseSearchEntry } from \"./parse.js\";\nexport { lookupOfficersByOrgnr, parseOfficer, parseRolesResponse, } from \"./roles.js\";\nexport type { BrregOfficer, BrregOfficerEntity, BrregOfficerPerson, BrregOfficerTrustee, BrregRawRolesResponse, } from \"./roles.js\";\nexport type { BrregAddress, BrregEntity, BrregEntityStatus, BrregErrorResponse, BrregIndustryCode, BrregRawAddress, BrregRawEnhet, BrregRawInstitusjonellSektor, BrregRawNaeringskode, BrregRawOrgForm, BrregSearchResponse, BrregSearchResult, } from \"./types.js\";\nexport { normalizeOrgnr, validateOrgnr } from \"./validation.js\";\n",
+    "./src/brreg/parse.d.ts": "import type { BrregAddress, BrregEntity, BrregRawAddress, BrregRawEnhet, BrregSearchResult } from \"./types.js\";\nexport type BrregEnhetKind = \"enhet\" | \"underenhet\";\nexport declare const parseAddress: (raw: BrregRawAddress) => BrregAddress;\nexport declare const parseEnhet: (raw: BrregRawEnhet, kind?: BrregEnhetKind) => BrregEntity;\nexport declare const parseSearchEntry: (raw: BrregRawEnhet) => BrregSearchResult;\n",
+    "./src/brreg/roles.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\ntype BrregRawRoleType = {\n    beskrivelse?: string;\n    kode: string;\n};\ntype BrregRawRolePerson = {\n    erDoed?: boolean;\n    fodselsdato?: string;\n    navn?: {\n        etternavn?: string;\n        fornavn?: string;\n        mellomnavn?: string;\n    };\n};\ntype BrregRawRoleEntity = {\n    erSlettet?: boolean;\n    navn?: string[];\n    organisasjonsform?: BrregRawRoleType;\n    organisasjonsnummer: string;\n};\ntype BrregRawRoleTrustee = {\n    erDoed?: boolean;\n    navn: string;\n    postadresse?: {\n        adresse?: string[];\n        landkode?: string;\n        postnummer?: string;\n        poststed?: string;\n    };\n};\ntype BrregRawRole = {\n    avregistrert?: boolean;\n    bostyrer?: BrregRawRoleTrustee;\n    enhet?: BrregRawRoleEntity;\n    fratraadt?: boolean;\n    person?: BrregRawRolePerson;\n    rekkefolge?: number;\n    type: BrregRawRoleType;\n};\ntype BrregRawRoleGroup = {\n    roller?: BrregRawRole[];\n    sistEndret?: string;\n    type: BrregRawRoleType;\n};\nexport type BrregRawRolesResponse = {\n    rollegrupper?: BrregRawRoleGroup[];\n};\nexport type BrregOfficerPerson = {\n    birthYear: null | number;\n    isDeceased: boolean;\n    name: string;\n};\nexport type BrregOfficerEntity = {\n    name: string;\n    orgnr: string;\n};\nexport type BrregOfficerTrustee = {\n    name: string;\n    postalAddress: null | string;\n};\nexport type BrregOfficer = {\n    changedAt: null | string;\n    entity?: BrregOfficerEntity;\n    isResigned: boolean;\n    person?: BrregOfficerPerson;\n    role: {\n        code: string;\n        description: null | string;\n    };\n    trustee?: BrregOfficerTrustee;\n};\nexport declare const parseOfficer: (raw: BrregRawRole, changedAt: null | string) => BrregOfficer;\nexport declare const parseRolesResponse: (raw: BrregRawRolesResponse) => BrregOfficer[];\nexport declare const lookupOfficersByOrgnr: (orgnr: string, options: RegistryClientOptions) => Promise<BrregOfficer[]>;\nexport {};\n",
+    "./src/brreg/types.d.ts": "export type BrregRawAddress = {\n    adresse?: string[];\n    kommune?: string;\n    kommunenummer?: string;\n    land?: string;\n    landkode?: string;\n    postnummer?: string;\n    poststed?: string;\n};\nexport type BrregRawOrgForm = {\n    beskrivelse?: string;\n    kode?: string;\n};\nexport type BrregRawNaeringskode = {\n    beskrivelse?: string;\n    kode?: string;\n};\nexport type BrregRawInstitusjonellSektor = {\n    beskrivelse?: string;\n    kode?: string;\n};\nexport type BrregRawEnhet = {\n    antallAnsatte?: number;\n    beliggenhetsadresse?: BrregRawAddress;\n    forretningsadresse?: BrregRawAddress;\n    hjemmeside?: string;\n    institusjonellSektorkode?: BrregRawInstitusjonellSektor;\n    konkurs?: boolean;\n    konkursdato?: string;\n    naeringskode1?: BrregRawNaeringskode;\n    naeringskode2?: BrregRawNaeringskode;\n    naeringskode3?: BrregRawNaeringskode;\n    navn: string;\n    nedleggelsesdato?: string;\n    organisasjonsform?: BrregRawOrgForm;\n    organisasjonsnummer: string;\n    postadresse?: BrregRawAddress;\n    registreringsdatoEnhetsregisteret?: string;\n    registrertIFrivillighetsregisteret?: boolean;\n    registrertIMvaregisteret?: boolean;\n    slettedato?: string;\n    stiftelsesdato?: string;\n    tvangsavvikletPgaManglendeSlettingDato?: string;\n    tvangsopplostPgaMangelfulltStyreDato?: string;\n    tvangsopplostPgaManglendeDagligLederDato?: string;\n    tvangsopplostPgaManglendeRegnskapDato?: string;\n    tvangsopplostPgaManglendeRevisorDato?: string;\n    underAvvikling?: boolean;\n    underAvviklingDato?: string;\n    underTvangsavviklingEllerTvangsopplosning?: boolean;\n};\nexport type BrregSearchResponse = {\n    _embedded?: {\n        enheter?: BrregRawEnhet[];\n    };\n    page?: {\n        number: number;\n        size: number;\n        totalElements: number;\n        totalPages: number;\n    };\n};\nexport type BrregErrorResponse = {\n    feilmelding?: string;\n    hjelp?: string;\n    status?: number;\n    tidspunkt?: string;\n};\nexport type BrregAddress = {\n    city: null | string;\n    country: null | string;\n    municipality: null | string;\n    postalCode: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type BrregIndustryCode = {\n    code: string;\n    description: null | string;\n};\nexport type BrregEntityStatus = {\n    deletedAt: string;\n    type: \"deleted\";\n} | {\n    openedAt: null | string;\n    type: \"bankruptcy\";\n} | {\n    openedAt: null | string;\n    type: \"compulsory_liquidation\";\n} | {\n    openedAt: null | string;\n    type: \"voluntary_liquidation\";\n} | {\n    type: \"active\";\n};\nexport type BrregEntity = {\n    businessAddress: BrregAddress | null;\n    establishedAt: null | string;\n    industryCodes: BrregIndustryCode[];\n    legalForm: null | string;\n    legalFormCode: null | string;\n    name: string;\n    numberOfEmployees: null | number;\n    orgnr: string;\n    postalAddress: BrregAddress | null;\n    registeredAt: null | string;\n    registryUrl: string;\n    status: BrregEntityStatus;\n    vatRegistered: boolean;\n};\nexport type BrregSearchResult = {\n    address: null | string;\n    name: string;\n    orgnr: string;\n};\n",
+    "./src/brreg/validation.d.ts": "export declare const normalizeOrgnr: (input: string) => string;\nexport declare const validateOrgnr: (input: string) => boolean;\n",
+    "./src/cnpj/index.d.ts": "export { normalizeCnpj, validateCnpj } from \"./validation.js\";\n",
+    "./src/cnpj/validation.d.ts": "export declare const normalizeCnpj: (input: string) => string;\nexport declare const validateCnpj: (input: string) => boolean;\n",
+    "./src/companies-house/client.d.ts": "import type { RegistryClientOptions } from \"../shared/http.js\";\nimport type { CompaniesHouseCompany, CompaniesHouseOfficer, CompaniesHouseSearchResult } from \"./types.js\";\nexport type CompaniesHouseClientConfig = RegistryClientOptions & {\n    apiKey: string;\n};\nexport declare const lookupByCompanyNumber: (input: string, config: CompaniesHouseClientConfig) => Promise<CompaniesHouseCompany | null>;\nexport type SearchOptions = {\n    limit?: number;\n    startIndex?: number;\n};\nexport declare const searchByName: (query: string, config: CompaniesHouseClientConfig, options?: SearchOptions) => Promise<CompaniesHouseSearchResult[]>;\nexport type OfficersOptions = {\n    limit?: number;\n};\nexport declare const lookupOfficersByCompanyNumber: (input: string, config: CompaniesHouseClientConfig, options?: OfficersOptions) => Promise<CompaniesHouseOfficer[]>;\n",
+    "./src/companies-house/default-format.d.ts": "import type { RegistryFormatClause } from \"../format-clauses.js\";\nexport declare const COMPANIES_HOUSE_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[];\nexport declare const COMPANIES_HOUSE_DEFAULT_FORMAT: string;\n",
+    "./src/companies-house/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class CompaniesHouseError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class CompaniesHouseAPIError extends CompaniesHouseError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class CompaniesHouseAuthError extends CompaniesHouseError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class CompaniesHouseNotFoundError extends CompaniesHouseError {\n    readonly companyNumber: string;\n    readonly canonicalId: string;\n    readonly registrySlug: string;\n    constructor(companyNumber: string);\n}\nexport declare class CompaniesHouseValidationError extends CompaniesHouseError {\n    constructor(message: string);\n}\nexport declare class CompaniesHouseRequestError extends CompaniesHouseError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/companies-house/index.d.ts": "export { lookupByCompanyNumber, lookupOfficersByCompanyNumber, searchByName, } from \"./client.js\";\nexport type { CompaniesHouseClientConfig, SearchOptions } from \"./client.js\";\nexport { CompaniesHouseAPIError, CompaniesHouseAuthError, CompaniesHouseError, CompaniesHouseNotFoundError, CompaniesHouseRequestError, CompaniesHouseValidationError, } from \"./errors.js\";\nexport { parseAddress, parseCompanyProfile, parseOfficer, parseOfficersResponse, parseSearchItem, parseSearchResponse, } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { NormalizeCompaniesHouseOptions } from \"./normalized.js\";\nexport type { CompaniesHouseAccounts, CompaniesHouseAddress, CompaniesHouseCompany, CompaniesHouseConfirmationStatement, CompaniesHouseEntityStatus, CompaniesHouseOfficer, CompaniesHousePreviousName, CompaniesHouseRawAccounts, CompaniesHouseRawAddress, CompaniesHouseRawCompanyProfile, CompaniesHouseRawConfirmationStatement, CompaniesHouseRawOfficer, CompaniesHouseRawOfficersResponse, CompaniesHouseRawPreviousName, CompaniesHouseRawSearchItem, CompaniesHouseRawSearchResponse, CompaniesHouseSearchResult, } from \"./types.js\";\nexport { normalizeCompanyNumber, validateCompanyNumber } from \"./validation.js\";\n",
+    "./src/companies-house/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { CompaniesHouseCompany, CompaniesHouseOfficer, CompaniesHouseSearchResult } from \"./types.js\";\nexport type NormalizeCompaniesHouseOptions = {\n    officers?: CompaniesHouseOfficer[];\n};\nexport declare const toNormalizedEntity: (company: CompaniesHouseCompany, options?: NormalizeCompaniesHouseOptions) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (result: CompaniesHouseSearchResult) => NormalizedRegistrySearchResult;\n",
+    "./src/companies-house/parse.d.ts": "import type { CompaniesHouseAddress, CompaniesHouseCompany, CompaniesHouseOfficer, CompaniesHouseRawAddress, CompaniesHouseRawCompanyProfile, CompaniesHouseRawOfficer, CompaniesHouseRawOfficersResponse, CompaniesHouseRawSearchItem, CompaniesHouseRawSearchResponse, CompaniesHouseSearchResult } from \"./types.js\";\nexport declare const parseAddress: (raw: CompaniesHouseRawAddress) => CompaniesHouseAddress;\nexport declare const parseCompanyProfile: (raw: CompaniesHouseRawCompanyProfile) => CompaniesHouseCompany;\nexport declare const parseSearchItem: (raw: CompaniesHouseRawSearchItem) => CompaniesHouseSearchResult;\nexport declare const parseSearchResponse: (raw: CompaniesHouseRawSearchResponse) => CompaniesHouseSearchResult[];\nexport declare const parseOfficer: (raw: CompaniesHouseRawOfficer) => CompaniesHouseOfficer;\nexport declare const parseOfficersResponse: (raw: CompaniesHouseRawOfficersResponse) => CompaniesHouseOfficer[];\n",
+    "./src/companies-house/types.d.ts": "export type CompaniesHouseRawAddress = {\n    address_line_1?: string;\n    address_line_2?: string;\n    care_of?: string;\n    country?: string;\n    locality?: string;\n    po_box?: string;\n    postal_code?: string;\n    premises?: string;\n    region?: string;\n};\nexport type CompaniesHouseRawAccounts = {\n    accounting_reference_date?: {\n        day?: number | string;\n        month?: number | string;\n    };\n    last_accounts?: {\n        made_up_to?: string;\n        period_end_on?: string;\n        period_start_on?: string;\n        type?: string;\n    };\n    next_accounts?: {\n        due_on?: string;\n        overdue?: boolean;\n        period_end_on?: string;\n        period_start_on?: string;\n    };\n    next_due?: string;\n    next_made_up_to?: string;\n    overdue?: boolean;\n};\nexport type CompaniesHouseRawConfirmationStatement = {\n    last_made_up_to?: string;\n    next_due?: string;\n    next_made_up_to?: string;\n    overdue?: boolean;\n};\nexport type CompaniesHouseRawPreviousName = {\n    ceased_on?: string;\n    effective_from?: string;\n    name: string;\n};\nexport type CompaniesHouseRawCompanyProfile = {\n    accounts?: CompaniesHouseRawAccounts;\n    company_name: string;\n    company_number: string;\n    company_status?: string;\n    company_status_detail?: string;\n    confirmation_statement?: CompaniesHouseRawConfirmationStatement;\n    date_of_cessation?: string;\n    date_of_creation?: string;\n    has_been_liquidated?: boolean;\n    has_charges?: boolean;\n    has_insolvency_history?: boolean;\n    jurisdiction?: string;\n    links?: {\n        charges?: string;\n        filing_history?: string;\n        officers?: string;\n        persons_with_significant_control?: string;\n        self?: string;\n    };\n    previous_company_names?: CompaniesHouseRawPreviousName[];\n    registered_office_address?: CompaniesHouseRawAddress;\n    registered_office_is_in_dispute?: boolean;\n    service_address?: CompaniesHouseRawAddress;\n    sic_codes?: string[];\n    subtype?: string;\n    type?: string;\n    undeliverable_registered_office_address?: boolean;\n};\nexport type CompaniesHouseRawSearchItem = {\n    address?: CompaniesHouseRawAddress;\n    address_snippet?: string;\n    company_number: string;\n    company_status?: string;\n    company_type?: string;\n    date_of_cessation?: string;\n    date_of_creation?: string;\n    description?: string;\n    description_identifier?: string[];\n    kind?: string;\n    links?: {\n        self?: string;\n    };\n    title: string;\n};\nexport type CompaniesHouseRawSearchResponse = {\n    etag?: string;\n    items?: CompaniesHouseRawSearchItem[];\n    items_per_page?: number;\n    kind?: string;\n    start_index?: number;\n    total_results?: number;\n};\nexport type CompaniesHouseRawOfficerDateOfBirth = {\n    day?: number | string;\n    month?: number | string;\n    year?: number | string;\n};\nexport type CompaniesHouseRawOfficer = {\n    address?: CompaniesHouseRawAddress;\n    appointed_before?: string;\n    appointed_on?: string;\n    country_of_residence?: string;\n    date_of_birth?: CompaniesHouseRawOfficerDateOfBirth;\n    identification?: {\n        identification_type?: string;\n        legal_authority?: string;\n        legal_form?: string;\n        place_registered?: string;\n        registration_number?: string;\n    };\n    is_pre_1992_appointment?: boolean;\n    links?: {\n        officer?: {\n            appointments?: string;\n        };\n    };\n    name: string;\n    nationality?: string;\n    occupation?: string;\n    officer_role: string;\n    principal_office_address?: CompaniesHouseRawAddress;\n    resigned_on?: string;\n};\nexport type CompaniesHouseRawOfficersResponse = {\n    active_count?: number | string;\n    etag?: string;\n    inactive_count?: number | string;\n    items?: CompaniesHouseRawOfficer[];\n    items_per_page?: number;\n    kind?: string;\n    links?: {\n        self?: string;\n    };\n    resigned_count?: number | string;\n    start_index?: number;\n    total_results?: number;\n};\nexport type CompaniesHouseAddress = {\n    addressLine1: null | string;\n    addressLine2: null | string;\n    careOf: null | string;\n    country: null | string;\n    locality: null | string;\n    poBox: null | string;\n    postalCode: null | string;\n    premises: null | string;\n    region: null | string;\n    textAddress: null | string;\n};\nexport type CompaniesHouseAccounts = {\n    lastMadeUpTo: null | string;\n    nextDue: null | string;\n    nextMadeUpTo: null | string;\n    overdue: boolean;\n};\nexport type CompaniesHouseConfirmationStatement = {\n    lastMadeUpTo: null | string;\n    nextDue: null | string;\n    nextMadeUpTo: null | string;\n    overdue: boolean;\n};\nexport type CompaniesHousePreviousName = {\n    ceasedOn: null | string;\n    effectiveFrom: null | string;\n    name: string;\n};\nexport type CompaniesHouseEntityStatus = {\n    closedAt: null | string;\n    type: \"converted-closed\";\n} | {\n    dissolvedAt: null | string;\n    type: \"dissolved\";\n} | {\n    type: \"active\";\n} | {\n    type: \"administration\";\n} | {\n    type: \"closed\";\n} | {\n    type: \"insolvency-proceedings\";\n} | {\n    type: \"liquidation\";\n} | {\n    type: \"open\";\n} | {\n    type: \"receivership\";\n} | {\n    type: \"registered\";\n} | {\n    type: \"removed\";\n} | {\n    type: \"unknown\";\n} | {\n    type: \"voluntary-arrangement\";\n};\nexport type CompaniesHouseCompany = {\n    accounts: CompaniesHouseAccounts | null;\n    companyNumber: string;\n    confirmationStatement: CompaniesHouseConfirmationStatement | null;\n    dateOfCessation: null | string;\n    dateOfCreation: null | string;\n    hasBeenLiquidated: boolean | null;\n    hasCharges: boolean | null;\n    hasInsolvencyHistory: boolean | null;\n    jurisdiction: null | string;\n    name: string;\n    previousNames: CompaniesHousePreviousName[];\n    registeredOfficeAddress: CompaniesHouseAddress | null;\n    registryUrl: string;\n    serviceAddress: CompaniesHouseAddress | null;\n    sicCodes: string[];\n    status: CompaniesHouseEntityStatus;\n    statusDetail: null | string;\n    subtype: null | string;\n    type: null | string;\n};\nexport type CompaniesHouseSearchResult = {\n    address: null | string;\n    companyNumber: string;\n    dateOfCessation: null | string;\n    dateOfCreation: null | string;\n    name: string;\n    registryUrl: string;\n    status: CompaniesHouseEntityStatus;\n    type: null | string;\n};\nexport type CompaniesHouseOfficer = {\n    address: CompaniesHouseAddress | null;\n    appointedBefore: null | string;\n    appointedOn: null | string;\n    countryOfResidence: null | string;\n    dateOfBirth: null | {\n        month: number;\n        year: number;\n    };\n    identification: null | {\n        legalAuthority: null | string;\n        legalForm: null | string;\n        placeRegistered: null | string;\n        registrationNumber: null | string;\n        type: null | string;\n    };\n    isResigned: boolean;\n    name: string;\n    nationality: null | string;\n    occupation: null | string;\n    resignedOn: null | string;\n    role: {\n        code: string;\n        title: null | string;\n    };\n};\n",
+    "./src/companies-house/validation.d.ts": "export declare const normalizeCompanyNumber: (input: string) => string;\nexport declare const validateCompanyNumber: (input: string) => boolean;\n",
+    "./src/cpf/index.d.ts": "export { normalizeCpf, validateCpf } from \"./validation.js\";\n",
+    "./src/cpf/validation.d.ts": "export declare const normalizeCpf: (input: string) => string;\nexport declare const validateCpf: (input: string) => boolean;\n",
+    "./src/default-formats.d.ts": "import type { RegistryFormatClause } from \"./format-clauses.js\";\nexport type RegistryFormatCapability = {\n    defaultFormat: string;\n    resultShape: \"full-record\" | \"search-result\";\n    type: \"registry-reference\";\n} | {\n    defaultFormat: string;\n    resultShape: \"full-record\";\n    type: \"company-specification\";\n};\nexport declare const REGISTRY_FORMAT_SLUGS: readonly [\n    \"ares\",\n    \"brreg\",\n    \"companies-house\",\n    \"denue\",\n    \"edgar\",\n    \"gcis\",\n    \"krs\",\n    \"orsr\",\n    \"prh\",\n    \"recherche-entreprises\",\n    \"rpo\",\n    \"vies\"\n];\nexport type RegistryFormatSlug = (typeof REGISTRY_FORMAT_SLUGS)[number];\nexport type RegistryFormatRun = {\n    start: number;\n    style: \"bold\" | \"italic\" | \"plain\";\n    text: string;\n};\nexport declare const parseRegistryFormatMarkdown: (text: string) => RegistryFormatRun[];\nexport declare const stripRegistryFormatMarkdown: (text: string) => string;\nexport declare const BUSINESS_REGISTRY_FORMAT_CAPABILITIES: Readonly<Record<RegistryFormatSlug, RegistryFormatCapability>>;\nexport declare const CLAUSE_DRIVEN_REGISTRY_SLUGS: readonly [\n    \"brreg\",\n    \"companies-house\",\n    \"krs\",\n    \"orsr\",\n    \"prh\",\n    \"recherche-entreprises\"\n];\nexport type ClauseDrivenRegistrySlug = (typeof CLAUSE_DRIVEN_REGISTRY_SLUGS)[number];\nexport declare const REGISTRY_DEFAULT_FORMAT_CLAUSES: Readonly<Record<ClauseDrivenRegistrySlug, readonly RegistryFormatClause[]>>;\nexport declare const isClauseDrivenRegistry: (registry: RegistryFormatSlug) => registry is ClauseDrivenRegistrySlug;\nexport declare const PREVIOUS_DEFAULT_FORMATS: Readonly<Record<Extract<RegistryFormatSlug, \"ares\" | \"brreg\" | \"companies-house\" | \"krs\" | \"orsr\" | \"prh\" | \"recherche-entreprises\">, readonly [\n    string,\n    ...string[]\n]>>;\nexport declare const isBuiltInRegistryFormat: (registry: RegistryFormatSlug, format: string) => boolean;\n",
+    "./src/denue/client.d.ts": "import type { RegistryClientOptions } from \"../shared/http.js\";\nimport type { DenueEstablishment, DenueSearchResult } from \"./types.js\";\nexport type DenueClientOptions = RegistryClientOptions & {\n    baseUrl?: string;\n    timeoutMs?: number;\n    token: string;\n};\nexport type SearchOptions = {\n    limit?: number;\n    stateCode?: string;\n};\nexport declare const lookupByEstablishmentId: (id: string, options: DenueClientOptions) => Promise<DenueEstablishment | null>;\nexport declare const searchByName: (name: string, clientOptions: DenueClientOptions, options?: SearchOptions) => Promise<DenueSearchResult[]>;\n",
+    "./src/denue/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class DenueError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class DenueAPIError extends DenueError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class DenueAuthError extends DenueError {\n    constructor(message: string);\n}\nexport declare class DenueValidationError extends DenueError {\n    constructor(message: string);\n}\nexport declare class DenueRequestError extends DenueError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/denue/index.d.ts": "export { lookupByEstablishmentId, searchByName } from \"./client.js\";\nexport type { DenueClientOptions, SearchOptions } from \"./client.js\";\nexport { DenueAPIError, DenueAuthError, DenueError, DenueRequestError, DenueValidationError, } from \"./errors.js\";\nexport { parseEstablishment, parseSearchEntry } from \"./parse.js\";\nexport type { DenueAddress, DenueCoordinates, DenueEstablishment, DenueRawEstablishment, DenueResponse, DenueSearchResult, } from \"./types.js\";\nexport { normalizeEstablishmentId, normalizeStateCode, validateEstablishmentId, validateStateCode, } from \"./validation.js\";\n",
+    "./src/denue/parse.d.ts": "import type { DenueEstablishment, DenueRawEstablishment, DenueSearchResult } from \"./types.js\";\nexport declare const parseEstablishment: (raw: DenueRawEstablishment) => DenueEstablishment;\nexport declare const parseSearchEntry: (raw: DenueRawEstablishment) => DenueSearchResult;\n",
+    "./src/denue/types.d.ts": "export type DenueRawEstablishment = {\n    CLEE?: string;\n    CP?: string;\n    Calle?: string;\n    CentroComercial?: string;\n    Clase_actividad?: string;\n    Colonia?: string;\n    Correo_e?: string;\n    Estrato?: string;\n    Id: string;\n    Latitud?: string;\n    Longitud?: string;\n    Nombre: string;\n    NumLocal?: string;\n    Num_Exterior?: string;\n    Num_Interior?: string;\n    Razon_social?: string;\n    Sitio_internet?: string;\n    Telefono?: string;\n    Tipo?: string;\n    TipoCentroComercial?: string;\n    Tipo_vialidad?: string;\n    Ubicacion?: string;\n};\nexport type DenueErrorResponse = string[];\nexport type DenueResponse = DenueErrorResponse | DenueRawEstablishment[];\nexport type DenueCoordinates = {\n    latitude: null | number;\n    longitude: null | number;\n};\nexport type DenueAddress = {\n    country: \"MX\";\n    line1: null | string;\n    line2: null | string;\n    locality: null | string;\n    municipality: null | string;\n    postalCode: null | string;\n    state: null | string;\n    textAddress: null | string;\n};\nexport type DenueEstablishment = {\n    activityClass: null | string;\n    address: DenueAddress | null;\n    clee: null | string;\n    coordinates: DenueCoordinates;\n    email: null | string;\n    employeeStratum: null | string;\n    id: string;\n    legalName: null | string;\n    name: string;\n    phone: null | string;\n    registryUrl: string;\n    shoppingCenter: null | string;\n    shoppingCenterType: null | string;\n    unitNumber: null | string;\n    unitType: null | string;\n    website: null | string;\n};\nexport type DenueSearchResult = Pick<DenueEstablishment, \"activityClass\" | \"clee\" | \"coordinates\" | \"employeeStratum\" | \"id\" | \"legalName\" | \"name\" | \"registryUrl\" | \"unitType\"> & {\n    address: null | string;\n};\n",
+    "./src/denue/validation.d.ts": "export declare const normalizeEstablishmentId: (input: string) => string;\nexport declare const validateEstablishmentId: (input: string) => boolean;\nexport declare const normalizeStateCode: (input: string) => string;\nexport declare const validateStateCode: (input: string) => boolean;\n",
+    "./src/edgar/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport type { EdgarCompany } from \"./types.js\";\nexport type EdgarClientConfig = RegistryClientOptions & {\n    userAgent: string;\n};\nexport declare const lookupByCik: (cik: string, config: EdgarClientConfig) => Promise<EdgarCompany | null>;\n",
+    "./src/edgar/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class EdgarError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class EdgarAPIError extends EdgarError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class EdgarNotFoundError extends EdgarError {\n    readonly cik: string;\n    readonly canonicalId: string;\n    readonly registrySlug: string;\n    constructor(cik: string);\n}\nexport declare class EdgarValidationError extends EdgarError {\n    constructor(message: string);\n}\nexport declare class EdgarRequestError extends EdgarError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/edgar/identifier-format.d.ts": "export declare const EIN_DASHED_TOKEN: \"EIN dashed\";\nexport declare const formatEinDashed: (ein: string) => string;\n",
+    "./src/edgar/index.d.ts": "export { lookupByCik } from \"./client.js\";\nexport type { EdgarClientConfig } from \"./client.js\";\nexport { EdgarAPIError, EdgarError, EdgarNotFoundError, EdgarRequestError, EdgarValidationError, } from \"./errors.js\";\nexport { parseAddress, parseSubmission } from \"./parse.js\";\nexport type { ParseSubmissionOptions } from \"./parse.js\";\nexport type { EdgarAddress, EdgarCompany, EdgarEntityStatus, EdgarFiling, EdgarFormerName, EdgarRawAddress, EdgarRawAddresses, EdgarRawFilings, EdgarRawFormerName, EdgarRawRecentFilings, EdgarRawSubmission, } from \"./types.js\";\nexport { normalizeCik, padCik, validateCik } from \"./validation.js\";\n",
+    "./src/edgar/parse.d.ts": "import type { EdgarAddress, EdgarCompany, EdgarRawAddress, EdgarRawSubmission } from \"./types.js\";\nexport declare const parseAddress: (raw: EdgarRawAddress) => EdgarAddress;\nexport type ParseSubmissionOptions = {\n    now?: number;\n};\nexport declare const parseSubmission: (raw: EdgarRawSubmission, options?: ParseSubmissionOptions) => EdgarCompany;\n",
+    "./src/edgar/types.d.ts": "export type EdgarRawAddress = {\n    city?: null | string;\n    country?: null | string;\n    countryCode?: null | string;\n    foreignStateTerritory?: null | string;\n    isForeignLocation?: null | number;\n    stateOrCountry?: null | string;\n    stateOrCountryDescription?: null | string;\n    street1?: null | string;\n    street2?: null | string;\n    zipCode?: null | string;\n};\nexport type EdgarRawAddresses = {\n    business?: EdgarRawAddress;\n    mailing?: EdgarRawAddress;\n};\nexport type EdgarRawFormerName = {\n    from?: null | string;\n    name: string;\n    to?: null | string;\n};\nexport type EdgarRawRecentFilings = {\n    acceptanceDateTime?: string[];\n    accessionNumber?: string[];\n    filingDate?: string[];\n    form?: string[];\n    primaryDocDescription?: string[];\n    primaryDocument?: string[];\n    reportDate?: string[];\n};\nexport type EdgarRawFilings = {\n    recent?: EdgarRawRecentFilings;\n};\nexport type EdgarRawSubmission = {\n    addresses?: EdgarRawAddresses;\n    category?: string;\n    cik: string;\n    ein?: string;\n    entityType?: string;\n    exchanges?: string[];\n    filings?: EdgarRawFilings;\n    fiscalYearEnd?: string;\n    formerNames?: EdgarRawFormerName[];\n    name: string;\n    sic?: string;\n    sicDescription?: string;\n    stateOfIncorporation?: string;\n    tickers?: string[];\n};\nexport type EdgarAddress = {\n    city: null | string;\n    country: null | string;\n    postalCode: null | string;\n    region: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type EdgarFiling = {\n    acceptanceDateTime: null | string;\n    accessionNumber: string;\n    filingDate: string;\n    form: string;\n    primaryDocDescription: null | string;\n    primaryDocument: null | string;\n    reportDate: null | string;\n};\nexport type EdgarFormerName = {\n    from: null | string;\n    name: string;\n    to: null | string;\n};\nexport type EdgarEntityStatus = {\n    lastFilingDate: string;\n    type: \"stale\";\n} | {\n    type: \"active\";\n} | {\n    type: \"unknown\";\n};\nexport type EdgarCompany = {\n    addresses: {\n        business: EdgarAddress | null;\n        mailing: EdgarAddress | null;\n    };\n    cik: string;\n    ein: null | string;\n    exchanges: string[];\n    formerNames: EdgarFormerName[];\n    name: string;\n    recentFilings: EdgarFiling[];\n    registryUrl: string;\n    sic: null | string;\n    sicDescription: null | string;\n    status: EdgarEntityStatus;\n    tickers: string[];\n};\n",
+    "./src/edgar/validation.d.ts": "export declare const normalizeCik: (input: string) => string;\nexport declare const padCik: (input: string) => string;\nexport declare const validateCik: (input: string) => boolean;\n",
+    "./src/entity-checks/cz-insolvency.d.ts": "import { Result } from \"better-result\";\nimport type { RegistryRequestObservation } from \"../shared/request-observer.js\";\nimport type { CheckedEntityCheckSubject, EntityCheckSource, EntityCheckSourceError, SourceAnswer } from \"./result.js\";\nexport declare const CZ_INSOLVENCY_SOURCE: EntityCheckSource;\nexport declare const CZ_INSOLVENCY_MATCH_BASES: readonly [\n    \"company-id\",\n    \"name-and-birth-date\"\n];\ntype IsirMatchBasis = (typeof CZ_INSOLVENCY_MATCH_BASES)[number];\nexport declare const CZ_INSOLVENCY_PHASES: readonly [\n    \"ongoing\",\n    \"ended\",\n    \"unverified\"\n];\nexport type CzInsolvencyFinding = {\n    court: null | string;\n    debtor: {\n        address: null | string;\n        birthDate: null | string;\n        companyId: null | string;\n        firstName: null | string;\n        name: null | string;\n    };\n    fileNumber: string;\n    insolvencyDeclaredOn: null | string;\n    insolvencyEndedOn: null | string;\n    matchedBy: IsirMatchBasis;\n    phase: (typeof CZ_INSOLVENCY_PHASES)[number];\n    stateCode: null | string;\n    url: null | string;\n};\nexport declare const checkCzInsolvency: (subject: CheckedEntityCheckSubject, signal: AbortSignal | undefined, observer: RegistryRequestObservation) => Promise<Result<SourceAnswer<CzInsolvencyFinding, null>, EntityCheckSourceError>>;\nexport {};\n",
+    "./src/entity-checks/cz-vat-reliability.d.ts": "import { Result } from \"better-result\";\nimport type { RegistryRequestObservation } from \"../shared/request-observer.js\";\nimport type { CheckedEntityCheckSubject, EntityCheckSource, EntityCheckSourceError, SourceAnswer } from \"./result.js\";\nexport declare const CZ_VAT_RELIABILITY_SOURCE: EntityCheckSource;\nexport declare const CZ_VAT_SUBJECT_TYPES: readonly [\n    \"vat-payer\",\n    \"identified-person\",\n    \"vat-group\",\n    \"unreliable-person\"\n];\ntype CzVatSubjectType = (typeof CZ_VAT_SUBJECT_TYPES)[number];\ntype CzVatPublishedAccount = {\n    account: string;\n    publishedOn: string;\n    withdrawnOn: null | string;\n};\nexport type CzVatPayerRecord = {\n    address: null | string;\n    name: null | string;\n    publishedAccounts: CzVatPublishedAccount[];\n    subjectType: CzVatSubjectType;\n    taxOfficeCode: null | string;\n};\nexport declare const CZ_VAT_FINDING_TYPES: readonly [\n    \"unreliable-vat-payer\",\n    \"unreliable-person\"\n];\nexport type CzVatReliabilityFinding = {\n    publishedOn: null | string;\n    type: (typeof CZ_VAT_FINDING_TYPES)[number];\n};\ntype CzVatAnswer = SourceAnswer<CzVatReliabilityFinding, CzVatPayerRecord>;\nexport declare const checkCzVatReliability: (subject: CheckedEntityCheckSubject, signal: AbortSignal | undefined, observer: RegistryRequestObservation) => Promise<Result<CzVatAnswer, EntityCheckSourceError>>;\nexport {};\n",
+    "./src/entity-checks/index.d.ts": "export { CZ_INSOLVENCY_MATCH_BASES, CZ_INSOLVENCY_PHASES, CZ_INSOLVENCY_SOURCE, } from \"./cz-insolvency.js\";\nexport type { CzInsolvencyFinding } from \"./cz-insolvency.js\";\nexport { CZ_VAT_FINDING_TYPES, CZ_VAT_RELIABILITY_SOURCE, CZ_VAT_SUBJECT_TYPES, } from \"./cz-vat-reliability.js\";\nexport type { CzVatPayerRecord, CzVatReliabilityFinding, } from \"./cz-vat-reliability.js\";\nexport { ENTITY_CHECK_NOT_COVERED_REASONS, ENTITY_CHECK_SUBJECT_TYPES, ENTITY_CHECK_UNAVAILABLE_REASONS, } from \"./result.js\";\nexport type { EntityCheckSubject } from \"./result.js\";\nexport { ENTITY_CHECK_KINDS, EntityCheckInputError, runEntityCheck, } from \"./run.js\";\nexport type { EntityCheckKind, EntityCheckResult } from \"./run.js\";\n",
+    "./src/entity-checks/result.d.ts": "import type { Err, TaggedErrorClass } from \"better-result\";\nexport type EntityCheckSubject = {\n    birthDate: string;\n    firstName: string;\n    lastName: string;\n    type: \"person\";\n} | {\n    type: \"company-id\";\n    value: string;\n} | {\n    type: \"tax-id\";\n    value: string;\n};\nexport declare const ENTITY_CHECK_SUBJECT_TYPES: readonly [\n    \"company-id\",\n    \"tax-id\",\n    \"person\"\n];\nexport type EntityCheckSubjectType = (typeof ENTITY_CHECK_SUBJECT_TYPES)[number];\nexport type CheckedEntityCheckSubject = Exclude<EntityCheckSubject, {\n    type: \"tax-id\";\n}> | {\n    derivedFrom: null | {\n        type: \"company-id\";\n        value: string;\n    };\n    type: \"tax-id\";\n    value: string;\n};\nexport type EntityCheckSource = {\n    authority: string;\n    name: string;\n    url: string;\n};\nexport declare const ENTITY_CHECK_UNAVAILABLE_REASONS: readonly [\n    \"timeout\",\n    \"network\",\n    \"http-error\",\n    \"outage-page\",\n    \"soap-fault\",\n    \"malformed-response\",\n    \"source-error\"\n];\nexport type EntityCheckUnavailableReason = (typeof ENTITY_CHECK_UNAVAILABLE_REASONS)[number];\nexport declare const ENTITY_CHECK_NOT_COVERED_REASONS: readonly [\n    \"subject-type-not-supported\",\n    \"tax-id-required\"\n];\ntype EntityCheckNotCoveredReason = (typeof ENTITY_CHECK_NOT_COVERED_REASONS)[number];\ntype EntityCheckOutcomeBase<TKind extends string> = {\n    kind: TKind;\n    source: EntityCheckSource;\n    subject: CheckedEntityCheckSubject;\n};\nexport type EntityCheckOutcome<TKind extends string, TFinding, TRecord> = (EntityCheckOutcomeBase<TKind> & {\n    checkedAt: string;\n    detail: null | string;\n    reason: EntityCheckUnavailableReason;\n    status: \"unavailable\";\n}) | (EntityCheckOutcomeBase<TKind> & {\n    checkedAt: string;\n    findings: [\n        TFinding,\n        ...TFinding[]\n    ];\n    record: TRecord;\n    sourceDataAsOf: null | string;\n    status: \"found\";\n    totalMatches: number;\n}) | (EntityCheckOutcomeBase<TKind> & {\n    checkedAt: string;\n    record: TRecord;\n    sourceDataAsOf: null | string;\n    status: \"clear\";\n}) | (EntityCheckOutcomeBase<TKind> & {\n    checkedAt: string;\n    sourceDataAsOf: null | string;\n    status: \"not-registered\";\n}) | (EntityCheckOutcomeBase<TKind> & {\n    reason: EntityCheckNotCoveredReason;\n    status: \"not-covered\";\n    supportedSubjectTypes: EntityCheckSubjectType[];\n});\nexport type SourceAnswer<TFinding, TRecord> = {\n    findings: [\n        TFinding,\n        ...TFinding[]\n    ];\n    record: TRecord;\n    sourceDataAsOf: null | string;\n    totalMatches: number;\n    type: \"found\";\n} | {\n    record: TRecord;\n    sourceDataAsOf: null | string;\n    type: \"clear\";\n} | {\n    sourceDataAsOf: null | string;\n    type: \"not-registered\";\n};\ndeclare const EntityCheckUnavailableErrorBase: TaggedErrorClass<\"EntityCheckUnavailableError\">;\nexport declare class EntityCheckUnavailableError extends EntityCheckUnavailableErrorBase<{\n    detail: null | string;\n    message: string;\n    reason: EntityCheckUnavailableReason;\n}> {\n}\ndeclare const EntityCheckCancelledErrorBase: TaggedErrorClass<\"EntityCheckCancelledError\">;\nexport declare class EntityCheckCancelledError extends EntityCheckCancelledErrorBase<{\n    message: string;\n}> {\n}\nexport type EntityCheckSourceError = EntityCheckCancelledError | EntityCheckUnavailableError;\nexport declare const unavailable: ({ reason, message, detail, }: {\n    detail?: null | string;\n    message: string;\n    reason: EntityCheckUnavailableReason;\n}) => Err<never, EntityCheckUnavailableError>;\nexport declare const nowInstant: () => string;\nexport {};\n",
+    "./src/entity-checks/run.d.ts": "import { Result, type TaggedErrorClass } from \"better-result\";\nimport type { RegistryRequestObservation } from \"../shared/request-observer.js\";\nimport type { CzInsolvencyFinding } from \"./cz-insolvency.js\";\nimport type { CzVatPayerRecord, CzVatReliabilityFinding } from \"./cz-vat-reliability.js\";\nimport type { EntityCheckCancelledError, EntityCheckOutcome, EntityCheckSubject } from \"./result.js\";\nexport declare const ENTITY_CHECK_KINDS: readonly [\n    \"cz-insolvency\",\n    \"cz-vat-reliability\"\n];\nexport type EntityCheckKind = (typeof ENTITY_CHECK_KINDS)[number];\ntype EntityCheckFindings = {\n    \"cz-insolvency\": CzInsolvencyFinding;\n    \"cz-vat-reliability\": CzVatReliabilityFinding;\n};\ntype EntityCheckRecords = {\n    \"cz-insolvency\": null;\n    \"cz-vat-reliability\": CzVatPayerRecord;\n};\ntype EntityCheckResultOf<TKind extends EntityCheckKind> = EntityCheckOutcome<TKind, EntityCheckFindings[TKind], EntityCheckRecords[TKind]>;\nexport type EntityCheckResult = {\n    [TKind in EntityCheckKind]: EntityCheckResultOf<TKind>;\n}[EntityCheckKind];\ndeclare const EntityCheckInputErrorBase: TaggedErrorClass<\"EntityCheckInputError\">;\nexport declare class EntityCheckInputError extends EntityCheckInputErrorBase<{\n    message: string;\n}> {\n}\ntype EntityCheckError = EntityCheckCancelledError | EntityCheckInputError;\ntype RunEntityCheckOptions = {\n    kind: EntityCheckKind;\n    observer: RegistryRequestObservation;\n    signal?: AbortSignal | undefined;\n    subject: EntityCheckSubject;\n};\nexport declare const runEntityCheck: ({ kind, subject, signal, observer, }: RunEntityCheckOptions) => Promise<Result<EntityCheckResult, EntityCheckError>>;\nexport {};\n",
+    "./src/format-clauses.d.ts": "export type RegistryFormatClause = {\n    readonly requires: readonly string[];\n    readonly separator?: string;\n    readonly template: string;\n};\nexport declare const formatFromClauses: (clauses: readonly RegistryFormatClause[]) => string;\nexport declare const clausesForTokens: (clauses: readonly RegistryFormatClause[], tokens: Readonly<Record<string, null | string | undefined>>) => RegistryFormatClause[];\nexport declare const templateForTokens: (clauses: readonly RegistryFormatClause[], tokens: Readonly<Record<string, null | string | undefined>>) => string;\n",
+    "./src/gcis/client.d.ts": "import type { RegistryClientOptions } from \"../shared/http.js\";\nimport type { GcisCompany, GcisSearchResult } from \"./types.js\";\nexport declare const lookupByTaxId: (taxId: string, options: RegistryClientOptions) => Promise<GcisCompany | null>;\nexport type SearchOptions = RegistryClientOptions & {\n    activeOnly?: boolean;\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<GcisSearchResult[]>;\n",
+    "./src/gcis/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class GcisError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class GcisAPIError extends GcisError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class GcisValidationError extends GcisError {\n    constructor(message: string);\n}\nexport declare class GcisRequestError extends GcisError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/gcis/index.d.ts": "export { lookupByTaxId, searchByName } from \"./client.js\";\nexport type { SearchOptions } from \"./client.js\";\nexport { GcisAPIError, GcisError, GcisRequestError, GcisValidationError, } from \"./errors.js\";\nexport { parseCompany, parseSearchEntry } from \"./parse.js\";\nexport type { GcisCompany, GcisCompanyStatus, GcisRawCompany, GcisResponse, GcisSearchResult, } from \"./types.js\";\nexport { normalizeTaxId, validateTaxId } from \"./validation.js\";\n",
+    "./src/gcis/parse.d.ts": "import type { GcisCompany, GcisRawCompany, GcisSearchResult } from \"./types.js\";\nexport declare const parseCompany: (raw: GcisRawCompany, now?: Date) => GcisCompany;\nexport declare const parseSearchEntry: (raw: GcisRawCompany, now?: Date) => GcisSearchResult;\n",
+    "./src/gcis/types.d.ts": "export type GcisRawCompany = {\n    Business_Accounting_NO: string;\n    Capital_Stock_Amount?: number;\n    Case_Status?: string;\n    Case_Status_Desc?: string;\n    Change_Of_Approval_Data?: string;\n    Company_Location?: string;\n    Company_Name?: string;\n    Company_Setup_Date?: string;\n    Company_Status?: string;\n    Company_Status_Desc?: string;\n    Paid_In_Capital_Amount?: number;\n    Register_Organization?: string;\n    Register_Organization_Desc?: string;\n    Responsible_Name?: string;\n    Revoke_App_Date?: string;\n    Sus_App_Date?: string;\n    Sus_Beg_Date?: string;\n    Sus_End_Date?: string;\n};\nexport type GcisResponse = GcisRawCompany[];\nexport type GcisCompanyStatus = {\n    type: \"active\";\n} | {\n    type: \"dissolved\";\n} | {\n    type: \"suspended\";\n} | {\n    type: \"unknown\";\n};\nexport type GcisCompany = {\n    capitalAmount: null | number;\n    lastChangeDate: null | string;\n    lastChangeDateRoc: null | string;\n    location: null | string;\n    name: string;\n    paidInCapitalAmount: null | number;\n    registerOrganization: null | string;\n    registryUrl: string;\n    responsibleName: null | string;\n    setupDate: null | string;\n    setupDateRoc: null | string;\n    status: GcisCompanyStatus;\n    statusDescription: null | string;\n    taxId: string;\n};\nexport type GcisSearchResult = {\n    location: null | string;\n    name: string;\n    status: GcisCompanyStatus;\n    taxId: string;\n};\n",
+    "./src/gcis/validation.d.ts": "export declare const normalizeTaxId: (input: string) => string;\nexport declare const validateTaxId: (input: string) => boolean;\n",
+    "./src/index.d.ts": "export * as ares from \"./ares/index.js\";\nexport * as brreg from \"./brreg/index.js\";\nexport * as companiesHouse from \"./companies-house/index.js\";\nexport * as denue from \"./denue/index.js\";\nexport * as edgar from \"./edgar/index.js\";\nexport * as entityChecks from \"./entity-checks/index.js\";\nexport * as gcis from \"./gcis/index.js\";\nexport * as krs from \"./krs/index.js\";\nexport * as orsr from \"./orsr/index.js\";\nexport * as prh from \"./prh/index.js\";\nexport * as rechercheEntreprises from \"./recherche-entreprises/index.js\";\nexport * as rpo from \"./rpo/index.js\";\nexport * as shared from \"./shared/index.js\";\nexport * as sudreg from \"./sudreg/index.js\";\nexport * as vies from \"./vies/index.js\";\nexport * as zefix from \"./zefix/index.js\";\n",
+    "./src/krs/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport { type KrsEntity, type KrsRegisterCode } from \"./types.js\";\nexport type LookupOptions = RegistryClientOptions & {\n    register?: KrsRegisterCode;\n};\nexport declare const lookupByKrsNumber: (krsNumber: string, options: LookupOptions) => Promise<KrsEntity | null>;\n",
+    "./src/krs/default-format.d.ts": "import type { RegistryFormatClause } from \"../format-clauses.js\";\nexport declare const KRS_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[];\nexport declare const KRS_DEFAULT_FORMAT: string;\n",
+    "./src/krs/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class KrsError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class KrsAPIError extends KrsError {\n    readonly httpStatus: number;\n    readonly upstreamTitle: null | string;\n    readonly upstreamDetail: null | string;\n    constructor({ cause, message, httpStatus, upstreamTitle, upstreamDetail, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamDetail?: null | string;\n        upstreamTitle?: null | string;\n    });\n}\nexport declare class KrsValidationError extends KrsError {\n    constructor(message: string);\n}\nexport declare class KrsRequestError extends KrsError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/krs/index.d.ts": "export { lookupByKrsNumber } from \"./client.js\";\nexport type { LookupOptions } from \"./client.js\";\nexport { KrsAPIError, KrsError, KrsRequestError, KrsValidationError, } from \"./errors.js\";\nexport { parseAddress, parseEntity, parseStatus } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { KrsAddress, KrsEntity, KrsEntityStatus, KrsErrorResponse, KrsIdentifiers, KrsLookupResponse, KrsRawAdres, KrsRawDane, KrsRawDanePodmiotu, KrsRawDzial1, KrsRawDzial6, KrsRawIdentifiers, KrsRawNaglowekA, KrsRawOdpis, KrsRawSiedziba, KrsRawSiedzibaIAdres, KrsRegisterCode, KrsRegisteredSeat, } from \"./types.js\";\nexport { normalizeKrsNumber, validateKrsNumber, validateNip, validateRegon, } from \"./validation.js\";\n",
+    "./src/krs/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { KrsEntity } from \"./types.js\";\nexport declare const toNormalizedEntity: (entity: KrsEntity) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (entity: KrsEntity) => NormalizedRegistrySearchResult;\n",
+    "./src/krs/number.d.ts": "export declare const normalizeKrsNumber: (input: string) => string;\nexport declare const validateKrsNumber: (input: string) => boolean;\n",
+    "./src/krs/parse.d.ts": "import { type KrsAddress, type KrsEntity, type KrsEntityStatus, type KrsLookupResponse, type KrsRawAdres, type KrsRawDzial6 } from \"./types.js\";\nexport declare const parseStatus: (dzial6: KrsRawDzial6 | undefined, name: string) => KrsEntityStatus;\nexport declare const parseAddress: (raw: KrsRawAdres) => KrsAddress;\nexport declare const parseEntity: (response: KrsLookupResponse, krsNumber: string) => KrsEntity;\n",
+    "./src/krs/regon.d.ts": "export declare const normalizeRegon: (regon: string) => string;\n",
+    "./src/krs/types.d.ts": "export declare const KRS_REGISTER_CODES: readonly [\n    \"RejP\",\n    \"RejS\"\n];\nexport type KrsRegisterCode = (typeof KRS_REGISTER_CODES)[number];\nexport type KrsRawIdentifiers = {\n    nip?: string;\n    regon?: string;\n};\nexport type KrsRawDanePodmiotu = {\n    czyPosiadaStatusOPP?: boolean;\n    czyProwadziDzialalnoscZInnymiPodmiotami?: boolean;\n    daneOWczesniejszejRejestracji?: Record<string, unknown>;\n    formaPrawna?: string;\n    identyfikatory?: KrsRawIdentifiers;\n    nazwa?: string;\n};\nexport type KrsRawSiedziba = {\n    gmina?: string;\n    kraj?: string;\n    miejscowosc?: string;\n    powiat?: string;\n    wojewodztwo?: string;\n};\nexport type KrsRawAdres = {\n    kodPocztowy?: string;\n    kraj?: string;\n    miejscowosc?: string;\n    nrDomu?: string;\n    nrLokalu?: string;\n    poczta?: string;\n    ulica?: string;\n};\nexport type KrsRawSiedzibaIAdres = {\n    adres?: KrsRawAdres;\n    adresDoDoreczenElektronicznychWpisanyDoBAE?: string;\n    adresPocztyElektronicznej?: string;\n    adresStronyInternetowej?: string;\n    siedziba?: KrsRawSiedziba;\n};\nexport type KrsRawMonetaryValue = {\n    waluta?: string;\n    wartosc?: string;\n};\nexport type KrsRawKapital = {\n    wysokoscKapitaluZakladowego?: KrsRawMonetaryValue;\n};\nexport type KrsRawDzial1 = {\n    danePodmiotu?: KrsRawDanePodmiotu;\n    kapital?: KrsRawKapital;\n    siedzibaIAdres?: KrsRawSiedzibaIAdres;\n};\nexport type KrsRawProceedingDetail = {\n    organWydajacy?: string;\n    rodzajPostepowania?: string;\n    sygnatura?: string;\n};\nexport type KrsRawProceeding = {\n    otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji?: KrsRawProceedingDetail;\n    zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji?: KrsRawProceedingDetail;\n};\nexport type KrsRawDzial6 = {\n    polaczeniePodzialPrzeksztalcenie?: unknown[];\n    postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja?: KrsRawProceeding[];\n    postepowanieUpadlosciowe?: unknown[];\n    wykreslenia?: unknown[];\n};\nexport type KrsRawDane = {\n    dzial1?: KrsRawDzial1;\n    dzial2?: Record<string, unknown>;\n    dzial3?: Record<string, unknown>;\n    dzial4?: Record<string, unknown>;\n    dzial5?: Record<string, unknown>;\n    dzial6?: KrsRawDzial6;\n};\nexport type KrsRawNaglowekA = {\n    dataCzasOdpisu?: string;\n    dataOstatniegoWpisu?: string;\n    dataRejestracjiWKRS?: string;\n    numerKRS?: string;\n    numerOstatniegoWpisu?: number;\n    oznaczenieSaduDokonujacegoOstatniegoWpisu?: string;\n    rejestr?: string;\n    stanPozycji?: number;\n    stanZDnia?: string;\n    sygnaturaAktSprawyDotyczacejOstatniegoWpisu?: string;\n};\nexport type KrsRawOdpis = {\n    dane?: KrsRawDane;\n    naglowekA?: KrsRawNaglowekA;\n    rodzaj?: string;\n};\nexport type KrsLookupResponse = {\n    odpis?: KrsRawOdpis;\n};\nexport type KrsErrorResponse = {\n    detail?: string;\n    status?: number;\n    title?: string;\n    traceId?: string;\n    type?: string;\n};\nexport type KrsAddress = {\n    city: null | string;\n    country: null | string;\n    postalCode: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type KrsIdentifiers = {\n    nip: null | string;\n    regon: null | string;\n};\nexport type KrsEntityStatus = {\n    type: \"active\";\n} | {\n    type: \"bankruptcy\";\n} | {\n    type: \"dissolved\";\n} | {\n    type: \"liquidating\";\n} | {\n    type: \"restructuring\";\n} | {\n    type: \"unknown\";\n};\nexport type KrsEntity = {\n    address: KrsAddress | null;\n    email: null | string;\n    identifiers: KrsIdentifiers;\n    krsNumber: string;\n    lastEntryAt: null | string;\n    legalForm: null | string;\n    name: string;\n    register: KrsRegisterCode;\n    registeredAt: null | string;\n    registeredSeat: KrsRegisteredSeat | null;\n    registryUrl: string;\n    shareCapital: null | {\n        amount: string;\n        currency: string;\n    };\n    status: KrsEntityStatus;\n    website: null | string;\n};\nexport type KrsRegisteredSeat = {\n    commune: null | string;\n    country: null | string;\n    county: null | string;\n    locality: null | string;\n    voivodeship: null | string;\n};\n",
+    "./src/krs/validation.d.ts": "export { normalizeKrsNumber, validateKrsNumber } from \"./number.js\";\nexport declare const validateNip: (input: string) => boolean;\nexport declare const validateRegon: (input: string) => boolean;\n",
+    "./src/orsr/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport type { OrsrCompany, OrsrFullRecord, OrsrSearchResult } from \"./types.js\";\nexport declare const lookupByIco: (ico: string, options: RegistryClientOptions) => Promise<OrsrCompany | null>;\nexport declare const lookupFullRecordByIco: (ico: string, options: RegistryClientOptions) => Promise<OrsrFullRecord | null>;\nexport type SearchOptions = RegistryClientOptions & {\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<OrsrSearchResult[]>;\n",
+    "./src/orsr/court-file.d.ts": "import type { OrsrCourtFile } from \"./types.js\";\nexport declare const formatOrsrInsert: (file: Pick<OrsrCourtFile, \"court\" | \"insertNumber\">) => string;\nexport declare const formatOrsrCourtFile: (file: Pick<OrsrCourtFile, \"court\" | \"insertNumber\" | \"section\">) => string;\n",
+    "./src/orsr/court-names.d.ts": "export declare const ORSR_COURT_GENITIVE_TOKEN: \"court genitive\";\nexport declare const getOrsrCourtName: (court: string) => string;\nexport declare const getOrsrCourtNameGenitive: (court: string) => null | string;\n",
+    "./src/orsr/default-format.d.ts": "import type { RegistryFormatClause } from \"../format-clauses.js\";\nexport declare const ORSR_SECTION_TOKEN: \"section\";\nexport declare const ORSR_INSERT_TOKEN: \"insert\";\nexport declare const ORSR_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[];\nexport declare const ORSR_DEFAULT_FORMAT: string;\n",
+    "./src/orsr/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class OrsrError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class OrsrAPIError extends OrsrError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class OrsrValidationError extends OrsrError {\n    constructor(message: string);\n}\nexport declare class OrsrRequestError extends OrsrError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/orsr/identifier-format.d.ts": "export declare const ORSR_IDENTIFIER_SPACED_TOKEN: \"registry number spaced\";\nexport declare const formatOrsrIdentifierSpaced: (identifier: string) => string;\n",
+    "./src/orsr/index.d.ts": "export { lookupByIco, lookupFullRecordByIco, searchByName } from \"./client.js\";\nexport type { SearchOptions } from \"./client.js\";\nexport { OrsrAPIError, OrsrError, OrsrRequestError, OrsrValidationError, } from \"./errors.js\";\nexport { parseAddress, parseExtract, parseSearchHit } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { OrsrAddress, OrsrCompany, OrsrCompanyStatus, OrsrCourtFile, OrsrDocument, OrsrFullRecord, OrsrHistoryEntry, OrsrRawAddress, OrsrRawCorporateBody, OrsrRawDeposit, OrsrRawEquity, OrsrRawErrorResponse, OrsrRawExtractResponse, OrsrRawFileReference, OrsrRawLegalForm, OrsrRawLegalPerson, OrsrRawSearchHit, OrsrRawSearchResponse, OrsrRawStakeholderMember, OrsrRawStatutoryBodyMember, OrsrRecordPart, OrsrRelatedLegalPerson, OrsrSearchResult, OrsrStakeholder, OrsrStatutoryBody, OrsrStatutoryMember, } from \"./types.js\";\nexport { normalizeIco, validateIco } from \"./validation.js\";\n",
+    "./src/orsr/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { OrsrCompany, OrsrSearchResult } from \"./types.js\";\nexport declare const toNormalizedEntity: (company: OrsrCompany) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (result: OrsrSearchResult) => NormalizedRegistrySearchResult;\n",
+    "./src/orsr/parse.d.ts": "import type { OrsrAddress, OrsrCompany, OrsrDocument, OrsrHistoryEntry, OrsrRawAddress, OrsrRawDocument, OrsrRawExtractResponse, OrsrRawRelatedHit, OrsrRawSearchHit, OrsrRelatedLegalPerson, OrsrSearchResult } from \"./types.js\";\nexport declare const parseAddress: (raw: OrsrRawAddress) => OrsrAddress;\nexport declare const parseExtract: (raw: OrsrRawExtractResponse) => OrsrCompany | null;\nexport declare const parseSearchHit: (hit: OrsrRawSearchHit) => OrsrSearchResult;\nexport declare const parseHistory: (raw: OrsrRawExtractResponse) => OrsrHistoryEntry[];\nexport declare const parseDocument: (raw: OrsrRawDocument) => OrsrDocument | null;\nexport declare const parseRelatedHit: (raw: OrsrRawRelatedHit) => OrsrRelatedLegalPerson | null;\n",
+    "./src/orsr/types.d.ts": "export type OrsrRawCodelistItem = {\n    itemCode?: string;\n    itemName?: string;\n};\nexport type OrsrRawCodelistRef = {\n    codelistCode?: string;\n    codelistItem?: OrsrRawCodelistItem;\n};\nexport type OrsrRawWrappedCodelist = {\n    item?: OrsrRawCodelistRef | string;\n};\nexport type OrsrRawTemporal = {\n    current?: boolean;\n    effectiveFrom?: string;\n    effectiveTo?: string;\n    effectiveToSpecified?: boolean;\n};\nexport type OrsrRawValueTemporal = OrsrRawTemporal & {\n    value?: string;\n};\nexport type OrsrRawLegalForm = OrsrRawTemporal & {\n    item?: OrsrRawCodelistRef;\n};\nexport type OrsrRawDeliveryAddress = {\n    postOfficeBox?: string;\n    postalCode?: string;\n    recipient?: string;\n};\nexport type OrsrRawAddress = OrsrRawTemporal & {\n    addressLine?: string;\n    buildingNumber?: string;\n    country?: OrsrRawWrappedCodelist;\n    county?: OrsrRawWrappedCodelist;\n    deliveryAddress?: OrsrRawDeliveryAddress;\n    district?: OrsrRawWrappedCodelist;\n    municipality?: OrsrRawWrappedCodelist;\n    propertyRegistrationNumber?: string;\n    region?: OrsrRawWrappedCodelist;\n    streetName?: string;\n};\nexport type OrsrRawCurrency = {\n    item?: OrsrRawCodelistRef | string;\n};\nexport type OrsrRawEquity = OrsrRawTemporal & {\n    currency?: OrsrRawCurrency;\n    equityValue?: number;\n    equityValuePaid?: number;\n    equityValuePaidSpecified?: boolean;\n    equityValueSpecified?: boolean;\n};\nexport type OrsrRawDeposit = OrsrRawTemporal & {\n    currency?: OrsrRawCurrency;\n    depositPayedValue?: null | number;\n    depositValue?: null | number;\n    stakeholder?: OrsrRawValueTemporal[];\n};\nexport type OrsrRawIdentifier = OrsrRawTemporal & {\n    identifierType?: OrsrRawWrappedCodelist;\n    identifierValue?: string;\n};\nexport type OrsrRawPersonName = {\n    formattedName?: string;\n    legalName?: string;\n};\nexport type OrsrRawPhysicalPerson = {\n    personName?: OrsrRawPersonName;\n};\nexport type OrsrRawCorporateBodyRef = {\n    corporateBodyFullName?: string;\n};\nexport type OrsrRawPersonData = {\n    corporateBody?: OrsrRawCorporateBodyRef | null;\n    id?: OrsrRawIdentifier[];\n    physicalAddress?: OrsrRawAddress[];\n    physicalPerson?: OrsrRawPhysicalPerson | null;\n};\nexport type OrsrRawStatutoryBodyMember = OrsrRawTemporal & {\n    function?: null | string;\n    functionCreationDate?: null | string;\n    functionTerminationDate?: null | string;\n    personData?: OrsrRawPersonData;\n};\nexport type OrsrRawStakeholderMember = OrsrRawTemporal & {\n    function?: null | string;\n    functionCreationDate?: null | string;\n    functionTerminationDate?: null | string;\n    personData?: OrsrRawPersonData;\n    stakeholderType?: OrsrRawWrappedCodelist;\n};\nexport type OrsrRawStatutoryBodyType = OrsrRawValueTemporal;\nexport type OrsrRawAuthorization = OrsrRawValueTemporal;\ntype OrsrRawLegalStatusEvent = OrsrRawTemporal & {\n    text?: null | string;\n    type?: null | string;\n};\nexport type OrsrRawCorporateBody = {\n    authorizationToExecute?: OrsrRawAuthorization[];\n    corporateBodyFullName?: OrsrRawValueTemporal[];\n    deposits?: OrsrRawDeposit[];\n    equity?: OrsrRawEquity[];\n    establishment?: string;\n    legalForm?: OrsrRawLegalForm[];\n    legalStatusEvents?: OrsrRawLegalStatusEvent[];\n    stakeholder?: OrsrRawStakeholderMember[];\n    statutoryBody?: OrsrRawStatutoryBodyMember[];\n    statutoryBodyType?: OrsrRawStatutoryBodyType[];\n    termination?: null | string;\n};\nexport type OrsrRawLegalPerson = {\n    corporateBody?: OrsrRawCorporateBody;\n    id?: OrsrRawIdentifier[];\n    physicalAddress?: OrsrRawAddress[];\n};\nexport type OrsrRawFileReference = {\n    court?: string;\n    formattedValueSpaced?: string;\n    formattedValueUrlSafe?: string;\n    insertNumber?: number | string;\n    section?: string;\n};\nexport type OrsrRawExtractResponse = {\n    courtName?: string;\n    createDateTime?: string;\n    dataSyncDate?: string;\n    fileReference?: OrsrRawFileReference;\n    legalForm?: string;\n    legalPerson?: OrsrRawLegalPerson;\n};\nexport type OrsrRawSearchHit = {\n    corporateBodyFullName?: string;\n    corporateBodyFullNames?: string[];\n    court?: number | string;\n    documentsCount?: number;\n    fileReference?: OrsrRawFileReference;\n    id: number;\n    insertNumber?: number | string;\n    physicalAddressLine1?: string;\n    physicalAddressLine2?: string;\n    physicalPersonName?: null | string;\n    registrationNumber?: string;\n    section?: number | string;\n};\nexport type OrsrRawSearchResponse = {\n    data?: OrsrRawSearchHit[];\n    filteredCount?: number;\n};\nexport type OrsrRawDocument = {\n    deliveryDate?: string;\n    isElectronic?: boolean;\n    name?: string;\n    pageCount?: number;\n    serialNumber?: number;\n    type?: number;\n};\nexport type OrsrRawRelatedHit = {\n    corporateBodyFullName?: string;\n    fileReference?: OrsrRawFileReference;\n    physicalAddressLine1?: string;\n    physicalAddressLine2?: string;\n    registrationNumber?: string;\n    relatedPersonName?: null | string;\n};\nexport type OrsrRawRelatedResponse = {\n    data?: OrsrRawRelatedHit[];\n    filteredCount?: number;\n};\nexport type OrsrRawErrorResponse = {\n    errors?: Record<string, unknown>;\n    title?: string;\n};\nexport type OrsrAddress = {\n    city: null | string;\n    country: null | string;\n    postalCode: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type OrsrCourtFile = {\n    court: string;\n    courtName: null | string;\n    insertNumber: string;\n    section: string;\n};\nexport type OrsrStatutoryMember = {\n    address: null | string;\n    name: string;\n    position: null | string;\n    since: null | string;\n};\nexport type OrsrStatutoryBody = {\n    members: OrsrStatutoryMember[];\n    organName: string;\n};\nexport type OrsrStakeholder = {\n    address: null | string;\n    identifier: null | string;\n    name: string;\n    organName: string;\n    position: string;\n    share: null | string;\n};\nexport type OrsrCompanyStatus = {\n    terminatedAt: string;\n    type: \"terminated\";\n} | {\n    type: \"active\";\n} | {\n    type: \"unknown\";\n};\nexport type OrsrCompany = {\n    actingClause: null | string;\n    address: OrsrAddress | null;\n    courtFile: OrsrCourtFile | null;\n    establishedAt: null | string;\n    ico: string;\n    legalForm: null | string;\n    name: string;\n    registryUrl: string;\n    shareCapital: null | string;\n    shareCapitalPaid: null | string;\n    stakeholders: OrsrStakeholder[];\n    status: OrsrCompanyStatus;\n    statutoryBodies: OrsrStatutoryBody[];\n    terminatedAt: null | string;\n};\nexport type OrsrSearchResult = {\n    address: null | string;\n    ico: string;\n    name: string;\n};\nexport type OrsrFileReference = Pick<OrsrCourtFile, \"court\" | \"insertNumber\" | \"section\">;\ntype OrsrHistoryDates = {\n    validFrom: null | string;\n    validTo: null | string;\n};\nexport type OrsrHistoryEntry = (OrsrHistoryDates & {\n    kind: \"acting-clause\" | \"address\" | \"legal-form\" | \"legal-status\" | \"name\" | \"share-capital\";\n    value: string;\n}) | (OrsrHistoryDates & {\n    kind: \"stakeholder\" | \"statutory-body-member\";\n    name: string;\n    role: null | string;\n});\ntype OrsrDocumentMedium = \"electronic\" | \"paper\";\nexport type OrsrDocument = {\n    deliveredOn: null | string;\n    medium: OrsrDocumentMedium;\n    name: string;\n    pageCount: null | number;\n    serialNumber: number;\n    typeCode: null | number;\n};\nexport type OrsrRelatedLegalPerson = {\n    address: null | string;\n    connectedThrough: null | string;\n    fileReference: OrsrFileReference | null;\n    ico: null | string;\n    name: string;\n};\nexport type OrsrRecordPart<Value> = {\n    reason: string;\n    status: \"unavailable\";\n} | {\n    status: \"loaded\";\n    value: Value;\n};\nexport type OrsrFullRecord = {\n    company: OrsrCompany;\n    documents: OrsrRecordPart<OrsrDocument[]>;\n    history: OrsrRecordPart<OrsrHistoryEntry[]>;\n    related: OrsrRecordPart<OrsrRelatedLegalPerson[]>;\n};\nexport {};\n",
+    "./src/orsr/validation.d.ts": "export declare const normalizeIco: (input: string) => string;\nexport declare const validateIco: (input: string) => boolean;\n",
+    "./src/prh/client.d.ts": "import type { RegistryClientOptions } from \"../shared/http.js\";\nimport type { PrhCompany, PrhSearchResult } from \"./types.js\";\nexport declare const lookupByBusinessId: (businessId: string, options: RegistryClientOptions) => Promise<PrhCompany | null>;\nexport type SearchOptions = RegistryClientOptions & {\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<PrhSearchResult[]>;\n",
+    "./src/prh/default-format.d.ts": "import type { RegistryFormatClause } from \"../format-clauses.js\";\nexport declare const PRH_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[];\nexport declare const PRH_DEFAULT_FORMAT: string;\n",
+    "./src/prh/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class PrhError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class PrhAPIError extends PrhError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    readonly upstreamCode: null | number;\n    constructor({ cause, message, httpStatus, upstreamMessage, upstreamCode, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamCode?: null | number;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class PrhValidationError extends PrhError {\n    constructor(message: string);\n}\nexport declare class PrhRequestError extends PrhError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/prh/index.d.ts": "export { lookupByBusinessId, searchByName } from \"./client.js\";\nexport type { SearchOptions } from \"./client.js\";\nexport { PrhAPIError, PrhError, PrhRequestError, PrhValidationError, } from \"./errors.js\";\nexport { parseAddress, parseCompany, parseSearchEntry } from \"./parse.js\";\nexport type { PrhAddress, PrhBusinessLine, PrhCompaniesResponse, PrhCompany, PrhCompanyName, PrhCompanyStatus, PrhErrorResponse, PrhRawAddress, PrhRawBusinessLine, PrhRawCompany, PrhRawCompanyForm, PrhRawCompanySituation, PrhRawLocalizedDescription, PrhRawName, PrhRawPostOffice, PrhRawSourcedValue, PrhSearchResult, } from \"./types.js\";\nexport { normalizeBusinessId, validateBusinessId } from \"./validation.js\";\n",
+    "./src/prh/parse.d.ts": "import type { PrhAddress, PrhCompany, PrhRawAddress, PrhRawCompany, PrhSearchResult } from \"./types.js\";\nexport declare const parseAddress: (raw: PrhRawAddress) => PrhAddress;\nexport declare const parseCompany: (raw: PrhRawCompany) => PrhCompany;\nexport declare const parseSearchEntry: (raw: PrhRawCompany) => PrhSearchResult;\n",
+    "./src/prh/types.d.ts": "export type PrhRawLocalizedDescription = {\n    description: string;\n    languageCode: string;\n};\nexport type PrhRawSourcedValue = {\n    endDate?: string;\n    registrationDate?: string;\n    source: string;\n    value: string;\n};\nexport type PrhRawName = {\n    endDate?: string;\n    name: string;\n    registrationDate?: string;\n    source: string;\n    type: string;\n    version: number;\n};\nexport type PrhRawCompanyForm = {\n    descriptions: PrhRawLocalizedDescription[];\n    endDate?: string;\n    registrationDate?: string;\n    source: string;\n    type: string;\n    version: number;\n};\nexport type PrhRawBusinessLine = {\n    descriptions: PrhRawLocalizedDescription[];\n    endDate?: string;\n    registrationDate?: string;\n    source: string;\n    type: string;\n    typeCodeSet: string;\n};\nexport type PrhRawPostOffice = {\n    city: string;\n    languageCode: string;\n    municipalityCode?: string;\n};\nexport type PrhRawAddress = {\n    apartmentIdSuffix?: string;\n    apartmentNumber?: string;\n    buildingNumber?: string;\n    co?: string;\n    country?: string;\n    endDate?: string;\n    entrance?: string;\n    freeAddressLine?: string;\n    postCode?: string;\n    postOfficeBox?: string;\n    postOffices?: PrhRawPostOffice[];\n    registrationDate?: string;\n    source: string;\n    street?: string;\n    type: number;\n};\nexport type PrhRawCompanySituation = {\n    descriptions: PrhRawLocalizedDescription[];\n    endDate?: string;\n    registrationDate?: string;\n    source: string;\n    type: string;\n};\nexport type PrhRawCompany = {\n    addresses?: PrhRawAddress[];\n    businessId: PrhRawSourcedValue;\n    companyForms?: PrhRawCompanyForm[];\n    companySituations?: PrhRawCompanySituation[];\n    endDate?: string;\n    euId?: PrhRawSourcedValue;\n    lastModified?: string;\n    mainBusinessLine?: PrhRawBusinessLine;\n    names?: PrhRawName[];\n    registrationDate?: string;\n    status?: string;\n    tradeRegisterStatus?: string;\n};\nexport type PrhCompaniesResponse = {\n    companies: PrhRawCompany[];\n    totalResults: number;\n};\nexport type PrhErrorResponse = {\n    errorcode?: number;\n    message?: string;\n    timestamp?: string;\n};\nexport type PrhAddress = {\n    city: null | string;\n    country: null | string;\n    postalCode: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type PrhBusinessLine = {\n    code: string;\n    description: null | string;\n};\nexport type PrhCompanyStatus = {\n    endedAt: null | string;\n    type: \"ended\";\n} | {\n    type: \"registered\";\n} | {\n    type: \"unknown\";\n} | {\n    type: \"unregistered\";\n};\nexport type PrhCompanyName = {\n    isCurrent: boolean;\n    name: string;\n};\nexport type PrhCompany = {\n    alternateNames: PrhCompanyName[];\n    businessId: string;\n    endedAt: null | string;\n    legalForm: null | string;\n    legalFormCode: null | string;\n    mainBusinessLine: PrhBusinessLine | null;\n    name: string;\n    postalAddress: PrhAddress | null;\n    registeredAt: null | string;\n    registryUrl: string;\n    status: PrhCompanyStatus;\n    streetAddress: PrhAddress | null;\n    tradeRegisterRegistered: boolean;\n};\nexport type PrhSearchResult = {\n    address: null | string;\n    businessId: string;\n    name: string;\n};\n",
+    "./src/prh/validation.d.ts": "export declare const normalizeBusinessId: (input: string) => string;\nexport declare const validateBusinessId: (input: string) => boolean;\n",
+    "./src/recherche-entreprises/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport type { RechercheEntreprisesCompany, RechercheEntreprisesSearchResult } from \"./types.js\";\nexport type LookupOptions = RegistryClientOptions;\nexport declare const lookupBySiren: (siren: string, options: LookupOptions) => Promise<RechercheEntreprisesCompany | null>;\nexport declare const lookupBySiret: (siret: string, options: LookupOptions) => Promise<RechercheEntreprisesCompany | null>;\nexport type SearchOptions = RegistryClientOptions & {\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<RechercheEntreprisesSearchResult[]>;\n",
+    "./src/recherche-entreprises/default-format.d.ts": "import type { RegistryFormatClause } from \"../format-clauses.js\";\nexport declare const RECHERCHE_ENTREPRISES_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[];\nexport declare const RECHERCHE_ENTREPRISES_DEFAULT_FORMAT: string;\n",
+    "./src/recherche-entreprises/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class RechercheEntreprisesError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class RechercheEntreprisesAPIError extends RechercheEntreprisesError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class RechercheEntreprisesValidationError extends RechercheEntreprisesError {\n    constructor(message: string);\n}\nexport declare class RechercheEntreprisesRequestError extends RechercheEntreprisesError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/recherche-entreprises/identifier-format.d.ts": "export declare const SIREN_SPACED_TOKEN: \"SIREN spaced\";\nexport declare const SIRET_SPACED_TOKEN: \"SIRET spaced\";\nexport declare const formatSirenSpaced: (siren: string) => string;\nexport declare const formatSiretSpaced: (siret: string) => string;\n",
+    "./src/recherche-entreprises/index.d.ts": "export { lookupBySiren, lookupBySiret, searchByName } from \"./client.js\";\nexport type { LookupOptions, SearchOptions } from \"./client.js\";\nexport { RechercheEntreprisesAPIError, RechercheEntreprisesError, RechercheEntreprisesRequestError, RechercheEntreprisesValidationError, } from \"./errors.js\";\nexport { parseAddress, parseCompany, parseEstablishment, parseSearchEntry, } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { RechercheEntreprisesAddress, RechercheEntreprisesCompany, RechercheEntreprisesDirector, RechercheEntreprisesErrorResponse, RechercheEntreprisesEstablishment, RechercheEntreprisesEstablishmentStatus, RechercheEntreprisesLegalEntityStatus, RechercheEntreprisesRawDirigeant, RechercheEntreprisesRawDirigeantOrganisation, RechercheEntreprisesRawDirigeantPerson, RechercheEntreprisesRawEtablissement, RechercheEntreprisesRawUniteLegale, RechercheEntreprisesSearchResponse, RechercheEntreprisesSearchResult, } from \"./types.js\";\nexport { hasCanonicalShape, normalizeSiren, validateSiren, validateSiret, } from \"./validation.js\";\n",
+    "./src/recherche-entreprises/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { RechercheEntreprisesCompany, RechercheEntreprisesSearchResult } from \"./types.js\";\nexport declare const toNormalizedEntity: (company: RechercheEntreprisesCompany) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (result: RechercheEntreprisesSearchResult) => NormalizedRegistrySearchResult;\n",
+    "./src/recherche-entreprises/parse.d.ts": "import type { RechercheEntreprisesAddress, RechercheEntreprisesCompany, RechercheEntreprisesEstablishment, RechercheEntreprisesRawEtablissement, RechercheEntreprisesRawUniteLegale, RechercheEntreprisesSearchResult } from \"./types.js\";\nexport declare const parseAddress: (raw: RechercheEntreprisesRawEtablissement) => RechercheEntreprisesAddress | null;\nexport declare const parseEstablishment: (raw: RechercheEntreprisesRawEtablissement) => RechercheEntreprisesEstablishment;\nexport declare const parseCompany: (raw: RechercheEntreprisesRawUniteLegale, matchedSiret?: string) => RechercheEntreprisesCompany;\nexport declare const parseSearchEntry: (raw: RechercheEntreprisesRawUniteLegale) => RechercheEntreprisesSearchResult;\n",
+    "./src/recherche-entreprises/types.d.ts": "export type RechercheEntreprisesRawEtablissement = {\n    activite_principale?: null | string;\n    adresse?: null | string;\n    code_pays_etranger?: null | string;\n    code_postal?: null | string;\n    complement_adresse?: null | string;\n    date_creation?: null | string;\n    date_fermeture?: null | string;\n    est_siege?: boolean | null;\n    etat_administratif?: null | string;\n    libelle_commune?: null | string;\n    libelle_commune_etranger?: null | string;\n    libelle_pays_etranger?: null | string;\n    libelle_voie?: null | string;\n    numero_voie?: null | string;\n    siret: string;\n    type_voie?: null | string;\n};\nexport type RechercheEntreprisesRawDirigeantPerson = {\n    annee_de_naissance?: null | string;\n    date_de_naissance?: null | string;\n    nationalite?: null | string;\n    nom?: null | string;\n    prenoms?: null | string;\n    qualite?: null | string;\n    type_dirigeant: \"personne physique\";\n};\nexport type RechercheEntreprisesRawDirigeantOrganisation = {\n    denomination?: null | string;\n    qualite?: null | string;\n    siren?: null | string;\n    type_dirigeant: \"personne morale\";\n};\nexport type RechercheEntreprisesRawDirigeant = RechercheEntreprisesRawDirigeantOrganisation | RechercheEntreprisesRawDirigeantPerson;\nexport type RechercheEntreprisesRawUniteLegale = {\n    date_creation?: null | string;\n    date_fermeture?: null | string;\n    dirigeants?: RechercheEntreprisesRawDirigeant[];\n    etat_administratif?: null | string;\n    matching_etablissements?: RechercheEntreprisesRawEtablissement[];\n    nature_juridique?: null | string;\n    nom_complet: string;\n    nom_raison_sociale?: null | string;\n    siege?: RechercheEntreprisesRawEtablissement | null;\n    sigle?: null | string;\n    siren: string;\n};\nexport type RechercheEntreprisesSearchResponse = {\n    page: number;\n    per_page: number;\n    results: RechercheEntreprisesRawUniteLegale[];\n    total_pages: number;\n    total_results: number;\n};\nexport type RechercheEntreprisesErrorResponse = {\n    erreur?: string;\n    message?: string;\n};\nexport type RechercheEntreprisesAddress = {\n    city: null | string;\n    country: null | string;\n    postalCode: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type RechercheEntreprisesEstablishmentStatus = {\n    closedAt: null | string;\n    type: \"closed\";\n} | {\n    type: \"open\";\n} | {\n    type: \"unknown\";\n};\nexport type RechercheEntreprisesLegalEntityStatus = {\n    ceasedAt: null | string;\n    type: \"ceased\";\n} | {\n    type: \"active\";\n} | {\n    type: \"unknown\";\n};\nexport type RechercheEntreprisesEstablishment = {\n    activityCode: null | string;\n    address: RechercheEntreprisesAddress | null;\n    closedAt: null | string;\n    createdAt: null | string;\n    isHeadOffice: boolean;\n    siret: string;\n    status: RechercheEntreprisesEstablishmentStatus;\n};\nexport type RechercheEntreprisesDirector = {\n    birthYear: null | string;\n    fullName: string;\n    role: null | string;\n    type: \"person\";\n} | {\n    name: string;\n    role: null | string;\n    siren: null | string;\n    type: \"organisation\";\n};\nexport type RechercheEntreprisesCompany = {\n    ceasedAt: null | string;\n    directors: RechercheEntreprisesDirector[];\n    headOffice: RechercheEntreprisesEstablishment | null;\n    legalFormCode: null | string;\n    matchedEstablishment: RechercheEntreprisesEstablishment | null;\n    name: string;\n    registeredAt: null | string;\n    registryUrl: string;\n    shortName: null | string;\n    siren: string;\n    status: RechercheEntreprisesLegalEntityStatus;\n};\nexport type RechercheEntreprisesSearchResult = {\n    address: null | string;\n    name: string;\n    siren: string;\n};\n",
+    "./src/recherche-entreprises/validation.d.ts": "export declare const normalizeSiren: (input: string) => string;\nexport declare const validateSiren: (input: string) => boolean;\nexport declare const validateSiret: (input: string) => boolean;\nexport declare const hasCanonicalShape: (input: string) => boolean;\n",
+    "./src/rpo/client.d.ts": "import { Result } from \"better-result\";\nimport { type RegistryClientOptions } from \"../shared/http.js\";\nimport { RpoAPIError, RpoRequestError, RpoValidationError } from \"./errors.js\";\nimport type { RpoEntity, RpoSearchResult, RpoView } from \"./types.js\";\nexport type RpoClientError = RpoAPIError | RpoRequestError | RpoValidationError;\nexport type LookupOptions = RegistryClientOptions & {\n    view?: RpoView;\n};\nexport declare const lookupByIco: (input: string, options: LookupOptions) => Promise<Result<RpoEntity | null, RpoClientError>>;\nexport type SearchOptions = RegistryClientOptions & {\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<Result<RpoSearchResult[], RpoClientError>>;\n",
+    "./src/rpo/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class RpoError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class RpoAPIError extends RpoError {\n    readonly httpStatus: number;\n    readonly upstreamMessage: null | string;\n    constructor({ cause, message, httpStatus, upstreamMessage, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamMessage?: null | string;\n    });\n}\nexport declare class RpoValidationError extends RpoError {\n    constructor(message: string);\n}\nexport declare class RpoRequestError extends RpoError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/rpo/index.d.ts": "export { lookupByIco, searchByName } from \"./client.js\";\nexport type { LookupOptions, RpoClientError, SearchOptions } from \"./client.js\";\nexport { RpoAPIError, RpoError, RpoRequestError, RpoValidationError, } from \"./errors.js\";\nexport { entityUrl, parseEntity, parseSearchHit } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { RpoAddress, RpoEntity, RpoRawEntity, RpoRawSearchHit, RpoSearchResult, RpoView, } from \"./types.js\";\nexport { isIcoShape } from \"./validation.js\";\n",
+    "./src/rpo/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { RpoEntity, RpoSearchResult } from \"./types.js\";\nexport declare const toNormalizedEntity: (entity: RpoEntity) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (result: RpoSearchResult) => NormalizedRegistrySearchResult;\n",
+    "./src/rpo/parse.d.ts": "import type { RpoAddress, RpoEntity, RpoRawAddress, RpoRawEntity, RpoRawSearchHit, RpoSearchResult } from \"./types.js\";\nexport declare const parseAddress: (raw: RpoRawAddress) => RpoAddress;\nexport declare const entityUrl: (rpoId: number) => string;\nexport declare const parseEntity: (raw: RpoRawEntity) => RpoEntity | null;\nexport declare const parseSearchHit: (hit: RpoRawSearchHit) => RpoSearchResult | null;\n",
+    "./src/rpo/types.d.ts": "export type RpoRawCodeValue = {\n    code?: string;\n    codelistCode?: string;\n    value?: string;\n};\nexport type RpoRawTimed = {\n    validFrom?: string;\n    validTo?: string;\n};\nexport type RpoRawTimedValue = RpoRawTimed & {\n    value?: string;\n};\ntype RpoRawTimedCodeValue = RpoRawTimed & {\n    value?: RpoRawCodeValue;\n};\nexport type RpoRawAddress = RpoRawTimed & {\n    buildingNumber?: string;\n    country?: RpoRawCodeValue;\n    district?: RpoRawCodeValue;\n    formatedAddress?: string;\n    municipality?: RpoRawCodeValue;\n    postalCodes?: string[];\n    regNumber?: number;\n    street?: string;\n};\nexport type RpoRawPersonName = {\n    familyNames?: string[];\n    formatedName?: string;\n    givenNames?: string[];\n    postfixes?: RpoRawCodeValue[];\n    prefixes?: RpoRawCodeValue[];\n};\nexport type RpoRawStakeholder = RpoRawTimed & {\n    address?: RpoRawAddress;\n    fullName?: string;\n    identifier?: string;\n    personName?: RpoRawPersonName;\n    stakeholderType?: RpoRawCodeValue;\n    statutoryBodyMember?: RpoRawCodeValue;\n};\nexport type RpoRawEquity = RpoRawTimed & {\n    currency?: RpoRawCodeValue;\n    value?: number;\n    valuePaid?: number;\n};\nexport type RpoRawSourceRegister = {\n    registrationNumbers?: RpoRawTimedValue[];\n    registrationOffices?: RpoRawTimedValue[];\n    value?: RpoRawCodeValue;\n};\nexport type RpoRawRelatedEntity = RpoRawTimed & {\n    fullName?: string;\n    identifier?: string;\n};\ntype RpoRawActivity = RpoRawTimed & {\n    economicActivityDescription?: string;\n};\ntype RpoRawStatisticalCodes = {\n    mainActivity?: RpoRawCodeValue;\n};\nexport type RpoRawSearchHit = {\n    addresses?: RpoRawAddress[];\n    establishment?: string;\n    fullNames?: RpoRawTimedValue[];\n    id: number;\n    identifiers?: RpoRawTimedValue[];\n    sourceRegister?: RpoRawSourceRegister;\n    termination?: string;\n};\nexport type RpoRawSearchResponse = {\n    results: RpoRawSearchHit[];\n};\nexport type RpoRawEntity = RpoRawSearchHit & {\n    activities?: RpoRawActivity[];\n    authorizations?: RpoRawTimedValue[];\n    equities?: RpoRawEquity[];\n    legalForms?: RpoRawTimedCodeValue[];\n    legalStatuses?: RpoRawTimedCodeValue[];\n    predecessors?: RpoRawRelatedEntity[];\n    stakeholders?: RpoRawStakeholder[];\n    statisticalCodes?: RpoRawStatisticalCodes;\n    statutoryBodies?: RpoRawStakeholder[];\n    successors?: RpoRawRelatedEntity[];\n};\nexport type RpoView = \"current\" | \"historical\";\nexport type RpoDated<Value> = {\n    validFrom: null | string;\n    validTo: null | string;\n    value: Value;\n};\nexport type RpoCodedValue = {\n    code: null | string;\n    label: string;\n};\nexport type RpoAddress = {\n    city: null | string;\n    country: null | string;\n    postalCode: null | string;\n    street: null | string;\n    textAddress: null | string;\n};\nexport type RpoPerson = {\n    address: null | string;\n    identifier: null | string;\n    name: string;\n    organName: null | string;\n    position: null | string;\n    validFrom: null | string;\n    validTo: null | string;\n};\nexport type RpoMoney = {\n    amount: number;\n    currency: null | string;\n};\nexport type RpoSourceRegister = {\n    code: null | string;\n    name: string;\n    registrationNumber: null | string;\n    registrationOffice: null | string;\n};\nexport type RpoRelatedEntity = {\n    ico: null | string;\n    name: string;\n    validFrom: null | string;\n};\nexport type RpoStatus = {\n    terminatedAt: string;\n    type: \"terminated\";\n} | {\n    type: \"active\";\n};\nexport type RpoEntity = {\n    activities: RpoDated<string>[];\n    address: RpoAddress | null;\n    authorizations: RpoDated<string>[];\n    establishedAt: null | string;\n    formerAddresses: RpoDated<RpoAddress>[];\n    formerNames: RpoDated<string>[];\n    ico: string;\n    legalForm: RpoCodedValue | null;\n    legalStatuses: string[];\n    mainActivity: RpoCodedValue | null;\n    name: string;\n    predecessors: RpoRelatedEntity[];\n    registryUrl: string;\n    shareCapital: RpoMoney | null;\n    shareCapitalPaid: RpoMoney | null;\n    sourceRegister: RpoSourceRegister | null;\n    stakeholders: RpoPerson[];\n    status: RpoStatus;\n    statutoryBodies: RpoPerson[];\n    successors: RpoRelatedEntity[];\n    terminatedAt: null | string;\n};\nexport type RpoSearchResult = {\n    address: null | string;\n    ico: string;\n    name: string;\n    rpoId: number;\n    sourceRegister: null | string;\n    status: RpoStatus;\n};\nexport {};\n",
+    "./src/rpo/validation.d.ts": "export declare const normalizeIco: (input: string) => string;\nexport declare const isIcoShape: (input: string) => boolean;\n",
+    "./src/shared/adapter.d.ts": "export type RegistryAdapterShape = {\n    type: \"event-stream\";\n} | {\n    type: \"local-index\";\n} | {\n    type: \"rpc\";\n};\nexport type RegistryDescriptor<Scheme extends string> = {\n    country: string;\n    idScheme: Scheme;\n    shape: RegistryAdapterShape;\n    slug: string;\n};\n",
+    "./src/shared/canonical-id.d.ts": "export type CanonicalId<Scheme extends string> = string & {\n    readonly __brand: Scheme;\n};\nexport declare const CANONICAL_ID_SCHEMES: readonly [\n    \"CZ-ICO\",\n    \"NO-ORGNR\",\n    \"FI-Y\",\n    \"PL-KRS\",\n    \"PL-NIP\",\n    \"PL-REGON\",\n    \"GB-CRN\",\n    \"FR-SIREN\",\n    \"FR-SIRET\",\n    \"SK-ICO\",\n    \"CH-UID\",\n    \"HR-MBS\",\n    \"BR-CNPJ\"\n];\nexport type KnownCanonicalIdScheme = (typeof CANONICAL_ID_SCHEMES)[number];\nexport declare const unsafeBrand: <S extends string>(raw: string) => CanonicalId<S>;\n",
+    "./src/shared/errors.d.ts": "export declare class RegistryError extends Error {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class RegistryUnavailableError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class RegistryValidationError extends RegistryError {\n    readonly scheme: string;\n    constructor(scheme: string);\n}\nexport type EntityNotFound = RegistryError & {\n    readonly canonicalId: string;\n    readonly registrySlug: string;\n};\nexport declare const isEntityNotFound: (error: unknown) => error is EntityNotFound;\nexport declare class RegistryRateLimitedError extends RegistryError {\n    readonly retryAfterMs: null | number;\n    constructor({ message, retryAfterMs, cause, }: {\n        cause?: unknown;\n        message: string;\n        retryAfterMs?: null | number;\n    });\n}\nexport declare class RegistryAuthRequiredError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class RegistryDataPaywalledError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class RegistryLicenceIncompatibleError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\n",
+    "./src/shared/http.d.ts": "import { RegistryRateLimitedError } from \"./errors.js\";\nimport { type RegistryRequestObservation } from \"./request-observer.js\";\nexport declare const DEFAULT_REGISTRY_TIMEOUT_MS = 10000;\nexport type RegistryClientOptions = {\n    observer: RegistryRequestObservation;\n    signal?: AbortSignal | undefined;\n};\nexport type RegistryRequestOptions = RegistryClientOptions & {\n    init?: Omit<RequestInit, \"signal\">;\n    signal?: AbortSignal | undefined;\n    timeoutMs?: number;\n    url: string;\n    wrapRequestError: (cause: unknown) => Error;\n};\nexport declare const performRegistryRequest: (options: RegistryRequestOptions) => Promise<Response>;\nexport type ReadRegistryJsonOptions<T> = {\n    isExpectedShape: (value: unknown) => value is T;\n    response: Response;\n    signal?: AbortSignal | undefined;\n    wrapParseError: (cause: unknown) => Error;\n    wrapShapeError: () => Error;\n};\nexport declare const readRegistryJson: <T>(options: ReadRegistryJsonOptions<T>) => Promise<T>;\nexport type RegistryFetchOptions<T> = RegistryRequestOptions & {\n    isExpectedShape: (value: unknown) => value is T;\n    onErrorResponse: (response: Response) => Promise<T | null> | T | null;\n    onRateLimited?: (response: Response) => Promise<T | null> | T | null;\n    wrapParseError: (response: Response, cause: unknown) => Error;\n    wrapShapeError: (response: Response) => Error;\n};\nexport declare const registryFetch: <T>(options: RegistryFetchOptions<T>) => Promise<T | null>;\nexport declare const parseRetryAfterMs: (response: Response) => null | number;\nexport type RateLimitedErrorOptions = {\n    cause?: unknown;\n    message: string;\n    response: Response;\n};\nexport declare const rateLimitedError: (options: RateLimitedErrorOptions) => RegistryRateLimitedError;\n",
+    "./src/shared/index.d.ts": "export type { RegistryAdapterShape, RegistryDescriptor } from \"./adapter.js\";\nexport type { CanonicalId, KnownCanonicalIdScheme } from \"./canonical-id.js\";\nexport { CANONICAL_ID_SCHEMES } from \"./canonical-id.js\";\nexport { isEntityNotFound, RegistryAuthRequiredError, RegistryDataPaywalledError, RegistryError, RegistryLicenceIncompatibleError, RegistryRateLimitedError, RegistryUnavailableError, RegistryValidationError, } from \"./errors.js\";\nexport type { EntityNotFound } from \"./errors.js\";\nexport type { RegistryClientOptions } from \"./http.js\";\nexport { clampSearchLimit } from \"./search.js\";\nexport type { NormalizedRegistryAddress, NormalizedRegistryBirthDate, NormalizedRegistryCapital, NormalizedRegistryEntity, NormalizedRegistryEntityFields, NormalizedRegistryField, NormalizedRegistryIdentifier, NormalizedRegistryKeyPeopleGroup, NormalizedRegistryKeyPerson, NormalizedRegistryRecord, NormalizedRegistrySearchFields, NormalizedRegistrySearchResult, NormalizedRegistryWarning, } from \"./normalized.js\";\nexport type { EntityStatus } from \"./status.js\";\nexport { mapEntityStatus } from \"./status.js\";\n",
+    "./src/shared/normalized.d.ts": "import type { CountryCode } from \"@stll/country-codes\";\nimport type { CanonicalId, KnownCanonicalIdScheme } from \"./canonical-id.js\";\nimport type { EntityStatus } from \"./status.js\";\nexport type NormalizedRegistryIdentifier<Scheme extends KnownCanonicalIdScheme = KnownCanonicalIdScheme> = {\n    [CurrentScheme in Scheme]: {\n        scheme: CurrentScheme;\n        value: CanonicalId<CurrentScheme>;\n    };\n}[Scheme];\ntype ValidatedRegistryIdentifierOptions<Scheme extends KnownCanonicalIdScheme> = {\n    scheme: Scheme;\n    validate: (value: string) => boolean;\n    value: string;\n};\nexport declare const toValidatedRegistryIdentifier: <Scheme extends KnownCanonicalIdScheme>({ scheme, value, validate, }: ValidatedRegistryIdentifierOptions<Scheme>) => NormalizedRegistryIdentifier<Scheme>;\nexport declare const fromCanonicalRegistryIdentifier: <Scheme extends KnownCanonicalIdScheme>(scheme: Scheme, value: CanonicalId<Scheme>) => NormalizedRegistryIdentifier<Scheme>;\nexport type NormalizedRegistryAddress = {\n    county: null | string;\n    houseNumber: null | string;\n    municipality: null | string;\n    municipalityPart: null | string;\n    orientationLetter: null | string;\n    orientationNumber: null | string;\n    postalCode: null | string;\n    stateName: null | string;\n    streetName: null | string;\n    textAddress: null | string;\n};\nexport type NormalizedRegistryRecord = {\n    courtName: null | string;\n    idNumber: null | string;\n    reference: null | string;\n    section: null | string;\n};\nexport type NormalizedRegistryBirthDate = {\n    precision: \"day\" | \"month\" | \"year\";\n    value: string;\n};\nexport type NormalizedRegistryKeyPerson = {\n    address: null | string;\n    birthDate: NormalizedRegistryBirthDate | null;\n    citizenship: null | string;\n    identifier: null | string;\n    link: null | string;\n    name: string;\n    nameWithTitles: null | string;\n    organName: null | string;\n    position: null | string;\n    share: null | string;\n    since: null | string;\n};\nexport type NormalizedRegistryKeyPeopleGroup = {\n    name: null | string;\n    people: NormalizedRegistryKeyPerson[];\n};\nexport type NormalizedRegistryCapital = {\n    amount: null | string;\n    currency: null | string;\n    text: string;\n};\nexport type NormalizedRegistryWarning = {\n    code: string;\n};\nexport type NormalizedRegistryField<Value> = {\n    availability: \"available\";\n    value: Value;\n} | {\n    availability: \"not-loaded\";\n} | {\n    availability: \"not-supported\";\n};\nexport declare const availableField: <Value>(value: Value) => NormalizedRegistryField<Value>;\nexport declare const notLoadedField: () => NormalizedRegistryField<never>;\nexport declare const unsupportedField: () => NormalizedRegistryField<never>;\nexport type NormalizedRegistryEntityFields = {\n    actingClause: NormalizedRegistryField<null | string>;\n    address: NormalizedRegistryField<NormalizedRegistryAddress | null>;\n    creationDate: NormalizedRegistryField<null | string>;\n    keyPeople: NormalizedRegistryField<NormalizedRegistryKeyPeopleGroup[]>;\n    legalForm: NormalizedRegistryField<null | {\n        code: null | string;\n        label: null | string;\n    }>;\n    nameWithoutLegalForm: NormalizedRegistryField<null | string>;\n    registrationDate: NormalizedRegistryField<null | string>;\n    registryRecord: NormalizedRegistryField<NormalizedRegistryRecord | null>;\n    registryUrl: NormalizedRegistryField<null | string>;\n    removalDate: NormalizedRegistryField<null | string>;\n    shareCapital: NormalizedRegistryField<NormalizedRegistryCapital | null>;\n    shareCapitalPaid: NormalizedRegistryField<NormalizedRegistryCapital | null>;\n    status: NormalizedRegistryField<EntityStatus>;\n    warnings: NormalizedRegistryField<NormalizedRegistryWarning[]>;\n};\nexport type NormalizedRegistryEntity = {\n    country: CountryCode;\n    identifiers: NormalizedRegistryIdentifier[];\n    name: string;\n    registryId: NormalizedRegistryIdentifier;\n    statusDetail: null | string;\n} & NormalizedRegistryEntityFields;\nexport type NormalizedRegistrySearchFields = {\n    address: NormalizedRegistryField<null | string>;\n    legalForm: NormalizedRegistryField<null | {\n        code: null | string;\n        label: null | string;\n    }>;\n    registryUrl: NormalizedRegistryField<null | string>;\n    status: NormalizedRegistryField<EntityStatus>;\n};\nexport type NormalizedRegistrySearchResult = {\n    country: CountryCode;\n    name: string;\n    registryId: NormalizedRegistryIdentifier;\n} & NormalizedRegistrySearchFields;\nexport {};\n",
+    "./src/shared/request-observer.d.ts": "export type RegistryRequestObservation = \"unobserved\" | {\n    onError: (cause: unknown) => void;\n    onRequest: () => void;\n};\nexport declare const observeRegistryRequest: (observer: RegistryRequestObservation) => void;\n",
+    "./src/shared/search.d.ts": "export declare const clampSearchLimit: (requested: number, max: number) => number;\n",
+    "./src/shared/status.d.ts": "export type EntityStatus = {\n    at: null | string;\n    type: \"deleted\";\n} | {\n    type: \"active\";\n} | {\n    type: \"bankruptcy\";\n} | {\n    type: \"dissolved\";\n} | {\n    type: \"inactive\";\n} | {\n    type: \"liquidating\";\n} | {\n    type: \"unknown\";\n};\nexport declare const mapEntityStatus: <TInternal extends string>(internal: string, mapping: Record<TInternal, EntityStatus>) => EntityStatus;\n",
+    "./src/sudreg/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport type { SudregCompany } from \"./types.js\";\nexport type LookupOptions = RegistryClientOptions;\nexport declare const lookupByMbs: (mbsInput: string, options: LookupOptions) => Promise<SudregCompany | null>;\n",
+    "./src/sudreg/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class SudregError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class SudregAPIError extends SudregError {\n    readonly httpStatus: number;\n    constructor({ cause, message, httpStatus, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n    });\n}\nexport declare class SudregParseError extends SudregError {\n    constructor(message: string);\n}\nexport declare class SudregValidationError extends SudregError {\n    constructor(message: string);\n}\nexport declare class SudregRequestError extends SudregError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/sudreg/index.d.ts": "export { lookupByMbs } from \"./client.js\";\nexport type { LookupOptions } from \"./client.js\";\nexport { SudregAPIError, SudregError, SudregParseError, SudregRequestError, SudregValidationError, } from \"./errors.js\";\nexport { parseAddress, parseCompanyPage } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { SudregAddress, SudregCompany, SudregWarning } from \"./types.js\";\nexport { normalizeMbs, validateMbs } from \"./validation.js\";\n",
+    "./src/sudreg/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { SudregCompany } from \"./types.js\";\nexport declare const toNormalizedEntity: (company: SudregCompany) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (company: SudregCompany) => NormalizedRegistrySearchResult;\n",
+    "./src/sudreg/parse.d.ts": "import type { SudregAddress, SudregCompany, SudregWarning } from \"./types.js\";\nexport declare const parseAddress: (text: string) => {\n    address: SudregAddress | null;\n    warnings: SudregWarning[];\n};\nexport declare const parseCompanyPage: (html: string, requestedMbs: string) => SudregCompany | null;\n",
+    "./src/sudreg/types.d.ts": "export type SudregAddress = {\n    houseNumber: null | string;\n    municipality: null | string;\n    municipalityPart: null | string;\n    orientationLetter: null | string;\n    orientationNumber: null | string;\n    street: null | string;\n    textAddress: string;\n};\nexport type SudregWarning = {\n    type: \"unexpected-address-format\";\n};\nexport type SudregCompany = {\n    address: SudregAddress | null;\n    legalForm: null | string;\n    mbs: string;\n    name: string;\n    registryUrl: string;\n    shareCapital: null | string;\n    warnings: SudregWarning[];\n};\n",
+    "./src/sudreg/validation.d.ts": "export declare const normalizeMbs: (input: string) => string;\nexport declare const validateMbs: (input: string) => boolean;\n",
+    "./src/vies/client.d.ts": "import type { RegistryClientOptions } from \"../shared/http.js\";\nimport type { ViesValidation } from \"./types.js\";\nimport { normalizeVatNumber, validateVatFormat } from \"./validation.js\";\nexport declare const validateVat: (input: string, options: RegistryClientOptions) => Promise<ViesValidation>;\nexport { normalizeVatNumber, validateVatFormat };\n",
+    "./src/vies/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class ViesError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class ViesAPIError extends ViesError {\n    readonly httpStatus: number;\n    readonly upstreamUserError: null | string;\n    constructor({ cause, message, httpStatus, upstreamUserError, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamUserError?: null | string;\n    });\n}\nexport declare class ViesValidationError extends ViesError {\n    constructor(message: string);\n}\nexport declare class ViesRequestError extends ViesError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/vies/index.d.ts": "export { normalizeVatNumber, validateVat, validateVatFormat, } from \"./client.js\";\nexport { ViesAPIError, ViesError, ViesRequestError, ViesValidationError, } from \"./errors.js\";\nexport { parseValidation } from \"./parse.js\";\nexport type { ViesApproximate, ViesRawResponse, ViesUserError, ViesValidation, ViesValidationStatus, ViesVatNumber, } from \"./types.js\";\nexport { isKnownVatCountry, isViesParticipant, knownVatCountries, parseVatNumber, VAT_FORMAT_RULES, } from \"./validation.js\";\nexport type { ParsedVatNumber, VatFormatRule } from \"./validation.js\";\n",
+    "./src/vies/parse.d.ts": "import type { ViesRawResponse, ViesValidation, ViesVatNumber } from \"./types.js\";\nexport declare const parseValidation: (raw: ViesRawResponse, vatNumber: ViesVatNumber) => ViesValidation;\n",
+    "./src/vies/types.d.ts": "export type ViesUserError = \"GLOBAL_MAX_CONCURRENT_REQ\" | \"INVALID\" | \"INVALID_INPUT\" | \"MS_MAX_CONCURRENT_REQ\" | \"MS_UNAVAILABLE\" | \"SERVICE_UNAVAILABLE\" | \"TIMEOUT\" | \"VALID\";\nexport type ViesApproximate = {\n    city: string;\n    companyType: string;\n    matchCity: number;\n    matchCompanyType: number;\n    matchName: number;\n    matchPostalCode: number;\n    matchStreet: number;\n    name: string;\n    postalCode: string;\n    street: string;\n};\nexport type ViesRawResponse = {\n    address: string;\n    isValid: boolean;\n    name: string;\n    originalVatNumber: string;\n    requestDate: string;\n    requestIdentifier: string;\n    userError: string;\n    vatNumber: string;\n    viesApproximate?: ViesApproximate;\n};\nexport type ViesVatNumber = {\n    country: string;\n    vat: string;\n};\nexport type ViesValidationStatus = {\n    type: \"invalid-format\";\n} | {\n    type: \"not-registered\";\n} | {\n    type: \"service-unavailable\";\n    userError: string;\n} | {\n    type: \"valid\";\n};\nexport type ViesValidation = {\n    address: null | string;\n    name: null | string;\n    requestDate: string;\n    status: ViesValidationStatus;\n    valid: boolean;\n    vatNumber: ViesVatNumber;\n};\n",
+    "./src/vies/validation.d.ts": "export type VatFormatRule = {\n    pattern: RegExp;\n    removed?: boolean;\n};\nexport declare const VAT_FORMAT_RULES: Readonly<Record<string, VatFormatRule>>;\nexport declare const normalizeVatNumber: (input: string) => string;\nexport type ParsedVatNumber = {\n    country: string;\n    vat: string;\n};\nexport declare const parseVatNumber: (input: string) => ParsedVatNumber | null;\nexport declare const isKnownVatCountry: (prefix: string) => boolean;\nexport declare const isViesParticipant: (prefix: string) => boolean;\nexport declare const validateVatFormat: (input: string) => boolean;\nexport declare const knownVatCountries: () => readonly string[];\n",
+    "./src/zefix/client.d.ts": "import { type RegistryClientOptions } from \"../shared/http.js\";\nimport type { ZefixCompany, ZefixSearchResult } from \"./types.js\";\nexport type LookupOptions = RegistryClientOptions;\nexport declare const lookupByUid: (uidInput: string, options: LookupOptions) => Promise<ZefixCompany | null>;\nexport type SearchOptions = RegistryClientOptions & {\n    limit?: number;\n};\nexport declare const searchByName: (name: string, options: SearchOptions) => Promise<ZefixSearchResult[]>;\n",
+    "./src/zefix/errors.d.ts": "import { RegistryError } from \"../shared/errors.js\";\nexport declare class ZefixError extends RegistryError {\n    constructor(message: string, options?: ErrorOptions);\n}\nexport declare class ZefixAPIError extends ZefixError {\n    readonly httpStatus: number;\n    readonly upstreamCode: null | string;\n    constructor({ cause, message, httpStatus, upstreamCode, }: {\n        cause?: unknown;\n        httpStatus: number;\n        message: string;\n        upstreamCode?: null | string;\n    });\n}\nexport declare class ZefixValidationError extends ZefixError {\n    constructor(message: string);\n}\nexport declare class ZefixRequestError extends ZefixError {\n    readonly url: string;\n    constructor(url: string, message: string, options?: ErrorOptions);\n}\n",
+    "./src/zefix/index.d.ts": "export { lookupByUid, searchByName } from \"./client.js\";\nexport type { LookupOptions, SearchOptions } from \"./client.js\";\nexport { ZefixAPIError, ZefixError, ZefixRequestError, ZefixValidationError, } from \"./errors.js\";\nexport { parseFirm, parseSearchEntry } from \"./parse.js\";\nexport { toNormalizedEntity, toNormalizedSearchResult } from \"./normalized.js\";\nexport type { ZefixCompany, ZefixCompanyStatus, ZefixRawFirm, ZefixSearchResponse, ZefixSearchResult, } from \"./types.js\";\nexport { formatUid, normalizeUid, validateUid } from \"./validation.js\";\n",
+    "./src/zefix/normalized.d.ts": "import type { NormalizedRegistryEntity, NormalizedRegistrySearchResult } from \"../shared/normalized.js\";\nimport type { ZefixCompany, ZefixSearchResult } from \"./types.js\";\nexport declare const toNormalizedEntity: (company: ZefixCompany) => NormalizedRegistryEntity;\nexport declare const toNormalizedSearchResult: (result: ZefixSearchResult) => NormalizedRegistrySearchResult;\n",
+    "./src/zefix/parse.d.ts": "import type { ZefixCompany, ZefixRawFirm, ZefixSearchResult } from \"./types.js\";\nexport declare const parseFirm: (raw: ZefixRawFirm) => ZefixCompany | null;\nexport declare const parseSearchEntry: (raw: ZefixRawFirm) => ZefixSearchResult | null;\n",
+    "./src/zefix/types.d.ts": "import type { SwissUid } from \"./validation.js\";\nexport type ZefixRawFirm = {\n    cantonalExcerptWeb?: string;\n    chid?: string;\n    chidFormatted?: string;\n    deleteDate?: null | string;\n    ehraid?: number;\n    legalFormId?: number;\n    legalSeat?: string;\n    legalSeatId?: number;\n    name?: string;\n    registerOfficeId?: number;\n    shabDate?: string;\n    status?: string;\n    uid?: string;\n    uidFormatted?: string;\n};\nexport type ZefixSearchResponse = {\n    error?: {\n        code?: string;\n        message?: string;\n    };\n    hasMoreResults?: boolean;\n    list?: ZefixRawFirm[];\n    maxEntries?: number;\n    maxOffset?: null | number;\n    offset?: number;\n};\nexport type ZefixCompanyStatus = {\n    deletedAt: null | string;\n    type: \"deleted\";\n} | {\n    type: \"active\";\n} | {\n    type: \"unknown\";\n    upstreamValue: null | string;\n};\nexport type ZefixCompany = {\n    legalFormId: null | number;\n    legalSeat: null | string;\n    name: string;\n    registryUrl: null | string;\n    status: ZefixCompanyStatus;\n    uid: SwissUid;\n    uidFormatted: string;\n};\nexport type ZefixSearchResult = {\n    legalSeat: null | string;\n    name: string;\n    registryUrl: null | string;\n    status: ZefixCompanyStatus;\n    uid: SwissUid;\n    uidFormatted: string;\n};\n",
+    "./src/zefix/validation.d.ts": "import { type CanonicalId } from \"../shared/canonical-id.js\";\nexport type SwissUid = CanonicalId<\"CH-UID\">;\nexport declare const normalizeUid: (input: string) => string;\nexport declare const parseUid: (input: string) => SwissUid | null;\nexport declare const validateUid: (input: string) => boolean;\nexport declare const formatUid: (input: string) => string;\n"
+  }
+}

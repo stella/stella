@@ -4,7 +4,8 @@
 // `unknown` so rule files can call them without per-call type ceremony or
 // shared type-import boilerplate.
 
-import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
+import type { Context, ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import { isDatabaseHandleName, MUTATION_METHODS } from "./database-access.ts";
 import { canonicalModuleId } from "./module-id.ts";
@@ -115,7 +116,7 @@ export const isCallTo = (node: unknown, name: string): boolean =>
   isIdentifier(node.callee, name);
 
 // Resolve the dot-notation name of a callee: an Identifier, or a
-// non-computed MemberExpression chain (e.g. `t.String`, `Schema.is`,
+// non-computed MemberExpression chain (e.g. `v.string`, `Schema.is`,
 // `process.stderr.write`). Returns null when the chain is computed
 // or the property name itself can't be resolved.
 //
@@ -536,6 +537,20 @@ export const resolveVariable = (
   return null;
 };
 
+export const isUnshadowedGlobalIdentifier = (
+  context: Context,
+  value: unknown,
+): boolean => {
+  if (!isIdentifierReference(value)) {
+    return false;
+  }
+  if (context.sourceCode.isGlobalReference(value)) {
+    return true;
+  }
+  const variable = resolveVariable(context, value);
+  return variable === null || variable.defs.length === 0;
+};
+
 // Whether a variable is never reassigned after its declaration, so its
 // initializer is the only value it can hold.
 export const isSingleAssignment = (variable: Variable): boolean =>
@@ -646,7 +661,10 @@ export const dynamicModuleSourceForEnforcement = (
 };
 
 // The static key of a member expression: `a.b`, `a["b"]`, `` a[`b`] ``.
-export const memberPropertyName = (member: AstNode): string | null => {
+export const memberPropertyName = (member: unknown): string | null => {
+  if (!isAstNode(member)) {
+    return null;
+  }
   if (member.computed !== true) {
     return getPropertyName(member.property);
   }
@@ -991,7 +1009,7 @@ const isDatabaseHandle = (
 };
 
 // The static text of a drizzle `sql` template, or of a const holding one.
-const writeSqlText = (
+export const writeSqlText = (
   context: DatabaseWriteContext,
   node: unknown,
   depth = 0,
@@ -1102,4 +1120,80 @@ export const databaseWriteTarget = (
   const named =
     table === undefined || table === SQL_PLACEHOLDER.trim() ? "?" : table;
   return `${verb ?? "execute"}:${named}`;
+};
+
+export type ReplayOptionDescription<T> =
+  | { kind: "plan" }
+  | { kind: "property"; key: string }
+  | { kind: "spread"; properties: readonly T[] }
+  | { kind: "unresolved" };
+
+type ReplayOptionEntry<T> =
+  { kind: "plan"; node: T } | { kind: "property"; key: string; node: T };
+
+type OrderedReplayOptions<T> = {
+  properties: readonly T[];
+  describe: (property: T) => ReplayOptionDescription<T>;
+};
+
+type OrderedReplayOptionResult<T> =
+  | { status: "resolved"; entries: ReplayOptionEntry<T>[] }
+  | { status: "unsafe" };
+
+/** Flatten known literal spreads in order; no later source may replace a plan's contract. */
+export const orderedReplayOptions = <T>({
+  properties,
+  describe,
+}: OrderedReplayOptions<T>): OrderedReplayOptionResult<T> => {
+  const entries: ReplayOptionEntry<T>[] = [];
+  const defined = new Set<string>();
+  let phase: "before-plan" | "after-plan" = "before-plan";
+  const visit = (items: readonly T[]): boolean => {
+    for (const node of items) {
+      const part = describe(node);
+      switch (part.kind) {
+        case "unresolved":
+          return false;
+        case "spread":
+          if (!visit(part.properties)) {
+            return false;
+          }
+          break;
+        case "plan":
+          if (
+            phase === "after-plan" ||
+            defined.has("set") ||
+            defined.has("setWhere")
+          ) {
+            return false;
+          }
+          phase = "after-plan";
+          defined.add("set");
+          defined.add("setWhere");
+          entries.push({ kind: "plan", node });
+          break;
+        case "property": {
+          const protectedKey = ["set", "setWhere", "where", "target"].includes(
+            part.key,
+          );
+          if (
+            protectedKey &&
+            (phase === "after-plan" || defined.has(part.key))
+          ) {
+            return false;
+          }
+          defined.add(part.key);
+          entries.push({ kind: "property", key: part.key, node });
+          break;
+        }
+        default:
+          part satisfies never;
+          return panic("Unknown replay option kind");
+      }
+    }
+    return true;
+  };
+  return visit(properties)
+    ? { status: "resolved", entries }
+    : { status: "unsafe" };
 };

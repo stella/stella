@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -11,9 +11,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disableAndPurgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
 
-const requestBody = t.Object({
-  enabled: t.Boolean(),
-});
+const requestBody = v.object({ enabled: v.boolean() });
 
 const config = {
   contract: "patch",

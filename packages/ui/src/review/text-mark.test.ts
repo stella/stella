@@ -7,6 +7,7 @@ import {
   SEARCH_HIT_DESCENDANT_MARK_CLASS,
   SEARCH_HIT_MARK,
   TEXT_MARK_TONE_COLOR,
+  textMarkBoxClass,
   textMarkClass,
   textMarkHighlightRule,
 } from "./text-mark";
@@ -151,6 +152,30 @@ describe("the search-hit mark", () => {
           : lightWash;
         expect(light).toContain(`var(--success) ${lightWash}%`);
         expect(dark).toContain(`var(--success) ${darkWash}%`);
+      }
+    }
+  });
+});
+
+describe("textMarkBoxClass", () => {
+  test("a box mark keeps the text mark's hue, wash and ring, and draws its line as an edge", () => {
+    for (const variant of ["fill", ...LINE_VARIANTS] as const) {
+      for (const state of ["rest", "matched", "active"] as const) {
+        const text = textMarkClass({ variant, tone: "warning", state });
+        const box = textMarkBoxClass({ variant, tone: "warning", state });
+        expect(box).toContain("[--text-mark:var(--warning)]");
+        expect(box.includes("ring-1")).toBe(text.includes("ring-1"));
+        if (text.includes("bg-(--text-mark)/")) {
+          expect(washPercent(box, "")).toBe(washPercent(text, ""));
+        }
+        // No text decoration: the box has no words of its own to decorate.
+        expect(box).not.toContain("underline");
+        expect(box).not.toContain("line-through");
+        expect(
+          variant === "fill" ||
+            box.includes("border-b-2") ||
+            box.includes("linear-gradient"),
+        ).toBe(true);
       }
     }
   });

@@ -16,13 +16,29 @@ import {
   claimMark,
   claimSpansForBlock,
   groupClaimsIntoPassages,
+  originalKind,
   passageReadingOrder,
   proseReadingOrder,
   readerParagraph,
-  selectClaimPresentation,
   segmentProse,
+  selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
+
+describe("originalKind", () => {
+  test("a DOCX run and a PDF run each have an original; no text or a mix has none", () => {
+    expect(originalKind([{ kind: "docx-block" }, { kind: "docx-block" }])).toBe(
+      "docx",
+    );
+    expect(originalKind([{ kind: "pdf-page" }, { kind: "pdf-page" }])).toBe(
+      "pdf",
+    );
+    expect(originalKind([])).toBeNull();
+    expect(originalKind([{ kind: "docx-block" }, { kind: "pdf-page" }])).toBe(
+      null,
+    );
+  });
+});
 
 describe("claimMark", () => {
   test("selection wins, a filtered-out claim is not drawn", () => {

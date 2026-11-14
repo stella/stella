@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   AiCassetteError,
-  createCassetteFetch,
   type AiProviderCassette,
   type CassetteFetch,
+  createCassetteFetch,
 } from "./ai-provider-cassette";
 
 const ORIGIN = "https://provider.example";

@@ -3,13 +3,13 @@ import { dkimSign } from "mailauth";
 import { generateKeyPairSync } from "node:crypto";
 
 import {
-  createMailDnsResolver,
   createLocalMailVerifier,
+  createMailDnsResolver,
   domainsAlign,
   hasAlignedAuthentication,
+  type MailAuthentication,
   parseProviderAuthentication,
   verifyMailLocally,
-  type MailAuthentication,
 } from "@/api/lib/email/inbound/authentication";
 
 const provider = (value: string) =>
@@ -277,7 +277,7 @@ test("local verification validates DKIM bytes, alignment, and DMARC policy", asy
   });
   const publicKeyRecord = publicKey
     .export({ type: "spki", format: "der" })
-    .toString("base64");
+    .toBase64();
   const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" });
   const unsigned = Buffer.from(
     "From: member@example.com\r\nTo: recipient@example.net\r\nSubject: local DKIM check\r\n\r\nOriginal body\r\n",

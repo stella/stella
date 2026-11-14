@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -16,17 +17,19 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
+  featureEnrolments,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
   TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
-  workspaces,
   workspaceMembers,
-  featureEnrolments,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -101,7 +104,32 @@ afterEach(async () => {
   setSystemTime();
 });
 
-const context = <TContext>(
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === removeEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === deleteLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
+
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (input: TContext) => unknown,
   request: {
     body?: unknown;
@@ -130,7 +158,7 @@ const context = <TContext>(
     recordAuditEvent,
     createAuditRecorder: () => recordAuditEvent,
     request: new Request("https://example.test/invoices/running-time"),
-    route: "/test/invoices/running-time",
+    route: invoiceRouteForHandler(_handler),
   });
 };
 

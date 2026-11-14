@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   formatMaintenanceReleaseRange,
-  groupMaintenanceReleases,
   getMaintenanceReleaseTitle,
   getReleaseKind,
+  groupMaintenanceReleases,
   isStellaReleaseTag,
 } from "./changelog-release";
 

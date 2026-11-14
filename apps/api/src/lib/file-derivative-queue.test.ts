@@ -5,6 +5,7 @@ import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import {
   createFileDerivativeProcessor,
   deferFileDerivativeForPendingReservation,
+  displayableConversionRefusal,
   FILE_DERIVATIVE_WORKER_CONCURRENCY,
   loadDerivativeSource,
 } from "@/api/lib/file-derivative-queue";
@@ -16,6 +17,38 @@ import { LIMITS } from "@/api/lib/limits";
 import { createPressurePause } from "@/api/lib/memory-pressure";
 import type { MemoryPressureCause } from "@/api/lib/memory-pressure";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
+
+describe("displayable conversion refusals", () => {
+  test("clips document-derived values to their persisted limits", () => {
+    const oversized = "x".repeat(600);
+
+    expect(
+      displayableConversionRefusal({
+        kind: "unsupported_reference",
+        format: oversized,
+        element: oversized,
+        attribute: oversized,
+      }),
+    ).toEqual({
+      kind: "unsupported_reference",
+      format: "x".repeat(256),
+      element: "x".repeat(512),
+      attribute: "x".repeat(512),
+    });
+    expect(
+      displayableConversionRefusal({
+        kind: "unsupported_encoding",
+        encoding: oversized,
+      }),
+    ).toEqual({ kind: "unsupported_encoding", encoding: "x".repeat(256) });
+    expect(
+      displayableConversionRefusal({
+        kind: "unsupported_field",
+        fieldType: oversized,
+      }),
+    ).toEqual({ kind: "unsupported_field", fieldType: "x".repeat(256) });
+  });
+});
 
 describe("file derivative reservation recovery", () => {
   test("delays a busy same-key write past its recovery grace without failing the job", async () => {

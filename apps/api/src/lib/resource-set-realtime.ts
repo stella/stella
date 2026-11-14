@@ -1,7 +1,6 @@
-import { ElysiaCustomStatusResponse } from "elysia";
-
 import type { ResourceType } from "@stll/api-contract";
 
+import { HttpStatusResponse } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   broadcastOrganizationResourceSetUpdated,
@@ -59,7 +58,7 @@ export const noResourceSetUpdates = (reason: string): NoResourceSetUpdates => ({
 
 /** A handler result counts as a committed success unless it is an error status. */
 export const isSuccessfulHandlerResult = (result: unknown): boolean => {
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return result.code < 400;
   }
   if (result instanceof Response) {
@@ -90,6 +89,7 @@ type AnnounceResourceSetUpdatesOptions = {
   /** The matter the request proved access to; absent for root handlers. */
   workspaceId: SafeId<"workspace"> | undefined;
   broadcasts?: ResourceSetBroadcasts;
+  mutationDigest?: string;
 };
 
 /**
@@ -102,6 +102,7 @@ export const announceResourceSetUpdates = ({
   organizationId,
   workspaceId,
   broadcasts = DEFAULT_BROADCASTS,
+  mutationDigest,
 }: AnnounceResourceSetUpdatesOptions): void => {
   if (
     realtime === undefined ||
@@ -111,6 +112,7 @@ export const announceResourceSetUpdates = ({
     return;
   }
   const resourceTypes = resourceTypesOf(realtime.resourceTypes);
+  const options = mutationDigest === undefined ? {} : { mutationDigest };
   if (realtime.scope === "workspace") {
     // Root handlers cannot declare a workspace scope (see the factory types);
     // a missing matter here means there is no audience to announce to.
@@ -118,11 +120,11 @@ export const announceResourceSetUpdates = ({
       return;
     }
     for (const resourceType of resourceTypes) {
-      broadcasts.workspace(workspaceId, resourceType);
+      broadcasts.workspace(workspaceId, resourceType, options);
     }
     return;
   }
   for (const resourceType of resourceTypes) {
-    broadcasts.organization(organizationId, resourceType);
+    broadcasts.organization(organizationId, resourceType, options);
   }
 };

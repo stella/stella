@@ -9,7 +9,9 @@ import {
   isClipboardSourceAppVisual,
 } from "../clipboard/clipboard-types";
 
-/** Payload-free: the window re-reads the day through `activity_get_day`. */
+/** Payload-free: the activity window re-reads the day through
+ *  `activity_get_day`, the Settings window its settings through
+ *  `activity_get_settings`. */
 export const ACTIVITY_CHANGED_EVENT = "activity-timeline-changed";
 
 export const ACTIVITY_RETENTIONS = ["week", "month", "quarter"] as const;
@@ -30,6 +32,8 @@ const ACTIVITY_PERSISTENCE_STATUSES = [
 ] as const;
 type ActivityPersistenceStatus = (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
 
+/** Whether stella AI descriptions ask before sending a suggestion's titles. */
+
 export const ACTIVITY_DETAILS_ACCESS = [
   "disabled",
   "ready",
@@ -44,6 +48,8 @@ export type ActivitySegment = {
   matterId?: string | null;
   windowTitle?: string | null;
   document?: string | null;
+  /** Time on a call in this app, whatever was in front. */
+  call?: boolean;
   /** RFC 3339 instants. */
   end: string;
   start: string;
@@ -61,10 +67,43 @@ export type ActivityManualAssignment = {
   matter?: DesktopMatter & { clientName: string | null };
 };
 
+export type ActivityDeletionStatus =
+  keyof typeof activityContract.deletionStatuses;
+
+/** The detail-capture choices both activity views show. */
+export type ActivityCaptureSettings = {
+  captureDetails: boolean;
+  detailsAccess: ActivityDetailsAccess;
+  appNameOnlyApps: ActivityAppExclusion[];
+  browserApps: ActivityAppExclusion[];
+  browserTitleApps: ActivityAppExclusion[];
+  sourceAppVisuals: ClipboardSourceAppVisual[];
+};
+
+/**
+ * What `activity_get_settings` returns to the Settings window: settings,
+ * deletion state and the names of the apps recorded on `date`, never the
+ * timeline.
+ */
+export type ActivitySettingsSnapshot = ActivityCaptureSettings & {
+  /** Local calendar dates as `YYYY-MM-DD`. */
+  date: string;
+  today: string;
+  earliestDate: string;
+  latestDate: string;
+  deletionStatus: ActivityDeletionStatus;
+  persistence: ActivityPersistenceStatus;
+  retention: ActivityRetention;
+  excludedApps: ActivityAppExclusion[];
+  detectCalls: boolean;
+  otherAccountHistoryDays: number;
+  apps: ActivityAppExclusion[];
+};
+
 export type ActivityDaySnapshot = {
   /** Local calendar dates as `YYYY-MM-DD`. */
   date: string;
-  deletionStatus: keyof typeof activityContract.deletionStatuses;
+  deletionStatus: ActivityDeletionStatus;
   pendingBatch: {
     idempotencyKey: string;
     entries: DesktopTimeEntryBatch["entries"];
@@ -72,11 +111,11 @@ export type ActivityDaySnapshot = {
   } | null;
   manualAssignments: ActivityManualAssignment[];
   draftedEntries: { start: string; end: string; entryId: string }[];
-  timeBillingEnabled: boolean;
   earliestDate: string;
   latestDate: string;
   excludedApps: ActivityAppExclusion[];
   captureDetails: boolean;
+  detectCalls: boolean;
   appNameOnlyApps: ActivityAppExclusion[];
   detailsAccess: ActivityDetailsAccess;
   browserApps: ActivityAppExclusion[];
@@ -205,6 +244,7 @@ const isSegment = (value: unknown): value is ActivitySegment => {
     windowTitle,
     document,
     matterId,
+    call,
   } = value;
   return (
     typeof appIdentifier === "string" &&
@@ -215,7 +255,8 @@ const isSegment = (value: unknown): value is ActivitySegment => {
       matterId === null ||
       typeof matterId === "string") &&
     isOptionalMetadata(windowTitle) &&
-    isOptionalMetadata(document)
+    isOptionalMetadata(document) &&
+    (call === undefined || typeof call === "boolean")
   );
 };
 
@@ -249,31 +290,36 @@ const isReviewState = ({
   Array.isArray(draftedEntries) &&
   draftedEntries.every(isDraftedEntry);
 
-export const isActivityDaySnapshot = (
-  value: unknown,
-): value is ActivityDaySnapshot => {
-  if (!isRecord(value)) {
-    return false;
-  }
+const isCaptureSettings = ({
+  captureDetails,
+  detectCalls,
+  detailsAccess,
+  appNameOnlyApps,
+  browserApps,
+  browserTitleApps,
+}: Record<string, unknown>) =>
+  typeof captureDetails === "boolean" &&
+  typeof detectCalls === "boolean" &&
+  isOneOf(ACTIVITY_DETAILS_ACCESS, detailsAccess) &&
+  Array.isArray(appNameOnlyApps) &&
+  appNameOnlyApps.every(isExclusion) &&
+  Array.isArray(browserApps) &&
+  browserApps.every(isExclusion) &&
+  Array.isArray(browserTitleApps) &&
+  browserTitleApps.every(isExclusion);
+
+/** The fields the day and settings snapshots share. */
+const isSettingsState = (value: Record<string, unknown>) => {
   const {
     date,
     today,
     earliestDate,
     latestDate,
-    unreadable,
-    timeBillingEnabled,
     deletionStatus,
     sourceAppVisuals,
-    captureDetails,
-    detailsAccess,
-    appNameOnlyApps,
-    browserApps,
-    browserTitleApps,
     otherAccountHistoryDays,
     persistence,
-    recordingStatus,
     retention,
-    segments,
     excludedApps,
   } = value;
   return (
@@ -281,30 +327,46 @@ export const isActivityDaySnapshot = (
     typeof today === "string" &&
     typeof earliestDate === "string" &&
     typeof latestDate === "string" &&
-    typeof unreadable === "boolean" &&
-    typeof timeBillingEnabled === "boolean" &&
     typeof deletionStatus === "string" &&
     Object.hasOwn(activityContract.deletionStatuses, deletionStatus) &&
-    isReviewState(value) &&
     Array.isArray(sourceAppVisuals) &&
     sourceAppVisuals.every(isClipboardSourceAppVisual) &&
-    typeof captureDetails === "boolean" &&
-    isOneOf(ACTIVITY_DETAILS_ACCESS, detailsAccess) &&
-    Array.isArray(appNameOnlyApps) &&
-    appNameOnlyApps.every(isExclusion) &&
-    Array.isArray(browserApps) &&
-    browserApps.every(isExclusion) &&
-    Array.isArray(browserTitleApps) &&
-    browserTitleApps.every(isExclusion) &&
+    isCaptureSettings(value) &&
     typeof otherAccountHistoryDays === "number" &&
     Number.isSafeInteger(otherAccountHistoryDays) &&
     otherAccountHistoryDays >= 0 &&
     isOneOf(ACTIVITY_PERSISTENCE_STATUSES, persistence) &&
-    isOneOf(ACTIVITY_RECORDING_STATUSES, recordingStatus) &&
     isOneOf(ACTIVITY_RETENTIONS, retention) &&
-    Array.isArray(segments) &&
-    segments.every(isSegment) &&
     Array.isArray(excludedApps) &&
     excludedApps.every(isExclusion)
+  );
+};
+
+export const isActivityDaySnapshot = (
+  value: unknown,
+): value is ActivityDaySnapshot => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { unreadable, recordingStatus, segments } = value;
+  return (
+    isSettingsState(value) &&
+    typeof unreadable === "boolean" &&
+    isReviewState(value) &&
+    isOneOf(ACTIVITY_RECORDING_STATUSES, recordingStatus) &&
+    Array.isArray(segments) &&
+    segments.every(isSegment)
+  );
+};
+
+export const isActivitySettingsSnapshot = (
+  value: unknown,
+): value is ActivitySettingsSnapshot => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { apps } = value;
+  return (
+    isSettingsState(value) && Array.isArray(apps) && apps.every(isExclusion)
   );
 };

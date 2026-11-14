@@ -5,6 +5,7 @@ import { isUuid } from "@stll/api-contract/safe-id";
 import { Temporal, todayFor } from "@stll/time";
 
 import { APIError } from "@/lib/errors/api";
+import { routeSearchSchema } from "@/route-search-params";
 
 /**
  * The history page's filters live in the URL, so a reader who opens a chat
@@ -12,7 +13,7 @@ import { APIError } from "@/lib/errors/api";
  * back to no filter instead of failing the route; the matter must be an id in
  * the format the API accepts, so a mistyped URL never reaches it.
  */
-export const chatHistorySearchSchema = v.object({
+export const chatHistorySearchSchema = routeSearchSchema({
   // Longer than the API accepts would only fail; dropped like a bad matter.
   q: v.fallback(
     v.optional(v.pipe(v.string(), v.maxLength(SEARCH_QUERY_MAX_LENGTH))),
@@ -119,8 +120,7 @@ export const groupChatHistoryByPeriod = <
 
 /** The query the field last sent to the URL, until the URL shows it. */
 type PendingSearchQuery =
-  | { status: "idle" }
-  | { status: "sent"; query: string | undefined };
+  { status: "idle" } | { status: "sent"; query: string | undefined };
 
 /**
  * The search field's own state: what it shows, what it knows of the URL, and

@@ -1,18 +1,17 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  contacts,
   workspaceContacts,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgConstraintError } from "@/api/lib/pg-error";
@@ -21,6 +20,8 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 import { readWorkspaceContactsHandler } from "../workspace-contacts-read";
 import { createWorkspaceContactHandler } from "./create";
@@ -57,12 +58,14 @@ if (!databaseUrl || !runPostgresTests) {
             name: "Isolation fixture",
             reference: "CONTACT-ISOLATION",
           });
-          await setup.db.insert(contacts).values({
-            id: contactId,
-            organizationId,
-            type: "person",
-            displayName: "Isolation fixture",
-          });
+          await insertOwnerContacts(setup.db, [
+            {
+              id: contactId,
+              organizationId,
+              type: "person",
+              displayName: "Isolation fixture",
+            },
+          ]);
           const outcome = await Result.tryPromise(
             async () =>
               await writer.sql.begin(async (tx) => {
@@ -88,9 +91,7 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ).toBe(0);
         } finally {
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
         }
       });
     });
@@ -149,7 +150,7 @@ if (!databaseUrl || !runPostgresTests) {
                 /^insert\b/iu.test(query.trimStart()) &&
                 query.includes('"workspace_contacts"'),
             );
-          const secondDatabase = drizzle({
+          const secondDatabase = createDatabase({
             client: second.sql,
             relations: databaseRelations,
             logger: {
@@ -207,7 +208,8 @@ if (!databaseUrl || !runPostgresTests) {
               workspaceId,
               userId,
             });
-            await setup.db.insert(contacts).values(
+            await insertOwnerContacts(
+              setup.db,
               contactIds.map((id, index) => ({
                 id,
                 organizationId,
@@ -374,9 +376,7 @@ if (!databaseUrl || !runPostgresTests) {
           } finally {
             releaseFirst.resolve(undefined);
             await Promise.all([firstAddition, secondAddition]);
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(setup.db, [organizationId]);
             await setup.db.delete(user).where(eq(user.id, userId));
           }
         });

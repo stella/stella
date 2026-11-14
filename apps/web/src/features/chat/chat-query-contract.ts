@@ -1,6 +1,8 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import type {
@@ -101,6 +103,8 @@ export type ChatThreadTitleKey = {
 
 export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
+  /** Only the reader's pinned, or only their unpinned, threads. */
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   userId: string;
   /** Only the threads that live in this matter. */
@@ -122,10 +126,11 @@ export type ChatThreadOptionsContext = {
   getContextMatterIds?: (() => string[]) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getDocxEditRepresentation?:
-    | (() => DocxEditRepresentation | undefined)
-    | undefined;
+    (() => DocxEditRepresentation | undefined) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
+  /** Where the next turn runs; absent on surfaces that only run in the cloud. */
+  getRunTarget?: (() => ChatRunTarget) | undefined;
   /**
    * Present on a surface that mounts a `suggest_changes` review-queue
    * bridge (the file overlay). Its presence, not its value, keys the
@@ -188,6 +193,14 @@ type AnswerRevisionQueryKey = {
 
 export const chatKeys = {
   all: ["chat"],
+  /** The reader's own chats that are working or waiting on them, all matters. */
+  activeRuns: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "runs",
+    "active",
+  ],
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -217,17 +230,23 @@ export const chatKeys = {
     "decision-thread",
     key.decisionId,
   ],
-  groupedThreads: ({
-    activeOrganizationId,
-    search,
-    userId,
-    workspaceId,
-  }: GroupedChatThreadsKey) => [
+  /** Every grouped thread list of the reader, whatever its filters. */
+  groupedThreadLists: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
     userId,
     "threads",
     "grouped",
+  ],
+  groupedThreads: ({
+    activeOrganizationId,
+    pinState,
+    search,
+    userId,
+    workspaceId,
+  }: GroupedChatThreadsKey) => [
+    ...chatKeys.groupedThreadLists(activeOrganizationId, userId),
+    pinState ?? "",
     search ?? "",
     workspaceId ?? "",
   ],
@@ -236,11 +255,82 @@ export const chatKeys = {
     userId: string,
     threadId: string,
   ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
+  limitReminder: (
+    activeOrganizationId: string,
+    userId: string,
+    threadKey: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "limit-reminder",
+    threadKey,
+  ],
+  localFilesUndo: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+    turnId: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-files-undo",
+    threadId,
+    turnId,
+  ],
+  /** Every chat's background count of the reader, for one refresh. */
+  backgroundTaskCounts: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "background-tasks",
+  ],
+  backgroundTasks: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+  ) => [
+    ...chatKeys.backgroundTaskCounts(activeOrganizationId, userId),
+    threadId,
+  ],
+  localRunStepOutput: ({
+    activeOrganizationId,
+    userId,
+    callId,
+  }: {
+    activeOrganizationId: string;
+    userId: string;
+    callId: string;
+  }) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-run-step-output",
+    callId,
+  ],
+  /** An image a step viewed, read whole: another read than its text. */
+  localRunStepImage: (key: {
+    activeOrganizationId: string;
+    userId: string;
+    callId: string;
+  }) => [...chatKeys.localRunStepOutput(key), "image"],
+  browserSiteGrants: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "browser-site-grants",
+  ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
     "modelOptions",
     MODEL_OPTIONS_RESPONSE_VERSION,
+  ],
+  localRunners: (activeOrganizationId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "localRunners",
   ],
   threadTitle: (activeOrganizationId: string, key: ChatThreadTitleKey) => [
     ...chatKeys.all,

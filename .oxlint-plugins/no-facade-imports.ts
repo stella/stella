@@ -2,7 +2,7 @@
 // migrated to explicit leaf modules. These aliases hide side effects, obscure
 // ownership, and turn small leaf changes into high-fanout dependency edges.
 
-import { eslintCompatPlugin, type Context, type Node } from "@oxlint/plugins";
+import { type Context, eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
 import { canonicalModuleId } from "./module-id.ts";
 import { repoRelativeFilename } from "./utils.ts";
@@ -14,22 +14,31 @@ const REMOVED_AST_FACADE_MODULE_IDS = new Set([
 ]);
 
 const ALLOWED_LEAF_IMPORTS = new Set([
+  "@/api/db/account-erasure-policies",
   "@/api/db/agent-auth-schema",
   "@/api/db/auth-schema",
   "@/api/db/backfill-runtime",
   "@/api/db/billing-validators",
+  "@/api/db/case-law-court-activity-indexes",
+  "@/api/db/case-law-sitemap-indexes",
+  "@/api/db/case-law-parsed-input-state",
   "@/api/db/columns",
   "@/api/db/connection-budget",
   "@/api/db/dedicated-connection-slots",
+  "@/api/db/dedicated-connection-timeouts",
   "@/api/db/corpus-schema-lane",
   "@/api/db/currency-exponents",
   "@/api/db/database-relations",
   "@/api/db/entity-feature-coverage",
   "@/api/db/entity-feature-gate-metadata",
   "@/api/db/entity-feature-policies",
+  "@/api/db/eu-vat-id-format",
   "@/api/db/json-utils",
+  "@/api/db/indicator-query",
   "@/api/db/long-running-connection",
+  "@/api/db/organization-settings-constants",
   "@/api/db/online-migration-connection",
+  "@/api/db/online-unique-indexes",
   "@/api/db/rls",
   "@/api/db/root",
   "@/api/db/registration-budget-schema",
@@ -37,13 +46,16 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/safe-db",
   "@/api/db/schema",
   "@/api/db/schema/desktop-device-proof-replay",
+  "@/api/db/schema/mcp-web-handoff",
   "@/api/db/schema-validators",
   "@/api/db/scoped",
   "@/api/db/scoped-feature-access",
   "@/api/db/shared-pool-connection-settings",
   "@/api/db/shared-pool-timeout-policy",
   "@/api/db/shared-pool-timeouts",
+  "@/api/db/sql-client",
   "@/api/db/sql-close",
+  "@/api/db/stored-chat-part-codec",
   "@/api/lib/analytics/capture",
   "@/api/lib/analytics/client",
   "@/api/lib/analytics/server-analytics",
@@ -55,10 +67,16 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/lib/errors/api-tag",
   "@/lib/errors/auth",
   "@/lib/errors/client",
+  "@/lib/errors/invoice-issue",
   "@/lib/errors/localization",
+  "@/lib/errors/native-fetch-failure",
   "@/lib/errors/provider-diagnostic",
   "@/lib/errors/provider-setup-guidance",
   "@/lib/errors/query-result",
+  "@/lib/errors/route-resource",
+  "@/lib/errors/route-resource-census",
+  "@/lib/errors/session-expired",
+  "@/lib/errors/session-expired-install",
   "@/lib/errors/telemetry",
   "@/lib/errors/user-safe",
   "@/lib/errors/user-toast",

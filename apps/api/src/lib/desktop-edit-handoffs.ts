@@ -4,7 +4,7 @@ import { and, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
 
 import { member } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import { rlsDb, rootDb } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditHandoffs,
@@ -13,9 +13,9 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import {
-  createBackgroundAuditRecorder,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { hashDesktopEditHandoffToken } from "@/api/lib/desktop-edit-sessions";

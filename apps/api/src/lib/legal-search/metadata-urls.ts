@@ -4,8 +4,8 @@ import { panic } from "better-result";
 import {
   METADATA_URL_DEFECT_REASONS,
   MetadataUrlDefect,
-  toMetadataUrl,
   type SafeHref,
+  toMetadataUrl,
 } from "@/api/lib/sanitize-url";
 import { includes, isRecord } from "@/api/lib/type-guards";
 

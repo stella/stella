@@ -51,8 +51,7 @@ export type InsertAutomatedFlowRunWithinCapInput = {
  * the rows with, so `started` need not echo it back.
  */
 export type InsertAutomatedFlowRunWithinCapResult =
-  | { outcome: "started" }
-  | { outcome: "capped"; dailyRunCount: number };
+  { outcome: "started" } | { outcome: "capped"; dailyRunCount: number };
 
 export const insertAutomatedFlowRunWithinCap = async (
   input: InsertAutomatedFlowRunWithinCapInput,

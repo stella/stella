@@ -7,8 +7,8 @@ import type { ChatSourceScope } from "@stll/api-contract";
 
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import {
-  corpusScopeDroppedTools,
   type CorpusResourceCountryResolver,
+  corpusScopeDroppedTools,
   PUBLIC_SOURCE_JURISDICTIONS,
   scopeCorpusRead,
 } from "@/api/handlers/chat/tools/corpus-scope";
@@ -399,5 +399,30 @@ describe("public sources under corpus chips", () => {
     })) {
       expect(Object.hasOwn(PUBLIC_SOURCE_JURISDICTIONS, name)).toBe(true);
     }
+  });
+});
+
+describe("guidance under a corpus scope", () => {
+  it.each(["search_guidance", "read_guidance"] as const)(
+    "a scoped turn refuses %s, which no chip can name",
+    async (toolName) => {
+      const scoped = await scopeCorpusRead({
+        scopes: CZECH_CASE_LAW,
+        toolName,
+        args: {},
+        resolveCountries: RESOLVER,
+      });
+      expect(Result.isError(scoped)).toBe(true);
+    },
+  );
+
+  it("an unscoped turn may read guidance", async () => {
+    const unscoped = await scopeCorpusRead({
+      scopes: [],
+      toolName: "search_guidance",
+      args: { query: "souhlas" },
+      resolveCountries: RESOLVER,
+    });
+    expect(Result.isOk(unscoped)).toBe(true);
   });
 });

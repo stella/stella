@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from "react";
 import { cn } from "../lib/utils";
 import { BidiText } from "./bidi-text";
 import { ScrollArea } from "./scroll-area";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * A home screen's one shape: a greeting and a box in the upper fold, three
@@ -35,28 +36,43 @@ export const LandingLayout = ({
     {/* The landing folds against its own width, not the viewport's: a side
         pane can leave this column far narrower than a viewport breakpoint
         would suggest. */}
-    <div className="@container flex min-h-0 flex-1 flex-col items-center overflow-hidden px-4">
-      {/* The box may grow past the preferred fold height; keep every one
-          of its controls reachable without making the whole page scroll. */}
-      <ScrollArea
-        className="min-h-72 w-full max-w-2xl shrink basis-[22rem]"
-        scrollFade
-      >
-        <div className="flex min-h-full w-full flex-col items-center justify-center gap-8">
-          {hero}
+    <div className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* In one column the page scrolls: the fold leaves a phone too little
+          height to split three ways, and each column got a sliver too short
+          for one row under its scroll fade. Side by side, the page fills
+          the viewport exactly and never scrolls; the columns do. */}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="flex min-h-full w-full flex-col items-center px-4 @2xl:h-full">
+          {/* The box may grow past the preferred fold height; keep every one
+              of its controls reachable without making the whole page
+              scroll. The viewport clips, so the inline padding leaves room
+              at the sides for the box's outer halo (the shield ring, focus
+              rings). */}
+          <ScrollArea
+            className="min-h-72 w-full max-w-2xl shrink-0 basis-[22rem] @2xl:shrink"
+            scrollFade
+          >
+            <div className="flex min-h-full w-full flex-col items-center justify-center gap-8 px-1">
+              {hero}
+            </div>
+          </ScrollArea>
+          {/* Side by side, the columns share the remaining height; each
+              `LandingSection` keeps its heading in place and scrolls its own
+              rows, so a long list in one column never pushes another's
+              heading out of view. */}
+          <div className="grid w-full shrink-0 gap-8 pb-6 @2xl:min-h-0 @2xl:flex-1 @2xl:auto-rows-fr @2xl:grid-cols-3">
+            {children}
+          </div>
+          {footer !== undefined && (
+            <ScrollArea
+              className="h-auto max-h-[40dvh] w-full shrink-0"
+              scrollFade
+            >
+              {footer}
+            </ScrollArea>
+          )}
         </div>
       </ScrollArea>
-      {/* The columns share the remaining height; each `LandingSection`
-          keeps its heading in place and scrolls its own rows, so a long list
-          in one column never pushes another's heading out of view. */}
-      <div className="grid min-h-0 w-full flex-1 auto-rows-fr gap-8 pb-6 @2xl:grid-cols-3">
-        {children}
-      </div>
-      {footer !== undefined && (
-        <ScrollArea className="h-auto max-h-[40dvh] w-full shrink-0" scrollFade>
-          {footer}
-        </ScrollArea>
-      )}
     </div>
   </div>
 );
@@ -94,12 +110,14 @@ type LandingSectionProps = {
   heading: ReactNode;
 };
 
-/** A column: its heading stays put, its rows scroll beneath it. */
+/** A column: its heading stays put, its rows scroll beneath it. The rows get
+ *  the same ring room as the hero box, since the viewport clips a flush row's
+ *  focus ring; the heading takes the same inset so the labels stay aligned. */
 export const LandingSection = ({ children, heading }: LandingSectionProps) => (
   <section className="flex min-h-0 min-w-0 flex-col">
-    <div className="mb-3 shrink-0">{heading}</div>
-    <ScrollArea className="min-h-0 flex-1" scrollFade>
-      <div className="flex flex-col gap-1 pb-4">{children}</div>
+    <div className="mb-3 shrink-0 px-1">{heading}</div>
+    <ScrollArea className="@2xl:min-h-0 @2xl:flex-1" scrollFade>
+      <div className="flex flex-col gap-1 px-1 pt-1 pb-4">{children}</div>
     </ScrollArea>
   </section>
 );
@@ -146,16 +164,16 @@ export const LandingItemText = ({
       <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
     )}
     <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className="text-foreground block truncate text-sm font-medium"
+      <TruncatedText
+        className="text-foreground text-sm font-medium"
+        render={<BidiText as="span" />}
       >
         {title}
-      </BidiText>
+      </TruncatedText>
       {meta !== undefined && meta !== null ? (
-        <span className="text-muted-foreground block truncate text-xs">
+        <TruncatedText className="text-muted-foreground text-xs">
           {meta}
-        </span>
+        </TruncatedText>
       ) : null}
     </span>
   </span>
@@ -172,7 +190,7 @@ export const LandingRowIcon = ({
 }: LandingRowIconProps) => (
   <span
     className={cn(
-      "mt-0.5 flex size-4 shrink-0 items-center justify-center",
+      "mt-0.5 flex min-h-4 min-w-4 shrink-0 items-center justify-center",
       tone === "muted" &&
         "text-foreground-muted group-hover:text-muted-foreground",
     )}

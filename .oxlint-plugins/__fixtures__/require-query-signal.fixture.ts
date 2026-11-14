@@ -9,7 +9,7 @@
 import { queryOptions as importedQueryFn } from "@tanstack/react-query";
 import * as api from "node:http";
 
-import { api as edenApi } from "@/lib/api";
+import { api as aliasedApi } from "@/lib/api";
 
 declare const url: string;
 declare const workspaceId: string;
@@ -34,11 +34,11 @@ export const noParamsFetchOptions = {
   },
 };
 
-export const noParamsEdenOptions = {
+export const noParamsApiClientOptions = {
   queryKey: ["things"],
   queryFn: async () => {
     // oxlint-disable-next-line require-query-signal/require-query-signal
-    const response = await edenApi.tasks.get();
+    const response = await aliasedApi.tasks.get();
     return response.data;
   },
 };
@@ -47,14 +47,14 @@ export const wrongDestructureOptions = {
   queryKey: ["things", "paged"],
   queryFn: async ({ pageParam: _pageParam }: { pageParam: number }) =>
     // oxlint-disable-next-line require-query-signal/require-query-signal
-    await edenApi.tasks.get(),
+    await aliasedApi.tasks.get(),
 };
 
 export const nestedMemberChainOptions = {
   queryKey: ["workspace-reports", workspaceId],
   queryFn: async () => {
     // oxlint-disable-next-line require-query-signal/require-query-signal
-    const response = await edenApi
+    const response = await aliasedApi
       .workspaces({ workspaceId })
       .overview.activity.get();
     return response.data;
@@ -84,7 +84,7 @@ export const signalOnlyReachesFirstCallOptions = {
   queryFn: async ({ signal }: { signal: AbortSignal }) => {
     await fetch(url, { signal });
     // oxlint-disable-next-line require-query-signal/require-query-signal
-    return await edenApi.tasks.get();
+    return await aliasedApi.tasks.get();
   },
 };
 
@@ -92,7 +92,7 @@ export const assertedApiWithoutSignalOptions = {
   queryKey: ["things", "asserted"],
   queryFn: async ({ signal: _signal }: { signal: AbortSignal }) =>
     // oxlint-disable-next-line require-query-signal/require-query-signal, typescript/no-unnecessary-type-assertion -- Exercise TS-wrapper traversal while preserving the missing-signal finding.
-    await (edenApi as typeof edenApi).tasks.get(),
+    await (aliasedApi as typeof aliasedApi).tasks.get(),
 };
 
 export const unrelatedSignalPropertyOptions = {
@@ -120,14 +120,14 @@ export const declaredFetchReferenceOptions = {
   queryFn: declaredFetchQueryFn,
 };
 
-// Const arrow initializers are inspected too, including direct Eden calls.
-const constEdenQueryFn = async () =>
+// Const arrow initializers are inspected too, including direct API client calls.
+const constApiClientQueryFn = async () =>
   // oxlint-disable-next-line require-query-signal/require-query-signal -- fixture: const arrow drops the query signal
-  await edenApi.tasks.get();
+  await aliasedApi.tasks.get();
 
-export const constEdenReferenceOptions = {
+export const constApiClientReferenceOptions = {
   queryKey: ["things", "const-helper"],
-  queryFn: constEdenQueryFn,
+  queryFn: constApiClientQueryFn,
 };
 
 const selfFetchQueryFn = async () =>
@@ -158,7 +158,7 @@ export const declaredWrongSignalReferenceOptions = {
 // Stable const aliases and TS wrappers preserve same-file provenance.
 const aliasedMissingSignalTarget = async () =>
   // oxlint-disable-next-line require-query-signal/require-query-signal -- fixture: aliases cannot hide a direct network call
-  await edenApi.tasks.get();
+  await aliasedApi.tasks.get();
 const firstMissingSignalAlias = aliasedMissingSignalTarget;
 const secondMissingSignalAlias =
   firstMissingSignalAlias satisfies typeof firstMissingSignalAlias;
@@ -183,16 +183,16 @@ export const aliasedSignalOptions = {
     await fetch(url, { signal: querySignal }),
 };
 
-export const signalDestructuredEdenOptions = {
+export const signalDestructuredApiClientOptions = {
   queryKey: ["things", "safe"],
   queryFn: async ({ signal }: { signal: AbortSignal }) =>
-    await edenApi.tasks.get({ fetch: { signal } }),
+    await aliasedApi.tasks.get({ fetch: { signal } }),
 };
 
-export const signalInSecondEdenArgumentOptions = {
+export const signalInSecondApiClientArgumentOptions = {
   queryKey: ["things", "post", "safe"],
   queryFn: async ({ signal }: { signal: AbortSignal }) =>
-    await edenApi.tasks.post({ value: "ok" }, { fetch: { signal } }),
+    await aliasedApi.tasks.post({ value: "ok" }, { fetch: { signal } }),
 };
 
 export const signalAlongsideOtherParamsOptions = {
@@ -204,7 +204,7 @@ export const signalAlongsideOtherParamsOptions = {
     signal: AbortSignal;
     pageParam: number;
   }) => {
-    const response = await edenApi.tasks.get({ fetch: { signal } });
+    const response = await aliasedApi.tasks.get({ fetch: { signal } });
     return { ...response, pageParam };
   },
 };
@@ -224,13 +224,17 @@ export const helperReferenceOptions = {
   queryFn: fetchThing,
 };
 
-async function declaredSafeEdenQueryFn({ signal }: { signal: AbortSignal }) {
-  return await edenApi.tasks.get({ fetch: { signal } });
+async function declaredSafeApiClientQueryFn({
+  signal,
+}: {
+  signal: AbortSignal;
+}) {
+  return await aliasedApi.tasks.get({ fetch: { signal } });
 }
 
-export const declaredSafeEdenReferenceOptions = {
+export const declaredSafeApiClientReferenceOptions = {
   queryKey: ["things", "declared-safe-helper"],
-  queryFn: declaredSafeEdenQueryFn,
+  queryFn: declaredSafeApiClientQueryFn,
 };
 
 const safeAliasedTarget = async ({ signal }: { signal: AbortSignal }) =>
@@ -264,14 +268,14 @@ export const makeInlineLocalWindowOptions = (window: {
 });
 
 export const makeInlineLocalApiOptions = (
-  // oxlint-disable-next-line no-shadow -- fixture: local API-shaped parameters must not inherit Eden import provenance
+  // oxlint-disable-next-line no-shadow -- fixture: local API-shaped parameters must not inherit API client import provenance
   api: { things: { get: () => Promise<unknown> } },
 ) => ({
   queryKey: ["thing", "inline-local-api"],
   queryFn: async () => await api.things.get(),
 });
 
-// An unrelated imported namespace named api is not the Eden client.
+// An unrelated imported namespace named api is not the API client.
 export const inlineUnrelatedImportedApiOptions = {
   queryKey: ["thing", "inline-imported-api"],
   queryFn: () => api.get(url),

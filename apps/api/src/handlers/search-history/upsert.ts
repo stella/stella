@@ -61,6 +61,7 @@ const upsertSearchHistory = createSafeRootHandler(
             tx,
             rows,
             mode: "record",
+            timestampSource: "database",
             recordAuditEvent,
           }),
       ),
@@ -75,7 +76,7 @@ const upsertSearchHistory = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(upsertSearchHistory.handler, {
+declareAggregateMutation(upsertSearchHistory, {
   type: "independent",
   reason:
     "One upsert on the unique owner lookup key; concurrent records of one entry converge in the database.",

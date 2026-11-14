@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
 import nodePath from "node:path";
 
 import { printError } from "@stll/errors";
@@ -13,6 +12,16 @@ import {
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { runMigrationsUntilSettled } from "./migration-runner";
+import {
+  assertOnlineRepairRehearsalCoverage,
+  parseOnlineRepairRehearsalArguments,
+} from "./online-migration-rehearsal-guard";
+import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
+import { prepareOnlineRepairRehearsalReport } from "./online-migration-rehearsal-report";
+import { ONLINE_MIGRATION_REPAIRS } from "./online-migrations";
+import { createSqlClient } from "./sql-client";
+
+const reportPath = parseOnlineRepairRehearsalArguments(process.argv.slice(2));
 
 // An index build would hold forever on a load gate nobody configured, and the
 // deploy waits on this process: reject that before any connection opens.
@@ -30,7 +39,10 @@ if (!url) {
 }
 
 await runScriptWithErrorOutput(async () => {
-  const client = new SQL({ url, max: 1 });
+  const report =
+    reportPath === null ? null : prepareOnlineRepairRehearsalReport(reportPath);
+  const observations: OnlineRepairRehearsalRecord[] = [];
+  const client = createSqlClient({ url, max: 1 });
   // The loose source and single-file bundle both resolve drizzle from this file.
   const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
   const connection = await client.reserve();
@@ -40,13 +52,26 @@ await runScriptWithErrorOutput(async () => {
       databaseUrl: url,
       migrationsFolder,
       ebs: ebs.value,
+      observeRepair:
+        report === null ? undefined : (record) => observations.push(record),
     });
+    if (report !== null) {
+      if (result.status !== "applied") {
+        panic("Online repair rehearsal report requires an applied upgrade");
+      }
+      assertOnlineRepairRehearsalCoverage({
+        records: observations,
+        repairs: ONLINE_MIGRATION_REPAIRS,
+      });
+    }
     if (result.status === "applied") {
       // oxlint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface
       console.info("[migrate] migrations applied");
     }
   } finally {
-    connection.release();
+    await connection.release();
     await client.end();
   }
+  // Publish only after the upgrade, coverage and database cleanup all succeed.
+  report?.publish(observations);
 });

@@ -5,10 +5,58 @@ use std::time::Duration;
 use crate::{
   account::AccountRequest,
   http_client::{DesktopHttpClient, HttpClientOptions},
+  logging::{
+    json_cause_logged, log_json_error, log_request_error, replaced_logged,
+    request_cause_logged,
+  },
 };
 
 const FAILURE: &str = "draft time entry request failed";
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
+
+/// The group of an entry not billed in LEDES.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryGroup {
+  Client,
+  Internal,
+}
+
+/// What a guided stella AI draft classified the entry as, as the shared
+/// contract spells it; the server checks it against the matter's billing
+/// format.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(
+  tag = "type",
+  rename_all = "snake_case",
+  rename_all_fields = "camelCase",
+  deny_unknown_fields
+)]
+pub enum Classification {
+  Ledes {
+    task_code: String,
+    activity_code: String,
+  },
+  #[serde(rename = "activity_group")]
+  Group { activity_group: EntryGroup },
+}
+
+/// The contract's bound on a UTBMS code.
+const CODE_MAX_CHARS: usize = 20;
+
+impl Classification {
+  fn is_valid(&self) -> bool {
+    match self {
+      Self::Ledes {
+        task_code,
+        activity_code,
+      } => [task_code, activity_code]
+        .iter()
+        .all(|code| !code.is_empty() && code.chars().count() <= CODE_MAX_CHARS),
+      Self::Group { .. } => true,
+    }
+  }
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -19,6 +67,8 @@ pub struct ConfirmedTimeEntry {
   pub duration_minutes: u32,
   pub narrative: String,
   pub billable: bool,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub classification: Option<Classification>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -80,18 +130,25 @@ fn client() -> Result<DesktopHttpClient, String> {
     redirect: reqwest::redirect::Policy::none(),
     timeout: Some(Duration::from_secs(15)),
   })
-  .map_err(|_| FAILURE.to_string())
+  .map_err(request_cause_logged(FAILURE))
 }
 
 async fn response_body(
   request: crate::http_client::DeviceProofRequest,
 ) -> Result<Vec<u8>, String> {
-  let mut response = request.send().await.map_err(|_| FAILURE.to_string())?;
+  let mut response = request
+    .send()
+    .await
+    .map_err(request_cause_logged(FAILURE))?;
   if !response.status().is_success() {
     return Err(FAILURE.to_string());
   }
   let mut body = Vec::new();
-  while let Some(chunk) = response.chunk().await.map_err(|_| FAILURE.to_string())? {
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(request_cause_logged(FAILURE))?
+  {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
       return Err(FAILURE.to_string());
     }
@@ -117,7 +174,7 @@ pub async fn search_matters(
   )?)
   .await?;
   let response: MattersResponse =
-    serde_json::from_slice(&body).map_err(|_| FAILURE.to_string())?;
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
   if response.matters.len() > 20
     || response.matters.iter().any(|matter| {
       matter.id.is_empty()
@@ -148,7 +205,7 @@ pub async fn candidates(
   )?)
   .await?;
   let result: CandidatesResponse =
-    serde_json::from_slice(&body).map_err(|_| FAILURE.to_string())?;
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
   if result.matters.len() > 100
     || result.matters.iter().any(|candidate| {
       candidate.matter.id.is_empty()
@@ -165,6 +222,7 @@ pub async fn candidates(
   Ok(result.matters)
 }
 
+// The API contract's narrative limits (`desktop-time-entries.ts`). Its
 impl ConfirmedBatch {
   pub fn validate(&self) -> Result<(), String> {
     if self.idempotency_key.is_empty()
@@ -180,6 +238,10 @@ impl ConfirmedBatch {
           || entry.duration_minutes == 0
           || entry.duration_minutes > 1440
           || entry.narrative.len() > 40000
+          || entry
+            .classification
+            .as_ref()
+            .is_some_and(|classification| !classification.is_valid())
       })
     {
       return Err(FAILURE.to_string());
@@ -198,9 +260,11 @@ async fn submit_batch(
   account: &AccountRequest,
   batch: &ConfirmedBatch,
 ) -> Result<CreatedBatch, AttemptFailure> {
-  batch.validate().map_err(|_| AttemptFailure::Rejected)?;
+  batch
+    .validate()
+    .map_err(replaced_logged(FAILURE, AttemptFailure::Rejected))?;
   let request = client()
-    .map_err(|_| AttemptFailure::Rejected)?
+    .map_err(replaced_logged(FAILURE, AttemptFailure::Rejected))?
     .put(format!(
       "{}/v1/desktop/time-entries/batch",
       account.api_base_url
@@ -212,10 +276,13 @@ async fn submit_batch(
     Some(&account.credential.key),
     None,
   )
-  .map_err(|_| AttemptFailure::Rejected)?
+  .map_err(replaced_logged(FAILURE, AttemptFailure::Rejected))?
   .send()
   .await
-  .map_err(|_| AttemptFailure::Uncertain)?;
+  .map_err(|error| {
+    log_request_error(&error, FAILURE);
+    AttemptFailure::Uncertain
+  })?;
   if !response.status().is_success() {
     // Client rejection still needs ledger recovery: an earlier attempt may
     // have committed even when this retry cannot be accepted.
@@ -228,18 +295,19 @@ async fn submit_batch(
     );
   }
   let mut body = Vec::new();
-  while let Some(chunk) = response
-    .chunk()
-    .await
-    .map_err(|_| AttemptFailure::Uncertain)?
-  {
+  while let Some(chunk) = response.chunk().await.map_err(|error| {
+    log_request_error(&error, FAILURE);
+    AttemptFailure::Uncertain
+  })? {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
       return Err(AttemptFailure::Uncertain);
     }
     body.extend_from_slice(&chunk);
   }
-  let created: CreatedBatch =
-    serde_json::from_slice(&body).map_err(|_| AttemptFailure::Uncertain)?;
+  let created: CreatedBatch = serde_json::from_slice(&body).map_err(|error| {
+    log_json_error(&error, FAILURE);
+    AttemptFailure::Uncertain
+  })?;
   validate_created_batch(created, batch)
 }
 
@@ -285,7 +353,7 @@ pub async fn submit_batch_with_recovery(
       let body = response_body(
         crate::http_client::device_proof_request(
           client()
-            .map_err(|_| SubmitFailure::Uncertain)?
+            .map_err(replaced_logged(FAILURE, SubmitFailure::Uncertain))?
             .put(format!(
               "{}/v1/desktop/time-entries/batch/status",
               account.api_base_url
@@ -295,16 +363,20 @@ pub async fn submit_batch_with_recovery(
           Some(&account.credential.key),
           None,
         )
-        .map_err(|_| SubmitFailure::Uncertain)?,
+        .map_err(replaced_logged(FAILURE, SubmitFailure::Uncertain))?,
       )
       .await
-      .map_err(|_| SubmitFailure::Uncertain)?;
-      let status: BatchStatus =
-        serde_json::from_slice(&body).map_err(|_| SubmitFailure::Uncertain)?;
+      .map_err(replaced_logged(FAILURE, SubmitFailure::Uncertain))?;
+      let status: BatchStatus = serde_json::from_slice(&body).map_err(|error| {
+        log_json_error(&error, FAILURE);
+        SubmitFailure::Uncertain
+      })?;
       match status {
         BatchStatus::Committed { entries } => {
-          validate_created_batch(CreatedBatch { entries }, batch)
-            .map_err(|_| SubmitFailure::Uncertain)
+          validate_created_batch(CreatedBatch { entries }, batch).map_err(|failure| {
+            tracing::warn!(?failure, "recovered time entry batch does not match");
+            SubmitFailure::Uncertain
+          })
         }
         BatchStatus::Cancelled => Err(SubmitFailure::Cancelled),
       }
@@ -525,6 +597,57 @@ mod tests {
         input["matters"]
       );
     }
+  }
+
+  #[test]
+  fn a_classification_crosses_the_boundary_as_the_contract_spells_it() {
+    let entry = |classification: serde_json::Value| {
+      serde_json::json!({"matterId":"w", "dateWorked":"2026-10-07", "timezoneId":"UTC",
+        "durationMinutes":6, "narrative":"Reviewed", "billable":true,
+        "classification": classification})
+    };
+    for classification in [
+      serde_json::json!({"type":"ledes", "taskCode":"L120", "activityCode":"A104"}),
+      serde_json::json!({"type":"activity_group", "activityGroup":"client"}),
+    ] {
+      let parsed: ConfirmedTimeEntry =
+        serde_json::from_value(entry(classification.clone())).unwrap();
+      assert_eq!(
+        serde_json::to_value(&parsed).unwrap()["classification"],
+        classification
+      );
+    }
+    for refused in [
+      serde_json::json!({"type":"ledes", "taskCode":"L120"}),
+      serde_json::json!({"type":"ledes", "taskCode":"L120", "activityCode":"A104", "extra":1}),
+      serde_json::json!({"type":"activity_group", "activityGroup":"billable"}),
+      serde_json::json!({"type":"utbms"}),
+    ] {
+      assert!(serde_json::from_value::<ConfirmedTimeEntry>(entry(refused)).is_err());
+    }
+    let batch = |code: &str| ConfirmedBatch {
+      idempotency_key: "key".into(),
+      entries: vec![
+        serde_json::from_value(entry(
+          serde_json::json!({"type":"ledes", "taskCode": code, "activityCode":"A104"}),
+        ))
+        .unwrap(),
+      ],
+    };
+    assert!(batch("L120").validate().is_ok());
+    assert!(batch("").validate().is_err());
+    assert!(batch(&"L".repeat(CODE_MAX_CHARS + 1)).validate().is_err());
+    // Without a classification the entry serializes exactly as before.
+    let plain: ConfirmedTimeEntry = serde_json::from_value(serde_json::json!({
+      "matterId":"w", "dateWorked":"2026-10-07", "timezoneId":"UTC",
+      "durationMinutes":6, "narrative":"Reviewed", "billable":true}))
+    .unwrap();
+    assert!(
+      serde_json::to_value(&plain)
+        .unwrap()
+        .get("classification")
+        .is_none()
+    );
   }
 
   #[test]

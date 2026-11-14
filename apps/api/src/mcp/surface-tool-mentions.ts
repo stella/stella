@@ -9,8 +9,8 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import {
   scopeProseToSurface,
-  unlistedToolNames,
   type ToolVocabulary,
+  unlistedToolNames,
 } from "@/api/mcp/tool-mentions";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 

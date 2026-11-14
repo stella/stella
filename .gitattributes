@@ -21,3 +21,4 @@ apps/api/mcp-surface-baseline.json linguist-generated=true
 
 # Capability contracts are generated from handlers.
 packages/cli/capabilities/*.json linguist-generated=true
+.tailwind-cache/** linguist-generated=true -diff

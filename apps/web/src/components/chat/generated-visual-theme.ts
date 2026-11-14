@@ -1,10 +1,10 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
   VISUAL_THEME_VARIABLES,
-  visualThemeSchema,
   type VisualTheme,
+  visualThemeSchema,
 } from "@stll/api-contract/visual-theme";
 
 type ReadVisualThemeOptions = {

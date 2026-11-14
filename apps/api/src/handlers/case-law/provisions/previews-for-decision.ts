@@ -4,12 +4,13 @@ import { eq, inArray } from "drizzle-orm";
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
 import {
-  publishedCaseLawDecisions,
   legislationDocuments,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -257,7 +258,10 @@ export const attachDecisionProvisionPreviews = async <
         ...buildProvisionPreview({
           version,
           blocks,
-          anchor: provisionHeadingAnchor(row.anchor),
+          anchor: provisionHeadingAnchor(
+            row.anchor,
+            statuteAnchorNestingFor(row.jurisdiction),
+          ),
           citedAnchor: row.anchor,
         }),
       });

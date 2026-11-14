@@ -12,7 +12,10 @@ import { pathToFileURL } from "node:url";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { productionE2eInputs } from "./production-e2e-inputs.mjs";
+import {
+  productionE2eChanged,
+  productionE2eInputs,
+} from "./production-e2e-inputs.mjs";
 
 const productionConfig = path.resolve(
   import.meta.dirname,
@@ -43,6 +46,19 @@ test("production input scope follows the config's testDir and imported modules",
   expect(relativeFiles).not.toContain("fixtures/generate.ts");
   expect(relativeFiles).not.toContain("playwright.collab.config.ts");
   expect(relativeFiles.some((file) => file.startsWith("collab/"))).toBe(false);
+});
+
+test("changed paths resolve from the repository root outside its working directory", () => {
+  const originalWorkingDirectory = process.cwd();
+  process.chdir(directory);
+  try {
+    expect(
+      productionE2eChanged(["apps/web/e2e/specs/law-cases-ssr.spec.ts"]),
+    ).toBe(true);
+    expect(productionE2eChanged(["README.md"])).toBe(false);
+  } finally {
+    process.chdir(originalWorkingDirectory);
+  }
 });
 
 test("input derivation follows a different testDir, transitive imports and setup assets", () => {

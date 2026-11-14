@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   ANALYSIS_GUIDELINES,
@@ -42,19 +42,21 @@ const fingerprintOf = (
 
 describe("analysisInputOf", () => {
   test("the fingerprint is a function of the model input alone", () => {
-    fc.assert(
+    assertProperty(
+      "the fingerprint is a function of the model input alone",
       fc.property(blocks, decision, systemPrompt, (input, meta, system) => {
         expect(fingerprintOf(input, meta, system)).toBe(
           fingerprintOf(structuredClone(input), structuredClone(meta), system),
         );
         expect(fingerprintOf(input, meta, system)).toMatch(/^[0-9a-f]{64}$/u);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("changes when a re-parse renumbers the anchors and leaves the words alone", () => {
-    fc.assert(
+    assertProperty(
+      "changes when a re-parse renumbers the anchors and leaves the words alone",
       fc.property(blocks, decision, (input, meta) => {
         const renumbered = input.map((b, index) => ({
           ...b,
@@ -64,12 +66,13 @@ describe("analysisInputOf", () => {
           fingerprintOf(input, meta),
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("changes when the text changes", () => {
-    fc.assert(
+    assertProperty(
+      "changes when the text changes",
       fc.property(
         blocks,
         decision,
@@ -88,12 +91,13 @@ describe("analysisInputOf", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("changes when the court or type the header is built from changes", () => {
-    fc.assert(
+    assertProperty(
+      "changes when the court or type the header is built from changes",
       fc.property(blocks, decision, (input, meta) => {
         const base = fingerprintOf(input, meta);
         expect(
@@ -106,18 +110,19 @@ describe("analysisInputOf", () => {
           }),
         ).not.toBe(base);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("changes when the system prompt changes", () => {
-    fc.assert(
+    assertProperty(
+      "changes when the system prompt changes",
       fc.property(blocks, decision, systemPrompt, (input, meta, system) => {
         expect(fingerprintOf(input, meta, system)).not.toBe(
           fingerprintOf(input, meta, `${system} (revised)`),
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -159,7 +164,8 @@ describe("analysisInputOf", () => {
   });
 
   test("changes when a paragraph gains or changes its court number", () => {
-    fc.assert(
+    assertProperty(
+      "changes when a paragraph gains or changes its court number",
       fc.property(
         blocks,
         decision,
@@ -179,7 +185,7 @@ describe("analysisInputOf", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

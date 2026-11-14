@@ -116,8 +116,7 @@ const renderLeaveControl =
 export const createGuideEngine = (): GuideEngine => {
   let activeLeave: (() => void) | undefined;
   let activeTarget:
-    | { element: Element; attributes: PreservedTargetAttributes }
-    | undefined;
+    { element: Element; attributes: PreservedTargetAttributes } | undefined;
   let destroyed = false;
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== "Escape") {

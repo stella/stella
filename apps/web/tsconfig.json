@@ -6,6 +6,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@stll/ai-catalog": ["../../packages/ai-catalog/src/index.ts"],
+      "@stll/brand": ["../../packages/brand/src/index.ts"],
       "@stll/business-registries": [
         "../../packages/business-registries/src/index.ts"
       ],
@@ -31,6 +32,7 @@
   "include": [
     "src",
     "tests",
+    "public/handoff-init.js",
     "vite.config.ts",
     "vite.config.test.ts",
     "../../types"

@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
@@ -14,10 +14,11 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -33,6 +34,7 @@ const PRODUCT_NAMES = {
   flexibee: "ABRA Flexi (XML)",
   ledes_1998b: "LEDES 1998B",
   ubl: "UBL 2.1 (EN 16931)",
+  peppol_sk: "Peppol (Slovakia)",
 } as const;
 
 type FormatLabel = TranslationKey | { name: string };
@@ -59,6 +61,8 @@ const FORMAT_GROUPS = [
     labelKey: "billing.invoices.export.eBilling",
     formats: [
       ["ubl", { name: PRODUCT_NAMES.ubl }],
+      ["peppol_sk", { name: PRODUCT_NAMES.peppol_sk }],
+      ["ksef_fa3", "billing.invoices.export.ksefFa3"],
       ["ledes_1998b", { name: PRODUCT_NAMES.ledes_1998b }],
     ],
   },
@@ -87,7 +91,7 @@ export const InvoiceExportMenu = ({
   invoiceId,
 }: InvoiceExportMenuProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const messageLocale = useMessageLocale();
   const analytics = useAnalytics();
   const exportFile = useMutation({
     mutationFn: async (format: InvoiceExportFormat) => {
@@ -100,10 +104,10 @@ export const InvoiceExportMenu = ({
               ? {}
               : { invoiceIds: [toSafeId<"invoice">(invoiceId)] }),
           },
-          { headers: { "Accept-Language": locale } },
+          { headers: { "Accept-Language": messageLocale } },
         );
       // The presigned URL answers as an attachment under its file name.
-      const { downloadUrl } = unwrapEden(response);
+      const { downloadUrl } = unwrapApiResponse(response);
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.rel = "noopener";
@@ -111,8 +115,11 @@ export const InvoiceExportMenu = ({
       link.click();
       link.remove();
     },
-    onError: (error) => {
-      analytics.captureError(error);
+    onError: (error, format) => {
+      analytics.captureError(error, {
+        fingerprintKey: "InvoiceExportMenu:failure",
+        scope: { type: "handler", handlerId: `invoice-export.${format}` },
+      });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });

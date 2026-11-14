@@ -3,6 +3,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -20,12 +21,14 @@ import {
 } from "@/api/lib/membership-role-invariants";
 import { cents } from "@/api/lib/money";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -35,16 +38,12 @@ const BLOCK_OBSERVATION_INTERVAL_MS = 10;
 setDefaultTimeout(120_000);
 
 const waitForMembershipBlock = async (observeBlock: () => Promise<boolean>) => {
-  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    if (await observeBlock()) {
-      return;
-    }
-    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
-  }
-  throw new Error(
-    "Membership mutation did not reach its database lock before the deadline",
-  );
+  await waitForExternalState({
+    description: "the membership mutation reaches its database lock",
+    intervalMs: BLOCK_OBSERVATION_INTERVAL_MS,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: observeBlock,
+  });
 };
 
 const fixture = async (db: GatedTestDb, ownerCount: number) => {
@@ -68,6 +67,10 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     name: "Membership",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(member).values(
     owners.map(({ userId, memberId }) => ({
@@ -121,7 +124,7 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     organizationId,
     owners,
     cleanUp: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(
         inArray(
           user.id,
@@ -565,9 +568,7 @@ if (!databaseUrl || !runPostgresTests) {
             .where(eq(member.id, owner.memberId));
           expect(retainedMember?.role).toBe("owner");
           await setup.db.transaction(async (tx) => {
-            await tx
-              .delete(organization)
-              .where(eq(organization.id, data.organizationId));
+            await deleteOrganizationsForTest(tx, [data.organizationId]);
           });
           const rows = await setup.db.execute(
             sql`SELECT id FROM member WHERE organization_id = ${data.organizationId}`,

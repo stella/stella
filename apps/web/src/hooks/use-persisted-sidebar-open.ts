@@ -1,19 +1,9 @@
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 
-import { deviceStorage } from "@/lib/account/browser-storage";
-
-const SIDEBAR_STORAGE_KEY = "sidebar_state";
-
-export const parsePersistedSidebarOpen = (
-  storedState: string | null,
-): boolean | null => {
-  if (storedState === null) {
-    return null;
-  }
-  return storedState === "expanded";
-};
-
-const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
+import {
+  readPersistedSidebarOpen,
+  writePersistedSidebarOpen,
+} from "@/components/sidebar/sidebar-state";
 
 export const usePersistedSidebarOpen = ({
   defaultOpen,
@@ -22,25 +12,13 @@ export const usePersistedSidebarOpen = ({
   defaultOpen: boolean;
   hydrateFromStorage: boolean;
 }) => {
-  const storedOpen = useSyncExternalStore(
-    noopSubscribe,
-    () =>
-      hydrateFromStorage
-        ? (parsePersistedSidebarOpen(
-            deviceStorage("local").getItem(SIDEBAR_STORAGE_KEY),
-          ) ?? defaultOpen)
-        : defaultOpen,
-    () => defaultOpen,
+  // The cookie is the same on the server and in the hydrating client, so the
+  // first render already matches what the user left.
+  const [open, setOpen] = useState(() =>
+    hydrateFromStorage
+      ? (readPersistedSidebarOpen() ?? defaultOpen)
+      : defaultOpen,
   );
-  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
-  const open = openOverride ?? storedOpen;
 
-  const persistOpen = (nextOpen: boolean) => {
-    deviceStorage("local").setItem(
-      SIDEBAR_STORAGE_KEY,
-      nextOpen ? "expanded" : "collapsed",
-    );
-  };
-
-  return { open, persistOpen, setOpen: setOpenOverride };
+  return { open, persistOpen: writePersistedSidebarOpen, setOpen };
 };

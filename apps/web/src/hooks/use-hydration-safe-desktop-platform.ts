@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
 
 import {
-  detectDesktopPlatform,
   type DesktopPlatform,
+  detectDesktopPlatform,
 } from "@/lib/desktop-downloads";
 
 const subscribeToPlatform = (_onStoreChange: () => void) => () => undefined;

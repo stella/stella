@@ -2,18 +2,18 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
 import {
-  expectRegistryResponse,
-  registryString,
-  registryExtras,
-  forEachRegistryMutation,
-  expectRegistryOutcome,
   expectNullableString,
+  expectRegistryOutcome,
+  expectRegistryResponse,
+  forEachRegistryMutation,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import {
   lookupByCompanyNumber,
@@ -122,7 +122,8 @@ const officer = fc
 test(
   "profile and search retain source identity and dates across nested optional data",
   () => {
-    fc.assert(
+    assertProperty(
+      "profile and search retain source identity and dates across nested optional data",
       fc.property(profile, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const searchRaw = { ...enriched, title: raw.company_name };
@@ -160,7 +161,7 @@ test(
           null;
         expect(parsed.accounts?.nextDue ?? null).toBe(currentDue);
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -169,7 +170,8 @@ test(
 test(
   "officers retain names and roles while exposing only valid month and year",
   () => {
-    fc.assert(
+    assertProperty(
+      "officers retain names and roles while exposing only valid month and year",
       fc.property(officer, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseOfficer(enriched));
@@ -198,7 +200,7 @@ test(
         }
         expectNullableString(parsed.identification?.registrationNumber ?? null);
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),

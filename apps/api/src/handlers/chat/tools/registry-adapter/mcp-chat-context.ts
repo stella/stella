@@ -4,24 +4,25 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { SOFT_LAW_READ_SURFACE } from "@/api/lib/legal-search/soft-law-serving";
 import {
   credentialPermissionsForContext,
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 
 /**
- * Everything a chat request has already resolved that an `McpRequestContext`
+ * Everything a chat request has already resolved that an `McpRequestResources`
  * needs. These are the same values `getChatTools` threads into the execution
  * tools today (`chat-tools.ts`), just gathered into one shape. Typed against the
  * adapter's own contract (not chat's live types) so this step can widen inputs
  * without touching live chat.
  */
 export type ChatRegistryContextDeps = {
-  testDependencies?: McpRequestContext["testDependencies"];
+  testDependencies?: McpRequestResources["testDependencies"];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   userEmail: string;
@@ -33,8 +34,7 @@ export type ChatRegistryContextDeps = {
    * cleanup after operations such as removing the caller's own membership.
    */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   /**
@@ -51,18 +51,12 @@ export type ChatRegistryContextDeps = {
    */
   recordAuditEvent?: AuditRecorder | undefined;
   /**
-   * Optional per-workspace status. Chat's `AuthorizedToolWorkspaceIds` is a
-   * bare id list and carries no status; every projected read tool gates
-   * workspace access on the id set alone (`ensureWorkspaceAccess`) and never
-   * consults `accessibleWorkspaceStatusById` (only write tools do, via
-   * `ensureActiveWorkspace` / `getWorkspaceStatus`). So this defaults to
-   * "active" for every authorized workspace: a value that is never read on the
-   * read path. It is accepted here so the write-tool driver (a later step) can
-   * supply real statuses without reshaping this adapter.
+   * The real status of each authorized matter. Required, and never defaulted:
+   * a matter without a status here is refused by every write tool's
+   * `ensureActiveWorkspace` gate, so an archived matter can never read as
+   * active because a caller forgot to pass it.
    */
-  workspaceStatusById?:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 // oxlint-disable-next-line typescript/promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
@@ -74,17 +68,17 @@ const deriveWorkspaceStatusMap = ({
 }: ChatRegistryContextDeps): Map<string, AccessibleWorkspace["status"]> => {
   const statusById = new Map<string, AccessibleWorkspace["status"]>();
   for (const workspaceId of toolWorkspaceIds) {
-    statusById.set(
-      workspaceId,
-      workspaceStatusById?.get(workspaceId) ?? "active",
-    );
+    const status = workspaceStatusById.get(workspaceId);
+    if (status !== undefined) {
+      statusById.set(workspaceId, status);
+    }
   }
   return statusById;
 };
 
 /**
  * Project a chat request's already-resolved session/workspace state onto the
- * `McpRequestContext` the registry handlers expect. A thin mapping, not a new
+ * `McpRequestResources` the registry handlers expect. A thin mapping, not a new
  * resolution path: no DB query, no membership lookup.
  *
  * Scope/feature gating is deliberately NOT applied here. MCP dispatch gates a
@@ -98,7 +92,7 @@ const deriveWorkspaceStatusMap = ({
  */
 export const buildMcpContextFromChat = (
   deps: ChatRegistryContextDeps,
-): McpRequestContext => {
+): McpRequestResources => {
   const accessibleWorkspaceIds = [...deps.toolWorkspaceIds];
   const workspaceAccessBoundary = createWorkspaceAccessBoundary(
     accessibleWorkspaceIds,
@@ -112,6 +106,7 @@ export const buildMcpContextFromChat = (
       )
     : undefined;
   return {
+    softLawReadSurface: SOFT_LAW_READ_SURFACE.chat,
     featureAccessSnapshot: deps.featureAccessSnapshot,
     ...(deps.testDependencies === undefined
       ? {}

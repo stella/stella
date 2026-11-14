@@ -3,7 +3,7 @@
 // fails its generator's byte-for-byte check right after autofix pushes, and
 // the pull request is stuck. So every committed output in the manifest must be
 // a formatter fixpoint: its generator formats what it writes (see
-// scripts/generated-artifacts.ts), or `.oxfmtrc.json` ignores the path because
+// scripts/generated-artifacts.ts), or bunfig.toml `[fmt]` ignores the path because
 // the generator lives outside this repository's formatter reach.
 
 import { describe, expect, test } from "bun:test";
@@ -40,11 +40,8 @@ const filesTheFormatterWouldRewrite = (files: readonly string[]): string[] => {
   const result = Bun.spawnSync(
     [
       process.execPath,
-      "--bun",
-      "oxfmt",
-      "-c",
-      ".oxfmtrc.json",
-      "--no-error-on-unmatched-pattern",
+      "fmt",
+      "--ignore-unknown",
       "--list-different",
       ...files.map((file) => `./${file}`),
     ],
@@ -75,7 +72,7 @@ describe("generated files under the autofix formatter", () => {
 
     // A file listed here needs its generator to format its output with
     // `formattedLikeRepository` before writing or comparing, or, when the
-    // generator is not this repository's, an `.oxfmtrc.json` ignore entry.
+    // generator is not this repository's, a bunfig.toml `[fmt]` ignore entry.
     expect(filesTheFormatterWouldRewrite(outputs)).toEqual([]);
   });
 });

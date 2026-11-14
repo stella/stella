@@ -27,8 +27,8 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { FINALIZE_CLAIM_TIMEOUT_MS } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -45,6 +45,31 @@ import {
   validateEntityCreate,
   validateEntityCreateCapacity,
 } from "./entity-create";
+
+const entityCreateSource = await Bun.file(
+  new URL("entity-create.ts", import.meta.url),
+).text();
+
+test("upload commit durably marks the entity before its immediate search flush", () => {
+  const transactionStart = entityCreateSource.indexOf(
+    "const writeResultResult = await safeDb",
+  );
+  const transactionEnd = entityCreateSource.indexOf(
+    "const writeResult = yield* writeResultResult",
+    transactionStart,
+  );
+  const postCommitEnd = entityCreateSource.indexOf(
+    "const afterPromote",
+    transactionEnd,
+  );
+
+  expect(entityCreateSource.slice(transactionStart, transactionEnd)).toContain(
+    "await enqueueEntitySearchRepairs(tx, [entityId]);",
+  );
+  expect(entityCreateSource.slice(transactionEnd, postCommitEnd)).toContain(
+    "flushEntitySearchRepairs([entityId])",
+  );
+});
 
 const workspaceId = toSafeId<"workspace">("workspace_upload");
 const propertyId = toSafeId<"property">("property_upload");

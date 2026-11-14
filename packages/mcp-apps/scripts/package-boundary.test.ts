@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
-import { ts } from "@stll/scripts/src/typescript-program";
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import oxlintConfig from "../../../oxlint.config.ts";
 import { PRODUCT_FRONTEND_FILES } from "../../../scripts/product-frontend-files.ts";
@@ -68,33 +68,7 @@ test("MCP app package never imports API code or API environment setup", async ()
   const forbidden: string[] = [];
   for (const file of files) {
     const filename = path.join(sourceRoot, file);
-    const module = ts.createSourceFile(
-      file,
-      await Bun.file(filename).text(),
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const visit = (node: ts.Node) => {
-      if (
-        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-        node.moduleSpecifier &&
-        ts.isStringLiteralLike(node.moduleSpecifier)
-      ) {
-        inspect(node.moduleSpecifier.text);
-      }
-      if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require"))
-      ) {
-        const specifier = node.arguments.at(0);
-        if (specifier && ts.isStringLiteralLike(specifier)) {
-          inspect(specifier.text);
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
+    const module = parseSource(file, await Bun.file(filename).text());
     const inspect = (specifier: string) => {
       const resolved = repoRelativePath(
         root,
@@ -109,7 +83,61 @@ test("MCP app package never imports API code or API environment setup", async ()
         forbidden.push(`${file}: ${specifier}`);
       }
     };
-    visit(module);
+    for (const entry of module.module.staticImports) {
+      inspect(entry.moduleRequest.value);
+    }
+    for (const entry of module.module.staticExports) {
+      for (const exported of entry.entries) {
+        if (exported.moduleRequest) {
+          inspect(exported.moduleRequest.value);
+        }
+      }
+    }
+    walk(module.program, (node) => {
+      if (node.type === "ImportExpression") {
+        if (
+          node.source.type === "Literal" &&
+          typeof node.source.value === "string"
+        ) {
+          inspect(node.source.value);
+        }
+        if (
+          node.source.type === "TemplateLiteral" &&
+          node.source.expressions.length === 0
+        ) {
+          const quasi = node.source.quasis.at(0);
+          if (
+            quasi?.value.cooked !== undefined &&
+            quasi.value.cooked !== null
+          ) {
+            inspect(quasi.value.cooked);
+          }
+        }
+      }
+      if (
+        node.type !== "CallExpression" ||
+        node.callee.type !== "Identifier" ||
+        node.callee.name !== "require"
+      ) {
+        return;
+      }
+      const specifier = node.arguments.at(0);
+      if (
+        specifier?.type === "Literal" &&
+        typeof specifier.value === "string"
+      ) {
+        inspect(specifier.value);
+      }
+      if (
+        specifier?.type === "TemplateLiteral" &&
+        specifier.expressions.length === 0
+      ) {
+        const quasi = specifier.quasis.at(0);
+        if (quasi?.value.cooked !== undefined && quasi.value.cooked !== null) {
+          inspect(quasi.value.cooked);
+        }
+      }
+    });
   }
   expect(forbidden).toEqual([]);
 });

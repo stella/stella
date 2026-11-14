@@ -12,8 +12,8 @@ describe("binary database driver decoding", () => {
       const driverValues = [
         bytes,
         new Uint8Array(bytes),
-        bytes.toString("hex"),
-        `\\x${bytes.toString("hex")}`,
+        bytes.toHex(),
+        `\\x${bytes.toHex()}`,
       ];
       for (const driverValue of driverValues) {
         const decoded =

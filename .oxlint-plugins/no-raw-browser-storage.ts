@@ -7,10 +7,10 @@ import {
   isIdentifierReference,
   memberPropertyName,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   staticStringValue,
   unwrapExpression,
-  type ScopeContext,
 } from "./utils.ts";
 
 const STORAGE_NAMES = new Set(["localStorage", "sessionStorage"]);

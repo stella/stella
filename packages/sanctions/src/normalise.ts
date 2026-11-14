@@ -117,6 +117,9 @@ const LEGAL_FORM_ABBREVIATIONS = [
   "as",
   "bv",
   "cjsc",
+  "eg",
+  "ek",
+  "ev",
   "fz",
   "fzc",
   "fzco",
@@ -125,23 +128,31 @@ const LEGAL_FORM_ABBREVIATIONS = [
   "gmbh",
   "jsc",
   "kg",
+  "kgaa",
   "ks",
   "llc",
   "llp",
   "lp",
+  "mbh",
   "nv",
   "oao",
+  "ohg",
   "ojsc",
   "ooo",
+  "ops",
   "pao",
+  "partg",
+  "partgmbb",
   "pjsc",
   "plc",
   "sa",
   "sarl",
   "se",
+  "sp",
   "spa",
   "sro",
   "srl",
+  "ug",
   "vos",
   "zao",
   "zs",
@@ -179,6 +190,20 @@ const LEGAL_FORMS: readonly (readonly string[])[] = [
   ["otkrytoe", "aktsionernoe", "obshchestvo"],
   ["zakrytoe", "aktsionernoe", "obshchestvo"],
   ["aktsionernoe", "obshchestvo"],
+  ["gesellschaft", "mit", "beschrankter", "haftung"],
+  ["aktiengesellschaft"],
+  ["kommanditgesellschaft"],
+  ["offene", "handelsgesellschaft"],
+  ["eingetragener", "verein"],
+  ["eingetragene", "genossenschaft"],
+  ["haftungsbeschrankt"],
+  // "PartG mbB" tokenises as two words; the run-together form is an abbreviation.
+  ["partg", "mbb"],
+  ["verejna", "obchodni", "spolecnost"],
+  ["komanditni", "spolecnost"],
+  ["statni", "podnik"],
+  ["obecne", "prospesna", "spolecnost"],
+  ["zapsany", "spolek"],
 ].toSorted((left, right) => right.length - left.length);
 
 const toLatin = (text: string): string =>
@@ -303,4 +328,68 @@ export const nameReading = (
     previous = position;
   }
   return { tokens, adjacent };
+};
+
+/** Identity of a reading: two readings with one key score identically. */
+export const readingKey = ({ tokens, adjacent }: NameReading): string =>
+  `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
+
+const OPENERS = new Set(["(", "[", "（", "［"]);
+const CLOSERS = new Set([")", "]", "）", "］"]);
+// Single letters joined by dots ("K.K.B.C.").
+const DOTTED_ACRONYM =
+  /(?<![\p{L}\p{N}])\p{L}(?:\.\p{L})+\.?(?![\p{L}\p{N}])/gu;
+const MAY_DERIVE = /[()[\]（）［］.]/u;
+
+/** The name with its outermost bracketed parts removed; an unclosed one runs to the end. */
+const withoutBrackets = (name: string): string => {
+  let kept = "";
+  let depth = 0;
+  for (const char of name) {
+    if (OPENERS.has(char)) {
+      depth += 1;
+      kept += " ";
+    } else if (CLOSERS.has(char)) {
+      depth = Math.max(0, depth - 1);
+      kept += " ";
+    } else if (depth === 0) {
+      kept += char;
+    }
+  }
+  return kept;
+};
+
+const joinDottedAcronyms = (name: string): string =>
+  name.replaceAll(DOTTED_ACRONYM, (acronym) => acronym.replaceAll(".", ""));
+
+/**
+ * Every reading of a name, its own first. Lists and parties write the same
+ * entity with and without a bracketed qualifier ("KOREA KWANGSON BANKING
+ * CORPORATION (KKBC)") and with and without dots in an acronym ("K.K.B.C."),
+ * so listed names and queries alike are also read without their bracketed
+ * parts and with dotted acronyms as one word. These are further readings of
+ * the same name, never a bracketed part on its own.
+ */
+export const nameReadings = (
+  name: string,
+  entityType: EntityType,
+): NameReading[] => {
+  const own = nameReading(name, entityType);
+  if (!MAY_DERIVE.test(name)) {
+    return [own];
+  }
+  const readings = new Map([[readingKey(own), own]]);
+  const stripped = withoutBrackets(name);
+  for (const spelling of [
+    stripped,
+    joinDottedAcronyms(name),
+    joinDottedAcronyms(stripped),
+  ]) {
+    const reading = nameReading(spelling, entityType);
+    const key = readingKey(reading);
+    if (reading.tokens.length > 0 && !readings.has(key)) {
+      readings.set(key, reading);
+    }
+  }
+  return [...readings.values()];
 };

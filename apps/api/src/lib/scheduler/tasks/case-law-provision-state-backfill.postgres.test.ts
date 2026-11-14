@@ -6,8 +6,8 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import {
-  PROVISION_EXTRACTION_ADMISSION_SCOPES,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
 import { BackfillFailedError } from "@/api/db/backfill-runtime";
@@ -19,8 +19,8 @@ import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
 import type {
@@ -131,7 +131,7 @@ const withFixture = async (
       }: FixtureOptions = {}) => {
         // A resumed worker must start after any hold persisted by earlier runs.
         if (phase === "resumed") {
-          now += SCHEDULER_BACKFILL_CONFIG.holdBackoffCapMs;
+          now += schedulerBackfillConfig().holdBackoffCapMs;
         }
         const events: string[] = [];
         const failures: unknown[] = [];
@@ -321,7 +321,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         await held.run();
       } finally {
         await slot.close();
-        session.release();
+        await session.release();
       }
       expect(held.failures).toEqual([]);
       expect((await checkpoint()).batch.holdUntil).not.toBeNull();

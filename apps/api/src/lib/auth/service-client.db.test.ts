@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
@@ -10,12 +10,13 @@ import {
   oauthClient,
   oauthClientResource,
   organization,
+  user,
 } from "@/api/db/auth-schema";
 import {
-  createServiceOAuthClient,
   changeServiceOAuthClient,
-  rootDb,
+  createServiceOAuthClient,
   recordLegalResolveAudit,
+  rootDb,
 } from "@/api/db/root";
 import { auditLogs, serviceOAuthClients } from "@/api/db/schema";
 import { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
@@ -33,14 +34,20 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { seedReadyOrganizationAuditExport } from "@/api/tests/helpers/organization-audit-export";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 import {
   readServiceOAuthClient,
   resolveServiceOAuthToken,
 } from "./service-client";
 
+const routeServer = serveRoutesForTest(meRoute);
 beforeAll(initAgentAuthTestDb);
-afterAll(releaseAgentAuthTestDb);
+afterAll(async () => {
+  await routeServer.stop();
+  await releaseAgentAuthTestDb();
+});
 
 const tokenSchema = v.looseObject({
   access_token: v.string(),
@@ -147,9 +154,29 @@ describe("confidential service OAuth lifecycle", () => {
 
   test("organization deletion removes the whole service credential", async () => {
     const { clientId, organizationId } = await fixture();
-    await rootDb.transaction(
-      async (tx) => await completeOrganizationDeletion({ organizationId, tx }),
+    const ownerId = mintAuthProviderId<"user">();
+    await rootDb.insert(user).values({
+      id: ownerId,
+      name: "Synthetic owner",
+      email: `${ownerId}@example.test`,
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await seedReadyOrganizationAuditExport({
+      db: await initAgentAuthTestDb(),
+      userId: ownerId,
+      organizationId,
+    });
+    const deletion = await rootDb.transaction(
+      async (tx) =>
+        await completeOrganizationDeletion({
+          deletedBy: ownerId,
+          organizationId,
+          tx,
+        }),
     );
+    expect(deletion.type).toBe("deleted");
     for (const table of [
       oauthClient,
       oauthClientResource,
@@ -391,7 +418,7 @@ describe("confidential service OAuth lifecycle", () => {
     const token = v.parse(tokenSchema, await (await issue(client)).json());
     const payload = decodeJwt(token.access_token);
     expect(Result.isError(extractMcpSession(payload))).toBe(true);
-    const response = await meRoute.handle(
+    const response = await routeServer.fetch(
       new Request("http://localhost/me/oauth-connections", {
         headers: { authorization: `Bearer ${token.access_token}` },
       }),

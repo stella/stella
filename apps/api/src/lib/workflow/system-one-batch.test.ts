@@ -66,6 +66,7 @@ const property = (
 ): AIBatchProperty => ({
   id: propertyId(id),
   status: "stale",
+  answerShape: "value",
   content,
   dependencies: [],
   tool: { version: 1, type: "ai-model", prompt: `What is ${id}?` },
@@ -157,8 +158,16 @@ describe("sourcesFromPreparedFiles", () => {
 
   test("text inputs are sources without a locator", async () => {
     const textInputs: TextInput[] = [
-      { propertyId: propertyId("col-party"), value: " Acme s.r.o. " },
-      { propertyId: propertyId("col-empty"), value: "   " },
+      {
+        propertyId: propertyId("col-party"),
+        value: " Acme s.r.o. ",
+        valueKind: "content",
+      },
+      {
+        propertyId: propertyId("col-empty"),
+        value: "   ",
+        valueKind: "content",
+      },
     ];
 
     const { sources, locators } = await sourcesFromPreparedFiles(
@@ -202,7 +211,11 @@ describe("sourcesFromPreparedFiles", () => {
   test("files come before text inputs, in prompt order", async () => {
     const files: PreparedInputFile[] = [docxFile, extractedTextFile];
     const { sources } = await sourcesFromPreparedFiles(files, [
-      { propertyId: propertyId("col-party"), value: "Acme s.r.o." },
+      {
+        propertyId: propertyId("col-party"),
+        value: "Acme s.r.o.",
+        valueKind: "content",
+      },
     ]);
 
     expect(sources.map((source) => source.id)).toEqual([
@@ -233,6 +246,20 @@ describe("splitPropertiesForSystemOne", () => {
       textProperty.id,
     ]);
   });
+
+  test.each(["clause-summary", "clause-quote"] as const)(
+    "a %s answer always goes through generation",
+    (answerShape) => {
+      const properties = [singleSelect, dateProperty, intProperty].map(
+        (entry) => ({ ...entry, answerShape }),
+      );
+
+      const split = splitPropertiesForSystemOne(properties);
+
+      expect(split.systemOne).toEqual([]);
+      expect(split.generative).toEqual(properties);
+    },
+  );
 });
 
 describe("outputFromSystemOneOutcomes", () => {
@@ -315,24 +342,26 @@ describe("outputFromSystemOneOutcomes", () => {
   });
 
   test("a genuine refusal is null and only an unplanned property continues", () => {
-    const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
-      properties: [singleSelect, dateProperty],
-      outcomes: new Map<string, AnswerOutcome>([
-        [
-          singleSelect.id,
-          {
-            state: "undecided",
-            reason: "refusal",
-            source: "generative",
-            model: "test-generative",
-          },
-        ],
-      ]),
-      locators,
-    }).unwrap();
+    const { output, fallbackPropertyIds, refusedPropertyIds } =
+      outputFromSystemOneOutcomes({
+        properties: [singleSelect, dateProperty],
+        outcomes: new Map<string, AnswerOutcome>([
+          [
+            singleSelect.id,
+            {
+              state: "undecided",
+              reason: "refusal",
+              source: "generative",
+              model: "test-generative",
+            },
+          ],
+        ]),
+        locators,
+      }).unwrap();
 
     // The unplanned date question has no outcome at all, and falls back too.
     expect(fallbackPropertyIds).toEqual([dateProperty.id]);
+    expect(refusedPropertyIds).toEqual([singleSelect.id]);
     expect(output).toEqual({
       [singleSelect.id]: { answer: null, justification: [] },
     });

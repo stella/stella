@@ -21,7 +21,7 @@ afterEach(() => {
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const credential = Buffer.alloc(32, 0x2a).toString("hex");
+const credential = Buffer.alloc(32, 0x2a).toHex();
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("stored agent credentials (postgres)", () => {

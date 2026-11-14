@@ -23,4 +23,4 @@ export const decodeCursor = (
 };
 
 export const encodeCursor = (score: number, id: string): string =>
-  Buffer.from(`${score}:${id}`).toString("base64");
+  Buffer.from(`${score}:${id}`).toBase64();

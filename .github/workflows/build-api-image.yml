@@ -27,6 +27,7 @@ env:
 jobs:
   resolve:
     name: Resolve protected source
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -77,6 +78,9 @@ jobs:
   build:
     name: Build and attest API image
     needs: resolve
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: success()
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     permissions:
@@ -104,7 +108,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

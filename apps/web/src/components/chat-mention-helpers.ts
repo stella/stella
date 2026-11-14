@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import { Result } from "better-result";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";

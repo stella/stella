@@ -4,8 +4,8 @@ import { Temporal } from "@stll/time";
 
 import contract from "../fixtures/activity-contract.json" with { type: "json" };
 import {
-  documentName,
   appTotals,
+  documentName,
   roundedTenthsOfHour,
   shiftDate,
   timedSegments,
@@ -14,10 +14,11 @@ import {
 import {
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_DETAILS_ACCESS,
-  MAX_ACTIVITY_METADATA_BYTES,
   ACTIVITY_RECORDING_STATUSES,
   ACTIVITY_RETENTIONS,
   isActivityDaySnapshot,
+  isActivitySettingsSnapshot,
+  MAX_ACTIVITY_METADATA_BYTES,
 } from "../src/activity/activity-types";
 
 const MINUTE = 60_000;
@@ -50,12 +51,12 @@ describe("activity contract", () => {
       deletionStatus: "available",
       manualAssignments: [],
       draftedEntries: [],
-      timeBillingEnabled: false,
       earliestDate: "2026-02-09",
       latestDate: "2026-03-10",
       excludedApps: [{ identifier: "com.example.app", name: "App" }],
       otherAccountHistoryDays: 0,
       captureDetails: false,
+      detectCalls: true,
       appNameOnlyApps: [],
       browserApps: [],
       sourceAppVisuals: [],
@@ -123,6 +124,21 @@ describe("activity contract", () => {
     expect(isActivityDaySnapshot({ ...snapshot, captureDetails: "yes" })).toBe(
       false,
     );
+    expect(isActivityDaySnapshot({ ...snapshot, detectCalls: undefined })).toBe(
+      false,
+    );
+    expect(
+      isActivityDaySnapshot({
+        ...snapshot,
+        segments: [{ ...segment("teams", 0, 5), call: true }],
+      }),
+    ).toBe(true);
+    expect(
+      isActivityDaySnapshot({
+        ...snapshot,
+        segments: [{ ...segment("teams", 0, 5), call: "yes" }],
+      }),
+    ).toBe(false);
     expect(
       isActivityDaySnapshot({ ...snapshot, detailsAccess: "unknown" }),
     ).toBe(false);
@@ -161,6 +177,38 @@ describe("activity contract", () => {
       isActivityDaySnapshot({ ...snapshot, segments: [{ appName: "x" }] }),
     ).toBe(false);
   });
+
+  test("a settings snapshot is validated before use", () => {
+    const settings = {
+      date: "2026-03-10",
+      today: "2026-03-10",
+      earliestDate: "2026-02-09",
+      latestDate: "2026-03-10",
+      deletionStatus: "available",
+      persistence: "encrypted",
+      retention: "month",
+      excludedApps: [],
+      otherAccountHistoryDays: 0,
+      captureDetails: false,
+      detectCalls: true,
+      appNameOnlyApps: [],
+      detailsAccess: "disabled",
+      browserApps: [],
+      browserTitleApps: [],
+      apps: [{ identifier: "com.example.app", name: "App" }],
+      sourceAppVisuals: [],
+    };
+    expect(isActivitySettingsSnapshot(settings)).toBe(true);
+    expect(isActivitySettingsSnapshot({ ...settings, apps: undefined })).toBe(
+      false,
+    );
+    expect(
+      isActivitySettingsSnapshot({ ...settings, apps: [{ name: "App" }] }),
+    ).toBe(false);
+    expect(
+      isActivitySettingsSnapshot({ ...settings, deletionStatus: "gone" }),
+    ).toBe(false);
+  });
 });
 
 describe("activity day logic", () => {
@@ -175,6 +223,14 @@ describe("activity day logic", () => {
       "mail",
     ]);
     expect(totalDurationMs(segments)).toBe(20 * MINUTE);
+  });
+
+  test("a call segment keeps its flag and others default to no call", () => {
+    const segments = timedSegments([
+      segment("word", 0, 10),
+      { ...segment("teams", 10, 40), call: true },
+    ]);
+    expect(segments.map((item) => item.call)).toEqual([false, true]);
   });
 
   test("app totals add up per app, longest first", () => {

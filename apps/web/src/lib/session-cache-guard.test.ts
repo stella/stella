@@ -4,8 +4,6 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 // The network these reads go to: the signed-in member (or nobody) answers.
 let signedIn: string | null = "member-a";
 const threadListRequests: (string | null)[] = [];
@@ -53,7 +51,7 @@ const { refreshAuthQueries, roleOptions, sessionOptions } =
   await import("@/lib/auth-queries");
 const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { isAuthFlowPathname } = await import("@/lib/redirect");
-const { installSessionCacheGuard, requireFreshDocument } =
+const { installSessionCacheGuard, requireFreshDocument, resetAuthTransition } =
   await import("@/lib/session-cache-guard");
 
 afterAll(() => {
@@ -130,13 +128,19 @@ const nextNavigation = async (
       publicHref: `${location.pathname}${hash === "" ? "" : `#${hash}`}`,
     },
   });
-  return await Promise.race([
+  const pending = Promise.withResolvers<"pending">();
+  const timeout = setTimeout(() => {
+    pending.resolve("pending");
+  }, 20);
+  const result = await Promise.race([
     guard.then(
       () => "stay" as const,
       (error: unknown) => (isRedirect(error) ? ("redirect" as const) : error),
     ),
-    sleep(20).then(() => "pending" as const),
+    pending.promise,
   ]);
+  clearTimeout(timeout);
+  return result;
 };
 
 /** The client with member-a's reads cached. */
@@ -253,6 +257,29 @@ describe("sign-in and the client cache", () => {
     expect(
       await nextNavigation(client.queryClient, { pathname: "/chat" }),
     ).toBe("stay");
+  });
+
+  test("the first page after signing in keeps the reads its loaders started", async () => {
+    // A signed-out visitor opens a member page and is sent to sign in.
+    signedIn = null;
+    const client = createClient("/workspaces");
+    await client.queryClient.query(sessionOptions);
+    client.location.pathname = "/auth/otp";
+    signedIn = "member-a";
+    await refreshAuthQueries(client.queryClient);
+
+    // The destination's loader starts its read, then the member frame mounts
+    // for the visitor now signed in, as the frame host does on first show.
+    client.location.pathname = "/workspaces";
+    const response = Promise.withResolvers<string>();
+    const loaderRead = client.queryClient.query({
+      queryKey: ["workspaces", "org-x"],
+      queryFn: async () => await response.promise,
+    });
+    await resetAuthTransition(client.queryClient, "member:member-a:org-x");
+    response.resolve("matters");
+
+    expect(await loaderRead).toBe("matters");
   });
 });
 

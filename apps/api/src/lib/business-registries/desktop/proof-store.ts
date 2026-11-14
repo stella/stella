@@ -6,8 +6,8 @@ import { Temporal } from "@stll/time";
 import { rootDb } from "@/api/db/root";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import {
-  VerifiedDesktopDeviceProof,
   deviceProofRefusal,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import {
   withAggregateTransaction,
@@ -78,6 +78,7 @@ export const pruneDesktopProofReceipts = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Desktop account proof cleanup is unavailable",
         cause,
       }),
@@ -122,6 +123,7 @@ export class ConsumedDesktopDeviceProof {
       catch: (cause) =>
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Desktop account proof verification is unavailable",
           cause,
         }),

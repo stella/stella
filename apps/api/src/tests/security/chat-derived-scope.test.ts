@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
 
@@ -25,6 +25,18 @@ const POINTER_ONLY_TABLES: ReadonlyMap<string, string> = new Map([
   [
     "chat_tool_grants",
     "names the conversation a tool approval applies in; holds a tool name, never thread content",
+  ],
+  [
+    "chat_limit_reminders",
+    "names the conversation a usage-limit reminder is for; holds a turn id and a time, never thread content",
+  ],
+  [
+    "desktop_runner_runs",
+    "names the thread whose turn started a run on the member's computer; owner-only RLS denies every application role, and only the thread's own member reads the run back, by account and organization",
+  ],
+  [
+    "desktop_runner_folder_restores",
+    "names the thread whose folder a member asked to undo, with its state; holds no thread content, owner-only RLS denies every application role, and the undo routes read the turn through the member's chat scope first",
   ],
 ]);
 

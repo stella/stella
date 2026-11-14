@@ -111,6 +111,23 @@ describe("model catalog newer-generation guard", () => {
     ]);
   });
 
+  test("Carbon is a Gemini tier of its own", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.google.push("gemini-4-carbon", "gemini-4.1-carbon");
+    const offered = emptyProviderMap();
+    offered.google.push("gemini-4-argon", "gemini-4-carbon");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-11-11" }),
+    ).toEqual([
+      {
+        type: "newer-generation",
+        provider: "google",
+        modelId: "gemini-4.1-carbon",
+      },
+    ]);
+  });
+
   test("a date suffix is not a minor version", () => {
     const upstreamIds = emptyProviderMap();
     upstreamIds.anthropic.push("claude-haiku-5-6");
@@ -141,6 +158,66 @@ describe("model catalog newer-generation guard", () => {
         asOf: "2026-10-10",
       }),
     ).toEqual([]);
+  });
+
+  test("a Mistral-hosted DeepSeek model passes as a known non-family id", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.mistral.push("deepseek-v4-1-flash-1017");
+
+    expect(
+      findNewerGenerationModels({
+        upstreamIds,
+        offered: emptyProviderMap(),
+        asOf: "2026-10-10",
+      }),
+    ).toEqual([]);
+  });
+
+  test("a Mistral point release of an offered generation passes", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.mistral.push("mistral-large-4-0-8");
+    const offered = emptyProviderMap();
+    offered.mistral.push("mistral-large-4");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-10-10" }),
+    ).toEqual([]);
+  });
+
+  test("a Mistral point release of a newer generation is reported", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.mistral.push("mistral-large-4-1-0");
+    const offered = emptyProviderMap();
+    offered.mistral.push("mistral-large-4");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-10-10" }),
+    ).toEqual([
+      {
+        type: "newer-generation",
+        provider: "mistral",
+        modelId: "mistral-large-4-1-0",
+      },
+    ]);
+  });
+
+  test("an unknown Mistral family shape fails closed", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.mistral.push("mistral-ultra-3");
+
+    expect(
+      findNewerGenerationModels({
+        upstreamIds,
+        offered: emptyProviderMap(),
+        asOf: "2026-10-10",
+      }),
+    ).toEqual([
+      {
+        type: "unparseable",
+        provider: "mistral",
+        modelId: "mistral-ultra-3",
+      },
+    ]);
   });
 
   test("a dated, reasoned exclusion passes until expiry", () => {

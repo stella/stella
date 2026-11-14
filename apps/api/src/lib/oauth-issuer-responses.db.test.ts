@@ -8,8 +8,13 @@ import { getAuth } from "@/api/lib/auth";
 import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
+  OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
+import {
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
 import { signInHuman } from "@/api/tests/helpers/human-session";
@@ -45,19 +50,24 @@ const requestHeaders = () => {
 };
 
 beforeAll(async () => {
-  await initAgentAuthTestDb();
-  const discoveredAt = performance.now();
-  const metadataResponse = await getAuth().handler(
-    new Request(getAuthEndpointUrl(".well-known/oauth-authorization-server")),
-  );
-  expect(performance.now() - discoveredAt).toBeLessThan(10_000);
+  await initAgentAuthTestDb({ logger: queryCountLogger });
+  const metadataResponse = await runWithQueryCounter(async (counter) => {
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl(".well-known/oauth-authorization-server")),
+    );
+    expect(counter.count).toBe(0);
+    return response;
+  });
   expect(metadataResponse.status).toBe(200);
   const metadata = v.parse(metadataSchema, await metadataResponse.json());
   issuer = metadata.issuer;
   expect(issuer).toBe(getAuthIssuerUrl());
   expect(metadata.scopes_supported).toContain("offline_access");
   expect(metadata.authorization_response_iss_parameter_supported).toBe(true);
-  browser = await signInHuman("issuer-responses@example.test");
+  // OTP state outlives a database fixture when this file repeats.
+  browser = await signInHuman(
+    `issuer-responses-${Bun.randomUUIDv7()}@example.test`,
+  );
 });
 
 afterAll(async () => {
@@ -113,12 +123,6 @@ const ERROR_CASES = [
     changes: { prompt: "none consent" },
   },
   {
-    name: "unconfigured account selection",
-    error: "unsupported_prompt_select_account",
-    changes: { prompt: "select_account" },
-    destination: "server",
-  },
-  {
     name: "unknown client",
     error: "invalid_client",
     changes: { client_id: "unknown-client" },
@@ -149,9 +153,14 @@ const ERROR_CASES = [
     destination: "server",
   },
   {
+    // Unoffered scopes are dropped, so the remaining invalid_scope is a held
+    // scope the requested resource does not allow.
     name: "invalid scope",
     error: "invalid_scope",
-    changes: { scope: "unknown:scope" },
+    changes: {
+      scope: "stella:documents_write",
+      resource: getMcpResourceUrl("law"),
+    },
   },
   {
     name: "claims without identity scope",
@@ -349,15 +358,21 @@ describe("OAuth authorization response issuer", () => {
     const providerOptions = v.parse(
       v.looseObject({
         options: v.looseObject({
-          selectAccount: v.optional(v.unknown()),
+          selectAccount: v.object({
+            page: v.string(),
+            shouldRedirect: v.function(),
+          }),
           requestUriResolver: v.optional(v.unknown()),
         }),
       }),
       plugin,
     ).options;
-    // These branches require features this server does not configure. Turning
-    // either feature on requires an integration case before this census passes.
-    expect(providerOptions.selectAccount).toBeUndefined();
+    // Account selection opens the organization step only on an explicit
+    // prompt, so its missing-page and noninteractive-selection errors stay
+    // unreachable; request URIs are not configured. Changing either requires
+    // an integration case before this census passes.
+    expect(providerOptions.selectAccount.page).toBe(OAUTH_UI_ORGANIZATION_PATH);
+    expect(providerOptions.selectAccount.shouldRedirect({})).toBe(false);
     expect(providerOptions.requestUriResolver).toBeUndefined();
     const exercised = new Set(ERROR_CASES.map(({ error }) => error));
     expect([...errorCodes].toSorted()).toEqual(
@@ -365,6 +380,7 @@ describe("OAuth authorization response issuer", () => {
         ...exercised,
         "account_selection_required",
         "invalid_request_uri",
+        "unsupported_prompt_select_account",
       ].toSorted(),
     );
   });

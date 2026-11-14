@@ -4,6 +4,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -18,22 +20,24 @@ import {
 } from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
 import {
   groupProvisionsByWork,
+  type ProvisionGroup,
   provisionStatusMessage,
   summarizeProvisionVersions,
-  type ProvisionGroup,
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
-import { formatProvisionReference } from "@/features/case-law/provision-label";
+import { formatProvisionLabel } from "@/features/case-law/provision-label";
 import {
   citedWorkAtDateKey,
   decisionProvisionsInfiniteOptions,
@@ -52,8 +56,9 @@ import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The statutes a decision applies, as the decision itself states them.
@@ -122,8 +127,8 @@ export const ProvisionsCited = ({
     ...statutesResolveOptions([...citedWorkByGroup.values()]),
     enabled: open && citedWorkByGroup.size > 0,
   });
-  const resolvedView = useQueryView(resolvedQuery);
-  useQueryViewError(resolvedView);
+  const resolvedView = queryView(resolvedQuery);
+  useQueryViewError(resolvedView, "ProvisionsCited:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
@@ -172,7 +177,10 @@ export const ProvisionsCited = ({
           </Button>
         </div>
       )}
+      {/* Closed is the resting state: a group's reference chips render only
+          once it is opened, not for every collapsed work on the page. */}
       <Accordion
+        hiddenUntilFound={false}
         multiple
         value={expandedGroups}
         onValueChange={(values) => {
@@ -238,17 +246,21 @@ export const ProvisionsCited = ({
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
-      <button
+      <Button
         aria-expanded={open}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setLocalOpen(!open)}
-        type="button"
+        variant="plain"
       >
-        <ChevronRightIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-        />
-        {t("caseLaw.viewer.provisionsCited")}
-      </button>
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          {t("caseLaw.viewer.provisionsCited")}
+        </span>
+      </Button>
       {content}
     </section>
   );
@@ -282,8 +294,8 @@ const WorkReferences = ({
         references: group.provisions,
       }),
   });
-  const versionsView = useQueryView(versionsQuery);
-  useQueryViewError(versionsView);
+  const versionsView = queryView(versionsQuery);
+  useQueryViewError(versionsView, "WorkReferences:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
 
@@ -318,9 +330,7 @@ const WorkReferences = ({
   const { basis, exceptions } = summarizeProvisionVersions(group.provisions);
   let title = group.title;
   if (statute !== undefined) {
-    title = statute.title.includes(group.title)
-      ? statute.title
-      : `${group.title}, ${statute.title}`;
+    title = statuteDisplayLabel(statute).text;
   }
 
   return (
@@ -361,35 +371,47 @@ const WorkReferences = ({
             {t("statutes.publisherWindowInconsistent")}
           </p>
         )}
-        <div className="flex flex-wrap gap-1.5">
-          {group.provisions.map((provision) => {
-            const href =
-              group.jurisdiction === "EU"
-                ? euProvisionSourceUrl(group.workIdentifier, provision)
-                : null;
-            return (
-              <ProvisionReferenceChip
-                target={
-                  href !== null
-                    ? { type: "external", href }
-                    : {
-                        type: "hosted",
-                        document:
-                          group.jurisdiction === "EU"
-                            ? null
-                            : documentFor(provision),
-                      }
-                }
-                key={provision.key}
-                label={formatProvisionReference(provision, renderPart)}
-                provision={provision}
-                versionMarker={
-                  exceptions.has(provision.key) ? "exception" : "group"
-                }
-              />
-            );
-          })}
-        </div>
+        {/* The chips are reader peeks; their side-panel action opens the
+            provision through the reader's adapters, which the inspector
+            views around this list do not otherwise provide. */}
+        <WebReaderProvider>
+          <div className="flex flex-wrap gap-1.5">
+            {group.provisions.map((provision) => {
+              const href =
+                group.jurisdiction === "EU"
+                  ? euProvisionSourceUrl(group.workIdentifier, provision)
+                  : null;
+              return (
+                <ProvisionReferenceChip
+                  target={
+                    href !== null
+                      ? { type: "external", href }
+                      : {
+                          type: "hosted",
+                          document:
+                            group.jurisdiction === "EU"
+                              ? null
+                              : documentFor(provision),
+                        }
+                  }
+                  key={provision.key}
+                  label={formatProvisionLabel(
+                    group.jurisdiction,
+                    provision,
+                    renderPart,
+                  )}
+                  anchorNesting={statuteAnchorNestingFor(group.jurisdiction)}
+                  jurisdiction={group.jurisdiction}
+                  provision={provision}
+                  statuteTitle={title}
+                  versionMarker={
+                    exceptions.has(provision.key) ? "exception" : "group"
+                  }
+                />
+              );
+            })}
+          </div>
+        </WebReaderProvider>
       </AccordionPanel>
     </AccordionItem>
   );

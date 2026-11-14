@@ -77,10 +77,7 @@
         },
         "rules": {
           "items": {
-            "maxLength": 200,
-            "minLength": 1,
-            "pattern": "^[^\\n\\r]*$",
-            "type": "string"
+            "$ref": "#/$defs/AlignmentRule"
           },
           "maxItems": 128,
           "minItems": 1,
@@ -92,6 +89,28 @@
         }
       },
       "required": ["id", "rules"],
+      "type": "object"
+    },
+    "AlignmentRule": {
+      "additionalProperties": false,
+      "properties": {
+        "rule": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "watch": {
+          "items": {
+            "enum": ["content", "tool_calls", "refusal", "images", "audio"],
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": ["rule", "watch"],
       "type": "object"
     },
     "AnthropicCacheControlDirective": {
@@ -110,6 +129,161 @@
     "AnthropicCacheControlTtl": {
       "enum": ["5m", "1h"],
       "type": "string"
+    },
+    "ArmorAutoMode": {
+      "properties": {
+        "allow": {
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 8122,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ArmorRule"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "environment": {
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 4122,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ArmorEnvironmentEntry"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "hard_deny": {
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 8122,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ArmorRule"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "soft_deny": {
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 8122,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ArmorRule"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "ArmorContext": {
+      "additionalProperties": {},
+      "properties": {
+        "auto_mode": {
+          "$ref": "#/$defs/ArmorAutoMode"
+        },
+        "v": {
+          "enum": [1],
+          "type": "number"
+        }
+      },
+      "required": ["v"],
+      "type": "object"
+    },
+    "ArmorEnvironmentEntry": {
+      "properties": {
+        "name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 4000,
+          "type": "string"
+        }
+      },
+      "required": ["name", "value"],
+      "type": "object"
+    },
+    "ArmorPlugin": {
+      "additionalProperties": false,
+      "properties": {
+        "classifier_context": {
+          "$ref": "#/$defs/ArmorContext"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "evaluate_native_tools": {
+          "type": "boolean"
+        },
+        "id": {
+          "enum": ["armor"],
+          "type": "string"
+        },
+        "mode": {
+          "enum": ["enforce", "audit"],
+          "type": "string"
+        },
+        "on_error": {
+          "enum": ["log", "block"],
+          "type": "string"
+        },
+        "output_mode": {
+          "enum": ["text", "custom_item", "claude_code_compatibility"],
+          "type": "string"
+        },
+        "use_cc_style_default_rules": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id"],
+      "type": "object"
+    },
+    "ArmorRule": {
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "type": "string"
+        },
+        "instructions": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "threshold": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": ["id", "instructions"],
+      "type": "object"
     },
     "AutoBetaRouterPlugin": {
       "properties": {
@@ -583,8 +757,14 @@
             "cache_control": {
               "$ref": "#/$defs/ChatContentCacheControl"
             },
+            "defer_loading": {
+              "type": "boolean"
+            },
             "function": {
               "properties": {
+                "defer_loading": {
+                  "type": "boolean"
+                },
                 "description": {
                   "type": "string"
                 },
@@ -736,6 +916,9 @@
         "debug": {
           "$ref": "#/$defs/ChatDebugOptions"
         },
+        "deferred_tools": {
+          "$ref": "#/$defs/DeferredToolsControl"
+        },
         "frequency_penalty": {
           "format": "double",
           "type": ["number", "null"]
@@ -833,6 +1016,9 @@
               },
               {
                 "$ref": "#/$defs/AlignmentPlugin"
+              },
+              {
+                "$ref": "#/$defs/ArmorPlugin"
               }
             ]
           },
@@ -1351,6 +1537,87 @@
         }
       },
       "type": "object"
+    },
+    "DeferredBm25Search": {
+      "properties": {
+        "max_results": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": ["bm25"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "DeferredCustomSearch": {
+      "properties": {
+        "max_results": {
+          "type": "integer"
+        },
+        "result_key": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tool_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "enum": ["custom"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "tool_id", "result_key"],
+      "type": "object"
+    },
+    "DeferredRegexSearch": {
+      "properties": {
+        "max_results": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": ["regex"],
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "DeferredToolsControl": {
+      "properties": {
+        "profile": {
+          "enum": ["portable"],
+          "type": "string"
+        },
+        "protocol": {
+          "enum": ["v1"],
+          "type": "string"
+        },
+        "search": {
+          "$ref": "#/$defs/DeferredToolsSearchStrategy"
+        },
+        "validation": {
+          "enum": ["runtime"],
+          "type": "string"
+        }
+      },
+      "required": ["protocol", "profile", "validation", "search"],
+      "type": "object"
+    },
+    "DeferredToolsSearchStrategy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeferredRegexSearch"
+        },
+        {
+          "$ref": "#/$defs/DeferredBm25Search"
+        },
+        {
+          "$ref": "#/$defs/DeferredCustomSearch"
+        }
+      ]
     },
     "DeprecatedRoute": {
       "enum": ["fallback", "sort", null],
@@ -1889,6 +2156,9 @@
         "mode": {
           "enum": ["explicit"],
           "type": "string"
+        },
+        "ttl": {
+          "type": ["string", "null"]
         }
       },
       "required": ["mode"],
@@ -1987,12 +2257,14 @@
         "OpenAI",
         "OpenInference",
         "Parasail",
+        "ParetoAlpha",
         "Poolside",
         "PrimeIntellect",
         "Perceptron",
         "Perplexity",
         "Phala",
         "Recraft",
+        "Recursive",
         "Reka",
         "Relace",
         "Respan",
@@ -2428,6 +2700,10 @@
           "additionalProperties": {},
           "type": "object"
         },
+        "pareto-alpha": {
+          "additionalProperties": {},
+          "type": "object"
+        },
         "perceptron": {
           "additionalProperties": {},
           "type": "object"
@@ -2457,6 +2733,10 @@
           "type": "object"
         },
         "recursal": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "recursive": {
           "additionalProperties": {},
           "type": "object"
         },

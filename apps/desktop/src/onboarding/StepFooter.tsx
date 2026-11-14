@@ -26,7 +26,7 @@ export const StepFooter = ({
   return (
     <div className="mt-auto flex items-center gap-2 pt-5">
       {onBack ? (
-        <Button onClick={onBack} size="sm" variant="ghost">
+        <Button onClick={onBack} variant="ghost">
           {t("back")}
         </Button>
       ) : null}

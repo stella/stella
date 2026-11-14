@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
-  SoftLawBlockedError,
   SoftLawAccessError,
+  SoftLawBlockedError,
   SoftLawContentTypeMismatchError,
 } from "@/api/lib/legal-search/soft-law-access-types";
 import type {

@@ -5,11 +5,11 @@ import path from "node:path";
 
 import {
   BYOK_MODEL_OPTIONS,
+  MODEL_RATE_UNITS_PER_USD,
+  MODEL_RATES,
   MODELS_DEV_RATE_CORRECTIONS,
   MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
   MODELS_DEV_RATE_SOURCE_ALIASES,
-  MODEL_RATES,
-  MODEL_RATE_UNITS_PER_USD,
   normalizeModelCatalogId,
   RETAINED_MODELS_DEV_RATE_ENTRIES,
   TANSTACK_AI_PROVIDERS,
@@ -22,6 +22,7 @@ import type {
 } from "@stll/ai-catalog";
 
 import { loadModelCatalogSnapshot } from "./model-catalog-snapshot";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
@@ -640,5 +641,7 @@ const main = async (): Promise<void> => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   await main();
 }

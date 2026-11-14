@@ -96,6 +96,7 @@ import type {
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
+  NO_REGISTRY_WEB_SEARCH,
 } from "@/api/lib/business-registries/dispatch";
 
 import {
@@ -199,6 +200,7 @@ export const createDispatchLookupResolver =
       };
     }
     const response = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       handler,
       query,
       observer,

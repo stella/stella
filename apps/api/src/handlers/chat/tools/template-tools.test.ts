@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -13,6 +12,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as tanstackModels from "@/api/lib/tanstack-ai-models";
+import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import * as decisionModel from "@/api/lib/workflow/decisions/decision-model";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -33,6 +33,7 @@ type TemplateRow = { id: string; name: string; fieldCount: number };
 
 const orgId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
+const templateId = toSafeId<"template">("00000000-0000-4000-8000-000000000001");
 
 /** Minimal scopedDb stub exposing only the templates RQB list_templates calls. */
 const stubScopedDb = (
@@ -50,8 +51,8 @@ const stubScopedDb = (
     },
   };
   // SAFETY: test double — exposes only the surface list_templates touches.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
   return (async (run: (t: typeof tx) => unknown) =>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     await run(tx)) as unknown as ScopedDb;
 };
 
@@ -59,9 +60,9 @@ const stubScopedDb = (
  *  these tool-registration tests never trigger (no orgAIConfig), so it is
  *  never invoked. */
 // SAFETY: test double — never called because no AI generation runs here.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 describe("createTemplateTools", () => {
@@ -132,7 +133,7 @@ describe("createTemplateTools", () => {
 });
 
 describe("fill_template grades the fill", () => {
-  const s3Key = "fake-key-chat-fill";
+  const s3Key = buildTemplateS3Key(orgId, templateId);
   const conditionField: FieldMeta = {
     path: "is_consumer",
     label: "Consumer contract",
@@ -149,19 +150,17 @@ describe("fill_template grades the fill", () => {
     ]
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
     const { file } = await writeFieldFilters(
-      testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+      testDocxFile(await zip.generate({ compression: "store" })),
       [],
       [
         {
@@ -239,10 +238,7 @@ describe("fill_template grades the fill", () => {
         (input: unknown, options: unknown) => Promise<Record<string, unknown>>
       >(tools[FILL_TEMPLATE_TOOL_NAME].execute);
 
-      const result = await execute(
-        { templateId: "00000000-0000-4000-8000-000000000001", values },
-        {},
-      );
+      const result = await execute({ templateId, values }, {});
       return { result, rows };
     } finally {
       fakeS3.stop();
@@ -281,14 +277,12 @@ describe("fill_template grades the fill", () => {
   });
 
   test("a value still holding an anonymization placeholder records and returns the fill as partial", async () => {
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Signed by {{party_name}}.</w:t></w:r></w:p></w:body></w:document>',
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
@@ -305,7 +299,7 @@ describe("fill_template grades the fill", () => {
     // A placeholder the turn never sent cannot be restored, so the document
     // carries the placeholder instead of a name.
     const { result, rows } = await runFill({
-      docx: await zip.generateAsync({ type: "uint8array" }),
+      docx: await zip.generate({ compression: "store" }),
       values: { party_name: "[PERSON_4]" },
       thirdPartyBoundary,
     });

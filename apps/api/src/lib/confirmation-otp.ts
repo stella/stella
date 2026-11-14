@@ -17,7 +17,8 @@ import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/cred
  * verification-table identifier (`${purpose}:${email}`) so codes issued for
  * different flows never collide, even for the same email.
  */
-type ConfirmationOtpPurpose = "delete-account" | "two-factor-manage";
+type ConfirmationOtpPurpose =
+  "delete-account" | "two-factor-manage" | "unlink-account";
 
 const CONFIRMATION_OTP_EXPIRY_MS = 5 * 60 * 1000;
 

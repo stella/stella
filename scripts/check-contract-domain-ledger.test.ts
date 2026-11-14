@@ -1,17 +1,19 @@
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
-  writeFileSync,
+  mkdtempSync,
   renameSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { relocateContractDomainEntries } from "./check-contract-domain-ledger";
 import { parseContractDomainLedger } from "./contract-domain-ledger";
-import { runLedgerMembershipGuard } from "./ledger-membership";
+import {
+  relocateLedgerEntries,
+  runLedgerMembershipGuard,
+} from "./ledger-membership";
 
 test("moving a source preserves existing sites but cannot add or replace constraints", () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "contract-domain-move-"));
@@ -60,6 +62,8 @@ test("moving a source preserves existing sites but cannot add or replace constra
     );
     expect(commit.exitCode).toBe(0);
     const baseCommit = commit.stdout.toString().trim();
+    // A checkout stands on a commit: the guard reads the fork point from HEAD.
+    git("update-ref", "HEAD", baseCommit);
     renameSync(path.join(repoRoot, original), path.join(repoRoot, moved));
     git("add", "-A");
     const check = (entries: string[]) => {
@@ -69,12 +73,8 @@ test("moving a source preserves existing sites but cannot add or replace constra
         ledgerRel: "ledger.json",
         parseLedger: (text, label) =>
           parseContractDomainLedger(text, label).map(({ id }) => id),
-        normalizeBaseEntries: (baseEntries, resolvedCommit) =>
-          relocateContractDomainEntries({
-            entries: baseEntries,
-            baseCommit: resolvedCommit,
-            repoRoot,
-          }),
+        normalizeBaseEntries: (options) =>
+          relocateLedgerEntries({ ...options, repoRoot }),
         label: "fixture",
         remediation: "use the contract",
         args: ["--base", baseCommit],
@@ -87,6 +87,58 @@ test("moving a source preserves existing sites but cannot add or replace constra
     expect(check([movedEntry, `${moved}::Form::maxLength:64::2`])).toBe(1);
     expect(check([`${moved}::Form::maxLength:128::1`])).toBe(1);
     expect(check([`${moved}::OtherForm::maxLength:64::1`])).toBe(1);
+
+    // A route cutover can leave a wrapper at the old path, which makes Git
+    // report the extracted implementation as a copy rather than a rename.
+    writeFileSync(
+      path.join(repoRoot, original),
+      'export { bound } from "./admin";\n',
+    );
+    git("add", "-A");
+    expect(check([movedEntry])).toBe(0);
+
+    // A source that keeps its site keeps its entry; the copy cannot list the
+    // same site a second time.
+    writeFileSync(
+      path.join(repoRoot, original),
+      "export const bound = 64;\nexport const kept = true;\n",
+    );
+    git("add", "-A");
+    expect(check([originalEntry])).toBe(0);
+    expect(check([movedEntry, originalEntry])).toBe(1);
+
+    const reviewedEntry = `${moved}::Form::maxLength:64::2`;
+    writeFileSync(
+      path.join(repoRoot, "ledger.json"),
+      serialize([reviewedEntry]),
+    );
+    const logs: string[] = [];
+    const runReviewed = (reason: string | undefined) =>
+      runLedgerMembershipGuard({
+        repoRoot,
+        ledgerRel: "ledger.json",
+        parseLedger: (text, label) =>
+          parseContractDomainLedger(text, label).map(({ id }) => id),
+        normalizeBaseEntries: (options) =>
+          relocateLedgerEntries({ ...options, repoRoot }),
+        label: "fixture",
+        remediation: "use the contract",
+        args: ["--base", baseCommit],
+        reviewedEntryAdmission: {
+          type: "reasoned",
+          entries: [{ id: reviewedEntry, reason: reason ?? "" }],
+        },
+        log: (message) => {
+          logs.push(message);
+        },
+        error: () => {},
+      });
+    expect(runReviewed("Intentional boundary.")).toBe(0);
+    expect(logs).toContain(
+      `reviewed entry admitted: ${reviewedEntry} (Intentional boundary.)`,
+    );
+    expect(runReviewed(undefined)).toBe(1);
+    expect(check([reviewedEntry])).toBe(1);
     // A copy leaves the original owner in place and earns no exception.
     writeFileSync(path.join(repoRoot, original), "export const bound = 64;\n");
     git("add", "-A");

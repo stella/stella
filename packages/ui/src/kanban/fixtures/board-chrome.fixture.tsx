@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { TruncatedText } from "../../components/truncated-text";
 import { KanbanCardShell } from "../card-shell";
 import { KanbanColumnHeader } from "../column-header";
 import { resolveKanbanGrouping } from "../grouping";
@@ -49,6 +50,9 @@ const BoardChromeFixture = () => {
   // The card a tap opened, the way a host tracks the one whose detail is on
   // screen. It is what gives a finger its way to the hover-revealed actions.
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const externalDrag = new URLSearchParams(location.search).has("externalDrag");
+  const [dragState, setDragState] = useState<"idle" | "over-band" | "ended-over-band">("idle");
+  const dragOverBandId = dragState === "idle" ? null : band.id;
 
   useEffect(() => {
     document.documentElement.dataset["kanbanBoardChromeReady"] = "true";
@@ -61,9 +65,24 @@ const BoardChromeFixture = () => {
     // Narrower than the board's own columns at any viewport the suite runs
     // at, so the board always has somewhere to scroll sideways to.
     <div className="h-[420px] w-[500px]">
+      {externalDrag ? (
+        <div>
+          <button type="button" onClick={() => setDragState("over-band")}>
+            Start host drag
+          </button>
+          <button type="button" onClick={() => setDragState("idle")}>
+            End host drag
+          </button>
+          <button type="button" onClick={() => setDragState("ended-over-band")}>
+            End host drag retaining target
+          </button>
+        </div>
+      ) : null}
       <KanbanSubgroupBoard
+        dragOverBandId={externalDrag ? dragOverBandId : undefined}
+        isDragging={externalDrag ? dragState === "over-band" : undefined}
         className="fixture-board"
-        isBandCollapsed={() => false}
+        isBandCollapsed={() => externalDrag}
         isLaneCollapsed={() => false}
         matrix={matrix}
         renderCell={({ cell }) => (
@@ -115,7 +134,9 @@ const BoardChromeFixture = () => {
                 }
                 meta="1"
                 title={
-                  <span className="truncate text-sm font-medium">{label}</span>
+                  <TruncatedText className="text-sm font-medium" hint={false}>
+                    {label}
+                  </TruncatedText>
                 }
               />
             </div>

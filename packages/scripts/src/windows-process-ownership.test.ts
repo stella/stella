@@ -5,9 +5,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
-  testInvocationMemoryLimit,
   TEST_INVOCATION_MEMORY_GIB_ENV,
+  testInvocationMemoryLimit,
   watchTestProcessMemory,
 } from "./process-memory";
 import { spawnTestProcess } from "./process-spawn";
@@ -111,14 +113,11 @@ windowsTest.each(["measurement", "hard-cap"] as const)(
         }
         expect(failures).toHaveLength(1);
         await child.exited;
-        for (
-          let attempt = 0;
-          attempt < 100 && Result.try(() => process.kill(worker, 0)).isOk();
-          attempt += 1
-        ) {
-          await Bun.sleep(10);
-        }
-        expect(Result.try(() => process.kill(worker, 0)).isErr()).toBe(true);
+        await waitForExternalState({
+          description: `worker ${String(worker)} exits`,
+          timeoutMs: 1000,
+          read: () => Result.try(() => process.kill(worker, 0)).isErr(),
+        });
       } finally {
         await watchdog.stop();
       }

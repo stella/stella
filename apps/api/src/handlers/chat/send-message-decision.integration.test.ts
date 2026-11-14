@@ -14,6 +14,7 @@ import {
 } from "@/api/handlers/chat/send-message-side-effects";
 import { createGetThreads } from "@/api/handlers/chat/threads/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -22,6 +23,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -95,6 +97,11 @@ const orgAIConfig = {
 } satisfies OrgAIConfig;
 
 const getThreads = createGetThreads({
+  readCopies: async (options) =>
+    await readWithdrawnCopyProjection({
+      ...options,
+      caseLawDb: asyncCaseLawDb,
+    }),
   readDecisionBadges: async ({ decisionIds }) =>
     await readPublicDecisionBadges({
       caseLawDb: asyncCaseLawDb,
@@ -174,8 +181,8 @@ const createContext = (): SendMessageCtx => {
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
-    route: "/v1/chat/send",
+    request: new Request("http://localhost/v1/chat"),
+    route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     session: { activeOrganizationId: ids.orgA },
@@ -199,6 +206,7 @@ test("the first send binds the reader decision to the listed thread badge", asyn
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100 },
       request: new Request("http://localhost/v1/chat/threads"),
+      route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

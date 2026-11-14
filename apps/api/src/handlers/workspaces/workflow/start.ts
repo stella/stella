@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
@@ -28,22 +28,26 @@ const config = {
     reason: "workflow_orchestration",
     consumesServices: true,
   },
-  body: t.Object({
-    // A run targets documents of one matter, so the matter's own entity cap
-    // is the most a caller can name. `matters.workflow.targets.count`
-    // carries the same bound so a sizeable set is always a startable one.
-    entityIds: t.Optional(
-      t.Array(tSafeId("entity"), { maxItems: LIMITS.entitiesCount }),
+  body: v.object({
+    entityIds: v.optional(
+      v.pipe(
+        v.array(resourceIdSchema("entity")),
+        v.maxLength(LIMITS.entitiesCount),
+      ),
     ),
-    entityIdsOrder: t.Optional(
-      t.Array(tSafeId("entity"), { maxItems: LIMITS.entitiesCount }),
+    entityIdsOrder: v.optional(
+      v.pipe(
+        v.array(resourceIdSchema("entity")),
+        v.maxLength(LIMITS.entitiesCount),
+      ),
     ),
-    propertyIds: t.Optional(
-      t.Array(tSafeId("property"), { maxItems: LIMITS.propertiesCount }),
+    propertyIds: v.optional(
+      v.pipe(
+        v.array(resourceIdSchema("property")),
+        v.maxLength(LIMITS.propertiesCount),
+      ),
     ),
-    serviceTier: t.Optional(
-      t.Union([t.Literal("standard"), t.Literal("flex")]),
-    ),
+    serviceTier: v.optional(v.picklist(["standard", "flex"])),
   }),
 } satisfies WorkspaceHandlerConfig;
 

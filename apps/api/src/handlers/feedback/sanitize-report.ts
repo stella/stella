@@ -47,8 +47,7 @@ type ContextTextField = (typeof CONTEXT_TEXT_FIELDS)[number];
 
 /** Dotted paths the redaction passes can touch; `redactedFields` holds these. */
 export type SanitizableFeedbackField =
-  | TextField
-  | `context.${ContextTextField}`;
+  TextField | `context.${ContextTextField}`;
 
 export type SanitizedFeedbackReport = {
   report: FeedbackReportInput;

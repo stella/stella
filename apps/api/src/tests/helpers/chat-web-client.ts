@@ -45,6 +45,9 @@ const WEB_CHAT_USER_ACTIONS_URL = new URL(
 
 /** The web app's API origin in tests (`apps/web/src/test-setup.ts`). */
 const WEB_TEST_API_URL = "http://localhost:3001";
+/** The web app's required document storage settings, as its test preload sets them. */
+const WEB_TEST_DOCUMENTS_BUCKET = "stella";
+const WEB_TEST_DOCUMENTS_ENDPOINT = "http://localhost:9000";
 
 type WebChatSnapshot = {
   error: Error | undefined;
@@ -73,6 +76,7 @@ type WebChatRuntime = {
 
 /** An assistant message's action, as `chat-user-actions.ts` offers it. */
 type AssistantMessageActionGate = (state: {
+  error: Error | undefined;
   isGenerating: boolean;
   messageId: string;
   messages: readonly UIMessage[];
@@ -135,6 +139,8 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
     return loadedWebChat;
   }
   process.env["VITE_API_URL"] ??= WEB_TEST_API_URL;
+  process.env["VITE_DOCUMENTS_BUCKET"] ??= WEB_TEST_DOCUMENTS_BUCKET;
+  process.env["VITE_DOCUMENTS_ENDPOINT"] ??= WEB_TEST_DOCUMENTS_ENDPOINT;
   const runtime: unknown = await import(WEB_CHAT_RUNTIME_URL);
   const uiTools: unknown = await import(WEB_CHAT_UI_TOOLS_URL);
   const userActions: unknown = await import(WEB_CHAT_USER_ACTIONS_URL);
@@ -270,6 +276,7 @@ export type WebChatClient = {
   /** Whether the runtime reports an error, has a request open, and where
    *  its Stop stands. */
   runtimeState: () => {
+    error: Error | undefined;
     hasError: boolean;
     requestActive: boolean;
     stopStatus: WebChatSnapshot["stop"]["status"];
@@ -545,6 +552,7 @@ export const createWebChatClient = async ({
     runtimeState: () => {
       const { error, isLoading, status, stop } = runtime.getSnapshot();
       return {
+        error,
         hasError: error !== undefined,
         requestActive:
           isLoading || status === "submitted" || status === "streaming",

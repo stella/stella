@@ -40,7 +40,7 @@ of whether a source document was previously public.
    enforced foreign keys. Queries apply tenant predicates before data is
    returned; PostgreSQL RLS provides an independent enforcement layer.
 
-2. **Organization boundary.** The `workspaceAccessMacro`
+2. **Organization boundary.** `authorizeWorkspace`
    verifies that the workspace belongs to the caller's active
    organization before any data is returned.
 
@@ -69,7 +69,7 @@ of whether a source document was previously public.
 ### Internal (operational data)
 
 8. **Access-controlled endpoints.** All API endpoints require
-   authentication via `authMacro`. Organization membership is
+   authentication via `authenticateSession`. Organization membership is
    verified before returning user or workspace metadata.
 
 9. **Logging without leaking.** Application logs capture
@@ -92,7 +92,7 @@ of whether a source document was previously public.
 ## Enforcement
 
 - Workspace isolation is enforced at both the application
-  layer (`workspaceAccessMacro`, `SafeId`) and the database
+  layer (`authorizeWorkspace`, `SafeId`) and the database
   layer (FK constraints, scoped indexes).
 - Developers who install Lefthook hooks get staged secret
   scanning via Gitleaks before secrets enter Git history.

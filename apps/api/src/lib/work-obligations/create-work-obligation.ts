@@ -1,11 +1,11 @@
 import type { Transaction } from "@/api/db/root";
 import {
-  type WorkObligationSource,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
   workObligationEvents,
   workObligations,
+  type WorkObligationSource,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

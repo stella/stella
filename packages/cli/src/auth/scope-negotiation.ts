@@ -2,43 +2,28 @@ import { Result } from "better-result";
 
 import { UnsupportedOAuthScopesError } from "./errors.js";
 
-export type NegotiatedOAuthScopes = {
-  readonly registrationScopes: readonly string[];
-  readonly requestedScopes: readonly string[];
-};
-
 type NegotiateOAuthScopesOptions = {
   readonly advertisedScopes: readonly string[] | undefined;
-  readonly registrationScopes: readonly string[];
   readonly requestedScopes: readonly string[];
   readonly requiredScopes: readonly string[];
 };
 
 /**
- * Restricts the CLI's OAuth requests to scopes the authorization server says
- * it supports. Metadata predating `scopes_supported` remains usable because
- * RFC 8414 makes that field optional; in that case the server still makes the
- * final decision at its registration and authorization endpoints.
+ * Restricts the CLI's authorization request to scopes the authorization
+ * server says it supports. Metadata predating `scopes_supported` remains
+ * usable because RFC 8414 makes that field optional; in that case the server
+ * still makes the final decision at its authorization endpoint.
  */
 export const negotiateOAuthScopes = ({
   advertisedScopes,
-  registrationScopes,
   requestedScopes,
   requiredScopes,
 }: NegotiateOAuthScopesOptions): Result<
-  NegotiatedOAuthScopes,
+  readonly string[],
   UnsupportedOAuthScopesError
 > => {
   if (advertisedScopes === undefined) {
-    return Result.ok({
-      registrationScopes: [
-        ...registrationScopes,
-        ...requestedScopes.filter(
-          (scope) => !registrationScopes.includes(scope),
-        ),
-      ],
-      requestedScopes,
-    });
+    return Result.ok(requestedScopes);
   }
 
   const supported = new Set(advertisedScopes);
@@ -52,14 +37,5 @@ export const negotiateOAuthScopes = ({
     );
   }
 
-  const registrationCandidates = [
-    ...registrationScopes,
-    ...requestedScopes.filter((scope) => !registrationScopes.includes(scope)),
-  ];
-  return Result.ok({
-    registrationScopes: registrationCandidates.filter((scope) =>
-      supported.has(scope),
-    ),
-    requestedScopes: requestedScopes.filter((scope) => supported.has(scope)),
-  });
+  return Result.ok(requestedScopes.filter((scope) => supported.has(scope)));
 };

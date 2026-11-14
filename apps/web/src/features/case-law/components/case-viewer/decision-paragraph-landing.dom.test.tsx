@@ -3,9 +3,9 @@ import { useRef } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
+import { DECISION_ANCHOR_RESOLUTION } from "@stll/api-contract/case-law-anchor-redirects";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   applyDecisionParagraphLanding,
@@ -67,6 +67,42 @@ test("highlights the complete range, reveals folded text, focuses and scrolls to
   expect(first.hasAttribute("tabindex")).toBe(false);
 });
 
+test("an anchor landing highlights and scrolls to a table cell without an id", () => {
+  const { container } = render(null);
+  container.innerHTML =
+    '<article><table><tbody><tr><td data-anchor="table:block-1:0:1">Cited cell</td></tr></tbody></table></article>';
+  const cell = container.querySelector<HTMLElement>(
+    '[data-anchor="table:block-1:0:1"]',
+  );
+  if (cell === null) {
+    throw new Error("Expected table cell fixture");
+  }
+  expect(cell.hasAttribute("id")).toBe(false);
+  const scroll = mock(() => {});
+  cell.scrollIntoView = scroll;
+
+  const release = applyDecisionParagraphLanding(container, {
+    type: "anchor",
+    anchorId: "table:block-1:0:1",
+  });
+
+  expect(cell.dataset["readerLanding"]).toBe("");
+  expect(cell.classList.contains("bg-accent")).toBe(true);
+  expect(cell.classList.contains("text-accent-foreground")).toBe(true);
+  expect(container.ownerDocument.activeElement).toBe(cell);
+  expect(scroll).toHaveBeenCalledWith({
+    behavior: "instant",
+    block: "center",
+    inline: "nearest",
+  });
+
+  release?.();
+  expect(cell.dataset["readerLanding"]).toBeUndefined();
+  expect(cell.classList.contains("bg-accent")).toBe(false);
+  expect(cell.classList.contains("text-accent-foreground")).toBe(false);
+  expect(cell.hasAttribute("tabindex")).toBe(false);
+});
+
 test("valid missing ranges hold the start instead of retaining a stale passage", () => {
   const { container } = fixture();
   const scroll = mock(() => {});
@@ -86,6 +122,20 @@ test("valid missing ranges hold the start instead of retaining a stale passage",
   container.ownerDocument.dispatchEvent(new Event("wheel"));
   container.dispatchEvent(new Event("scroll"));
   expect(scroll).toHaveBeenCalledTimes(2);
+  release?.();
+});
+
+test("an anchor a reparse dropped holds the start instead of another passage", () => {
+  const { container } = fixture();
+  const scroll = mock(() => {});
+  container.scrollTo = scroll;
+  const release = applyDecisionParagraphLanding(container, {
+    type: "anchor-gone",
+  });
+  expect(scroll).toHaveBeenCalledWith({ top: 0, behavior: "instant" });
+  expect(
+    container.querySelectorAll<HTMLElement>("[data-reader-landing]").length,
+  ).toBe(0);
   release?.();
 });
 
@@ -110,6 +160,7 @@ test("a range landing lands again when something else scrolls the reader", () =>
 for (const landing of [
   { type: "invalid" },
   { type: "text-unavailable" },
+  { type: "anchor-pending" },
 ] as const) {
   test(`${landing.type} leaves the normal reader untouched`, () => {
     const { container, first } = fixture();
@@ -174,6 +225,9 @@ const LandingHarness = ({
     containerRef,
     documentAst,
     fragment,
+    fragmentAnchor: fragment.startsWith("par=")
+      ? undefined
+      : { type: DECISION_ANCHOR_RESOLUTION.CURRENT, anchorId: fragment },
     sessionId,
   });
   return (

@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
 import {
-  PublicLawSearch,
   publicLawAskScope,
+  PublicLawSearch,
 } from "@/components/public-law-search";
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteCountryName } from "@/lib/statutes/statute-route";

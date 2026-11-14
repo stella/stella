@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 
-import type { BusinessRegistrySlug } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
+  type BusinessRegistrySlug,
+} from "@stll/api-contract";
 import type {
   DesktopRegistryConfig,
   DesktopRegistryDefaultFormat,
@@ -10,6 +13,7 @@ import type {
 } from "@stll/api-contract/desktop-registry";
 import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { classifyFailure } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateLookupFormats } from "@/api/db/schema";
@@ -19,10 +23,12 @@ import {
   getOrganizationRegistryDispatch,
   getOrganizationRegistryHandler,
 } from "@/api/lib/business-registries/credentials";
-import type { BusinessRegistryHit } from "@/api/lib/business-registries/dispatch";
 import {
   BUSINESS_REGISTRY_SLUGS,
+  type BusinessRegistryHit,
   executeRegistryLookup,
+  type LoadRegistryWebSearch,
+  NO_REGISTRY_WEB_SEARCH,
 } from "@/api/lib/business-registries/dispatch";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
@@ -37,6 +43,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 
 import { getDefaultDesktopRegistry } from "./default-registry";
 
@@ -48,6 +55,11 @@ export type DesktopRegistryContext = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
+  testDependencies?: {
+    getOrganizationRegistryHandler?: typeof getOrganizationRegistryHandler;
+    loadWebSearch?: LoadRegistryWebSearch;
+    loadFormats?: typeof loadFormats;
+  };
 };
 
 type DesktopRegistrySearch = {
@@ -129,6 +141,7 @@ export const getDesktopRegistryConfig = async (
           id,
           name: `${handler.country} · ${handler.displayName}`,
           formatType: BUSINESS_REGISTRY_FORMAT_CAPABILITIES[id].type,
+          searchCapabilities: BUSINESS_REGISTRY_SEARCH_CAPABILITIES[id],
         }
       : null;
   });
@@ -156,7 +169,10 @@ export const searchDesktopRegistry = async (
   }
   const configured = await Result.tryPromise({
     try: async () =>
-      await getOrganizationRegistryHandler({
+      await (
+        context.testDependencies?.getOrganizationRegistryHandler ??
+        getOrganizationRegistryHandler
+      )({
         ...context,
         registry,
       }),
@@ -179,7 +195,36 @@ export const searchDesktopRegistry = async (
       }),
     );
   }
+  const loadWebSearch: LoadRegistryWebSearch =
+    context.testDependencies?.loadWebSearch ??
+    (async () =>
+      await Result.tryPromise({
+        try: async () => {
+          const { webSearchProvider } = await context.scopedDb(async (tx) =>
+            loadWebSearchProvidersForOrg(tx, context.organizationId),
+          );
+          return webSearchProvider === null
+            ? null
+            : {
+                provider: webSearchProvider,
+                observer: actionRequestObserver(
+                  context.organizationId,
+                  ACTION_COST_CALL_KIND.webSearchRequest,
+                ).onRequest,
+              };
+        },
+        catch: (cause) =>
+          classifyFailure(
+            new HandlerError({
+              status: 500,
+              message: "Could not load web search configuration",
+              cause,
+            }),
+            "unobserved_5xx",
+          ),
+      }));
   const lookup = await executeRegistryLookup({
+    loadWebSearch,
     observer,
     permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,
@@ -189,7 +234,20 @@ export const searchDesktopRegistry = async (
   if (lookup instanceof HandlerError) {
     return Result.err(lookup);
   }
-  const formats = await loadFormats(context, registry);
+  if (lookup.type === "name-search-unavailable") {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        retryable: true,
+        message: "Business registry name search is unavailable",
+      }),
+    );
+  }
+  const formats = await (context.testDependencies?.loadFormats ?? loadFormats)(
+    context,
+    registry,
+  );
   const results: DesktopRegistrySearchResult[] = [];
   const toResult = (hit: BusinessRegistryHit): DesktopRegistrySearchResult => {
     const rendered = renderLookupOutput(formats.defaultFormat, hit);
@@ -204,7 +262,7 @@ export const searchDesktopRegistry = async (
     if (lookup.hit !== null) {
       results.push(toResult(lookup.hit));
     }
-  } else {
+  } else if (lookup.type === "search") {
     const detailed = await mapWithConcurrency({
       items: lookup.hits.slice(0, SEARCH_LIMIT),
       limit: DETAIL_CONCURRENCY,
@@ -217,6 +275,7 @@ export const searchDesktopRegistry = async (
           return Result.ok(hit);
         }
         const detail = await executeRegistryLookup({
+          loadWebSearch,
           observer,
           permit: grantThirdPartyOutboundPermit(),
           handler: configured.value,
@@ -229,6 +288,7 @@ export const searchDesktopRegistry = async (
           return Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Could not format a registry result",
             }),
           );
@@ -294,6 +354,7 @@ export const setDesktopRegistryDefaultFormat = async (
       catch: (cause) =>
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Could not save the default format",
           cause,
         }),
@@ -379,6 +440,7 @@ export const formatDesktopRegistry = async (
     );
   }
   const lookup = await executeRegistryLookup({
+    loadWebSearch: NO_REGISTRY_WEB_SEARCH,
     observer,
     permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,

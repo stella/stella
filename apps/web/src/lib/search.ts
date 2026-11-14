@@ -1,10 +1,11 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
 import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";
-import { unwrapEden } from "@/lib/errors/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import { normalizeSearchQuery } from "@/lib/search.logic";
@@ -137,6 +138,15 @@ const searchKeys = {
         limit: params.limit,
       },
     ] as const,
+  caseLawSection: (params: CaseLawSectionParams) =>
+    [
+      ...searchKeys.owner(params),
+      "case-law-section",
+      {
+        query: normalizeSearchQuery(params.query),
+        limit: params.limit,
+      },
+    ] as const,
   preview: ({
     organizationId,
     userId,
@@ -225,8 +235,47 @@ export const searchInfiniteOptions = (params: SearchParams) =>
         { fetch: { signal } },
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
+    initialPageParam: stringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    placeholderData: (previousData, previousQuery) =>
+      belongsToSearchOwner(previousQuery?.queryKey, params)
+        ? previousData
+        : undefined,
+    enabled: params.enabled,
+  });
+
+export type CaseLawSectionParams = SearchOwner & {
+  /** UI-owned gate: the query is typed and settled. */
+  enabled: boolean;
+  query: string;
+  limit?: number | undefined;
+};
+
+/**
+ * The palette's case-law section. The public corpus is answered by its own
+ * search engine (per country, the organization's practised ones first), not by
+ * the matter search above, so the matter filters do not apply to it.
+ */
+export const caseLawSectionInfiniteOptions = (params: CaseLawSectionParams) =>
+  infiniteQueryOptions({
+    queryKey: searchKeys.caseLawSection(params),
+    // A read posted as a search body, like the matter search: the palette's
+    // own surface, with no automation capability behind it.
+    queryFn: async ({ signal, pageParam }) =>
+      await invokeAppOnlyWrite("search.case-law-section.list", async () =>
+        unwrapApiResponse(
+          await api.search["case-law"].post(
+            {
+              query: normalizeSearchQuery(params.query),
+              ...(pageParam ? { cursor: pageParam } : {}),
+              ...(params.limit !== undefined ? { limit: params.limit } : {}),
+            },
+            { fetch: { signal } },
+          ),
+        ),
+      ),
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: (previousData, previousQuery) =>
@@ -281,7 +330,7 @@ export const searchPreviewOptions = ({
         { fetch: { signal } },
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     // The key is content-addressed (query + resultId + updatedAt), so a
     // cached preview can never show stale content for a changed document —
@@ -360,7 +409,7 @@ export const recentFilePreviewFieldOptions = (
         .entities({ workspaceId: toSafeId<"workspace">(params.workspaceId) })
         .entity({ entityId: toSafeId<"entity">(params.entityId) })
         .get({ fetch: { signal } });
-      const entity = unwrapEden(response);
+      const entity = unwrapApiResponse(response);
       return resolveRecentFilePreviewFieldId({
         fields: entity.fields,
         fileFieldId: params.fileFieldId,
@@ -393,7 +442,7 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
         { fetch: { signal } },
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     enabled: params.enabled,
     placeholderData: (previousData, previousQuery) =>

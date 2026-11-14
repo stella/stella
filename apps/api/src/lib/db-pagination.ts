@@ -1,6 +1,8 @@
 import { and, eq, gt, gte, lt, or, sql } from "drizzle-orm";
 import type { Column, SQL, SQLWrapper } from "drizzle-orm";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -27,9 +29,7 @@ const THIRTY_DAY_MONTHS = new Set([4, 6, 9, 11]);
  * timestamp, while the generic fallback skips the ambiguous interval.
  */
 type PgTimestampCursorPrecision =
-  | "microseconds"
-  | "microseconds-naive"
-  | "milliseconds";
+  "microseconds" | "microseconds-naive" | "milliseconds";
 
 export type ParsedPgTimestampCursor = {
   type: "pgTimestampCursor";
@@ -79,12 +79,24 @@ const hasValidTimestampParts = (groups: Record<string, string> | undefined) => {
   if (groups === undefined) {
     return false;
   }
-  const year = Number(groups["year"]);
-  const month = Number(groups["month"]);
-  const day = Number(groups["day"]);
-  const hour = Number(groups["hour"]);
-  const minute = Number(groups["minute"]);
-  const second = Number(groups["second"]);
+  const year = parseIntegerToken(groups["year"], { sign: "unsigned" }).unwrapOr(
+    -1,
+  );
+  const month = parseIntegerToken(groups["month"], {
+    sign: "unsigned",
+  }).unwrapOr(-1);
+  const day = parseIntegerToken(groups["day"], { sign: "unsigned" }).unwrapOr(
+    -1,
+  );
+  const hour = parseIntegerToken(groups["hour"], { sign: "unsigned" }).unwrapOr(
+    -1,
+  );
+  const minute = parseIntegerToken(groups["minute"], {
+    sign: "unsigned",
+  }).unwrapOr(-1);
+  const second = parseIntegerToken(groups["second"], {
+    sign: "unsigned",
+  }).unwrapOr(-1);
 
   return (
     year >= 1 &&
@@ -142,8 +154,6 @@ export const parsePgTimestampCursorValue = (
 // UTC-anchored boundary. This factory owns that codec so each list
 // handler only supplies the timestamp column and the branded-id constructor.
 
-const LEGACY_PIPE_SEPARATOR = "|";
-
 export type TimestampIdCursor<Id> = {
   timestamp: ParsedPgTimestampCursor;
   id: Id;
@@ -194,24 +204,6 @@ type TimestampIdCursorCodecOptions<Id> = {
   isIdPart?: (value: unknown) => value is string;
 };
 
-// Accepts the canonical base64url JSON tuple and, as a fallback, the legacy
-// plain `"timestamp|uuid"` form so cursors issued before the codec was unified
-// keep decoding. base64url never contains `|`, and the timestamp half always
-// contains `:`/`-` (outside the base64url alphabet), so the two forms cannot be
-// confused.
-const timestampIdCursorTuple = (cursor: string): [unknown, unknown] | null => {
-  const parts = decodePaginationCursor(cursor);
-  if (parts !== null) {
-    return parts.length === 2 ? [parts[0], parts[1]] : null;
-  }
-
-  const separatorIndex = cursor.indexOf(LEGACY_PIPE_SEPARATOR);
-  if (separatorIndex === -1) {
-    return null;
-  }
-  return [cursor.slice(0, separatorIndex), cursor.slice(separatorIndex + 1)];
-};
-
 export const createTimestampIdCursorCodec = <Id>({
   column,
   brandId,
@@ -237,11 +229,11 @@ export const createTimestampIdCursorCodec = <Id>({
   },
   encode: (timestampValue, id) => encodePaginationCursor([timestampValue, id]),
   decode: (cursor) => {
-    const tuple = timestampIdCursorTuple(cursor);
-    if (tuple === null) {
+    const parts = decodePaginationCursor(cursor);
+    if (parts?.length !== 2) {
       return null;
     }
-    const [rawTimestamp, rawId] = tuple;
+    const [rawTimestamp, rawId] = parts;
     const timestamp = parsePgTimestampCursorValue(rawTimestamp);
     if (timestamp === null || !isIdPart(rawId)) {
       return null;

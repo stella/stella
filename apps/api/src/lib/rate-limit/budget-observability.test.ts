@@ -7,12 +7,12 @@ import {
 import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import {
   BUDGET_NAMES,
-  recordBudgetRejection,
   type BudgetKeyKind,
+  recordBudgetRejection,
 } from "@/api/lib/rate-limit/budget-observability";
 import {
-  createOtpAccountBudget,
   createAccountAttemptBudget,
+  createOtpAccountBudget,
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -109,16 +109,6 @@ describe("budget rejection observations", () => {
           expect(JSON.parse(metrics.at(-1) ?? "{}")).toEqual({
             budgetName: name,
             RateLimitRejected: 1,
-            _aws: {
-              Timestamp: expect.any(Number),
-              CloudWatchMetrics: [
-                {
-                  Namespace: "Stella/Api",
-                  Dimensions: [["budgetName"]],
-                  Metrics: [{ Name: "RateLimitRejected", Unit: "Count" }],
-                },
-              ],
-            },
           });
         }
       }

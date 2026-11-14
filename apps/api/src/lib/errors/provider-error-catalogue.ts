@@ -11,6 +11,27 @@ type ProviderSetupErrorOptions = {
   error: Record<string, unknown> | undefined;
 };
 
+const ACCOUNT_OUT_OF_CREDIT_CODES: ReadonlySet<string> = new Set([
+  "insufficient_quota",
+  "credit_balance_exhausted",
+  "organization_spend_limit_exceeded",
+  "project_spend_limit_exceeded",
+  "organization_usage_limit_exceeded",
+]);
+
+/**
+ * A provider error body naming the account as out of credit: by its code, or
+ * by its type when it carries no code.
+ */
+export const isProviderAccountOutOfCredit = (
+  body: Record<string, unknown>,
+): boolean => {
+  const code = body["code"];
+  return code === undefined || code === null
+    ? body["type"] === "insufficient_quota"
+    : typeof code === "string" && ACCOUNT_OUT_OF_CREDIT_CODES.has(code);
+};
+
 type GoogleSetupErrorReason = "api-not-enabled" | "key-restricted";
 
 const classifyGoogleSetupErrorReason = (
@@ -90,7 +111,6 @@ export const identifyProviderSetupError = ({
     return undefined;
   }
   const code = error["code"];
-  const type = error["type"];
   switch (provider) {
     case "anthropic":
       return identifyAnthropicSetupError(error);
@@ -98,14 +118,7 @@ export const identifyProviderSetupError = ({
       if (code === "mismatched_organization" || code === "invalid_project") {
         return PROVIDER_SETUP_ERROR_CODE.openaiProjectOrganizationMismatch;
       }
-      if (
-        code === "insufficient_quota" ||
-        code === "credit_balance_exhausted" ||
-        code === "organization_spend_limit_exceeded" ||
-        code === "project_spend_limit_exceeded" ||
-        code === "organization_usage_limit_exceeded" ||
-        ((code === undefined || code === null) && type === "insufficient_quota")
-      ) {
+      if (isProviderAccountOutOfCredit(error)) {
         return PROVIDER_SETUP_ERROR_CODE.openaiInsufficientQuota;
       }
       return undefined;

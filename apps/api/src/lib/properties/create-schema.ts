@@ -1,14 +1,13 @@
-import { Value } from "@sinclair/typebox/value";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   currencyCodeSchema,
   propertyContentSchema,
-  propertyContentTypeSchema,
+  scalarPropertyContentTypeSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
@@ -20,34 +19,35 @@ type SelectOption = {
 export const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
 export type InferredPropertyRole = typeof DOCUMENT_TYPE_CLASSIFIER_ROLE | null;
 
-const selectOptionSchema = t.Object({
-  color: t.String({ minLength: 1, maxLength: 64 }),
-  value: t.String({ minLength: 1, maxLength: 1000 }),
+const selectOptionSchema = v.object({
+  color: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  value: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
 });
 
-export const createPropertyBodySchema = t.Object({
-  name: tDefaultVarchar,
-  contentType: propertyContentTypeSchema,
-  toolType: t.Optional(
-    t.Union([t.Literal("ai-model"), t.Literal("manual-input")]),
-  ),
-  prompt: t.Optional(t.String({ maxLength: 1000 })),
-  dependencies: t.Optional(
-    t.Array(
-      t.Object({
-        dependsOnPropertyId: tSafeId("property"),
-        condition: t.Nullable(tConditionNode),
-      }),
-      { maxItems: LIMITS.propertyDependenciesPerProperty },
+export const createPropertyBodySchema = v.object({
+  name: displayNameSchema(),
+  contentType: scalarPropertyContentTypeSchema,
+  toolType: v.optional(v.picklist(["ai-model", "manual-input"])),
+  prompt: v.optional(v.pipe(v.string(), v.maxLength(1000))),
+  dependencies: v.optional(
+    v.pipe(
+      v.array(
+        v.object({
+          dependsOnPropertyId: resourceIdSchema("property"),
+          condition: v.nullable(tConditionNode),
+        }),
+      ),
+      v.maxLength(LIMITS.propertyDependenciesPerProperty),
     ),
   ),
-  options: t.Optional(t.Array(selectOptionSchema)),
-  /** Money only: the currency new values default to, or null for per-value. */
-  currency: t.Optional(t.Nullable(currencyCodeSchema())),
-  fallback: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 1000 }))),
+  options: v.optional(v.array(selectOptionSchema)),
+  currency: v.optional(v.nullable(currencyCodeSchema())),
+  fallback: v.optional(
+    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1000))),
+  ),
 });
 
-export type CreatePropertyBody = typeof createPropertyBodySchema.static;
+export type CreatePropertyBody = v.InferOutput<typeof createPropertyBodySchema>;
 
 const arrayOrEmpty = <T>(value: T[] | undefined): T[] => {
   if (value === undefined) {
@@ -60,7 +60,7 @@ const areSelectOptionsValid = (
   rawOptions: SelectOption[],
   contentType: "single-select" | "multi-select",
 ): boolean =>
-  Value.Check(propertyContentSchema, {
+  v.is(propertyContentSchema, {
     version: 1,
     type: contentType,
     options: rawOptions,
@@ -208,12 +208,16 @@ export const buildPropertyParts = (
       content = { version: 1, type: body.contentType };
       tool = defaultTool();
       break;
-    // Entered by hand, like a file: an amount needs a currency the model
-    // cannot choose, and a person has to resolve to a workspace member.
+    // Entered by hand unless the caller asks for an AI column: an amount
+    // read from a document carries the currency the document states.
     case "money":
       content = { version: 1, type: "money", currency: body.currency ?? null };
-      tool = { version: 1, type: "manual-input" };
+      tool =
+        body.toolType === "ai-model"
+          ? defaultTool()
+          : { version: 1, type: "manual-input" };
       break;
+    // A person has to resolve to a workspace member.
     case "person":
       content = { version: 1, type: "person" };
       tool = { version: 1, type: "manual-input" };

@@ -5,8 +5,8 @@ import { eq, sql } from "drizzle-orm";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import {
   auditLogs,
-  billingArrangements,
   BILLING_ARRANGEMENT_MODES,
+  billingArrangements,
   timeTimers,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";

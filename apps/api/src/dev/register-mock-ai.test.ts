@@ -9,7 +9,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { locateQuote } from "@stll/legal-ast/quote-locate";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import {
   MOCK_AI_CANCELLATION_MARKER,
@@ -22,11 +25,13 @@ import {
   registerMockAI,
 } from "@/api/dev/register-mock-ai";
 import { env } from "@/api/env";
+import { factExtractionSchema } from "@/api/lib/lists/generation/fact-extract";
+import { extractionSchema as claimExtractionSchema } from "@/api/lib/lists/verification/claim-extract";
+import { gradingSchema as claimGradingSchema } from "@/api/lib/lists/verification/claim-grade";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -111,11 +116,11 @@ const novelSchema = v.strictObject({
 });
 
 // A required-nullable ISO-date leaf: the `"mock"` string primitive fails
-// `v.isoDate()`, so only synthesizing `null` for a nullable field keeps this
+// `v.isoDate(), API_CALENDAR_DATE_CHECK`, so only synthesizing `null` for a nullable field keeps this
 // parseable. Under the Google projection the field arrives as
 // `nullable: true` rather than an `anyOf` null branch.
 const nullableIsoDateSchema = v.strictObject({
-  when: v.nullable(v.pipe(v.string(), v.isoDate())),
+  when: v.nullable(apiDateSchema),
 });
 
 // A genuinely optional (not nullable) field: valid to omit, invalid as null.
@@ -191,6 +196,156 @@ describe("mockStructuredData", () => {
     const parsed = v.parse(optionalFieldSchema, data);
     expect(parsed).not.toHaveProperty("note");
     expect(parsed.required).toBe("mock");
+  });
+
+  // The worker drops any fact whose quote is not in the block it names, so
+  // the local fixture must quote the blocks of the request it answers.
+  for (const provider of PROVIDERS) {
+    test(`answers fact extraction with quotes of the asked blocks (${provider})`, () => {
+      const blocks = new Map([
+        [
+          "b1",
+          "On 9 March 2021 the board approved the policy. It was later circulated.",
+        ],
+        ["b2", "The ward manager said the policy was final."],
+        ["b3", "Ok."],
+        // Prose no rule recognises: proposing a fact here would cite a
+        // passage that does not support it.
+        ["b4", "The schedule below lists the addresses of both parties."],
+      ]);
+      const request = `Document blocks:\n${[...blocks]
+        .map(([id, text]) => `[${id}] ${text}`)
+        .join("\n")}\n\nList the facts in these blocks only: b1, b2, b3, b4`;
+      const data = mockStructuredData(
+        structuredOutputSchemaFor(factExtractionSchema, provider),
+        [{ role: "user", content: [{ type: "text", content: request }] }],
+      );
+      const { facts } = v.parse(factExtractionSchema, data);
+      expect(
+        facts.map(({ blockId, quote, fact, occurredOn, contestedMeaning }) => ({
+          blockId,
+          located: locateQuote(blocks.get(blockId) ?? "", quote) !== null,
+          // A fact restates the passage; it is not the passage again.
+          restated: fact !== quote,
+          // The date comes from the passage the fact cites, or is absent.
+          occurredOn,
+          held: contestedMeaning !== null,
+        })),
+      ).toEqual([
+        {
+          blockId: "b1",
+          located: true,
+          restated: true,
+          occurredOn: "2021-03-09",
+          held: false,
+        },
+        {
+          blockId: "b2",
+          located: true,
+          restated: true,
+          occurredOn: null,
+          held: true,
+        },
+      ]);
+    });
+  }
+
+  // A local verification run has to show every qualifier the grader can
+  // give, from claims quoted out of the document it was asked about.
+  for (const provider of PROVIDERS) {
+    test(`answers claim extraction and grading from the request (${provider})`, () => {
+      const blocks = new Map([
+        [
+          "b1",
+          "6. I was on annual leave for the whole of August 2021. I was abroad with my family.",
+        ],
+        [
+          "b2",
+          "7. Had it been raised at board level, I would have expected to see it minuted.",
+        ],
+        ["b3", "8. I signed the engagement letter on 14 June 2021."],
+      ]);
+      const extraction = mockStructuredData(
+        structuredOutputSchemaFor(claimExtractionSchema, provider),
+        [
+          {
+            role: "user",
+            content: `Document blocks:\n${[...blocks]
+              .map(([id, text]) => `[${id}] ${text}`)
+              .join("\n")}\n\nList the claims in these blocks only: b1, b2, b3`,
+          },
+        ],
+      );
+      const { claims } = v.parse(claimExtractionSchema, extraction);
+      expect(
+        claims.every(
+          ({ blockId, quote }) =>
+            locateQuote(blocks.get(blockId) ?? "", quote) !== null,
+        ),
+      ).toBe(true);
+
+      const request = [
+        "Facts:",
+        '- F1: Calendar "Annual leave" blocked across 2–20 August 2021.',
+        "- F2: Engagement letter signed by E. Whitfield on 14 June 2021.",
+        `Claims:\n${claims
+          .map(({ quote }, index) => `- C${String(index + 1)}: ${quote}`)
+          .join("\n")}`,
+      ].join("\n");
+      const grading = mockStructuredData(
+        structuredOutputSchemaFor(claimGradingSchema, provider),
+        [{ role: "user", content: request }],
+      );
+      const { grades } = v.parse(claimGradingSchema, grading);
+      expect(grades.map(({ claimId }) => claimId)).toEqual(
+        claims.map((_, index) => `C${String(index + 1)}`),
+      );
+      expect(
+        grades.flatMap(({ verdict, qualifiers }) =>
+          qualifiers.map(({ kind }) => `${verdict}:${kind}`),
+        ),
+      ).toEqual(["tension:scope-mismatch", "nocover:record-silent"]);
+      expect(
+        grades.find(({ verdict }) => verdict === "supported")?.refs,
+      ).toEqual([{ factId: "F2", rel: "supports" }]);
+    });
+  }
+
+  // The sample statement's disclosure date is recorded twice, differently;
+  // a local run withholds that claim between the two records.
+  test("withholds a dated claim between two records that date its point differently", () => {
+    const request = [
+      "Facts:",
+      "- F1: Email from E. Whitfield to Compliance disclosing the arrangement, header timestamp 10 Aug 2021.",
+      "  date=2021-08-10 (day); kind=Email",
+      "- F2: Compliance case-management log records the same disclosure as received on 17 Aug 2021.",
+      "  date=2021-08-17 (day); kind=System log",
+      "- F3: Engagement letter bearing E. Whitfield's signature, dated 14 June 2021.",
+      "  date=2021-06-14 (day); kind=Document",
+      "Claims:",
+      "- C1: I notified compliance of the arrangement on 10 August 2021.",
+      "- C2: I signed the engagement letter on 14 June 2021.",
+    ].join("\n");
+    const grading = mockStructuredData(
+      structuredOutputSchemaFor(claimGradingSchema, "openai"),
+      [{ role: "user", content: request }],
+    );
+    const { grades } = v.parse(claimGradingSchema, grading);
+    expect(
+      grades.map(({ verdict, conflict }) => ({
+        verdict,
+        factIds: conflict?.factIds ?? null,
+        values: conflict?.values ?? null,
+      })),
+    ).toEqual([
+      {
+        verdict: "recordconflict",
+        factIds: ["F1", "F2"],
+        values: ["2021-08-10", "2021-08-17"],
+      },
+      // One record dates the signing, so nothing conflicts.
+      { verdict: "supported", factIds: null, values: null },
+    ]);
   });
 
   test("keeps the curated templates/prefill fixture", () => {

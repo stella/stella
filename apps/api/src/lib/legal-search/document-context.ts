@@ -1,17 +1,20 @@
 import { eq } from "drizzle-orm";
 
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
-
 import { publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
-import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
+import {
+  parsePersistedCorpusAst,
+  readCorpusForRecovery,
+  readCorpusPayloadOrFallback,
+} from "@/api/lib/legal-search/corpus-storage";
 import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
 import {
   definePublicLawSharedQuery,
@@ -63,16 +66,21 @@ export const loadDocumentContext = async (
   const corpus = corpusStorageMode !== "off";
   const { astS3Key, textS3Key } = decision;
 
-  const documentAst =
-    corpus && astS3Key !== null
-      ? await readCorpusPayloadOrFallback({
-          documentId: decisionId,
-          key: astS3Key,
-          step: "documentContext.corpusAst",
-          read: async () => await readCorpusAst(astS3Key),
-          fallback: () => decision.documentAst,
-        })
-      : decision.documentAst;
+  const documentAst = (
+    await readCorpusForRecovery({
+      documentId: decisionId,
+      read: async () =>
+        corpus && astS3Key !== null
+          ? await readCorpusPayloadOrFallback({
+              documentId: decisionId,
+              key: astS3Key,
+              step: "documentContext.corpusAst",
+              read: async () => await readCorpusAst(astS3Key),
+              fallback: () => parsePersistedCorpusAst(decision.documentAst),
+            })
+          : parsePersistedCorpusAst(decision.documentAst),
+    })
+  ).unwrapOr(null);
 
   const fulltext =
     corpus && textS3Key !== null
@@ -90,6 +98,6 @@ export const loadDocumentContext = async (
     caseNumber: decision.caseNumber,
     court: decision.court,
     fulltext,
-    documentAst: parseCaseLawDecisionAst(documentAst),
+    documentAst: parseCachedDecisionAst(documentAst),
   };
 };

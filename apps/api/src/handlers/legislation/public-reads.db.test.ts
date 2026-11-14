@@ -9,8 +9,8 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
@@ -1190,7 +1190,8 @@ describe("public statute list", () => {
       ),
       maxLength: 40,
     });
-    await fc.assert(
+    await assertProperty(
+      "the title fold agrees with the client-side fold",
       fc.asyncProperty(latinText, async (text) => {
         const folded = await legislationDb(async (tx) => {
           const [row] = await tx
@@ -1202,7 +1203,7 @@ describe("public statute list", () => {
 
         expect(folded).toBe(foldToAscii(text).toLowerCase());
       }),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   });
 });
@@ -1768,8 +1769,8 @@ describe("batched point-in-time statute resolve", () => {
           { country: "CZE", eli: "CZ/1999/111", asOf: "2021-01-01" },
           // A jurisdiction this surface holds no law for.
           { country: "Freedonia", eli: civilCode, asOf: "2021-01-01" },
-          // A jurisdiction the corpus holds rows for but does not publish.
-          { country: "SVK", eli: "SVK/2020/123", asOf: "2021-01-01" },
+          // A jurisdiction not yet launched.
+          { country: "AUT", eli: "AUT/2020/123", asOf: "2021-01-01" },
         ],
       },
       legislationDb,
@@ -1782,11 +1783,11 @@ describe("batched point-in-time statute resolve", () => {
       null,
     ]);
     expect(items.at(3)).toMatchObject({
-      unresolvedReason: "pages_public",
+      unresolvedReason: "pending_public",
       availability: {
         status: "unavailable",
-        country: "SVK",
-        reason: "pages_public",
+        country: "AUT",
+        reason: "pending_public",
       },
     });
   });

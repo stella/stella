@@ -24,6 +24,7 @@ import { updateDocumentProperties } from "@/api/handlers/files/update-document-p
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { CARRIED_FIELD_COLUMNS } from "@/api/lib/entity-versions/field-clone-policy";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { FileVersionWritePolicy } from "@/api/lib/entity-versions/write-file-version";
 import {
@@ -772,6 +773,54 @@ describe("first file version persistence", () => {
       type: "file",
       fileName: "exhibit redline.docx",
     });
+  });
+
+  test("a new file version keeps each other cell's AI settlement", async () => {
+    const entityId = await createEmptyEntity("document");
+    const first = await writeTestFile(entityId);
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    if (first.value.status !== "ok") {
+      throw new Error(`Initial write failed: ${first.value.status}`);
+    }
+    const settlement = {
+      type: "value",
+      runId: "run_extract",
+      settledAt: "2026-11-01T10:00:00.000Z",
+    } as const;
+    await testDb.insert(fields).values({
+      id: createSafeId<"field">(),
+      workspaceId: ids.wsA1,
+      entityVersionId: first.value.entityVersionId,
+      propertyId: ids.propertyA1,
+      content: { type: "text", value: "Prague", version: 1 },
+      aiSettlement: settlement,
+    });
+
+    const next = await writeTestFile(entityId, { fileName: "smlouva v2.docx" });
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    if (next.value.status !== "ok") {
+      throw new Error(`Second write failed: ${next.value.status}`);
+    }
+
+    const version = await testDb.query.entityVersions.findFirst({
+      where: { id: { eq: next.value.entityVersionId } },
+      with: { fields: { columns: CARRIED_FIELD_COLUMNS } },
+    });
+    expect(
+      version?.fields.find((field) => field.propertyId === ids.propertyA1),
+    ).toEqual({
+      propertyId: ids.propertyA1,
+      content: { type: "text", value: "Prague", version: 1 },
+      aiSettlement: settlement,
+    });
+    expect(
+      version?.fields.find((field) => field.propertyId === filePropertyId)
+        ?.aiSettlement,
+    ).toBeNull();
   });
 
   test("publishes collaboration metadata through the targeted canonical writer", async () => {

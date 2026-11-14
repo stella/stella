@@ -3,25 +3,25 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
-  MATTER_SWATCHES,
   getMatterSwatch,
+  MATTER_SWATCHES,
   resolveMatterColor,
 } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -32,14 +32,17 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   workspacesNavigationOptions,
   workspacesRouteOptions,
@@ -60,8 +63,8 @@ export const useInspectorGroups = () => {
       userId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useInspectorGroups:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const state = useInspectorTabsStore(
     useShallow((s) => ({
@@ -201,7 +204,10 @@ export const InspectorGroupEditor = ({
       }}
     >
       <DialogPopup finalFocus={returnFocus}>
-        <DialogFormState
+        {/* `contents`: the form adds no box of its own, so the dialog's
+          header, panel and footer keep the popup's own layout. */}
+        <Form
+          className="contents"
           dirty={
             name !== (target.type === "edit" ? target.name : "") ||
             color !==
@@ -213,8 +219,6 @@ export const InspectorGroupEditor = ({
               target.type === "edit" ? target.color : MATTER_SWATCHES[0],
             );
           }}
-        />
-        <form
           onSubmit={(event) => {
             event.preventDefault();
             save();
@@ -274,7 +278,7 @@ export const InspectorGroupEditor = ({
               {t("common.save")}
             </Button>
           </DialogFooter>
-        </form>
+        </Form>
       </DialogPopup>
     </Dialog>
   );
@@ -340,8 +344,8 @@ const InspectorGroupDestinations = ({
 }) => {
   const { activeOrganizationId } = useAuthenticatedUser();
   const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "InspectorGroupDestinations:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const customGroups = useInspectorTabsStore((state) => state.groups);
   const destinations: InspectorGroupPresentation[] = [];
@@ -367,7 +371,9 @@ const InspectorGroupDestinations = ({
       {destinations.map((group) => (
         <MenuItem key={group.id} onClick={() => onMove(group.id)}>
           <InspectorGroupIcon group={group} />
-          <bdi className="max-w-64 truncate">{group.name}</bdi>
+          <TruncatedText className="max-w-64" render={<bdi />}>
+            {group.name}
+          </TruncatedText>
         </MenuItem>
       ))}
     </>

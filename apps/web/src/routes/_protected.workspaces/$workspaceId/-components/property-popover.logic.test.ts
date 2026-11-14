@@ -21,9 +21,7 @@ const propertyId = toSafeId<"property">("ai-property");
 const propertyRunRow = (
   entityId: string,
   content:
-    | { type: "error" | "pending" }
-    | { type: "text"; value: string }
-    | null,
+    { type: "error" | "pending" } | { type: "text"; value: string } | null,
   options: {
     kind?: "document" | "folder";
     locked?: boolean;
@@ -125,9 +123,7 @@ test("the header reruns a selected column when every selected cell is answered",
     selectedRowIds: ["answered"],
   });
   const action = aiColumnRunMenu(
-    rows.map((row) =>
-      propertyAiCellState(row.original.fields[propertyId]?.content),
-    ),
+    rows.map((row) => propertyAiCellState(row.original.fields[propertyId])),
   ).at(0);
   if (action === undefined) {
     throw new Error("Expected a column run action for an answered cell");

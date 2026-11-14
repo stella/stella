@@ -1,4 +1,4 @@
-import { describe, test, expectTypeOf } from "bun:test";
+import { describe, expectTypeOf, test } from "bun:test";
 
 import type { ActionKindDefinition } from "@/api/lib/rate-limit/action-kinds";
 import type {

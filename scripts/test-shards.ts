@@ -33,6 +33,9 @@ export const TEST_SHARD_IDS = [
   "api-1",
   "api-2",
   "api-3",
+  "api-4",
+  "api-5",
+  "api-6",
   "rest",
   "web",
 ] as const;
@@ -43,6 +46,9 @@ export const TEST_JOB_SHARDS = {
   "api-1": ["api-1"],
   "api-2": ["api-2"],
   "api-3": ["api-3"],
+  "api-4": ["api-4"],
+  "api-5": ["api-5"],
+  "api-6": ["api-6"],
   "rest-web": ["rest", "web"],
 } as const satisfies Record<string, readonly TestShardId[]>;
 
@@ -56,6 +62,9 @@ export const TEST_SHARD_PACKAGES = {
   "api-1": ["@stll/api"],
   "api-2": ["@stll/api"],
   "api-3": ["@stll/api"],
+  "api-4": ["@stll/api"],
+  "api-5": ["@stll/api"],
+  "api-6": ["@stll/api"],
   rest: null,
   web: ["@stll/web"],
 } as const satisfies Record<TestShardId, readonly string[] | null>;

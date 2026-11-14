@@ -16,6 +16,11 @@
 
 import { describe, expect, test } from "bun:test";
 
+import {
+  CURRENT_ANALYSIS_VERSION,
+  isDecisionAnalysis,
+} from "@stll/legal-ast/analysis";
+
 import { readCaseLawFixtureAnalyses } from "./lib/case-law-fixture-analyses";
 
 describe("seeded case-law analyses", () => {
@@ -30,6 +35,24 @@ describe("seeded case-law analyses", () => {
     expect(
       entries
         .filter((entry) => !entry.matches)
+        .map((entry) => `${entry.fixtureName} ${entry.caseNumber}`),
+    ).toEqual([]);
+  });
+
+  test("every stored analysis is readable at the current version", async () => {
+    const files = await readCaseLawFixtureAnalyses();
+    const entries = files.flatMap((file) => file.entries);
+    expect(entries.length).toBeGreaterThan(0);
+
+    // An analysis written at a version the reader no longer accepts reads as
+    // no analysis at all, so a version bump must carry the fixtures with it.
+    expect(
+      entries
+        .filter(
+          (entry) =>
+            !isDecisionAnalysis(entry.analysis) ||
+            entry.analysis.version !== CURRENT_ANALYSIS_VERSION,
+        )
         .map((entry) => `${entry.fixtureName} ${entry.caseNumber}`),
     ).toEqual([]);
   });

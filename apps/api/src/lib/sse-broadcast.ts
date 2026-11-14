@@ -1,12 +1,12 @@
 import { TaggedError } from "better-result";
 
 import {
+  type DesktopEditSessionRealtimeEvent,
+  type OrganizationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
-  type DesktopEditSessionRealtimeEvent,
-  type OrganizationRealtimeEvent,
   type UserRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
@@ -66,6 +66,14 @@ type RedisPayload =
       id: string;
       organizationId: string;
       originInstanceId?: string | undefined;
+    }
+  | {
+      /** The MCP tools an organisation, or one of its members, may see changed. */
+      scope: "mcp-tool-projection";
+      /** The organisation id. */
+      id: string;
+      userId?: string | undefined;
+      originInstanceId?: string | undefined;
     };
 
 /**
@@ -104,7 +112,8 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     scope !== "session" &&
     scope !== "workspace-access-revoked" &&
     scope !== "user" &&
-    scope !== "user-access-revoked"
+    scope !== "user-access-revoked" &&
+    scope !== "mcp-tool-projection"
   ) {
     return null;
   }
@@ -116,6 +125,15 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     "originInstanceId" in parsed && typeof parsed.originInstanceId === "string"
       ? parsed.originInstanceId
       : undefined;
+
+  if (scope === "mcp-tool-projection") {
+    if (!("userId" in parsed)) {
+      return { scope, id: parsed.id, originInstanceId };
+    }
+    return typeof parsed.userId === "string"
+      ? { scope, id: parsed.id, userId: parsed.userId, originInstanceId }
+      : null;
+  }
 
   if (scope === "user" || scope === "user-access-revoked") {
     if (
@@ -312,6 +330,23 @@ export const createSseBroadcastPublisher = ({
         deliveredInline: options.deliveredInline,
       });
     },
+    publishMcpToolProjectionChange: async (
+      {
+        organizationId,
+        userId,
+      }: {
+        organizationId: SafeId<"organization">;
+        userId?: SafeId<"user"> | undefined;
+      },
+      options: { originInstanceId?: string | undefined } = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "mcp-tool-projection",
+        id: organizationId,
+        userId,
+        originInstanceId: options.originInstanceId,
+      });
+    },
     publishUserAccessRevoked: async (
       userId: SafeId<"user">,
       organizationId: SafeId<"organization">,
@@ -327,13 +362,13 @@ export const createSseBroadcastPublisher = ({
   };
 };
 
-const defaultPublisher = createSseBroadcastPublisher();
+export type SseBroadcastPublisher = ReturnType<
+  typeof createSseBroadcastPublisher
+>;
 
-export const {
-  publishOrganizationEvent,
-  publishSessionEvent,
-  publishUserAccessRevoked,
-  publishUserEvent,
-  publishWorkspaceAccessRevoked,
-  publishWorkspaceEvent,
-} = defaultPublisher;
+/** The process-wide publisher; its Redis connection opens on first publish. */
+export const defaultSseBroadcastPublisher: SseBroadcastPublisher =
+  createSseBroadcastPublisher();
+
+export const { publishSessionEvent, publishWorkspaceEvent } =
+  defaultSseBroadcastPublisher;

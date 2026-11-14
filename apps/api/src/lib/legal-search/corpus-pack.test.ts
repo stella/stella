@@ -5,20 +5,20 @@ import { zstdCompress, zstdDecompressToString } from "@/api/lib/compression";
 import { CorpusMemberDigestMismatchError } from "@/api/lib/errors/tagged-errors";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
+  corpusMemberDigest,
   CorpusPackError,
   decodePackFooter,
   encodePack,
-  packJurisdictionPrefix,
-  packKeyForMembers,
   PACK_FORMAT_VERSION,
   PACK_MAGIC,
-  corpusMemberDigest,
+  packJurisdictionPrefix,
+  packKeyForMembers,
 } from "@/api/lib/legal-search/corpus-pack";
 import type {
   PackFooter,
   PackFooterMember,
-  PackMemberKind,
   PackMemberInput,
+  PackMemberKind,
 } from "@/api/lib/legal-search/corpus-pack";
 import {
   CORPUS_TRANSFER_MAX_BYTES,

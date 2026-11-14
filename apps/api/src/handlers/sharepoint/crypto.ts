@@ -18,8 +18,7 @@ import type { Secret, SecretKind } from "@/api/lib/secret-brands";
 import { secretSchema } from "@/api/lib/secret-brands";
 
 type SharepointSecretPurpose =
-  | "sharepoint_access_token"
-  | "sharepoint_refresh_token";
+  "sharepoint_access_token" | "sharepoint_refresh_token";
 
 type DecryptedKind<P extends SharepointSecretPurpose> =
   P extends "sharepoint_access_token"

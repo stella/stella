@@ -8,11 +8,11 @@
 
 import { panic } from "better-result";
 
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 
 type AdapterLoader = () => Promise<SourceAdapter>;
 
@@ -56,6 +56,7 @@ export const ADAPTER_MODULES = {
     (await import("./at-findok")).atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: async () => (await import("./eu-ecj")).euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: async () => (await import("./hu-bhgy")).huBhgyAdapter,
+  [ADAPTER_KEYS.UK_FCL]: async () => (await import("./uk-fcl")).ukFclAdapter,
   [ADAPTER_KEYS.PL_KIS]: async () => (await import("./pl-kis")).plKisAdapter,
   [ADAPTER_KEYS.PL_UODO]: async () => (await import("./pl-uodo")).plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: async () =>

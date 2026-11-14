@@ -4,9 +4,9 @@ import { invalidInput, type InvoicingResult } from "../errors";
 import {
   amountText,
   invoiceDescriptionOf,
-  quantityText,
   type InvoiceExportLine,
   type InvoiceExportRecord,
+  quantityText,
 } from "./record";
 
 // LEDES 1998B: one pipe-delimited record per invoice line, each closed by
@@ -79,11 +79,11 @@ const records = (record: InvoiceExportRecord): string[] => {
       ledesDate(record.issueDate),
       record.number,
       record.buyer.registrationNumber ?? record.buyer.vatId ?? "",
-      record.matter.reference ?? record.matter.id,
+      line.matter.reference ?? line.matter.id,
       amount(record.totals.netAmountMinor),
       start,
       end,
-      invoiceDescriptionOf(record) ?? record.matter.name,
+      invoiceDescriptionOf(record) ?? line.matter.name,
       String(index + 1),
       type,
       quantityText(line.quantity),

@@ -75,7 +75,10 @@ export const useCaseLawRefine = ({
       }
     },
     onError: (error, asked) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "CaseLawSearch:failure",
+        scope: { type: "handler", handlerId: "CaseLawSearch:failure" },
+      });
       if (!asked.automatic) {
         notifyUserError(error, t("common.somethingWentWrong"));
       }

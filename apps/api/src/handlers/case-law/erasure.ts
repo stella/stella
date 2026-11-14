@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
@@ -7,13 +7,19 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitationDoctrineReviews,
-  caseLawDecisionSupplements,
+  caseLawDecisionAliases,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
+  caseLawDecisionSupplements,
   caseLawIndexJobs,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import {
+  lockCaseLawDecisionRows,
+  lockCaseLawRepublication,
+} from "@/api/lib/db/aggregate-lock";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
@@ -44,6 +50,15 @@ import {
   deleteRawKeys,
   RAW_KEY_OWNERSHIP,
 } from "@/api/lib/legal-search/raw-source-storage";
+import {
+  REMOVAL_SUPERSEDED_REASON,
+  supersededRemovalEvidence,
+} from "@/api/lib/legal-search/removal-evidence";
+import type {
+  RemovalEvidence,
+  RemovalSupersededReason,
+} from "@/api/lib/legal-search/removal-evidence";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 /** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
 const RAW_ERASE_TIMEOUT_MS = 60_000;
@@ -142,12 +157,15 @@ export const eraseCancelledIntentObjects = async ({
 };
 
 type RedactInput = {
+  evidence?: RemovalEvidence | undefined;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   /** Test seam; production deletes through the corpus bucket client. */
   deleteCorpus?: typeof deleteCorpusDocument;
   /** Test seam; production sweeps through the documents bucket client. */
   sweepRaw?: typeof sweepCaseLawRawDecision;
+  /** Test seam; production locks the decision's projection source. */
+  lockSource?: typeof lockActiveCorpusProjectionSourceTx;
 };
 
 /** How the publisher's own payloads and files were reached. */
@@ -167,6 +185,7 @@ type LegacyRawErasure = Extract<
 >["legacy"];
 
 export type RedactCaseLawDecisionOutcome =
+  | { type: "superseded"; reason: RemovalSupersededReason }
   | { type: "not-found" }
   /**
    * Every store was scrubbed. `erasure` says how the corpus payloads were
@@ -275,157 +294,248 @@ const recordFailedRedactionAudit = async ({
 type RedactionFence =
   | {
       type: "fenced";
-      cancelledIntents: Awaited<
-        ReturnType<typeof cancelCaseLawCorpusUploadIntents>
-      >;
-      decision: Pick<
-        typeof caseLawDecisions.$inferSelect,
-        | "id"
-        | "sourceId"
-        | "textS3Key"
-        | "normalizedS3Key"
-        | "astS3Key"
-        | "sourceRawS3Key"
-        | "redactedAt"
-      >;
-      /** Supplement payloads stored under another decision's prefix. */
-      supplementRawKeys: string[];
+      canonicalId: SafeId<"caseLawDecision">;
+      decisions: FencedDecision[];
     }
   /** No such row, or none the projection knows: nothing to redact. */
+  | { type: "superseded"; reason: RemovalSupersededReason }
   | { type: "missing" }
   /** The fence itself failed, which says nothing about the row. */
   | { type: "lock-failed"; cause: unknown };
+
+type FencedDecision = {
+  cancelledIntents: Awaited<
+    ReturnType<typeof cancelCaseLawCorpusUploadIntents>
+  >;
+  decision: Pick<
+    typeof caseLawDecisions.$inferSelect,
+    | "id"
+    | "sourceId"
+    | "textS3Key"
+    | "normalizedS3Key"
+    | "astS3Key"
+    | "sourceRawS3Key"
+    | "redactedAt"
+  >;
+  /** Supplement payloads stored under another decision's prefix. */
+  supplementRawKeys: string[];
+};
 
 export const redactCaseLawDecision = async ({
   decisionId,
   scopedDb,
   deleteCorpus = deleteCorpusDocument,
   sweepRaw = sweepCaseLawRawDecision,
+  lockSource = lockActiveCorpusProjectionSourceTx,
+  evidence,
 }: RedactInput): Promise<
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
   const fenced = await scopedDb(async (tx): Promise<RedactionFence> => {
-    const sourceLock = await Result.tryPromise({
-      try: async () =>
-        await lockActiveCorpusProjectionSourceTx(tx, {
-          family: "case_law",
-          entityId: decisionId,
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(sourceLock)) {
-      // A subject the projection does not know is the row not being there,
-      // which is an answer. Anything else — a lock timeout, a dropped
-      // connection — says nothing about the row, so it is carried back
-      // instead of being recorded as an erasure that never happened.
-      return sourceLock.error instanceof
-        CorpusIndexProjectionSubjectMissingError
-        ? { type: "missing" }
-        : { type: "lock-failed", cause: sourceLock.error };
-    }
-    const decision = (
+    await lockCaseLawRepublication({ tx, mode: "shared" });
+    const aliasForRequestedId = (
       await tx
-        .select({
-          id: caseLawDecisions.id,
-          sourceId: caseLawDecisions.sourceId,
-          textS3Key: caseLawDecisions.textS3Key,
-          normalizedS3Key: caseLawDecisions.normalizedS3Key,
-          astS3Key: caseLawDecisions.astS3Key,
-          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
-          redactedAt: caseLawDecisions.redactedAt,
-          sourceDocumentId: caseLawDecisions.sourceDocumentId,
-        })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, decisionId))
-        .for("update")
+        .select({ id: caseLawDecisionAliases.canonicalDecisionId })
+        .from(caseLawDecisionAliases)
+        .where(eq(caseLawDecisionAliases.retiredDecisionId, decisionId))
         .limit(1)
     ).at(0);
-    if (decision === undefined) {
+    const canonicalId = aliasForRequestedId?.id ?? decisionId;
+    const aliases = await tx
+      .select({ id: caseLawDecisionAliases.retiredDecisionId })
+      .from(caseLawDecisionAliases)
+      .where(eq(caseLawDecisionAliases.canonicalDecisionId, canonicalId));
+    const decisionIds = [
+      canonicalId,
+      ...aliases.map(({ id }) => id),
+    ].toSorted();
+    // Projection fences before decision rows, the order projection writers
+    // take them; and every lock before any row changes, because a failure
+    // returned from this callback commits and must find nothing mutated.
+    const pendingSourceLocks = [];
+    for (const id of decisionIds) {
+      const subject = { family: "case_law", entityId: id } as const;
+      pendingSourceLocks.push(
+        Result.tryPromise({
+          // db-await-in-loop: take per-subject projection fences in sorted order before any row changes
+          try: async () => await lockSource(tx, subject),
+          catch: (cause) => cause,
+        }).then((sourceLock) => ({ sourceLock, subject })),
+      );
+    }
+    const lockedSubjects = [];
+    for (const locked of await Promise.all(pendingSourceLocks)) {
+      if (Result.isError(locked.sourceLock)) {
+        if (
+          !(
+            locked.sourceLock.error instanceof
+            CorpusIndexProjectionSubjectMissingError
+          )
+        ) {
+          return { type: "lock-failed", cause: locked.sourceLock.error };
+        }
+        continue;
+      }
+      lockedSubjects.push({
+        sourceLock: locked.sourceLock.value,
+        subject: locked.subject,
+      });
+    }
+    const lockedIds = lockedSubjects.map(({ subject }) => subject.entityId);
+    await lockCaseLawDecisionRows({ tx, decisionIds: lockedIds });
+    const decisions = await tx
+      .select({
+        id: caseLawDecisions.id,
+        sourceId: caseLawDecisions.sourceId,
+        textS3Key: caseLawDecisions.textS3Key,
+        normalizedS3Key: caseLawDecisions.normalizedS3Key,
+        astS3Key: caseLawDecisions.astS3Key,
+        sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+        redactedAt: caseLawDecisions.redactedAt,
+        sourceDocumentId: caseLawDecisions.sourceDocumentId,
+        sourceObservedAt: caseLawDecisions.sourceObservedAt,
+        sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
+      })
+      .from(caseLawDecisions)
+      .where(inArray(caseLawDecisions.id, lockedIds));
+    if (decisions.length === 0) {
       return { type: "missing" };
     }
 
-    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
-    await tx
-      .update(caseLawDecisions)
-      .set({
-        redactedAt: decision.redactedAt ?? new Date(),
-        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-        fulltext: null,
-        sections: null,
-        documentAst: null,
-        contentHash: null,
-        // The inline raw column predates object storage; nothing writes it
-        // any more, and a row that still holds it holds the publisher's text.
-        sourceRaw: null,
-      })
-      .where(eq(caseLawDecisions.id, decisionId));
-    // Supplements carry the same personal text: those merged into this
-    // decision, and the one this row stands for. Payloads under this
-    // decision's prefix go with the sweep below; one its judgment holds is
-    // deleted by key. A supplement observed after this point finds its
-    // judgment or its own row redacted and is not kept.
-    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
-    const erasedSupplements = await tx
-      .delete(caseLawDecisionSupplements)
-      .where(
-        or(
-          eq(caseLawDecisionSupplements.decisionId, decisionId),
-          decision.sourceDocumentId === null
-            ? undefined
-            : and(
-                eq(caseLawDecisionSupplements.sourceId, decision.sourceId),
-                eq(
-                  caseLawDecisionSupplements.sourceDocumentId,
-                  decision.sourceDocumentId,
-                ),
-              ),
-        ),
-      )
-      .returning({ key: caseLawDecisionSupplements.sourceRawS3Key });
-    // A doctrine review quotes the citing decision's own text as evidence,
-    // so it goes with that text. Re-reviewing a redacted decision has no
-    // text to quote from, so nothing re-creates it. Covered by this fence's
-    // redaction exemption above, recorded in case_law_index_jobs below.
-    await tx
-      .delete(caseLawCitationDoctrineReviews)
-      .where(eq(caseLawCitationDoctrineReviews.citingDecisionId, decisionId));
-    const supplementRawKeys = erasedSupplements.flatMap(({ key }) =>
-      key !== null &&
-      classifyCaseLawRawKey(key, {
-        sourceId: decision.sourceId,
-        documentId: decisionId,
-      }) === RAW_KEY_OWNERSHIP.FOREIGN &&
-      key.startsWith(`case-law/raw/${decision.sourceId}/documents/`)
-        ? [key]
-        : [],
-    );
-    // The raw prefix is swept below and again once every write that could
-    // have started before this fence is over.
-    await enqueueCaseLawRawSweepTx(tx, {
-      decisionId,
-      sourceId: decision.sourceId,
-      firstAttemptAt: new Date(
-        Temporal.Now.instant().epochMilliseconds + RAW_SWEEP_FOLLOW_UP_MS,
-      ),
-      settleAfter: rawSweepSettleAfter(),
-    });
-    const cancelledIntents = await cancelCaseLawCorpusUploadIntents({
-      decisionId,
-      tx,
-    });
-    if (sourceLock.value !== null) {
-      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-        lock: sourceLock.value,
-        subject: { family: "case_law", entityId: decisionId },
-      });
+    if (evidence !== undefined) {
+      const requested = decisions.find(({ id }) => id === decisionId);
+      if (requested === undefined) {
+        return {
+          type: "superseded",
+          reason: REMOVAL_SUPERSEDED_REASON.IDENTITY_CHANGED,
+        };
+      }
+      const reason = supersededRemovalEvidence(evidence, requested);
+      if (reason !== null) {
+        return { type: "superseded", reason };
+      }
+      // An alias's absence cannot authorize the first redaction of another live canonical row.
+      if (
+        canonicalId !== decisionId &&
+        decisions.some(
+          ({ id, redactedAt }) => id === canonicalId && redactedAt === null,
+        )
+      ) {
+        return {
+          type: "superseded",
+          reason: REMOVAL_SUPERSEDED_REASON.CANONICAL_CHANGED,
+        };
+      }
     }
-    await runDecisionWriteExtension(tx, decisionId);
-    return { type: "fenced", cancelledIntents, decision, supplementRawKeys };
+
+    const pendingFenceResults = [];
+    for (const decision of decisions) {
+      const { sourceLock, subject } =
+        lockedSubjects.find(
+          (locked) => locked.subject.entityId === decision.id,
+        ) ??
+        panic(
+          `Redaction fence read ${decision.id} without its projection lock`,
+        );
+      pendingFenceResults.push(
+        (async () => {
+          // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+          await tx
+            .update(caseLawDecisions)
+            .set({
+              redactedAt: decision.redactedAt ?? new Date(),
+              corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+              fulltext: null,
+              sections: null,
+              documentAst: null,
+              contentHash: null,
+              // The inline raw column predates object storage; nothing writes it
+              // any more, and a row that still holds it holds the publisher's text.
+              sourceRaw: null,
+            })
+            .where(eq(caseLawDecisions.id, decision.id));
+          // Supplements carry the same personal text: those merged into this
+          // decision, and the one this row stands for. Payloads under this
+          // decision's prefix go with the sweep below; one its judgment holds is
+          // deleted by key. A supplement observed after this point finds its
+          // judgment or its own row redacted and is not kept.
+          // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+          const erasedSupplements = await tx
+            .delete(caseLawDecisionSupplements)
+            .where(
+              or(
+                eq(caseLawDecisionSupplements.decisionId, decision.id),
+                decision.sourceDocumentId === null
+                  ? undefined
+                  : and(
+                      eq(
+                        caseLawDecisionSupplements.sourceId,
+                        decision.sourceId,
+                      ),
+                      eq(
+                        caseLawDecisionSupplements.sourceDocumentId,
+                        decision.sourceDocumentId,
+                      ),
+                    ),
+              ),
+            )
+            .returning({ key: caseLawDecisionSupplements.sourceRawS3Key });
+          // A doctrine review quotes the citing decision's own text as evidence,
+          // so it goes with that text. Re-reviewing a redacted decision has no
+          // text to quote from, so nothing re-creates it. Covered by this fence's
+          // redaction exemption above, recorded in case_law_index_jobs below.
+          await tx
+            .delete(caseLawCitationDoctrineReviews)
+            .where(
+              eq(caseLawCitationDoctrineReviews.citingDecisionId, decision.id),
+            );
+          const supplementRawKeys = erasedSupplements.flatMap(({ key }) =>
+            key !== null &&
+            classifyCaseLawRawKey(key, {
+              sourceId: decision.sourceId,
+              documentId: decision.id,
+            }) === RAW_KEY_OWNERSHIP.FOREIGN &&
+            key.startsWith(`case-law/raw/${decision.sourceId}/documents/`)
+              ? [key]
+              : [],
+          );
+          // The raw prefix is swept below and again once every write that could
+          // have started before this fence is over.
+          await enqueueCaseLawRawSweepTx(tx, {
+            decisionId: decision.id,
+            sourceId: decision.sourceId,
+            firstAttemptAt: new Date(
+              Temporal.Now.instant().epochMilliseconds + RAW_SWEEP_FOLLOW_UP_MS,
+            ),
+            settleAfter: rawSweepSettleAfter(),
+          });
+          const cancelledIntents = await cancelCaseLawCorpusUploadIntents({
+            decisionId: decision.id,
+            tx,
+          });
+          if (sourceLock !== null) {
+            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+              lock: sourceLock,
+              subject,
+            });
+          }
+          await runDecisionWriteExtension(tx, decision.id);
+          return { cancelledIntents, decision, supplementRawKeys };
+        })(),
+      );
+    }
+    return {
+      type: "fenced",
+      canonicalId,
+      decisions: await Promise.all(pendingFenceResults),
+    };
   });
 
   switch (fenced.type) {
     case "fenced":
       break;
+    case "superseded":
+      return Result.ok({ type: "superseded", reason: fenced.reason });
     case "missing":
       return Result.ok({ type: "not-found" });
     case "lock-failed":
@@ -439,7 +549,57 @@ export const redactCaseLawDecision = async ({
       fenced satisfies never;
       return panic(`Unhandled fence: ${String(fenced)}`);
   }
-  const { cancelledIntents, decision, supplementRawKeys } = fenced;
+  const primary = fenced.decisions.find(
+    ({ decision }) => decision.id === fenced.canonicalId,
+  );
+  if (primary === undefined) {
+    return panic(
+      `Redaction fence omitted canonical decision ${fenced.canonicalId}`,
+    );
+  }
+  const aliasDecisions = fenced.decisions.filter(
+    ({ decision }) => decision.id !== fenced.canonicalId,
+  );
+  const pendingAliasOutcomes = [];
+  for (const alias of aliasDecisions) {
+    pendingAliasOutcomes.push(
+      eraseFencedDecision({
+        fenced: alias,
+        scopedDb,
+        deleteCorpus,
+        sweepRaw,
+      }),
+    );
+  }
+  const aliasOutcomes = await Promise.all(pendingAliasOutcomes);
+  const incompleteAlias = aliasOutcomes.find(
+    (outcome) => outcome.type === "corpus-objects-remain",
+  );
+  const primaryOutcome = await eraseFencedDecision({
+    fenced: primary,
+    scopedDb,
+    deleteCorpus,
+    sweepRaw,
+  });
+  return Result.ok(incompleteAlias ?? primaryOutcome);
+};
+
+type EraseFencedDecisionOptions = {
+  fenced: FencedDecision;
+  scopedDb: ScopedDb;
+  deleteCorpus: typeof deleteCorpusDocument;
+  sweepRaw: typeof sweepCaseLawRawDecision;
+};
+
+const eraseFencedDecision = async ({
+  fenced: { cancelledIntents, decision, supplementRawKeys },
+  scopedDb,
+  deleteCorpus,
+  sweepRaw,
+}: EraseFencedDecisionOptions): Promise<
+  Exclude<RedactCaseLawDecisionOutcome, { type: "not-found" | "superseded" }>
+> => {
+  const decisionId = decision.id;
 
   // 1. pg-fts projection.
   await removeDecisionFromIndex(decisionId, scopedDb);
@@ -471,10 +631,16 @@ export const redactCaseLawDecision = async ({
       deleteCorpus,
     });
     if (corpusErasure.type === "incomplete") {
-      captureError(corpusErasure.error, {
-        decisionId,
-        step: "redactCaseLawDecision.deleteCorpusDocument",
-      });
+      captureError(
+        corpusErasure.error,
+        handlerErrorContext(
+          "caselaw.redactCaseLawDecision.corpusErasure_error",
+          {
+            decisionId,
+            step: "redactCaseLawDecision.deleteCorpusDocument",
+          },
+        ),
+      );
       await recordFailedRedactionAudit({
         decisionId,
         error: corpusErasure.error,
@@ -497,10 +663,13 @@ export const redactCaseLawDecision = async ({
     deleteCorpus,
   });
   for (const { error } of incomplete) {
-    captureError(error, {
-      decisionId,
-      step: "redactCaseLawDecision.deleteReservedCorpusUpload",
-    });
+    captureError(
+      error,
+      handlerErrorContext("caselaw.redactCaseLawDecision", {
+        decisionId,
+        step: "redactCaseLawDecision.deleteReservedCorpusUpload",
+      }),
+    );
   }
   const intentCleanup = await Result.tryPromise({
     try: async () =>
@@ -511,10 +680,13 @@ export const redactCaseLawDecision = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(intentCleanup)) {
-    captureError(intentCleanup.error, {
-      decisionId,
-      step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
-    });
+    captureError(
+      intentCleanup.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.intentCleanup_error", {
+        decisionId,
+        step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
+      }),
+    );
   }
 
   // The publisher's own payloads and files carry the same text as the
@@ -557,10 +729,13 @@ export const redactCaseLawDecision = async ({
     return { type: "swept", legacyRaw: rawSwept.value.legacy };
   })();
   if (rawErasure.type === "incomplete") {
-    captureError(rawErasure.error, {
-      decisionId,
-      step: "redactCaseLawDecision.sweepSourceRaw",
-    });
+    captureError(
+      rawErasure.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.rawErasure_error", {
+        decisionId,
+        step: "redactCaseLawDecision.sweepSourceRaw",
+      }),
+    );
     await recordFailedRedactionAudit({
       decisionId,
       error: rawErasure.error,
@@ -584,22 +759,26 @@ export const redactCaseLawDecision = async ({
           sourceRawContentType: null,
         })
         .where(eq(caseLawDecisions.id, decisionId));
+      await tx
+        .update(caseLawDecisionSourceIdentities)
+        .set({ sourceRawS3Key: null, sourceRawContentType: null })
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId));
       await runDecisionWriteExtension(tx, decisionId);
     });
   }
 
   if (corpusErasure.type === "incomplete") {
     // The failed audit row recorded above is the record of this erasure.
-    return Result.ok({
+    return {
       type: "corpus-objects-remain",
       error: corpusErasure.error,
-    });
+    };
   }
   if (rawErasure.type === "incomplete") {
-    return Result.ok({
+    return {
       type: "corpus-objects-remain",
       error: rawErasure.error,
-    });
+    };
   }
 
   const detail =
@@ -625,9 +804,9 @@ export const redactCaseLawDecision = async ({
     }),
   );
 
-  return Result.ok({
+  return {
     type: "redacted",
     erasure: corpusErasure.type,
     legacyRaw: rawErasure.legacyRaw,
-  });
+  };
 };

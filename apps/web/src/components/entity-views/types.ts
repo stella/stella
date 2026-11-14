@@ -5,8 +5,7 @@ import type { InboxSignal } from "@/lib/inbox/queries";
 import type { WorkspaceEntity } from "@/lib/types";
 
 export type EntityViewScope =
-  | { type: "matter"; matterId: string }
-  | { type: "organization" };
+  { type: "matter"; matterId: string } | { type: "organization" };
 
 /** The work a signal proposes, as the server's window typed it. */
 const PROPOSAL_TYPES = ["task", "deadline"] as const;

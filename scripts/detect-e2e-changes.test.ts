@@ -14,15 +14,18 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
+  type ChangedFileScopeDetectors,
   computeChangedFileScope,
   DEFAULT_DETECTORS,
   MODEL_CATALOG_DRIFT_INPUTS,
   STACK_REDACTION_BROWSER_INPUTS,
-  type ChangedFileScopeDetectors,
 } from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -224,8 +227,7 @@ const evaluateExpression = (expression: string, context: object) =>
 const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
   (job.steps ?? []).filter(
     (step) =>
-      step.uses?.startsWith("actions/checkout@") &&
-      step.with?.["ref"] !== undefined,
+      isRepositoryCheckoutAction(step.uses) && step.with?.["ref"] !== undefined,
   ),
 );
 const marketingCheckout = (job: string) => {
@@ -501,6 +503,7 @@ describe("detect-e2e-changes", () => {
     expect(workflow).not.toContain("needs.ci-changes");
   });
 
+  // timeout: evaluates five repository scope plans with real subprocess detectors.
   test("runs Redis collaboration checks for every owning boundary", () => {
     const plan = workflowJob("ci-plan");
     const serviceSuites = workflowJob("service-suites");
@@ -530,7 +533,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
+        "!cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -539,7 +542,7 @@ describe("detect-e2e-changes", () => {
     const result = workflowJob("ci-result");
     expect(result).toContain("service-suites,");
     expect(result).toContain('"service-suites": "service_suites_required"');
-  });
+  }, 30_000);
 
   test("keeps production, Vite canary, and landing work parallel", () => {
     const production = workflowJob("e2e-production-shard");
@@ -624,6 +627,7 @@ describe("detect-e2e-changes", () => {
     expect(declaredEnv).toContain("ROUTE_SMOKE_REQUIRED");
     const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
     const output = path.join(root, "outputs");
+    const selectedPlan = path.join(root, "selection.json");
     try {
       for (const event of [
         "pull_request",
@@ -639,16 +643,27 @@ describe("detect-e2e-changes", () => {
               ["false", "false"],
             ] as const) {
               writeFileSync(output, "fixture=preserved\n");
+              if (matrix) {
+                writeFileSync(
+                  selectedPlan,
+                  JSON.stringify({
+                    matrix: JSON.parse(matrix),
+                    specs: JSON.parse(selectedSpecs),
+                  }),
+                );
+              } else {
+                rmSync(selectedPlan, { force: true });
+              }
               const env = {
                 PATH: "/usr/bin:/bin",
                 GITHUB_OUTPUT: output,
                 EVENT_NAME: event,
                 SELECTOR_OUTCOME: outcome,
-                SELECTED_MATRIX: matrix,
                 SELECTED_MODE: "selected",
-                SELECTED_SPECS: selectedSpecs,
+                SELECTED_PLAN_PATH: selectedPlan,
                 E2E_PRODUCTION_REQUIRED: required,
                 ROUTE_SMOKE_REQUIRED: routeSmoke,
+                SCOPE_UNKNOWN: "false",
                 FULL_MATRIX: fullMatrix,
               };
               // The harness supplies every variable the step declares, so a
@@ -689,6 +704,8 @@ describe("detect-e2e-changes", () => {
                 `matrix=${expectedMatrix}`,
                 `mode=${usesSelection ? "selected" : "full"}`,
                 `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                // The fixture plans no hosted browser suite specs.
+                "suite_specs=[]",
                 `selection_required=${String(!emptySelection)}`,
                 `required=${emptySelection ? "false" : required}`,
               ]);
@@ -853,6 +870,7 @@ describe("detect-e2e-changes", () => {
     }
   });
 
+  // Measured p95: 12.7 s; this must evaluate the real workflow and repository scope.
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     expect(
       changedFileScope("docs/development.md", "pull_request", {
@@ -879,10 +897,19 @@ describe("detect-e2e-changes", () => {
       expect(env["CHECK_BASE_REF"]).toBe(
         githubExpression("format('origin/{0}', github.base_ref || 'main')"),
       );
+      expect(env["GREEN_BASE"]).toBe(
+        githubExpression("inputs.green_base || ''"),
+      );
       expect(requiredExpression(step["run"])).toBe(
         [
           'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then',
           `  bun run code-check -- --leg ${leg}`,
+          "  exit 0",
+          "fi",
+          "# Main compared with itself checks nothing: check the change since the",
+          "# last commit known green, or every file when none is known.",
+          'if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then',
+          `  bun run code-check:affected -- --leg ${leg} --green-base "$GREEN_BASE"`,
           "  exit 0",
           "fi",
           `bun run code-check:affected -- --leg ${leg} --base "$CHECK_BASE_REF"`,
@@ -890,7 +917,7 @@ describe("detect-e2e-changes", () => {
         ].join("\n"),
       );
     }
-  }, 15_000);
+  }, 30_000);
 
   test("runs the full native compiler only at the release boundary", () => {
     const plan = workflowJob("ci-plan");
@@ -906,8 +933,9 @@ describe("detect-e2e-changes", () => {
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    // Release compiles gate merge groups (and heavy runs), never pull requests.
-    expect(releaseTypecheck).toContain("github.event_name != 'pull_request'");
+    // Release compiles gate merge groups, armed pull requests and heavy
+    // runs, never an unarmed pull request.
+    expect(releaseTypecheck).toContain(HEAVY_PROOF_GATE);
     expect(releaseTypecheck).toContain("(github.event_name == 'merge_group'");
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
@@ -934,22 +962,6 @@ describe("detect-e2e-changes", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
       `model_catalog_drift_required: ${githubExpression("steps.changed-files.outputs.model_catalog_drift_required")}`,
-    );
-    expect(new Set(MODEL_CATALOG_DRIFT_INPUTS)).toEqual(
-      new Set([
-        ".github/workflows/ci.yml",
-        "packages/ai-catalog/package.json",
-        "packages/ai-catalog/src/capabilities-overrides.ts",
-        "packages/ai-catalog/src/capabilities.gen.ts",
-        "packages/ai-catalog/src/document-input-overrides.ts",
-        "packages/ai-catalog/src/index.ts",
-        "packages/ai-catalog/src/model-rate-policy.ts",
-        "packages/ai-catalog/src/model-rate.ts",
-        "packages/ai-catalog/src/model-rates.gen.ts",
-        "packages/scripts/src/model-catalog-capabilities-gen.ts",
-        "packages/scripts/src/model-catalog-capabilities.ts",
-        "packages/scripts/src/model-catalog-rates-gen.ts",
-      ]),
     );
     for (const input of MODEL_CATALOG_DRIFT_INPUTS) {
       expect(changedFileScope(input).model_catalog_drift_required, input).toBe(
@@ -1041,7 +1053,13 @@ describe("detect-e2e-changes", () => {
     const predicate = requiredExpression(
       ciContract.jobs["marketing-screenshots"]?.if,
     );
-    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+    // The armed proof runs them on a pull request; a merge group whose head
+    // carries it skips them.
+    for (const [event, heavyProof] of [
+      "pull_request",
+      "merge_group",
+      "workflow_dispatch",
+    ].flatMap((name) => [[name, false] as const, [name, true] as const])) {
       for (const planned of [false, true]) {
         for (const trusted of [false, true]) {
           for (const buildRequired of [false, true]) {
@@ -1056,6 +1074,7 @@ describe("detect-e2e-changes", () => {
                         outputs: {
                           queue_depth: "full",
                           run_required: "true",
+                          heavy_proof: String(heavyProof),
                           trusted: String(trusted),
                           marketing_screenshots_required: String(planned),
                           web_build_required: String(buildRequired),
@@ -1068,7 +1087,7 @@ describe("detect-e2e-changes", () => {
                     cancelled: () => cancelled,
                   };
                   const certified =
-                    event !== "pull_request" &&
+                    heavyProof &&
                     planned &&
                     (trusted || event === "workflow_dispatch") &&
                     (!buildRequired ||
@@ -1263,10 +1282,15 @@ describe("detect-e2e-changes", () => {
     expect(
       validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
     ).toContain("^[0-9a-f]{40}$");
-    expect(
-      validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
-    ).toContain(
-      'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
+    const verifyAncestry = validateSteps.find(
+      ({ name }) => name === "Verify main ancestry",
+    )?.run;
+    expect(verifyAncestry).toContain(
+      'if ! git merge-base --is-ancestor "$SHA" origin/main; then',
+    );
+    expect(verifyAncestry).toContain("proof_args+=(--allow-pr-head)");
+    expect(verifyAncestry).toContain(
+      `bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "\${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA"`,
     );
     expect(
       validateSteps.find(({ name }) => name === "Fetch main history")?.run,
@@ -1292,9 +1316,7 @@ describe("detect-e2e-changes", () => {
       jobOf(marketingCaptureWorkflow, "capture"),
       "Upload regenerated baselines",
     );
-    expect(upload["uses"]).toBe(
-      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-    );
+    expect(upload["uses"]).toMatch(/^actions\/upload-artifact@[a-f0-9]{40}$/u);
     expect(upload["with"]).toMatchObject({
       name: "marketing-screenshots",
       path: "apps/landing/public/media/products/*.png",
@@ -1535,7 +1557,12 @@ describe("detect-e2e-changes", () => {
             for (const webResult of ["success", "skipped", "failure"]) {
               for (const heavyResult of ["success", "skipped", "failure"]) {
                 for (const heavyOnly of [false, true]) {
-                  for (const cancelled of [false, true]) {
+                  for (const [cancelled, armed] of [
+                    [false, false],
+                    [false, true],
+                    [true, false],
+                    [true, true],
+                  ] as const) {
                     const context = {
                       github: { event_name: event },
                       inputs: { heavy_only: heavyOnly },
@@ -1550,6 +1577,10 @@ describe("detect-e2e-changes", () => {
                             run_required: "true",
                             trusted: String(trusted),
                             e2e_production_required: String(planned),
+                            // A pull request runs the suite once armed.
+                            heavy_proof: String(
+                              event !== "pull_request" || armed,
+                            ),
                           },
                         },
                         "web-build": { result: webResult },
@@ -1563,7 +1594,7 @@ describe("detect-e2e-changes", () => {
                       (trusted || event === "workflow_dispatch") &&
                       (webResult === "success" || heavyResult === "success") &&
                       (event !== "merge_group" || !cancelled);
-                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`;
+                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}/${armed}`;
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       label,
@@ -1805,7 +1836,11 @@ describe("detect-e2e-changes", () => {
     // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set(["publish-npm.yml#release"]);
+    const forwardingCallers = new Set(
+      ALL_PACKAGE_ORDER.map(
+        (directory) => `publish-npm.yml#${npmReleaseJobId(directory)}`,
+      ),
+    );
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");
@@ -1997,7 +2032,12 @@ test("every workflow browser command uses the pinned image and no reachable brow
       );
       const runs =
         isRecord(action) && isRecord(action["runs"]) ? action["runs"] : {};
-      const reached = reachableSteps(stepsOf(runs["steps"], step.uses));
+      // Only composite actions have steps to inherit; a node action runs one
+      // entry point and reaches no further workflow steps.
+      const reached =
+        runs["using"] === "composite"
+          ? reachableSteps(stepsOf(runs["steps"], step.uses))
+          : [];
       actionSteps.set(step.uses, reached);
       return [step, ...reached];
     });

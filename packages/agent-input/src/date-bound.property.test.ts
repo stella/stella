@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { parsePlainDate } from "@stll/time";
 
 import { normalizeDateBound } from "./date-value";
@@ -18,18 +18,20 @@ const valueOf = (
 
 describe("date range bounds", () => {
   test("a bare year reads as its first day from, and its last day to", () => {
-    fc.assert(
+    assertProperty(
+      "a bare year reads as its first day from, and its last day to",
       fc.property(yearArb, boundArb, (year, bound) => {
         expect(valueOf(normalizeDateBound(String(year), { bound }))).toBe(
           bound === "start" ? `${year}-01-01` : `${year}-12-31`,
         );
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("a year and month read as the month's first or last real day", () => {
-    fc.assert(
+    assertProperty(
+      "a year and month read as the month's first or last real day",
       fc.property(
         yearArb,
         monthArb,
@@ -53,12 +55,13 @@ describe("date range bounds", () => {
           expect(last?.add({ days: 1 }).month).not.toBe(month);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a date in a sentinel year is no bound", () => {
-    fc.assert(
+    assertProperty(
+      "a date in a sentinel year is no bound",
       fc.property(
         fc.oneof(
           fc.integer({ min: 1, max: 999 }),
@@ -72,12 +75,13 @@ describe("date range bounds", () => {
           expect(normalizeDateBound(iso, { bound }).ok).toBe("absent");
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("an ISO date passes through unchanged with nothing to report", () => {
-    fc.assert(
+    assertProperty(
+      "an ISO date passes through unchanged with nothing to report",
       fc.property(
         fc.date({
           min: new Date(Date.UTC(1000, 0, 1)),
@@ -93,7 +97,7 @@ describe("date range bounds", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

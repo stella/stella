@@ -4,6 +4,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  canUndoLocalFilesOf,
   isChatTurnGenerating,
 } from "@/components/chat/chat-user-actions";
 import type { UnnamedChatSessionHandler } from "@/components/chat/chat-user-actions";
@@ -35,10 +36,40 @@ describe("assistant message actions", () => {
     expect(
       ["a1", "a2"].flatMap((messageId) =>
         [false, true].map((isGenerating) =>
-          canRetryAssistantMessage({ isGenerating, messageId, messages }),
+          canRetryAssistantMessage({
+            error: undefined,
+            isGenerating,
+            messageId,
+            messages,
+          }),
         ),
       ),
     ).toEqual([false, false, true, false]);
+  });
+
+  test("hold retry back while the answer waits on the user", () => {
+    const pendingApproval = {
+      approval: { id: "approval-1", needsApproval: true },
+      arguments: "{}",
+      id: "call-1",
+      input: {},
+      name: "save_document",
+      state: "approval-requested",
+      type: "tool-call",
+    } satisfies PersistedChatMessage["parts"][number];
+    const canRetry = (parts: PersistedChatMessage["parts"]) =>
+      canRetryAssistantMessage({
+        error: undefined,
+        isGenerating: false,
+        messageId: "a1",
+        messages: [
+          message("u1", "user"),
+          { ...message("a1", "assistant"), parts },
+        ],
+      });
+
+    expect(canRetry([])).toBe(true);
+    expect(canRetry([pendingApproval])).toBe(false);
   });
 
   test("offer a fork on every answer but a running latest one", () => {
@@ -49,6 +80,42 @@ describe("assistant message actions", () => {
         ),
       ),
     ).toEqual([true, true, true, false]);
+  });
+});
+
+describe("undoing a local turn's file changes", () => {
+  test("is offered only while nothing runs and no prompt follows the answer", () => {
+    const answered = [message("u1", "user"), message("a1", "assistant")];
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: false,
+        messageId: "a1",
+        messages: answered,
+      }),
+    ).toBe(true);
+    // A send appends the member's prompt before its turn starts.
+    const sent = [...answered, message("u2", "user")];
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: false,
+        messageId: "a1",
+        messages: sent,
+      }),
+    ).toBe(false);
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: true,
+        messageId: "a1",
+        messages: answered,
+      }),
+    ).toBe(false);
+    expect(
+      canUndoLocalFilesOf({
+        isGenerating: false,
+        messageId: "missing",
+        messages: answered,
+      }),
+    ).toBe(false);
   });
 });
 

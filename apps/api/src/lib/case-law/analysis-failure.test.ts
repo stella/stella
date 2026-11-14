@@ -7,11 +7,11 @@ import {
   ANALYSIS_FAILURE_HOLD_MS,
   analysisFailureKeyTag,
   analysisFailureRecord,
+  type AnalysisReaderKey,
+  type AnalysisRequestKind,
   failureClaimGuard,
   failureMatchesGuard,
   failureStillHolds,
-  type AnalysisReaderKey,
-  type AnalysisRequestKind,
 } from "./analysis-failure";
 
 const NOW = new Date("2026-09-01T12:00:00.000Z");

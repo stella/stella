@@ -12,6 +12,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { WORK_OBLIGATION_TRANSITION_AUDIT_ACTION } from "@/api/lib/work-obligations/transitions";
 import type {
   WorkObligationTransitionAction,
@@ -83,7 +84,7 @@ export const settleWorkObligation = async ({
       and(
         eq(entities.id, entityId),
         eq(entities.workspaceId, workspaceId),
-        eq(entities.kind, "task"),
+        workTask(entities),
       ),
     );
 

@@ -1,13 +1,16 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { SEARCH_BOE_LEGISLATION_PROJECTION } from "@/api/lib/chat/projections";
+import { parseStrippingUndeclaredKeys } from "@/api/lib/chat/tool-output-degrade";
 import type { MemberRole } from "@/api/lib/member-roles";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -18,7 +21,9 @@ import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -27,28 +32,31 @@ const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 // A DB accessor that fails the test if any handler reaches it. Every assertion
 // here exercises authorization or input validation, which must reject before
 // the tool touches the database.
-const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-  throw new Error("database must not be reached in a rejection path");
-});
+const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+  () => {
+    throw new Error("database must not be reached in a rejection path");
+  },
+);
 
 const createContext = (
   memberRole: MemberRole = "owner",
-): McpRequestContext => ({
-  accessibleWorkspaceIds: [],
-  accessibleWorkspaceIdSet: new Set(),
-  accessibleWorkspaceStatusById: new Map(),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: async () => {},
-  safeDb: toSafeDbMock(throwingScopedDb),
-  scopedDb: throwingScopedDb,
-  // The MCP transport holds a permit for every request (`context.ts`).
-  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: async () => {},
+    safeDb: toSafeDbMock(throwingScopedDb),
+    scopedDb: throwingScopedDb,
+    // The MCP transport holds a permit for every request (`context.ts`).
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -242,6 +250,48 @@ describe("search_boe_legislation feature gating", () => {
       "Provide law_id to read a law, or at least one search filter",
     );
   });
+
+  test("declares every field of a search hit in the output contract", async () => {
+    const searchConsolidatedLegislation = mock(async () => ({
+      data: [
+        {
+          identificador: "BOE-A-2000-1",
+          titulo: "Ley de ejemplo",
+          fecha_actualizacion: "20000102T000000Z",
+          fecha_disposicion: "20000101",
+          fecha_publicacion: "20000102",
+          fecha_vigencia: "20000103",
+          numero_oficial: "1/2000",
+          diario: "Boletín Oficial del Estado",
+          diario_numero: "1",
+          vigencia_agotada: "N",
+          ambito: { codigo: "1", texto: "Estatal" },
+          departamento: { codigo: "1", texto: "Departamento" },
+          rango: { codigo: "1", texto: "Ley" },
+          estado_consolidacion: { codigo: "3", texto: "Finalizado" },
+          url_eli: "https://www.boe.es/eli/es/l/2000/01/01/1",
+          url_html_consolidada:
+            "https://www.boe.es/buscar/act.php?id=BOE-A-2000-1",
+        },
+      ],
+      status: { code: "200", text: "ok" },
+    }));
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
+      args: { query: "ejemplo" },
+      context: {
+        ...createContext("owner"),
+        testDependencies: { searchConsolidatedLegislation },
+      },
+    });
+    if (isMcpEgressPlan(result) || result.status !== "success") {
+      throw new Error("expected a successful search");
+    }
+    const parsed = parseStrippingUndeclaredKeys(
+      SEARCH_BOE_LEGISLATION_PROJECTION,
+      result.data,
+    );
+    expect(Result.isOk(parsed) && parsed.value.undeclaredPaths).toEqual([]);
+  });
 });
 
 describe("matter membership and organization settings", () => {
@@ -342,6 +392,39 @@ describe("matter membership and organization settings", () => {
       definitions.find((tool) => tool.name === "remove_matter_member")
         ?.destructiveBehavior,
     ).toEqual({ type: "always" });
+  });
+
+  // Organization AI instructions stay off the curated tool, which keeps the
+  // connect-time tool list within budget; agents reach them on demand through
+  // the organization-settings.update capability instead.
+  test("AI instructions are written through the settings capability, not the curated tool", async () => {
+    expect(
+      errorText(
+        await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
+          args: { ai_instructions: "Use concise language." },
+          context: createContext(),
+        }),
+      ),
+    ).toContain("validation_error");
+    const entry = readCapabilityCatalog().find(
+      (candidate) =>
+        typeof candidate === "object" &&
+        candidate !== null &&
+        "id" in candidate &&
+        candidate.id === "organization-settings.update",
+    );
+    expect(entry).toMatchObject({
+      inputSchema: {
+        body: {
+          properties: {
+            aiInstructions: {
+              type: "string",
+              maxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+            },
+          },
+        },
+      },
+    });
   });
 
   test("settings reject empty updates, unpaired numbering, and member fields", async () => {

@@ -51,7 +51,7 @@ export const AnonymizedSpan = ({
       <span
         aria-label={label}
         className={cn(
-          "bg-info/12 text-info rounded px-1 align-baseline select-all",
+          "bg-info/12 text-info rounded-sm px-1 align-baseline select-all",
           className,
         )}
         role="group"

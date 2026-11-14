@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { envFeatureAccess } from "@/api/env-feature-access";
+import { readFeatureAccessGrants } from "@/api/env-feature-access";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import {
@@ -27,7 +27,7 @@ export const featureAccessReadPlan = ({
   organizationId,
   enrolmentSource = "database",
   registry = FEATURE_REGISTRY,
-  grants = envFeatureAccess.API_FEATURE_ACCESS_GRANTS,
+  grants = readFeatureAccessGrants().grants,
 }: FeatureAccessReadPlanOptions) => {
   const definitions = new Map(Object.entries(registry));
   const enrolmentKind = (id: string) =>
@@ -98,7 +98,7 @@ export const buildFeatureAccessSnapshot = ({
   identity,
   enrolments,
   registry = FEATURE_REGISTRY,
-  grants = envFeatureAccess.API_FEATURE_ACCESS_GRANTS,
+  grants = readFeatureAccessGrants().grants,
 }: BuildFeatureAccessSnapshotOptions): FeatureAccessSnapshot => {
   const decisions = new Map<string, FeatureAccessDecision>();
   for (const featureId of Object.keys(registry)) {

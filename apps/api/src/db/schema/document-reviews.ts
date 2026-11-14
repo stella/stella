@@ -1,14 +1,19 @@
 import { sql } from "drizzle-orm";
 
+import { REVIEW_DECISION } from "@stll/api-contract/review-decision";
+import type { ReviewDecision } from "@stll/api-contract/review-decision";
+
 import { REVIEW_SKIPPED_MAX } from "@/api/lib/document-review/contract";
 import type {
   ReviewParty,
   ReviewSkippedTerm,
+  ReviewWithheldSource,
 } from "@/api/lib/document-review/contract";
 import {
-  DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_APPLICATION_STATUS,
+  DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_DECISION,
+  DOCUMENT_REVIEW_DECISION_REASON_MAX,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_FINDING_FLAGS,
   DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
@@ -39,8 +44,10 @@ import {
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  stella,
   timestamptz,
   user,
+  workspaceCheck,
   wsOrganizationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -62,6 +69,7 @@ const PIN_PROVENANCE_SQL_VALUES = quoted(PLAYBOOK_PIN_PROVENANCES);
 const OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES);
 
 const DECISION_SQL_VALUES = quoted(DOCUMENT_REVIEW_DECISIONS);
+const REVIEW_DECISION_SQL_VALUES = quoted(REVIEW_DECISION);
 const FINDING_FLAG_SQL_VALUES = quoted(DOCUMENT_REVIEW_FINDING_FLAGS);
 const APPLICATION_STATUS_SQL_VALUES = quoted(
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
@@ -111,6 +119,12 @@ export const documentReviewRuns = p.pgTable(
     // the other half were compliant, and that stays true when the review is
     // reopened tomorrow. Empty for a run with no proposal behind it.
     skipped: jsonb().$type<ReviewSkippedTerm[]>().notNull().default([]),
+    // Sources this run read only in part because they exceed the model's
+    // request budget. Sizes only, never text. Empty when all were read whole.
+    withheldSources: jsonb("withheld_sources")
+      .$type<ReviewWithheldSource[]>()
+      .notNull()
+      .default([]),
     status: p
       .text("status", { enum: DOCUMENT_REVIEW_RUN_STATUSES })
       .notNull()
@@ -125,9 +139,18 @@ export const documentReviewRuns = p.pgTable(
       .text("executor", { enum: DOCUMENT_REVIEW_RUN_EXECUTORS })
       .notNull()
       .default(DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
+    // Whether the run counts against the organization's document review
+    // caps (`lib/usage/model-run-caps`): a review a person starts on one document
+    // does; a playbook run over a table of documents is admitted as one batch
+    // and does not. Set when the run is inserted and never changed, so the
+    // triggers that charge and free the counter see the same answer.
+    orgCapped: p.boolean("org_capped").notNull().default(false),
     // Coarse progress over the expected finding set (see `expectedFindings`).
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
+    // Fixes the run did not stage because the requester could not open every
+    // matter its reference text came from, so the panel can say why.
+    fixesWithheld: p.integer("fixes_withheld").notNull().default(0),
     requestedBy: p
       .text("requested_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -363,6 +386,69 @@ export const documentReviewFindings = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("document_review_findings", { columns: table }),
+  ],
+);
+
+/** Immutable reviewer decisions. The finding row remains the current-state
+ * projection; these rows preserve every transition, including reopening. */
+export const documentReviewFindingDecisions = p.pgTable(
+  "document_review_finding_decisions",
+  {
+    id: pUuid<"documentReviewFindingDecision">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    findingId: safeUuid<"documentReviewFinding">("finding_id").notNull(),
+    decision: p.text("decision").$type<ReviewDecision | null>(),
+    reason: p.text("reason"),
+    actorId: p
+      .text("actor_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    // Named here: the derived name is longer than Postgres keeps.
+    p
+      .foreignKey({
+        name: "document_review_finding_decisions_finding_fk",
+        columns: [table.findingId],
+        foreignColumns: [documentReviewFindings.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("document_review_finding_decisions_finding_created_idx")
+      .on(table.findingId, table.createdAt),
+    p.check(
+      "document_review_finding_decisions_decision_check",
+      sql`${table.decision} IS NULL OR ${table.decision} IN (${REVIEW_DECISION_SQL_VALUES})`,
+    ),
+    p.check(
+      "document_review_finding_decisions_reason_length_check",
+      sql`${table.reason} IS NULL OR char_length(${table.reason}) <= ${sql.raw(String(DOCUMENT_REVIEW_DECISION_REASON_MAX))}`,
+    ),
+    p.pgPolicy("document_review_finding_decisions_workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("document_review_finding_decisions_workspace_insert", {
+      for: "insert",
+      to: stella,
+      // The foreign key checks only the finding's id: the finding must also
+      // be in the event's workspace, or one workspace could write another's
+      // history. Outer columns are named by table, since both have them.
+      withCheck: sql`(${workspaceCheck}) AND EXISTS (
+        SELECT 1 FROM public.document_review_findings decided_finding
+        WHERE decided_finding.id = document_review_finding_decisions.finding_id
+          AND decided_finding.workspace_id = document_review_finding_decisions.workspace_id
+      )`,
+    }),
+    p.pgPolicy("document_review_finding_decisions_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.document_review_finding_decisions'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.document_review_finding_decisions'::regclass)`,
+    }),
   ],
 );
 

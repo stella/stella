@@ -3,7 +3,10 @@
  * themselves so a step module can name it without importing the runner.
  */
 
-import { Result, TaggedError } from "better-result";
+import { TaggedError } from "better-result";
+import type { Result } from "better-result";
+
+import { runReadCommittedUnit } from "@/api/lib/db/read-committed-unit";
 
 /**
  * A bound parameter. Scalars only: the scheduler binds through Bun SQL's
@@ -34,8 +37,7 @@ export type ProvisionBackfillSession = {
 };
 
 export type ProvisionBackfillCompletion =
-  | { reason: string; type: "incomplete" }
-  | { type: "complete" };
+  { reason: string; type: "incomplete" } | { type: "complete" };
 
 /**
  * How much of a run one unit may take: a keyset page (many per run, until the
@@ -88,17 +90,12 @@ export const inBackfillTransaction = async (
   if (session.runUnit !== undefined) {
     return await session.runUnit({ lockTimeout, statementTimeout }, work);
   }
-  await session.execute("BEGIN");
-  const unit = await Result.tryPromise({
-    try: async () => {
-      await session.setTransactionBudget({
-        lockTimeout,
-        statementTimeout,
-      });
-      await work();
-      await session.execute("COMMIT");
-    },
-    catch: (cause) =>
+  const unit = await runReadCommittedUnit(session, async () => {
+    await session.setTransactionBudget({ lockTimeout, statementTimeout });
+    await work();
+  });
+  return unit.mapError(
+    (cause) =>
       new ProvisionBackfillUnitError({
         message:
           cause instanceof Error
@@ -106,9 +103,5 @@ export const inBackfillTransaction = async (
             : "a provision backfill unit failed",
         cause,
       }),
-  });
-  if (unit.isErr()) {
-    await session.execute("ROLLBACK");
-  }
-  return unit;
+  );
 };

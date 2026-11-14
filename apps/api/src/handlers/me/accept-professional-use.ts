@@ -1,15 +1,16 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 
+import { PROFESSIONAL_USE_ACCEPTANCE_SOURCE } from "@/api/db/schema";
 import { professionalUseResponse } from "@/api/handlers/me/professional-use";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
-import { acceptAccountProfessionalUse } from "@/api/lib/auth/professional-use";
+import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -17,10 +18,12 @@ const STATEMENT_VERSION_MAX_LENGTH = 32;
 
 // The client names the statement version it showed, so an outdated page
 // cannot record acceptance of a statement it did not display.
-const requestBody = t.Object(
-  { statementVersion: t.String({ maxLength: STATEMENT_VERSION_MAX_LENGTH }) },
-  { additionalProperties: false },
-);
+const requestBody = v.strictObject({
+  statementVersion: v.pipe(
+    v.string(),
+    v.maxLength(STATEMENT_VERSION_MAX_LENGTH),
+  ),
+});
 
 // Session-only and open to restricted accounts: an operator-created account
 // accepts here on its first interactive sign-in.
@@ -44,12 +47,17 @@ const acceptProfessionalUse = createSafeSessionHandler(
         }),
       );
     }
-    const state = yield* Result.await(acceptAccountProfessionalUse(user.id));
+    const state = yield* Result.await(
+      recordAccountProfessionalUse({
+        userId: user.id,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+      }),
+    );
     return Result.ok(professionalUseResponse(state));
   },
 );
 
-declareAggregateMutation(acceptProfessionalUse.handler, {
+declareAggregateMutation(acceptProfessionalUse, {
   type: "aggregate",
   aggregates: ["professionalUseAcceptance"],
 });

@@ -24,7 +24,7 @@ import { oauthClient } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import { isAgentAuthRateLimitedPath } from "@/api/handlers/agent-auth/rate-limit";
 import {
   agentAuthConfirmRoute,
@@ -39,6 +39,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 // These tests drive the agent-auth slice end to end against the same
 // better-auth instance and database the API uses at runtime, so the token
@@ -65,8 +66,14 @@ const asJson = (value: unknown): Json => v.parse(jsonObjectSchema, value);
 
 const BASE = "http://localhost";
 
+// Both agent-auth tables over a real socket, behind the API's own pipeline.
+const server = serveRoutesForTest([
+  ...agentAuthRoute,
+  ...agentAuthConfirmRoute,
+]);
+
 const postIdentity = async (body: Json) =>
-  await agentAuthRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_IDENTITY_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -75,7 +82,7 @@ const postIdentity = async (body: Json) =>
   );
 
 const postToken = async (body: Json) =>
-  await agentAuthRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_TOKEN_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -84,7 +91,7 @@ const postToken = async (body: Json) =>
   );
 
 const postConfirm = async (body: Json, cookieHeader: string) =>
-  await agentAuthConfirmRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_CONFIRM_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json", cookie: cookieHeader },
@@ -93,7 +100,7 @@ const postConfirm = async (body: Json, cookieHeader: string) =>
   );
 
 const postClaim = async (body: Json) =>
-  await agentAuthRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_CLAIM_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -114,6 +121,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await server.stop();
   await releaseAgentAuthTestDb();
 });
 
@@ -190,8 +198,7 @@ describe("agent registration configuration", () => {
 
   test("returns a service error when the selected storage format is unavailable", async () => {
     const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
-    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    const restoreKey = withoutContentEncryptionKeyForTesting();
     try {
       const responses = [
         await postIdentity({
@@ -212,7 +219,7 @@ describe("agent registration configuration", () => {
         expect(body["registration_id"]).toBeUndefined();
       }
     } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+      restoreKey();
     }
   });
 });
@@ -593,7 +600,7 @@ describe("agent-auth anonymous flow", () => {
 
 describe("agent-auth events receiver", () => {
   test("accepts a SET with 202 and does not act on it", async () => {
-    const response = await agentAuthRoute.handle(
+    const response = await server.fetch(
       new Request(`${BASE}/agent/event/notify`, {
         method: "POST",
         headers: { "content-type": "application/json" },

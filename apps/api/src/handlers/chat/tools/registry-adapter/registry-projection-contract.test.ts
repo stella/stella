@@ -12,20 +12,28 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  countedSearchTotal,
   DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
-  SEARCH_PAGINATION_COMPLETE,
-  SEARCH_PAGE_REACH,
-  countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
+import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
+import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  type contacts,
+  INVOICE_BILLING_PURPOSE,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
@@ -40,6 +48,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import {
   deriveRefMediationEntry,
   projectForChat,
@@ -48,24 +57,37 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  SOFT_LAW_DOCUMENT_CLASS,
+  SOFT_LAW_NATURE_NOTICE,
+} from "@/api/lib/legal-search/soft-law-read";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
+import {
+  invoiceDetailRowFixture,
+  invoiceListRowFixture,
+} from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+
+const testFetchState = createTestFetch();
 
 /**
  * Contract corpus over every chat-projectable read tool: run the real MCP
@@ -113,6 +135,8 @@ const readGatedDecisionCitationsMock = mock();
 const readGatedDecisionCitationDigestMock = mock();
 const withRedistributableSubjectMock = mock();
 const searchLegislationHandlerMock = mock();
+const searchServedSoftLawMock = mock();
+const readServedSoftLawMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
 const readPublicLegislationHandlerMock = mock();
@@ -204,58 +228,84 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
-const buildContext = (tx: unknown): McpRequestContext => {
+const ANNOTATION_BLOCKS = [
+  { anchorId: "p-3", text: "The court held" },
+  { anchorId: "p-4", text: "that the claim was time-barred" },
+].map(
+  ({ anchorId, text }) =>
+    ({
+      type: "paragraph",
+      id: anchorId,
+      anchorId,
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    }) satisfies Block,
+);
+
+const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
-  return buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: ORGANIZATION_ID,
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
-      pinnedIds: [],
-    }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-    testDependencies: {
-      // Billing reads are enrolment-gated; this caller is enrolled so every
-      // projectable read runs.
-      featureAccessSnapshot: enrolledTimeBillingSnapshot({
-        organizationId: ORGANIZATION_ID,
-        userId: "user_1",
+  return authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: ORGANIZATION_ID,
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
+        pinnedIds: [],
       }),
-      readWorkspaceHandler: readWorkspaceHandlerMock,
-      readOverviewHandler: readOverviewHandlerMock,
-      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-      readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
-      describeStoredTemplate: describeStoredTemplateMock,
-      getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
-      searchDecisionsHandler: searchDecisionsHandlerMock,
-      readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
-      readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
-      readGatedDecisionCitations: readGatedDecisionCitationsMock,
-      readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
-      searchLegislationHandler: searchLegislationHandlerMock,
-      resolveStatuteExpression: resolveStatuteExpressionMock,
-      resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
-      readPublicLegislationHandler: readPublicLegislationHandlerMock,
-      listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
-      readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
-      readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
-      readVersionBlocks: readVersionBlocksMock,
-      // The corpus gate has its own tests; here a document is reachable.
-      resolveAnnotationTarget: async () =>
-        await Promise.resolve({
-          status: "available" as const,
-          readBlocks: async () => await Promise.resolve([]),
+      workspaceStatusById: new Map([[WS, "active" as const]]),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+      testDependencies: {
+        readWithdrawnCopies: async () =>
+          new WithdrawnCopyProjection([], "Withdrawn by publisher"),
+        // Billing reads are enrolment-gated; this caller is enrolled so every
+        // projectable read runs.
+        featureAccessSnapshot: enrolledTimeBillingSnapshot({
+          organizationId: ORGANIZATION_ID,
+          userId: "user_1",
         }),
-      searchConsolidatedLegislation: searchConsolidatedLegislationMock,
-      getLawTextBlock: getLawTextBlockMock,
-      executeRegistryLookup: executeRegistryLookupMock,
-    },
-  });
+        readWorkspaceHandler: readWorkspaceHandlerMock,
+        readOverviewHandler: readOverviewHandlerMock,
+        readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+        readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+        describeStoredTemplate: describeStoredTemplateMock,
+        getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
+        searchDecisionsHandler: searchDecisionsHandlerMock,
+        readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
+        readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
+        readGatedDecisionCitations: readGatedDecisionCitationsMock,
+        readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
+        searchLegislationHandler: searchLegislationHandlerMock,
+        searchServedSoftLaw: searchServedSoftLawMock,
+        readServedSoftLaw: readServedSoftLawMock,
+        resolveStatuteExpression: resolveStatuteExpressionMock,
+        resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
+        readPublicLegislationHandler: readPublicLegislationHandlerMock,
+        listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
+        readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
+        readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
+        readVersionBlocks: readVersionBlocksMock,
+        // The corpus gate has its own tests; here a document is reachable.
+        resolveAnnotationTarget: async () =>
+          await Promise.resolve({
+            status: "available" as const,
+            readBlocks: async () => await Promise.resolve(ANNOTATION_BLOCKS),
+            readTextPieces: async () =>
+              await Promise.resolve(
+                ANNOTATION_BLOCKS.flatMap(readerAnchorPiecesOf),
+              ),
+            resolveHeldAnchors: async () => await Promise.resolve(new Map()),
+          }),
+        searchConsolidatedLegislation: searchConsolidatedLegislationMock,
+        getLawTextBlock: getLawTextBlockMock,
+        executeRegistryLookup: executeRegistryLookupMock,
+      },
+    }),
+  );
 };
 
 /**
@@ -267,7 +317,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
 const contextFor = (
   toolName: ProjectableReadToolName,
   tx: unknown,
-): McpRequestContext =>
+): AuthorizedMcpRequestContext =>
   CHAT_READ_SCRIPT_POLICY[toolName] === "script"
     ? buildContext(tx)
     : {
@@ -293,11 +343,14 @@ const recordOutboundFetches = async <TResult>(
     },
     { preconnect: globalThis.fetch.preconnect },
   );
-  const spy = spyOn(globalThis, "fetch").mockImplementation(refuse);
+  const spy = Object.assign(mock(refuse), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(spy);
   try {
     return { result: await run(), fetched };
   } finally {
-    spy.mockRestore();
+    testFetchState.restore();
   }
 };
 
@@ -432,6 +485,32 @@ const entityRef = (refRegistry: ChatRefRegistry, entityId: string): string =>
     workspaceId: toSafeId<"workspace">(WS),
   });
 
+const guidanceFixture = (documentId: string) => ({
+  documentId: toSafeId<"softLawDocument">(documentId),
+  documentClass: SOFT_LAW_DOCUMENT_CLASS,
+  notice: SOFT_LAW_NATURE_NOTICE,
+  issuer: {
+    authority: "eu-edpb",
+    name: "European Data Protection Board",
+    jurisdiction: "EU",
+  },
+  kind: "guideline" as const,
+  sourceKind: "Guideline",
+  title: "Guidelines on consent",
+  reference: "05/2020",
+  issuedOn: "2020-05-04",
+  validity: { state: "not_stated", basis: "source_stated" },
+  language: "en",
+  publisherUrl: "https://publisher.example/guidelines-05-2020",
+  attribution: {
+    text: "European Data Protection Board, edpb.europa.eu",
+    termsUrl: "https://www.edpb.europa.eu/copyright_en",
+    conditions: ["Acknowledge the source."],
+    summaryDisclaimer: "Summary disclaimer the publisher requires.",
+  },
+  access: "text" as const,
+});
+
 const CONTRACT_CORPUS = {
   list_matters: [
     {
@@ -460,11 +539,16 @@ const CONTRACT_CORPUS = {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
           organizationId: ORGANIZATION_ID,
+          externalSource: null,
+          externalId: null,
+          externalChangeKey: null,
+          importedAt: null,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),
           leadUserId: null,
           billingReference: null,
+          billingNarrativeLanguage: null,
           color: null,
           status: "active",
           lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -477,50 +561,52 @@ const CONTRACT_CORPUS = {
           },
           stampedVersionCount: 0,
         } satisfies Awaited<ReturnType<typeof readWorkspaceHandler>>);
-        readOverviewHandlerMock.mockResolvedValue({
-          entityCount: 1,
-          documentCount: 1,
-          taskCount: 0,
-          recentEntities: [
-            {
-              entityId: toSafeId<"entity">(uid(2)),
-              name: "NDA draft.docx",
-              kind: "document",
-              status: null,
-              priority: null,
-              listItemType: null,
-              dueDate: null,
-              mimeType:
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-              // The exact trio that tripped the prod backstop on every
-              // non-empty matter: primary-field plumbing ids, now stripped.
-              fieldId: uid(3),
-              propertyId: uid(4),
-              pdfFileId: uid(5),
-              encrypted: false,
-              createdAt: "2026-01-01T00:00:00.000Z",
-              updatedAt: null,
-              createdBy: "Jana",
-              createdByImage: null,
-              createdByDeletedAt: null,
-              assignedTo: "Petr",
-              assignedToImage: null,
-              assignedToDeletedAt: null,
-            },
-          ],
-          // The web agenda stays out of the matter detail projection.
-          upcomingAgenda: [
-            {
-              entityId: toSafeId<"entity">(uid(43)),
-              name: "File the response",
-              status: null,
-              dueDate: "2026-01-10",
-              assignedTo: "Petr",
-              assignedToImage: null,
-              assignedToDeletedAt: null,
-            },
-          ],
-        } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
+        readOverviewHandlerMock.mockResolvedValue(
+          Result.ok({
+            entityCount: 1,
+            documentCount: 1,
+            taskCount: 0,
+            recentEntities: [
+              {
+                entityId: toSafeId<"entity">(uid(2)),
+                name: "NDA draft.docx",
+                kind: "document",
+                status: null,
+                priority: null,
+                listItemType: null,
+                dueDate: null,
+                mimeType:
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                // The exact trio that tripped the prod backstop on every
+                // non-empty matter: primary-field plumbing ids, now stripped.
+                fieldId: uid(3),
+                propertyId: uid(4),
+                pdfFileId: uid(5),
+                encrypted: false,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: null,
+                createdBy: "Jana",
+                createdByImage: null,
+                createdByDeletedAt: null,
+                assignedTo: "Petr",
+                assignedToImage: null,
+                assignedToDeletedAt: null,
+              },
+            ],
+            // The web agenda stays out of the matter detail projection.
+            upcomingAgenda: [
+              {
+                entityId: toSafeId<"entity">(uid(43)),
+                name: "File the response",
+                status: null,
+                dueDate: "2026-01-10",
+                assignedTo: "Petr",
+                assignedToImage: null,
+                assignedToDeletedAt: null,
+              },
+            ],
+          } satisfies InferOk<Awaited<ReturnType<typeof readOverviewHandler>>>),
+        );
         readWorkspaceContactsHandlerMock.mockResolvedValue(
           Result.ok({
             contacts: [
@@ -758,6 +844,9 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
+                externalSource: "legacy",
+                externalId: uid(113),
+                externalChangeKey: "sample-change",
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
@@ -766,6 +855,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: [uid(113)],
     },
   ],
   list_documents: [
@@ -1340,8 +1430,10 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         select: selectQueue([
           [
-            {
+            invoiceListRowFixture({
               id: uid(45),
+              clientId: null,
+              matterShare: 1000,
               invoiceNumber: "INV-1",
               documentType: "invoice",
               originalInvoiceId: null,
@@ -1351,12 +1443,14 @@ const CONTRACT_CORPUS = {
               dueDate: "2026-02-01",
               currency: "EUR",
               totalAmount: 1000,
+              paidAmount: 400,
               createdAtCursor: new Date("2026-01-01"),
-            },
+            }),
           ],
         ]),
       }),
       expectRefPaths: [],
+      expectPayloadContains: ['"paidAmount":400', '"outstandingAmount":600'],
     },
     {
       mode: "detail",
@@ -1364,99 +1458,151 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         query: {
           invoices: {
-            findFirst: async () => ({
-              id: uid(46),
-              workspaceId: WS,
-              invoiceNumber: "INV-2",
-              documentType: "invoice",
-              originalInvoiceId: null,
-              reference: "Acme February",
-              status: "draft",
-              invoiceDate: "2026-02-01",
-              taxableSupplyDate: "2026-02-01",
-              dueDate: "2026-03-01",
-              currency: "EUR",
-              totalAmount: 2000,
-              netAmount: 100,
-              vatAmount: 21,
-              notes: "Net 30",
-              sellerProfileId: uid(106),
-              buyerName: "Acme s.r.o.",
-              buyerRegistrationId: "12345678",
-              buyerVatId: "CZ12345678",
-              buyerAddressLine1: "Hlavni 1",
-              buyerAddressLine2: null,
-              buyerCity: "Praha",
-              buyerPostalCode: "110 00",
-              buyerCountry: "CZ",
-              paidAt: null,
-              createdAt: new Date("2026-02-01"),
-              updatedAt: new Date("2026-02-01"),
-              timeEntries: [
-                {
-                  id: uid(47),
-                  workItemId: uid(48),
-                  workItemReference: { type: "available", id: uid(48) },
-                  dateWorked: "2026-02-01",
-                  billedMinutes: 60,
-                  rateAtEntry: 100,
-                  currency: "EUR",
-                  narrative: "Drafted the NDA",
-                  narrativeLanguage: null,
-                  invoiceNarrative: null,
-                  noCharge: false,
-                  status: "invoiced",
-                  workItem: { id: uid(48), name: "NDA draft" },
-                },
-              ],
-              expenses: [
-                {
-                  id: uid(49),
-                  matterId: uid(50),
-                  matterReference: { type: "available", id: uid(50) },
-                  dateIncurred: "2026-02-01",
-                  amount: 100,
-                  currency: "EUR",
-                  category: "travel",
-                  description: "Court filing fee",
-                  invoiceDescription: null,
-                  billable: true,
-                  markup: 0,
-                  matter: { id: uid(50), name: "Filing bundle" },
-                },
-              ],
-              lines: [
-                {
-                  id: uid(105),
-                  position: 0,
-                  description: "Drafted the NDA",
-                  quantity: "1.0000",
-                  unit: "h",
-                  unitPrice: 100,
-                  vatRateBps: 2100,
-                  vatTreatment: "domestic_vat",
-                  netAmount: 100,
-                  vatAmount: 21,
-                  grossAmount: 121,
-                  source: "time_entry",
-                  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
-                  timeEntryId: uid(47),
-                  expenseId: null,
-                  releasedAt: null,
-                },
-              ],
-            }),
+            findFirst: async () =>
+              invoiceDetailRowFixture({
+                id: toSafeId<"invoice">(uid(46)),
+                clientId: null,
+                workspaceId: toSafeId<"workspace">(WS),
+                invoiceNumber: "INV-2",
+                documentType: "invoice",
+                originalInvoiceId: null,
+                reference: "Acme February",
+                status: "draft",
+                invoiceDate: "2026-02-01",
+                taxableSupplyDate: "2026-02-01",
+                dueDate: "2026-03-01",
+                currency: "EUR",
+                totalAmount: cents(2000),
+                netAmount: cents(100),
+                vatAmount: cents(21),
+                notes: "Net 30",
+                sellerProfileId: toSafeId<"sellerProfile">(uid(106)),
+                buyerName: "Acme s.r.o.",
+                buyerRegistrationId: "12345678",
+                buyerVatId: "CZ12345678",
+                buyerAddressLine1: "Hlavni 1",
+                buyerAddressLine2: null,
+                buyerCity: "Praha",
+                buyerPostalCode: "110 00",
+                buyerCountry: "CZ",
+                paidAt: null,
+                createdAt: new Date("2026-02-01"),
+                updatedAt: new Date("2026-02-01"),
+                payments: [
+                  {
+                    id: toSafeId<"invoicePayment">(uid(107)),
+                    invoiceId: toSafeId<"invoice">(uid(46)),
+                    amount: cents(500),
+                    paidOn: "2026-02-01",
+                    method: "bank_transfer",
+                    reference: null,
+                    note: null,
+                    recordedBy: toSafeId<"user">(uid(108)),
+                    createdAt: new Date("2026-02-01"),
+                    voidedAt: null,
+                    voidedBy: null,
+                  },
+                ],
+                timeEntries: [
+                  {
+                    id: toSafeId<"timeEntry">(uid(47)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    workItemId: toSafeId<"entity">(uid(48)),
+                    workItemReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(uid(48)),
+                    },
+                    dateWorked: "2026-02-01",
+                    billedMinutes: 60,
+                    rateAtEntry: cents(100),
+                    currency: "EUR",
+                    narrative: "Drafted the NDA",
+                    invoiceNarrative: null,
+                    noCharge: false,
+                    status: BILLING_STATUS.BILLED,
+                    invoiceAttachment: "charged",
+                    workItem: {
+                      id: toSafeId<"entity">(uid(48)),
+                      name: "NDA draft",
+                    },
+                  },
+                ],
+                expenses: [
+                  {
+                    id: toSafeId<"expense">(uid(49)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    matterId: toSafeId<"entity">(uid(50)),
+                    matterReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(uid(50)),
+                    },
+                    dateIncurred: "2026-02-01",
+                    amount: cents(100),
+                    currency: "EUR",
+                    category: "travel",
+                    description: "Court filing fee",
+                    invoiceDescription: null,
+                    billable: true,
+                    markup: 0,
+                    matter: {
+                      id: toSafeId<"entity">(uid(50)),
+                      name: "Filing bundle",
+                    },
+                  },
+                ],
+                lines: [
+                  {
+                    id: toSafeId<"invoiceLine">(uid(105)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    workspace: {
+                      id: toSafeId<"workspace">(WS),
+                      name: "Matter",
+                      color: null,
+                    },
+                    recordedDescription: null,
+                    recordedQuantity: null,
+                    recordedUnit: null,
+                    recordedUnitPrice: null,
+                    recordedNetAmount: null,
+                    position: 0,
+                    description: "Drafted the NDA",
+                    quantity: "1.0000",
+                    unit: "h",
+                    unitPrice: cents(100),
+                    vatRateBps: 2100,
+                    vatTreatment: "domestic_vat",
+                    exemptionReason: null,
+                    netAmount: cents(100),
+                    vatAmount: cents(21),
+                    grossAmount: cents(121),
+                    source: "time_entry",
+                    billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
+                    timeEntryId: toSafeId<"timeEntry">(uid(47)),
+                    expenseId: null,
+                    releasedAt: null,
+                  },
+                ],
+              }),
           },
         },
       }),
+      expectPayloadContains: ['"paidAmount":500', '"outstandingAmount":1500'],
       expectRefPaths: [
         "invoice.workspaceId",
+        "invoice.timeEntries[].workspaceId",
         "invoice.timeEntries[].entityId",
         "invoice.timeEntries[].entityReference.id",
+        "invoice.timeEntries[].entityReference.workspaceId",
         "invoice.timeEntries[].entity.id",
+        "invoice.timeEntries[].entity.workspaceId",
+        "invoice.expenses[].workspaceId",
         "invoice.expenses[].entityId",
         "invoice.expenses[].entityReference.id",
+        "invoice.expenses[].entityReference.workspaceId",
         "invoice.expenses[].entity.id",
+        "invoice.expenses[].entity.workspaceId",
+        "invoice.lines[].workspaceId",
+        "invoice.lines[].workspace.id",
       ],
     },
   ],
@@ -1524,6 +1670,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1538,6 +1685,7 @@ const CONTRACT_CORPUS = {
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               textWithheldReason: null,
+              textAvailability: "available",
               matchingPassages: 3,
               match,
               headnote: { type: "absent", reason: "not_published" },
@@ -1552,6 +1700,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
@@ -1602,6 +1751,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1616,6 +1766,7 @@ const CONTRACT_CORPUS = {
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               textWithheldReason: null,
+              textAvailability: "available",
               matchingPassages: 3,
               match: "all_terms",
               headnote: { type: "absent", reason: "not_published" },
@@ -1630,6 +1781,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
@@ -1641,6 +1793,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          extractionWarnings: [],
           hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
@@ -1649,6 +1802,7 @@ const CONTRACT_CORPUS = {
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
           caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          citationCount: 2,
           citationsFrom: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -1666,6 +1820,11 @@ const CONTRACT_CORPUS = {
             },
           ],
           citationsNextCursor: null,
+          caseFile: {
+            items: [],
+            nextCursor: null,
+            limit: LIMITS.caseLawCaseFilePageSize,
+          },
           country: "CZ",
           court: "Nejvyšší soud",
           courtId: null,
@@ -1715,6 +1874,7 @@ const CONTRACT_CORPUS = {
           // GUID-bearing publisher URLs; see the statute fixture above.
           sourceUrl: `https://example.test/decision/${uid(93)}`,
           sourceAttributionUrl: `https://example.test/decision/${uid(94)}`,
+          sourceLanguages: null,
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
@@ -1801,6 +1961,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                extractionWarnings: [],
                 textWithheldReason: null,
                 sectionIndex: 1,
                 doctrine: "unread",
@@ -1870,6 +2031,38 @@ const CONTRACT_CORPUS = {
       JSON.stringify({ match: { type: matchType } }).slice(1, -1),
     ],
   })),
+  search_guidance: [
+    {
+      mode: "search",
+      buildArgs: () => ({ query: "consent" }),
+      setup: () => {
+        searchServedSoftLawMock.mockResolvedValue({
+          items: [{ ...guidanceFixture(uid(96)), snippet: "valid consent" }],
+          nextOffset: null,
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [SOFT_LAW_DOCUMENT_CLASS],
+    },
+  ],
+  read_guidance: [
+    {
+      mode: "read",
+      buildArgs: () => ({ document_id: uid(96) }),
+      setup: () => {
+        readServedSoftLawMock.mockResolvedValue({
+          ...guidanceFixture(uid(96)),
+          textState: "available",
+          text: "Consent must be freely given.",
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [
+        SOFT_LAW_DOCUMENT_CLASS,
+        "Summary disclaimer the publisher requires.",
+      ],
+    },
+  ],
   read_statute: [
     {
       mode: "read",
@@ -2104,20 +2297,21 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ target_type: "decision", target_id: uid(60) }),
       tx: () => ({
         select: selectQueue([
-          [
-            ["p-3", "The court held"],
-            ["p-4", "that the claim was time-barred"],
-          ].map(([blockAnchorId, quote], index) => ({
+          ANNOTATION_BLOCKS.map(({ anchorId, plainText }, index) => ({
             id: uid(61 + index),
             groupId: uid(63),
             kind: "comment",
             visibility: "shared",
             color: null,
             style: null,
-            blockAnchorId,
-            startOffset: 0,
-            endOffset: 10,
-            quote,
+            ...({
+              blockAnchorId: anchorId,
+              startOffset: 0,
+              endOffset: plainText.length,
+              quote: plainText,
+              quotePrefix: "",
+              quoteSuffix: "",
+            } satisfies ReaderTextQuoteSelector),
             body: index === 0 ? "Check the limitation date" : null,
             createdAt: new Date("2026-01-01"),
             updatedAt: new Date("2026-01-01"),
@@ -2192,12 +2386,38 @@ const recordedExceptions = () =>
 let previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   analytics?.restore();
   analytics = null;
   env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
 });
 
 beforeEach(() => {
+  describeStoredTemplateMock.mockReset();
+  executeRegistryLookupMock.mockReset();
+  getLawTextBlockMock.mockReset();
+  listStatuteVersionsHandlerMock.mockReset();
+  readCaseLawCoverageHandlerMock.mockReset();
+  readGatedDecisionCitationDigestMock.mockReset();
+  readGatedDecisionCitationsMock.mockReset();
+  readGatedDecisionWithDocumentMock.mockReset();
+  readLegislationProvisionVersionsMock.mockReset();
+  readOverviewHandlerMock.mockReset();
+  readProvisionHistoryHandlerMock.mockReset();
+  readPublicLegislationHandlerMock.mockReset();
+  readVersionBlocksMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+  readWorkspaceMembersHandlerMock.mockReset();
+  resolveStatuteExpressionMock.mockReset();
+  resolveStatuteWorkVersionMock.mockReset();
+  searchConsolidatedLegislationMock.mockReset();
+  searchDecisionsHandlerMock.mockReset();
+  searchLegislationHandlerMock.mockReset();
+  searchServedSoftLawMock.mockReset();
+  readServedSoftLawMock.mockReset();
+  searchProviderSearchMock.mockReset();
   analytics = installRecordingAnalytics();
   previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
   env.FEATURE_PUBLIC_LAW = true;
@@ -2269,7 +2489,7 @@ describe("registry projection contract", () => {
           if (!isRecord(item)) {
             panic("Invalid citation result");
           }
-          expect(item["url"]).toBe(item["sourceUrl"]);
+          expect(item["sourceUrl"]).toBeUndefined();
           expect(item["url"]).toMatch(/^https:/u);
           expect(item["source_url"]).toBeUndefined();
         }
@@ -2370,16 +2590,12 @@ describe("registry projection contract", () => {
             "appUrl" in value,
             `${toolName}: primary/source links must not expose appUrl`,
           ).toBe(false);
-          if (
-            "url" in value &&
-            typeof value.url === "string" &&
-            "sourceUrl" in value &&
-            typeof value.sourceUrl === "string" &&
-            value.url !== new URL(value.sourceUrl).href
-          ) {
-            expect("source_url" in value && value.source_url).toBe(
-              new URL(value.sourceUrl).href,
+          // The publisher link is a distinct, parsed link or absent.
+          if ("source_url" in value) {
+            expect(value.source_url).toBe(
+              new URL(String(value.source_url)).href,
             );
+            expect("url" in value && value.url).not.toBe(value.source_url);
           }
           for (const child of Object.values(value)) {
             assertCitationLinks(child);
@@ -2481,6 +2697,7 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      extractionWarnings: [],
       hasDocument: true,
       documentPending: false,
       documentReadFailed: false,
@@ -2489,9 +2706,15 @@ describe("decision text in chat projection", () => {
       resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
       caseNumber: "22 Cdo 1000/2020",
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationCount: 0,
       citationsFrom: [],
       citationsTo: [],
       citationsNextCursor: null,
+      caseFile: {
+        items: [],
+        nextCursor: null,
+        limit: LIMITS.caseLawCaseFilePageSize,
+      },
       country: "CZ",
       court: "Nejvyšší soud",
       courtId: null,
@@ -2537,6 +2760,7 @@ describe("decision text in chat projection", () => {
       },
       sourceUrl: "https://example.test/decision/source",
       sourceAttributionUrl: "https://example.test/decision/attribution",
+      sourceLanguages: null,
       createdAt: new Date("2020-05-01T00:00:00.000Z"),
       updatedAt: new Date("2020-05-01T00:00:00.000Z"),
     } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);

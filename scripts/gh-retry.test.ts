@@ -1,14 +1,17 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import {
-  mkdtemp,
   chmod,
+  mkdir,
+  mkdtemp,
   readFile,
   rm,
   writeFile,
-  mkdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+// timeout: matrix tests run several isolated subprocess scenarios serially.
+setDefaultTimeout(20_000);
 
 const HELPER = path.resolve(import.meta.dir, "gh-retry.sh");
 const FAKE_GH = `#!/usr/bin/env python3
@@ -247,11 +250,10 @@ test("429 and secondary 403 honor Retry-After while ordinary 403 fails once", as
   expect(result.sleeps).toEqual([]);
 });
 
-test("404, absent or successful HTTP status on errors and exhausted delay budget do not retry", async () => {
+test("404, absent HTTP status, and exhausted delay budget do not retry", async () => {
   for (const response of [
     { exit: 1, http: 404 },
     { exit: 1 },
-    { exit: 1, http: 200 },
     { exit: 1, http: 429, after: 61 },
   ]) {
     const result = await scenario({ responses: [response, success] });
@@ -259,6 +261,219 @@ test("404, absent or successful HTTP status on errors and exhausted delay budget
     expect(result.calls).toHaveLength(1);
     expect(result.sleeps).toEqual([]);
   }
+});
+
+test("a paginated GET retries when its second successful page cannot be decoded", async () => {
+  const firstPage = Buffer.from(JSON.stringify([{ id: 1 }])).toHex();
+  const result = await scenario({
+    args: [
+      "api",
+      "repos/example/project/actions/workflows/ci.yml/runs",
+      "--paginate",
+      "--slurp",
+    ],
+    responses: [
+      {
+        exit: 1,
+        http: 200,
+        output: firstPage,
+        error:
+          "* Request to https://api.github.com/page/2\n< HTTP/2.0 200\nerror decoding JSON: unexpected EOF",
+      },
+    ],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(4);
+  expect(result.stdout).toEqual(Buffer.alloc(0));
+  expect(result.sleeps).toHaveLength(3);
+  expect(result.stderr).toContain("HTTP 200, attempt 1/4");
+});
+
+test("a paginated GET that fails without any HTTP status stays single-shot", async () => {
+  // No response was recorded, so nothing shows the read reached GitHub;
+  // an unknown failure (for example authentication) must not be repeated.
+  const result = await scenario({
+    args: ["api", "repos/example/project/issues", "--paginate"],
+    responses: [{ exit: 2 }, success],
+  });
+  expect(result.exit).toBe(2);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+});
+
+test("a POST that fails after HTTP 200 stays single-shot", async () => {
+  const result = await scenario({
+    args: ["api", "repos/example/project", "--method", "POST"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+  expect(result.stderr).toContain("operation is not safe to retry");
+});
+
+test("a successful HTTP status with persistent command failure exhausts four attempts", async () => {
+  const result = await scenario({ responses: [{ exit: 1, http: 200 }] });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(4);
+  expect(result.sleeps).toHaveLength(3);
+  expect(result.stderr).toContain("HTTP 200, attempt 4/4");
+});
+
+const typedRefusal = {
+  exit: 1,
+  http: 200,
+  output: Buffer.from(
+    JSON.stringify({
+      errors: [
+        {
+          type: "UNPROCESSABLE",
+          message: "Pull request is not mergeable",
+          extensions: { code: "STALE_DATA" },
+        },
+      ],
+    }),
+  ).toHex(),
+  error: JSON.stringify({
+    errors: [
+      {
+        type: "UNPROCESSABLE",
+        message: "Pull request is not mergeable",
+        extensions: { code: "STALE_DATA" },
+      },
+    ],
+  }),
+};
+
+test("a typed GraphQL refusal is returned after one request", async () => {
+  const result = await scenario({
+    args: ["api", "graphql", "-f", "query=query { viewer { login } }"],
+    responses: [typedRefusal],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.stdout).toEqual(Buffer.from(typedRefusal.output, "hex"));
+});
+
+test.each([
+  ["type", { type: "UNPROCESSABLE", message: "Request refused" }],
+  [
+    "extension code",
+    { message: "Request refused", extensions: { code: "STALE_DATA" } },
+  ],
+])("a GraphQL refusal with only %s is returned once", async (_, error) => {
+  const output = Buffer.from(JSON.stringify({ errors: [error] }));
+  const result = await scenario({
+    args: ["api", "graphql", "-f", "query=query { viewer { login } }"],
+    responses: [
+      { exit: 1, http: 200, output: output.toHex(), error: output.toString() },
+    ],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.stdout).toEqual(output);
+});
+
+test.each([
+  ["an empty", ""],
+  ["a non-JSON", "not JSON"],
+])(
+  "%s successful response is retried for a repeatable read",
+  async (_, output) => {
+    const result = await scenario({
+      responses: [
+        { exit: 1, http: 200, output: Buffer.from(output).toHex() },
+        success,
+      ],
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls.length).toBeGreaterThan(1);
+  },
+);
+
+test.each([
+  ["view", ["run", "view", "123", "--exit-status"]],
+  ["watch", ["run", "watch", "--exit-status=true", "123"]],
+])(
+  "run %s returns a failed workflow conclusion without retrying",
+  async (_, args) => {
+    const result = await scenario({
+      args,
+      responses: [{ exit: 1, http: 200 }, success],
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(1);
+    expect(result.sleeps).toEqual([]);
+  },
+);
+
+test("run view accepts --exit-status=1", async () => {
+  const result = await scenario({
+    args: ["run", "view", "123", "--exit-status=1"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+});
+
+test.each(["1", "t", "T", "TRUE", "true", "True"])(
+  "run --exit-status=%s returns a failed workflow conclusion without retrying",
+  async (value) => {
+    const result = await scenario({
+      args: ["run", "view", "123", `--exit-status=${value}`],
+      responses: [{ exit: 1, http: 200 }, success],
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(1);
+    expect(result.sleeps).toEqual([]);
+  },
+);
+
+test("run --exit-status still retries a transient HTTP response", async () => {
+  const result = await scenario({
+    args: ["run", "view", "123", "--exit-status"],
+    responses: [{ exit: 1, http: 502 }, success],
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toHaveLength(2);
+});
+
+test("run view without --exit-status retries a 2xx decode failure", async () => {
+  const result = await scenario({
+    args: ["run", "view", "123"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toHaveLength(2);
+});
+
+test.each(["false", "0"])(
+  "run --exit-status=%s retries a 2xx decode failure",
+  async (value) => {
+    const result = await scenario({
+      args: ["run", "view", "123", `--exit-status=${value}`],
+      responses: [{ exit: 1, http: 200 }, success],
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls).toHaveLength(2);
+  },
+);
+
+test("the last --exit-status value wins", async () => {
+  const enabled = await scenario({
+    args: ["run", "view", "123", "--exit-status=false", "--exit-status=T"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(enabled.exit).toBe(1);
+  expect(enabled.calls).toHaveLength(1);
+
+  const disabled = await scenario({
+    args: ["run", "view", "123", "--exit-status=1", "--exit-status=0"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(disabled.exit).toBe(0);
+  expect(disabled.calls).toHaveLength(2);
 });
 
 test("HTTP writes and GraphQL mutations stay single-shot", async () => {
@@ -316,7 +531,7 @@ test("explicit GET replays stdin byte-for-byte for every attempt", async () => {
     expect(result.exit).toBe(0);
     expect(result.calls).toHaveLength(2);
     for (const call of result.calls) {
-      expect(call).toContain(Buffer.from(input).toString("hex"));
+      expect(call).toContain(Buffer.from(input).toHex());
     }
   }
 });

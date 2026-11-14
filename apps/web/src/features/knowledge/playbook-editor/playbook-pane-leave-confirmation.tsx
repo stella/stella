@@ -17,8 +17,8 @@ import { detached } from "@/lib/detached";
 import {
   cancelPlaybookPaneLeave,
   confirmPlaybookPaneLeave,
-  usePlaybookPaneLeave,
   usePlaybookPaneHasUnsavedWork,
+  usePlaybookPaneLeave,
 } from "./playbook-pane-parking";
 
 export const PlaybookPaneLeaveConfirmation = () => {

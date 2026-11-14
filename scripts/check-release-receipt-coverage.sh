@@ -2,7 +2,9 @@
 # Read-only: may a merge-group ci-result receipt on the release commit stand in
 # for main/heavy and main/pr-depth? A merge-group run validates only its own
 # group's final diff, so the receipt covers the release only when every commit
-# since the previous release tag reached main through a validated merge group.
+# after a fully proven one (the newest earlier main commit with main/heavy and
+# main/pr-depth green, else the previous release tag) reached main through a
+# validated merge group.
 # An admin merge or a direct push in that range, history this checkout cannot
 # read, or a missing Bun all keep both statuses required: unknown is not safe.
 #
@@ -38,7 +40,24 @@ command -v bun >/dev/null 2>&1 \
   || not_covered "Bun is not available, so the release history cannot be checked."
 previous_tag=$(git describe --tags --abbrev=0 --match 'v*' "$sha^" 2>/dev/null) && [[ -n "$previous_tag" ]] \
   || not_covered "no previous release tag is reachable from $sha in this checkout."
+# The newest earlier main commit whose main/heavy and main/pr-depth both passed
+# (the cut gate requires both on the cut base) anchors the history: its suites
+# ran on its whole tree, so only the commits after it need merge-group
+# validation. Without one since the previous tag, the tag is the anchor.
+anchor="$previous_tag"
+while read -r candidate; do
+  [[ -n "$candidate" ]] || continue
+  states=$(bash "$gh_retry_script" api "repos/$repo/commits/$candidate/statuses?per_page=100" \
+    --jq '[.[] | select(.creator.login == "github-actions[bot]")] as $own
+      | [($own | map(select(.context == "main/heavy")) | first | .state // "none"),
+         ($own | map(select(.context == "main/pr-depth")) | first | .state // "none")] | join(" ")' \
+    </dev/null) || continue
+  if [[ "$states" == "success success" ]]; then
+    anchor="$candidate"
+    break
+  fi
+done < <(git rev-list --first-parent --max-count=50 "$previous_tag..$sha^" 2>/dev/null)
 GH_RETRY_SCRIPT="$gh_retry_script" bun "$queue_history" --require \
-  --from "$previous_tag" --base "$sha" --repo-dir "$PWD" >&2 \
-  || not_covered "history since $previous_tag is not validated through the merge queue."
-echo "Merge-group receipt on $sha and validated queue history since $previous_tag stand in for main/heavy and main/pr-depth." >&2
+  --from "$anchor" --base "$sha" --repo-dir "$PWD" >&2 \
+  || not_covered "history since $anchor is not validated through the merge queue."
+echo "Merge-group receipt on $sha and validated queue history since $anchor stand in for main/heavy and main/pr-depth." >&2

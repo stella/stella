@@ -3,9 +3,9 @@ import * as v from "valibot";
 
 import {
   CHAT_MESSAGE_EDIT_INSTRUCTION_MAX_LENGTH,
+  type ChatMessageAcceptedEdit,
   chatMessageAcceptedEditSchema,
   chatMessageRevisionEditSchema,
-  type ChatMessageAcceptedEdit,
 } from "./chat-message-revisions";
 
 describe("accepted answer edit boundaries", () => {

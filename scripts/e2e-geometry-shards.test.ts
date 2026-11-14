@@ -114,6 +114,7 @@ const productionShardRun = () => {
   return run;
 };
 
+// Measured p95 is 36.8 s; this test must enumerate the production Playwright suite.
 test("production shards split every geometry viewport evenly without losing hosts", () => {
   const run = productionShardRun();
   const generalProjects =
@@ -125,7 +126,7 @@ test("production shards split every geometry viewport evenly without losing host
   // Exercise the workflow's project selection rather than a hand-written mirror.
   expect(listGeometry(generalProjects)).toEqual([]);
   expect(run).toContain(
-    `--project=docked-chat-geometry --shard=\${{ matrix.shard }}/${E2E_SHARD_COUNT}`,
+    `--project=docked-chat-geometry --shard=\${{ matrix.shard }}/\${{ steps.e2e-shards.outputs.count }}`,
   );
   const project = ["--project=docked-chat-geometry"];
   const allCases = listGeometry(project);
@@ -168,7 +169,7 @@ test("production shards split every geometry viewport evenly without losing host
     );
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   }
-}, 60_000);
+}, 75_000);
 
 test.each([
   { generalStatus: 0, geometryStatus: 0, expectedStatus: 0 },
@@ -216,7 +217,11 @@ esac
         [
           "bash",
           "-c",
-          productionShardRun().replaceAll(`\${{ matrix.shard }}`, "1"),
+          productionShardRun()
+            .replaceAll(`\${{ matrix.shard }}`, "1")
+            .replaceAll(`\${{ steps.e2e-shards.outputs.count }}`, () =>
+              String(E2E_SHARD_COUNT),
+            ),
         ],
         {
           cwd: workspace,
@@ -249,3 +254,69 @@ esac
     }
   },
 );
+
+test("geometry defaults belong to the exported fixture in every importing spec", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "geometry-defaults-"));
+  try {
+    symlinkSync(
+      path.join(root, "node_modules"),
+      path.join(directory, "node_modules"),
+      "dir",
+    );
+    const helper = path.join(root, "apps/web/e2e/helpers/stable-geometry.ts");
+    const spec = `
+import { expect, test } from ${JSON.stringify(helper)};
+test("defaults", async ({ viewport, deviceScaleFactor, reducedMotion }) => {
+  expect(viewport).toEqual({ width: 1440, height: 900 });
+  expect(deviceScaleFactor).toBe(1);
+  expect(reducedMotion).toBe("reduce");
+});
+`;
+    writeFileSync(path.join(directory, "first.spec.ts"), spec);
+    writeFileSync(
+      path.join(directory, "second.spec.ts"),
+      `${spec}
+test.describe("explicit suite overrides", () => {
+  test.use({ viewport: { width: 800, height: 600 }, deviceScaleFactor: 2, reducedMotion: "no-preference" });
+  test("overrides", async ({ viewport, deviceScaleFactor, reducedMotion }) => {
+    expect(viewport).toEqual({ width: 800, height: 600 });
+    expect(deviceScaleFactor).toBe(2);
+    expect(reducedMotion).toBe("no-preference");
+  });
+});
+`,
+    );
+    const config = path.join(directory, "playwright.config.ts");
+    writeFileSync(
+      config,
+      `export default ${JSON.stringify({
+        testDir: directory,
+        workers: 1,
+        retries: 0,
+        use: {
+          viewport: { width: 640, height: 480 },
+          deviceScaleFactor: 3,
+          reducedMotion: "no-preference",
+        },
+      })};`,
+    );
+    // These cases request only option fixtures: no browser or app is needed.
+    const result = Bun.spawnSync(
+      [
+        "node",
+        path.join(root, "node_modules/@playwright/test/cli.js"),
+        "test",
+        `--config=${config}`,
+        "--reporter=line",
+      ],
+      { cwd: directory, env: { ...process.env, CI: "true" } },
+    );
+    expect(
+      result.exitCode,
+      result.stdout.toString() + result.stderr.toString(),
+    ).toBe(0);
+    expect(result.stdout.toString()).toContain("3 passed");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 30_000);

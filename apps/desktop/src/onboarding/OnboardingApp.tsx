@@ -9,15 +9,22 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
+import { ActivityStep } from "./ActivityStep";
 import { ConnectStep } from "./ConnectStep";
+import { DictationStep } from "./DictationStep";
 import { DoneStep } from "./DoneStep";
+import { FixView } from "./FixView";
 import { HowItWorksStep } from "./HowItWorksStep";
+import { IntroduceDictationView } from "./IntroduceDictationView";
+import { IntroduceView } from "./IntroduceView";
 import { reportOnboardingFailure } from "./onboarding-telemetry";
 import {
   isOnboardingSnapshot,
   ONBOARDING_CHANGED_EVENT,
 } from "./onboarding-types";
 import type {
+  IntroducedFeature,
   OnboardingNavigation,
   OnboardingSnapshot,
   OnboardingStep,
@@ -126,6 +133,15 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     }
   };
 
+  const close = async (
+    command: "onboarding_dismiss" | "onboarding_open_activity",
+  ) => {
+    const result = await Result.tryPromise(async () => invoke(command));
+    if (Result.isError(result)) {
+      reportOnboardingFailure();
+    }
+  };
+
   return (
     <main
       className={cn(
@@ -133,6 +149,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
         DESKTOP_PLATFORM === "mac" ? "pt-10" : "pt-6",
       )}
     >
+      <WindowDragRegion />
       {flowContent()}
     </main>
   );
@@ -147,12 +164,30 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
             <p className="text-sm" role="alert">
               {t("errorLoad")}
             </p>
-            <Button onClick={onRetry} size="sm" variant="outline">
+            <Button onClick={onRetry} variant="outline">
               {t("tryAgain")}
             </Button>
           </div>
         );
       case "ready":
+        switch (flow.snapshot.mode.type) {
+          case "fix":
+            return (
+              <FixView
+                onDismiss={() => {
+                  void close("onboarding_dismiss");
+                }}
+                permissions={flow.snapshot.mode.permissions}
+              />
+            );
+          case "introduce":
+            return introduction(flow.snapshot, flow.snapshot.mode.feature);
+          case "tour":
+            break;
+          default:
+            flow.snapshot.mode satisfies never;
+            return panic("Unknown onboarding mode.");
+        }
         return (
           <div
             className="motion-safe:animate-swap-in flex min-h-0 flex-1 flex-col"
@@ -164,6 +199,37 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
       default:
         flow satisfies never;
         return panic("Unknown onboarding flow state.");
+    }
+  }
+
+  function introduction(
+    snapshot: OnboardingSnapshot,
+    feature: IntroducedFeature,
+  ) {
+    const onDismiss = () => {
+      void close("onboarding_dismiss");
+    };
+    switch (feature) {
+      case "activityTimeline":
+        return (
+          <IntroduceView
+            activityPermissions={snapshot.activityPermissions}
+            onDismiss={onDismiss}
+            onOpenActivity={() => {
+              void close("onboarding_open_activity");
+            }}
+          />
+        );
+      case "dictation":
+        return (
+          <IntroduceDictationView
+            dictationPermissions={snapshot.dictationPermissions}
+            onDismiss={onDismiss}
+          />
+        );
+      default:
+        feature satisfies never;
+        return panic("Unknown introduced feature.");
     }
   }
 
@@ -184,10 +250,14 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
         return <ConnectStep {...props} />;
       case "howItWorks":
         return <HowItWorksStep {...props} />;
+      case "activity":
+        return <ActivityStep {...props} />;
       case "permissions":
         return <PermissionsStep {...props} />;
       case "tryIt":
         return <TryItStep {...props} />;
+      case "dictation":
+        return <DictationStep {...props} />;
       case "done":
         return (
           <DoneStep

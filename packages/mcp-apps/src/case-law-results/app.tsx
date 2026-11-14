@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 
 import { panic } from "better-result";
 
+import { TooltipProvider } from "@stll/ui/tooltip";
+
 import { CASE_LAW_RESULTS_APP } from "../manifest";
 import { createPresentationBridge } from "../shared/bridge";
 import { createCaseLawParser } from "./parse";
@@ -16,5 +18,9 @@ const root = document.querySelector("#app");
 if (root === null) {
   panic("Case-law app mount is missing");
 }
-createRoot(root).render(<CaseLawApp bridge={bridge} />);
-bridge.detached(bridge.connect(), "connect case-law app");
+createRoot(root).render(
+  <TooltipProvider>
+    <CaseLawApp bridge={bridge} />
+  </TooltipProvider>,
+);
+bridge.detached(bridge.connect(), "caseLawResults.connect");

@@ -27,7 +27,7 @@ import { UPLOAD_ENTITY_ORIGIN } from "@/api/handlers/entities/upload-origin";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { reconcileBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
-import { injectStamp, extractStamp } from "@/api/lib/docx-stamp";
+import { extractStamp, injectStamp } from "@/api/lib/docx-stamp";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import type { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";

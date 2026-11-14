@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "d93d017dbc12c3babc355df53190f77cbbaaf5948849434af6b3323dd251193f",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgements?signature=VIII+GC+227%2F21&court=15100500&sort=signature-asc",
+  "capturedAt": "2026-10-25T20:38:17.000Z",
+  "note": "one signature at one court: the listed row of a recorded document"
+}

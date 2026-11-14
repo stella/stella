@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -41,7 +41,12 @@ const expectExactProjection = async () => {
       JOIN case_law_decisions d ON d.id = c.decision_id
       CROSS JOIN LATERAL (
         SELECT 'work' AS target_type, '' AS anchor
-        UNION ALL SELECT 'provision', c.anchor WHERE c.anchor <> ''
+        -- The anchor and each provision above it: every cut before a
+        -- separator, stated here by character position rather than by the
+        -- projection's own split.
+        UNION ALL SELECT 'provision', left(c.anchor, cut)
+        FROM generate_series(1, length(c.anchor)) AS cut
+        WHERE cut = length(c.anchor) OR substr(c.anchor, cut + 1, 1) = '-'
       ) target
       WHERE c.work_eli IS NOT NULL AND d.country = c.jurisdiction
         AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
@@ -119,10 +124,42 @@ test("statute memberships follow publication, country, citation and source trans
     .delete(caseLawProvisionCitations)
     .where(eq(caseLawProvisionCitations.id, duplicateId));
   await expectExactProjection();
+  // A subdivision joins every provision above it, and leaves each one only
+  // when no other citation of the decision still sits under it.
+  const subdivisionId = createSafeId<"caseLawProvisionCitation">();
+  await db.insert(caseLawProvisionCitations).values({
+    id: subdivisionId,
+    decisionId,
+    jurisdiction: "CZE",
+    workIdentifier: "89/2012 Sb.",
+    workNumber: 89,
+    workYear: 2012,
+    workCollection: "Sb.",
+    unit: "section" as const,
+    section: 1,
+    workEli: "/eli/cz/sb/2012/89",
+    anchor: "s1-odst_2-pism_a",
+    spanStart: 40,
+    spanEnd: 45,
+    sentenceText: "Citation",
+    confidence: 1,
+  });
+  await expectExactProjection();
+  for (const anchor of ["s1-odst_2", "s10-odst_2", "s1-odst_3-pism_b"]) {
+    await db
+      .update(caseLawProvisionCitations)
+      .set({ anchor })
+      .where(eq(caseLawProvisionCitations.id, subdivisionId));
+    await expectExactProjection();
+  }
   await db
     .update(caseLawProvisionCitations)
     .set({ anchor: "s2", workEli: "/eli/cz/sb/1963/99" })
     .where(eq(caseLawProvisionCitations.id, citationId));
+  await expectExactProjection();
+  await db
+    .delete(caseLawProvisionCitations)
+    .where(eq(caseLawProvisionCitations.id, subdivisionId));
   await expectExactProjection();
   await db
     .update(caseLawProvisionCitations)
@@ -168,6 +205,40 @@ test("checkpointed repair removes stale memberships and converges on replay", as
     sql`SELECT decision_count FROM case_law_statute_citation_counts`,
   );
   expect(stale.rows).toEqual([{ decision_count: 1 }]);
+  // A membership projected before subdivisions counted toward their section:
+  // the repair adds the section bucket the citation now belongs to.
+  const subdivisionDecisionId =
+    decisionIds.at(1) ?? panic("Expected a second decision");
+  await db
+    .update(caseLawDecisions)
+    .set({ metadata: {} })
+    .where(eq(caseLawDecisions.id, subdivisionDecisionId));
+  await db.insert(caseLawProvisionCitations).values({
+    id: createSafeId<"caseLawProvisionCitation">(),
+    decisionId: subdivisionDecisionId,
+    jurisdiction: "CZE",
+    workIdentifier: "262/2006 Sb.",
+    workNumber: 262,
+    workYear: 2006,
+    workCollection: "Sb.",
+    unit: "section" as const,
+    section: 7,
+    workEli: "/eli/cz/sb/2006/262",
+    anchor: "par_7-odst_1",
+    spanStart: 0,
+    spanEnd: 5,
+    sentenceText: "Citation",
+    confidence: 1,
+  });
+  await db.execute(sql`
+    DELETE FROM case_law_statute_citation_memberships
+    WHERE decision_id = ${subdivisionDecisionId}::uuid AND anchor = 'par_7'
+  `);
+  const sectionCount = sql`
+    SELECT decision_count FROM case_law_statute_citation_counts
+    WHERE work_eli = '/eli/cz/sb/2006/262' AND anchor = 'par_7'
+  `;
+  expect((await db.execute(sectionCount)).rows).toEqual([]);
   for (const _pass of [1, 2]) {
     await db
       .update(caseLawStatuteCitationCountState)
@@ -180,6 +251,9 @@ test("checkpointed repair removes stale memberships and converges on replay", as
       decisions: 1,
     });
     await expectExactProjection();
+    expect((await db.execute(sectionCount)).rows).toEqual([
+      { decision_count: 1 },
+    ]);
     expect(await repairBatch()).toEqual({
       status: "ready",
       decisions: 0,

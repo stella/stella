@@ -154,6 +154,43 @@ describe("BOE client", () => {
     });
   });
 
+  test.each([
+    "fecha_actualizacion",
+    "fecha_vigencia",
+    "numero_oficial",
+    "diario",
+    "diario_numero",
+    "vigencia_agotada",
+  ])("refuses non-string values for %s", async (field) => {
+    for (const value of [null, 1, true, [], {}]) {
+      installFetch(() =>
+        jsonResponse({
+          data: [{ identificador: "BOE-A-1889-4763", [field]: value }],
+        }),
+      );
+      expect(
+        await rejectionOf(searchConsolidatedLegislation({})),
+      ).toMatchObject({
+        name: "BoeAPIError",
+        message: "BOE returned an unexpected JSON payload shape",
+      });
+    }
+  });
+
+  test.each(
+    [null, "Estatal", [], { codigo: 1 }, { texto: false }].map((ambito) => ({
+      ambito,
+    })),
+  )("refuses malformed ambito metadata: %j", async ({ ambito }) => {
+    installFetch(() =>
+      jsonResponse({ data: [{ identificador: "BOE-A-1889-4763", ambito }] }),
+    );
+    expect(await rejectionOf(searchConsolidatedLegislation({}))).toMatchObject({
+      name: "BoeAPIError",
+      message: "BOE returned an unexpected JSON payload shape",
+    });
+  });
+
   test("surfaces malformed JSON as a structured BOE error", async () => {
     installFetch(
       () =>

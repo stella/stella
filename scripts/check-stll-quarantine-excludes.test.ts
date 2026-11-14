@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -117,7 +125,9 @@ describe("quarantine exclude guard", () => {
     expect(result.errors).toEqual([]);
   });
 
-  test("rejects an expired container quarantine exception", () => {
+  // scripts/dated-waivers.ts owns the expiry and scopes it to changes that
+  // touch the exception, so the clock alone never turns this guard red.
+  test("leaves an elapsed container quarantine exception to the dated waiver check", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig(
         '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
@@ -127,12 +137,10 @@ describe("quarantine exclude guard", () => {
         "docker-compose.yml":
           "# release-age-quarantine-exception: 2026-08-13T09:51:27.645Z",
       },
-      now: new Date("2026-08-13T09:51:27.645Z"),
+      now: new Date("2099-01-01T00:00:00.000Z"),
     });
 
-    expect(result.errors).toContain(
-      "docker-compose.yml:1 release-age quarantine exception expired at 2026-08-13T09:51:27.645Z",
-    );
+    expect(result.errors).toEqual([]);
   });
 
   test("rejects every undated first-party exclusion", () => {
@@ -221,13 +229,15 @@ minimumReleaseAgeExcludes = [
     expect(result.activeTemporaryCount).toBe(1);
   });
 
+  // The prune workflow removes the entry, the lockfile release-age guard
+  // stops exempting it, and scripts/dated-waivers.ts inventories it; none of
+  // them fails an unrelated change, and neither does this guard.
   test.each([
     "2026-08-06T21:35:30.036Z",
-    "2026-08-06T21:35:30.037Z",
-    "2026-08-07T21:35:30.035Z",
     "2026-08-07T21:35:30.036Z",
+    "2099-01-01T00:00:00.000Z",
   ])(
-    "fails exactly at expiry and throughout the former notice window: %s",
+    "leaves an elapsed temporary exclusion to its expiry owners: %s",
     (now) => {
       const result = checkQuarantineExcludes({
         bunfig: createBunfig(
@@ -236,25 +246,10 @@ minimumReleaseAgeExcludes = [
         lockfile,
         now: new Date(now),
       });
-      expect(result.errors.at(0)).toContain(
-        'temporary quarantine exclude "better-result" expired at 2026-08-06T21:35:30.036Z and is still here',
-      );
-      expect(result.errors.at(0)).toContain(
-        "bun scripts/check-stll-quarantine-excludes.ts --prune",
-      );
+      expect(result.errors).toEqual([]);
+      expect(result.activeTemporaryCount).toBe(1);
     },
   );
-
-  test("stays silent immediately before expiry", () => {
-    const result = checkQuarantineExcludes({
-      bunfig: createBunfig(
-        '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
-      ),
-      lockfile,
-      now: new Date("2026-08-06T21:35:30.035Z"),
-    });
-    expect(result.errors).toEqual([]);
-  });
 
   test("rejects malformed expiry annotations", () => {
     const result = checkQuarantineExcludes({
@@ -339,6 +334,45 @@ minimumReleaseAgeExcludes = [
         now: new Date("2026-08-04T10:37:00.000Z"),
       }).errors,
     ).toEqual([]);
+  });
+
+  test("the prune CLI defaults to the root bunfig", () => {
+    const fixtureRoot = mkdtempSync(
+      path.join(tmpdir(), "stll-quarantine-prune-"),
+    );
+    try {
+      const fixtureScripts = path.join(fixtureRoot, "scripts");
+      const fixtureBunfig = path.join(fixtureRoot, "bunfig.toml");
+      const fixtureScript = path.join(
+        fixtureScripts,
+        "check-stll-quarantine-excludes.ts",
+      );
+      mkdirSync(fixtureScripts);
+      copyFileSync(
+        path.join(import.meta.dir, "check-stll-quarantine-excludes.ts"),
+        fixtureScript,
+      );
+      writeFileSync(
+        fixtureBunfig,
+        createBunfig(
+          '"better-result", # quarantine-expires: 2020-01-01T00:00:00.000Z',
+        ),
+      );
+
+      const result = Bun.spawnSync([
+        process.execPath,
+        fixtureScript,
+        "--prune",
+      ]);
+
+      expect(result.stderr.toString()).toBe("");
+      expect(result.exitCode).toBe(0);
+      const prunedBunfig = readFileSync(fixtureBunfig, "utf-8");
+      expect(prunedBunfig).not.toContain("better-result");
+      expect(prunedBunfig).toContain("@stll/native");
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
   });
 
   // Matching by name would take the renewed entry with the expired one, which

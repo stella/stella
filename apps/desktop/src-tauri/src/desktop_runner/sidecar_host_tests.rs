@@ -1,0 +1,1382 @@
+//! The harness host end to end, with nothing of ours mocked: the real runner
+//! over a local gateway socket, the real journal, the real supervisor and a
+//! real holder process (the supervisor tests' stand-in, which re-executes
+//! this test binary). Only the managed CLIs and the ChatGPT connection are
+//! fakes, since neither may run here.
+
+use std::{
+  path::PathBuf,
+  sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+  },
+  time::Duration,
+};
+
+use futures_util::future::BoxFuture;
+use serde_json::{Value, json};
+
+use super::harness::{HarnessHost, HarnessReports};
+use super::journal::SharedJournal;
+use super::sidecar_host::{
+  HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LinkedFolderLook,
+  LinkedFolderLooks, LocalHarnesses, SidecarHarnessHost, linked_folder_within,
+  skill_folders_within,
+};
+use super::tests::{Connection, Gateway, Setup};
+use crate::harness_sidecar::tests::Fixture;
+use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, SkillFolderRef};
+use crate::local_linked_folders::LinkedFolderRefusal;
+use crate::runner_protocol::{
+  ApprovalDecision, Harness, HarnessReport, LinkedFolderReport, RunApproval,
+};
+
+const WAIT: Duration = Duration::from_secs(10);
+const VERSION: &str = "0.50.0";
+/// A folder the member linked, which the fakes find in their root.
+const LINKED_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d1";
+/// A linked folder whose volume is not mounted.
+const OFFLINE_FOLDER_ID: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000d2";
+/// The approval request id the stand-in holder asks with.
+const REQUEST_ID: &str = "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f";
+/// The stand-in's scenarios, each a model the probe reports.
+const MODELS: &[&str] = &[
+  "gpt-test",
+  "wait",
+  "interruptible",
+  "approve",
+  "ask",
+  "needs-login",
+  "crash",
+  "flood-later",
+];
+
+/// Codex installed at `VERSION`, optionally on a credential that records
+/// every process it authorizes; Claude Code not installed.
+struct FakeHarnesses {
+  root: PathBuf,
+  /// What each read of the credentials finds; a test may change it.
+  credentials: Arc<Mutex<Option<HarnessCredentials>>>,
+  /// What the host asked to hear when an install ends.
+  settled: Arc<Mutex<Option<InstallSettled>>>,
+  /// Whether the member linked any folder; a report of them reaches the API
+  /// on its own, between the messages other tests wait for.
+  folders_linked: bool,
+}
+
+impl LocalHarnesses for FakeHarnesses {
+  fn installed(&self, harness: Harness) -> Option<InstalledHarness> {
+    (harness == Harness::Codex).then(|| InstalledHarness {
+      version: VERSION.to_owned(),
+      executable: self.root.join("harness/codex"),
+      config_dir: self.root.join("harness-home/codex"),
+      tool_path: vec![self.root.join("harness/bun/1.4.4/package/bin")],
+      lease: Box::new(()),
+    })
+  }
+
+  fn credentials(&self, harness: Harness) -> BoxFuture<'_, Option<HarnessCredentials>> {
+    let credentials = (harness == Harness::Codex)
+      .then(|| self.credentials.lock().unwrap().clone())
+      .flatten();
+    Box::pin(async move { credentials })
+  }
+
+  fn on_install_settled(&self, settled: InstallSettled) {
+    *self.settled.lock().unwrap() = Some(settled);
+  }
+
+  fn skill_folders(&self) -> Vec<SkillFolderRef> {
+    vec![SkillFolderRef {
+      name: "fixture-skill".to_owned(),
+      path: self.root.join("skills/fixture-skill").display().to_string(),
+    }]
+  }
+
+  fn linked_folder(&self, id: uuid::Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
+    match id.to_string().as_str() {
+      LINKED_FOLDER_ID => Ok(self.root.join("member/Smith v Jones")),
+      OFFLINE_FOLDER_ID => Err(LinkedFolderRefusal::Offline),
+      _ => Err(LinkedFolderRefusal::Unlinked),
+    }
+  }
+
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    if !self.folders_linked {
+      return Vec::new();
+    }
+    serde_json::from_value(json!([
+      { "id": LINKED_FOLDER_ID, "name": "Smith v Jones", "state": "available" },
+      { "id": OFFLINE_FOLDER_ID, "name": "Archive", "state": "offline" },
+    ]))
+    .unwrap()
+  }
+}
+
+/// Harnesses whose skill folders answer only once `release` fires.
+struct HungFolders {
+  release: Mutex<std::sync::mpsc::Receiver<()>>,
+  /// How many looks at the linked folders began.
+  looks: AtomicUsize,
+}
+
+impl LocalHarnesses for HungFolders {
+  fn installed(&self, _harness: Harness) -> Option<InstalledHarness> {
+    None
+  }
+
+  fn credentials(
+    &self,
+    _harness: Harness,
+  ) -> BoxFuture<'_, Option<HarnessCredentials>> {
+    Box::pin(async { None })
+  }
+
+  fn on_install_settled(&self, _settled: InstallSettled) {}
+
+  fn linked_folder(&self, _id: uuid::Uuid) -> Result<PathBuf, LinkedFolderRefusal> {
+    let _released = self.release.lock().unwrap().recv();
+    Ok(PathBuf::from("/late"))
+  }
+
+  fn linked_folder_reports(&self) -> Vec<LinkedFolderReport> {
+    self.looks.fetch_add(1, Ordering::SeqCst);
+    let _released = self.release.lock().unwrap().recv();
+    Vec::new()
+  }
+
+  fn skill_folders(&self) -> Vec<SkillFolderRef> {
+    let _released = self.release.lock().unwrap().recv();
+    vec![SkillFolderRef {
+      name: "late".to_owned(),
+      path: "/late".to_owned(),
+    }]
+  }
+}
+
+#[test]
+fn a_skill_folder_read_that_hangs_leaves_the_run_without_skills_in_time() {
+  let (release, released) = std::sync::mpsc::channel();
+  let harnesses = Arc::new(HungFolders {
+    release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
+  });
+
+  assert!(skill_folders_within(Duration::from_millis(20), harnesses).is_empty());
+
+  // Lets the stuck reader end.
+  release.send(()).unwrap();
+}
+
+/// Every process id a credential authorized, and how many grants are held.
+#[derive(Default)]
+struct Grants {
+  authorized: Mutex<Vec<u32>>,
+  held: Arc<Mutex<usize>>,
+}
+
+struct Held(Arc<Mutex<usize>>);
+
+impl Drop for Held {
+  fn drop(&mut self) {
+    *self.0.lock().unwrap() -= 1;
+  }
+}
+
+fn chatgpt_credentials(grants: &Arc<Grants>) -> HarnessCredentials {
+  let grants = Arc::clone(grants);
+  HarnessCredentials {
+    settings: HarnessLaunchSettings {
+      config_overrides: vec!["model_provider=\"openai_chatgpt_plan\"".to_owned()],
+      environment: [(
+        "STELLA_CODEX_TOKEN_BROKER".to_owned(),
+        "/broker/s".to_owned(),
+      )]
+      .into_iter()
+      .collect(),
+      removed_environment: vec!["OPENAI_API_KEY".to_owned()],
+      client_name: Some("Stella".to_owned()),
+      process_grant: true,
+    },
+    grant: Some(Arc::new(move |pid| {
+      grants.authorized.lock().unwrap().push(pid);
+      *grants.held.lock().unwrap() += 1;
+      Box::new(Held(Arc::clone(&grants.held))) as Box<dyn Send + Sync>
+    })),
+  }
+}
+
+/// A host on a stand-in holder, and the probe answer it reads.
+struct Place {
+  fixture: Fixture,
+  settled: Arc<Mutex<Option<InstallSettled>>>,
+}
+
+impl Place {
+  fn new() -> Self {
+    let place = Self {
+      fixture: Fixture::new(),
+      settled: Arc::default(),
+    };
+    place.probe_answers(&ready());
+    place
+  }
+
+  /// What the next probe of Codex answers.
+  fn probe_answers(&self, outcome: &Value) {
+    std::fs::write(
+      self.fixture.log().with_file_name("probe-codex.json"),
+      outcome.to_string(),
+    )
+    .unwrap();
+  }
+
+  fn host(
+    &self,
+    credentials: Option<HarnessCredentials>,
+    probe_interval: Duration,
+  ) -> SidecarHarnessHost {
+    self.host_with(credentials, probe_interval, false)
+  }
+
+  /// A host that reports a linked folder when `folders_linked`.
+  fn host_with(
+    &self,
+    credentials: Option<HarnessCredentials>,
+    probe_interval: Duration,
+    folders_linked: bool,
+  ) -> SidecarHarnessHost {
+    self.build_host(
+      Arc::new(Mutex::new(credentials)),
+      probe_interval,
+      folders_linked,
+    )
+  }
+
+  /// A host whose credentials are read from `credentials` each time.
+  fn host_reading(
+    &self,
+    credentials: Arc<Mutex<Option<HarnessCredentials>>>,
+    probe_interval: Duration,
+  ) -> SidecarHarnessHost {
+    self.build_host(credentials, probe_interval, false)
+  }
+
+  fn build_host(
+    &self,
+    credentials: Arc<Mutex<Option<HarnessCredentials>>>,
+    probe_interval: Duration,
+    folders_linked: bool,
+  ) -> SidecarHarnessHost {
+    SidecarHarnessHost::new(
+      HostSettings {
+        sidecar: self.fixture.settings_for("1.4.0", self.fixture.stand_in()),
+        workspaces: self.workspaces(),
+        unreadable: vec![self.fixture.root.join("home/.ssh")],
+        probe_interval,
+      },
+      Arc::new(FakeHarnesses {
+        root: self.fixture.root.clone(),
+        credentials,
+        settled: Arc::clone(&self.settled),
+        folders_linked,
+      }),
+      Arc::new(SharedJournal::default()),
+    )
+  }
+
+  /// An install of a managed CLI ends, as the installer reports it.
+  fn install_settles(&self) {
+    let settled = self
+      .settled
+      .lock()
+      .unwrap()
+      .clone()
+      .expect("the host watches installs once it serves a runner");
+    settled();
+  }
+
+  fn workspaces(&self) -> PathBuf {
+    self.fixture.root.join("runs")
+  }
+
+  /// Every message the holder read, of one type.
+  fn received(&self, kind: &str) -> Vec<Value> {
+    self
+      .fixture
+      .received()
+      .into_iter()
+      .filter(|message| message["type"] == kind)
+      .collect()
+  }
+
+  /// The holder seqs the host acked for a run, in order.
+  fn acks(&self, run_id: &str) -> Vec<u64> {
+    self
+      .received("ack")
+      .iter()
+      .filter(|ack| ack["runId"] == run_id)
+      .map(|ack| ack["seq"].as_u64().unwrap())
+      .collect()
+  }
+}
+
+fn ready() -> Value {
+  let models: Vec<Value> = MODELS
+    .iter()
+    .map(|id| {
+      json!({ "id": id, "label": id, "isDefault": false, "reasoningEfforts": ["low", "high"] })
+    })
+    .collect();
+  json!({
+    "type": "ready",
+    "version": VERSION,
+    "capabilities": ["approvals", "interrupt"],
+    // This desktop cannot sandbox the harness.
+    "approvalModes": ["ask", "auto"],
+    "models": models,
+  })
+}
+
+fn setup(host: &SidecarHarnessHost) -> Setup {
+  let mut setup = Setup::new(Arc::new(host.clone()) as Arc<dyn HarnessHost>);
+  setup.reports = Arc::new(host.clone()) as Arc<dyn HarnessReports>;
+  setup
+}
+
+fn run_id() -> String {
+  uuid::Uuid::new_v4().to_string()
+}
+
+fn run_start(run_id: &str, model: &str) -> Value {
+  json!({
+    "type": "run.start",
+    "runId": run_id,
+    "folderId": run_id,
+    "harness": "codex",
+    "harnessVersion": VERSION,
+    "model": model,
+    "reasoningEffort": "high",
+    "harnessSessionId": null,
+    "instructions": "Summarize the matter.",
+    "messages": [{"role": "user", "content": "Summarize the matter."}],
+    "policy": {"network": "open", "fs": "workspace", "approvals": "auto"},
+    "mcp": {
+      "serverName": "stella",
+      "url": "https://api.example.test/mcp",
+      "token": "run-token-1",
+      "expiresAt": "2026-10-28T13:00:00.000Z",
+    },
+  })
+}
+
+fn codex_state(report: &Value) -> Option<&str> {
+  (report["id"] == "codex").then(|| report["state"].as_str().unwrap_or_default())
+}
+
+/// Accept a connection, welcome it with `resume`, and wait until the API
+/// knows Codex as `state`, from `hello` or a later `harness.status`.
+async fn connect(gateway: &Gateway, resume: &[(&str, u32)], state: &str) -> Connection {
+  let mut connection = gateway.accept().await;
+  let hello = connection.hello().await;
+  connection.welcome(resume).await;
+  let known = hello["harnesses"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .any(|report| codex_state(report) == Some(state));
+  if !known {
+    status(&mut connection, state).await;
+  }
+  connection
+}
+
+/// The next `harness.status`, which must report Codex as `state`.
+async fn status(connection: &mut Connection, state: &str) -> Value {
+  let status = connection.receive_type("harness.status").await;
+  assert_eq!(codex_state(&status["harness"]), Some(state), "{status}");
+  status
+}
+
+/// The run's messages up to and including its `run.finished`.
+async fn until_finished(connection: &mut Connection) -> Vec<Value> {
+  let mut messages = Vec::new();
+  loop {
+    let message = connection.receive().await;
+    let finished = message["type"] == "run.finished";
+    messages.push(message);
+    if finished {
+      return messages;
+    }
+  }
+}
+
+fn seqs(messages: &[Value]) -> Vec<u64> {
+  messages
+    .iter()
+    .filter_map(|message| message["seq"].as_u64())
+    .collect()
+}
+
+/// Wait for a condition another process or task makes true.
+async fn until(what: &str, condition: impl Fn() -> bool) {
+  let deadline = tokio::time::Instant::now() + WAIT;
+  while !condition() {
+    assert!(tokio::time::Instant::now() < deadline, "timed out: {what}");
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+}
+
+/// A test body on its own runtime, holding the child-process guard.
+fn run(body: impl std::future::Future<Output = ()>) {
+  let _children = crate::test_child_processes::exclusive();
+  tokio::runtime::Builder::new_multi_thread()
+    .enable_all()
+    .build()
+    .unwrap()
+    .block_on(body);
+}
+
+/// Stop every holder the fixture's host started.
+fn stop_holders(place: &Place) {
+  tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+    .unwrap()
+    .block_on(async {
+      let settings = place
+        .fixture
+        .settings_for("1.4.0", place.fixture.stand_in());
+      HarnessSidecar::spawn(settings).shutdown().await;
+    });
+}
+
+#[test]
+fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_journaled()
+ {
+  let place = Place::new();
+  let id = run_id();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    connection.send(run_start(&id, "gpt-test")).await;
+    assert_eq!(
+      connection.receive().await,
+      json!({"type": "run.accepted", "runId": id})
+    );
+    let messages = until_finished(&mut connection).await;
+    assert_eq!(seqs(&messages), vec![1, 2, 3]);
+    assert_eq!(messages[0]["chunk"]["type"], "RUN_STARTED");
+    assert_eq!(messages[1]["type"], "run.approval_request");
+    assert_eq!(messages[1]["requestId"], REQUEST_ID);
+    assert_eq!(messages[2]["outcome"], "completed");
+    assert_eq!(messages[2]["harnessSessionId"], "thread-a");
+    until("the holder was acked through its last seq", || {
+      place.acks(&id).last() == Some(&3)
+    })
+    .await;
+    // The next turn of the chat works in the same folder.
+    assert!(place.workspaces().join(&id).is_dir());
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let start = place.received("run.start").remove(0);
+  assert_eq!(start["runId"], id.as_str());
+  assert_eq!(start["threadId"], id.as_str());
+  assert_eq!(
+    start["executable"],
+    place.fixture.root.join("harness/codex").to_str().unwrap()
+  );
+  assert_eq!(
+    start["configDir"],
+    place
+      .fixture
+      .root
+      .join("harness-home/codex")
+      .to_str()
+      .unwrap()
+  );
+  assert_eq!(
+    start["workspaceDir"],
+    place.workspaces().join(&id).to_str().unwrap()
+  );
+  // The chat's own cache, beside its folder, never one other chats share.
+  let cache = place.workspaces().join(format!("{id}.cache"));
+  assert_eq!(start["cacheDir"], cache.to_str().unwrap());
+  assert!(cache.is_dir());
+  // No chat's folder or cache is readable but for the run's own, which
+  // the harness re-opens; the app's own paths follow.
+  assert_eq!(
+    start["unreadablePaths"],
+    json!([
+      place.workspaces().to_str().unwrap(),
+      place.fixture.root.join("home/.ssh").to_str().unwrap(),
+    ])
+  );
+  let chats = std::path::Path::new(start["unreadablePaths"][0].as_str().unwrap());
+  assert!(place.workspaces().join(&id).starts_with(chats));
+  assert!(cache.starts_with(chats));
+  assert_eq!(
+    start["toolPath"],
+    json!([place
+      .fixture
+      .root
+      .join("harness/bun/1.4.4/package/bin")
+      .to_str()
+      .unwrap()])
+  );
+  assert_eq!(
+    start["skillFolders"],
+    json!([{
+      "name": "fixture-skill",
+      "path": place.fixture.root.join("skills/fixture-skill").to_str().unwrap(),
+    }])
+  );
+  assert_eq!(
+    start["policy"],
+    json!({"network": "open", "fs": "workspace", "approvals": "auto"})
+  );
+  assert_eq!(start["reasoningEffort"], "high");
+  assert_eq!(start["launch"]["processGrant"], false);
+}
+
+#[test]
+fn the_linked_folders_reach_the_api_by_name_and_state_only() {
+  let place = Place::new();
+  run(async {
+    let host = place.host_with(None, Duration::from_secs(3600), true);
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let _connection = connect(&gateway, &[], "ready").await;
+    until("the host looked at the linked folders", || {
+      host.linked_folders().len() == 2
+    })
+    .await;
+    assert_eq!(
+      serde_json::to_value(host.linked_folders()).unwrap(),
+      json!([
+        { "id": LINKED_FOLDER_ID, "name": "Smith v Jones", "state": "available" },
+        { "id": OFFLINE_FOLDER_ID, "name": "Archive", "state": "offline" },
+      ])
+    );
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_linked_folder_that_hangs_counts_as_offline_in_time() {
+  let (release, released) = std::sync::mpsc::channel();
+  let harnesses = Arc::new(HungFolders {
+    release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
+  });
+
+  assert_eq!(
+    linked_folder_within(Duration::from_millis(20), harnesses, uuid::Uuid::new_v4()),
+    Err(LinkedFolderRefusal::Offline)
+  );
+
+  release.send(()).unwrap();
+}
+
+#[test]
+fn a_look_at_the_linked_folders_that_hangs_is_the_only_one_until_it_ends() {
+  let (release, released) = std::sync::mpsc::channel();
+  let hung = Arc::new(HungFolders {
+    release: Mutex::new(released),
+    looks: AtomicUsize::new(0),
+  });
+  let harnesses: Arc<dyn LocalHarnesses> = Arc::<HungFolders>::clone(&hung);
+  run(async move {
+    let mut looks = LinkedFolderLooks::default();
+    let budget = Duration::from_millis(20);
+
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+    // The next beat waits on the same look instead of starting another.
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+    assert_eq!(
+      looks.look(&harnesses, budget).await,
+      LinkedFolderLook::Pending
+    );
+
+    release.send(()).unwrap();
+    assert_eq!(
+      looks.look(&harnesses, WAIT).await,
+      LinkedFolderLook::LateReports(Vec::new())
+    );
+    assert_eq!(hung.looks.load(Ordering::SeqCst), 1);
+
+    // With none in flight, the next look is a new one.
+    release.send(()).unwrap();
+    assert_eq!(
+      looks.look(&harnesses, WAIT).await,
+      LinkedFolderLook::Reports(Vec::new())
+    );
+    assert_eq!(hung.looks.load(Ordering::SeqCst), 2);
+  });
+}
+
+/// Every entry under `dir` by relative path, with each file's bytes.
+fn tree_of(
+  dir: &std::path::Path,
+) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+  let mut tree = std::collections::BTreeMap::new();
+  let mut pending = vec![dir.to_path_buf()];
+  while let Some(at) = pending.pop() {
+    for entry in std::fs::read_dir(&at).unwrap().flatten() {
+      let path = entry.path();
+      let relative = path.strip_prefix(dir).unwrap().to_path_buf();
+      if entry.file_type().unwrap().is_dir() {
+        tree.insert(relative, None);
+        pending.push(path);
+      } else {
+        tree.insert(relative, Some(std::fs::read(&path).unwrap()));
+      }
+    }
+  }
+  tree
+}
+
+#[test]
+fn a_run_in_a_linked_folder_works_there_and_keeps_its_cache_and_step_outputs_beside_the_chat_folder()
+ {
+  let place = Place::new();
+  let id = run_id();
+  let output_key = "cd".repeat(32);
+  // The member's own folder, with their work in it.
+  let member = place.fixture.root.join("member");
+  let linked = member.join("Smith v Jones");
+  std::fs::create_dir_all(linked.join("drafts")).unwrap();
+  std::fs::write(linked.join("drafts/lease.md"), "The first draft.\n").unwrap();
+  let before = tree_of(&member);
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    let mut start = run_start(&id, "gpt-test");
+    start["linkedFolderId"] = json!(LINKED_FOLDER_ID);
+    start["outputKey"] = json!(output_key);
+    connection.send(start).await;
+    assert_eq!(
+      connection.receive().await,
+      json!({"type": "run.accepted", "runId": id})
+    );
+    let messages = until_finished(&mut connection).await;
+    assert_eq!(messages.last().unwrap()["outcome"], "completed");
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let start = place.received("run.start").remove(0);
+  assert_eq!(start["workspaceDir"], linked.to_str().unwrap());
+  let cache = place.workspaces().join(format!("{id}.cache"));
+  assert_eq!(start["cacheDir"], cache.to_str().unwrap());
+  assert!(cache.is_dir());
+  // The run's outputs and their key are kept in stella's runs folder, where
+  // the bridge looks, and nothing is written in or beside the member's.
+  let store = place.workspaces().join(format!("{id}.step-outputs"));
+  assert_eq!(start["stepOutputDir"], store.to_str().unwrap());
+  assert_eq!(
+    std::fs::read_to_string(store.join(&id).join("key")).unwrap(),
+    output_key
+  );
+  assert_eq!(tree_of(&member), before);
+  // A step the sidecar keeps where `run.start` named opens through the
+  // bridge for the member's page.
+  let step = "ab".repeat(32);
+  std::fs::write(store.join(&id).join(&step), "{\"bytes\":3}\nok\n").unwrap();
+  run(async {
+    let response = crate::bridge::tests::read_step_at(
+      &place.workspaces(),
+      &output_key,
+      "user-fixture-1",
+      uuid::Uuid::parse_str(&id).unwrap(),
+      &step,
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+      .await
+      .unwrap();
+    assert_eq!(&body[..], b"ok\n");
+  });
+}
+
+#[test]
+fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_millis(100));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    let mut older = run_start(&run_id(), "gpt-test");
+    older["harnessVersion"] = json!("0.49.0");
+    let mut claude = run_start(&run_id(), "gpt-test");
+    claude["harness"] = json!("claude-code");
+    let mut unsandboxed = run_start(&run_id(), "gpt-test");
+    unsandboxed["policy"]["approvals"] = json!("full_auto");
+    let mut offline = run_start(&run_id(), "gpt-test");
+    offline["linkedFolderId"] = json!(OFFLINE_FOLDER_ID);
+    let mut unlinked = run_start(&run_id(), "gpt-test");
+    unlinked["linkedFolderId"] = json!(run_id());
+    let mut unoffered_effort = run_start(&run_id(), "gpt-test");
+    unoffered_effort["reasoningEffort"] = json!("max");
+    let cases = [
+      (run_start(&run_id(), "gpt-unknown"), "model_unavailable"),
+      (unoffered_effort, "model_unavailable"),
+      (older, "harness_version_unavailable"),
+      (claude, "harness_not_installed"),
+      (unsandboxed, "policy_unsupported"),
+      (offline, "folder_offline"),
+      (unlinked, "folder_unlinked"),
+    ];
+    for (start, reason) in cases {
+      connection.send(start.clone()).await;
+      assert_eq!(
+        connection.receive().await,
+        json!({"type": "run.rejected", "runId": start["runId"], "reason": reason})
+      );
+    }
+    for (outcome, reason) in [
+      (
+        json!({ "type": "needs_login", "version": VERSION }),
+        "harness_needs_login",
+      ),
+      (
+        json!({ "type": "limit_until", "version": VERSION, "resetsAt": "2026-10-28T14:00:00Z" }),
+        "harness_limited",
+      ),
+      (
+        json!({ "type": "unsupported", "version": VERSION, "recommendedVersion": null }),
+        "harness_unsupported",
+      ),
+      (
+        json!({ "type": "failed", "reason": "harness_unavailable", "message": "exited" }),
+        "harness_unavailable",
+      ),
+    ] {
+      place.probe_answers(&outcome);
+      // The next probe changes the report, and the API hears of it.
+      let state = connection.receive_type("harness.status").await;
+      assert_ne!(state["harness"]["state"], "ready", "{state}");
+      let start = run_start(&run_id(), "gpt-test");
+      connection.send(start.clone()).await;
+      assert_eq!(
+        connection.receive().await,
+        json!({"type": "run.rejected", "runId": start["runId"], "reason": reason})
+      );
+    }
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  assert!(place.received("run.start").is_empty());
+}
+
+#[test]
+fn approvals_answers_interrupts_and_cancels_reach_the_harness_and_its_end_comes_back() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+
+    let approved = run_id();
+    connection.send(run_start(&approved, "approve")).await;
+    connection.receive_type("run.accepted").await;
+    connection.receive_type("run.event").await;
+    let request = connection.receive_type("run.approval_request").await;
+    connection
+      .send(json!({
+        "type": "run.approval",
+        "runId": approved,
+        "requestId": request["requestId"],
+        "decision": "approve_for_session",
+      }))
+      .await;
+    let rest = until_finished(&mut connection).await;
+    assert_eq!(rest[0]["chunk"]["delta"], "approve_for_session");
+    assert_eq!(rest[1]["outcome"], "completed");
+    assert_eq!(seqs(&rest), vec![3, 4]);
+
+    // A question's answers reach the holder, which goes on with the run.
+    let asked = run_id();
+    let request_id = "0192f3a0-6b1c-7d2e-8f30-0000000000d2";
+    connection.send(run_start(&asked, "ask")).await;
+    connection.receive_type("run.accepted").await;
+    connection.receive_type("run.event").await;
+    connection
+      .send(json!({
+        "type": "run.answer",
+        "runId": asked,
+        "requestId": request_id,
+        "answers": {"tone": ["Formal"]},
+      }))
+      .await;
+    let rest = until_finished(&mut connection).await;
+    assert_eq!(rest[0]["chunk"]["delta"], request_id);
+    assert_eq!(rest[1]["outcome"], "completed");
+
+    for (model, command, outcome) in [
+      ("interruptible", "run.interrupt", "interrupted"),
+      ("wait", "run.cancel", "cancelled"),
+    ] {
+      let id = run_id();
+      connection.send(run_start(&id, model)).await;
+      connection.receive_type("run.accepted").await;
+      connection.receive_type("run.event").await;
+      connection.send(json!({"type": command, "runId": id})).await;
+      let finished = connection.receive_type("run.finished").await;
+      assert_eq!(finished["outcome"], outcome);
+      assert_eq!(finished["seq"], 2);
+    }
+    runner.stop().await;
+  });
+  let answers = place.received("run.answer");
+  assert_eq!(answers.len(), 1);
+  assert_eq!(
+    answers[0]["requestId"],
+    "0192f3a0-6b1c-7d2e-8f30-0000000000d2"
+  );
+  assert_eq!(answers[0]["answers"], json!({"tone": ["Formal"]}));
+  stop_holders(&place);
+}
+
+#[test]
+fn a_holder_that_dies_ends_its_runs_failed_and_input_is_answered_on_the_stream() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+
+    let waiting = run_id();
+    connection.send(run_start(&waiting, "wait")).await;
+    connection.receive_type("run.accepted").await;
+    connection.receive_type("run.event").await;
+    connection
+      .send(json!({
+        "type": "run.input",
+        "runId": waiting,
+        "inputId": "input-1",
+        "message": {"role": "user", "content": "And the appeal?"},
+      }))
+      .await;
+    let answered = connection.receive_type("run.event").await;
+    assert_eq!(answered["seq"], 2);
+    assert_eq!(answered["chunk"]["type"], "RUN_ERROR");
+    assert_eq!(answered["chunk"]["code"], "input_unsupported");
+    assert_eq!(answered["chunk"]["runId"], waiting.as_str());
+
+    let crashed = run_id();
+    connection.send(run_start(&crashed, "crash")).await;
+    connection.receive_type("run.accepted").await;
+    // Both runs end failed: the one that crashed the holder, and the one
+    // it held. Neither end came from the holder, so no ack names it.
+    let mut ends = Vec::new();
+    while ends.len() < 2 {
+      let message = connection.receive().await;
+      if message["type"] == "run.finished" {
+        ends.push((
+          message["runId"].as_str().unwrap().to_owned(),
+          message["seq"].clone(),
+          message["outcome"].clone(),
+        ));
+      }
+    }
+    ends.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut expected = vec![
+      (waiting.clone(), json!(3), json!("failed")),
+      (crashed.clone(), json!(2), json!("failed")),
+    ];
+    expected.sort_by(|left, right| left.0.cmp(&right.0));
+    assert_eq!(ends, expected);
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_changed_probe_reaches_the_api_and_a_run_that_needs_a_login_probes_again() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    let probes = place.received("harness.probe").len();
+    place.probe_answers(&json!({ "type": "needs_login", "version": VERSION }));
+    let id = run_id();
+    connection.send(run_start(&id, "needs-login")).await;
+    connection.receive_type("run.accepted").await;
+    let messages = until_finished(&mut connection).await;
+    assert_eq!(messages.last().unwrap()["outcome"], "needs_login");
+    let changed = status(&mut connection, "needs_login").await;
+    assert_eq!(changed["harness"]["version"], VERSION);
+    assert!(place.received("harness.probe").len() > probes);
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn an_install_that_ends_is_probed_and_reported_without_waiting_for_the_interval() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    // The CLI now answers differently, as an update would make it.
+    place.probe_answers(&json!({ "type": "needs_login", "version": VERSION }));
+    place.install_settles();
+    let changed = status(&mut connection, "needs_login").await;
+    assert_eq!(changed["harness"]["version"], VERSION);
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_ready_harness_stays_ready_through_one_failed_probe_and_the_next_decides() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let _connection = connect(&gateway, &[], "ready").await;
+    let failed = json!({
+      "type": "failed",
+      "reason": "harness_unavailable",
+      "message": "the CLI did not answer in time",
+    });
+    place.probe_answers(&failed);
+    let probes = place.received("harness.probe").len();
+    place.install_settles();
+    until("the failed probe", || {
+      place.received("harness.probe").len() > probes
+    })
+    .await;
+    // One failed probe keeps the harness ready.
+    until("the probe's outcome", || {
+      host.kept_through_failure(Harness::Codex)
+    })
+    .await;
+    assert!(matches!(
+      host.reports().iter().find(|report| codex_report(report)),
+      Some(HarnessReport::Ready(_))
+    ));
+    // The next failed probe decides.
+    place.install_settles();
+    until("the second failed probe", || {
+      matches!(
+        host.reports().iter().find(|report| codex_report(report)),
+        Some(HarnessReport::Unavailable(_))
+      )
+    })
+    .await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_ready_report_kept_through_a_failed_probe_starts_runs_with_the_fresh_credentials() {
+  let place = Place::new();
+  let grants = Arc::new(Grants::default());
+  let credentials = Arc::new(Mutex::new(Some(chatgpt_credentials(&grants))));
+  let id = run_id();
+  run(async {
+    let host = place.host_reading(Arc::clone(&credentials), Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    // A sign-in since the last probe: the credentials changed.
+    credentials
+      .lock()
+      .unwrap()
+      .as_mut()
+      .unwrap()
+      .settings
+      .environment
+      .insert(
+        "STELLA_CODEX_TOKEN_BROKER".to_owned(),
+        "/broker/signed-in-again".to_owned(),
+      );
+    place.probe_answers(&json!({
+      "type": "failed",
+      "reason": "harness_unavailable",
+      "message": "the CLI did not answer in time",
+    }));
+    place.install_settles();
+    until("the probe's outcome", || {
+      host.kept_through_failure(Harness::Codex)
+    })
+    .await;
+    connection.send(run_start(&id, "gpt-test")).await;
+    connection.receive_type("run.accepted").await;
+    until_finished(&mut connection).await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let start = place.received("run.start").remove(0);
+  assert_eq!(
+    start["launch"]["environment"],
+    json!({ "STELLA_CODEX_TOKEN_BROKER": "/broker/signed-in-again" })
+  );
+}
+
+fn codex_report(report: &HarnessReport) -> bool {
+  serde_json::to_value(report).is_ok_and(|value| value["id"] == "codex")
+}
+
+#[test]
+fn a_harness_process_runs_only_once_its_credential_authorized_it() {
+  let place = Place::new();
+  let grants = Arc::new(Grants::default());
+  let id = run_id();
+  run(async {
+    let host = place.host(
+      Some(chatgpt_credentials(&grants)),
+      Duration::from_secs(3600),
+    );
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    // The probe's process was authorized before it answered.
+    assert_eq!(grants.authorized.lock().unwrap().len(), 1);
+    connection.send(run_start(&id, "gpt-test")).await;
+    connection.receive_type("run.accepted").await;
+    let messages = until_finished(&mut connection).await;
+    assert_eq!(seqs(&messages), vec![1, 2, 3]);
+    assert_eq!(grants.authorized.lock().unwrap().len(), 2);
+    until("the run's grant was released", || {
+      *grants.held.lock().unwrap() == 0
+    })
+    .await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let start = place.received("run.start").remove(0);
+  assert_eq!(start["launch"]["processGrant"], true);
+  assert_eq!(start["launch"]["clientName"], "Stella");
+  assert_eq!(
+    start["launch"]["configOverrides"],
+    json!(["model_provider=\"openai_chatgpt_plan\""])
+  );
+  assert_eq!(
+    start["launch"]["environment"],
+    json!({ "STELLA_CODEX_TOKEN_BROKER": "/broker/s" })
+  );
+  let granted: Vec<Value> = place.received("harness.process_granted");
+  assert_eq!(granted.len(), 2);
+  assert_eq!(granted[1]["id"], id.as_str());
+  // Both reports named the stand-in holder's own process.
+  let authorized = grants.authorized.lock().unwrap().clone();
+  assert_eq!(authorized[0], authorized[1]);
+}
+
+#[test]
+fn a_burst_during_a_runner_outage_is_journaled_whole_and_resent() {
+  let place = Place::new();
+  let id = run_id();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    connection.send(run_start(&id, "flood-later")).await;
+    connection.receive_type("run.accepted").await;
+    assert_eq!(connection.receive_type("run.event").await["seq"], 1);
+    until("the holder was acked for the event", || {
+      place.acks(&id) == vec![1]
+    })
+    .await;
+    runner.stop().await;
+
+    // With no runner and no socket, the harness produces a burst.
+    host
+      .approval(RunApproval {
+        run_id: id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        decision: ApprovalDecision::Approve,
+      })
+      .unwrap();
+    // What the stand-in sends on the approval.
+    let flooded: u64 = 300;
+    until(
+      "the journal took every output and the holder was acked for it",
+      || place.acks(&id).last() == Some(&(flooded + 1)),
+    )
+    .await;
+    // Each ack follows the journal: it never names a position the journal
+    // does not hold yet.
+    let journaled = setup.journal.get(&id).unwrap();
+    assert_eq!(u64::from(journaled.last_seq()), flooded + 1);
+    assert_eq!(u64::from(journaled.source_seq()), flooded + 1);
+    let acks = place.acks(&id);
+    assert!(acks.windows(2).all(|pair| pair[0] < pair[1]), "{acks:?}");
+
+    let runner = setup.start(&gateway);
+    let mut connection = gateway.accept().await;
+    let hello = connection.hello().await;
+    assert_eq!(
+      hello["activeRuns"],
+      json!([{"runId": id, "lastSeq": flooded + 1}])
+    );
+    connection.welcome(&[(id.as_str(), 1)]).await;
+    let mut seqs = Vec::new();
+    while seqs.len() < usize::try_from(flooded).unwrap() {
+      let message = connection.receive().await;
+      if message["type"] == "run.event" {
+        assert_eq!(message["chunk"]["delta"], "more");
+        seqs.push(message["seq"].as_u64().unwrap());
+      }
+    }
+    assert_eq!(seqs, (2..=flooded + 1).collect::<Vec<_>>());
+    connection
+      .send(json!({"type": "run.cancel", "runId": id}))
+      .await;
+    let finished = connection.receive_type("run.finished").await;
+    assert_eq!(finished["seq"], flooded + 2);
+    assert_eq!(finished["outcome"], "cancelled");
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  // Only the API's cancel reached the holder: the outage cancelled nothing.
+  let cancels = place
+    .received("run.cancel")
+    .into_iter()
+    .filter(|cancel| cancel["runId"] == id.as_str())
+    .count();
+  assert_eq!(cancels, 1);
+}
+
+/// The first app: start a run and see its first event journaled, then quit
+/// (the runtime and every task on it end, as when the process exits). The
+/// journal stays in `journal_dir`.
+fn first_app(
+  place: &Place,
+  journal_dir: &std::path::Path,
+  id: &str,
+  credentials: Option<HarnessCredentials>,
+) {
+  run(async {
+    let host = place.host(credentials, Duration::from_secs(3600));
+    let mut setup = setup(&host);
+    let own = std::mem::replace(&mut setup.journal_dir, journal_dir.to_path_buf());
+    let _unused = std::fs::remove_dir_all(own);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    connection.send(run_start(id, "wait")).await;
+    connection.receive_type("run.accepted").await;
+    let event = connection.receive_type("run.event").await;
+    assert_eq!(event["seq"], 1);
+    until("the holder was acked for the event", || {
+      place.acks(id) == vec![1]
+    })
+    .await;
+    runner.stop().await;
+    // The journal outlives this app; the test removes it at the end.
+    setup.journal_dir = place.fixture.root.join("no-journal");
+  });
+}
+
+/// A journal folder the test removes at its end.
+fn journal_dir(place: &Place) -> PathBuf {
+  place.fixture.root.join("journal")
+}
+
+#[test]
+fn a_restarted_app_resumes_a_held_run_after_its_journal_without_a_repeat_or_a_gap() {
+  let place = Place::new();
+  let grants = Arc::new(Grants::default());
+  let id = run_id();
+  let journal = journal_dir(&place);
+  first_app(&place, &journal, &id, Some(chatgpt_credentials(&grants)));
+  let granted_for_run = || {
+    place
+      .received("harness.process_granted")
+      .iter()
+      .filter(|granted| granted["id"] == id.as_str())
+      .count()
+  };
+  assert_eq!(granted_for_run(), 1);
+  let run_process = *grants.authorized.lock().unwrap().last().unwrap();
+  // A restarted app has a broker of its own that trusts nothing the first
+  // one authorized: it must authorize the kept run's process itself.
+  let restarted = Arc::new(Grants::default());
+  run(async {
+    let host = place.host(
+      Some(chatgpt_credentials(&restarted)),
+      Duration::from_secs(3600),
+    );
+    let mut setup = setup(&host);
+    let own = std::mem::replace(&mut setup.journal_dir, journal.clone());
+    let _unused = std::fs::remove_dir_all(own);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = gateway.accept().await;
+    let hello = connection.hello().await;
+    assert_eq!(hello["activeRuns"], json!([{"runId": id, "lastSeq": 1}]));
+    connection.welcome(&[(id.as_str(), 1)]).await;
+    // The resumed holder reports the run's process again, and the new app
+    // authorizes it.
+    until("the resumed run's process was authorized again", || {
+      granted_for_run() == 2
+    })
+    .await;
+    assert_eq!(
+      restarted.authorized.lock().unwrap().last(),
+      Some(&run_process),
+      "the restarted app's own credential authorized the run's process"
+    );
+    assert!(*restarted.held.lock().unwrap() >= 1);
+    connection
+      .send(json!({"type": "run.cancel", "runId": id}))
+      .await;
+    let mut messages = Vec::new();
+    loop {
+      let message = connection.receive().await;
+      if message["type"] == "harness.status" {
+        continue;
+      }
+      let finished = message["type"] == "run.finished";
+      messages.push(message);
+      if finished {
+        break;
+      }
+    }
+    assert_eq!(seqs(&messages), vec![2]);
+    assert_eq!(messages[0]["outcome"], "cancelled");
+    until("the holder was acked through the end", || {
+      place.acks(&id) == vec![1, 2]
+    })
+    .await;
+    until("the resumed run's grant was released", || {
+      *restarted.held.lock().unwrap() == 0
+    })
+    .await;
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let resumes = place.received("resume");
+  assert_eq!(resumes.len(), 1);
+  assert_eq!(resumes[0]["afterSeq"], 1);
+  assert_eq!(
+    place.fixture.starts(),
+    1,
+    "the second app started no holder"
+  );
+}
+
+#[test]
+fn a_restarted_app_ends_a_journaled_run_the_holder_no_longer_has_as_failed() {
+  let place = Place::new();
+  let id = run_id();
+  let journal = journal_dir(&place);
+  first_app(&place, &journal, &id, None);
+  // The holder goes away with its runs while no app runs.
+  stop_holders(&place);
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let mut setup = setup(&host);
+    let own = std::mem::replace(&mut setup.journal_dir, journal.clone());
+    let _unused = std::fs::remove_dir_all(own);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = gateway.accept().await;
+    connection.hello().await;
+    connection.welcome(&[(id.as_str(), 1)]).await;
+    let finished = loop {
+      let message = connection.receive().await;
+      if message["type"] == "run.finished" {
+        break message;
+      }
+    };
+    assert_eq!(finished["seq"], 2);
+    assert_eq!(finished["outcome"], "failed");
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn a_restore_asked_again_by_a_new_socket_while_it_runs_ends_restored_on_that_socket() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    let restore_id = run_id();
+    let restore = json!({
+      "type": "folder.restore",
+      "restoreId": restore_id,
+      "folderId": run_id(),
+      "runId": run_id(),
+    });
+    connection.send(restore.clone()).await;
+    until("the holder was asked to restore", || {
+      place.received("folder.restore").len() == 1
+    })
+    .await;
+
+    // The socket drops while the holder still writes the folder; the API
+    // sends the same restore on the next socket. It is the restore already
+    // going, not another one: no refusal, and the holder is not asked again.
+    runner.stop().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    connection.send(restore).await;
+    until("the host was handed the resend", || {
+      host.restores_asked() == 2
+    })
+    .await;
+    assert_eq!(place.received("folder.restore").len(), 1);
+
+    // The holder's link drops too; the supervisor asks it again by the same
+    // request, and its answer goes out on the socket that is up now.
+    let _intruder = place.fixture.replace_holder_connection("1.4.0");
+    let answered = loop {
+      let message = connection.receive().await;
+      if message["type"] == "folder.restored" {
+        break message;
+      }
+    };
+    assert_eq!(
+      answered,
+      json!({"type": "folder.restored", "restoreId": restore_id, "outcome": "restored"})
+    );
+    runner.stop().await;
+  });
+  stop_holders(&place);
+  let asked = place.received("folder.restore");
+  assert_eq!(asked.len(), 2);
+  assert_eq!(asked[0]["requestId"], asked[1]["requestId"]);
+}

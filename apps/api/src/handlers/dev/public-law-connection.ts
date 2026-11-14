@@ -47,8 +47,7 @@ type ConnectionConfig =
   | Extract<PublicLawConnection, { status: "unconfigured" }>;
 
 type ProbeOutcome =
-  | { status: "reachable" }
-  | { status: "unreachable"; reason: string };
+  { status: "reachable" } | { status: "unreachable"; reason: string };
 
 let connectRun: Promise<void> | null = null;
 let lastFailure: string | null = null;

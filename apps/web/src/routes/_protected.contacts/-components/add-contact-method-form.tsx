@@ -1,6 +1,7 @@
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
@@ -25,12 +26,12 @@ export const AddContactMethodForm = ({
   type?: "text";
   value: string;
 }) => (
-  <form
+  <Form
     action={() => {
       onSubmit();
     }}
-    className="flex gap-2"
-    noValidate
+    density="compact"
+    layout="inline"
   >
     <Input
       className="h-8 min-w-0 flex-1 text-sm"
@@ -46,7 +47,7 @@ export const AddContactMethodForm = ({
       buttonLabel={buttonLabel}
       disabled={disabled || value.trim().length === 0}
     />
-  </form>
+  </Form>
 );
 
 const AddContactMethodSubmitButton = ({

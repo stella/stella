@@ -1,11 +1,20 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  expectTypeOf,
+  test,
+} from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { ReaderAnswerErrorCode } from "@stll/api-contract/reader-answers";
 import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
 
 import { organization, user } from "@/api/db/auth-schema";
-import { legalReaderAnswers, legalReaderAnswerMessages } from "@/api/db/schema";
+import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
@@ -179,6 +188,37 @@ describe("reader answer storage", () => {
     expect(
       diagnostics.every((message) => message.invalidCitationCount === 2),
     ).toBe(true);
+  });
+
+  test("legacy diagnostics read as current codes while writes accept only the current contract", async () => {
+    expectTypeOf<
+      (typeof legalReaderAnswerMessages.$inferInsert)["errorCode"]
+    >().toEqualTypeOf<ReaderAnswerErrorCode | null | undefined>();
+    expectTypeOf<"action_admission_unavailable">().not.toExtend<
+      NonNullable<(typeof legalReaderAnswerMessages.$inferInsert)["errorCode"]>
+    >();
+    const answer = answerRow();
+    await database.insert(legalReaderAnswers).values(answer);
+    const id = createSafeId<"legalReaderAnswerMessage">();
+    await database.execute(sql`
+      INSERT INTO legal_reader_answer_messages (id, answer_id, sequence, role, content, status, error_code)
+      VALUES (${id}, ${answer.id}, 1, 'assistant', 'Retained answer', 'failed', 'action_admission_unavailable')
+    `);
+    const [message] = await database
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.id, id));
+    expect(message?.errorCode).toBe(ACTION_ADMISSION_CODES.storeUnavailable);
+    expect(message?.content).toBe("Retained answer");
+    await database.execute(
+      sql`UPDATE legal_reader_answer_messages SET content = 'Updated answer' WHERE id = ${id}`,
+    );
+    const stored = await database.execute(
+      sql`SELECT error_code, content FROM legal_reader_answer_messages WHERE id = ${id}`,
+    );
+    expect(stored.rows).toEqual([
+      { error_code: "action_admission_unavailable", content: "Updated answer" },
+    ]);
   });
 
   test("refuses unknown error codes and negative citation counts", async () => {

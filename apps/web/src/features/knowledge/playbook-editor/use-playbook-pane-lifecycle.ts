@@ -12,8 +12,8 @@ import {
 import type { PlaybookDraft } from "./playbook-editor.logic";
 import {
   beginParkedPlaybookPaneSave,
-  discardParkedPlaybookPane,
   discardParkedPlaybookDraft,
+  discardParkedPlaybookPane,
   parkPlaybookPane,
   registerPlaybookPaneLeaveGuard,
   resolvePaneDraftState,

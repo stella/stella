@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 
 export type RegistryRequestObservation =
-  | { onRequest: () => void; onError: (cause: unknown) => void }
-  | "unobserved";
+  { onRequest: () => void; onError: (cause: unknown) => void } | "unobserved";
 
 export const observeRegistryRequest = (
   observer: RegistryRequestObservation,

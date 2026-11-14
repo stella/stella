@@ -19,10 +19,10 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  toPersistedChatMessageContentV3,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   finalizeAssistantTurn,
@@ -43,10 +43,12 @@ import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-
 import { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
@@ -55,6 +57,7 @@ import {
   findOfferedInteractions,
   findTurnOutcomeMismatches,
 } from "@/api/tests/helpers/chat-thread-invariants";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -130,22 +133,27 @@ const seedAcceptedTurn = async () => {
     workspaceId: ids.wsA1,
   });
   unwrap(
-    await safeDb(async (tx) => {
-      await tx.insert(chatMessages).values({
-        content: toPersistedChatMessageContentV3({
-          data: [{ content: "Draft it", type: "text" }],
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Draft it", type: "text" }],
+            }),
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          });
+          expect(
+            await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+          ).toEqual({
+            superseded: undefined,
+            type: "accepted",
+          });
         }),
-        id: userMessageId,
-        role: "user",
-        threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
-      });
-      expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toEqual({
-        superseded: undefined,
-        type: "accepted",
-      });
-    }),
+    ),
   );
   return { threadId, turnId: acceptance.id, userMessageId };
 };
@@ -218,24 +226,28 @@ const seedAwaitingTurn = async () => {
     role: "assistant",
   });
   unwrap(
-    await safeDb(async (tx) => {
-      await tx.insert(chatMessages).values({
-        content: chatMessageContentFromMessage(message),
-        id: assistantMessageId,
-        role: "assistant",
-        threadId: seeded.threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
-      });
-      expect(
-        await settleChatTurnOnTx({
-          assistantMessageId,
-          execution: seeded.execution,
-          outcome: { interaction, type: "awaiting-user" },
-          tx,
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: chatMessageContentFromMessage(message),
+            id: assistantMessageId,
+            role: "assistant",
+            threadId: seeded.threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          });
+          expect(
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId,
+              execution: seeded.execution,
+              outcome: { interaction, type: "awaiting-user" },
+              tx,
+            }),
+          ).toBe("settled");
         }),
-      ).toBe("settled");
-    }),
+    ),
   );
   return { ...seeded, assistantMessageId };
 };
@@ -261,7 +273,8 @@ const stop = async ({
         `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
         { method: "POST" },
       ),
-      route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+      route:
+        "/v1/chat/threads/:threadId/turns/:turnId/cancel" satisfies ApiRoutePath,
       safeDb: as,
       session: { activeOrganizationId: ids.orgA },
       set,
@@ -309,8 +322,11 @@ const recordStop = async ({
   turnId: SafeId<"chatTurn">;
 }) =>
   unwrap(
-    await safeDb(
-      async (tx) => await stopChatTurnOnTx({ threadId, tx, turnId }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(
+          async (tx) => await stopChatTurnOnTx({ pings, threadId, tx, turnId }),
+        ),
     ),
   );
 
@@ -375,6 +391,7 @@ const produceUntilCut = ({
   const response = run.produce(
     output(),
     memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
   );
   return { response, run };
 };
@@ -797,21 +814,28 @@ describe("the thread a stopped turn belongs to", () => {
       workspaceId: ids.wsA1,
     });
     unwrap(
-      await safeDb(async (tx) => {
-        await tx.insert(chatMessages).values({
-          content: toPersistedChatMessageContentV3({
-            data: [{ content: "Next", type: "text" }],
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(async (tx) => {
+            await tx.insert(chatMessages).values({
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "Next", type: "text" }],
+              }),
+              id: next.userMessageId,
+              role: "user",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: ids.wsA1,
+            });
+            expect(
+              await insertChatTurnAcceptanceOnTx({
+                pings,
+                acceptance: next,
+                tx,
+              }),
+            ).toMatchObject({ type: "accepted" });
           }),
-          id: next.userMessageId,
-          role: "user",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: ids.wsA1,
-        });
-        expect(
-          await insertChatTurnAcceptanceOnTx({ acceptance: next, tx }),
-        ).toMatchObject({ type: "accepted" });
-      }),
+      ),
     );
 
     expect((await stop({ threadId, turnId })).body).toEqual({

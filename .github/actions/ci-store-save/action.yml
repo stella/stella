@@ -1,5 +1,5 @@
-name: Save scoped store after job work
-description: Non-fatal zstd cache save with a progress-based stall watchdog.
+name: Save scoped store now
+description: Save a zstd cache now with a non-fatal progress-based stall watchdog.
 inputs:
   key:
     description: Exact sealed install-store key.
@@ -10,5 +10,3 @@ inputs:
 runs:
   using: node24
   main: index.mjs
-  post: index.mjs
-  post-if: always()

@@ -14,6 +14,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
   "apps/api/src/mcp/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.{ts,tsx}",
+  "apps/skill-runner/src/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
 ] as const;
 
@@ -27,27 +28,63 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/deadlines/src/**/*.ts",
+  "packages/html/src/**/*.{ts,tsx}",
+  "apps/api/src/lib/data-sources/**/*.ts",
+  "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
+  "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
+  "apps/api/src/handlers/mobile-updates/**/*.ts",
+  "apps/mobile/src/app/matter/**/*.{ts,tsx}",
+  "apps/mobile/src/connection/**/*.{ts,tsx}",
+  "apps/mobile/src/i18n/**/*.{ts,tsx}",
+  "apps/mobile/src/state/**/*.{ts,tsx}",
+  "apps/mobile/src/app/thread/**/*.{ts,tsx}",
+  "apps/mobile/src/app/law/**/*.{ts,tsx}",
+  "apps/mobile/src/app/task/**/*.{ts,tsx}",
+  "apps/mobile/src/app/timers/**/*.{ts,tsx}",
+  "apps/mobile/src/app/scan/**/*.{ts,tsx}",
+  "apps/mobile/src/app/share/**/*.{ts,tsx}",
+  "apps/mobile/src/components/ui/**/*.{ts,tsx}",
+  "apps/mobile/src/native/**/*.{ts,tsx}",
+  "apps/mobile/src/widgets/**/*.{ts,tsx}",
+  "apps/mobile/src/app/document/**/*.{ts,tsx}",
+  "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
+  "apps/outlook/src/components/**/*.{ts,tsx}",
+  "apps/outlook/src/i18n/**/*.{ts,tsx}",
+  "apps/outlook/src/lib/oauth/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
+  "apps/skill-runner/src/**/*.ts",
+  "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
+  "apps/api/src/handlers/ai/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
   "apps/api/src/handlers/auth/**/*.ts",
   "apps/api/src/handlers/bilingual-translations/**/*.ts",
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
+  "apps/api/src/handlers/conflict-checks/**/*.ts",
+  "apps/api/src/lib/conflict-check/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/client-invoices/**/*.ts",
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
+  "apps/api/src/handlers/desktop-runner/**/*.ts",
+  "apps/api/src/lib/desktop-runner/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
+  "apps/api/src/handlers/dictation/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
   "apps/api/src/handlers/documents/**/*.ts",
@@ -68,7 +105,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
+  "apps/api/src/handlers/data-exports/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
@@ -87,25 +126,34 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/verify/**/*.ts",
   "apps/api/src/handlers/work-obligations/**/*.ts",
   "apps/api/src/lib/account-export/**/*.ts",
+  "apps/api/src/lib/ai-generation/**/*.ts",
+  "apps/api/src/lib/chat/artefact-provenance.ts",
   "apps/api/src/lib/bbox/**/*.ts",
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
+  "apps/api/src/lib/data-export/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/queue/**/*.ts",
+  "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
   "apps/api/src/lib/feature-access/**/*.ts",
+  "apps/api/src/lib/kill-switches/**/*.ts",
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
+  "apps/api/src/lib/idempotency/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
+  "apps/api/src/lib/load/**/*.ts",
   "apps/api/src/lib/machine-api-keys/**/*.ts",
+  "apps/api/src/lib/push/**/*.ts",
   "apps/api/src/lib/synthetic-principal/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
@@ -125,6 +173,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
+  "apps/api/src/lib/write-contract/**/*.ts",
   "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
@@ -145,29 +194,42 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/components/references/**/*.{ts,tsx}",
   "apps/web/src/components/route-provider-scope/**/*.{ts,tsx}",
+  "apps/web/src/components/sidebar/**/*.{ts,tsx}",
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
+  "apps/web/src/features/organization/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
   "apps/web/src/features/guides/**/*.{ts,tsx}",
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
+  "apps/web/src/features/my-week/**/*.{ts,tsx}",
+  "apps/web/src/features/sharepoint/**/*.{ts,tsx}",
+  "apps/web/src/features/time-review/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/capabilities/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
+  "apps/web/src/lib/idempotency/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
   "apps/web/src/lib/legal/**/*.{ts,tsx}",
+  "apps/web/src/lib/persisted-state/**/*.ts",
+  "apps/web/src/lib/platform/**/*.ts",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.settings/-components/settings-shell/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.settings/organization*.{ts,tsx}",
+  "apps/web/src/routes/_protected.settings/organization/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.time_.report/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
+  "apps/web/src/security/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
@@ -176,6 +238,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
   "packages/auth-model/src/**/*.ts",
+  "packages/brand/src/**/*.ts",
   "packages/calculations/src/**/*.ts",
   "packages/catalogue/src/**/*.ts",
   "packages/chat-limits/src/**/*.ts",
@@ -191,6 +254,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/invoicing/src/**/*.ts",
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
+  "packages/parameter-store/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
   "packages/portable-path/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
@@ -200,31 +264,58 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
+  "packages/test-state/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
+  "packages/transcript/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Adapter definitions return typed stored-read failures; the existing replay
+  // callback protocol consumes those failures through Promise rejection.
+  "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
   // MCP request handlers translate typed gateway failures into SDK protocol errors.
   "apps/api/src/mcp/server-core.ts",
+  // The tools/call callback observer preserves the SDK's result/rejection contract;
+  // it records thrown failures and rethrows the original value to the protocol owner.
+  "apps/api/src/mcp/observe-tool-call.ts",
   // Process startup consumes login refusals through Promise rejection before accepting work.
   "apps/api/src/lib/db/assert-database-login-posture.ts",
-  // Elysia consumes prevalidation feature denials through its error pipeline.
+  // The HTTP core turns thrown pipeline failures (a malformed body, an unknown
+  // route, a hidden feature) into sanitized answers at its error boundary.
+  "apps/api/src/http/**/*.ts",
+  "apps/api/src/lib/observability/request-lifecycle.ts",
+  // A rate-limit stage refunds its charges when a later stage throws.
+  "apps/api/src/lib/rate-limit/rate-limit.ts",
   "apps/api/src/lib/auth/feature-access/route.ts",
+  "apps/api/src/lib/deployment-feature-route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Router consumes a loader's notFound() and failures through
+  // Promise rejection; this adapter translates the typed route-resource Result.
+  "apps/web/src/lib/errors/route-resource.ts",
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",
+  // Browser startup captures detector installation failures in its outer Result.
+  "apps/web/src/lib/analytics/web-hang/web-hang-detector.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
+  // Better Auth organization hooks reject invalid slug operations through APIError.
+  "apps/api/src/lib/auth/organization-slug-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
+  // The OAuth provider consumes a client discovery's refusal as a rejected
+  // APIError, which the stale-if-error wrapper passes through unchanged.
+  "apps/api/src/lib/auth/cimd-stale-if-error.ts",
+  // Better Auth maps a rejected code exchange to its callback error, so the
+  // retry wrapper hands the provider's rejection back unchanged.
+  "apps/api/src/lib/auth/social-token-exchange.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -233,6 +324,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-deletion-cleanup-queue.ts",
   // The ZIP async iterator and Node pipeline propagate failures to the worker.
   "apps/api/src/lib/account-export/archive.ts",
+  "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
   "apps/api/src/lib/document-processing-queue.ts",
@@ -240,6 +332,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-translation/run-queue.ts",
   "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
   "apps/api/src/lib/file-derivative-queue.ts",
+  // BullMQ retries an attempt only when its processor rejects.
+  "apps/api/src/lib/push/push-delivery-worker.ts",
+  "apps/api/src/lib/push/timer-activity-worker.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
@@ -262,18 +357,28 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Wraps that StreamDurability adapter for a chat turn: the SDK still reads a
+  // delivery failure only from a rejection, now carrying its AI error kind.
+  "apps/api/src/handlers/chat/chat-delivery-failure.ts",
   // Drizzle rolls back transaction callbacks through rejection; returning a
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Queue worker entry point: BullMQ consumes the job's rejection, and the
+  // run turns every failure into the export row's state.
+  "apps/api/src/handlers/data-exports/data-export-worker.ts",
+  // An async generator: its consumer learns that a streamed entry ended at
+  // the wrong length only from the iteration rejecting.
+  "apps/api/src/handlers/data-exports/zip-writer.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.
   "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   "apps/api/src/handlers/visual-sandbox/**",
-  // Lambda invokes this entry point and reports a failure through rejection.
+  // Lambda invokes these entry points and reports a failure through rejection.
   "apps/visual-preview/src/handler.ts",
+  "apps/skill-runner/src/handler.ts",
   // Web worker entry modules. The browser, not our code, invokes the message
   // handler, and a failure has to travel back over `postMessage` instead of
   // returning to a caller that could read a `Result`.
@@ -285,6 +390,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack Router reads the chat thread loader's redirect and its unchanged
+  // load failure only through rejection.
+  "apps/web/src/routes/_protected.chat/-thread-scope-redirect-boundary.ts",
   // TanStack's fetch and connection adapters consume Response/rejection;
   // this transport cannot return Result across the SDK callback boundary.
   "packages/chat/src/durable-transport.ts",
@@ -307,6 +415,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // a checkout without installed packages gets one actionable line; it cannot
   // import the Result library, which is one of the packages that may be missing.
   "packages/cli/src/cli.ts",
+  // Protected CLI startup must reject before check work when its network-denying preload is absent.
+  "packages/scripts/src/offline-check-startup.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",
@@ -458,6 +568,21 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/mobile/src/app" },
   { reason: "unreviewed", unit: "apps/mobile/src/app/(tabs)" },
   { reason: "unreviewed", unit: "apps/mobile/src/components" },
+  {
+    reason:
+      "Outlook add-in adapters and entry scripts: api.ts and outlook.ts reject with typed errors that the hooks consume through Result.tryPromise, and the entry scripts catch Office.js startup failures. Enrol once those adapters return Result.",
+    unit: "apps/outlook/src",
+  },
+  {
+    reason:
+      "Outlook hooks turn adapter rejections into task pane state through Result.tryPromise, and a stale mail item rejects inside that wrapper. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/hooks",
+  },
+  {
+    reason:
+      "Office.js and API client adapters: office.ts reads callback APIs that fail by throwing, and outlook-api-client.ts rejects with typed errors its callers wrap in Result.tryPromise. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/lib",
+  },
   { reason: "unreviewed", unit: "apps/playground/src" },
   { reason: "unreviewed", unit: "apps/web/src" },
   { reason: "unreviewed", unit: "apps/web/src/components" },

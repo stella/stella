@@ -13,23 +13,30 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canonicalJson,
   changesetNamesCli,
   classifyCliRelease,
   CLI_CONTRACT_SURFACE,
+  type CliContractSurface,
   compareStableVersions,
   findSurfaceDrift,
   parseGeneratedConstants,
+  type PublishedCli,
   readHeadSurface,
   readPublishedPackageSurface,
   verdictFromClassification,
-  type CliContractSurface,
-  type PublishedCli,
 } from "./check-cli-release-coupling";
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import {
+  assertNoOpenReleasePullRequests,
+  MaintenanceReleaseError,
+} from "./prepare-maintenance-release";
+
+// Dynamic reads consume temporary Git fixtures, never repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = "scripts/check-cli-release-coupling.ts";
@@ -105,7 +112,8 @@ describe("compareStableVersions", () => {
   });
 
   test("is antisymmetric and consistent with segment-wise numeric order", () => {
-    fc.assert(
+    assertProperty(
+      "is antisymmetric and consistent with segment-wise numeric order",
       fc.property(stableVersion, stableVersion, (a, b) => {
         const forward = Math.sign(compareStableVersions(a, b));
         const backward = Math.sign(compareStableVersions(b, a));
@@ -122,7 +130,7 @@ describe("compareStableVersions", () => {
         }
         expect(forward).toBe(expected);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -170,7 +178,8 @@ describe("classifyCliRelease", () => {
   });
 
   test("a pending changeset dominates every version relation", () => {
-    fc.assert(
+    assertProperty(
+      "a pending changeset dominates every version relation",
       fc.property(
         stableVersion,
         fc.array(fc.string({ minLength: 1 }), { minLength: 1 }),
@@ -180,12 +189,13 @@ describe("classifyCliRelease", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("without pending changesets, coupled means strictly newer than npm", () => {
-    fc.assert(
+    assertProperty(
+      "without pending changesets, coupled means strictly newer than npm",
       fc.property(stableVersion, (cliVersion) => {
         const status = classify(cliVersion).status;
         const order = compareStableVersions(cliVersion, published.latest);
@@ -197,7 +207,7 @@ describe("classifyCliRelease", () => {
           expect(status).toBe("behind-npm");
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -309,12 +319,13 @@ describe("canonicalJson", () => {
       fc.oneof(fc.integer(), fc.string(), fc.array(fc.integer())),
       { maxKeys: 6 },
     );
-    fc.assert(
+    assertProperty(
+      "is invariant under key reordering",
       fc.property(record, (value) => {
         const reversed = Object.fromEntries(Object.entries(value).toReversed());
         expect(canonicalJson(reversed)).toBe(canonicalJson(value));
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -382,12 +393,14 @@ describe("release workflows run the gate", () => {
   const read = (file: string) =>
     readFileSync(path.join(REPO_ROOT, file), "utf-8");
 
-  test("the tag workflow refuses a stable tag before pushing it", () => {
+  test("the RC workflow checks CLI coupling before its candidate tag push", () => {
     const workflow = read(".github/workflows/release-tag.yml");
     const gate = workflow.indexOf(SCRIPT);
-    const push = workflow.indexOf("- name: Push tag");
+    const verdict = workflow.indexOf("- name: Report every release gate");
+    const push = workflow.indexOf("- name: Push candidate tag once");
     expect(gate).toBeGreaterThan(0);
-    expect(push).toBeGreaterThan(gate);
+    expect(verdict).toBeGreaterThan(gate);
+    expect(push).toBeGreaterThan(verdict);
   });
 
   test("a release pull request sees the same verdict before merging", () => {
@@ -528,6 +541,7 @@ test("release contract reads committed data without installed dependencies or de
         expect(archive.error).toBeUndefined();
         expect(archive.status, archive.stderr.toString()).toBe(0);
         const extracted = spawnSync("tar", ["-x", "-C", root], {
+          maxBuffer: 2 ** 30,
           input: archive.stdout,
           timeout: 10_000,
         });
@@ -577,12 +591,94 @@ test("release contract reads committed data without installed dependencies or de
   }
 });
 
+const releasedTagFixture = (tagged: "release" | "elsewhere" | "none") => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-release-tagged-"));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", args, {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+      encoding: "utf-8",
+    });
+    expect(result.status).toBe(0);
+    return result.stdout.trim();
+  };
+  copyNoInstallFiles(root);
+  git("init");
+  git("config", "user.name", "Release fixture");
+  git("config", "user.email", "fixture@example.test");
+  git("config", "commit.gpgsign", "false");
+  git("config", "tag.gpgsign", "false");
+  writeFileSync(path.join(root, "VERSION"), "0.9.47\n");
+  git("add", ".");
+  git("commit", "-m", "fixture base");
+  git("branch", "fixture-main");
+  const base = git("rev-parse", "HEAD");
+  writeFileSync(path.join(root, "VERSION"), "0.9.48\n");
+  git("add", ".");
+  git("commit", "-m", "fixture release");
+  if (tagged === "release") {
+    git("tag", "-a", "v0.9.48", "-m", "v0.9.48");
+  }
+  if (tagged === "elsewhere") {
+    git("checkout", "--detach", base);
+    writeFileSync(path.join(root, "other.txt"), "other\n");
+    git("add", "other.txt");
+    git("commit", "-m", "fixture unrelated");
+    git("tag", "-a", "v0.9.48", "-m", "v0.9.48");
+    git("checkout", "-");
+  }
+  return root;
+};
+
+const runBase = (root: string, env: NodeJS.ProcessEnv = {}) =>
+  Bun.spawnSync([process.execPath, SCRIPT, "--base", "fixture-main"], {
+    cwd: root,
+    env: {
+      ...process.env,
+      GITHUB_EVENT_NAME: "pull_request",
+      GITHUB_REF: "refs/pull/123/merge",
+      ...env,
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+test("a release pull request whose version is already tagged releases nothing on merge", () => {
+  const root = releasedTagFixture("release");
+  try {
+    const result = runBase(root);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("v0.9.48 is already tagged at");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an untagged release, or a tag outside this history, still gets the full check", () => {
+  for (const tagged of ["none", "elsewhere"] as const) {
+    const root = releasedTagFixture(tagged);
+    try {
+      const result = runBase(root);
+      // The fixture has no CLI package, so reaching the full check fails it:
+      // a release the tag does not cover is never waved through.
+      expect(result.exitCode, tagged).not.toBe(0);
+      expect(result.stdout.toString()).not.toContain("already tagged");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 test("an advancing base does not turn an unchanged PR into a release", () => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-release-base-"));
   try {
     copyNoInstallFiles(root);
     const git = (...args: string[]) => {
-      const result = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+      const result = spawnSync("git", args, {
+        maxBuffer: 2 ** 30,
+        cwd: root,
+        encoding: "utf-8",
+      });
       expect(result.status).toBe(0);
       return result.stdout.trim();
     };
@@ -613,6 +709,217 @@ test("an advancing base does not turn an unchanged PR into a release", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain(
       "VERSION unchanged against advanced-base",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const mergeGroupFixture = (tagged: "release" | "elsewhere") => {
+  const root = releasedTagFixture(tagged);
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", args, {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+      encoding: "utf-8",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    return result.stdout.trim();
+  };
+  const prHead = git("rev-parse", "HEAD");
+  git("clone", "--bare", "--no-local", root, path.join(root, "remote.git"));
+  git("remote", "add", "origin", path.join(root, "remote.git"));
+  git("push", "origin", `${prHead}:refs/pull/123/head`);
+  git("checkout", "fixture-main");
+  mkdirSync(path.join(root, ".changeset"));
+  writeFileSync(
+    path.join(root, ".changeset/pending.md"),
+    '---\n"@stll/cli": patch\n---\nPending CLI change.\n',
+  );
+  git("add", ".changeset/pending.md");
+  git("commit", "-m", "fixture pending CLI change on main");
+  // The queue builds its group commit on top of the base, never on it.
+  git("checkout", "-b", "merge-group");
+  git("merge", "--squash", prHead);
+  git("commit", "-m", "fixture squash merge group");
+  expect(
+    spawnSync("git", ["merge-base", "--is-ancestor", prHead, "HEAD"], {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+    }).status,
+  ).toBe(1);
+  // The full check must report pending changesets without contacting npm.
+  mkdirSync(path.join(root, "packages/cli"), { recursive: true });
+  writeFileSync(
+    path.join(root, "packages/cli/package.json"),
+    '{"version":"0.10.1"}',
+  );
+  mkdirSync(path.join(root, "bin"));
+  writeFileSync(
+    path.join(root, "bin/npm"),
+    `#!/bin/sh\nprintf '%s\\n' '{"dist-tags.latest":"0.10.1","versions":["0.10.1"]}'\n`,
+    { mode: 0o755 },
+  );
+  const env = {
+    GITHUB_EVENT_NAME: "merge_group",
+    GITHUB_REF: `refs/heads/gh-readonly-queue/main/pr-123-${git("rev-parse", "HEAD")}`,
+    PATH: `${path.join(root, "bin")}${path.delimiter}${process.env["PATH"] ?? ""}`,
+  };
+  return { root, git, prHead, env };
+};
+
+test("a squash merge group accepts the tagged PR history despite pending CLI changesets on main", () => {
+  const { root, env } = mergeGroupFixture("release");
+  try {
+    const result = runBase(root, env);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toContain("v0.9.48 is already tagged at");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a squash merge group fetches a PR head absent from the checkout", () => {
+  const { root, env, git, prHead } = mergeGroupFixture("release");
+  try {
+    git("push", "origin", "HEAD:refs/heads/merge-group");
+    const checkout = path.join(root, "checkout");
+    git(
+      "clone",
+      "--no-local",
+      "--depth",
+      "1",
+      "--branch",
+      "merge-group",
+      path.join(root, "remote.git"),
+      checkout,
+    );
+    expect(
+      spawnSync("git", ["cat-file", "-e", prHead], {
+        maxBuffer: 2 ** 30,
+        cwd: checkout,
+      }).status,
+    ).not.toBe(0);
+    const result = runBase(checkout, env);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toContain("v0.9.48 is already tagged at");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const failure of [
+  "unrelated-tag",
+  "malformed-ref",
+  "trailing-newline",
+  "zero-pr",
+  "short-sha",
+  "missing-pr-head",
+  "lookup-failure",
+] as const) {
+  test(`merge groups fail closed for ${failure}`, () => {
+    const { root, env, git } = mergeGroupFixture(
+      failure === "unrelated-tag" ? "elsewhere" : "release",
+    );
+    try {
+      switch (failure) {
+        case "unrelated-tag":
+          break;
+        case "malformed-ref":
+          env.GITHUB_REF += "/extra";
+          break;
+        case "trailing-newline":
+          env.GITHUB_REF += "\n";
+          break;
+        case "zero-pr":
+          env.GITHUB_REF = env.GITHUB_REF.replace("pr-123-", "pr-0-");
+          break;
+        case "short-sha":
+          env.GITHUB_REF = env.GITHUB_REF.slice(0, -1);
+          break;
+        case "missing-pr-head":
+          git("push", "origin", ":refs/pull/123/head");
+          break;
+        case "lookup-failure":
+          git("remote", "set-url", "origin", path.join(root, "missing.git"));
+          break;
+        default:
+          failure satisfies never;
+      }
+      const result = runBase(root, env);
+      expect(result.exitCode, failure).toBe(1);
+      expect(result.stderr.toString(), failure).toContain(
+        "pending changesets name @stll/cli",
+      );
+      expect(result.stdout.toString(), failure).not.toContain("already tagged");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("finalized release PRs cannot deadlock the next cut with pending CLI changesets", () => {
+  const root = releasedTagFixture("release");
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", args, {
+      cwd: root,
+      encoding: "utf-8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    return result.stdout.trim();
+  };
+  try {
+    const headRefOid = git("rev-parse", "HEAD");
+    git("checkout", "fixture-main");
+    mkdirSync(path.join(root, ".changeset"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".changeset/pending-cli.md"),
+      '---\n"@stll/cli": patch\n---\n\nCLI change after the release cut.\n',
+    );
+    git("add", ".changeset/pending-cli.md");
+    git("commit", "-m", "pending CLI change on main");
+    git("checkout", "-b", "release-merge");
+    git("merge", "--no-edit", headRefOid);
+    expect(
+      readFileSync(path.join(root, ".changeset/pending-cli.md"), "utf-8"),
+    ).toContain('"@stll/cli": patch');
+    mkdirSync(path.join(root, "packages/cli"), { recursive: true });
+    writeFileSync(
+      path.join(root, "packages/cli/package.json"),
+      '{"name":"@stll/cli","version":"0.10.1"}',
+    );
+    mkdirSync(path.join(root, "bin"));
+    writeFileSync(
+      path.join(root, "bin/npm"),
+      '#!/bin/sh\nprintf \'%s\\n\' \'{"dist-tags.latest":"0.10.1","versions":["0.10.1"]}\'\n',
+      { mode: 0o755 },
+    );
+    const env = {
+      PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
+    };
+    const check = runBase(root, env);
+    expect(check.exitCode, check.stderr.toString()).toBe(0);
+    expect(check.stdout.toString()).toContain("v0.9.48 is already tagged at");
+    git("branch", "-f", "fixture-main", "HEAD");
+    // The cut's verdict depends on the checkout, not on the listing, so one
+    // run covers every sample.
+    expect(runBase(root, env).exitCode).toBe(0);
+    assertProperty(
+      "finalized release PRs cannot deadlock the next cut with pending CLI changesets",
+      fc.property(fc.integer({ min: 1, max: 1_000_000 }), (number) => {
+        const open = [{ number, title: "chore: release v0.9.48", headRefOid }];
+        expect(() => assertNoOpenReleasePullRequests(open)).toThrow(
+          MaintenanceReleaseError,
+        );
+        expect(() => assertNoOpenReleasePullRequests(open)).toThrow(
+          `merge-bar ${number}`,
+        );
+
+        // The merged PR disappears from the open listing used by the cut.
+        assertNoOpenReleasePullRequests([]);
+      }),
+      { numRuns: 3 },
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

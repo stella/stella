@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
@@ -13,7 +14,8 @@ import { SourceVerificationAction } from "@/components/workspaces/source-verific
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { legalListSourcesOptions } from "@/lib/workspaces/queries/legal-lists";
 
 type ListItemSourcesProps = {
@@ -30,7 +32,7 @@ export const ListItemSources = ({
   const user = useAuthenticatedUser();
   const enabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const openSourceDocument = useOpenSourceDocument(workspaceId);
-  const view = useQueryView(
+  const view = queryView(
     useQuery({
       ...legalListSourcesOptions({
         workspaceId,
@@ -41,7 +43,7 @@ export const ListItemSources = ({
       enabled,
     }),
   );
-  useQueryViewError(view);
+  useQueryViewError(view, "ListItemSources:query");
   if (!enabled) {
     return null;
   }
@@ -63,9 +65,9 @@ export const ListItemSources = ({
               }
               variant="link"
             >
-              <span className="truncate">
+              <TruncatedText>
                 <SourceLocatorLabel locator={source.locator} />
-              </span>
+              </TruncatedText>
             </Button>
             <SourceVerificationAction
               itemEntityId={itemEntityId}
@@ -76,9 +78,13 @@ export const ListItemSources = ({
             />
           </div>
           {source.quote && (
-            <blockquote className="text-muted-foreground mt-2 line-clamp-3 text-xs">
+            <TruncatedText
+              className="text-muted-foreground mt-2 text-xs"
+              lines={3}
+              render={<blockquote />}
+            >
               {source.quote}
-            </blockquote>
+            </TruncatedText>
           )}
         </article>
       ))}

@@ -23,7 +23,7 @@ readonly RUSTC_HOST
 RUSTC_RELEASE="$(printf '%s\n' "${RUSTC_METADATA}" | sed -n 's/^release: //p')"
 readonly RUSTC_RELEASE
 if [[ "${RUSTC_HOST}" != "${CANONICAL_RUST_HOST}" || "${RUSTC_RELEASE}" != "${PINNED_RUST_VERSION}" ]]; then
-  printf 'Scan engine WASM generation requires x86_64 Linux with Rust %s (found %s, Rust %s). Use the scan-engine-wasm CI artifact to update generated/.\n' \
+  printf 'Scan engine WASM generation requires x86_64 Linux with Rust %s (found %s, Rust %s). On another host, run "bun run build:wasm:container" (Docker) to build it in the pinned linux/amd64 Rust image, or use the scan-engine-wasm CI artifact to update generated/.\n' \
     "${PINNED_RUST_VERSION}" "${RUSTC_HOST}" "${RUSTC_RELEASE}" >&2
   exit 2
 fi
@@ -57,4 +57,4 @@ perl -0pi -e 's/  if \(wasm !== undefined\) return wasm;\n//g' "${OUTPUT_DIR}/sc
 for declaration in "${OUTPUT_DIR}"/*.d.ts; do
   perl -ni -e 'print unless m{^/\* (?:eslint|tslint)-disable \*/$}' "${declaration}"
 done
-bun "${CRATE_DIR}/../../scripts/run-oxfmt.ts" "${OUTPUT_DIR}"
+bun fmt "${OUTPUT_DIR}"

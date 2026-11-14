@@ -5,8 +5,8 @@ import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
-  toPersistedChatMessageContentV3,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "./chat-message-parts";
 import {
   planAssistantFinishPersistence,

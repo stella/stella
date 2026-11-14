@@ -59,6 +59,7 @@ export type AnalysisGraphFingerprint = string;
 export const ANALYSIS_HOLDING_MAX_LENGTH = 400;
 export const ANALYSIS_HOLDING_MAX_ANCHORS = 8;
 export const ANALYSIS_ABSTRACT_MAX_LENGTH = 2000;
+export const ANALYSIS_ABSTRACT_MAX_ANCHORS = 16;
 export const ANALYSIS_TOPIC_MAX_LENGTH = 60;
 export const ANALYSIS_MAX_TOPICS = 12;
 export const ANALYSIS_SIGNIFICANCE_MAX_LENGTH = 1200;
@@ -70,9 +71,29 @@ export type AnalysisAnchorRange = {
 };
 
 /**
+ * One claim of a model-written passage and the paragraphs that claim rests
+ * on. A passage is its spans' text concatenated verbatim, and each span's
+ * citations are drawn where its claim ends, so a citation sits next to the
+ * statement it supports instead of being collected after the last sentence.
+ */
+export type AnalysisCitedSpan = {
+  text: string;
+  anchors: AnalysisAnchorRange[];
+};
+
+/** A passage's plain text: its spans, concatenated verbatim. */
+export const citedPassageText = (spans: readonly AnalysisCitedSpan[]): string =>
+  spans.map((span) => span.text).join("");
+
+/** How many ranges a passage cites, over all its spans. */
+export const citedPassageCitationCount = (
+  spans: readonly AnalysisCitedSpan[],
+): number => spans.reduce((total, span) => total + span.anchors.length, 0);
+
+/**
  * The legal proposition a decision stands for: the sentence a lawyer would
- * quote when citing it as authority, plus the paragraphs it rests on, so a
- * reader can jump from the proposition to the text that carries it.
+ * quote when citing it as authority, each claim carrying the paragraphs it
+ * rests on, so a reader can jump from a claim to the text that carries it.
  *
  * It is not the publisher's own headnote (the editorial text a court or
  * publisher wrote, projected into the corpus index as `headnote`). The two
@@ -80,14 +101,16 @@ export type AnalysisAnchorRange = {
  * into the other.
  */
 export type AnalysisHolding = {
-  text: string;
+  spans: AnalysisCitedSpan[];
   language: string;
-  anchors: AnalysisAnchorRange[];
 };
 
-/** The decision in a paragraph: facts, question, reasoning, outcome. */
+/**
+ * The decision in a paragraph: facts, question, reasoning, outcome, each
+ * claim citing the paragraphs it rests on.
+ */
 export type AnalysisAbstract = {
-  text: string;
+  spans: AnalysisCitedSpan[];
   language: string;
 };
 
@@ -97,7 +120,9 @@ export type AnalysisAbstract = {
  * fence. Produced in-app only: it is a property of the corpus, which no
  * external producer of a document analysis can see.
  */
-export type AnalysisSignificance = {
+export type AnalysisSignificanceStatement = {
+  /** Absent on statements stored before `none` existed. */
+  kind?: "statement" | undefined;
   text: string;
   language: string;
   graphFingerprint: AnalysisGraphFingerprint;
@@ -106,6 +131,20 @@ export type AnalysisSignificance = {
   /** Which revision of the significance prompt wrote this text. */
   promptVersion: number;
 };
+
+/**
+ * No later decision cites this one, read from the graph itself: there is
+ * nothing to say, so no model is asked and nothing is shown. Fenced on the
+ * graph like a statement, so the first citing decision makes it stale.
+ */
+export type AnalysisSignificanceNone = {
+  kind: "none";
+  graphFingerprint: AnalysisGraphFingerprint;
+  generatedAt: string;
+};
+
+export type AnalysisSignificance =
+  AnalysisSignificanceStatement | AnalysisSignificanceNone;
 
 type DecisionAnalysisCore = {
   generatedAt: string;
@@ -123,18 +162,18 @@ export type DecisionAnalysisV2 = DecisionAnalysisCore & { version: 2 };
  * half-written record, not a lesser one. `significance` is the exception
  * because it is fenced on the graph instead, and is filled in later.
  */
-export type DecisionAnalysisV3 = DecisionAnalysisCore & {
-  version: 3;
+export type DecisionAnalysisV4 = DecisionAnalysisCore & {
+  version: 4;
   holding: AnalysisHolding;
   abstract: AnalysisAbstract;
   topics: string[];
   significance?: AnalysisSignificance;
 };
 
-export type DecisionAnalysis = DecisionAnalysisV2 | DecisionAnalysisV3;
+export type DecisionAnalysis = DecisionAnalysisV2 | DecisionAnalysisV4;
 
 /** The version every new analysis and every new sentinel is written at. */
-export const CURRENT_ANALYSIS_VERSION = 3;
+export const CURRENT_ANALYSIS_VERSION = 4;
 
 /**
  * The in-flight marker a generation run holds on the row. It carries the
@@ -145,11 +184,19 @@ export const CURRENT_ANALYSIS_VERSION = 3;
 export type AnalysisGenerating = {
   version: typeof CURRENT_ANALYSIS_VERSION;
   status: "generating";
+  /** Unique ownership token for the run that claimed this sentinel. */
+  runId: string;
   startedAt: string;
   inputFingerprint: AnalysisInputFingerprint;
+  /** Complete top-level sections emitted by the in-flight model run. */
+  partialTree: DecisionAnalysis["tree"];
 };
 
-export type PersistedDecisionAnalysis = DecisionAnalysis | AnalysisGenerating;
+/** A pre-run-id sentinel remains readable only so its five-minute lease applies. */
+type LegacyAnalysisGenerating = Omit<AnalysisGenerating, "runId">;
+
+export type PersistedDecisionAnalysis =
+  DecisionAnalysis | AnalysisGenerating | LegacyAnalysisGenerating;
 
 export const analysisAnnotationSchema: v.GenericSchema<AnalysisAnnotation> =
   v.object({
@@ -185,6 +232,8 @@ export const analysisHeadingSchema: v.GenericSchema<AnalysisHeading> = v.object(
   },
 );
 
+export const analysisTreeSchema = v.array(analysisHeadingSchema);
+
 const inputFingerprintSchema = v.pipe(v.string(), v.minLength(1));
 
 const graphFingerprintSchema = v.pipe(v.string(), v.minLength(1));
@@ -195,28 +244,70 @@ export const analysisAnchorRangeSchema: v.GenericSchema<AnalysisAnchorRange> =
     endAnchorId: v.string(),
   });
 
+const citedSpanSchema = (maxAnchors: number) =>
+  v.strictObject({
+    text: v.pipe(v.string(), v.minLength(1)),
+    anchors: v.pipe(
+      v.array(analysisAnchorRangeSchema),
+      v.maxLength(maxAnchors),
+    ),
+  });
+
+type CitedPassageBounds = { maxLength: number; maxAnchors: number };
+
 /**
- * The layer texts as a producer writes them: no `language`, because the
- * decision already names it, and Stella stamps it on. These are the
- * schemas the in-app run constrains its model with and the save
- * capability parses a submission through, so the two can never diverge.
+ * The bounds that sum over a passage's spans, which JSON Schema cannot
+ * express. Each span's own bounds stay in the published schema.
  */
-export const analysisHoldingInputSchema = v.object({
-  text: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(ANALYSIS_HOLDING_MAX_LENGTH),
+const citedPassageChecks = ({ maxAnchors, maxLength }: CitedPassageBounds) => ({
+  length: v.check(
+    (spans: AnalysisCitedSpan[]) => citedPassageText(spans).length <= maxLength,
+    `The passage must be at most ${String(maxLength)} characters`,
   ),
-  anchors: v.pipe(
-    v.array(analysisAnchorRangeSchema),
-    v.maxLength(ANALYSIS_HOLDING_MAX_ANCHORS),
+  citations: v.check(
+    (spans: AnalysisCitedSpan[]) =>
+      citedPassageCitationCount(spans) <= maxAnchors,
+    `The passage must cite at most ${String(maxAnchors)} ranges`,
   ),
 });
 
-export const analysisAbstractTextSchema = v.pipe(
-  v.string(),
+const HOLDING_CHECKS = citedPassageChecks({
+  maxLength: ANALYSIS_HOLDING_MAX_LENGTH,
+  maxAnchors: ANALYSIS_HOLDING_MAX_ANCHORS,
+});
+
+const ABSTRACT_CHECKS = citedPassageChecks({
+  maxLength: ANALYSIS_ABSTRACT_MAX_LENGTH,
+  maxAnchors: ANALYSIS_ABSTRACT_MAX_ANCHORS,
+});
+
+/** Checks a converter leaves to runtime validation: the passage-wide sums. */
+export const ANALYSIS_RUNTIME_ONLY_CHECKS = [
+  HOLDING_CHECKS.length,
+  HOLDING_CHECKS.citations,
+  ABSTRACT_CHECKS.length,
+  ABSTRACT_CHECKS.citations,
+] as const;
+
+/**
+ * The layer passages as a producer writes them and as they are stored. The
+ * producer's layer carries no `language`, because the decision already
+ * names it, and Stella stamps it on. These are the schemas the in-app run
+ * constrains its model with and the save capability parses a submission
+ * through, so the two can never diverge.
+ */
+export const analysisHoldingSpansSchema = v.pipe(
+  v.array(citedSpanSchema(ANALYSIS_HOLDING_MAX_ANCHORS)),
   v.minLength(1),
-  v.maxLength(ANALYSIS_ABSTRACT_MAX_LENGTH),
+  HOLDING_CHECKS.length,
+  HOLDING_CHECKS.citations,
+);
+
+export const analysisAbstractSpansSchema = v.pipe(
+  v.array(citedSpanSchema(ANALYSIS_ABSTRACT_MAX_ANCHORS)),
+  v.minLength(1),
+  ABSTRACT_CHECKS.length,
+  ABSTRACT_CHECKS.citations,
 );
 
 export const analysisTopicsSchema = v.pipe(
@@ -228,51 +319,51 @@ export const analysisTopicsSchema = v.pipe(
 
 export const analysisHoldingSchema: v.GenericSchema<AnalysisHolding> =
   v.strictObject({
-    text: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(ANALYSIS_HOLDING_MAX_LENGTH),
-    ),
+    spans: analysisHoldingSpansSchema,
     language: v.pipe(v.string(), v.minLength(1)),
-    anchors: v.pipe(
-      v.array(analysisAnchorRangeSchema),
-      v.maxLength(ANALYSIS_HOLDING_MAX_ANCHORS),
-    ),
   });
 
 export const analysisAbstractSchema: v.GenericSchema<AnalysisAbstract> =
   v.strictObject({
-    text: analysisAbstractTextSchema,
+    spans: analysisAbstractSpansSchema,
     language: v.pipe(v.string(), v.minLength(1)),
   });
 
 export const analysisSignificanceSchema: v.GenericSchema<AnalysisSignificance> =
-  v.strictObject({
-    text: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(ANALYSIS_SIGNIFICANCE_MAX_LENGTH),
-    ),
-    language: v.pipe(v.string(), v.minLength(1)),
-    graphFingerprint: graphFingerprintSchema,
-    generatedAt: v.string(),
-    model: v.string(),
-    promptVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  });
+  v.union([
+    v.strictObject({
+      kind: v.literal("none"),
+      graphFingerprint: graphFingerprintSchema,
+      generatedAt: v.string(),
+    }),
+    v.strictObject({
+      kind: v.exactOptional(v.literal("statement")),
+      text: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(ANALYSIS_SIGNIFICANCE_MAX_LENGTH),
+      ),
+      language: v.pipe(v.string(), v.minLength(1)),
+      graphFingerprint: graphFingerprintSchema,
+      generatedAt: v.string(),
+      model: v.string(),
+      promptVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    }),
+  ]);
 
 const decisionAnalysisCoreEntries = {
   generatedAt: v.string(),
   model: v.string(),
   inputFingerprint: inputFingerprintSchema,
-  tree: v.array(analysisHeadingSchema),
+  tree: analysisTreeSchema,
 } as const;
 
 const decisionAnalysisV2Schema: v.GenericSchema<DecisionAnalysisV2> =
   v.strictObject({ version: v.literal(2), ...decisionAnalysisCoreEntries });
 
-const decisionAnalysisV3Schema: v.GenericSchema<DecisionAnalysisV3> =
+const decisionAnalysisV4Schema: v.GenericSchema<DecisionAnalysisV4> =
   v.strictObject({
-    version: v.literal(3),
+    version: v.literal(4),
     ...decisionAnalysisCoreEntries,
     holding: analysisHoldingSchema,
     abstract: analysisAbstractSchema,
@@ -284,24 +375,40 @@ const decisionAnalysisV3Schema: v.GenericSchema<DecisionAnalysisV3> =
 
 /**
  * Version 1 carried no fingerprint, so nothing could tell whether its
- * anchors still named the document. Such a row is unreadable here on
- * purpose: it reads as no analysis and is regenerated against the current
- * document on the next open. Version 2 stays readable: its tree is exactly
- * a version 3 tree, it simply predates the other layers.
+ * anchors still named the document. Version 3 cited the holding only after
+ * its last sentence and the abstract not at all, and the prompt that wrote
+ * it is gone, so its fingerprint can never match again. Both are unreadable
+ * here on purpose: such a row reads as no analysis and is regenerated
+ * against the current document on the next open. Version 2 stays readable:
+ * its tree is exactly a version 4 tree, it simply predates the other layers.
  */
 export const decisionAnalysisSchema: v.GenericSchema<DecisionAnalysis> =
-  v.union([decisionAnalysisV2Schema, decisionAnalysisV3Schema]);
+  v.union([decisionAnalysisV2Schema, decisionAnalysisV4Schema]);
+
+const analysisGeneratingEntries = {
+  version: v.literal(CURRENT_ANALYSIS_VERSION),
+  status: v.literal("generating"),
+  startedAt: v.string(),
+  inputFingerprint: inputFingerprintSchema,
+  partialTree: v.optional(analysisTreeSchema, []),
+} as const;
 
 const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> =
   v.strictObject({
-    version: v.literal(CURRENT_ANALYSIS_VERSION),
-    status: v.literal("generating"),
-    startedAt: v.string(),
-    inputFingerprint: inputFingerprintSchema,
+    ...analysisGeneratingEntries,
+    partialTree: analysisTreeSchema,
+    runId: v.pipe(v.string(), v.uuid()),
   });
 
-const persistedDecisionAnalysisSchema: v.GenericSchema<PersistedDecisionAnalysis> =
-  v.union([analysisGeneratingSchema, decisionAnalysisSchema]);
+const legacyAnalysisGeneratingSchema = v.strictObject(
+  analysisGeneratingEntries,
+);
+
+const persistedDecisionAnalysisSchema = v.union([
+  analysisGeneratingSchema,
+  legacyAnalysisGeneratingSchema,
+  decisionAnalysisSchema,
+]);
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   v.is(analysisGeneratingSchema, val);
@@ -335,7 +442,7 @@ export const analysisLayersOf = (
   switch (analysis.version) {
     case 2:
       return NO_LAYERS;
-    case 3:
+    case 4:
       return {
         holding: analysis.holding,
         abstract: analysis.abstract,
@@ -367,11 +474,20 @@ export const isSignificanceCurrent = ({
   promptVersion: number;
 }): boolean => {
   const significance = analysisLayersOf(analysis).significance;
+  if (significance?.graphFingerprint !== graphFingerprint) {
+    return false;
+  }
+  // `none` was read from the graph, not written by a prompt.
   return (
-    significance?.graphFingerprint === graphFingerprint &&
-    significance.promptVersion === promptVersion
+    significance.kind === "none" || significance.promptVersion === promptVersion
   );
 };
+
+/** The statement a reader is shown: none when there is nothing to say. */
+export const significanceStatementOf = (
+  significance: AnalysisSignificance | null,
+): AnalysisSignificanceStatement | null =>
+  significance === null || significance.kind === "none" ? null : significance;
 
 export const parsePersistedDecisionAnalysis = (
   val: unknown,

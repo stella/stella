@@ -59,8 +59,7 @@ export type ModelMode =
   | {
       type: "anthropic-thinking";
       thinking:
-        | { type: "adaptive" }
-        | { type: "enabled"; budget_tokens: number };
+        { type: "adaptive" } | { type: "enabled"; budget_tokens: number };
       temperaturePolicy: "omit";
     };
 
@@ -118,8 +117,7 @@ type UnsupportedModelDefaultEntry = {
   reason: "document-input-unsupported";
 };
 export type ModelDefaultEntry =
-  | SupportedModelDefaultEntry
-  | UnsupportedModelDefaultEntry;
+  SupportedModelDefaultEntry | UnsupportedModelDefaultEntry;
 
 type TaskProviderDefaults<TTask extends ModelTask> = {
   [TProvider in AIProvider]: TTask extends "pdf"

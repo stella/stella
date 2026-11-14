@@ -3,7 +3,7 @@
  * fields the decision model answers, what one chip shows, how clicking it
  * cycles the user's override, and which values the decide request carries.
  *
- * The response shape is derived from the Eden client so a contract change on
+ * The response shape is derived from the API client so a contract change on
  * `POST /templates/:templateId/decide-conditions` fails to compile here
  * instead of drifting into a stale local copy.
  */

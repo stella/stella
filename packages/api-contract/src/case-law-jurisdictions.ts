@@ -46,8 +46,10 @@ export const isCaseLawJurisdiction = (
  */
 export const CASE_LAW_REGION_BY_JURISDICTION = {
   AUT: "AT",
+  BRA: "BR",
   CZE: "CZ",
   EU: "EU",
+  GBR: "GB",
   HUN: "HU",
   POL: "PL",
   SVK: "SK",

@@ -9,7 +9,7 @@ import {
   runSelfTest,
   SELF_TEST_CASES,
 } from "./deployment-feature-guard";
-import type { ScanInput } from "./lib/deployment-feature-scan";
+import type { MountedRoute, ScanInput } from "./lib/deployment-feature-scan";
 import {
   createParseCache,
   findingKey,
@@ -21,19 +21,19 @@ const OWNER = `const LOCAL_DEV_ACCESS_BY_FLAG = {
   FEATURE_B: LOCAL_DEV_ACCESS.followsFlag,
 } as const satisfies Record<DeploymentFeatureFlag, LocalDevAccess>;`;
 
-const HANDLER = "apps/api/src/handlers/things/list.ts";
-const ROUTE = "apps/api/src/handlers/things/routes.ts";
-const CHILD = "apps/api/src/handlers/things/child-routes.ts";
-const IMPORTS = `import Elysia from "elysia";
-import list from "@/api/handlers/things/list";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-`;
-const GATE_A = `.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_A")))`;
+const ROUTE = "GET /v1/things";
+
+const mounted = (overrides: Partial<MountedRoute> = {}): MountedRoute => ({
+  method: "GET",
+  path: "/v1/things",
+  gateFlags: ["FEATURE_A"],
+  localDevelopment: false,
+  capability: "things.list",
+  ...overrides,
+});
 
 const input = ({
-  routes,
-  handlerSource = "export default {};",
+  routes = [mounted()],
   readers = [
     {
       file: "apps/api/src/lib/b.ts",
@@ -41,30 +41,20 @@ const input = ({
     },
   ],
   features = new Map([["things.list", "FEATURE_A"]]),
+  alwaysOn = new Map(),
 }: {
-  routes: Record<string, string>;
-  handlerSource?: string;
+  routes?: MountedRoute[];
   readers?: { file: string; source: string }[];
   features?: Map<string, string | undefined>;
-}): ScanInput => {
-  const sources = new Map<string, string>([
-    [HANDLER, handlerSource],
-    ...Object.entries(routes),
-  ]);
-  return {
-    ownerSource: OWNER,
-    readerFiles: readers,
-    processEnvFiles: [],
-    routeFiles: Object.entries(routes).map(([file, source]) => ({
-      file,
-      source,
-    })),
-    catalogFeatures: features,
-    alwaysOnRouteFiles: new Map(),
-    readSource: (file) => sources.get(file),
-    allFiles: new Set(sources.keys()),
-  };
-};
+  alwaysOn?: Map<string, string>;
+}): ScanInput => ({
+  ownerSource: OWNER,
+  readerFiles: readers,
+  processEnvFiles: [],
+  routes,
+  catalogFeatures: features,
+  alwaysOnRoutePrefixes: alwaysOn,
+});
 
 const keys = (scanInput: ScanInput): string[] =>
   scanDeploymentFeatures(scanInput, createParseCache()).findings.map(
@@ -74,190 +64,62 @@ const keys = (scanInput: ScanInput): string[] =>
 const FLAGGED_KEY = `flagged-capability:things.list@${ROUTE}`;
 
 describe("route gates", () => {
-  test("a gate before the route covers it", () => {
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia()${GATE_A}.get("/", list.handler);`,
-          },
-        }),
-      ),
-    ).toEqual([]);
+  test("a gate on the capability's flag covers its route", () => {
+    expect(keys(input({}))).toEqual([]);
   });
 
-  test("a gate after the route does not", () => {
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia().get("/", list.handler)${GATE_A};`,
-          },
-        }),
-      ),
-    ).toContain(FLAGGED_KEY);
+  test("an ungated route serving a flagged capability is reported", () => {
+    expect(keys(input({ routes: [mounted({ gateFlags: [] })] }))).toEqual([
+      FLAGGED_KEY,
+    ]);
   });
 
-  test("a gate on another flag does not", () => {
+  test("a gate on another flag does not cover it", () => {
     expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia().use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_B"))).get("/", list.handler);`,
-          },
-        }),
-      ),
-    ).toContain(FLAGGED_KEY);
+      keys(input({ routes: [mounted({ gateFlags: ["FEATURE_B"] })] })),
+    ).toEqual([FLAGGED_KEY]);
   });
 
-  test("a child inherits the gate of every parent it is mounted under", () => {
-    const child = `${IMPORTS}export const child = new Elysia().get("/", list.handler);`;
+  test("every mount of a flagged capability needs the gate", () => {
     expect(
       keys(
         input({
-          routes: {
-            [CHILD]: child,
-            [ROUTE]: `${IMPORTS}import { child } from "./child-routes";\nexport const r = new Elysia()${GATE_A}.use(child);`,
-          },
+          routes: [
+            mounted(),
+            mounted({ path: "/v1/other-things", gateFlags: [] }),
+          ],
         }),
       ),
-    ).toEqual([]);
-    expect(
-      keys(
-        input({
-          routes: {
-            [CHILD]: child,
-            [ROUTE]: `${IMPORTS}import { child } from "./child-routes";\nexport const r = new Elysia()${GATE_A}.use(child);\nexport const open = new Elysia().use(child);`,
-          },
-        }),
-      ),
-    ).toContain(`flagged-capability:things.list@${CHILD}`);
-  });
-
-  test("a group's hook stays inside the group", () => {
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia().group("/x", (app) => app${GATE_A}).get("/", list.handler);`,
-          },
-        }),
-      ),
-    ).toContain(FLAGGED_KEY);
-  });
-
-  test("hook, guard and route-level checks count as gates", () => {
-    const forms = [
-      `${IMPORTS}export const r = new Elysia().onBeforeHandle(() => { if (!isDeploymentFeatureEnabled("FEATURE_A")) { throw new Error(); } }).get("/", list.handler);`,
-      `${IMPORTS}import { env } from "@/api/env";\nexport const r = new Elysia().onRequest(() => (env.FEATURE_A ? undefined : 404)).get("/", list.handler);`,
-      `${IMPORTS}export const r = new Elysia().guard({ beforeHandle: () => isDeploymentFeatureEnabled("FEATURE_A") }).get("/", list.handler);`,
-      `${IMPORTS}export const r = new Elysia().get("/", list.handler, { beforeHandle: () => isDeploymentFeatureEnabled("FEATURE_A") });`,
-    ];
-    for (const route of forms) {
-      expect(keys(input({ routes: { [ROUTE]: route } }))).toEqual([]);
-    }
+    ).toEqual(["flagged-capability:things.list@GET /v1/other-things"]);
   });
 
   test("a flag read inside the handler is not a gate", () => {
-    for (const handlerSource of [
-      `export default () => ({ extra: isDeploymentFeatureEnabled("FEATURE_A") });`,
-      `export default () => { if (!isDeploymentFeatureEnabled("FEATURE_A")) { throw new Error(); } };`,
-    ]) {
-      expect(
-        keys(
-          input({
-            routes: {
-              [ROUTE]: `${IMPORTS}export const r = new Elysia().get("/", list.handler);`,
+    expect(
+      keys(
+        input({
+          routes: [mounted({ gateFlags: [] })],
+          readers: [
+            {
+              file: "apps/api/src/handlers/things/list.ts",
+              source: `export default () => isDeploymentFeatureEnabled("FEATURE_A") && isDeploymentFeatureEnabled("FEATURE_B");`,
             },
-            handlerSource,
-          }),
-        ),
-      ).toContain(FLAGGED_KEY);
-    }
+          ],
+        }),
+      ),
+    ).toEqual([FLAGGED_KEY]);
   });
 
-  test("a chain derived from an instance sees only the gates registered before it", () => {
-    const gate = `app${GATE_A};`;
-    const derived = `export const routes = app.get("/", list.handler);`;
+  test("a gate on an undeclared flag fails and never counts as a reader of it", () => {
     expect(
       keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}const app = new Elysia();\n${derived}\n${gate}`,
-          },
-        }),
+        input({ routes: [mounted({ gateFlags: ["FEATURE_A", "FEATURE_Z"] })] }),
       ),
-    ).toContain(FLAGGED_KEY);
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}const app = new Elysia();\n${gate}\n${derived}`,
-          },
-        }),
-      ),
-    ).toEqual([]);
-    // A base in another module ran every statement before it was imported.
-    expect(
-      keys(
-        input({
-          routes: {
-            [CHILD]: `${IMPORTS}export const app = new Elysia();\n${gate}`,
-            [ROUTE]: `${IMPORTS}import { app } from "./child-routes";\n${derived}`,
-          },
-        }),
-      ),
-    ).toEqual([]);
+    ).toEqual([`undeclared-gate-flag:FEATURE_Z@${ROUTE}`]);
   });
 
-  test("factories and statement continuations are walked", () => {
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const create = () => { return new Elysia().get("/", list.handler); };\nexport const r = new Elysia()${GATE_A}.use(create());`,
-          },
-        }),
-      ),
-    ).toEqual([]);
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia()${GATE_A};\nr.get("/", list.handler);`,
-          },
-        }),
-      ),
-    ).toEqual([]);
-  });
-
-  test("a gate on an undeclared flag fails, and so does an unwalked mount", () => {
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia().use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_Z")))${GATE_A}.get("/", list.handler);`,
-          },
-        }),
-      ),
-    ).toEqual([`undeclared-gate-flag:FEATURE_Z:${ROUTE}`]);
-    expect(
-      keys(
-        input({
-          routes: {
-            [ROUTE]: `${IMPORTS}export const r = new Elysia()${GATE_A};\nexport function mount(app) { return app.get("/", list.handler); }`,
-          },
-        }),
-      ),
-    ).toEqual([`unattributed-mount:list.handler@${ROUTE}`]);
-  });
-
-  test("a route file outside every class is reported", () => {
-    const scanInput = input({
-      routes: {
-        [ROUTE]: `${IMPORTS}export const r = new Elysia().get("/", list.handler);`,
-      },
-      features: new Map([["things.list", undefined]]),
+  test("a route outside every class is reported", () => {
+    const unflagged = input({
+      routes: [mounted({ gateFlags: [], capability: undefined })],
       readers: [
         {
           file: "apps/api/src/lib/a.ts",
@@ -265,25 +127,58 @@ describe("route gates", () => {
         },
       ],
     });
-    expect(keys(scanInput)).toEqual([`route-file:${ROUTE}`]);
+    expect(keys(unflagged)).toEqual([`unclassified-route:${ROUTE}`]);
     expect(
-      keys({ ...scanInput, alwaysOnRouteFiles: new Map([[ROUTE, "core"]]) }),
+      keys({ ...unflagged, alwaysOnRoutePrefixes: new Map([["/v1", "core"]]) }),
     ).toEqual([]);
+    // A prefix covers whole segments only.
+    expect(
+      keys({
+        ...unflagged,
+        alwaysOnRoutePrefixes: new Map([
+          ["/v1/thing", "core"],
+          ["/v1/things", "core"],
+        ]),
+      }),
+    ).toEqual(["stale-always-on:/v1/thing"]);
+    expect(
+      keys({
+        ...unflagged,
+        routes: [
+          mounted({
+            gateFlags: [],
+            capability: undefined,
+            localDevelopment: true,
+          }),
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  test("a capability without a flag is classified by its gate or prefix", () => {
+    expect(
+      keys(
+        input({
+          routes: [mounted({ gateFlags: [] })],
+          features: new Map([["things.list", undefined]]),
+          readers: [
+            {
+              file: "apps/api/src/lib/a.ts",
+              source: `isDeploymentFeatureEnabled("FEATURE_A"); isDeploymentFeatureEnabled("FEATURE_B");`,
+            },
+          ],
+        }),
+      ),
+    ).toEqual([`unclassified-route:${ROUTE}`]);
   });
 });
 
 describe("flags", () => {
-  const gated = {
-    [ROUTE]: `${IMPORTS}export const r = new Elysia()${GATE_A}.get("/", list.handler);`,
-  };
-
   test("a declared flag without a reader is dead", () => {
-    expect(keys(input({ routes: gated, readers: [] }))).toEqual([
-      "dead-flag:FEATURE_B",
-    ]);
+    expect(keys(input({ readers: [] }))).toEqual(["dead-flag:FEATURE_B"]);
   });
 
-  test("tags, catalog entries and sanctioned env reads are readers", () => {
+  test("tags, catalog entries, sanctioned env reads and route gates are readers", () => {
     for (const source of [
       `export const tool = { feature: "FEATURE_B" };`,
       `export const feature = { deploymentFeature: "FEATURE_B" };`,
@@ -291,18 +186,12 @@ describe("flags", () => {
       `import { env } from "@/api/env";\nconst { FEATURE_B } = env;`,
     ]) {
       expect(
-        keys(
-          input({
-            routes: gated,
-            readers: [{ file: "apps/api/src/lib/b.ts", source }],
-          }),
-        ),
+        keys(input({ readers: [{ file: "apps/api/src/lib/b.ts", source }] })),
       ).toEqual([]);
     }
     expect(
       keys(
         input({
-          routes: gated,
           readers: [],
           features: new Map([
             ["things.list", "FEATURE_A"],
@@ -311,12 +200,26 @@ describe("flags", () => {
         }),
       ),
     ).toEqual([]);
+    expect(
+      keys(
+        input({
+          readers: [],
+          routes: [
+            mounted(),
+            mounted({
+              path: "/v1/gated",
+              gateFlags: ["FEATURE_B"],
+              capability: undefined,
+            }),
+          ],
+        }),
+      ),
+    ).toEqual([]);
   });
 
   test("an undeclared read fails in every reader form", () => {
     const found = keys(
       input({
-        routes: gated,
         readers: [
           {
             file: "apps/api/src/lib/b.ts",
@@ -337,7 +240,6 @@ describe("flags", () => {
   test("a process-env read is never a reader and always fails", () => {
     const found = keys(
       input({
-        routes: gated,
         readers: [
           {
             file: "apps/api/src/lib/b.ts",
@@ -354,12 +256,7 @@ describe("flags", () => {
 
 describe("baseline", () => {
   const findings = scanDeploymentFeatures(
-    input({
-      routes: {
-        [ROUTE]: `${IMPORTS}export const r = new Elysia().get("/", list.handler);`,
-      },
-      readers: [],
-    }),
+    input({ routes: [mounted({ gateFlags: [] })], readers: [] }),
     createParseCache(),
   ).findings;
   const rows = buildBaseline(findings);
@@ -409,6 +306,28 @@ describe("baseline", () => {
     ).toBe(true);
   });
 
+  test("findings that are never baselined fail even when listed", () => {
+    const undeclared = scanDeploymentFeatures(
+      input({
+        routes: [mounted({ gateFlags: ["FEATURE_A", "FEATURE_Z"] })],
+        alwaysOn: new Map([["/v1/nothing", "self-test"]]),
+      }),
+      createParseCache(),
+    ).findings;
+    expect(
+      diffBaseline({
+        findings: undeclared,
+        baseline: [],
+        baseBaseline: undefined,
+      }).errors,
+    ).toEqual([
+      "stale-always-on:/v1/nothing",
+      `undeclared-gate-flag:FEATURE_Z@${ROUTE}`,
+    ]);
+    expect(() => buildBaseline(undeclared)).not.toThrow();
+    expect(buildBaseline(undeclared)).toEqual([]);
+  });
+
   test("written rows pass the order check for keys that collate differently", () => {
     const deadFlags = ["FEATURE_AIR", "FEATURE_AI_X", "FEATURE_a", "FEATURE_B"];
     const findingsByFlag = deadFlags.map((flag) => ({
@@ -434,7 +353,8 @@ describe("baseline", () => {
     expect(() => readBaseBaseline("refs/heads/no-such-base-revision")).toThrow(
       "is not a commit",
     );
-    expect(Array.isArray(readBaseBaseline("HEAD"))).toBe(true);
+    const base = readBaseBaseline("HEAD");
+    expect(base === undefined || Array.isArray(base)).toBe(true);
   });
 
   test("an empty or missing --base value fails", () => {
@@ -448,13 +368,14 @@ describe("baseline", () => {
   });
 });
 
-describe("real tree", () => {
-  // The tree is read and parsed once, outside the test timeouts; the
-  // self-test cases reparse only the files they edit.
-  const real = loadRealInput();
-  const cache = createParseCache();
-  const scanned = scanDeploymentFeatures(real, cache);
+// The tree is read once, outside the test timeouts: handler discovery and the
+// route table import the API module graph. The self-test cases reparse only
+// the files they edit.
+const real = await loadRealInput();
+const cache = createParseCache();
+const scanned = scanDeploymentFeatures(real, cache);
 
+describe("real tree", () => {
   test("every self-test detector fires", () => {
     expect(SELF_TEST_CASES.length).toBeGreaterThan(0);
     expect(runSelfTest(real, cache)).toEqual([]);
@@ -462,32 +383,35 @@ describe("real tree", () => {
 
   test("the scan matches the committed baseline", async () => {
     const committed: unknown = await Bun.file(
-      new URL("../deployment-feature-baseline.json", import.meta.url),
+      new URL("../deployment-feature-routes-baseline.json", import.meta.url),
     ).json();
     expect(buildBaseline(scanned.findings)).toEqual(
       Array.isArray(committed) ? committed : [],
     );
   });
-});
 
-test("list routes and task admission read the same deployment owner", () => {
-  const actual = loadRealInput();
-  const required = [
-    "apps/api/src/handlers/lists/routes.ts",
-    "apps/api/src/lib/tasks/deployment-features.ts",
-  ];
-  const ownerReaders = (source: ScanInput) =>
-    scanDeploymentFeatures(source, createParseCache())
-      .reads.filter(
-        (read) =>
-          read.flag === "FEATURE_LEGAL_LISTS" && read.form === "owner-call",
-      )
-      .map((read) => read.file);
-  for (const file of required) {
-    expect(ownerReaders(actual)).toContain(file);
+  test("list routes and task admission read the same deployment owner", () => {
+    // The lists routes read the flag through their mounted gate, which reads
+    // the owner per request; task admission calls the owner itself.
+    const listRoutes = real.routes.filter((route) =>
+      route.path.startsWith("/v1/lists/"),
+    );
+    expect(listRoutes.length).toBeGreaterThan(0);
+    for (const route of listRoutes) {
+      expect(route.gateFlags).toContain("FEATURE_LEGAL_LISTS");
+    }
+    const file = "apps/api/src/lib/tasks/deployment-features.ts";
+    const ownerReaders = (source: ScanInput) =>
+      scanDeploymentFeatures(source, createParseCache())
+        .reads.filter(
+          (read) =>
+            read.flag === "FEATURE_LEGAL_LISTS" && read.form === "owner-call",
+        )
+        .map((read) => read.file);
+    expect(ownerReaders(real)).toContain(file);
     const divergent = {
-      ...actual,
-      readerFiles: actual.readerFiles.map((record) =>
+      ...real,
+      readerFiles: real.readerFiles.map((record) =>
         record.file === file
           ? {
               ...record,
@@ -500,5 +424,5 @@ test("list routes and task admission read the same deployment owner", () => {
       ),
     };
     expect(ownerReaders(divergent)).not.toContain(file);
-  }
+  });
 });

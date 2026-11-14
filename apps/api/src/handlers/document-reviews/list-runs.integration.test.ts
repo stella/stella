@@ -23,11 +23,16 @@ import {
   entityVersions,
   fields,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
+import type {
+  DocumentReviewRunBasis,
+  DocumentReviewRunExecutor,
+} from "@/api/lib/document-review/run-contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { memberSafeDb } from "@/api/tests/helpers/application-role-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -37,6 +42,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import listDocumentReviewRuns from "./list-runs";
+import readDocumentReviewRun from "./read-run";
 
 setDefaultTimeout(120_000);
 
@@ -56,6 +62,7 @@ const basis: DocumentReviewRunBasis = {
     definitionSnapshot: {
       name: "Positions confirmed for this review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   references: [],
@@ -65,6 +72,7 @@ const basis: DocumentReviewRunBasis = {
 const seedRun = async (target: {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
+  executor?: DocumentReviewRunExecutor;
 }): Promise<SafeId<"documentReviewRun">> => {
   const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
   seededRunIds.push(runId);
@@ -78,6 +86,7 @@ const seedRun = async (target: {
     contentSha256: "a".repeat(64),
     basis,
     status: "completed",
+    executor: target.executor ?? DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
     total: 0,
     completed: 0,
     finishedAt: new Date(),
@@ -90,9 +99,11 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-  );
+  safeDb = memberSafeDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  });
   // The document gains a version: the same property, a new field row.
   await testDb.insert(entityVersions).values({
     id: laterVersionId,
@@ -133,6 +144,23 @@ afterAll(async () => {
   }
 });
 
+const listRuns = async (query: { includeLatest?: boolean } = {}) =>
+  await listDocumentReviewRuns.handler(
+    asTestRaw<Parameters<typeof listDocumentReviewRuns.handler>[0]>({
+      request: new Request("https://api.example.test/handler"),
+      route:
+        "/v1/workspaces/:workspaceId/document-reviews/runs" satisfies ApiRoutePath,
+      memberRole: sessionMemberRole("owner"),
+      params: { workspaceId: ids.wsA1 },
+      query: { entityId: ids.entityA1, fileFieldId: laterFieldId, ...query },
+      recordAuditEvent: async () => undefined,
+      safeDb,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+      workspaceId: ids.wsA1,
+    }),
+  );
+
 describe("document review run history across versions", () => {
   test("lists a run made on an earlier version of the document", async () => {
     const earlier = await seedRun({
@@ -144,11 +172,52 @@ describe("document review run history across versions", () => {
       entityVersionId: laterVersionId,
     });
 
-    const result = await listDocumentReviewRuns.handler(
-      asTestRaw<Parameters<typeof listDocumentReviewRuns.handler>[0]>({
+    const result = await listRuns();
+
+    expect(result).toMatchObject({
+      items: [
+        { id: later, entityVersionId: laterVersionId },
+        { id: earlier, entityVersionId: ids.entityVersionA1 },
+      ],
+    });
+  });
+
+  test("says which executor produced each run, in the list and the newest run", async () => {
+    const worker = await seedRun({
+      fileFieldId: ids.fieldA1,
+      entityVersionId: ids.entityVersionA1,
+    });
+    const table = await seedRun({
+      fileFieldId: laterFieldId,
+      entityVersionId: laterVersionId,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+    });
+
+    const result = await listRuns({ includeLatest: true });
+
+    expect(result).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: table,
+          executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+        }),
+        expect.objectContaining({
+          id: worker,
+          executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+        }),
+      ]),
+      latest: {
+        run: { id: table, executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE },
+      },
+    });
+
+    const detail = await readDocumentReviewRun.handler(
+      asTestRaw<Parameters<typeof readDocumentReviewRun.handler>[0]>({
+        request: new Request("https://api.example.test/handler"),
+        route:
+          "/v1/workspaces/:workspaceId/document-reviews/runs/:runId" satisfies ApiRoutePath,
         memberRole: sessionMemberRole("owner"),
-        params: { workspaceId: ids.wsA1 },
-        query: { entityId: ids.entityA1, fileFieldId: laterFieldId },
+        params: { workspaceId: ids.wsA1, runId: worker },
         recordAuditEvent: async () => undefined,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
@@ -156,12 +225,8 @@ describe("document review run history across versions", () => {
         workspaceId: ids.wsA1,
       }),
     );
-
-    expect(result).toMatchObject({
-      items: [
-        { id: later, entityVersionId: laterVersionId },
-        { id: earlier, entityVersionId: ids.entityVersionA1 },
-      ],
+    expect(detail).toMatchObject({
+      run: { id: worker, executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER },
     });
   });
 });

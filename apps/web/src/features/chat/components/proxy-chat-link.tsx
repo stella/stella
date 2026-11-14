@@ -5,21 +5,43 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ChatLink, hasBundledChatLinkIcon } from "@stll/chat/link";
 import type { ChatLinkIconSource } from "@stll/chat/link";
-import { normalizeChatLink } from "@stll/chat/link-detection";
+import { getChatLinkSite, normalizeChatLink } from "@stll/chat/link-detection";
 
 import { linkIconOptions } from "@/features/chat/link-icons";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
-export const ProxyChatLink = (
-  props: Omit<ComponentProps<typeof ChatLink>, "iconSource">,
-) => {
+/** Only links from a tool-returned source may fetch a site icon. */
+export type LinkIconSource = { kind: "tool-source" } | { kind: "model-text" };
+
+type ProxyChatLinkProps = Omit<
+  ComponentProps<typeof ChatLink>,
+  "iconSource"
+> & {
+  iconSource: LinkIconSource;
+};
+
+export const ProxyChatLink = ({
+  iconSource: source,
+  ...props
+}: ProxyChatLinkProps) => {
   const hostname = normalizeChatLink(props.href)?.hostname ?? "";
+  const site = getChatLinkSite(hostname) ?? "";
   const [visible, setVisible] = useState(false);
   const { data: icon, isError } = useQuery({
-    ...linkIconOptions(hostname),
-    enabled: visible && hostname !== "" && !hasBundledChatLinkIcon(hostname),
+    ...linkIconOptions(site),
+    enabled:
+      source.kind === "tool-source" &&
+      visible &&
+      site !== "" &&
+      !hasBundledChatLinkIcon(hostname),
   });
-  const blob = icon?.type === "icon" ? icon.blob : undefined;
+  // A disabled query still exposes data another link cached for the site.
+  const blob =
+    source.kind === "tool-source" &&
+    !hasBundledChatLinkIcon(hostname) &&
+    icon?.type === "icon"
+      ? icon.blob
+      : undefined;
   const [localIcon, setLocalIcon] = useState<{
     blob: Blob;
     source: ChatLinkIconSource;

@@ -10,9 +10,9 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  NETWORK_DEPTH_METHOD,
   diffNetworkBaseline,
   mergeNetworkBaseline,
+  NETWORK_DEPTH_METHOD,
 } from "../apps/web/e2e/helpers/network";
 import { generateRevisionRouteTree } from "../apps/web/scripts/network-baseline-route-tree";
 import { prepareComparisonBaseline } from "./network-baseline-scope";
@@ -25,7 +25,9 @@ const routeTree = await (async () => {
   const revision = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
     cwd: repository,
   });
-  expect(revision.exitCode).toBe(0);
+  if (revision.exitCode !== 0) {
+    throw new Error(`git rev-parse HEAD failed: ${revision.stderr.toString()}`);
+  }
   const output = path.join(directory, "route-tree.ts");
   try {
     await generateRevisionRouteTree({
@@ -89,7 +91,7 @@ test("successive write recordings retain declarations and timing-conditional pea
             responseSizes: Object.fromEntries(
               observedRequests.map((key) => [key, 1024]),
             ),
-            missingResponseSizeCounts: {},
+            responseSizeFailures: {},
           },
         ],
       ]),
@@ -116,7 +118,7 @@ test("only a validated declaration permits measured growth", () => {
         dbQueries: { "GET /old": 2 },
         missingDbQueryCounts: {},
         responseSizes: { "GET /old": 1024 },
-        missingResponseSizeCounts: {},
+        responseSizeFailures: {},
       },
     ],
   ]);
@@ -176,7 +178,7 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       dbQueries: {},
       missingDbQueryCounts: {},
       responseSizes: {},
-      missingResponseSizeCounts: {},
+      responseSizeFailures: {},
     },
   };
   expect(

@@ -1,14 +1,15 @@
 #!/usr/bin/env bun
 
 import { panic } from "better-result";
-import { SQL } from "bun";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { createSqlClient } from "../apps/api/src/db/sql-client";
 import { REHEARSAL_ROWS_PER_DECISION } from "../apps/api/src/scripts/seed-migration-rehearsal-plan";
 
 type Row = Record<string, unknown>;
 type Catalog = Record<string, unknown>;
+type CatalogClient = { unsafe: (query: string) => Promise<Row[]> };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -120,14 +121,42 @@ export const rowsByKey = (
     ]),
   );
 
-const queryRows = async (client: SQL, query: string): Promise<Row[]> =>
-  await client.unsafe(query);
+const serializeCatalogValue = (value: unknown): unknown => {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map(serializeCatalogValue);
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [
+        key,
+        serializeCatalogValue(nested),
+      ]),
+    );
+  }
+  return value;
+};
+
+export const queryRows = async (
+  client: CatalogClient,
+  query: string,
+): Promise<Row[]> =>
+  (await client.unsafe(query)).map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [
+        key,
+        serializeCatalogValue(value),
+      ]),
+    ),
+  );
 
 const quoteIdentifier = (name: string): string =>
   `"${name.replaceAll('"', '""')}"`;
 
 const snapshotData = async (
-  client: SQL,
+  client: CatalogClient,
   tables: readonly Row[],
   columns: readonly Row[],
 ): Promise<Record<string, string>> => {
@@ -182,7 +211,9 @@ const snapshotData = async (
 };
 
 /** Catalog only non-system objects. Database-local names are stable across both paths. */
-export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
+export const snapshotCatalog = async (
+  client: CatalogClient,
+): Promise<Catalog> => {
   const schemas = await queryRows(
     client,
     `
@@ -288,8 +319,9 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
     client,
     `
     SELECT n.nspname AS schema, c.relname AS name, s.seqtypid::regtype::text AS type,
-           s.seqstart AS start, s.seqincrement AS increment, s.seqmin AS minimum,
-           s.seqmax AS maximum, s.seqcache AS cache, s.seqcycle AS cycle,
+           s.seqstart::text AS start, s.seqincrement::text AS increment,
+           s.seqmin::text AS minimum, s.seqmax::text AS maximum,
+           s.seqcache::text AS cache, s.seqcycle AS cycle,
            pg_get_userbyid(c.relowner) AS owner,
            coalesce(c.relacl::text[], '{}'::text[]) AS acl
     FROM pg_sequence s JOIN pg_class c ON c.oid = s.seqrelid
@@ -380,7 +412,7 @@ if (import.meta.main) {
     if (!url) {
       panic("DATABASE_URL is required");
     }
-    const client = new SQL({ url, max: 1, connectionTimeout: 30 });
+    const client = createSqlClient({ url, max: 1, connectionTimeout: 30 });
     try {
       console.log(JSON.stringify(await snapshotCatalog(client)));
     } finally {

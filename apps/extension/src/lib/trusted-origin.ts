@@ -1,12 +1,8 @@
 import { panic } from "better-result";
 
-import { buildMode, rawStellaOrigins } from "./env";
+import { PRODUCTION_STELLA_ORIGINS } from "@stll/api-contract/browser-control";
 
-/** Hosted production stella; every build but `staging` trusts it by default. */
-const PRODUCTION_STELLA_ORIGINS = [
-  "https://app.stll.app",
-  "https://my.stll.app",
-] as const;
+import { buildMode, rawStellaOrigins } from "./env";
 
 /** Hosted staging stella; only the `staging` build trusts it by default. */
 export const STAGING_STELLA_ORIGINS = ["https://staging.stll.app"] as const;

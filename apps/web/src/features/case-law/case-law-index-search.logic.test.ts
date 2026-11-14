@@ -1,16 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
-import { SEARCH_SORTS } from "@stll/api-contract/search";
+import {
+  DECISION_LIST_SORTS,
+  DECISION_SORTS,
+  SEARCH_SORTS,
+} from "@stll/api-contract/search";
 
 import {
   activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
-  clearedCaseLawFilters,
   createCaseLawIndexPath,
   dateRangeYear,
   decisionDateRange,
-  decisionSortOrder,
-  decisionSortParam,
+  dropCaseLawFilters,
   hasActiveCaseLawFilter,
   isStrictSearch,
   STRICT_SEARCH_VALUE,
@@ -20,40 +22,61 @@ import {
   withQuery,
   yearDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
+import {
+  decisionListSortOf,
+  searchSortOf,
+} from "@/features/case-law/decision-order.logic";
 
 describe("the sort the URL carries", () => {
-  test("omits the default so one result set has one address", () => {
-    expect(decisionSortParam(undefined)).toBeUndefined();
-    expect(decisionSortParam("relevance")).toBeUndefined();
+  test("omits the default of the result set it addresses", () => {
     expect(createCaseLawIndexPath({ country: "cz", q: "nájem" })).toBe(
       "/law/cases?country=cz&q=n%C3%A1jem",
     );
     expect(
       createCaseLawIndexPath({ country: "cz", q: "nájem", sort: "relevance" }),
     ).toBe("/law/cases?country=cz&q=n%C3%A1jem");
-  });
-
-  test("carries a non-default sort", () => {
-    expect(decisionSortParam("newest")).toBe("newest");
+    // Newest first is the listing's default and a search's choice.
+    expect(createCaseLawIndexPath({ country: "cz", sort: "newest" })).toBe(
+      "/law/cases?country=cz",
+    );
     expect(
       createCaseLawIndexPath({ country: "cz", q: "nájem", sort: "newest" }),
     ).toBe("/law/cases?country=cz&q=n%C3%A1jem&sort=newest");
+    expect(createCaseLawIndexPath({ country: "cz", sort: "oldest" })).toBe(
+      "/law/cases?country=cz&sort=oldest",
+    );
   });
 
-  test("runs a search whose URL says nothing under the default", () => {
-    expect(decisionSortOrder(undefined)).toBe("relevance");
-    expect(decisionSortOrder("newest")).toBe("newest");
-  });
-
-  test("every sort survives a round trip through the URL", () => {
-    for (const sort of SEARCH_SORTS) {
-      const path = createCaseLawIndexPath({ country: "cz", q: "x", sort });
+  test("every order its result set serves survives a round trip through the URL", () => {
+    const readBack = (path: string) => {
       const carried = new URL(path, "https://example.test").searchParams.get(
         "sort",
       );
-      const parsed = SEARCH_SORTS.find((order) => order === carried);
-      expect(decisionSortOrder(parsed)).toBe(sort);
+      return DECISION_SORTS.find((order) => order === carried);
+    };
+    for (const sort of SEARCH_SORTS) {
+      const path = createCaseLawIndexPath({ country: "cz", q: "x", sort });
+      expect(searchSortOf(readBack(path))).toBe(sort);
     }
+    for (const sort of DECISION_LIST_SORTS) {
+      const path = createCaseLawIndexPath({ country: "cz", sort });
+      expect(decisionListSortOf(readBack(path))).toBe(sort);
+    }
+  });
+
+  test("a query edit keeps the order only where the result set it lands on serves it", () => {
+    expect(withQuery({ country: "cz", sort: "oldest" }, "nájem").sort).toBe(
+      undefined,
+    );
+    expect(withQuery({ country: "cz", sort: "newest" }, "nájem").sort).toBe(
+      "newest",
+    );
+    expect(
+      withQuery({ country: "cz", q: "nájem", sort: "relevance" }, "").sort,
+    ).toBe(undefined);
+    expect(
+      withQuery({ country: "cz", q: "nájem", sort: "newest" }, "").sort,
+    ).toBe("newest");
   });
 });
 
@@ -126,19 +149,31 @@ describe("the filters the URL carries", () => {
     );
   });
 
-  test("clearing unsets each filter key and nothing else", () => {
-    const cleared = clearedCaseLawFilters();
-
-    // Every facet key, plus the three the date range is spelled with.
-    expect(Object.keys(cleared).toSorted()).toEqual(
-      [...CASE_LAW_FILTER_KEYS, "from", "to", "year"].toSorted(),
-    );
-    expect(Object.values(cleared)).toEqual(
-      [...CASE_LAW_FILTER_KEYS, "from", "to", "year"].map(() => undefined),
-    );
-    expect(
-      hasActiveCaseLawFilter({ country: "cz", q: "nájem", ...cleared }),
-    ).toBe(false);
+  test("dropping any filter preserves every unrelated search key and its type", () => {
+    const search = {
+      country: "cze",
+      court: "Ústavní soud",
+      lang: "cs",
+      sourceId: "00000000-0000-4000-8000-000000000001",
+      type: "judgment",
+      q: "nájem",
+      questions: ["question-fixture"],
+      rewrite: "off" as const,
+      rewrittenFrom: "original query",
+      futureSearchKey: { retained: "by default" },
+    };
+    for (const field of CASE_LAW_FILTER_KEYS) {
+      const next = dropCaseLawFilters(search, [field]);
+      expect(next.futureSearchKey).toBe(search.futureSearchKey);
+      expect(Object.keys(next).toSorted()).toEqual(
+        Object.keys(search)
+          .filter((key) => key !== field)
+          .toSorted(),
+      );
+      expect(Object.entries(next)).toEqual(
+        Object.entries(search).filter(([key]) => key !== field),
+      );
+    }
   });
 
   test("each filter on its own counts as active", () => {
@@ -465,7 +500,9 @@ describe("the decision-date range", () => {
 
     expect(hasActiveCaseLawFilter(narrowed)).toBe(true);
     expect(
-      hasActiveCaseLawFilter({ ...narrowed, ...clearedCaseLawFilters() }),
+      hasActiveCaseLawFilter(
+        dropCaseLawFilters(narrowed, ["from", "to", "year"]),
+      ),
     ).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
@@ -6,6 +6,7 @@ import {
   definitelyFalse,
   evaluate,
 } from "./github-expression";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const policySchema = v.object({
@@ -14,6 +15,7 @@ const policySchema = v.object({
     v.picklist([
       "pr-fast",
       "queue",
+      "armed",
       "main",
       "schema-pr",
       "pr-opt-in",
@@ -33,6 +35,137 @@ const policySchema = v.object({
     {},
   ),
 });
+
+const WHOLE_CONTEXT_BUDGET_TEST =
+  "whole workflow contexts stay below the per-variable environment budget";
+
+type WholeContextBudgetCase = {
+  /** The context the value serializes, as written inside `toJSON(...)`. */
+  context: string;
+  /** The context the budget test measures for this consumer. */
+  budget: string;
+};
+
+/**
+ * Every workflow, job or step env value that receives a whole workflow
+ * context, keyed by consumer. The budget test fails when a named budget is not
+ * measured, the policy check fails on an unlisted consumer or a context other
+ * than the declared one, and the policy test fails on an entry no workflow
+ * still declares.
+ */
+export const WHOLE_CONTEXT_ENV_BUDGET_CASES = {
+  "ci.yml/ci-checks-policy/Run policy checks/CI_CHECK_POOL_STEPS": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/ci-checks-policy/Run policy checks/CI_CHECK_POOL_INPUTS": {
+    context: "inputs",
+    budget: "pool inputs",
+  },
+  "ci.yml/ci-checks-policy/Record static check receipts/CHECK_OUTCOMES": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_STEPS": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_INPUTS": {
+    context: "inputs",
+    budget: "pool inputs",
+  },
+  "ci.yml/ci-checks-rest/Record static check receipts/CHECK_OUTCOMES": {
+    context: "steps",
+    budget: "pool steps",
+  },
+  "ci.yml/code-quality-web-rest/Run independent code-quality checks/CI_CHECK_POOL_STEPS":
+    { context: "steps", budget: "pool steps" },
+  "ci.yml/code-quality-web-rest/Run independent code-quality checks/CI_CHECK_POOL_INPUTS":
+    { context: "inputs", budget: "pool inputs" },
+  "main-heavy.yml/status/Classify failed heavy jobs/RESULTS": {
+    context: "needs",
+    budget: "main-heavy needs",
+  },
+  "main-heavy.yml/status/Publish heavy conclusion/RESULTS": {
+    context: "needs",
+    budget: "main-heavy needs",
+  },
+  "main-pr-depth.yml/status/Publish PR-depth conclusion/RESULTS": {
+    context: "needs",
+    budget: "main-pr-depth needs",
+  },
+  "publish-npm.yml/release-summary/Report published, failed and skipped packages/NPM_RELEASE_NEEDS":
+    { context: "needs", budget: "publish-npm release-summary needs" },
+  "release-desktop.yml/release-complete/Require all release jobs to complete/NEEDS":
+    { context: "needs", budget: "release-desktop release-complete needs" },
+} as const satisfies Record<string, WholeContextBudgetCase>;
+
+const WHOLE_CONTEXT_BUDGETS = new Map(
+  Object.entries(WHOLE_CONTEXT_ENV_BUDGET_CASES),
+);
+
+// GitHub function names are case-insensitive and allow whitespace around
+// arguments.
+const WHOLE_CONTEXT_EXPRESSION =
+  /toJSON\(\s*(needs|steps|inputs|github|needs\.[A-Za-z0-9_-]+\.outputs)\s*\)/giu;
+
+const envSchema = v.record(v.string(), v.unknown());
+
+type WholeContextConsumer = { consumer: string; contexts: string[] };
+
+const wholeContextValues = (
+  prefix: string,
+  env: unknown,
+): WholeContextConsumer[] =>
+  (v.is(envSchema, env) ? Object.entries(env) : []).flatMap(([name, value]) => {
+    if (typeof value !== "string") {
+      return [];
+    }
+    const contexts = [...value.matchAll(WHOLE_CONTEXT_EXPRESSION)].map(
+      (match) => match[1] ?? "",
+    );
+    return contexts.length === 0
+      ? []
+      : [{ consumer: `${prefix}/${name}`, contexts }];
+  });
+
+/** Workflow, job and step env values that serialize a whole context. */
+export const wholeContextConsumers = (
+  file: string,
+  workflow: v.InferOutput<typeof workflowSchema>,
+): WholeContextConsumer[] => [
+  ...wholeContextValues(`${file}/<workflow env>`, workflow["env"]),
+  ...Object.entries(workflow.jobs).flatMap(([id, job]) => [
+    ...wholeContextValues(`${file}/${id}/<job env>`, job["env"]),
+    ...(job.steps ?? []).flatMap((step) =>
+      wholeContextValues(
+        `${file}/${id}/${typeof step["name"] === "string" ? step["name"] : "<unnamed step>"}`,
+        step.env,
+      ),
+    ),
+  ]),
+];
+
+const checkWholeContextEnvironment = (
+  workflows: Readonly<Record<string, v.InferOutput<typeof workflowSchema>>>,
+) =>
+  Object.entries(workflows)
+    .flatMap(([file, workflow]) => wholeContextConsumers(file, workflow))
+    .flatMap(({ consumer, contexts }) => {
+      const declared = WHOLE_CONTEXT_BUDGETS.get(consumer);
+      if (declared === undefined) {
+        return [
+          `${consumer}: whole-context env is not covered by ${WHOLE_CONTEXT_BUDGET_TEST}`,
+        ];
+      }
+      return contexts
+        .filter((context) => context !== declared.context)
+        .map(
+          (context) =>
+            `${consumer}: serializes toJSON(${context}), but ${WHOLE_CONTEXT_BUDGET_TEST} measures toJSON(${declared.context})`,
+        );
+    });
+
 export const workflowSchema = v.looseObject({
   on: v.record(v.string(), v.unknown()),
   permissions: v.optional(v.unknown()),
@@ -113,8 +246,7 @@ type CheckMainConcurrencyOptions = {
   file: string;
   workflow: v.InferOutput<typeof workflowSchema>;
   concurrencyPolicy:
-    | v.InferOutput<typeof policySchema>["pushMain"][string]
-    | undefined;
+    v.InferOutput<typeof policySchema>["pushMain"][string] | undefined;
 };
 
 const checkMainConcurrency = ({
@@ -261,14 +393,10 @@ const checkCompilerProofPolicy = ({
 }: CheckCompilerProofPolicyOptions) => {
   const problems: string[] = [];
   const compilerProof = job.steps?.some((step) =>
-    /\b(?:check:typecheck-parity|typecheck-parity\.ts|stll-typecheck-parity|typecheck-command-probe(?:\.sh|\.ts))\b/u.test(
-      step.run ?? "",
-    ),
+    /\btypecheck-command-probe\.(?:sh|ts)\b/u.test(step.run ?? ""),
   );
   if (compilerProof && eventPolicy !== "dispatch-only") {
-    problems.push(
-      `${key}: compiler parity and probes require dispatch-only policy`,
-    );
+    problems.push(`${key}: compiler probes require dispatch-only policy`);
   }
   if (
     eventPolicy === "dispatch-only" &&
@@ -278,6 +406,43 @@ const checkCompilerProofPolicy = ({
     problems.push(
       `${key}: dispatch-only jobs require workflow_dispatch as the only trigger`,
     );
+  }
+  return problems;
+};
+
+// Queue-only suites a pull request runs once it is armed for merge: the one
+// ci-plan output decides, so no other path can run them on an unarmed pull
+// request.
+const checkArmedPolicy = ({
+  key,
+  job,
+  eventPolicy,
+  triggers,
+}: Pick<
+  CheckJobEventPolicyOptions,
+  "key" | "job" | "eventPolicy" | "triggers"
+>) => {
+  const problems: string[] = [];
+  if (eventPolicy !== "armed") {
+    return problems;
+  }
+  const condition =
+    typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+  if (!condition.includes(HEAVY_PROOF_GATE)) {
+    problems.push(`${key}: armed job must gate on ${HEAVY_PROOF_GATE}`);
+  }
+  for (const event of ["pull_request", "pull_request_target"]) {
+    if (
+      Object.hasOwn(triggers, event) &&
+      !definitelyFalse(condition, {
+        values: {
+          "github.event_name": event,
+          "needs.ci-plan.outputs.heavy_proof": "false",
+        },
+      })
+    ) {
+      problems.push(`${key}: armed job can run on an unarmed ${event}`);
+    }
   }
   return problems;
 };
@@ -304,38 +469,41 @@ const checkJobEventPolicy = ({
     }
     return [];
   }
-  if (eventPolicy === "pr-opt-in") {
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
-    if (
-      key === "ci.yml/service-suites" ||
-      key === "ci.yml/postgres-service-suites"
-    ) {
-      if (
-        !requiresPostgresPrSwitch({ key, condition, planOutputs }) ||
-        ["", "off"].some(
-          (value) =>
-            !definitelyFalse(
-              condition,
-              contextWithPlanOutputs({
-                outputs: planOutputs,
-                context: {
-                  values: {
-                    "github.event_name": "pull_request",
-                    "vars.CI_POSTGRES_PR_SELECTION": value,
-                    "needs.ci-plan.outputs.corpus_suites_required": "false",
-                  },
+  const condition =
+    typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+  if (
+    (key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites") &&
+    (!requiresPostgresPrSwitch({ key, condition, planOutputs }) ||
+      ["", "off"].some(
+        (value) =>
+          !definitelyFalse(
+            condition,
+            contextWithPlanOutputs({
+              outputs: planOutputs,
+              context: {
+                values: {
+                  "github.event_name": "pull_request",
+                  "vars.CI_POSTGRES_PR_SELECTION": value,
+                  "needs.ci-plan.outputs.corpus_suites_required": "false",
                 },
-              }),
-            ),
-        )
-      ) {
-        problems.push(
-          `${key}: Postgres PR suites must require the disabled-by-default switch`,
-        );
-      }
-      return problems;
-    }
+              },
+            }),
+          ),
+      ))
+  ) {
+    problems.push(
+      `${key}: Postgres PR suites must require the disabled-by-default switch`,
+    );
+  }
+  if (
+    eventPolicy === "pr-opt-in" &&
+    (key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites")
+  ) {
+    return problems;
+  }
+  if (eventPolicy === "pr-opt-in") {
     if (
       key !== "ci.yml/fix-tests-on-base" ||
       !condition.includes(
@@ -352,12 +520,10 @@ const checkJobEventPolicy = ({
     }
     return problems;
   }
-  if (eventPolicy === "schema-pr" && file !== "db-migrations.yml") {
-    problems.push(`${key}: schema policy belongs to Database Migrations`);
+  if (eventPolicy === "schema-pr" && file !== "ci.yml") {
+    problems.push(`${key}: schema policy belongs to CI Checks`);
   }
   if (periodic) {
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
     const scopeValues = Object.fromEntries(
       Array.from(
         condition.matchAll(/needs\.ci-plan\.outputs\.(\w+_required)/gu),
@@ -374,6 +540,7 @@ const checkJobEventPolicy = ({
           "inputs.heavy_only": true,
           "inputs.pr_depth_only": false,
           "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.heavy_proof": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.trusted": "true",
         },
@@ -391,8 +558,6 @@ const checkJobEventPolicy = ({
     if (!Object.hasOwn(triggers, event)) {
       continue;
     }
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
     if (
       !definitelyFalse(condition, {
         values: { "github.event_name": event },
@@ -514,8 +679,14 @@ export const checkCiEventPolicies = ({
   for (const key of policySource ? duplicatePolicyJobKeys(policySource) : []) {
     problems.push(`CI event policy has duplicate job key: ${key}`);
   }
-  for (const [file, raw] of Object.entries(workflows)) {
-    const workflow = v.parse(workflowSchema, raw);
+  const parsedWorkflows = Object.fromEntries(
+    Object.entries(workflows).map(([file, raw]) => [
+      file,
+      v.parse(workflowSchema, raw),
+    ]),
+  );
+  problems.push(...checkWholeContextEnvironment(parsedWorkflows));
+  for (const [file, workflow] of Object.entries(parsedWorkflows)) {
     if (file === "codeql.yml") {
       problems.push(...checkCodeqlWorkflow(workflow));
     }
@@ -547,6 +718,12 @@ export const checkCiEventPolicies = ({
           eventPolicy,
           triggers: workflow.on,
         }),
+        ...checkArmedPolicy({
+          key,
+          job,
+          eventPolicy,
+          triggers: workflow.on,
+        }),
         ...checkJobEventPolicy({
           key,
           file,
@@ -571,7 +748,9 @@ export const checkCiEventPolicies = ({
     );
     const needs = v.parse(v.array(v.string()), result?.needs);
     const expected = needs.filter(
-      (id) => id !== "ci-plan" && declared.jobs[`${file}/${id}`] === "pr-fast",
+      (id) =>
+        id !== "ci-plan" &&
+        ["pr-fast", "schema-pr"].includes(declared.jobs[`${file}/${id}`] ?? ""),
     );
     if (
       actual.length !== expected.length ||

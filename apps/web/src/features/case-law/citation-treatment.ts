@@ -149,3 +149,14 @@ export const totalCitations = (counts: CitationTreatmentCounts): number =>
     (total, treatment) => total + counts[treatment],
     0,
   );
+
+/**
+ * Whether any later decision cites this one. A capped count is a lower bound
+ * that already passed zero. Everything that speaks of later citing decisions
+ * (the citation strip, the later-treatment note) asks this one question.
+ */
+export const hasIncomingCitations = (
+  summary: DecisionCitationSummary,
+): boolean =>
+  totalCitations(summary.incoming) > 0 ||
+  citationSummaryIsCapped(summary, "incoming");

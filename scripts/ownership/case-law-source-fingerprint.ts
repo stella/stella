@@ -12,6 +12,9 @@ export default {
     "`raw-hash-from-source-fingerprint` rule rejects a hand-written `rawHash` " +
     "in adapters, and `scripts/source-fingerprint-baseline.ts` enumerates " +
     "every registered source, every exempt file and every external-id writer " +
-    "against a shrink-only baseline.",
+    "against a shrink-only baseline. A fingerprint version bump changes the " +
+    "fingerprint over the same stored bytes; changing the stored bytes makes " +
+    "the next observation rewrite the row instead, with a parser version " +
+    "bump only when parser output changes.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

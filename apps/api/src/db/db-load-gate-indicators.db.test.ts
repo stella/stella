@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { defaultConfig } from "../../../../packages/db-load-gate/src/health";
 import {
   AUTOVACUUM_SQL,
-  LONG_TRANSACTION_SQL,
   autovacuumOnTarget,
+  LONG_TRANSACTION_SQL,
   longTransaction,
 } from "../../../../packages/db-load-gate/src/indicators";
 import { withGatedTestClients } from "../tests/gated-test-database";
@@ -54,8 +54,8 @@ describe.skipIf(!enabled)("real database health readings", () => {
         await holder`ROLLBACK`;
       } finally {
         await holder`ROLLBACK`;
-        holder.release();
-        observer.release();
+        await holder.release();
+        await observer.release();
       }
     });
   });
@@ -94,8 +94,8 @@ describe.skipIf(!enabled)("real database health readings", () => {
       } finally {
         await holder`ROLLBACK`;
         await observer.unsafe(`DROP TABLE IF EXISTS "${target}"`);
-        holder.release();
-        observer.release();
+        await holder.release();
+        await observer.release();
       }
     });
   });
@@ -177,7 +177,7 @@ describe.skipIf(!enabled)("real database health readings", () => {
           expect((await read())?.active).toBe(false);
         }
       } finally {
-        observer.release();
+        await observer.release();
       }
     });
   });
@@ -216,7 +216,7 @@ describe.skipIf(!enabled)("real database health readings", () => {
         await observer`UPDATE seeded_activity SET state = 'idle'`;
         expect((await read())?.ageMs).toBe(0);
       } finally {
-        observer.release();
+        await observer.release();
       }
     });
   });
