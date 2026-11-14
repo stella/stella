@@ -45,6 +45,7 @@ const CHAT_THREAD_SETTING_FIELDS = [
   "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
+  "limitReminder",
   "pinState",
   "titleChanged",
   "titleSource",
