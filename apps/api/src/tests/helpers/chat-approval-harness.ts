@@ -643,6 +643,7 @@ export const createApprovalHarness = ({
       route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
+      set: { headers: {}, status: 200 },
       session: { activeOrganizationId: ids.orgA },
       user: { id: userId },
     });

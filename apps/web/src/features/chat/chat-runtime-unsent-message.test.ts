@@ -45,11 +45,11 @@ type Refusal =
 
 const REFUSALS: { name: string; refusal: Refusal }[] = [
   {
-    name: "no computer is connected",
+    name: "the organization does not allow the permissions",
     refusal: {
       type: "refused",
-      status: 409,
-      code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
+      status: 403,
+      code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
     },
   },
   {
@@ -306,8 +306,8 @@ test("a refused send the member's computer still cannot take keeps the message t
   const { acquire, runtime, server } = await sendOnce(
     serve({
       type: "refused",
-      status: 409,
-      code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
+      status: 403,
+      code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
     }),
   );
   await acquire();
@@ -317,8 +317,8 @@ test("a refused send the member's computer still cannot take keeps the message t
   expect(server.posted.map(intentOf)).toEqual([undefined, undefined]);
   expect(await acquire()).toBe(runtime);
   expect(chatRefusal(runtime.getSnapshot().error)).toMatchObject({
-    status: 409,
-    code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
+    status: 403,
+    code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
   });
   expect(textOf(runtime.getSnapshot().messages).at(0)).toEqual({
     role: "user",
@@ -367,8 +367,8 @@ test("a kept unsent message follows what another tab stored in the thread meanwh
   const { acquire, runtime, server } = await sendOnce(
     serve({
       type: "refused",
-      status: 409,
-      code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
+      status: 403,
+      code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
     }),
   );
   const refused = runtime.getSnapshot().error;
@@ -409,8 +409,8 @@ test("a resend leaves the turn to a message sent while the thread was read", asy
   const { runtime, server } = await sendOnce(
     serve({
       type: "refused",
-      status: 409,
-      code: CHAT_LOCAL_RUN_REFUSAL.noComputer,
+      status: 403,
+      code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
     }),
   );
   server.refusal = null;
@@ -569,8 +569,11 @@ test.each(OPEN_WAITS)(
         posts += 1;
         if (posts > 1) {
           return Response.json(
-            { code: CHAT_LOCAL_RUN_REFUSAL.noComputer, message: "Refused" },
-            { status: 409 },
+            {
+              code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+              message: "Refused",
+            },
+            { status: 403 },
           );
         }
         const body: unknown = await request.json();

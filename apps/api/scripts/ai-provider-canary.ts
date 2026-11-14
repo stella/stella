@@ -282,6 +282,12 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
   local_runner_relinked: false,
   local_runner_restoring: false,
   local_runner_folder_unavailable: false,
+  local_runner_no_computer: false,
+  local_runner_harness_unavailable: false,
+  local_runner_model_unavailable: false,
+  local_runner_reasoning_effort_unavailable: false,
+  local_runner_approvals_unavailable: false,
+  local_runner_folder_not_approved: false,
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 

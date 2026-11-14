@@ -271,23 +271,12 @@ const MODEL_RUN_CAP_ERROR_KEYS = {
 /** Why a chat turn bound for the member's computer was refused. */
 const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
   [CHAT_LOCAL_RUN_REFUSAL.unavailable]: "chat.localRun.refusalUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.noComputer]: "chat.localRun.refusalNoComputer",
-  [CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable]:
-    "chat.localRun.refusalHarnessUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
-    "chat.localRun.refusalModelUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable]:
-    "chat.localRun.refusalReasoningEffortUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
-    "chat.localRun.refusalPermissionUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:
     "chat.localRun.refusalPermissionAboveLimit",
   [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
     "chat.localRun.refusalConflictingRunMode",
   [CHAT_LOCAL_RUN_REFUSAL.folderUnavailable]:
     "chat.localRun.refusalFolderUnavailable",
-  [CHAT_LOCAL_RUN_REFUSAL.folderNotApproved]:
-    "chat.localRun.refusalFolderNotApproved",
 } as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
 
 /** Why a chat turn was refused before it started, with what the person can do. */

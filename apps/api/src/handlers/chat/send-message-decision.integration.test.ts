@@ -185,6 +185,7 @@ const createContext = (): SendMessageCtx => {
     route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });
@@ -208,6 +209,7 @@ test("the first send binds the reader decision to the listed thread badge", asyn
       request: new Request("http://localhost/v1/chat/threads"),
       route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb,
+      set: { headers: {}, status: 200 },
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
     }),

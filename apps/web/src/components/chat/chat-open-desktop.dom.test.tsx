@@ -1,11 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import type {
-  ChatLocalRunReadiness,
-  ChatLocalRunRefusal,
-} from "@stll/api-contract/chat-run-target";
-import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
+import type { AIErrorKind } from "@stll/api-contract/ai-errors";
+import type { ChatLocalRunReadiness } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -27,7 +25,8 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
-const { chatFetchClient } = await import("@/features/chat/chat-fetch");
+const { getChatAssistantTurnError } =
+  await import("@/components/chat/chat-ui-tools");
 const { DESKTOP_PING_URL } =
   await import("@/features/chat/desktop-launch.logic");
 const { getDesktopLaunch } = await import("@/features/chat/desktop-launch");
@@ -77,27 +76,19 @@ const json = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
-/** A turn for the member's computer the API refused with `code`. */
-const refusedTurn = async (code: ChatLocalRunRefusal): Promise<Error> => {
-  globalThis.fetch = Object.assign(
-    async () =>
-      await Promise.resolve(
-        json({ code, message: "English text for agents and logs" }, 409),
-      ),
-    { preconnect: () => undefined },
-  );
-  try {
-    await chatFetchClient("https://api.example.test/chat", { method: "POST" });
-  } catch (error) {
-    if (error instanceof Error) {
-      return error;
-    }
-  }
-  throw new TypeError("expected the chat request to be refused");
-};
+/**
+ * The error the page shows for a stored turn that failed with `error`, read
+ * from the stored answer as a reload reads it.
+ */
+const failedTurn = (error: AIErrorKind): Error =>
+  getChatAssistantTurnError({
+    role: "assistant",
+    parts: [],
+    metadata: { turnOutcome: { type: "failed", error } },
+  }) ?? panic("a failed turn carries an error");
 
-test("the refusal's Open stella desktop opens it once, waits for the computer, then sends the turn again", async () => {
-  const error = await refusedTurn(CHAT_LOCAL_RUN_REFUSAL.noComputer);
+test("a turn that failed with no computer connected offers Open stella desktop, which opens it once, waits for the computer, then sends the turn again", async () => {
+  const error = failedTurn("local_runner_no_computer");
   // The member's computers are read until one connects; the read is held so
   // the test sees the wait.
   const readiness = Promise.withResolvers<Response>();
@@ -184,8 +175,8 @@ test("the refusal's Open stella desktop opens it once, waits for the computer, t
   ).toBeDefined();
 });
 
-test("a refusal for another reason offers no Open stella desktop", async () => {
-  const error = await refusedTurn(CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable);
+test("a turn that failed for another reason offers no Open stella desktop", async () => {
+  const error = failedTurn("local_runner_harness_unavailable");
 
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
@@ -216,7 +207,7 @@ test("a refusal for another reason offers no Open stella desktop", async () => {
  * held until the test lets the computer connect.
  */
 const renderHeldRefusal = async () => {
-  const error = await refusedTurn(CHAT_LOCAL_RUN_REFUSAL.noComputer);
+  const error = failedTurn("local_runner_no_computer");
   const readiness = Promise.withResolvers<Response>();
   globalThis.fetch = Object.assign(async () => await readiness.promise, {
     preconnect: () => undefined,

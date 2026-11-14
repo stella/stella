@@ -671,23 +671,6 @@ describe("PostHog browser analytics adapter", () => {
     ).toBe(true);
   });
 
-  test.each([
-    CHAT_LOCAL_RUN_REFUSAL.noComputer,
-    CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable,
-    CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
-    CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
-    CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
-  ])("drops the computer-state refusal %s of a chat stream", (code) => {
-    expect(
-      isNoiseException(
-        exceptionEvent(
-          { type: "StreamReadError", value: "x" },
-          { error_status: 409, error_code: code },
-        ),
-      ),
-    ).toBe(true);
-  });
-
   test.each([CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode])(
     "keeps the local run refusal %s the composer should prevent",
     (code) => {
