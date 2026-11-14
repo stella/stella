@@ -174,6 +174,21 @@ export const legalListVerificationRuns = p.pgTable(
         table.createdAt.desc(),
         table.id.desc(),
       ),
+    // The latest finished run of each document checked against a list, for
+    // the list's verification graph, without reading the pinned evidence of
+    // every run. Built online (indexes-legal-list-verification-runs-list-
+    // document-idx).
+    p
+      .index("legal_list_verification_runs_list_document_idx")
+      .on(
+        table.workspaceId,
+        sql`(${table.evidence} ->> 'listId')`,
+        table.entityId,
+        table.fileFieldId,
+        table.createdAt.desc(),
+        table.id.desc(),
+      )
+      .where(sql`${table.status} = 'completed'`),
     // At most one unfinished run per document; makes a lost race impossible.
     p
       .uniqueIndex("legal_list_verification_runs_active_document_uidx")
@@ -390,6 +405,10 @@ export const legalListClaims = p.pgTable(
     score: p.smallint(),
     text: p.varchar({ length: VERIFICATION_LIMITS.CLAIM_TEXT_MAX }).notNull(),
     anchor: jsonb().$type<ClaimAnchor>().notNull(),
+    // The printed number of the paragraph the claim sits in, read once when
+    // the run stored it; null when the document's numbering is unclear, the
+    // claim sits outside any numbered paragraph, or the run predates it.
+    paragraphNumber: p.integer("paragraph_number"),
     refs: jsonb().$type<ClaimRef[]>().notNull().default([]),
     recordConflict: jsonb("record_conflict").$type<RecordConflict>(),
     // Caveats the grader gave with the verdict. Qualifiers computed from the

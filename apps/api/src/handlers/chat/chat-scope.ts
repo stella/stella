@@ -53,7 +53,7 @@ export const resolveChatScope = async function* ({
   } as const;
 };
 
-type ChatScope =
+export type ChatScope =
   | { scope: "global" }
   | { scope: "workspace"; workspaceId: SafeId<"workspace"> };
 

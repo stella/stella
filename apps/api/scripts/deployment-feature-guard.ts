@@ -157,6 +157,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A run's output upload authenticates the run's agent token on every deployment; a run exists only once the member's local-agents feature let it start",
   ],
   [
+    "/v1/chat/threads/:threadId/limit-reminder",
+    "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
+  ],
+  [
     "/v1/organization-settings/local-runs",
     "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
   ],
