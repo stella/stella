@@ -81,14 +81,14 @@ const stored = (
 
 /**
  * The API as a chat on the member's computer meets it. While the
- * organization does not allow the chosen permissions (`connected` is false) a
- * send is refused before anything of it is stored, though the
- * request has touched the thread's row by then (the first send of an empty
- * thread titles it), so the next read carries a new revision. A regeneration
- * is taken only for a message the thread stores.
+ * organization does not allow the chosen permissions (`allowed` is false) a
+ * send is refused before anything of it is stored, though the request has
+ * touched the thread's row by then (the first send of an empty thread titles
+ * it), so the next read carries a new revision. A regeneration is taken only
+ * for a message the thread stores.
  */
 type Server = {
-  connected: boolean;
+  allowed: boolean;
   stored: StoredMessage[];
   revision: number;
   posted: Record<string, unknown>[];
@@ -97,7 +97,7 @@ type Server = {
 
 const serve = (history: StoredMessage[]) => {
   const state: Server = {
-    connected: false,
+    allowed: false,
     stored: history,
     revision: history.length === 0 ? 0 : 1,
     posted: [],
@@ -143,7 +143,7 @@ const serve = (history: StoredMessage[]) => {
       const posted = Object.fromEntries(Object.entries(body));
       state.posted.push(posted);
       state.revision += 1;
-      if (!state.connected) {
+      if (!state.allowed) {
         return Response.json(
           {
             code: CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
@@ -302,7 +302,7 @@ test("Resend on a send refused before it is stored sends the message again, and 
   await refusalShown(server, live);
   expectMessageAndRefusal(container);
 
-  server.connected = true;
+  server.allowed = true;
   await act(async () => {
     fireEvent.click(
       within(container).getByRole("button", { name: messages.chat.resend }),

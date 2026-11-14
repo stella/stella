@@ -1364,8 +1364,9 @@ const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
  * For a turn that failed because none of the member's computers was
  * connected: opens stella desktop on this click, waits for a computer to
  * connect, and then sends the turn again by itself, unless something
- * superseded this failure meanwhile (`holdResend`'s signal). One click opens the desktop
- * once; while it opens the button says so and takes no other click.
+ * superseded this failure meanwhile (`holdResend`'s signal). One click
+ * opens the desktop once; while it opens the button says so and takes no
+ * other click.
  */
 const OpenDesktopAndResendButton = ({
   disabled,
@@ -1449,14 +1450,14 @@ export const ChatErrorMessage = ({
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
+  const failureKind = aiErrorKindFromMessage(error.message);
   const limitResetsAt =
-    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+    failureKind === "local_runner_limit_reached"
       ? localRunLimitResetsAtFromThrown(error)
       : null;
   // The turn was stored and failed because none of the member's computers
   // was connected: opening stella desktop is the fix, then a resend.
-  const noComputerConnected =
-    aiErrorKindFromMessage(error.message) === "local_runner_no_computer";
+  const noComputerConnected = failureKind === "local_runner_no_computer";
   // The resend an "Open stella desktop" click holds until a computer
   // connects belongs to this refusal: Resend, another refusal in its place,
   // or the card leaving the page (a new send, another thread) drops it.

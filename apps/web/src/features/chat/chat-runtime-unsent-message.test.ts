@@ -302,7 +302,7 @@ describe.each(REFUSALS)("a send refused because $name", ({ refusal }) => {
   });
 });
 
-test("a refused send the member's computer still cannot take keeps the message through every resend", async () => {
+test("a send refused again on every resend keeps the message through each of them", async () => {
   const { acquire, runtime, server } = await sendOnce(
     serve({
       type: "refused",
