@@ -595,7 +595,8 @@
       "startFailed": "Could not start the verification",
       "status": {
         "running": "Verifying"
-      }
+      },
+      "unreadParts": "{count, plural, one {# part of the document could not be read, so its claims were not checked.} other {# parts of the document could not be read, so their claims were not checked.}}"
     },
     "save": {
       "failed": "Not saved",
@@ -1673,6 +1674,8 @@
         "actions": {
           "click": "Click",
           "fill": "Enter text",
+          "find": "Find on page",
+          "findHeadings": "List page headings",
           "open": "Open website",
           "openNewTab": "Open website in a new tab",
           "pressKey": "Press key",
@@ -1962,6 +1965,24 @@
       "dismiss": "Dismiss and stop",
       "secretAnswer": "Answer hidden",
       "secretPlaceholder": "Your answer stays hidden"
+    },
+    "makeSkill": {
+      "command": "Make a skill from this conversation",
+      "drafted": "Skill draft ready. Review it, then switch it on.",
+      "drafting": "Drafting a skill from this conversation…",
+      "emptyThread": "Send a message first, then a skill can be made from the conversation.",
+      "failed": "Could not make a skill from this conversation",
+      "review": {
+        "description": "The drafted skill holds these names. Anyone with access to this skill may see them.",
+        "replaceHint": "Untick a name to replace it with a general placeholder.",
+        "role": {
+          "organization": "organization name",
+          "person": "person name"
+        },
+        "saveAll": "Keep all and save",
+        "saveReplacing": "Replace unticked and save",
+        "title": "Save these names in the skill?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat is waiting for you} other {# chats are waiting for you}}",
@@ -3009,7 +3030,6 @@
       "dropZone": "Drop a power of attorney (.docx) here, or click to choose a file",
       "extracting": "Extracting grantor(s)…",
       "fileHint": "stella reads the document and finds the grantor(s) (not the lawyer) automatically. Review the results before confirming.",
-      "fileTooLarge": "The power-of-attorney file must be 50 MB or smaller.",
       "invalidFileType": "Please choose a .docx file.",
       "noOutorganteFound": "No grantor could be identified in this document.",
       "parseErrorGeneric": "Could not extract contacts from this document.",
@@ -3411,6 +3431,11 @@
       "sharepointNotFound": "This site, library or file no longer exists or is not shared with you.",
       "sharepointReconnectRequired": "Your Microsoft sign-in has expired. Reconnect SharePoint and OneDrive.",
       "sharepointThrottled": "Microsoft is limiting requests. Try again shortly.",
+      "skillFromChatAnonymizedThread": "A skill cannot be made from an anonymized conversation yet.",
+      "skillFromChatEmptyThread": "This conversation has nothing to make a skill from yet.",
+      "skillFromChatLocalRunThread": "This conversation runs on your computer, so a skill is not drafted from it in the cloud.",
+      "skillFromChatThreadNotFound": "This conversation could not be found.",
+      "skillFromChatWithdrawn": "This conversation's content was withdrawn, so a skill cannot be made from it.",
       "skillSourceUnreachable": "The skill source could not be loaded. Check that the link points to a public GitHub repository, or try again later.",
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.",
       "usageLimitExceeded": "Usage limit reached.",

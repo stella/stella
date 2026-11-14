@@ -1510,6 +1510,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
   "APP_VARIANT",
+  // The desktop build script derives the largest editable document from the
+  // API contract's limits and hands it to the crate at compile time.
+  "STELLA_EDITABLE_DOCUMENT_MAX_BYTES",
   "APPLE_TEAM_ID",
   // The release workflow's Developer ID; the desktop's PKCS #11 helper build
   // signs the helper with it before Tauri bundles the app.

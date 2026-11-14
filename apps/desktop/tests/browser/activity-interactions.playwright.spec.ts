@@ -748,6 +748,49 @@ const rejectName = (messages: Messages) =>
 const suggestionCard = (page: Page, matter: string) =>
   page.getByRole("region", { name: matter, exact: true });
 
+/**
+ * Chooses a matter in the open matter picker. The picker opens with a
+ * transition and follows its trigger as the card scrolls, so the option is
+ * brought into view first and clicked only once the popup's animations have
+ * finished and the option holds still across two frames: a click aimed
+ * while it moves can land beside it. The picker closes on a choice, which
+ * proves the click reached the option.
+ */
+const chooseMatter = async (page: Page, matter: RegExp) => {
+  const picker = page.getByRole("dialog");
+  const option = picker.getByRole("button", { name: matter });
+  await option.scrollIntoViewIfNeeded();
+  await picker.evaluate(
+    async (popup) =>
+      await Promise.all(
+        popup
+          .getAnimations({ subtree: true })
+          .map(async (animation) => await animation.finished),
+      ),
+  );
+  await expect
+    .poll(async () =>
+      option.evaluate(async (element) => {
+        const before = element.getBoundingClientRect();
+        await new Promise((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(resolve);
+          });
+        });
+        const after = element.getBoundingClientRect();
+        return (
+          before.x === after.x &&
+          before.y === after.y &&
+          before.width === after.width &&
+          before.height === after.height
+        );
+      }),
+    )
+    .toBe(true);
+  await option.click();
+  await expect(picker).toHaveCount(0);
+};
+
 /** Presses a card shortcut with the primary modifier the window reads from
  * its own user agent; Playwright's WebKit reports macOS on every host. */
 const pressCardShortcut = async (page: Page, key: "Backspace" | "Enter") => {
@@ -3116,10 +3159,7 @@ test("a range a matter holds only a minority of starts on no matter, non-billabl
   await card
     .getByRole("button", { name: enMessages.activity.chooseMatter })
     .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /Second matter/u })
-    .click();
+  await chooseMatter(page, /Second matter/u);
   const chosen = suggestionCard(page, "Second matter");
   await expect(
     chosen.getByRole("switch", { name: enMessages.activity.entryBillable }),
@@ -3591,10 +3631,7 @@ test("a split proposed for one matter is not offered once the card's matter chan
   });
   await expect(proposal).toBeVisible();
   await card.getByRole("button", { name: "Example matter" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /Second matter/u })
-    .click();
+  await chooseMatter(page, /Second matter/u);
   await expect(proposal).toHaveCount(0);
 });
 
@@ -3610,10 +3647,7 @@ test("choosing another matter drops a guided draft's codes", async ({
   const card = suggestionCard(page, "Example matter");
   await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
   await card.getByRole("button", { name: "Example matter" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /Second matter/u })
-    .click();
+  await chooseMatter(page, /Second matter/u);
   await expect(page.getByText("Task L120 · Activity A104")).toHaveCount(0);
 });
 

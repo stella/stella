@@ -15,6 +15,7 @@ import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
 import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
+import getLocalRunStepContent from "@/api/handlers/chat/local-run-step-content";
 import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
@@ -93,6 +94,9 @@ export const chatRoute = routes(
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
+    "/threads/:threadId/local-run-steps/:callId/content": {
+      GET: getLocalRunStepContent,
+    },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
     "/threads/:threadId/limit-reminder": {
       GET: getChatLimitReminder,

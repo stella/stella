@@ -2527,6 +2527,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/skills/from-chat",
+      "reason": "Writes nothing; drafts a skill from the caller's chat with one model call and returns it for review. Awaits the write harness like the other skill draft POST routes."
+    },
+    {
       "id": "POST /v1/skills/generate-draft",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2536,6 +2540,10 @@
     },
     {
       "id": "POST /v1/skills/import-urls",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/save-draft",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2892,6 +2900,10 @@
     },
     {
       "id": "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/chat/local-runs/:runId/steps/:stepKey/content",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
