@@ -43,7 +43,7 @@ const PUBLISH_DELAY = sql.raw(
 const GENERATION = "legislation_v2";
 const INDEX_ID = "legislation_v2_cze";
 const SERVED_COPY_MIGRATION =
-  "20261114213000_corpus_projection_served_copy_guard";
+  "20261115080000_corpus_projection_served_copy_guard";
 const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000af1";
 const FINGERPRINTS = ["a", "b", "c", "d", "e"].map((digit) => digit.repeat(64));
