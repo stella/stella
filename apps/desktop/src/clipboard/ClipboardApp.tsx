@@ -593,6 +593,22 @@ const ClipboardCardName = ({
   );
 };
 
+/** The icon of what a clip holds, when no group or source app marks it. */
+const ClipboardKindIcon = ({ item }: { item: ClipboardItem }) => {
+  const className = "text-muted-foreground size-6";
+  // A dictation reads as one even when its text is a link.
+  if (isClipboardDictation(item)) {
+    return <DictateIcon aria-hidden="true" className={className} />;
+  }
+  if (clipboardItemLink(item)) {
+    return <LinkIcon aria-hidden="true" className={className} />;
+  }
+  if (item.type === "image") {
+    return <ImageIcon aria-hidden="true" className={className} />;
+  }
+  return <FileTextIcon aria-hidden="true" className={className} />;
+};
+
 const ClipboardCard = ({
   active,
   selected,
@@ -675,28 +691,7 @@ const ClipboardCard = ({
     text: t("unnamedClip"),
   });
   const dictation = isClipboardDictation(item);
-  let metadataIcon: ReactNode = (
-    <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
-  );
-  if (item.type === "image") {
-    metadataIcon = (
-      <ImageIcon aria-hidden="true" className="text-muted-foreground size-6" />
-    );
-  }
-  if (link) {
-    metadataIcon = (
-      <LinkIcon aria-hidden="true" className="text-muted-foreground size-6" />
-    );
-  }
-  // A dictation reads as one even when its text is a link.
-  if (dictation) {
-    metadataIcon = (
-      <DictateIcon
-        aria-hidden="true"
-        className="text-muted-foreground size-6"
-      />
-    );
-  }
+  let metadataIcon: ReactNode = <ClipboardKindIcon item={item} />;
   if (groupName) {
     metadataIcon = (
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
