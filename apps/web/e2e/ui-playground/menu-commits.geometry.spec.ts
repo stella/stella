@@ -14,10 +14,15 @@ import { expect, type Page, test } from "@playwright/test";
 import { RENDER_COMMIT_COUNT_GLOBAL } from "../../src/lib/render-storm-canary";
 import { menuCommitBenches } from "../../src/routes/dev/-visual-metadata";
 
+// A page without the counter (a production build, or the canary no longer
+// around the app) measures nothing, and every budget would pass on zero.
 const readCommits = async (page: Page) =>
   await page.evaluate((key) => {
     const counted: unknown = Reflect.get(globalThis, key);
-    return typeof counted === "number" ? counted : 0;
+    if (typeof counted !== "number") {
+      throw new TypeError(`The page counts no commits (${key} is unset).`);
+    }
+    return counted;
   }, RENDER_COMMIT_COUNT_GLOBAL);
 
 type Bench = keyof typeof menuCommitBenches;
@@ -96,6 +101,9 @@ for (const how of ["pointer", "keyboard"] as const) {
       process.stdout.write(
         `menu commits (${how}, ${test.info().project.name}): ${JSON.stringify(measured)}\n`,
       );
+      // Opening and closing a menu both commit: zero is a broken counter.
+      expect(measured.open, "to open").toBeGreaterThan(0);
+      expect(measured.close, "to close").toBeGreaterThan(0);
       expect(measured.open, "to open").toBeLessThanOrEqual(budget.open);
       expect(measured.close, "to close").toBeLessThanOrEqual(budget.close);
     });
