@@ -3,11 +3,15 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output";
 import {
+  CHAT_LOCAL_RUN_NEEDS_MEMBER,
+  CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   CHAT_LOCAL_RUN_TOOL_NAMES,
   CHAT_LOCAL_RUN_TOOL_STATUSES,
   chatLocalRunApprovalMessage,
+  chatLocalRunParentCallId,
   chatLocalRunShownText,
   parseChatLocalRunToolCall,
   shownChatLocalRunToolResult,
@@ -48,13 +52,31 @@ describe("what a local run's native step shows", () => {
 
   test("a call keeps only its schema's fields, and parsing what it kept gives the same call", () => {
     const extra = fc.dictionary(
-      fc.constantFrom("output", "content", "diff", "old_string", "prompt"),
+      fc.constantFrom(
+        "output",
+        "content",
+        "diff",
+        "old_string",
+        "prompt",
+        "report",
+        "messages",
+        // Where a step named its subagent before the link moved beside it.
+        "parentCallId",
+      ),
       fc.string(),
     );
     const calls = fc.oneof(
       fc.record({
         name: fc.constant(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution),
         input: fc.record({ command: text }),
+      }),
+      fc.record({
+        name: fc.constant(CHAT_LOCAL_RUN_TOOL_NAMES.webSearch),
+        input: fc.record({ query: text }),
+      }),
+      fc.record({
+        name: fc.constant(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),
+        input: fc.record({ itemType: text }),
       }),
       fc.record({
         name: fc.constant(CHAT_LOCAL_RUN_TOOL_NAMES.fileChange),
@@ -74,7 +96,17 @@ describe("what a local run's native step shows", () => {
           tool: text,
           detail: fc.oneof(
             fc.record({ kind: fc.constant("read"), path: text }),
+            fc.record({ kind: fc.constant("image"), path: text }),
+            fc.record({ kind: fc.constant("search"), pattern: text }),
             fc.record({ kind: fc.constant("fetch"), url: text }),
+            fc.record(
+              {
+                kind: fc.constant("subagent"),
+                description: text,
+                agentType: text,
+              },
+              { requiredKeys: ["kind", "description"] },
+            ),
             fc.record({
               kind: fc.constant("plan"),
               items: fc.array(text, { maxLength: 80 }),
@@ -95,6 +127,28 @@ describe("what a local run's native step shows", () => {
         }
         for (const key of Object.keys(added)) {
           expect(Object.keys(parsed.input)).not.toContain(key);
+        }
+        expect(Object.keys(parsed.input).toSorted()).toEqual(
+          Object.keys(call.input).toSorted(),
+        );
+        if (
+          parsed.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+          parsed.input.detail?.kind === "subagent"
+        ) {
+          expect(parsed.input.detail.description.length).toBeLessThanOrEqual(
+            CHAT_LOCAL_RUN_TOOL_LIMITS.description,
+          );
+          expect(
+            (parsed.input.detail.agentType ?? "").length,
+          ).toBeLessThanOrEqual(CHAT_LOCAL_RUN_TOOL_LIMITS.name);
+        }
+        if (
+          parsed.name === CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool &&
+          parsed.input.detail?.kind === "image"
+        ) {
+          expect(parsed.input.detail.path.length).toBeLessThanOrEqual(
+            CHAT_LOCAL_RUN_TOOL_LIMITS.path,
+          );
         }
         expect(parseChatLocalRunToolCall(parsed.name, parsed.input)).toEqual(
           parsed,
@@ -123,11 +177,61 @@ describe("what a local run's native step shows", () => {
       name: CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool,
       input: { tool: "Read" },
     });
+    // A subagent's step keeps the few words of its task, never its prompt.
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool, {
+        tool: "Agent",
+        detail: {
+          kind: "subagent",
+          description: "Check the lease",
+          agentType: "Explore",
+          prompt: "Private text",
+        },
+      })?.input,
+    ).toEqual({
+      tool: "Agent",
+      detail: {
+        kind: "subagent",
+        description: "Check the lease",
+        agentType: "Explore",
+      },
+    });
     expect(
       parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution, {
         output: "Private text",
       }),
     ).toBeNull();
+  });
+
+  test("a call names the subagent step that made it whole or not at all", () => {
+    assertProperty(
+      "a call names the subagent step that made it whole or not at all",
+      fc.property(
+        fc.oneof(
+          fc.string({ minLength: 1, maxLength: 40 }),
+          fc.constant(""),
+          fc.string({
+            minLength: CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH + 1,
+            maxLength: CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH + 40,
+          }),
+          fc.anything(),
+        ),
+        (reported) => {
+          const named = chatLocalRunParentCallId({
+            [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: reported,
+          });
+          const namesStep =
+            typeof reported === "string" &&
+            reported !== "" &&
+            reported.length <= CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH;
+          // An id is never cut: it names its step, or the call names none.
+          expect(named).toBe(namesStep ? reported : null);
+        },
+      ),
+    );
+    for (const metadata of [undefined, null, "call", {}, { parent: "call" }]) {
+      expect(chatLocalRunParentCallId(metadata)).toBeNull();
+    }
   });
 
   test("a native step's result keeps how it ended and never what it produced", () => {
@@ -200,5 +304,66 @@ describe("what a local run's native step shows", () => {
         reason: null,
       }),
     ).toBe("Approval required to run mcp__docs__read");
+  });
+});
+
+describe("a browser step on the member's computer", () => {
+  test("keeps the kind of step and the opened address, never the page", () => {
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "open",
+        url: "https://fixture-library.test/search",
+        snapshot: { text: "Private page text" },
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "open", url: "https://fixture-library.test/search" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "type",
+        ref: "e:0:1.2",
+        text: "Private query",
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "type" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "click",
+        url: "https://fixture-library.test/private",
+      }),
+    ).toEqual({
+      name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      input: { action: "click" },
+    });
+    expect(
+      parseChatLocalRunToolCall(CHAT_LOCAL_RUN_TOOL_NAMES.browser, {
+        action: "evaluate",
+      }),
+    ).toBeNull();
+  });
+
+  test("a sign-in the member completes is kept as its own status", () => {
+    const content = JSON.stringify({
+      status: CHAT_LOCAL_RUN_NEEDS_MEMBER,
+      message: "This page asks for a sign-in.",
+      page: { text: "Private page text" },
+    });
+    expect(
+      shownChatLocalRunToolResult(
+        CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+        content,
+        true,
+      ),
+    ).toBe(JSON.stringify({ status: CHAT_LOCAL_RUN_NEEDS_MEMBER }));
+    expect(
+      shownChatLocalRunToolResult(
+        CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+        JSON.stringify({ text: "Private page text", title: "Library" }),
+        false,
+      ),
+    ).toBe(JSON.stringify({ status: "completed" }));
   });
 });

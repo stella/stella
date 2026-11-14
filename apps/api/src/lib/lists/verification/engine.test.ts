@@ -22,7 +22,11 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
-import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import {
+  gradeClaims,
+  GRADING_BATCH_SIZE,
+  GRADING_CONCURRENCY,
+} from "@/api/lib/lists/verification/claim-grade";
 import { gradedClaimType } from "@/api/lib/lists/verification/contract";
 import type { VerificationEvidenceFact } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
@@ -31,8 +35,10 @@ import {
   ListVerificationAccessRevokedError,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
+import { wholeDocumentPassages } from "@/api/lib/lists/verification/paragraph-scope";
+import { RECHECKS_PER_REQUEST_MAX } from "@/api/lib/lists/verification/recheck";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -166,9 +172,9 @@ describe("extractClaims", () => {
     } as const;
     answers.push({ claims: [raw, raw] });
     const result = await extractClaims({
-      blocks: [
+      passages: wholeDocumentPassages([
         { id: "b1", text, source: { type: "docx-block", blockId: "b1" } },
-      ],
+      ]),
       deps,
     });
     expect(Result.isOk(result)).toBe(true);
@@ -221,7 +227,10 @@ describe("extractClaims", () => {
         ],
       },
     );
-    const result = await extractClaims({ blocks: BLOCKS, deps });
+    const result = await extractClaims({
+      passages: wholeDocumentPassages(BLOCKS),
+      deps,
+    });
     expect(Result.isOk(result)).toBe(true);
     const claims = Result.isOk(result) ? result.value : [];
     expect(captured).toHaveLength(2);
@@ -245,7 +254,7 @@ describe("extractClaims", () => {
       }),
     );
     answers.push({ claims: [] }, { claims: [] });
-    await extractClaims({ blocks: many, deps });
+    await extractClaims({ passages: wholeDocumentPassages(many), deps });
     expect(captured).toHaveLength(2);
     const firstCall = JSON.stringify(captured.at(0)?.messages);
     expect(firstCall).toContain("Block 42 text.");
@@ -269,8 +278,66 @@ describe("extractClaims", () => {
       },
       { claims: [] },
     );
-    const result = await extractClaims({ blocks: BLOCKS, deps });
+    const result = await extractClaims({
+      passages: wholeDocumentPassages(BLOCKS),
+      deps,
+    });
     expect(Result.isOk(result) ? result.value : null).toEqual([]);
+  });
+
+  test("a paragraph range is read alone and anchored in the whole page", async () => {
+    const page =
+      "80. Before the range.\n81. Also before.\n82. I agreed the plan on 2 April.\n83. The plan was then published.\n84. After the range.";
+    const blocks: VerificationBlock[] = [
+      { id: "P5", text: page, source: { type: "pdf-page", pageNumber: 5 } },
+    ];
+    const start = page.indexOf("82.");
+    const end = page.indexOf("84.");
+    // The fixture must reach the fault: offsets inside the slice differ from
+    // offsets inside the page.
+    expect(start).toBeGreaterThan(0);
+    answers.push({
+      claims: [
+        {
+          blockId: "P5",
+          quote: "The plan was then published",
+          type: "fact",
+          framing: "asserted",
+        },
+        {
+          blockId: "P5",
+          quote: "Before the range",
+          type: "fact",
+          framing: "asserted",
+        },
+      ],
+    });
+    // The second claim is outside the range: the repair round asks again
+    // and the model drops it.
+    answers.push({ claims: [] });
+    const result = await extractClaims({
+      passages: [{ block: blocks[0] ?? panic("fixture"), start, end }],
+      deps,
+    });
+    const claims = Result.isOk(result) ? result.value : [];
+    expect(claims.map(({ text, anchor }) => ({ text, anchor }))).toEqual([
+      {
+        text: "The plan was then published",
+        anchor: {
+          type: "pdf-page",
+          pageNumber: 5,
+          start: page.indexOf("The plan"),
+          end: page.indexOf("The plan") + "The plan was then published".length,
+        },
+      },
+    ]);
+    expect(
+      claims.map(({ anchor }) => page.slice(anchor.start, anchor.end)),
+    ).toEqual(["The plan was then published"]);
+    const prompt = JSON.stringify(captured.at(0)?.messages);
+    expect(prompt).toContain("82. I agreed the plan");
+    expect(prompt).not.toContain("Before the range");
+    expect(prompt).not.toContain("After the range");
   });
 });
 
@@ -303,6 +370,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -343,6 +411,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -392,6 +461,7 @@ describe("gradeClaims", () => {
         grades: [
           {
             claimId: "C1",
+            statedDate: null,
             verdict: "supported",
             score: 91.6,
             refs: [{ factId: "F1", rel: "supports" }],
@@ -400,6 +470,7 @@ describe("gradeClaims", () => {
           },
           {
             claimId: "C2",
+            statedDate: null,
             verdict: "contradicted",
             score: 20,
             refs: [],
@@ -412,6 +483,7 @@ describe("gradeClaims", () => {
         grades: [
           {
             claimId: "C2",
+            statedDate: null,
             verdict: "contradicted",
             score: 20,
             refs: [{ factId: "F2", rel: "conflicts" }],
@@ -446,11 +518,62 @@ describe("gradeClaims", () => {
     }
   });
 
+  test("a claim's words date it; the grader's date counts only where they name none", async () => {
+    const answer = (statedDate: string) => ({
+      grades: ["C1", "C2"].map((claimId) => ({
+        claimId,
+        statedDate,
+        verdict: "nocover",
+        score: null,
+        refs: [],
+        conflict: null,
+        qualifiers: [],
+      })),
+    });
+    answers.push(answer("2020-06"));
+    const result = await gradeClaims({
+      claims,
+      facts: [fact(FACT_A, "Meeting on 9 March 2021")],
+      deps,
+    });
+    const outcome = Result.isOk(result) ? result.value : null;
+    expect(
+      outcome?.type === "graded" ? [...outcome.assertedDates] : null,
+    ).toEqual([
+      [
+        "0",
+        { type: "dated", source: "text", date: "2021-03-09", precision: "day" },
+      ],
+      [
+        "1",
+        {
+          type: "dated",
+          source: "grader",
+          date: "2020-06-01",
+          precision: "month",
+        },
+      ],
+    ]);
+
+    // A grader date that is not a calendar date is no date.
+    answers.push(answer("June 2020"));
+    const unreadable = await gradeClaims({
+      claims,
+      facts: [fact(FACT_A, "Meeting on 9 March 2021")],
+      deps,
+    });
+    const second = Result.isOk(unreadable) ? unreadable.value : null;
+    expect(
+      second?.type === "graded" ? second.assertedDates.get("1") : null,
+    ).toEqual({ type: "none" });
+  });
+
   test("sets aside an uncheckable claim while leaving an uncovered fact checkable", async () => {
     answers.push({
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "notverifiable",
           score: null,
           refs: [{ factId: "F1", rel: "record" }],
@@ -459,6 +582,7 @@ describe("gradeClaims", () => {
         },
         {
           claimId: "C2",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -519,6 +643,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "recordconflict",
           score: null,
           refs: [],
@@ -559,6 +684,7 @@ describe("gradeClaims", () => {
       grades: [
         {
           claimId: "C1",
+          statedDate: null,
           verdict: "nocover",
           score: null,
           refs: [],
@@ -572,6 +698,7 @@ describe("gradeClaims", () => {
         },
         {
           claimId: "C2",
+          statedDate: null,
           verdict: "tension",
           score: 45,
           refs: [{ factId: "F2", rel: "conflicts" }],
@@ -648,6 +775,7 @@ describe("gradeClaims", () => {
   ])("repairs $rule", async ({ qualifiers, reason }) => {
     const broken = {
       claimId: "C1",
+      statedDate: null,
       verdict: "contradicted",
       score: 10,
       refs: [{ factId: "F1", rel: "conflicts" }],
@@ -682,6 +810,8 @@ describe("gradeClaims", () => {
     });
     expect(Result.isOk(result) ? result.value : null).toEqual({
       type: "incomplete",
+      grades: new Map(),
+      assertedDates: new Map(),
       ungraded: 1,
     });
   });
@@ -735,7 +865,10 @@ test("access removal after extraction blocks the later grading batch", async () 
       },
     ),
   };
-  const extracted = await extractClaims({ blocks: BLOCKS, deps: currentDeps });
+  const extracted = await extractClaims({
+    passages: wholeDocumentPassages(BLOCKS),
+    deps: currentDeps,
+  });
   expect(Result.isOk(extracted)).toBe(true);
   if (Result.isError(extracted)) {
     throw new TypeError("Expected extracted fixture claim");
@@ -843,7 +976,8 @@ test("model dispatch requires proofs bound to the requester and organization", a
 
 test("each model request rechecks its run budget before dispatch", async () => {
   let checks = 0;
-  const capError = new ListVerificationRunCapError({
+  const capError = new ModelRunCapError({
+    kind: "list-run",
     reason: "active",
     message: "Verification limit reached",
     hint: "Wait for an active run.",
@@ -870,4 +1004,10 @@ test("each model request rechecks its run budget before dispatch", async () => {
   }
   expect(checks).toBe(2);
   expect(captured).toHaveLength(1);
+});
+
+test("a bulk re-check request is one round of the grader's batches", () => {
+  expect(RECHECKS_PER_REQUEST_MAX).toBe(
+    GRADING_BATCH_SIZE * GRADING_CONCURRENCY,
+  );
 });

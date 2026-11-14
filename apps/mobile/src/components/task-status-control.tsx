@@ -8,6 +8,7 @@ import { isTaskStatus, TASK_STATUS } from "@stll/api-contract/entity-options";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
+import { useCan } from "@/components/role";
 import { TaskAssignees } from "@/components/task-assignees";
 import { useTaskStatus } from "@/components/use-task-status";
 import { WriteFailureNotice } from "@/components/write-failure";
@@ -101,6 +102,7 @@ const TaskStatusBody = ({
     status: reported ?? TASK_STATUS.OPEN,
     taskId,
   });
+  const canEdit = useCan({ entity: ["update"] });
 
   return (
     <View className="gap-3">
@@ -120,14 +122,16 @@ const TaskStatusBody = ({
           .filter((part) => part !== undefined)
           .join(" · ")}
       </Text>
-      <Button
-        disabled={saving}
-        loading={saving}
-        onPress={change}
-        variant={closed ? "outline" : "default"}
-      >
-        {closed ? t("reopen") : t("markDone")}
-      </Button>
+      {canEdit ? (
+        <Button
+          disabled={saving}
+          loading={saving}
+          onPress={change}
+          variant={closed ? "outline" : "default"}
+        >
+          {closed ? t("reopen") : t("markDone")}
+        </Button>
+      ) : null}
       <WriteFailureNotice failure={failure} message={t("statusFailed")} />
       <TaskAssignees
         initial={assignees}

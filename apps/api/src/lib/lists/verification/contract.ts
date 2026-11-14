@@ -9,7 +9,7 @@
 
 import { panic } from "better-result";
 
-import type { ReviewDecision } from "@stll/api-contract/review-decision";
+import type { ReadsExactly } from "@stll/api-contract/review-decision";
 import type { SpotTarget } from "@stll/api-contract/spot";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -17,6 +17,7 @@ import type { ConstantMap } from "@/api/lib/constant-map";
 import type {
   FactConfidence,
   FactDatePrecision,
+  PartialDate,
 } from "@/api/lib/lists/fact-details";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
 import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
@@ -69,6 +70,33 @@ export const CLAIM_OVERRIDE_STATES = [
   "notverifiable",
 ] as const satisfies readonly ClaimState[];
 export type ClaimOverrideState = (typeof CLAIM_OVERRIDE_STATES)[number];
+
+/**
+ * Where a claim's asserted date came from: its own words (`text`), or the
+ * grader, asked only when the words name no complete date (`grader`).
+ */
+export const CLAIM_DATE_SOURCES = ["text", "grader"] as const;
+type ClaimDateSource = (typeof CLAIM_DATE_SOURCES)[number];
+
+/**
+ * The date a claim asserts for what it says, at the precision its words
+ * give. `none` is an answer, not a gap: the claim names no date, only a
+ * relative one, or dates no single day, month or year covers.
+ */
+export type ClaimAssertedDate =
+  { type: "none" } | ({ type: "dated"; source: ClaimDateSource } & PartialDate);
+
+/**
+ * How a claim row stores its asserted date. `pending` is only on claims
+ * written before claims carried dates, until the online backfill reads
+ * their words.
+ */
+export const CLAIM_ASSERTED_ON_SOURCES = [
+  "pending",
+  "none",
+  ...CLAIM_DATE_SOURCES,
+] as const;
+export type ClaimAssertedOnSource = (typeof CLAIM_ASSERTED_ON_SOURCES)[number];
 
 export const CLAIM_FACT_RELATIONS = [
   "supports",
@@ -142,6 +170,40 @@ export const VERIFICATION_RUN_ERROR_CODES = [
 export type VerificationRunErrorCode =
   (typeof VERIFICATION_RUN_ERROR_CODES)[number];
 
+/**
+ * How a run counts the paragraphs of its range: by the numbers the document
+ * prints on them (`82.`, `82)`, `[82]`, or Word's own numbering), which is
+ * what a lawyer cites, or, in a document that numbers none, by position.
+ */
+export const PARAGRAPH_NUMBERINGS = ["document", "ordinal"] as const;
+export type ParagraphNumbering = (typeof PARAGRAPH_NUMBERINGS)[number];
+
+/** A point in the text a run read: a block by the id the run stores it
+ *  under, and a UTF-16 offset into that block's text. */
+export type VerificationScopeEdge = { blockId: string; offset: number };
+
+/**
+ * What a run checks: the whole document, or an inclusive range of its
+ * paragraphs. A range is resolved once, when the run starts, to the text
+ * from the start of paragraph `from` to the start of the paragraph after
+ * `to` (`start` inclusive, `end` exclusive, in whole-document coordinates).
+ * Only claims inside it are extracted and graded.
+ */
+export type VerificationScope =
+  | { kind: "whole" }
+  | {
+      kind: "paragraphs";
+      from: number;
+      to: number;
+      numbering: ParagraphNumbering;
+      start: VerificationScopeEdge;
+      end: VerificationScopeEdge;
+    };
+
+export const WHOLE_DOCUMENT_SCOPE = {
+  kind: "whole",
+} as const satisfies VerificationScope;
+
 /** At most one run per document may hold these (partial unique index). */
 export const VERIFICATION_RUN_ACTIVE_STATUSES = [
   "queued",
@@ -188,13 +250,9 @@ export const CLAIM_REVIEW_STATUSES = [
 ] as const;
 export type ClaimReviewStatus = (typeof CLAIM_REVIEW_STATUSES)[number];
 
-/** `needs-evidence` keeps a claim open until the record can answer it, so
- *  it decides nothing either way. */
-export const AVT_CLAIM_REVIEW_DECISION = {
-  reviewed: "accepted",
-  disputed: "rejected",
-  "needs-evidence": null,
-} as const satisfies Record<ClaimReviewStatus, ReviewDecision | null>;
+/** What each status decides is the shared owner's
+ *  (`REVIEW_STATUS_DECISION.claim`). */
+true satisfies ReadsExactly<"claim", ClaimReviewStatus>;
 
 /**
  * Reviewer actions, one row each, never rewritten. The current disposition of
@@ -353,6 +411,9 @@ export type ClaimReviewAction =
        *  the facts the run pinned (`applyFactChanges`). */
       facts: RecheckFactChanges;
       modelRef: string | null;
+      /** The claim's asserted date as this grading read it. Absent on
+       *  re-checks recorded before claims carried dates. */
+      assertedOn?: ClaimAssertedDate;
     };
 
 /**
@@ -377,8 +438,17 @@ type WithReason<Action extends ClaimReviewAction> = Action extends unknown
   ? Action & ReasonFields[(typeof CLAIM_REVIEW_REASON_RULE)[Action["kind"]]]
   : never;
 
+/** A re-check recorded now always states the date it read. */
+type RecordedNow<Action extends ClaimReviewAction> = Action extends {
+  kind: "recheck";
+}
+  ? Action & { assertedOn: ClaimAssertedDate }
+  : Action;
+
 /** One reviewer action as it is recorded now. */
-export type ClaimReviewEventPayload = WithReason<ClaimReviewAction>;
+export type ClaimReviewEventPayload = RecordedNow<
+  WithReason<ClaimReviewAction>
+>;
 
 /**
  * One reviewer action as stored. Events recorded before reasons were
@@ -443,4 +513,16 @@ export const VERIFICATION_LIMITS = {
   /** Characters of a fact's text, a source quote or a source's document
    *  name pinned on a run. */
   EVIDENCE_TEXT_MAX: 2000,
+  /** Verified documents one page of a list's verification graph reads. */
+  GRAPH_STATEMENTS_PAGE_MAX: 50,
+  /** Claims one page of a list's verification graph carries; a document
+   *  with more continues on the next page. */
+  GRAPH_CLAIMS_PAGE_MAX: 500,
+  /** Facts of the list the first page of its verification graph carries. */
+  GRAPH_FACTS_MAX: 1000,
+  /** Verified documents and claims one chronology export reads, as one
+   *  page of the verification graph; a list verified past them is refused,
+   *  never exported in part. */
+  CHRONOLOGY_EXPORT_DOCUMENTS_MAX: 200,
+  CHRONOLOGY_EXPORT_CLAIMS_MAX: 10_000,
 } as const;

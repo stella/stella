@@ -13349,7 +13349,7 @@
   {
     "cli": {
       "command": ["matter", "add-member"],
-      "scope": "admin_write"
+      "scope": "matters_write"
     },
     "name": "add_matter_member",
     "description": "Grant an organization member matter access.",
@@ -13415,7 +13415,7 @@
   {
     "cli": {
       "command": ["matter", "remove-member"],
-      "scope": "admin_write"
+      "scope": "matters_write"
     },
     "name": "remove_matter_member",
     "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",

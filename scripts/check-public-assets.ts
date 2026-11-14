@@ -159,6 +159,10 @@ export const PUBLIC_ASSET_EXCEPTIONS: ReadonlyMap<RegExp, string> = new Map([
     /^apps\/landing\/public\/media\/products\/(?:case-law-search|contacts|import-export|invoicing|templates|time-tracking)(?:-dark)?\.png$/u,
     "product captures from #5964 for product pages not built yet; wire them into a page or delete them",
   ],
+  [
+    /^apps\/landing\/public\/media\/changelog\/[^/]+\.(?:mp4|webm)$/u,
+    "release demo videos embedded by docs/changelog/*.md notes, which the changelog page and GitHub release notes render",
+  ],
 ]);
 
 const isConsumer = (filePath: string): boolean =>

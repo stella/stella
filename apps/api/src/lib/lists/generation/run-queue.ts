@@ -58,10 +58,6 @@ import { readVerificationDocument } from "@/api/lib/lists/verification/document-
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import { ListVerificationAccessRevokedError } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import {
-  checkVerificationDispatchBudget,
-  ListVerificationRunCapError,
-} from "@/api/lib/lists/verification/run-caps";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -83,6 +79,17 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { findExtractionFileFieldRow } from "@/api/lib/search/types";
+import {
+  checkModelRunCaps,
+  ModelRunCapError,
+} from "@/api/lib/usage/model-run-caps/caps";
+
+/** An extraction's model calls re-check the list counter it was charged to. */
+const EXTRACTION_DISPATCH_CAPS = {
+  kind: "list-run",
+  operation: "lists.fact-extractions.create",
+  phase: "dispatch",
+} as const;
 
 const QUEUE_NAME = "legal-list-generation-runs";
 /** Fields read per pinned version when choosing its file. */
@@ -645,7 +652,7 @@ type ExecuteRunArgs = {
 };
 
 const failureOf = (cause: unknown): ListGenerationRunErrorCode => {
-  if (cause instanceof ListVerificationRunCapError) {
+  if (cause instanceof ModelRunCapError) {
     return "run_limit_reached";
   }
   return cause instanceof ListVerificationAccessRevokedError
@@ -739,9 +746,10 @@ const executeRun = async ({
     checkRunBudget: async () =>
       await actor.writeDb(
         async (tx) =>
-          await checkVerificationDispatchBudget({
+          await checkModelRunCaps({
             tx,
             organizationId: actor.organizationId,
+            ...EXTRACTION_DISPATCH_CAPS,
           }),
       ),
     ...(execution.generateObjectForTask === undefined

@@ -8,11 +8,21 @@ import type { StreamChunk } from "@tanstack/ai";
  * for this answer, so the model saw only the newest messages that fit its
  * window. The answer carries the notice live and after reload, so the reader
  * knows why it may not account for earlier messages.
+ *
+ * `session-not-resumed`: the coding agent on the member's computer could not
+ * resume its own session of the chat (the session was gone or the agent
+ * refused it), so it started over from the chat's messages, without the tool
+ * results and files of its earlier turns.
  */
-export type ChatContextNotice = { type: "history-trimmed" };
+export type ChatContextNotice =
+  { type: "history-trimmed" } | { type: "session-not-resumed" };
 
 export const HISTORY_TRIMMED_NOTICE = {
   type: "history-trimmed",
+} as const satisfies ChatContextNotice;
+
+export const SESSION_NOT_RESUMED_NOTICE = {
+  type: "session-not-resumed",
 } as const satisfies ChatContextNotice;
 
 /** The metadata key an answer carries its context notice under. */

@@ -76,6 +76,10 @@ import {
   refreshCaseLawSourceArrivalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import {
+  SEND_CHAT_LIMIT_REMINDERS_TASK,
+  sendChatLimitReminders,
+} from "@/api/lib/scheduler/tasks/chat-limit-reminders";
+import {
   SWEEP_CHAT_RUN_LOGS_TASK,
   sweepChatRunLogs,
 } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
@@ -282,6 +286,7 @@ const SCHEDULER_TASKS = {
   [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
+  [SEND_CHAT_LIMIT_REMINDERS_TASK]: sendChatLimitReminders,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,

@@ -660,29 +660,52 @@ if (!databaseUrl || !enabled) {
         expect(
           pending instanceof HttpStatusResponse ? pending.code : undefined,
         ).toBe(409);
-        const repair = createSearchHistoryCountryRepair({
+        const runRepair = async (
+          repair: ReturnType<typeof createSearchHistoryCountryRepair>,
+        ) => {
+          const reserved = await fixture.sql.reserve();
+          const connection = {
+            execute: async (query, params = []) => {
+              await reserved.unsafe(query, [...params]);
+            },
+            query: async (query, params = []) =>
+              await reserved.unsafe(query, [...params]),
+            release: async () => {
+              await reserved.release();
+            },
+          } satisfies OnlineMigrationConnection;
+          try {
+            await repair.repair(
+              connection,
+              createUngatedTableGateForTests(connection),
+            );
+            return await repair.readCompletion(connection);
+          } finally {
+            await connection.release();
+          }
+        };
+        const repairOptions = {
           readVerdict: async () => ({ kind: "normal", signals: [] }),
           sleep: async () => {},
-        });
-        const reserved = await fixture.sql.reserve();
-        const connection = {
-          execute: async (query, params = []) => {
-            await reserved.unsafe(query, [...params]);
-          },
-          query: async (query, params = []) =>
-            await reserved.unsafe(query, [...params]),
-          release: async () => {
-            await reserved.release();
-          },
-        } satisfies OnlineMigrationConnection;
-        try {
-          await repair.repair(
-            connection,
-            createUngatedTableGateForTests(connection),
-          );
-        } finally {
-          await connection.release();
-        }
+        } satisfies Parameters<typeof createSearchHistoryCountryRepair>[0];
+        // The migrate task has no content key: the repair leaves the row
+        // pending behind a durable checkpoint instead of failing.
+        const withoutKey = await runRepair(
+          createSearchHistoryCountryRepair({
+            ...repairOptions,
+            readContentKey: () => "unavailable",
+          }),
+        );
+        expect(withoutKey.type).toBe("pending");
+        const unrepaired = await clearCountry();
+        expect(
+          unrepaired instanceof HttpStatusResponse
+            ? unrepaired.code
+            : undefined,
+        ).toBe(409);
+        expect(
+          await runRepair(createSearchHistoryCountryRepair(repairOptions)),
+        ).toEqual({ type: "complete" });
         const classified = (
           await fixture.db
             .select({

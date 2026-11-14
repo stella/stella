@@ -1,5 +1,0 @@
-{
-  "metric": "as-casts",
-  "delta": 1,
-  "reason": "A carried review event copies its origin's stored payload as written, including actions recorded before reasons were required; the column is typed as written now so ordinary writers cannot drop a required reason, and the database admits the copy because the row names its origin event."
-}

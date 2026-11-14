@@ -94,15 +94,6 @@ const GENERATED_CONFLICTS =
 
 /** Keys are `<workflow file>:<job>#<step name>`. */
 export const DIFF_SCOPED_STEPS = {
-  "queue-admission.yml:admission#Run deterministic manifest checks":
-    operational(CHECK_POOL),
-  "queue-admission.yml:admission#Check parser versions":
-    expands(PARSER_VERSIONS),
-  "queue-admission.yml:admission#Check workflow job classifications":
-    fullTree(JOB_CLASSIFICATION),
-  "queue-admission.yml:admission#Code quality for changed files": expands(
-    "Turbo's affected scope adds reverse dependants of the queued change.",
-  ),
   "autofix.yml:dependabot-bun-autofix#Verify trusted autofix sources":
     diffComplete("Verifies the provenance of the commits being fixed."),
   "autofix.yml:dependabot-bun-autofix#Align Tauri counterparts": diffComplete(
@@ -193,6 +184,10 @@ export const DIFF_SCOPED_STEPS = {
   "deploy-landing.yml:scope#Decide whether the push changes the site": expands(
     "Follows the landing's workspace graph and declared inputs from the pushed range.",
   ),
+  "deploy-outlook-addin.yml:scope#Decide whether the push changes the add-in":
+    expands(
+      "Follows the add-in's workspace graph and declared inputs from the last successful deploy run.",
+    ),
   "ci.yml:ci-plan#Resolve comparison base": operational(
     "Resolves the base the plan compares against.",
   ),

@@ -25,7 +25,10 @@ import {
   CLAIM_STATE,
   VERIFICATION_LIMITS,
 } from "@/api/lib/lists/verification/contract";
-import type { ClaimState } from "@/api/lib/lists/verification/contract";
+import type {
+  ClaimState,
+  VerificationScope,
+} from "@/api/lib/lists/verification/contract";
 import { verificationRunListIdColumn } from "@/api/lib/lists/verification/read-run";
 import {
   foldClaimReview,
@@ -59,6 +62,7 @@ export const RUN_SUMMARY_COLUMNS = {
   status: legalListVerificationRuns.status,
   errorCode: legalListVerificationRuns.errorCode,
   entityVersionId: legalListVerificationRuns.entityVersionId,
+  scope: legalListVerificationRuns.scope,
   listId: verificationRunListIdColumn,
   createdAt: legalListVerificationRuns.createdAt,
   finishedAt: legalListVerificationRuns.finishedAt,
@@ -71,6 +75,7 @@ type RunSummaryRow = {
   status: (typeof legalListVerificationRuns.$inferSelect)["status"];
   errorCode: (typeof legalListVerificationRuns.$inferSelect)["errorCode"];
   entityVersionId: SafeId<"entityVersion">;
+  scope: VerificationScope;
   listId: SafeId<"legalList">;
   createdAt: Date;
   finishedAt: Date | null;
@@ -181,6 +186,7 @@ export const serializeRunSummary = (run: RunSummaryRow) => ({
   status: run.status,
   errorCode: run.errorCode,
   entityVersionId: run.entityVersionId,
+  scope: run.scope,
   listId: run.listId,
   createdAt: run.createdAt.toISOString(),
   finishedAt: run.finishedAt?.toISOString() ?? null,

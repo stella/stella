@@ -11,7 +11,7 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
@@ -251,7 +251,7 @@ test("a loaded document keeps verification disabled without update permission", 
   ).toBe(true);
 });
 
-for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
   test(`${code}: a limit refusal leaves the document available for a later verification`, async () => {
     const toast = spyOn(stellaToast, "add").mockReturnValue("limit-toast");
     try {
@@ -271,9 +271,9 @@ for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
         view.getByRole("button", { name: messages.common.verify }),
       );
       const expected =
-        code === VERIFICATION_RUN_CAP_CODES.active
-          ? messages.errors.apiCodes.verificationActiveLimitReached
-          : messages.errors.apiCodes.verificationDailyLimitReached;
+        code === MODEL_RUN_CAP_CODES.active
+          ? messages.errors.apiCodes.runActiveLimitReached
+          : messages.errors.apiCodes.runDailyLimitReached;
       await waitFor(() =>
         expect(toast).toHaveBeenCalledWith(
           expect.objectContaining({ title: expected, type: "error" }),
@@ -329,6 +329,9 @@ test("a failed kind read says so where the switches are and recovers on retry", 
     view.getByRole("switch", { name: messages.avt.documents.testimony });
   expect(Object.hasOwn(toggle().dataset, "disabled")).toBe(true);
   fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
+  // Polled assertions compare booleans: while the message is still shown, a
+  // failing matcher on the DOM node formats the whole node graph, which
+  // takes seconds per poll and starves the retry it is waiting for.
   await waitFor(() =>
     expect(
       view.queryByText(messages.avt.documents.kindsLoadFailed) === null,
