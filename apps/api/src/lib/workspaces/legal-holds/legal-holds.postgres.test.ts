@@ -27,6 +27,7 @@ import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { EMPTY_CHAT_HISTORY_SNAPSHOT } from "@/api/handlers/chat/history-window";
 import { rollbackUnpersistedChatSideEffects } from "@/api/handlers/chat/send-message-side-effects";
 import { bulkDeleteContactsInTransaction } from "@/api/handlers/contacts/bulk/delete";
+import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { moveEntities } from "@/api/handlers/entities/move";
@@ -49,7 +50,11 @@ import {
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
-import { holdsBlocking, requireNoHold } from "./holds";
+import {
+  holdsBlocking,
+  lockLegalHoldOrganization,
+  requireNoHold,
+} from "./holds";
 import { placeLegalHold, releaseLegalHold } from "./lifecycle";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -1157,15 +1162,20 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             organizationId,
             userId,
           );
-          const deletion = await safeDb(
-            async (tx) =>
-              await bulkDeleteContactsInTransaction({
-                tx,
-                organizationId,
-                contactIds: [witnessContactId, freeContactId],
-                recordAuditEvent,
-              }),
-          );
+          const deletion = await safeDb(async (tx) => {
+            await lockLegalHoldOrganization({
+              tx,
+              organizationId,
+              mode: "update",
+            });
+            await lockContactCapacity(tx, organizationId);
+            return await bulkDeleteContactsInTransaction({
+              tx,
+              organizationId,
+              contactIds: [witnessContactId, freeContactId],
+              recordAuditEvent,
+            });
+          });
           expect(deletion.isOk()).toBe(true);
           if (deletion.isOk()) {
             expect(deletion.value.outcomes).toEqual([

@@ -59,7 +59,11 @@ type BulkDeleteContactsOptions = {
   recordAuditEvent: AuditRecorder;
 };
 
-/** Delete the owned, unblocked contacts in the caller's transaction. */
+/**
+ * Delete the owned, unblocked contacts in the caller's transaction, which
+ * holds the organization's legal-hold fence and then its contact capacity
+ * lock, the order single deletion takes them in.
+ */
 export const bulkDeleteContactsInTransaction = async ({
   tx,
   organizationId,
@@ -67,9 +71,6 @@ export const bulkDeleteContactsInTransaction = async ({
   recordAuditEvent,
 }: BulkDeleteContactsOptions) => {
   const uniqueIds = [...new Set(contactIds)];
-  // The hold fence comes before the contact rows, as in single deletion.
-  await lockLegalHoldOrganization({ tx, organizationId, mode: "update" });
-  await lockContactCapacity(tx, organizationId);
   const owned = await lockOwnedContactsForBulkDelete({
     tx,
     organizationId,
@@ -189,15 +190,17 @@ const bulkDeleteContacts = createSafeRootHandler(
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
     const txResult = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await bulkDeleteContactsInTransaction({
-            tx,
-            organizationId,
-            contactIds: body.contactIds,
-            recordAuditEvent,
-          }),
-      ),
+      safeDb(async (tx) => {
+        // The hold fence comes before the contact rows, as in single deletion.
+        await lockLegalHoldOrganization({ tx, organizationId, mode: "update" });
+        await lockContactCapacity(tx, organizationId);
+        return await bulkDeleteContactsInTransaction({
+          tx,
+          organizationId,
+          contactIds: body.contactIds,
+          recordAuditEvent,
+        });
+      }),
     );
 
     detached(
