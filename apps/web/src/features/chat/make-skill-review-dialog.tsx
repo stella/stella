@@ -24,6 +24,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
 import {
+  isCurrentDraftOwner,
+  type PendingSkillReview,
   saveSkillDraft,
   type SkillDraftSaveOutcome,
   useMakeSkillReviewStore,
@@ -32,7 +34,6 @@ import {
   mergeApprovedNames,
   replaceDraftNames,
   type SkillDraft,
-  type SkillDraftName,
 } from "./make-skill-review.logic";
 import { useOpenSavedSkill } from "./use-make-skill-from-chat";
 
@@ -42,31 +43,29 @@ import { useOpenSavedSkill } from "./use-make-skill-from-chat";
  * name is replaced by its role before the draft is saved.
  */
 export const MakeSkillReviewDialog = () => {
-  const pending = useMakeSkillReviewStore((store) => store.pending);
+  const pending = useMakeSkillReviewStore((store) => store.queue.at(0));
   const close = useMakeSkillReviewStore((store) => store.close);
-  // The signed-in frame unmounts on any change of user; a draft waiting for
-  // review leaves with it, so the next member never sees its names.
+  // The signed-in frame unmounts on any change of user or organization; the
+  // drafts waiting for review leave with it, so the next member never sees
+  // their names.
   useMountEffect(() => () => {
-    useMakeSkillReviewStore.getState().close();
+    useMakeSkillReviewStore.getState().clear();
   });
   return (
     <Dialog
       onOpenChange={(open) => {
-        if (!open) {
-          close();
+        if (!open && pending !== undefined) {
+          close(pending.id);
         }
       }}
-      open={pending !== null}
+      open={pending !== undefined}
     >
-      {pending === null ? null : (
+      {pending === undefined ? null : (
         <MakeSkillReviewBody
           // A new review (another draft, or names the server found again)
           // starts from its own list, every name kept.
-          key={pending.names.map(({ value }) => value).join("\u0000")}
-          approved={pending.approved}
-          draft={pending.draft}
-          names={pending.names}
-          onDone={close}
+          key={pending.id}
+          review={pending}
         />
       )}
     </Dialog>
@@ -81,20 +80,15 @@ type ReviewedSave = {
 };
 
 const MakeSkillReviewBody = ({
-  approved,
-  draft,
-  names,
-  onDone,
+  review: { id: reviewId, approved, draft, names, owner },
 }: {
-  approved: string[];
-  draft: SkillDraft;
-  names: SkillDraftName[];
-  onDone: () => void;
+  review: PendingSkillReview;
 }) => {
   const t = useTranslations();
   const tReview = useTranslations("chat.makeSkill.review");
   const queryClient = useQueryClient();
-  const openReview = useMakeSkillReviewStore((store) => store.open);
+  const reopenReview = useMakeSkillReviewStore((store) => store.reopen);
+  const closeReview = useMakeSkillReviewStore((store) => store.close);
   const openSaved = useOpenSavedSkill();
   const [kept, setKept] = useState<ReadonlySet<string>>(
     () => new Set(names.map(({ value }) => value)),
@@ -124,15 +118,21 @@ const MakeSkillReviewBody = ({
       },
     }),
     onSuccess: ({ approvedNow, reviewed, outcome }: ReviewedSave) => {
+      // A save that answers after a switch of account or organization is
+      // not shown in the one switched to.
+      if (!isCurrentDraftOwner(queryClient, owner)) {
+        return;
+      }
       if (outcome.type === "saved") {
-        onDone();
+        closeReview(reviewId);
         openSaved(outcome.skill.id);
         return;
       }
-      openReview({
+      reopenReview(reviewId, {
         approved: approvedNow,
         draft: reviewed,
         names: outcome.names,
+        owner,
       });
     },
     onError: (error) => {

@@ -16,7 +16,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
 import {
+  currentDraftOwner,
+  isCurrentDraftOwner,
   saveSkillDraft,
+  type SkillDraftOwner,
   type SkillDraftSaveOutcome,
   useMakeSkillReviewStore,
 } from "./make-skill-review";
@@ -58,11 +61,15 @@ export const useOpenSavedSkill = () => {
   };
 };
 
+/** A draft, and the account and organization it was made in. */
+type OwnedDraft = { draft: SkillDraft; owner: SkillDraftOwner };
+
 /**
  * Store a drafted skill that holds no names to review. The server checks it
  * again; names it finds go to the review dialog instead. The outcome is
  * handled on the mutation, not on `mutate`, so it still lands when the
- * composer that asked has unmounted.
+ * composer that asked has unmounted, and only while the session is still
+ * the one the draft was made in.
  */
 export const useSaveDraftedSkill = () => {
   const t = useTranslations();
@@ -74,14 +81,21 @@ export const useSaveDraftedSkill = () => {
       mutation: "saveSkillDraft",
       queryClient,
       scope: { type: "organization" },
-      mutationFn: async (draft: SkillDraft) => await saveSkillDraft(draft, []),
+      mutationFn: async ({ draft }: OwnedDraft) =>
+        await saveSkillDraft(draft, []),
     }),
-    onSuccess: (outcome: SkillDraftSaveOutcome, draft: SkillDraft) => {
+    onSuccess: (
+      outcome: SkillDraftSaveOutcome,
+      { draft, owner }: OwnedDraft,
+    ) => {
+      if (!isCurrentDraftOwner(queryClient, owner)) {
+        return;
+      }
       if (outcome.type === "saved") {
         openSaved(outcome.skill.id);
         return;
       }
-      openReview({ draft, names: outcome.names, approved: [] });
+      openReview({ draft, names: outcome.names, approved: [], owner });
     },
     onError: (error) => {
       notifyUserError(error, t("chat.makeSkill.failed"), {
@@ -101,10 +115,15 @@ export const useMakeSkillFromChat = (
   saveDraft: ReturnType<typeof useSaveDraftedSkill>,
 ) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const openReview = useMakeSkillReviewStore((store) => store.open);
   const flight = useSingleFlight();
 
   const make = async (target: MakeSkillTarget) => {
+    const owner = currentDraftOwner(queryClient);
+    if (owner === null) {
+      return;
+    }
     const toastId = stellaToast.loading(t("chat.makeSkill.drafting"));
     const drafted = await Result.tryPromise({
       try: async () => await draftSkillFromChat(target),
@@ -120,12 +139,17 @@ export const useMakeSkillFromChat = (
       });
       return;
     }
-    const { draft, names } = drafted.value;
-    if (names.length > 0) {
-      openReview({ draft, names, approved: [] });
+    // A draft that finishes after a switch of account or organization is
+    // dropped: saving it would store it in the organization switched to.
+    if (!isCurrentDraftOwner(queryClient, owner)) {
       return;
     }
-    saveDraft.mutate(draft);
+    const { draft, names } = drafted.value;
+    if (names.length > 0) {
+      openReview({ draft, names, approved: [], owner });
+      return;
+    }
+    saveDraft.mutate({ draft, owner });
   };
 
   return (target: MakeSkillTarget) => {
