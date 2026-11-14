@@ -44,6 +44,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { continuesAcrossPageBreak } from "@/api/lib/legal-search/parsers/page-furniture";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_KIS_SOURCE_SYSTEM = "eureka.mf.gov.pl";
@@ -232,8 +233,65 @@ const stateTemplateHeadings = ($: cheerio.CheerioAPI): void => {
   }
 };
 
+/**
+ * A link to a place in the same document: the export marks one with an
+ * `anchor` attribute or a `#` target.
+ */
+const IN_DOCUMENT_LINK = 'a[anchor], a[href^="#"]';
+
+/**
+ * Drop the lines that only link back within the document (`powrót do spisu`
+ * after each section of a brochure): web navigation, not the document's
+ * text. A link inside a sentence, such as a footnote mark, stays.
+ */
+const dropNavigationLines = ($: cheerio.CheerioAPI): void => {
+  for (const link of $(IN_DOCUMENT_LINK).toArray()) {
+    const line = $(link).closest("p");
+    const text = visibleText(visibleHtmlText($(link)));
+    if (
+      line.length > 0 &&
+      text !== "" &&
+      visibleText(visibleHtmlText(line)) === text
+    ) {
+      line.remove();
+    }
+  }
+};
+
+/** The container the export sets each footnote in (`<div id="ftn6">`). */
+const FOOTNOTE_CONTAINER = 'div[id^="ftn"]';
+
+/**
+ * Join a footnote's lines that one sentence runs across: the export can set
+ * a note's wrapped line as a paragraph of its own (`… z dnia 7 grudnia 2025
+ * r. zmieniające` / `rozporządzenie w sprawie …`). A note's line that ends
+ * its sentence, or one the next does not go on from, stays a paragraph.
+ */
+const joinWrappedFootnoteLines = ($: cheerio.CheerioAPI): void => {
+  for (const container of $(FOOTNOTE_CONTAINER).toArray()) {
+    const lines = $(container).children("p").toArray();
+    let previous = lines.at(0);
+    for (const line of lines.slice(1)) {
+      if (
+        previous !== undefined &&
+        continuesAcrossPageBreak(
+          visibleText(visibleHtmlText($(previous))),
+          visibleText(visibleHtmlText($(line))),
+        )
+      ) {
+        $(previous).append(" ", $(line).contents());
+        $(line).remove();
+        continue;
+      }
+      previous = line;
+    }
+  }
+};
+
 const loadLetter = (html: string): cheerio.CheerioAPI => {
   const $ = load(html);
+  dropNavigationLines($);
+  joinWrappedFootnoteLines($);
   stateTemplateHeadings($);
   return $;
 };
