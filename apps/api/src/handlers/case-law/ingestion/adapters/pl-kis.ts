@@ -1196,16 +1196,7 @@ const PL_KIS_SOURCE_FIELDS = {
         "The original typed field collection retains this category-specific publisher value exactly",
     },
   },
-  TRESC_INTERP_ZAPYT: {
-    disposition: "stored",
-    target: {
-      type: "raw",
-      part: "detail",
-      path: ["dokument", "fields"],
-      reason:
-        "The original typed field collection retains this category-specific publisher value exactly",
-    },
-  },
+  TRESC_INTERP_ZAPYT: { disposition: "stored", target: { type: "document" } },
   DATA_WYSLANIA_NEWSLETTERA: {
     disposition: "stored",
     target: {
@@ -1236,16 +1227,7 @@ const PL_KIS_SOURCE_FIELDS = {
         "The original typed field collection retains this category-specific publisher value exactly",
     },
   },
-  TRESC_NEWS: {
-    disposition: "stored",
-    target: {
-      type: "raw",
-      part: "detail",
-      path: ["dokument", "fields"],
-      reason:
-        "The original typed field collection retains this category-specific publisher value exactly",
-    },
-  },
+  TRESC_NEWS: { disposition: "stored", target: { type: "document" } },
   DATA_ORZECZENIA: {
     disposition: "stored",
     target: {
@@ -1443,6 +1425,36 @@ const detailProblemOf = (
   return detail === undefined ? "detail-unreadable" : undefined;
 };
 
+/**
+ * Every HTML text a record can state, in reading order: the question a
+ * parliamentary answer replies to, the document's own text, and a
+ * newsletter's text.
+ */
+const PL_KIS_TEXT_FIELDS = [
+  "TRESC_INTERP_ZAPYT",
+  "TRESC_INTERESARIUSZ",
+  "TRESC_NEWS",
+] as const;
+
+/**
+ * The document's HTML: every text field the record states, in reading
+ * order, so a parliamentary answer opens with the question it replies to.
+ * `undefined` when the template's own text field is empty, so the document
+ * is read from its PDF.
+ */
+const documentHtmlOf = (
+  detail: PlKisDetail | undefined,
+  body: PlKisCategoryFields["body"],
+): string | undefined => {
+  if (detailString(detail, body) === undefined) {
+    return undefined;
+  }
+  return PL_KIS_TEXT_FIELDS.flatMap((key) => {
+    const text = detailString(detail, key);
+    return text === undefined ? [] : [text];
+  }).join("\n");
+};
+
 type ParsedDocument = {
   output: ParsePlKisDocumentOutput;
   from: "html" | "pdf";
@@ -1537,7 +1549,7 @@ export const assemblePlKisDecision = async ({
   const documentUrl =
     publisherId === undefined ? undefined : pdfUrl(publisherId);
 
-  const html = detailString(detail, fields.body);
+  const html = documentHtmlOf(detail, fields.body);
   const parseInput = {
     caseNumber,
     court,

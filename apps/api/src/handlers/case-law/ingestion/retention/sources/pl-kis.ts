@@ -4,9 +4,10 @@
  * The stored raw is an envelope with the search row (`listing`) and the
  * document's detail response (`detail`), a JSON record whose
  * `dokument.fields` list states the document text as HTML under
- * `TRESC_INTERESARIUSZ`, or under `TRESC_NEWS` for a newsletter. A document
- * whose HTML field is empty is read from its PDF rendition, stored beside the
- * envelope rather than in it.
+ * `TRESC_INTERESARIUSZ`, or under `TRESC_NEWS` for a newsletter; a
+ * parliamentary answer also states the question under `TRESC_INTERP_ZAPYT`.
+ * A document whose own HTML field is empty is read from its PDF rendition,
+ * stored beside the envelope rather than in it.
  */
 import { Result } from "better-result";
 
@@ -22,10 +23,21 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const DETAIL_PART = "detail";
 /**
- * The fields a document type states its text in, in the adapter's order:
- * every type but the newsletter uses the first, the newsletter the second.
+ * Every HTML text a record can state, in the adapter's reading order: the
+ * question a parliamentary answer replies to, the document's own text, and a
+ * newsletter's text. The adapter reads all a record states, as here.
  */
-const TEXT_FIELDS = ["TRESC_INTERESARIUSZ", "TRESC_NEWS"] as const;
+const TEXT_FIELDS = [
+  "TRESC_INTERP_ZAPYT",
+  "TRESC_INTERESARIUSZ",
+  "TRESC_NEWS",
+] as const;
+
+/** The fields a document type states its own text in. */
+const BODY_FIELDS: ReadonlySet<string> = new Set([
+  "TRESC_INTERESARIUSZ",
+  "TRESC_NEWS",
+]);
 
 /** One HTML field of the detail, `undefined` where the record states none. */
 const htmlFieldValue = (
@@ -44,16 +56,23 @@ const htmlFieldValue = (
     : undefined;
 };
 
-/** The detail's HTML text, `undefined` where the record states none. */
+/**
+ * The detail's HTML text, `undefined` where the record states no text of its
+ * own (the adapter then reads the PDF).
+ */
 const htmlFieldOf = (detail: unknown): string | undefined => {
   const document = isRecord(detail) ? detail["dokument"] : undefined;
   const fields = isRecord(document) ? document["fields"] : undefined;
   if (!Array.isArray(fields)) {
     return undefined;
   }
-  return TEXT_FIELDS.map((key) => htmlFieldValue(fields, key)).find(
-    (html) => html !== undefined,
-  );
+  const stated = TEXT_FIELDS.flatMap((key) => {
+    const html = htmlFieldValue(fields, key);
+    return html === undefined ? [] : [{ html, key }];
+  });
+  return stated.some(({ key }) => BODY_FIELDS.has(key))
+    ? stated.map(({ html }) => html).join("\n")
+    : undefined;
 };
 
 const projectPlKis = (sourceRaw: string): RetentionProjection => {

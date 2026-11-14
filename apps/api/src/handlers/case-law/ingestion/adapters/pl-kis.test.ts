@@ -1639,6 +1639,53 @@ test("all source categories are admitted by total and crawl requests without wid
     stub.restore();
   }
 });
+test.each([
+  ["24-senat", "Interwencja pana senatora", "Odpowiedź Ministra Finansów"],
+  ["25-sejm", null, null],
+] as const)(
+  "%s: a parliamentary answer opens with the question it replies to",
+  async (tag, question, answer) => {
+    const { decision } = await builtFrom(tag);
+    const text = decision.fulltext ?? "";
+    // The capture's question and answer each reach the text, question first.
+    const opening = (html: string) =>
+      html
+        .replaceAll(/<[^>]+>/gu, " ")
+        .replaceAll("&nbsp;", " ")
+        .replaceAll(/\s+/gu, " ")
+        .trim()
+        .split(" ")
+        .slice(0, 3)
+        .join(" ");
+    const detail: unknown = JSON.parse(await readDetailFixture(tag));
+    const fields =
+      isRecord(detail) && isRecord(detail["dokument"])
+        ? detail["dokument"]["fields"]
+        : undefined;
+    const stated = (key: string): string => {
+      const field = (Array.isArray(fields) ? fields : []).find(
+        (candidate: unknown) => isRecord(candidate) && candidate["key"] === key,
+      );
+      const value = isRecord(field) ? field["value"] : undefined;
+      return typeof value === "string"
+        ? value
+        : panic(`${tag}: no ${key} in the capture`);
+    };
+    const questionText = question ?? opening(stated("TRESC_INTERP_ZAPYT"));
+    const answerText = answer ?? opening(stated("TRESC_INTERESARIUSZ"));
+    expect(text.indexOf(questionText)).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf(answerText)).toBeGreaterThan(
+      text.indexOf(questionText),
+    );
+  },
+);
+
+test("23-newsletter: the newsletter's own text is the decision's text", async () => {
+  const { decision } = await builtFrom("23-newsletter");
+  expect(decision.isListingOnly).toBeUndefined();
+  expect(decision.fulltext?.length ?? 0).toBeGreaterThan(1000);
+});
+
 test("reference missing-id identities distinguish the publisher's signature", () => {
   const first = {
     KATEGORIA_INFORMACJI: ["Broszura informacyjna"],
