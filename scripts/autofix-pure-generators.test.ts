@@ -226,8 +226,10 @@ test("every module the case-law re-parse imports selects it", () => {
   expect(
     [...graph.computedImports].filter((file) => closure.has(file)),
   ).toEqual([]);
+  // The segmenter shapes every re-parsed section; the payload reads it
+  // directly, not through the ingestion re-export.
   expect(closure).toContain(
-    "apps/api/src/handlers/case-law/ingestion/segmenter.ts",
+    "apps/api/src/lib/legal-search/segment-decision.ts",
   );
   const { inputs } = generator("case-law-fixture-reparse");
   expect(

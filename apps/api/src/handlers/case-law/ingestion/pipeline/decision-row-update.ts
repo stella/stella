@@ -45,6 +45,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { writeDecisionAnchorRedirectsTx } from "@/api/lib/case-law/decision-anchor-redirects";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -364,6 +365,11 @@ export const describeRowUpdateTx = async (
     : {
         ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
+        ...decisionFallbackState({
+          storage: write.storageIdentity,
+          previous: existing,
+          persistedSourceDocumentId,
+        }).columns,
         ecli: result.ecli,
         court: result.court,
         courtId: result.courtId ?? null,

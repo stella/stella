@@ -95,6 +95,7 @@ export { default as indexes_document_outstanding_date_index } from "./online-mig
 export { default as indexes_document_outstanding_index } from "./online-migration-entries/indexes-document-outstanding-index";
 export { default as indexes_entity_versions_entity_number_uidx } from "./online-migration-entries/indexes-entity-versions-entity-number-uidx";
 export { default as indexes_entity_versions_id_entity_ws_uidx } from "./online-migration-entries/indexes-entity-versions-id-entity-ws-uidx";
+export { default as indexes_fallback_decision_indexes } from "./online-migration-entries/indexes-fallback-decision-indexes";
 export { default as indexes_folio_collab_rooms_workspace_source_version_idx } from "./online-migration-entries/indexes-folio-collab-rooms-workspace-source-version-idx";
 export { default as indexes_import_provenance_unique_indexes } from "./online-migration-entries/indexes-import-provenance-unique-indexes";
 export { default as indexes_invoice_lines_workspace_organization_idx } from "./online-migration-entries/indexes-invoice-lines-workspace-organization-idx";

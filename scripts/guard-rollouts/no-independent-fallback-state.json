@@ -1,0 +1,18 @@
+{
+  "id": "no-independent-fallback-state",
+  "rules": ["no-independent-fallback-state/no-independent-fallback-state"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-20T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-independent-fallback-state/no-independent-fallback-state",
+    "apps/api/src"
+  ]
+}
