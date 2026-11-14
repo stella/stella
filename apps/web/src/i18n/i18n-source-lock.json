@@ -1679,6 +1679,7 @@
   "chat.sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
   "chat.sendErrorTimedOut": "The chat service did not respond in time. Try again.",
   "chat.sendErrorToolsUnsupported": "This model cannot use tools, so it cannot answer questions about your matter. Switch to a model that supports tools.",
+  "chat.sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue.",
   "chat.sendPrompt": "Send message",
   "chat.sendQueuedMessageNow": "Send now",
   "chat.sendWithoutAnonymization": "Send without anonymization",

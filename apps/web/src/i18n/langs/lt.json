@@ -2110,6 +2110,7 @@
     "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
     "sendErrorTimedOut": "Pokalbio paslauga laiku neatsakė. Bandykite dar kartą.",
     "sendErrorToolsUnsupported": "Šis modelis negali naudoti įrankių, todėl negali atsakyti į klausimus apie jūsų bylą. Perjunkite į modelį, kuris palaiko įrankius.",
+    "sendErrorTurnTooLarge": "Šis atsakymas tapo per didelis, kad būtų pateiktas visas. Norėdami tęsti, išsiųskite naują žinutę.",
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",

@@ -2110,6 +2110,7 @@
     "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
     "sendErrorTimedOut": "Le service de conversation n’a pas répondu à temps. Réessayez.",
     "sendErrorToolsUnsupported": "Ce modèle ne peut pas utiliser d’outils et ne peut donc pas répondre aux questions sur votre dossier. Passez à un modèle qui prend en charge les outils.",
+    "sendErrorTurnTooLarge": "Cette réponse est devenue trop volumineuse pour être transmise en entier. Envoyez un nouveau message pour continuer.",
     "sendPrompt": "Envoyer le message",
     "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",

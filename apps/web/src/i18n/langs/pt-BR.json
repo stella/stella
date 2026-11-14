@@ -2110,6 +2110,7 @@
     "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
     "sendErrorTimedOut": "O chat não respondeu a tempo. Tente novamente.",
     "sendErrorToolsUnsupported": "Este modelo não pode usar ferramentas, então não consegue responder a perguntas sobre o seu caso. Mude para um modelo que aceite ferramentas.",
+    "sendErrorTurnTooLarge": "Esta resposta ficou grande demais para ser entregue por completo. Envie uma nova mensagem para continuar.",
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",

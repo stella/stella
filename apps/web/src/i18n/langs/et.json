@@ -2110,6 +2110,7 @@
     "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
     "sendErrorTimedOut": "Vestlusteenus ei vastanud õigel ajal. Proovige uuesti.",
     "sendErrorToolsUnsupported": "See mudel ei saa tööriistu kasutada, seega ei saa see sinu toimiku kohta küsimustele vastata. Vaheta mudelile, mis tööriistu toetab.",
+    "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum.",
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",

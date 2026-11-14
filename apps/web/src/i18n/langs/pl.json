@@ -2110,6 +2110,7 @@
     "sendErrorStreamIncomplete": "Odpowiedź AI urwała się przed zakończeniem. Spróbuj ponownie.",
     "sendErrorTimedOut": "Czat nie odpowiedział na czas. Spróbuj ponownie.",
     "sendErrorToolsUnsupported": "Ten model nie może używać narzędzi, więc nie może odpowiadać na pytania dotyczące Twojej sprawy. Przełącz się na model, który obsługuje narzędzia.",
+    "sendErrorTurnTooLarge": "Ta odpowiedź stała się zbyt duża, aby dostarczyć ją w całości. Wyślij nową wiadomość, aby kontynuować.",
     "sendPrompt": "Wyślij wiadomość",
     "sendQueuedMessageNow": "Wyślij teraz",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",

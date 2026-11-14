@@ -2110,6 +2110,7 @@
     "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
     "sendErrorTimedOut": "Chat neodpovedal včas. Skúste to znova.",
     "sendErrorToolsUnsupported": "Tento model nevie používať nástroje, takže nemôže odpovedať na otázky k vášmu spisu. Prepnite na model, ktorý nástroje podporuje.",
+    "sendErrorTurnTooLarge": "Táto odpoveď je príliš veľká na to, aby sa dala doručiť celá. Pokračujte novou správou.",
     "sendPrompt": "Odoslať správu",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",

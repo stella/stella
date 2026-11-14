@@ -2110,6 +2110,7 @@
     "sendErrorStreamIncomplete": "La respuesta de la IA se cortó antes de terminar. Inténtalo de nuevo.",
     "sendErrorTimedOut": "El chat no respondió a tiempo. Inténtelo de nuevo.",
     "sendErrorToolsUnsupported": "Este modelo no puede usar herramientas, por lo que no puede responder preguntas sobre tu asunto. Cambia a un modelo que admita herramientas.",
+    "sendErrorTurnTooLarge": "Esta respuesta se hizo demasiado grande para entregarla completa. Envía un mensaje nuevo para continuar.",
     "sendPrompt": "Enviar mensaje",
     "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
