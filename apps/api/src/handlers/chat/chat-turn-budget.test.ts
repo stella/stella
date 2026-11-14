@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_TURN_BUDGET } from "@stll/chat-limits";
 import type { ChatTurnBudget } from "@stll/chat-limits";
+import { createTestClock } from "@stll/test-kit";
 
 import {
   chatMessageContentFromMessage,
@@ -31,6 +32,8 @@ import type {
 import { toSafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
+
+const clock = createTestClock();
 
 const SEARCH_TOOL_NAME = "web_search";
 const ANSWER_MESSAGE_ID = toSafeId<"chatMessage">(
@@ -66,7 +69,7 @@ const searchForeverAdapter = ({
     async *chatStream({ model, runId, threadId }) {
       calls += 1;
       const callId = `${callIdPrefix}-${String(calls)}`;
-      const timestamp = Date.now();
+      const timestamp = clock.now();
       yield {
         type: EventType.RUN_STARTED,
         runId: runId ?? "run-1",
