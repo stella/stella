@@ -764,11 +764,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/playbooks/from-run/create.integration.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/playbooks/from-run/create.postgres.test.ts": {
     "count": 5,
     "owner": "api",
@@ -816,11 +811,6 @@
   },
   "apps/api/src/handlers/soft-law/ingestion.db.test.ts": {
     "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/template-packs/installs/create.db.test.ts": {
-    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -881,11 +871,6 @@
   },
   "apps/api/src/handlers/work-obligations/queues/list.integration.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/work-obligations/transitions.integration.test.ts": {
-    "count": 4,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
