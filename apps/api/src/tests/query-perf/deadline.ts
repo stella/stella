@@ -47,9 +47,9 @@ export const createQueryPerfDeadline = ({
           throw error instanceof TimeoutError &&
             error.label === QUERY_PERF_DEADLINE_LABEL
             ? new TimeoutError({
-                message: `${messageLabel} exceeded ${String(error.timeoutMs)}ms`,
+                message: `${messageLabel} exceeded ${String(remainingMs)}ms`,
                 label: QUERY_PERF_DEADLINE_LABEL,
-                timeoutMs: error.timeoutMs,
+                timeoutMs: remainingMs,
                 cause: error,
               })
             : error;
