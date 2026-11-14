@@ -179,6 +179,8 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db: firstDb } = openClient();
         const { db: secondDb } = openClient();
+        // Watches the other two while the first holds its connection open.
+        const { db: observerDb } = openClient();
         const fixture = await seed(firstDb);
         try {
           const census = await exactCensus(fixture);
@@ -217,7 +219,7 @@ if (!databaseUrl || !runPostgresTests) {
           // The second prover waits on the first one's row locks.
           await waitFor(
             async () => {
-              const waiting = await firstDb.execute<{ waiting: number }>(sql`
+              const waiting = await observerDb.execute<{ waiting: number }>(sql`
                 SELECT count(*)::int AS waiting
                 FROM pg_stat_activity
                 WHERE datname = current_database()
