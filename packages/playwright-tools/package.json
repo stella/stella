@@ -23,7 +23,7 @@
     "report": "PLAYWRIGHT_HTML_OUTPUT_DIR=../../apps/web/playwright-report playwright merge-reports --reporter html ../../apps/web/all-blob-reports"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   }
