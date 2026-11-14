@@ -3030,7 +3030,6 @@
       "dropZone": "Lohista volikiri (.docx) siia või klõpsa faili valimiseks",
       "extracting": "Tuvastame volitaja(id)…",
       "fileHint": "stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
-      "fileTooLarge": "Volikirja fail peab olema kuni 50 MB.",
       "invalidFileType": "Palun valige .docx-fail.",
       "noOutorganteFound": "Selles dokumendis ei õnnestunud ühtegi volitajat tuvastada.",
       "parseErrorGeneric": "Sellest dokumendist ei õnnestunud kontakte tuvastada.",

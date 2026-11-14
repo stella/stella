@@ -3030,7 +3030,6 @@
       "dropZone": "Vollmacht (.docx) hier ablegen oder klicken, um eine Datei auszuwählen",
       "extracting": "Vollmachtgeber werden ermittelt…",
       "fileHint": "stella liest das Dokument und findet automatisch den/die Vollmachtgeber (nicht den Anwalt). Prüfen Sie das Ergebnis, bevor Sie bestätigen.",
-      "fileTooLarge": "Die Vollmachtsdatei darf höchstens 50 MB groß sein.",
       "invalidFileType": "Bitte wählen Sie eine .docx-Datei aus.",
       "noOutorganteFound": "In diesem Dokument konnte kein Vollmachtgeber erkannt werden.",
       "parseErrorGeneric": "Aus diesem Dokument konnten keine Kontakte extrahiert werden.",

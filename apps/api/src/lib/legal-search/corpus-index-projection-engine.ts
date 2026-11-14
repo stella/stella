@@ -485,14 +485,23 @@ type ProveCorpusProjectionRevisionsOptions = {
   expected: readonly CorpusProjectionRevisionPresence[];
 };
 
-type CorpusProjectionPresenceCensus =
-  | { status: "proven"; proofs: CorpusProjectionPresenceProof[] }
-  | { status: "unproven" };
+/** A revision the census did not find exactly as its append wrote it. */
+type CorpusProjectionUnprovenRevision = {
+  revision: ProjectionRevision;
+  expectedDocumentCount: number;
+  /** Zero when the census found none. */
+  observedDocumentCount: number;
+};
+
+export type CorpusProjectionPresenceCensus = {
+  proofs: CorpusProjectionPresenceProof[];
+  unproven: CorpusProjectionUnprovenRevision[];
+};
 
 /**
- * Prove a bounded revision set present: one exact census, and every revision
- * must count exactly the documents its append wrote. One revision that does
- * not leaves the whole set unproven.
+ * Census a bounded revision set once, exactly. A revision that counts exactly
+ * the documents its append wrote gets presence evidence; every other one is
+ * reported with what the census found, absent, partial or in excess.
  */
 export const proveCorpusProjectionRevisionsPresent = async ({
   client,
@@ -515,24 +524,27 @@ export const proveCorpusProjectionRevisionsPresent = async ({
       documentCount,
     ]),
   );
-  if (
-    expected.some(
-      ({ revision, documentCount }) => counts.get(revision) !== documentCount,
-    )
-  ) {
-    return Result.ok({ status: "unproven" });
-  }
-  return Result.ok({
-    status: "proven",
-    proofs: expected.map(
-      (presence) =>
+  const proofs: CorpusProjectionPresenceProof[] = [];
+  const unproven: CorpusProjectionUnprovenRevision[] = [];
+  for (const presence of expected) {
+    const observedDocumentCount = counts.get(presence.revision) ?? 0;
+    if (observedDocumentCount === presence.documentCount) {
+      proofs.push(
         new CorpusProjectionPresenceProof(
           PRESENCE_PROOF_CONSTRUCTION,
           indexId,
           presence,
         ),
-    ),
-  });
+      );
+    } else {
+      unproven.push({
+        revision: presence.revision,
+        expectedDocumentCount: presence.documentCount,
+        observedDocumentCount,
+      });
+    }
+  }
+  return Result.ok({ proofs, unproven });
 };
 
 export const deleteCorpusProjectionRevisions = async ({

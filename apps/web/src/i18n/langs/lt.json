@@ -3030,7 +3030,6 @@
       "dropZone": "Nutempkite įgaliojimą (.docx) čia arba spustelėkite ir pasirinkite failą",
       "extracting": "Nustatomas (-i) įgaliotojas (-ai)…",
       "fileHint": "stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
-      "fileTooLarge": "Įgaliojimo failas turi būti ne didesnis kaip 50 MB.",
       "invalidFileType": "Pasirinkite .docx failą.",
       "noOutorganteFound": "Šiame dokumente nepavyko nustatyti nė vieno įgaliotojo.",
       "parseErrorGeneric": "Iš šio dokumento nepavyko nustatyti kontaktų.",

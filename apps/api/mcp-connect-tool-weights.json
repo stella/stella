@@ -64,9 +64,9 @@
     {
       "name": "create_template",
       "nameChars": 15,
-      "descriptionChars": 807,
+      "descriptionChars": 808,
       "inputSchemaChars": 1252,
-      "totalChars": 2074,
+      "totalChars": 2075,
       "estimatedTokens": 796
     },
     {
@@ -328,17 +328,17 @@
     {
       "name": "prepare_file_comparison",
       "nameChars": 23,
-      "descriptionChars": 667,
-      "inputSchemaChars": 1140,
-      "totalChars": 1830,
-      "estimatedTokens": 705
+      "descriptionChars": 668,
+      "inputSchemaChars": 1144,
+      "totalChars": 1835,
+      "estimatedTokens": 707
     },
     {
       "name": "prepare_file_comparison_from_links",
       "nameChars": 34,
-      "descriptionChars": 342,
+      "descriptionChars": 343,
       "inputSchemaChars": 1058,
-      "totalChars": 1434,
+      "totalChars": 1435,
       "estimatedTokens": 567
     },
     {
@@ -663,7 +663,7 @@
     }
   ],
   "totals": {
-    "characters": 140330,
-    "estimatedTokens": 55753
+    "characters": 140337,
+    "estimatedTokens": 55755
   }
 }

@@ -3030,7 +3030,6 @@
       "dropZone": "Presuňte sem plnomocenstvo (.docx) alebo kliknite a vyberte súbor",
       "extracting": "Zisťujeme splnomocniteľa…",
       "fileHint": "stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
-      "fileTooLarge": "Súbor plnomocenstva môže mať najviac 50 MB.",
       "invalidFileType": "Vyberte, prosím, súbor .docx.",
       "noOutorganteFound": "V tomto dokumente sa nepodarilo identifikovať žiadneho splnomocniteľa.",
       "parseErrorGeneric": "Z tohto dokumentu sa nepodarilo extrahovať kontakty.",

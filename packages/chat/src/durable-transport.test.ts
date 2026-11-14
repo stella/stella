@@ -802,6 +802,71 @@ describe("durable chat transport", () => {
     // Joins at 0, 60s, 120s and 180s; the window closes before a fifth.
     expect(counts).toEqual({ joins: 4, posts: 0, probes: 4, waits: 3 });
   });
+  test("each drop of a silent turn gets its own reconnect window", async () => {
+    // The turn says nothing between its drops, so no event ever marks
+    // progress: only the reopened stream tells one outage from the next.
+    const DROPS = 4;
+    const SILENCE_MS = 600_000;
+    let clock = 0;
+    let joins = 0;
+    const errors: ChatReconnectError[] = [];
+    const reconnecting: boolean[] = [];
+    const silentThenDropped = () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            clock += SILENCE_MS;
+            controller.error(new TypeError("Connection dropped"));
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method !== "GET") {
+            return response(0, 3);
+          }
+          joins += 1;
+          return joins < DROPS ? silentThenDropped() : response(3, undefined);
+        },
+        { preconnect: () => undefined },
+      ),
+      probe: async () => ({
+        type: "running",
+        turnId: "turn-rejoin",
+        runId: RUN_ID,
+      }),
+      onReconnectChange: (next) => {
+        reconnecting.push(next);
+      },
+      onTranscript: () => undefined,
+      onError: (error) => {
+        errors.push(error);
+      },
+      wait: async () => undefined,
+      random: () => 0,
+      now: () => clock,
+    });
+    const chunks = await collect(
+      transport.connection.connect([], undefined, undefined, {
+        threadId: THREAD_ID,
+        runId: RUN_ID,
+      }),
+    );
+    expect(chunks).toMatchObject(events);
+    expect(chunks).toHaveLength(events.length);
+    expect(errors).toEqual([]);
+    expect(joins).toBe(DROPS);
+    expect(reconnecting).toEqual(
+      Array.from({ length: DROPS }, () => [true, false]).flat(),
+    );
+  });
   test("loader lifecycle refreshes changed server truth once and retains the same parked turn", async () => {
     const parkedSnapshot = {
       resumeState: { threadId: THREAD_ID, runId: RUN_ID },

@@ -440,6 +440,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("request-lifetime.fixture.ts", [
     "request-lifetime/confine-request-reads",
   ]),
+  fixtureRuleOverride("no-literal-document-byte-limit.fixture.ts", [
+    "no-literal-document-byte-limit/no-literal-document-byte-limit",
+  ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
   ]),
@@ -2107,6 +2110,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-in-flow-viewport-popup.ts",
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
+    "./.oxlint-plugins/no-literal-document-byte-limit.ts",
     "./.oxlint-plugins/no-canonical-money-form-parse.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
@@ -4810,6 +4814,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-literal-minor-unit-scale/no-literal-minor-unit-scale": "error",
+      },
+    },
+    {
+      // The document limit is declared once in the API contract. A byte count
+      // equal to it anywhere else is a hand copy that stops agreeing when the
+      // limit moves; every app and package imports the constant instead.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-literal-document-byte-limit/no-literal-document-byte-limit":
+          "error",
       },
     },
     {

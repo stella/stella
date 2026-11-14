@@ -18,6 +18,7 @@ import {
 } from "@stll/api-contract";
 import {
   CASE_LAW_RESULT_DEPTH_MAX,
+  MULTIPART_DOCUMENT_MAX_BYTES,
   READER_PAGE_MAX_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
   READER_PROVISION_ANCHOR_MIN_CHARS,
@@ -29,6 +30,7 @@ import {
   UPLOAD_DOCUMENT_MAX_BYTES,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
+import { SSE_HEARTBEAT_INTERVAL_MS } from "@stll/api-contract/sse-heartbeat";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
@@ -314,10 +316,9 @@ export const LIMITS = {
     return MCP_RATE_LIMITS.gateway.max;
   },
   /** Silence an event stream may carry before it writes a comment frame. The
-   *  CDN and the load balancer in front of this service both cut a connection
-   *  after 60 s without a byte, so the interval leaves room for three writes
-   *  inside one of their windows. */
-  sseHeartbeatMs: 15_000,
+   *  contract owns the value: readers derive from it how long a stream may
+   *  stay silent before they hold it to be lost. */
+  sseHeartbeatMs: SSE_HEARTBEAT_INTERVAL_MS,
   /** How long an event stream may outlive the credential that opened it: the
    *  interval of the sweep that ends every stream whose session or other
    *  credential no longer holds. */
@@ -537,8 +538,11 @@ export const LIMITS = {
   searchHeadlineDocumentMaxChars: 2000,
   /** Maximum encrypted OCR page-geometry payload before AES-GCM overhead. */
   documentOcrPayloadMaxBytes: 16 * 1024 * 1024,
-  /** Maximum source PDF the local OCR provider will read and render. */
-  documentOcrSourceMaxBytes: 200 * 1024 * 1024,
+  /** Maximum source PDF the local OCR provider will read and render: every
+   *  stored PDF, so none is left without a text layer for being large. The
+   *  document-processing task holds one source and renders one page at a
+   *  time. */
+  documentOcrSourceMaxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
   /** Cursor page size for document- and matter-deletion OCR derivative
    *  cleanup. Also caps the storage keys recorded per cleanup request. */
   ocrDerivativeCleanupBatchSize: 1000,
@@ -986,17 +990,21 @@ export const LIMITS = {
    *  this so a send cannot load an unbounded history; sized well above the
    *  compaction trigger so a checkpointed thread's window is unaffected. */
   chatSendHistoryWindowMax: 500,
-  /** Max DOCX size for stamp injection (bytes). */
-  docxStampMaxBytes: 50 * 1024 * 1024,
-  /** Staged file bytes all in-flight upload finalizations of one API process
-   *  may hold at once. Finalizing reads, scans and may rewrite the whole file,
-   *  peaking near six copies, so this keeps a burst of large uploads well
-   *  inside the task's memory. A single file above it still runs alone. */
-  uploadFinalizeInFlightBytes: 150 * 1024 * 1024,
-  /** How long a finalization waits for that budget before it fails as
-   *  retryable. The wait comes before the upload is claimed, so it never
-   *  counts against the claim timeout. */
-  uploadFinalizeAdmissionWaitMs: 20_000,
+  /** Max DOCX size for stamp injection (bytes): every stored DOCX, so a
+   *  download is never left without its reference for being large. Stamping
+   *  rewrites the archive the same way finalizing an upload strips one. */
+  docxStampMaxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+  /** Stored document bytes the whole-file work of one API process may hold
+   *  at once: upload finalization, which reads, scans and may rewrite the
+   *  file (peaking near six copies), and list verification's whole-document
+   *  parse (about five). Exactly one maximum-size document, so the largest
+   *  file fits the budget alone and its peak bounds every mix of smaller ones:
+   *  about 1.2 GiB, inside the API container's share of the task. */
+  documentBytesInFlight: UPLOAD_DOCUMENT_MAX_BYTES,
+  /** How long whole-file work waits for that budget before it fails as
+   *  retryable. A finalization waits before the upload is claimed, so the wait
+   *  never counts against the claim timeout. */
+  documentBytesAdmissionWaitMs: 20_000,
   workPoolHeavySidecarSlots: 1,
   workPoolHeavySidecarBytes: 150 * 1024 * 1024,
   workPoolHeavySidecarMaxWaiters: 0,
@@ -1017,8 +1025,12 @@ export const LIMITS = {
 } as const;
 
 export const FILE_SIZE_LIMIT_BYTES = {
-  /** General document uploads (entities, templates). */
+  /** A stored document: a presigned upload, a download a tool fetches, and
+   *  the bound every reader of a stored file reads it under. */
   document: UPLOAD_DOCUMENT_MAX_BYTES,
+  /** A document sent as a multipart form field through the API, which reads
+   *  the form whole; larger documents use a presigned upload. */
+  multipartDocument: MULTIPART_DOCUMENT_MAX_BYTES,
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */

@@ -1,8 +1,13 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
+import {
+  SSE_HEARTBEAT_FRAME,
+  SSE_HEARTBEAT_INTERVAL_MS,
+  SSE_SILENCE_BOUND_MS,
+} from "@stll/api-contract/sse-heartbeat";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -840,6 +845,131 @@ describe("rejoining a turn", () => {
     expect(urls).toEqual([
       `https://stella.example.com/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/resume`,
     ]);
+  });
+});
+
+describe("a stream's liveness", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** A turn's stream the test writes to, joined by one request. */
+  const joinHeldStream = () => {
+    const encoder = new TextEncoder();
+    const requests: AbortSignal[] = [];
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let asked = Promise.withResolvers<undefined>();
+    const fetch: StreamFetch = async (_url, init) => {
+      requests.push(init.signal);
+      return new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            start(controller) {
+              stream = controller;
+              // Like a platform fetch, the body errors once its request is
+              // aborted.
+              init.signal.addEventListener("abort", () => {
+                controller.error(init.signal.reason);
+              });
+            },
+            // No queue of its own, so a pull is the app asking for bytes.
+            pull() {
+              asked.resolve(undefined);
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+      );
+    };
+    const events: ChatEvent[] = [];
+    const joined = joinChatTurn({
+      fetch,
+      lastEventId: undefined,
+      matterId: undefined,
+      onEvent: (event) => {
+        events.push(event);
+      },
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    return {
+      events,
+      joined,
+      requests,
+      /** The app has read all that was written and waits for more. */
+      waiting: async () => {
+        await asked.promise;
+      },
+      write: (text: string) => {
+        asked = Promise.withResolvers<undefined>();
+        stream?.enqueue(encoder.encode(text));
+      },
+      close: () => stream?.close(),
+    };
+  };
+
+  test("a turn silent for hours keeps its one stream while keep-alive frames arrive", async () => {
+    jest.useFakeTimers();
+    const turn = joinHeldStream();
+    await turn.waiting();
+    turn.write(sse(RUN_EVENTS.slice(0, 4)));
+    const beats = (4 * 60 * 60 * 1000) / SSE_HEARTBEAT_INTERVAL_MS;
+    for (let beat = 0; beat < beats; beat += 1) {
+      await turn.waiting();
+      jest.advanceTimersByTime(SSE_HEARTBEAT_INTERVAL_MS);
+      turn.write(SSE_HEARTBEAT_FRAME);
+    }
+    await turn.waiting();
+    turn.write(sse(RUN_EVENTS.slice(4), 5));
+    await turn.waiting();
+    turn.close();
+
+    const joined = await turn.joined;
+    expect(joined.isOk() ? joined.value : joined.error).toEqual({
+      lastEventId: String(RUN_EVENTS.length),
+    });
+    // The same events as a stream that arrives all at once.
+    const whole: ChatEvent[] = [];
+    await joinChatTurn({
+      fetch: async () => new Response(streamOf([sse(RUN_EVENTS)])),
+      lastEventId: undefined,
+      matterId: undefined,
+      onEvent: (event) => {
+        whole.push(event);
+      },
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    expect(whole.length).toBeGreaterThan(0);
+    expect(turn.events).toEqual(whole);
+    expect(turn.requests.map(({ aborted }) => aborted)).toEqual([false]);
+  });
+
+  test("a stream that falls silent breaks at the bound, keeping the last event id it read", async () => {
+    jest.useFakeTimers();
+    const turn = joinHeldStream();
+    await turn.waiting();
+    turn.write(sse(RUN_EVENTS.slice(0, 4)));
+    await turn.waiting();
+
+    // One millisecond short of the bound the app still waits.
+    jest.advanceTimersByTime(SSE_SILENCE_BOUND_MS - 1);
+    expect(turn.requests.map(({ aborted }) => aborted)).toEqual([false]);
+
+    jest.advanceTimersByTime(1);
+    const joined = await turn.joined;
+    expect(
+      Result.isError(joined)
+        ? [joined.error.error._tag, joined.error.lastEventId]
+        : joined.value,
+    ).toEqual(["ApiRequestError", "4"]);
+    // The connection is released, and a rejoin picks up after event 4.
+    expect(turn.requests.map(({ aborted }) => aborted)).toEqual([true]);
+    expect(textsOf(reduce(turn.events))).toEqual(["Checking the "]);
   });
 });
 

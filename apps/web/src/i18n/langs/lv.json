@@ -3030,7 +3030,6 @@
       "dropZone": "Ievelciet pilnvaru (.docx) šeit vai noklikšķiniet, lai izvēlētos failu",
       "extracting": "Iegūst pilnvarotāju(-us)…",
       "fileHint": "stella izlasa dokumentu un automātiski atrod pilnvaras devēju (personu, kas piešķir pilnvaru, nevis juristu). Pirms apstiprināšanas pārbaudiet rezultātu.",
-      "fileTooLarge": "Pilnvaras failam jābūt ne lielākam par 50 MB.",
       "invalidFileType": "Lūdzu, izvēlieties .docx failu.",
       "noOutorganteFound": "Šajā dokumentā neizdevās identificēt nevienu pilnvaras devēju.",
       "parseErrorGeneric": "No šī dokumenta neizdevās iegūt kontaktus.",
