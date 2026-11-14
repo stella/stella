@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: [cz-regional] recapture upgrades a document-only stored payload to the crawl's envelope; crawl and replay build decisions as before.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -82,7 +83,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   listingIdentityKey,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -1996,9 +1996,16 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "document" },
   },
   "document.styles": { disposition: "stored", target: { type: "document" } },
-  "document.metadata": legacyExcludedSourceField(
-    "the object holding the thirteen metadata keys below, each of which carries its own disposition",
-  ),
+  "document.metadata": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "document",
+      path: ["metadata"],
+      reason:
+        "The complete publisher metadata object is retained, including every currently unprojected key",
+    },
+  },
   "document.texts[].text": {
     disposition: "stored",
     target: { type: "document" },
@@ -2013,22 +2020,47 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.tableCellInfo": legacyExcludedSourceField(
-    "a paragraph's placement inside a table; every payload sampled states it as null, so the shape a non-null value would take is unstated and nothing can be read from it",
-  ),
+  "document.tableCellInfo": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "document",
+      path: [],
+      reason:
+        "Table-cell positions occur throughout the source sections; the complete original document retains null and future non-null shapes",
+    },
+  },
   "document.styles[].localId": {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.styles[].alignment": legacyExcludedSourceField(
-    "how the paragraph was aligned on the printed page; the document model carries the text and its emphasis, not its layout",
-  ),
-  "document.styles[].hasSpaceBefore": legacyExcludedSourceField(
-    "vertical spacing above the paragraph on the printed page, which the document model does not represent",
-  ),
-  "document.styles[].hasSpaceAfter": legacyExcludedSourceField(
-    "vertical spacing below the paragraph on the printed page, which the document model does not represent",
-  ),
+  "document.styles[].alignment": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "document",
+      path: ["styles", "*", "alignment"],
+      reason: "Original paragraph alignment values are retained",
+    },
+  },
+  "document.styles[].hasSpaceBefore": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "document",
+      path: ["styles", "*", "hasSpaceBefore"],
+      reason: "Original paragraph spacing flags are retained, including false",
+    },
+  },
+  "document.styles[].hasSpaceAfter": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "document",
+      path: ["styles", "*", "hasSpaceAfter"],
+      reason: "Original paragraph spacing flags are retained, including false",
+    },
+  },
   "document.styles[].bold": {
     disposition: "stored",
     target: { type: "document" },
