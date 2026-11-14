@@ -27,6 +27,8 @@ globalThis.fetch = Object.assign(
 
 const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
+// Load the real lazy renderer before assertions use its parsed Markdown.
+await import("@/components/ai-elements/message-response");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -428,15 +430,16 @@ test("opening a finished subagent shows what it was told, wrote and reported, re
   });
   // Formatted as the answer is: the emphasis is drawn, not its markers.
   const emphasis = await waitFor(() => {
-    const strong = region.querySelector("strong");
+    const strong = region.querySelector('[data-streamdown="strong"]');
     if (strong === null) {
       throw new Error("The conversation is not formatted yet");
     }
     return strong;
   });
   expect(emphasis.textContent).toBe("Reading");
+  // The entries themselves, not the lists a formatted entry may hold.
   const [prompt, message, report] = [
-    ...region.querySelectorAll(":scope > ol > li"),
+    ...(region.querySelector("ol")?.children ?? []),
   ].map((item) => item.textContent ?? "");
   expect(prompt).toBe(
     `${messages.chat.toolCall.localOutput.conversationPrompt}List every clause on arrears.`,
