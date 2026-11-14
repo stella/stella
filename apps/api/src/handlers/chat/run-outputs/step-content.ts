@@ -23,14 +23,14 @@ import {
   uploadUserFile,
   type UploadUserFileDependencies,
 } from "@/api/handlers/chat/upload-files";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { fileSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitLocalRunStepContentMetric } from "@/api/lib/observability/request-metrics";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
@@ -39,6 +39,12 @@ import {
   type RunOutputCaller,
   verifyRunCaller,
 } from "./upload";
+
+/** An image no step adopted could not be removed again; it stays until its thread goes. */
+const UNADOPTED_IMAGE_SINK = failureSink({
+  event: "chat.local_run_step_image_cleanup_failed",
+  expected: [],
+});
 
 /** Room a multipart body needs beyond the content itself. */
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
@@ -227,13 +233,7 @@ const storeImage = async ({
         workspaceId: thread.workspaceId,
       });
       if (Result.isError(removed)) {
-        captureError(
-          removed.error,
-          handlerErrorContext("chat.localRunStepContent.removeUnadoptedImage", {
-            stage: "local-run-step-image-cleanup",
-            userFileId: uploaded.id,
-          }),
-        );
+        observeFailure(removed.error, { sink: UNADOPTED_IMAGE_SINK });
       }
     }
     if (stored.isErr()) {

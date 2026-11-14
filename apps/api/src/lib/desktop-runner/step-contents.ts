@@ -106,7 +106,7 @@ const readStored = async (tx: Transaction, run: HeldRun, stepKey: string) =>
     await tx
       .select({
         kind: contents.kind,
-        state: contents.state,
+        state: contents.outcome,
         storedBytes: contents.storedBytes,
       })
       .from(contents)
@@ -175,7 +175,7 @@ export const storeStepText = async (
     const row = fits
       ? {
           kind,
-          state: stored,
+          outcome: stored,
           totalBytes,
           storedBytes,
           textEncrypted: sealed.ciphertext,
@@ -183,7 +183,7 @@ export const storeStepText = async (
         }
       : {
           kind,
-          state: runBudgetReached,
+          outcome: runBudgetReached,
           totalBytes,
           storedBytes: 0,
           textEncrypted: null,
@@ -208,7 +208,7 @@ export const storeStepText = async (
       .update(runs)
       .set({ stepContentTextBytes: withoutStep + row.storedBytes })
       .where(eq(runs.runId, runId));
-    return { type: "settled", state: row.state };
+    return { type: "settled", state: row.outcome };
   });
 };
 
@@ -241,7 +241,7 @@ export const recordStepTooLarge = async (
       runId,
       turnId: run.turnId,
       kind,
-      state: tooLarge,
+      outcome: tooLarge,
       totalBytes,
       storedBytes: 0,
     });
@@ -282,7 +282,7 @@ export const openStepImage = async (
       runId,
       turnId: run.turnId,
       kind: "image",
-      state: runBudgetReached,
+      outcome: runBudgetReached,
       totalBytes,
       storedBytes: 0,
     });
@@ -355,12 +355,12 @@ export const storeStepImage = async (
       kind: "image",
       ...(fits
         ? {
-            state: stored,
+            outcome: stored,
             totalBytes: sizeBytes,
             storedBytes: sizeBytes,
             userFileId,
           }
-        : { state: runBudgetReached, totalBytes: sizeBytes, storedBytes: 0 }),
+        : { outcome: runBudgetReached, totalBytes: sizeBytes, storedBytes: 0 }),
     });
     if (!fits) {
       return { type: "settled", state: runBudgetReached, adopted: false };
@@ -422,7 +422,7 @@ export const readStepContent = async (
     await db
       .select({
         kind: contents.kind,
-        state: contents.state,
+        state: contents.outcome,
         totalBytes: contents.totalBytes,
         storedBytes: contents.storedBytes,
         textEncrypted: contents.textEncrypted,

@@ -14,7 +14,7 @@ CREATE TABLE "chat_local_run_step_contents" (
   "run_id" uuid NOT NULL,
   "turn_id" uuid NOT NULL,
   "kind" text NOT NULL,
-  "state" text NOT NULL,
+  "outcome" text NOT NULL,
   "total_bytes" bigint NOT NULL,
   "stored_bytes" integer NOT NULL,
   "text_encrypted" bytea,
@@ -27,9 +27,9 @@ CREATE TABLE "chat_local_run_step_contents" (
   CONSTRAINT "chat_local_run_step_contents_user_file_fk" FOREIGN KEY ("user_file_id") REFERENCES "user_files"("id") ON DELETE cascade,
   CONSTRAINT "chat_local_run_step_contents_step_key_check" CHECK ("step_key" ~ '^[0-9a-f]{64}$'),
   CONSTRAINT "chat_local_run_step_contents_kind_check" CHECK ("kind" IN ('command','diff','conversation','image')),
-  CONSTRAINT "chat_local_run_step_contents_state_check" CHECK ("state" IN ('stored','too_large','run_budget_reached')),
+  CONSTRAINT "chat_local_run_step_contents_outcome_check" CHECK ("outcome" IN ('stored','too_large','run_budget_reached')),
   CONSTRAINT "chat_local_run_step_contents_bytes_check" CHECK ("total_bytes" >= 0 AND "stored_bytes" >= 0 AND "stored_bytes" <= "total_bytes"),
-  CONSTRAINT "chat_local_run_step_contents_content_check" CHECK (("text_encrypted" IS NULL) = ("text_iv" IS NULL) AND ("text_encrypted" IS NOT NULL) = ("state" = 'stored' AND "kind" <> 'image') AND ("user_file_id" IS NOT NULL) = ("state" = 'stored' AND "kind" = 'image') AND ("state" = 'stored' OR "stored_bytes" = 0))
+  CONSTRAINT "chat_local_run_step_contents_content_check" CHECK (("text_encrypted" IS NULL) = ("text_iv" IS NULL) AND ("text_encrypted" IS NOT NULL) = ("outcome" = 'stored' AND "kind" <> 'image') AND ("user_file_id" IS NOT NULL) = ("outcome" = 'stored' AND "kind" = 'image') AND ("outcome" = 'stored' OR "stored_bytes" = 0))
 );--> statement-breakpoint
 CREATE INDEX "chat_local_run_step_contents_turn_idx" ON "chat_local_run_step_contents" USING btree ("turn_id");--> statement-breakpoint
 CREATE INDEX "chat_local_run_step_contents_user_file_idx" ON "chat_local_run_step_contents" USING btree ("user_file_id") WHERE "user_file_id" IS NOT NULL;--> statement-breakpoint

@@ -114,33 +114,33 @@ chat_local_run_step_contents.step_key        varchar      not null          desk
 chat_local_run_step_contents.run_id          uuid         not null          desktop-runner.ts:486  The run whose step this is; its row may be gone.
 chat_local_run_step_contents.turn_id         uuid         fk,not null       desktop-runner.ts:488  The turn that produced the step.
 chat_local_run_step_contents.kind            text         not null          desktop-runner.ts:489
-chat_local_run_step_contents.state           text         not null          desktop-runner.ts:490
-chat_local_run_step_contents.total_bytes     bigint       not null          desktop-runner.ts:492  How many bytes the step produced, stored or not.
-chat_local_run_step_contents.stored_bytes    integer      not null          desktop-runner.ts:494  How many bytes are stored: a text's kept start, or the whole image.
-chat_local_run_step_contents.text_encrypted  bytea        null              desktop-runner.ts:496  The stored text, encrypted for the thread's organization.
-chat_local_run_step_contents.text_iv         bytea        null              desktop-runner.ts:498  The IV of `text_encrypted`; set with it.
-chat_local_run_step_contents.user_file_id    uuid         fk,null           desktop-runner.ts:500  The chat file a stored image is.
-chat_local_run_step_contents.created_at      timestamptz  default,not null  desktop-runner.ts:501
+chat_local_run_step_contents.outcome         text         not null          desktop-runner.ts:491  How the step's content settled: stored, or why it was not.
+chat_local_run_step_contents.total_bytes     bigint       not null          desktop-runner.ts:493  How many bytes the step produced, stored or not.
+chat_local_run_step_contents.stored_bytes    integer      not null          desktop-runner.ts:495  How many bytes are stored: a text's kept start, or the whole image.
+chat_local_run_step_contents.text_encrypted  bytea        null              desktop-runner.ts:497  The stored text, encrypted for the thread's organization.
+chat_local_run_step_contents.text_iv         bytea        null              desktop-runner.ts:499  The IV of `text_encrypted`; set with it.
+chat_local_run_step_contents.user_file_id    uuid         fk,null           desktop-runner.ts:501  The chat file a stored image is.
+chat_local_run_step_contents.created_at      timestamptz  default,not null  desktop-runner.ts:502
 ```
 
-## desktop_runner_folder_restores · `desktopRunnerFolderRestores` · desktop-runner.ts:572 · rls
+## desktop_runner_folder_restores · `desktopRunnerFolderRestores` · desktop-runner.ts:573 · rls
 
 A member's request to undo the file changes of a chat turn run on their computer: the chat's folder goes back to the checkpoint the run took before it started.
 
 ```text
-desktop_runner_folder_restores.id               uuid                not null          desktop-runner.ts:575
-desktop_runner_folder_restores.user_id          text                fk,not null       desktop-runner.ts:576
-desktop_runner_folder_restores.organization_id  safeOrganizationId  fk,not null       desktop-runner.ts:577
-desktop_runner_folder_restores.chat_thread_id   uuid                fk,not null       desktop-runner.ts:578
-desktop_runner_folder_restores.chat_turn_id     uuid                fk,not null       desktop-runner.ts:579
-desktop_runner_folder_restores.run_id           uuid                fk,not null       desktop-runner.ts:581  The run whose checkpoint the folder goes back to.
-desktop_runner_folder_restores.desktop_id       uuid                fk,not null       desktop-runner.ts:583  The run's computer and device key; only that socket is sent it.
-desktop_runner_folder_restores.device_jkt       text                fk,not null       desktop-runner.ts:584
-desktop_runner_folder_restores.state            text                not null          desktop-runner.ts:585
-desktop_runner_folder_restores.reason           text                null              desktop-runner.ts:587  Set with `refused`: why the computer refused it.
-desktop_runner_folder_restores.created_at       timestamptz         default,not null  desktop-runner.ts:588
-desktop_runner_folder_restores.expires_at       timestamptz         not null          desktop-runner.ts:590  A `queued` request not sent by then is never sent.
-desktop_runner_folder_restores.settled_at       timestamptz         null              desktop-runner.ts:592  When it was restored, refused or expired.
-desktop_runner_folder_restores.noted_run_id     uuid                fk,null           desktop-runner.ts:597  The latest run whose request carried the note that the folder went back; it is told once the computer accepts that run.
-desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:599  When an accepted run of the chat was told the folder went back.
+desktop_runner_folder_restores.id               uuid                not null          desktop-runner.ts:576
+desktop_runner_folder_restores.user_id          text                fk,not null       desktop-runner.ts:577
+desktop_runner_folder_restores.organization_id  safeOrganizationId  fk,not null       desktop-runner.ts:578
+desktop_runner_folder_restores.chat_thread_id   uuid                fk,not null       desktop-runner.ts:579
+desktop_runner_folder_restores.chat_turn_id     uuid                fk,not null       desktop-runner.ts:580
+desktop_runner_folder_restores.run_id           uuid                fk,not null       desktop-runner.ts:582  The run whose checkpoint the folder goes back to.
+desktop_runner_folder_restores.desktop_id       uuid                fk,not null       desktop-runner.ts:584  The run's computer and device key; only that socket is sent it.
+desktop_runner_folder_restores.device_jkt       text                fk,not null       desktop-runner.ts:585
+desktop_runner_folder_restores.state            text                not null          desktop-runner.ts:586
+desktop_runner_folder_restores.reason           text                null              desktop-runner.ts:588  Set with `refused`: why the computer refused it.
+desktop_runner_folder_restores.created_at       timestamptz         default,not null  desktop-runner.ts:589
+desktop_runner_folder_restores.expires_at       timestamptz         not null          desktop-runner.ts:591  A `queued` request not sent by then is never sent.
+desktop_runner_folder_restores.settled_at       timestamptz         null              desktop-runner.ts:593  When it was restored, refused or expired.
+desktop_runner_folder_restores.noted_run_id     uuid                fk,null           desktop-runner.ts:598  The latest run whose request carried the note that the folder went back; it is told once the computer accepts that run.
+desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:600  When an accepted run of the chat was told the folder went back.
 ```

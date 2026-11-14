@@ -487,7 +487,8 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     /** The turn that produced the step. */
     turnId: p.uuid("turn_id").notNull(),
     kind: p.text().notNull(),
-    state: p.text().notNull(),
+    /** How the step's content settled: stored, or why it was not. */
+    outcome: p.text().notNull(),
     /** How many bytes the step produced, stored or not. */
     totalBytes: p.bigint("total_bytes", { mode: "number" }).notNull(),
     /** How many bytes are stored: a text's kept start, or the whole image. */
@@ -542,8 +543,8 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
       sql`${table.kind} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_KINDS)})`,
     ),
     p.check(
-      "chat_local_run_step_contents_state_check",
-      sql`${table.state} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES)})`,
+      "chat_local_run_step_contents_outcome_check",
+      sql`${table.outcome} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES)})`,
     ),
     p.check(
       "chat_local_run_step_contents_bytes_check",
@@ -553,7 +554,7 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     // and a step that stored nothing holds neither.
     p.check(
       "chat_local_run_step_contents_content_check",
-      sql`(${table.textEncrypted} IS NULL) = (${table.textIv} IS NULL) AND (${table.textEncrypted} IS NOT NULL) = (${table.state} = 'stored' AND ${table.kind} <> 'image') AND (${table.userFileId} IS NOT NULL) = (${table.state} = 'stored' AND ${table.kind} = 'image') AND (${table.state} = 'stored' OR ${table.storedBytes} = 0)`,
+      sql`(${table.textEncrypted} IS NULL) = (${table.textIv} IS NULL) AND (${table.textEncrypted} IS NOT NULL) = (${table.outcome} = 'stored' AND ${table.kind} <> 'image') AND (${table.userFileId} IS NOT NULL) = (${table.outcome} = 'stored' AND ${table.kind} = 'image') AND (${table.outcome} = 'stored' OR ${table.storedBytes} = 0)`,
     ),
     ...ownerOnlyPolicies("chat_local_run_step_contents"),
   ],
