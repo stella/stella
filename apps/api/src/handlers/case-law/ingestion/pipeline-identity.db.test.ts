@@ -1887,8 +1887,11 @@ if (!databaseUrl || !runPostgresTests) {
     test("binds a legacy row before a listing-only preservation return", async () => {
       const publisherId = "listing-only-legacy-binding";
       const legacyUrl = "https://publisher.test/listing-only-legacy";
+      // A docket of its own: before the contract phase, the docket-only index
+      // refuses a second court's document-less row on the shared docket.
       const legacy = plainTextIngestionResult({
         ...decisionAt("Listing-only legacy", undefined),
+        caseNumber: "0T/77/2019",
         sourceUrl: legacyUrl,
       });
       (

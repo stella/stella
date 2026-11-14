@@ -233,34 +233,31 @@ const finishInsertedRowTx = async (
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };
 
-const reserveFallbackAliasesTx = async (
-  tx: Transaction,
-  {
-    write,
-    previous,
-  }: { write: DecisionRowWrite; previous?: DecisionRowWrite["existing"] },
+/** The fallback identity aliases a write reserves for its decision. */
+const fallbackAliasRows = (
+  write: DecisionRowWrite,
   decisionId: SafeId<"caseLawDecision">,
-) => {
-  const { sourceId } = write;
-  const { aliases } = decisionFallbackState({
+  previous?: DecisionRowWrite["existing"],
+) =>
+  decisionFallbackState({
     storage: write.storageIdentity,
     previous,
     persistedSourceDocumentId: write.persistedSourceDocumentId,
-  });
-  if (aliases.length === 0) {
+  }).aliases.map((identityKey) => ({
+    sourceId: write.sourceId,
+    identityKey,
+    decisionId,
+  }));
+
+/** Every reserved alias must name the decision that reserved it. */
+const confirmFallbackAliasOwnersTx = async (
+  tx: Transaction,
+  rows: ReturnType<typeof fallbackAliasRows>,
+) => {
+  const [first] = rows;
+  if (first === undefined) {
     return;
   }
-  // audit: skip - public corpus identity bookkeeping, not user activity
-  await tx
-    .insert(caseLawDecisionFallbackIdentities)
-    .values(
-      aliases.map((key) => ({
-        sourceId,
-        identityKey: key,
-        decisionId,
-      })),
-    )
-    .onConflictDoNothing();
   const owners = await tx
     .select({
       id: canonicalDecisionIdSql(caseLawDecisionFallbackIdentities.decisionId),
@@ -268,17 +265,59 @@ const reserveFallbackAliasesTx = async (
     .from(caseLawDecisionFallbackIdentities)
     .where(
       and(
-        eq(caseLawDecisionFallbackIdentities.sourceId, sourceId),
-        inArray(caseLawDecisionFallbackIdentities.identityKey, aliases),
+        eq(caseLawDecisionFallbackIdentities.sourceId, first.sourceId),
+        inArray(
+          caseLawDecisionFallbackIdentities.identityKey,
+          rows.map(({ identityKey }) => identityKey),
+        ),
       ),
     )
-    .limit(aliases.length);
+    .limit(rows.length);
   if (
-    owners.length !== aliases.length ||
-    owners.some(({ id }) => id !== decisionId)
+    owners.length !== rows.length ||
+    owners.some(({ id }) => id !== first.decisionId)
   ) {
     panic("Fallback alias reservation conflicts with its decision owner");
   }
+};
+
+/**
+ * Lock the write's fallback identity keys in a fixed order and read the
+ * decision that holds them now: the existing row a content or strong identity
+ * resolves to, or `IDENTITY_MOVED` when another decision took it since the
+ * plan read it.
+ */
+const lockFallbackWinnerTx = async (
+  tx: Transaction,
+  write: DecisionRowWrite,
+): Promise<
+  | { type: "moved" }
+  | { type: "settled"; existing: DecisionRowWrite["existing"] }
+> => {
+  const { sourceId, decisionId, existing } = write;
+  for (const identityKey of decisionStorageLockKeys(write.storageIdentity)) {
+    // db-await-in-loop: sorted strong aliases and weak evidence locks prevent inverse-order deadlocks.
+    await lockCaseLawFallbackIdentity({ tx, sourceId, identityKey });
+  }
+  if (
+    write.storageIdentity.type !== "content" &&
+    write.storageIdentity.type !== "strong"
+  ) {
+    return { type: "settled", existing };
+  }
+  const winner = await findFallbackDecisionTx(tx, write);
+  // A re-parse writes its own row, whose identity the new document may move.
+  if (write.inputProvenance.type === "stored" && winner === undefined) {
+    return { type: "settled", existing };
+  }
+  if (
+    existing !== undefined
+      ? winner?.id !== existing.id
+      : winner !== undefined && winner.id !== decisionId
+  ) {
+    return { type: "moved" };
+  }
+  return { type: "settled", existing: winner };
 };
 
 /**
@@ -295,32 +334,17 @@ const writeDecisionRow = async (
     const {
       sourceId,
       decisionId,
-      existing: plannedExisting,
       composition,
       composedSupplements,
       shape: { preservesExistingDetail },
       plan: { payloadColumns, replacedBlockAnchors, storedPayloadUnchanged },
       inputProvenance,
     } = write;
-    let existing = plannedExisting;
-    for (const identityKey of decisionStorageLockKeys(write.storageIdentity)) {
-      // db-await-in-loop: sorted strong aliases and weak evidence locks prevent inverse-order deadlocks.
-      await lockCaseLawFallbackIdentity({ tx, sourceId, identityKey });
+    const fallbackWinner = await lockFallbackWinnerTx(tx, write);
+    if (fallbackWinner.type === "moved") {
+      return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
     }
-    if (
-      write.storageIdentity.type === "content" ||
-      write.storageIdentity.type === "strong"
-    ) {
-      const winner = await findFallbackDecisionTx(tx, write);
-      if (
-        existing !== undefined
-          ? winner?.id !== existing.id
-          : winner !== undefined && winner.id !== decisionId
-      ) {
-        return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
-      }
-      existing = winner;
-    }
+    const { existing } = fallbackWinner;
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
       family: "case_law",
@@ -383,11 +407,14 @@ const writeDecisionRow = async (
         });
       }
 
-      await reserveFallbackAliasesTx(
-        tx,
-        { write, previous: existing },
-        existing.id,
-      );
+      const refreshedAliases = fallbackAliasRows(write, existing.id, existing);
+      if (refreshedAliases.length > 0) {
+        await tx
+          .insert(caseLawDecisionFallbackIdentities)
+          .values(refreshedAliases)
+          .onConflictDoNothing();
+        await confirmFallbackAliasOwnersTx(tx, refreshedAliases);
+      }
 
       if (payloadNeedsGuard) {
         // The row is locked by the update above, so what this reads is
@@ -463,7 +490,14 @@ const writeDecisionRow = async (
     }
 
     const insertedId = await insertDecisionRowTx(tx, write, slugLadder);
-    await reserveFallbackAliasesTx(tx, { write }, insertedId);
+    const insertedAliases = fallbackAliasRows(write, insertedId);
+    if (insertedAliases.length > 0) {
+      await tx
+        .insert(caseLawDecisionFallbackIdentities)
+        .values(insertedAliases)
+        .onConflictDoNothing();
+      await confirmFallbackAliasOwnersTx(tx, insertedAliases);
+    }
     if (composedSupplements.length > 0) {
       await markSupplementsMerged(tx, {
         sourceId,

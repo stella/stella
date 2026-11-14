@@ -18,6 +18,10 @@ const CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX =
   "case_law_decisions_source_case_lang_null_idx";
 const CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX =
   "case_law_decisions_source_document_idx";
+const CASE_LAW_DECISIONS_SOURCE_FALLBACK_CONTENT_IDX =
+  "case_law_decisions_source_fallback_content_idx";
+const CASE_LAW_DECISIONS_SOURCE_FALLBACK_IDENTITY_IDX =
+  "case_law_decisions_source_fallback_identity_idx";
 const CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX =
   "case_law_ingestion_failures_source_record_uidx";
 const CHAT_MESSAGES_ID_THREAD_UIDX = "chat_messages_id_thread_uidx";
@@ -85,6 +89,8 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   CASE_LAW_DECISIONS_SLUG_UIDX,
   CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
   CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  CASE_LAW_DECISIONS_SOURCE_FALLBACK_CONTENT_IDX,
+  CASE_LAW_DECISIONS_SOURCE_FALLBACK_IDENTITY_IDX,
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   CHAT_MESSAGES_ID_THREAD_UIDX,
   CHAT_TURNS_ORG_RUN_ID_UIDX,
@@ -254,6 +260,33 @@ export const LEGISLATION_UNIQUE_INDEXES = [
     isUnique: true,
     name: "legislation_documents_legacy_current_lang_idx",
     tableName: "legislation_documents",
+  },
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+})[];
+
+/** Unique fallback decision identities; the docket-only index they replace
+ *  retires in the contract release. */
+export const FALLBACK_DECISION_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261114200000_case_law_fallback_identity",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_fallback_identity_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_identity_key") WHERE "source_document_id" IS NULL AND "fallback_identity_key" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, fallback_identity_key) WHERE ((source_document_id IS NULL) AND (fallback_identity_key IS NOT NULL))",
+    isUnique: true,
+    name: "case_law_decisions_source_fallback_identity_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    introducedBy: "20261114200000_case_law_fallback_identity",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_fallback_content_idx" ON public."case_law_decisions" USING btree ("source_id", "fallback_content_hash") WHERE "source_document_id" IS NULL AND "fallback_content_hash" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, fallback_content_hash) WHERE ((source_document_id IS NULL) AND (fallback_content_hash IS NOT NULL))",
+    isUnique: true,
+    name: "case_law_decisions_source_fallback_content_idx",
+    tableName: "case_law_decisions",
   },
 ] as const satisfies readonly (OnlineIndexDeclaration & {
   introducedBy: OnlineStepIntroduction;
@@ -453,6 +486,7 @@ export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly (Omit<
   ...CLIENT_INVOICE_UNIQUE_INDEXES,
   ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   ...LEGISLATION_UNIQUE_INDEXES,
+  ...FALLBACK_DECISION_UNIQUE_INDEXES,
   ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),
 ];
 

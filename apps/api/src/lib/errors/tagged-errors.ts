@@ -366,6 +366,7 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   PUBLISHER_CITATIONS: "publisher-citations",
   PRIMARY_REFERENCE_TYPE: "primary-reference-type",
   SUPPLEMENT: "supplement",
+  FALLBACK_IDENTITY: "fallback-identity",
 } as const;
 
 export type UnpersistableDecisionField =

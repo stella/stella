@@ -190,7 +190,7 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
-  test("the online runner does not rebuild the obsolete docket-only fallback index", () => {
+  test("the online runner does not rebuild the retired docket-only fallback index", () => {
     expect(
       ONLINE_MIGRATION_INDEXES.some(
         ({ name }) => name === PREVIOUS_FALLBACK_DECISION_INDEX,
@@ -1478,8 +1478,8 @@ describe("online migrations", () => {
   });
 
   test("retires the docket-only fallback index after both decision replacements validate", async () => {
-    const harness = createHarness();
-    await runOnlineMigrations(harness.pool);
+    const harness = createHarness({ retiredIndexes: [] });
+    await runOnlineMigrations(harness.pool, { repairs: [] });
     const dropOffset = indexOfStatement(
       harness.statements,
       `DROP INDEX CONCURRENTLY IF EXISTS public."${PREVIOUS_FALLBACK_DECISION_INDEX}"`,

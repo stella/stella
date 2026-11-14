@@ -86,7 +86,7 @@ test(
       await db.transaction(async (tx) => await callback(asTestRaw(tx)));
     try {
       await assertProperty(
-        "fallback publication transition sequences preserve original UUID",
+        "all compatible fallback observation orders preserve the original publication UUID",
         fc.asyncProperty(
           fc.constantFrom(...INITIAL_STATES),
           sequence,
@@ -328,7 +328,7 @@ test(
       await db.transaction(async (tx) => await callback(asTestRaw(tx)));
     try {
       await assertProperty(
-        "fallback sibling transition sequences preserve each decision",
+        "generated fallback sequences preserve contradictory and different-document siblings",
         fc.asyncProperty(
           fc.constantFrom(...SIBLING_KINDS),
           fc.constantFrom(...SIBLING_STARTS),

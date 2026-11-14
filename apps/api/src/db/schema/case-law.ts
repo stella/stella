@@ -1605,9 +1605,7 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
 export const caseLawDecisionFallbackIdentities = p.pgTable(
   "case_law_decision_fallback_identities",
   {
-    sourceId: safeUuid<"caseLawSource">("source_id")
-      .notNull()
-      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
     identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
     // Canonical aliases resolve retired UUIDs, as for publisher identity reservations.
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
@@ -1618,6 +1616,13 @@ export const caseLawDecisionFallbackIdentities = p.pgTable(
       columns: [t.sourceId, t.identityKey],
       name: "case_law_decision_fallback_identities_pk",
     }),
+    p
+      .foreignKey({
+        name: "case_law_decision_fallback_identities_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
     p
       .index("case_law_decision_fallback_identities_decision_idx")
       .on(t.decisionId),

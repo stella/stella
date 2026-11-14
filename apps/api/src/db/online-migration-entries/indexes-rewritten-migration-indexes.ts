@@ -6,8 +6,8 @@ export default {
   id: "indexes-rewritten-migration-indexes",
   revision: 760,
   type: "indexes",
-  // Historical migration receipts remain valid; the obsolete fallback index
-  // is no longer a current requirement and the contract phase retires it.
+  // Historical migration receipts remain valid; the contract release retires
+  // the docket-only fallback index through its replacement.
   values: REWRITTEN_MIGRATION_INDEXES.filter(
     ({ name }) => name !== PREVIOUS_FALLBACK_DECISION_INDEX,
   ),

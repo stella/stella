@@ -58,6 +58,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // read only their organization's counter and object records.
   "organization_file_usage",
   "organization_file_objects",
+  // What local runs' steps produced: the gateway's owner connection writes a
+  // step with its run's budget; a scoped request reads it with its thread.
+  "chat_local_run_step_contents",
   // History written only by the record_agent_skill_revision trigger.
   "agent_skill_revisions",
   "search_document_preview_passages",
@@ -289,6 +292,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
+  // Court-qualified fallback identity keys are reserved with the decision row
+  // write by ingestion; request transactions never read them.
+  "case_law_decision_fallback_identities",
   // UUID retirement is ingestion-owned; request transactions cannot access it.
   "case_law_decision_aliases",
   // Retired publisher identities are ingestion repair state; request

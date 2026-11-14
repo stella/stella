@@ -4,11 +4,13 @@
 //! to that account, with a model its region offers and the dictation
 //! language. Audio and text are never logged or stored here.
 //!
-//! The choice is read again before every chunk; once it is no longer stella
-//! AI, or dictation is off, no further chunk is sent. When stella AI cannot
-//! transcribe and the speech model is installed, the dictation is
-//! transcribed on this computer instead: the more private destination. A
-//! dictation set to this computer never goes to stella AI.
+//! Each stretch of speech is uploaded as soon as the speaker pauses, through
+//! one [`CloudSession`] per dictation. The choice is read again before every
+//! chunk; once it is no longer stella AI, or dictation is off, no further
+//! chunk is sent. When stella AI cannot transcribe and the speech model is
+//! installed, the whole dictation is transcribed on this computer instead:
+//! the more private destination. A dictation set to this computer never goes
+//! to stella AI.
 
 #![cfg_attr(
   not(dictation),
@@ -23,7 +25,7 @@ use tauri::{AppHandle, Manager};
 use crate::{
   account::AccountRequest,
   dictation::{self, Failure},
-  dictation_audio::holds_speech,
+  dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, samples_in},
   dictation_cleanup::{self, dictation_account},
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
@@ -36,8 +38,9 @@ const STOPPED: &str = "dictation no longer goes to stella AI";
 const TIMED_OUT: &str = "stella AI transcription timed out";
 /// One chunk's upload and transcription.
 pub const CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
-/// Every chunk of one dictation together, account and model reads included.
-/// Past it the dictation falls back as any other failure does.
+/// Every request of one dictation together, account and model reads
+/// included; time spent waiting for the speaker's next stretch does not
+/// count. Past it the dictation falls back as any other failure does.
 pub const DEADLINE: Duration = Duration::from_secs(120);
 /// The account read, bounded as cleanup bounds it.
 const ACCOUNT_TIMEOUT: Duration = dictation_cleanup::TIMEOUT;
@@ -135,28 +138,14 @@ pub fn attempts(destination: Destination, local_installed: bool) -> Vec<Attempt>
   }
 }
 
-/// The text of the first attempt that produced one. Without any, a local
-/// dictation whose model is missing reports that; anything else reports the
+/// What a dictation reports once no attempt produced its text: a local
+/// dictation whose model is missing says so; anything else reports the
 /// failure of the destination the user chose.
-pub fn transcribe_with(
-  destination: Destination,
-  local_installed: bool,
-  mut cloud: impl FnMut() -> Option<String>,
-  mut local: impl FnMut() -> Option<String>,
-) -> Result<String, Failure> {
-  for attempt in attempts(destination, local_installed) {
-    let text = match attempt {
-      Attempt::Cloud => cloud(),
-      Attempt::Local => local(),
-    };
-    if let Some(text) = text {
-      return Ok(text);
-    }
-  }
+pub const fn failure(destination: Destination, local_installed: bool) -> Failure {
   match destination {
-    Destination::Local if !local_installed => Err(Failure::ModelMissing),
-    Destination::Local => Err(Failure::Transcription),
-    Destination::Cloud => Err(Failure::CloudTranscription),
+    Destination::Local if !local_installed => Failure::ModelMissing,
+    Destination::Local => Failure::Transcription,
+    Destination::Cloud => Failure::CloudTranscription,
   }
 }
 
@@ -182,11 +171,6 @@ pub fn wav(samples: &[f32], rate: u32) -> Vec<u8> {
     bytes.extend_from_slice(&value.to_le_bytes());
   }
   bytes
-}
-
-/// Samples in `millis` milliseconds at `rate`.
-const fn samples_in(millis: usize, rate: u32) -> usize {
-  millis * rate as usize / 1_000
 }
 
 /// The longest chunk: a second under the API's limit, so a container
@@ -222,21 +206,38 @@ fn quietest_cut(samples: &[f32], search: Range<usize>, window: usize) -> usize {
   quietest + window / 2
 }
 
+/// How far before the chunk limit a cut is looked for.
+fn cut_search(rate: u32) -> usize {
+  samples_in(CUT_SEARCH_MILLIS, rate).min(chunk_limit(rate) / 2)
+}
+
+/// Where audio longer than one chunk is cut: the quietest moment of the last
+/// seconds before the chunk limit, so the first piece always fits. `None`
+/// while the audio still fits one chunk. Recording cuts a stretch that grows
+/// this long the same way, so no stretch is longer than a chunk.
+pub fn cap_cut(samples: &[f32], rate: u32) -> Option<usize> {
+  let limit = chunk_limit(rate);
+  (samples.len() > limit).then(|| {
+    quietest_cut(
+      samples,
+      limit - cut_search(rate)..limit,
+      samples_in(QUIET_WINDOW_MILLIS, rate),
+    )
+  })
+}
+
 /// The pieces a dictation is uploaded in: each at most the chunk limit, cut
 /// at the quietest moment of the last seconds before it. A final piece too
 /// short to transcribe well joins the one before it when the two still fit
 /// the API's limit; otherwise the two are split again around their middle.
 pub fn chunk_bounds(samples: &[f32], rate: u32) -> Vec<Range<usize>> {
-  let limit = chunk_limit(rate);
   let window = samples_in(QUIET_WINDOW_MILLIS, rate);
-  let search = samples_in(CUT_SEARCH_MILLIS, rate).min(limit / 2);
+  let search = cut_search(rate);
   let mut bounds = Vec::new();
   let mut start = 0;
-  while samples.len() - start > limit {
-    let end = start + limit;
-    let cut = quietest_cut(samples, end - search..end, window);
-    bounds.push(start..cut);
-    start = cut;
+  while let Some(cut) = cap_cut(&samples[start..], rate) {
+    bounds.push(start..start + cut);
+    start += cut;
   }
   bounds.push(start..samples.len());
   let short_tail = bounds.len() >= 2
@@ -428,63 +429,110 @@ pub fn choose_model(
     })
 }
 
-async fn transcribe_chunks(
-  app: &AppHandle,
-  pieces: Vec<Vec<u8>>,
-  stored_model: Option<&str>,
-  language: Option<&str>,
-) -> Result<String, String> {
-  let offered = models(app).await?;
-  let choice =
-    choose_model(stored_model, &offered).ok_or_else(|| UNAVAILABLE.to_string())?;
-  if choice.replaces_stored {
-    dictation::adopt_cloud_model(app, &choice.model_id)?;
+/// `future`'s result within what is left of `budget`, which then loses the
+/// time the future took, whether it answered, failed or ran out.
+async fn spend<T>(
+  budget: &mut Duration,
+  future: impl Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+  if budget.is_zero() {
+    return Err(TIMED_OUT.to_string());
   }
-  let model_id = choice.model_id;
-  upload(
-    pieces,
-    DEADLINE,
-    || dictation::cloud_chosen(app),
-    |piece| {
-      let model_id = model_id.clone();
-      async move {
-        let account = cloud_account(app).await?;
-        let text = send_chunk(&account, piece, Some(&model_id), language).await;
-        drop(account);
-        text
-      }
-    },
-  )
-  .await
+  let started = tokio::time::Instant::now();
+  let result = within(*budget, TIMED_OUT, future).await;
+  *budget = budget.saturating_sub(started.elapsed());
+  result
 }
 
-/// The audio's text from stella AI, chunk by chunk within [`DEADLINE`], or
-/// an error that names no audio and no text.
-pub fn transcribe(
-  app: &AppHandle,
-  samples: &[f32],
-  rate: u32,
-  model_id: Option<&str>,
-  language: Option<&str>,
-) -> Result<String, String> {
-  let pieces = chunks(samples, rate)
-    .into_iter()
-    .map(|piece| wav(piece, rate))
-    .collect::<Vec<_>>();
-  if pieces
-    .iter()
-    .any(|piece| piece.len() > contract().max_audio_bytes)
-  {
-    return Err("dictation audio is larger than stella AI accepts".to_string());
+/// One dictation's way to stella AI. Every stretch is uploaded the way a
+/// whole recording once was: chunk by chunk, each within [`CHUNK_TIMEOUT`]
+/// and only while stella AI is still chosen. The model is chosen once, and
+/// all requests of the dictation together stay within [`DEADLINE`].
+pub struct CloudSession {
+  app: AppHandle,
+  stored_model: Option<String>,
+  language: Option<&'static str>,
+  model_id: Option<String>,
+  budget: Duration,
+}
+
+impl CloudSession {
+  pub const fn new(
+    app: AppHandle,
+    stored_model: Option<String>,
+    language: Option<&'static str>,
+  ) -> Self {
+    Self {
+      app,
+      stored_model,
+      language,
+      model_id: None,
+      budget: DEADLINE,
+    }
   }
-  if pieces.is_empty() {
-    return Ok(String::new());
+
+  /// The text of one stretch of 16 kHz audio, or an error that names no
+  /// audio and no text.
+  pub fn transcribe(&mut self, samples: &[f32]) -> Result<String, String> {
+    let pieces = chunks(samples, MODEL_SAMPLE_RATE)
+      .into_iter()
+      .map(|piece| wav(piece, MODEL_SAMPLE_RATE))
+      .collect::<Vec<_>>();
+    if pieces
+      .iter()
+      .any(|piece| piece.len() > contract().max_audio_bytes)
+    {
+      return Err("dictation audio is larger than stella AI accepts".to_string());
+    }
+    if pieces.is_empty() {
+      return Ok(String::new());
+    }
+    let mut budget = self.budget;
+    let text =
+      dictation_cleanup::bounded(DEADLINE, spend(&mut budget, self.send(pieces)));
+    self.budget = budget;
+    text.unwrap_or_else(|| {
+      self.budget = Duration::ZERO;
+      Err(TIMED_OUT.to_string())
+    })
   }
-  dictation_cleanup::bounded(
-    DEADLINE,
-    transcribe_chunks(app, pieces, model_id, language),
-  )
-  .unwrap_or_else(|| Err(TIMED_OUT.to_string()))
+
+  /// The stored model while the region still offers it, otherwise the
+  /// region's default, which then replaces the stored one.
+  async fn model(&mut self) -> Result<String, String> {
+    if let Some(model_id) = &self.model_id {
+      return Ok(model_id.clone());
+    }
+    let offered = models(&self.app).await?;
+    let choice = choose_model(self.stored_model.as_deref(), &offered)
+      .ok_or_else(|| UNAVAILABLE.to_string())?;
+    if choice.replaces_stored {
+      dictation::adopt_cloud_model(&self.app, &choice.model_id)?;
+    }
+    self.model_id = Some(choice.model_id.clone());
+    Ok(choice.model_id)
+  }
+
+  async fn send(&mut self, pieces: Vec<Vec<u8>>) -> Result<String, String> {
+    let model_id = self.model().await?;
+    let app = &self.app;
+    let language = self.language;
+    upload(
+      pieces,
+      DEADLINE,
+      || dictation::cloud_chosen(app),
+      |piece| {
+        let model_id = model_id.clone();
+        async move {
+          let account = cloud_account(app).await?;
+          let text = send_chunk(&account, piece, Some(&model_id), language).await;
+          drop(account);
+          text
+        }
+      },
+    )
+    .await
+  }
 }
 
 /// One model stella AI offers this organization.
@@ -580,18 +628,7 @@ mod tests {
   fn this_computer_never_falls_back_to_stella_ai() {
     assert_eq!(attempts(Destination::Local, true), vec![Attempt::Local]);
     assert_eq!(attempts(Destination::Local, false), vec![Attempt::Local]);
-    let mut cloud_calls = 0;
-    let result = transcribe_with(
-      Destination::Local,
-      true,
-      || {
-        cloud_calls += 1;
-        Some("cloud".to_string())
-      },
-      || None,
-    );
-    assert_eq!(result, Err(Failure::Transcription));
-    assert_eq!(cloud_calls, 0);
+    assert_eq!(failure(Destination::Local, true), Failure::Transcription);
   }
 
   #[test]
@@ -601,46 +638,75 @@ mod tests {
       vec![Attempt::Cloud, Attempt::Local]
     );
     assert_eq!(attempts(Destination::Cloud, false), vec![Attempt::Cloud]);
-    assert_eq!(
-      transcribe_with(Destination::Cloud, true, || None, || Some("local".into())),
-      Ok("local".to_string())
-    );
-    let mut local_calls = 0;
-    let result = transcribe_with(
-      Destination::Cloud,
-      false,
-      || None,
-      || {
-        local_calls += 1;
-        Some("local".to_string())
-      },
-    );
-    assert_eq!(result, Err(Failure::CloudTranscription));
-    assert_eq!(local_calls, 0);
-  }
-
-  #[test]
-  fn a_working_destination_answers_without_a_fallback() {
-    let mut local_calls = 0;
-    let result = transcribe_with(
-      Destination::Cloud,
-      true,
-      || Some("cloud".to_string()),
-      || {
-        local_calls += 1;
-        None
-      },
-    );
-    assert_eq!(result, Ok("cloud".to_string()));
-    assert_eq!(local_calls, 0);
+    for installed in [true, false] {
+      assert_eq!(
+        failure(Destination::Cloud, installed),
+        Failure::CloudTranscription
+      );
+    }
   }
 
   #[test]
   fn a_missing_model_is_reported_for_this_computer() {
-    assert_eq!(
-      transcribe_with(Destination::Local, false, || None, || None),
-      Err(Failure::ModelMissing)
-    );
+    assert_eq!(failure(Destination::Local, false), Failure::ModelMissing);
+  }
+
+  #[test]
+  fn recording_cuts_a_long_stretch_where_the_upload_would() {
+    let limit = chunk_limit(RATE);
+    let pause = limit - seconds(2.5);
+    let audio = speech(limit + seconds(20.0), &[pause], seconds(0.3));
+    assert_eq!(cap_cut(&audio[..limit], RATE), None);
+    let cut = cap_cut(&audio, RATE).unwrap();
+    assert_eq!(cut, chunk_bounds(&audio, RATE)[0].end);
+    assert!((pause..pause + seconds(0.3)).contains(&cut), "cut at {cut}");
+    // The cut reads only the audio before the limit, so how much more has
+    // arrived by the time it is taken never moves it.
+    assert_eq!(cap_cut(&audio[..=limit], RATE), Some(cut));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn the_dictation_budget_counts_only_time_spent_on_requests() {
+    let mut budget = DEADLINE;
+    for _ in 0..2 {
+      let answer = spend(&mut budget, async {
+        tokio::time::advance(Duration::from_secs(50)).await;
+        Ok("part")
+      })
+      .await;
+      assert_eq!(answer, Ok("part"));
+      // Waiting for the next stretch costs nothing.
+      tokio::time::advance(Duration::from_secs(300)).await;
+    }
+    assert_eq!(budget, Duration::from_secs(20));
+    let sent = AtomicUsize::new(0);
+    let late = spend(&mut budget, async {
+      sent.fetch_add(1, Ordering::SeqCst);
+      std::future::pending::<Result<&str, String>>().await
+    })
+    .await;
+    assert_eq!(late, Err(TIMED_OUT.to_string()));
+    assert!(budget.is_zero());
+    // Once the budget is gone nothing more is sent.
+    let after = spend(&mut budget, async {
+      sent.fetch_add(1, Ordering::SeqCst);
+      Ok("never")
+    })
+    .await;
+    assert_eq!(after, Err(TIMED_OUT.to_string()));
+    assert_eq!(sent.load(Ordering::SeqCst), 1);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_failed_request_still_spends_its_time() {
+    let mut budget = DEADLINE;
+    let failed = spend(&mut budget, async {
+      tokio::time::advance(Duration::from_secs(30)).await;
+      Err::<(), String>(FAILURE.to_string())
+    })
+    .await;
+    assert_eq!(failed, Err(FAILURE.to_string()));
+    assert_eq!(budget, Duration::from_secs(90));
   }
 
   #[test]
@@ -812,20 +878,6 @@ mod tests {
     assert_eq!(result, Err(STOPPED.to_string()));
     assert_eq!(sent.load(Ordering::SeqCst), 1);
     assert_eq!(checks.load(Ordering::SeqCst), 2);
-  }
-
-  #[test]
-  fn a_stopped_upload_falls_back_to_this_computer_only_with_its_model() {
-    // The upload stops once the choice changes; the dictation then follows
-    // the same fallback as any other stella AI failure.
-    assert_eq!(
-      transcribe_with(Destination::Cloud, true, || None, || Some("local".into())),
-      Ok("local".to_string())
-    );
-    assert_eq!(
-      transcribe_with(Destination::Cloud, false, || None, || Some("local".into())),
-      Err(Failure::CloudTranscription)
-    );
   }
 
   #[tokio::test]

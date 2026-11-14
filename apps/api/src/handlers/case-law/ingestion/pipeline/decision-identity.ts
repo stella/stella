@@ -420,6 +420,8 @@ type FindExistingDecisionOptions = Pick<
   exactClaimedDecisionId: SafeId<"caseLawDecision"> | undefined;
   /** The one decision the repair-only identities are reserved for, if any. */
   repairClaimedDecisionId: SafeId<"caseLawDecision"> | undefined;
+  /** The stored decision a re-parse writes; its row is the decision. */
+  storedDecisionId: SafeId<"caseLawDecision"> | undefined;
 };
 
 type StrongFallbackOptions = {
@@ -613,11 +615,13 @@ const findExistingDecisionTx = async (
     statedEcliIdentity,
     exactClaimedDecisionId: reservedExactClaimedDecisionId,
     repairClaimedDecisionId,
+    storedDecisionId,
   }: FindExistingDecisionOptions,
 ) => {
   let exactClaimedDecisionId = reservedExactClaimedDecisionId;
+  // A re-parse names its row: a document it restructures cannot move it.
   let provisionalClaimedDecisionId =
-    exactClaimedDecisionId ?? repairClaimedDecisionId;
+    exactClaimedDecisionId ?? repairClaimedDecisionId ?? storedDecisionId;
   let provisionalIdentified =
     provisionalClaimedDecisionId === undefined
       ? await findFallbackDecisionTx(tx, { sourceId, storageIdentity })
@@ -788,6 +792,8 @@ type ResolveDecisionIdentityOptions = ObservedDecision & {
   statedEcliIdentity: StatedEcliIdentity;
   /** The id a decision nothing stored yet is inserted under. */
   proposedDecisionId: SafeId<"caseLawDecision">;
+  /** The stored decision a re-parse writes, when the input is one. */
+  storedDecisionId?: SafeId<"caseLawDecision"> | undefined;
 };
 
 /**
@@ -811,6 +817,7 @@ export const resolveDecisionIdentityTx = async (
     sourceId,
     statedEcliIdentity,
     proposedDecisionId,
+    storedDecisionId,
   }: ResolveDecisionIdentityOptions,
 ) => {
   for (const identity of sourceIdentityCandidates) {
@@ -880,6 +887,7 @@ export const resolveDecisionIdentityTx = async (
       statedEcliIdentity,
       exactClaimedDecisionId,
       repairClaimedDecisionId,
+      storedDecisionId,
     });
   const decisionId = claimedDecisionId ?? existing?.id ?? proposedDecisionId;
   const existingIdentity = existing?.sourceDocumentId ?? undefined;

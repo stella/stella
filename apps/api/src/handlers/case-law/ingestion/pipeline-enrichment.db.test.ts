@@ -60,7 +60,7 @@ test("expansion enrichment preserves its row before post-contract sibling storag
         : undefined,
       sourceUrl,
       fulltext,
-      rawHash: `${sourceUrl}:${fulltext}`,
+      rawHash: `${sourceUrl}:${fulltext ?? ""}`,
       metadata: fulltext
         ? { publicationLabel: "first", detail: "published" }
         : { publicationLabel: "first" },

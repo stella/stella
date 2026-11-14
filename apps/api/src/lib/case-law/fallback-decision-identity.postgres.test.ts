@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
   absentDecisionTextFields,
@@ -18,9 +18,8 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-test.skipIf(!enabled)(
-  "fallback contract preserves rows and permits distinct court and content identities",
-  async () => {
+describe.skipIf(!enabled)("fallback decision identity (postgres)", () => {
+  test("fallback contract preserves rows and permits distinct court and content identities", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
       panic("PostgreSQL URL required for fallback identity test");
@@ -39,7 +38,7 @@ test.skipIf(!enabled)(
         const sourceId = Bun.randomUUIDv7();
         await client.unsafe(
           `INSERT INTO ${table} (id,source_id,case_number,country,court,language,decision_date)
-        VALUES ($1,$2,'104 C 16/2024','CZE','Okresní soud v Chrudimi','cs','2025-01-01')`,
+          VALUES ($1,$2,'104 C 16/2024','CZE','Okresní soud v Chrudimi','cs','2025-01-01')`,
           [Bun.randomUUIDv7(), sourceId],
         );
         const before = await client.unsafe(
@@ -47,7 +46,7 @@ test.skipIf(!enabled)(
         );
         const migration = await Bun.file(
           new URL(
-            "../../../drizzle/20261114120000_case_law_fallback_identity/migration.sql",
+            "../../../drizzle/20261114200000_case_law_fallback_identity/migration.sql",
             import.meta.url,
           ),
         ).text();
@@ -103,7 +102,7 @@ test.skipIf(!enabled)(
         );
         for (const { indexname } of docketIndexes) {
           if (typeof indexname !== "string") {
-            return panic("Fixture index name missing");
+            panic("Fixture index name missing");
           }
           // db-await-in-loop: concurrent DDL must run outside transactions, one index at a time.
           await client.unsafe(
@@ -141,7 +140,7 @@ test.skipIf(!enabled)(
           }).columns;
           await client.unsafe(
             `INSERT INTO ${table} (id,source_id,case_number,country,court,language,decision_date,decision_type,fallback_identity_key,fallback_cohort_key,fallback_content_hash)
-            VALUES ($1,$2,'0Pu/1/2025','SVK',$3,'sk',$4,'Uznesenie',$5,$6,$7)`,
+              VALUES ($1,$2,'0Pu/1/2025','SVK',$3,'sk',$4,'Uznesenie',$5,$6,$7)`,
             [
               Bun.randomUUIDv7(),
               sourceId,
@@ -182,5 +181,5 @@ test.skipIf(!enabled)(
         await client.unsafe(`DROP SCHEMA "${schema}" CASCADE`);
       }
     });
-  },
-);
+  });
+});
