@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 100,
+    "count": 98,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -19,12 +19,10 @@
       "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
       "apps/api/src/lib/buffer-intent-reconciliation.ts": 5,
       "apps/api/src/lib/chat/thread-compaction.ts": 1,
-      "apps/api/src/lib/document-processing-ocr-result.ts": 1,
       "apps/api/src/lib/document-translation/run-queue.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 3,
       "apps/api/src/lib/errors/tagged-errors.ts": 3,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
       "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": 1,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 1,
       "apps/api/src/lib/legal-search/sk-document-backfill.ts": 2,
