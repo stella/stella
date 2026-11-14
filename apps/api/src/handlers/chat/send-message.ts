@@ -2939,8 +2939,9 @@ export const createSendMessage = (
         } = acceptedTurnResult.value;
         // From here the member's message and its turn are stored, so every
         // answer names the turn, a refusal included: a client then knows
-        // from the response alone that the thread holds what it sent. The
-        // run's own response carries the header itself.
+        // from the response alone that the thread holds what it sent. A
+        // stream refused before it opens (`ChatTurnFailureResponse`) gets the
+        // header from here too.
         set.headers[CHAT_TURN_ID_HEADER] = turnExecution.id;
 
         const skillBindingScope = yield* Result.await(
@@ -3741,7 +3742,6 @@ export const createSendMessage = (
           }),
         );
 
-        Reflect.deleteProperty(set.headers, CHAT_TURN_ID_HEADER);
         return Result.ok(response);
       } finally {
         await lifecycle.cleanup();
