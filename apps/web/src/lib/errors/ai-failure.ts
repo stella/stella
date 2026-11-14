@@ -28,7 +28,6 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.local_runner_limit_reached]:
     "chat.localRun.errorLimitReached",
   [AI_FAILURE_CODES.local_runner_unavailable]: "chat.localRun.errorUnavailable",
-  // The same refusal as a turn the API finds too long before it starts.
   [AI_FAILURE_CODES.local_runner_turn_too_large]:
     "chat.localRun.refusalTooLarge",
   [AI_FAILURE_CODES.local_runner_not_reached]: "chat.localRun.errorNotReached",

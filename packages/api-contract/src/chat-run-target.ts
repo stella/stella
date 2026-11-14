@@ -208,8 +208,6 @@ export const CHAT_LOCAL_RUN_REFUSAL = {
   approvalsUnavailable: "local_run_approvals_unavailable",
   /** The organization does not let a run go that far without asking. */
   approvalsAboveLimit: "local_run_approvals_above_limit",
-  /** The turn does not fit what one run may carry. */
-  tooLarge: "local_run_too_large",
   /** A turn cannot both run in the agent sandbox and on a computer. */
   conflictingRunMode: "local_run_conflicting_run_mode",
   /**

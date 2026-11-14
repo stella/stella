@@ -688,19 +688,19 @@ describe("PostHog browser analytics adapter", () => {
     ).toBe(true);
   });
 
-  test.each([
-    CHAT_LOCAL_RUN_REFUSAL.tooLarge,
-    CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode,
-  ])("keeps the local run refusal %s the composer should prevent", (code) => {
-    expect(
-      isNoiseException(
-        exceptionEvent(
-          { type: "StreamReadError", value: "x" },
-          { error_status: 409, error_code: code },
+  test.each([CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode])(
+    "keeps the local run refusal %s the composer should prevent",
+    (code) => {
+      expect(
+        isNoiseException(
+          exceptionEvent(
+            { type: "StreamReadError", value: "x" },
+            { error_status: 409, error_code: code },
+          ),
         ),
-      ),
-    ).toBe(false);
-  });
+      ).toBe(false);
+    },
+  );
 
   test.each([
     ["a server error", { type: "ApiError", value: "x" }, { error_status: 500 }],
