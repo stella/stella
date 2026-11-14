@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 
 import { InlineRenameInput } from "../inline-rename";
@@ -22,7 +22,7 @@ const sibling = params.get("sibling") === "true";
 const longTitle = rtl ? "مراجعة العقد" : "Contract review";
 const initialTitle = sibling ? "003" : longTitle;
 
-const wrapInSiblingRow = (field: ReactNode) =>
+const wrapInSiblingRow = (field: ReactElement) =>
   sibling ? (
     <span data-sibling-row>
       <span data-sibling>Test</span>

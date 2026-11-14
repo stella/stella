@@ -38,6 +38,11 @@ for (const scenario of [
   { name: "narrow", query: "", width: 320 },
   { name: "Arabic RTL", query: "?rtl=true", width: 900 },
   { name: "mirror fallback", query: "?fallback=true", width: 900 },
+  {
+    name: "a title shorter than the floor",
+    query: "?sibling=true",
+    width: 900,
+  },
 ]) {
   test(`preserves title geometry, typography and selection on ${scenario.name}`, async ({
     page,

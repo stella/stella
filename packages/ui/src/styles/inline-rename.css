@@ -54,6 +54,10 @@
     position: static;
     field-sizing: content;
     inline-size: auto;
+    /* The mirror reserves the floor; the input hugs its text so opening a
+       short title does not widen or move it. */
+    min-inline-size: 0;
+    justify-self: start;
   }
 }
 
