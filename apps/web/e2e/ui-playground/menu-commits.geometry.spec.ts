@@ -26,32 +26,33 @@ const BENCHES = Object.keys(menuCommitBenches).filter(
 );
 
 /**
- * The commits each menu takes to open and to close today, each measured on a
- * newly loaded page: a menu measured after another inherits its focus and
- * its warm tooltip, and commits differently. The counts were the same in the
- * three projects of the suite, so they are the budget with no headroom; the
- * one exception is the tooltip menu opened by keyboard, which took 21 in some
- * projects and 22 in others. The primitive is the floor, which the shared
- * menu adds nothing to. Closing is always by Escape, which returns focus to
- * the trigger: there the tooltip opens, and that is the difference between
- * `tooltip` and `tooltip-quiet-on-focus`.
+ * The most commits each menu may take to open and to close: the highest
+ * count measured, plus one. The margin is one commit of run-to-run
+ * variation (the tooltip menu opened by keyboard took 21 in some projects
+ * and 22 in others); a real regression, a new store write or effect per
+ * open or close, takes more than that. Each menu is measured on a newly
+ * loaded page: one measured after another inherits its focus and its warm
+ * tooltip, and commits differently. The primitive is the floor, which the
+ * shared menu adds nothing to. Closing is always by Escape, which returns
+ * focus to the trigger: there the tooltip opens, and that is the difference
+ * between `tooltip` and `tooltip-quiet-on-focus`.
  */
 const COMMIT_BUDGET = {
   pointer: {
-    primitive: { open: 11, close: 6 },
-    plain: { open: 11, close: 6 },
-    tooltip: { open: 12, close: 15 },
-    "tooltip-quiet-on-focus": { open: 12, close: 7 },
-    radio: { open: 11, close: 6 },
-    many: { open: 12, close: 6 },
+    primitive: { open: 12, close: 7 },
+    plain: { open: 12, close: 7 },
+    tooltip: { open: 13, close: 16 },
+    "tooltip-quiet-on-focus": { open: 13, close: 8 },
+    radio: { open: 12, close: 7 },
+    many: { open: 13, close: 7 },
   },
   keyboard: {
-    primitive: { open: 10, close: 6 },
-    plain: { open: 10, close: 6 },
-    tooltip: { open: 22, close: 15 },
-    "tooltip-quiet-on-focus": { open: 11, close: 6 },
-    radio: { open: 10, close: 6 },
-    many: { open: 10, close: 6 },
+    primitive: { open: 11, close: 7 },
+    plain: { open: 11, close: 7 },
+    tooltip: { open: 23, close: 16 },
+    "tooltip-quiet-on-focus": { open: 12, close: 7 },
+    radio: { open: 11, close: 7 },
+    many: { open: 11, close: 7 },
   },
 } as const satisfies Record<
   "pointer" | "keyboard",
