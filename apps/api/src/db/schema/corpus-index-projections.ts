@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   corpusIndexProjectionAppendIsUnblocked,
+  corpusIndexProjectionAppendIsUnproven,
   corpusIndexProjectionErasureIsPending,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionIsBlocked,
@@ -62,6 +63,13 @@ export const corpusIndexProjectionIntents = p.pgTable(
     leaseExpiresAt: timestamptz("lease_expires_at"),
     appendStartedAt: timestamptz("append_started_at"),
     appendRequestRevisionCount: p.integer("append_request_revision_count"),
+    /**
+     * NDJSON bytes this revision sends to the engine, every part included,
+     * recorded when its append starts. Null on rows started before the column
+     * existed; the unproven-byte budget counts those at their request's
+     * ceiling.
+     */
+    appendBytes: p.integer("append_bytes"),
     appendCommittedAt: timestamptz("append_committed_at"),
     expectedDocumentCount: p.integer("expected_document_count"),
     appliedAt: timestamptz("applied_at"),
@@ -187,6 +195,13 @@ export const corpusIndexProjectionIntents = p.pgTable(
       .index("corpus_index_projection_intents_proof_idx")
       .on(t.family, t.generation, t.indexId, t.appendPublishBarrierAt)
       .where(sql`${t.status} = 'append_committed'`),
+    // An index's unproven appends, which the byte budget sums. It also
+    // serves the prover's claim: a started revision has no barrier yet, so
+    // it sorts after every claimable one.
+    p
+      .index("corpus_index_projection_intents_unproven_idx")
+      .on(t.family, t.generation, t.indexId, t.appendPublishBarrierAt)
+      .where(corpusIndexProjectionAppendIsUnproven(t.status)),
     p.check(
       "corpus_index_projection_intents_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,

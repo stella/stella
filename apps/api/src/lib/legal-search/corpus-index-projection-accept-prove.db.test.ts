@@ -37,6 +37,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-prover";
 import {
   type AcceptedCorpusProjectionAppendProof,
+  CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
   type CorpusProjectionProofTiming,
   proveAcceptedCorpusProjectionAppendsTx,
   recordAcceptedCorpusProjectionAppendsTx,
@@ -463,6 +464,7 @@ const applyCommand = async (run: ModelRun, next: Command) => {
             payloadReadConcurrency: 2,
             retryDelayMs: 5000,
             payloadRetryLimit: 3,
+            unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
             proofAfterIndexId: null,
             payloadReader: async () => Result.ok(PAYLOAD),
           }),
@@ -1163,6 +1165,7 @@ const appendCycle = async (
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
     proofAfterIndexId: null,
     payloadReader: async () => Result.ok(PAYLOAD),
   });

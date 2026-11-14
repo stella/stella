@@ -67,6 +67,16 @@ export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
   "applied",
 ] as const satisfies readonly CorpusIndexIntentStatus[];
 
+/**
+ * Append phases whose documents the engine may hold without a proof that they
+ * are published: a request in flight, or one accepted and not yet proven.
+ * Their bytes count against an index's unproven-byte budget.
+ */
+export const CORPUS_INDEX_UNPROVEN_APPEND_INTENT_STATUSES = [
+  "append_started",
+  "append_committed",
+] as const satisfies readonly CorpusIndexIntentStatus[];
+
 /** Append phases whose published document count must already be known. */
 export const CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES = [
   "append_committed",

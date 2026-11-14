@@ -22,7 +22,10 @@ import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/
 import { CORPUS_PROJECTION_APPEND_COMMIT_MODE } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
-import { CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
+  CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
+} from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -189,6 +192,7 @@ const runLegislationCycle = async ({
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
     proofAfterIndexId: null,
     payloadReader: async () => Result.ok({ text, ast: null }),
   });
@@ -251,6 +255,7 @@ const runCycle = async (
     payloadReadConcurrency: 4,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
     proofAfterIndexId: null,
   });
 

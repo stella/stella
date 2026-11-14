@@ -40,6 +40,7 @@ import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpu
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   classifyCorpusProjectionReservationFailureTx,
+  CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
   reserveCorpusProjectionIntentsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { CORPUS_TRANSFER_MAX_BYTES } from "@/api/lib/legal-search/corpus-storage";
@@ -182,6 +183,7 @@ test("unreadable payloads are persisted as they are read, not once the batch dra
     payloadReadConcurrency: READ_CONCURRENCY,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
     proofAfterIndexId: null,
   });
 

@@ -42,7 +42,10 @@ import {
   lockRegisteredCorpusProjectionManifestForMutation,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
+  CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+  CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  corpusProjectionAppendIngestBudgetMs,
   type CorpusProjectionPresenceCensus,
   type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -60,6 +63,7 @@ import {
   indexIdForCorpusProjectionWorkScope,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
+  corpusIndexProjectionAppendIsUnproven,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionProducesAppend,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -90,6 +94,12 @@ type ReserveCorpusProjectionIntentsOptions<Family extends CorpusFamily> =
     generation: string;
     limit: number;
     leaseMs: number;
+    /**
+     * Indexes over their unproven-byte budget
+     * (`readBackpressuredCorpusProjectionIndexesTx`): their work stays
+     * unreserved, so no payload is read for an append that cannot start.
+     */
+    backpressuredIndexIds?: readonly string[];
     /** Deterministic database-test clock; production expiry uses PostgreSQL. */
     testNow?: Date;
     newIntentId?: () => ProjectionIntentId;
@@ -158,6 +168,7 @@ export const reserveCorpusProjectionIntentsTx = async <
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
     scope = CORPUS_PROJECTION_GENERATION_SCOPE,
+    backpressuredIndexIds = [],
     testNow,
     newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
     newLeaseToken = () => Bun.randomUUIDv7(),
@@ -172,7 +183,10 @@ export const reserveCorpusProjectionIntentsTx = async <
     generation,
   );
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
-  const excludedIndexIds = await unattestedCorpusIndexIdsTx(tx, manifest);
+  const excludedIndexIds = [
+    ...(await unattestedCorpusIndexIdsTx(tx, manifest)),
+    ...backpressuredIndexIds,
+  ];
   if (scopedIndexId !== null && excludedIndexIds.includes(scopedIndexId)) {
     return [];
   }
@@ -467,6 +481,124 @@ const attestedAtAppendStart = (unattestedIndexIds: readonly string[]) =>
     ? undefined
     : notInArray(corpusIndexProjectionIntents.indexId, [...unattestedIndexIds]);
 
+/** A budget below one full request would hold every request back. */
+export const CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MIN =
+  CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES;
+export const CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX = 1024 ** 4;
+
+/**
+ * The most bytes of started or accepted, not yet proven appends one index may
+ * hold before a cycle stops reserving and starting appends for it. The engine
+ * keeps accepted documents in a write-ahead queue until a commit publishes
+ * them, so the budget is a property of the engine deployment, not of the
+ * generation, and the caller supplies it.
+ */
+export const validateCorpusProjectionUnprovenBytesBudget = (
+  unprovenBytesBudget: number,
+): number => {
+  if (
+    !Number.isSafeInteger(unprovenBytesBudget) ||
+    unprovenBytesBudget < CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MIN ||
+    unprovenBytesBudget > CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX
+  ) {
+    return panic(
+      `Corpus projection unproven-byte budget must be an integer from ${CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MIN} to ${CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX} bytes`,
+    );
+  }
+  return unprovenBytesBudget;
+};
+
+/**
+ * What one unproven revision counts against its index's budget. A revision
+ * started by this release records the bytes it sends. One started by the
+ * previous release records none and counts at the most it can have sent: a
+ * revision that shared its request was a single part no larger than the
+ * request, and one sent alone may have gone in parts up to the revision
+ * ceiling. Every row counts at least what it sent, so the sum never
+ * undercounts, whichever of a request's rows are still unproven.
+ */
+const unprovenAppendBytes = sql`COALESCE(
+  ${corpusIndexProjectionIntents.appendBytes},
+  ${sqlCaseFragment({
+    branches: [
+      sql`WHEN ${corpusIndexProjectionIntents.appendRequestRevisionCount} > 1 THEN ${CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES}::integer`,
+    ],
+    fallback: sql`${CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES}::integer`,
+  })}
+)`;
+
+type ReadBackpressuredCorpusProjectionIndexesOptions = {
+  manifest: CorpusIndexManifest;
+  /** The indexes to read, or null for every index of the generation. */
+  indexIds: readonly string[] | null;
+  unprovenBytesBudget: number;
+  testNow?: Date | undefined;
+};
+
+export type BackpressuredCorpusProjectionIndex = {
+  indexId: string;
+  unprovenBytes: number;
+  /**
+   * Until the earliest of the index's unproven revisions can leave the
+   * budget: an accepted one once its stored barrier lets a proof apply it,
+   * a started one once its request has certainly ended.
+   */
+  retryDelayMs: number;
+};
+
+/**
+ * The indexes whose unproven appends have reached the budget. Reservation
+ * leaves their work unreserved, and a request to one of them does not start.
+ * Plain reads: concurrent starts that have not committed are not counted, so
+ * each concurrent chain can start at most one request beyond the budget.
+ */
+export const readBackpressuredCorpusProjectionIndexesTx = async (
+  tx: Transaction,
+  {
+    manifest,
+    indexIds,
+    unprovenBytesBudget,
+    testNow,
+  }: ReadBackpressuredCorpusProjectionIndexesOptions,
+): Promise<BackpressuredCorpusProjectionIndex[]> => {
+  const budget =
+    validateCorpusProjectionUnprovenBytesBudget(unprovenBytesBudget);
+  if (indexIds?.length === 0) {
+    return [];
+  }
+  const now = testNow ?? sql<Date>`clock_timestamp()`;
+  const unprovenBytes = sql<number>`sum(${unprovenAppendBytes})`;
+  const releasedAt = sql`min(COALESCE(
+    ${corpusIndexProjectionIntents.appendPublishBarrierAt},
+    ${corpusIndexProjectionIntents.appendStartedAt}
+      + ${corpusProjectionAppendIngestBudgetMs(manifest)}::double precision * interval '1 millisecond'
+  ))`;
+  return await tx
+    .select({
+      indexId: corpusIndexProjectionIntents.indexId,
+      unprovenBytes: sql<number>`${unprovenBytes}::float8`.mapWith(Number),
+      retryDelayMs: sql<number>`GREATEST(
+        ${CORPUS_PROJECTION_RETRY_MIN_MS}::float8,
+        ceil(extract(epoch FROM ${releasedAt} - ${now}::timestamptz) * 1000)
+      )::float8`.mapWith(Number),
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, manifest.family),
+        eq(corpusIndexProjectionIntents.generation, manifest.generation),
+        indexIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionIntents.indexId, [...indexIds]),
+        corpusIndexProjectionAppendIsUnproven(
+          corpusIndexProjectionIntents.status,
+        ),
+      ),
+    )
+    .groupBy(corpusIndexProjectionIntents.indexId)
+    .having(sql`${unprovenBytes} >= ${budget}`);
+};
+
 type StartCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
@@ -592,21 +724,51 @@ export type CorpusProjectionAppendStart = {
   status: "started" | "stale_cancelled" | "lease_lost";
 };
 
+/** One revision of a physical append request, with what it sends. */
+export type CorpusProjectionAppendRequestRevision = {
+  lease: CorpusProjectionIntentLease;
+  /** NDJSON bytes the revision sends to the engine, every part included. */
+  appendBytes: number;
+};
+
 type StartCorpusProjectionAppendBatchOptions = {
-  leases: readonly CorpusProjectionIntentLease[];
+  /** The revisions of one request, so of one index. */
+  revisions: readonly CorpusProjectionAppendRequestRevision[];
+  unprovenBytesBudget: number;
   testNow?: Date;
 };
+
+/**
+ * Whether a request passed its index's unproven-byte budget. A backpressured
+ * request wrote nothing: its revisions are still reserved under their leases.
+ */
+export type CorpusProjectionAppendBatchStart =
+  | { status: "admitted"; starts: CorpusProjectionAppendStart[] }
+  | ({ status: "backpressured" } & Omit<
+      BackpressuredCorpusProjectionIndex,
+      "indexId"
+    >);
 
 /**
  * Fence one physical append request and give every included revision one DB
  * timestamp after all state locks are held. Recovery can therefore anchor its
  * unknown-outcome barrier to the actual request boundary, not to an earlier
  * per-revision lock wait.
+ *
+ * The request starts only while its index's unproven appends are below the
+ * budget, read after the generation fence that every start joins. Each
+ * revision records the bytes it sends, which count against the budget until
+ * a proof applies it or cleanup takes it.
  */
 export const startCorpusProjectionAppendBatchTx = async (
   tx: Transaction,
-  { leases, testNow }: StartCorpusProjectionAppendBatchOptions,
-): Promise<CorpusProjectionAppendStart[]> => {
+  {
+    revisions,
+    unprovenBytesBudget,
+    testNow,
+  }: StartCorpusProjectionAppendBatchOptions,
+): Promise<CorpusProjectionAppendBatchStart> => {
+  const leases = revisions.map(({ lease }) => lease);
   const first = leases.at(0);
   if (
     first === undefined ||
@@ -620,12 +782,26 @@ export const startCorpusProjectionAppendBatchTx = async (
     intentIds.size !== leases.length ||
     entityIds.size !== leases.length ||
     leases.some(
-      ({ family, generation }) =>
-        family !== first.family || generation !== first.generation,
+      ({ family, generation, indexId }) =>
+        family !== first.family ||
+        generation !== first.generation ||
+        indexId !== first.indexId,
     )
   ) {
     return panic(
-      "Corpus projection append-start leases must be unique and scoped",
+      "Corpus projection append-start leases must be unique and name one index",
+    );
+  }
+  if (
+    revisions.some(
+      ({ appendBytes }) =>
+        !Number.isSafeInteger(appendBytes) ||
+        appendBytes < 1 ||
+        appendBytes > CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+    )
+  ) {
+    return panic(
+      `Corpus projection append bytes must be an integer from 1 to ${CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES}`,
     );
   }
   const manifest = await lockActiveCorpusProjectionManifestForMutation(
@@ -633,6 +809,21 @@ export const startCorpusProjectionAppendBatchTx = async (
     first.family,
     first.generation,
   );
+  const backpressured = (
+    await readBackpressuredCorpusProjectionIndexesTx(tx, {
+      manifest,
+      indexIds: [first.indexId],
+      unprovenBytesBudget,
+      testNow,
+    })
+  ).at(0);
+  if (backpressured !== undefined) {
+    return {
+      status: "backpressured",
+      unprovenBytes: backpressured.unprovenBytes,
+      retryDelayMs: backpressured.retryDelayMs,
+    };
+  }
   const unattestedIndexIds = await unattestedAtAppendStart(tx, manifest);
   const entityIdList = [...entityIds];
   await tx
@@ -679,6 +870,14 @@ export const startCorpusProjectionAppendBatchTx = async (
       status: "append_started",
       appendStartedAt: transitionAt,
       appendRequestRevisionCount: leases.length,
+      appendBytes: sqlCaseFragment({
+        operand: sql`${corpusIndexProjectionIntents.id}`,
+        branches: revisions.map(
+          ({ lease, appendBytes }) =>
+            sql`WHEN ${lease.intentId}::uuid THEN ${appendBytes}::integer`,
+        ),
+        fallback: sql`${corpusIndexProjectionIntents.appendBytes}`,
+      }),
       updatedAt: transitionAt,
     })
     .where(
@@ -735,36 +934,57 @@ export const startCorpusProjectionAppendBatchTx = async (
     )
     .returning({ id: corpusIndexProjectionIntents.id });
   const cancelledIds = new Set(cancelled.map(({ id }) => id));
-  return leases.map(({ intentId }) => {
-    if (startedIds.has(intentId)) {
+  return {
+    status: "admitted",
+    starts: leases.map(({ intentId }) => {
+      if (startedIds.has(intentId)) {
+        return {
+          intentId,
+          status: "started",
+        } satisfies CorpusProjectionAppendStart;
+      }
+      if (cancelledIds.has(intentId)) {
+        return {
+          intentId,
+          status: "stale_cancelled",
+        } satisfies CorpusProjectionAppendStart;
+      }
       return {
         intentId,
-        status: "started",
+        status: "lease_lost",
       } satisfies CorpusProjectionAppendStart;
-    }
-    if (cancelledIds.has(intentId)) {
-      return {
-        intentId,
-        status: "stale_cancelled",
-      } satisfies CorpusProjectionAppendStart;
-    }
-    return {
-      intentId,
-      status: "lease_lost",
-    } satisfies CorpusProjectionAppendStart;
-  });
+    }),
+  };
+};
+
+type StartCorpusProjectionMultipartAppendOptions = {
+  /** `appendBytes` counts every part, so the budget holds the whole revision. */
+  revision: CorpusProjectionAppendRequestRevision;
+  unprovenBytesBudget: number;
 };
 
 /** A multipart revision owns the same lease throughout its sequential requests. */
 export const startCorpusProjectionMultipartAppendTx = async (
   tx: Transaction,
-  lease: CorpusProjectionIntentLease,
-): Promise<CorpusProjectionAppendStart["status"]> => {
-  const status =
-    (await startCorpusProjectionAppendBatchTx(tx, { leases: [lease] })).at(0)
-      ?.status ?? "lease_lost";
+  {
+    revision,
+    unprovenBytesBudget,
+  }: StartCorpusProjectionMultipartAppendOptions,
+): Promise<
+  | { status: CorpusProjectionAppendStart["status"] }
+  | Extract<CorpusProjectionAppendBatchStart, { status: "backpressured" }>
+> => {
+  const { lease } = revision;
+  const start = await startCorpusProjectionAppendBatchTx(tx, {
+    revisions: [revision],
+    unprovenBytesBudget,
+  });
+  if (start.status === "backpressured") {
+    return start;
+  }
+  const status = start.starts.at(0)?.status ?? "lease_lost";
   if (status !== "started") {
-    return status;
+    return { status };
   }
   await tx
     .update(corpusIndexProjectionIntents)
@@ -778,7 +998,7 @@ export const startCorpusProjectionMultipartAppendTx = async (
         eq(corpusIndexProjectionIntents.status, "append_started"),
       ),
     );
-  return "started";
+  return { status: "started" };
 };
 
 /** Refresh the unknown-outcome fence immediately before a later physical part. */

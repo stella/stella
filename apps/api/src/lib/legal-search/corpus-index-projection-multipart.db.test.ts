@@ -30,6 +30,7 @@ import {
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import { CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -107,6 +108,7 @@ const runCycle = async (
     payloadReadConcurrency: 1,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
     proofAfterIndexId: null,
   });
 };

@@ -1,0 +1,3 @@
+{
+  "add-column": "One nullable integer column without a default on corpus_index_projection_intents, a catalog-only change that rewrites no rows, under 1s lock_timeout and 5s statement_timeout."
+}

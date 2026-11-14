@@ -58,6 +58,8 @@ import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/cor
 import {
   abandonCorpusProjectionAppendTx,
   classifyCorpusProjectionReservationFailureTx,
+  CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
+  type CorpusProjectionIntentLease,
   prepareCorpusProjectionReplacementsTx,
   proveAcceptedCorpusProjectionAppendsTx,
   recordAcceptedCorpusProjectionAppendsTx,
@@ -76,6 +78,10 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 /** The metastore instant a delete task receipt carries in these tests. */
+/** A request of these revisions, a byte each: the budget is not under test. */
+const requestOf = (leases: readonly CorpusProjectionIntentLease[]) =>
+  leases.map((lease) => ({ lease, appendBytes: 1 }));
+
 const DELETE_TASK_CREATED_AT = Temporal.Instant.from("2026-08-25T12:00:00Z");
 const LATER_DELETE_TASK_CREATED_AT = Temporal.Instant.from(
   "2026-08-25T12:05:00Z",
@@ -1369,7 +1375,8 @@ test("an expired multi-revision append does not charge its members", async () =>
   const lease = await reserveOneLease(startedAt, 60_000);
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
-      leases: [lease],
+      revisions: requestOf([lease]),
+      unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
       testNow: startedAt,
     });
     // The request-size provenance is supplied directly; the executor suite
@@ -1692,7 +1699,8 @@ test("batch rejection keeps retries singleton until a single rejection blocks", 
   expect(lease.appendMode).toBe("batchable");
   await db.transaction(async (tx) => {
     await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
-      leases: [lease],
+      revisions: requestOf([lease]),
+      unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
       testNow: attemptedAt,
     });
     // This store test supplies the physical request size directly; the
@@ -2187,11 +2195,15 @@ test("one append request receives one post-lock database timestamp", async () =>
     await db.transaction(
       async (tx) =>
         await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
-          leases,
+          revisions: requestOf(leases),
+          unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
           testNow: requestStartedAt,
         }),
     ),
-  ).toEqual(leases.map(({ intentId }) => ({ intentId, status: "started" })));
+  ).toEqual({
+    status: "admitted",
+    starts: leases.map(({ intentId }) => ({ intentId, status: "started" })),
+  });
   expect(
     await db
       .select({ appendStartedAt: corpusIndexProjectionIntents.appendStartedAt })
@@ -2232,11 +2244,15 @@ test("an append start past the lease deadline records the expiry, not drift", as
     await db.transaction(
       async (tx) =>
         await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
-          leases: [lease],
+          revisions: requestOf([lease]),
+          unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
           testNow: new Date("2026-08-25T12:02:00.000Z"),
         }),
     ),
-  ).toEqual([{ intentId: lease.intentId, status: "stale_cancelled" }]);
+  ).toEqual({
+    status: "admitted",
+    starts: [{ intentId: lease.intentId, status: "stale_cancelled" }],
+  });
   // The desired state never moved, so naming it here would send the next
   // diagnosis after epoch churn that did not happen.
   expect(await readCancelReason()).toEqual([
@@ -2261,11 +2277,15 @@ test("an append start under a moved desired state records the drift", async () =
     await db.transaction(
       async (tx) =>
         await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
-          leases: [lease],
+          revisions: requestOf([lease]),
+          unprovenBytesBudget: CORPUS_PROJECTION_UNPROVEN_BYTES_BUDGET_MAX,
           testNow: new Date("2026-08-25T12:00:10.000Z"),
         }),
     ),
-  ).toEqual([{ intentId: lease.intentId, status: "stale_cancelled" }]);
+  ).toEqual({
+    status: "admitted",
+    starts: [{ intentId: lease.intentId, status: "stale_cancelled" }],
+  });
   expect(await readCancelReason()).toEqual([
     { lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.desiredStateChanged },
   ]);

@@ -87,6 +87,7 @@ export { default as indexes_client_invoice_unique_indexes } from "./online-migra
 export { default as indexes_contacts_data_box_ids_idx } from "./online-migration-entries/indexes-contacts-data-box-ids-idx";
 export { default as indexes_contacts_org_id_unique } from "./online-migration-entries/indexes-contacts-org-id-unique";
 export { default as indexes_corpus_index_projection_intents_proof_idx } from "./online-migration-entries/indexes-corpus-index-projection-intents-proof-idx";
+export { default as indexes_corpus_index_projection_intents_unproven_idx } from "./online-migration-entries/indexes-corpus-index-projection-intents-unproven-idx";
 export { default as indexes_corpus_index_projection_states_append_route_idx } from "./online-migration-entries/indexes-corpus-index-projection-states-append-route-idx";
 export { default as indexes_correspondence_attachments_ws_entity_idx } from "./online-migration-entries/indexes-correspondence-attachments-ws-entity-idx";
 export { default as indexes_correspondence_ws_source_entity_uidx } from "./online-migration-entries/indexes-correspondence-ws-source-entity-uidx";
