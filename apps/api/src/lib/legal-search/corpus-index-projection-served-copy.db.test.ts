@@ -479,7 +479,6 @@ const entityOf = (run: ModelRun, index: number) =>
 
 /** A canonical write and the desired state it implies, in one transaction. */
 const writeCanonical = async (
-  run: ModelRun,
   entityId: string,
   hash: string | null,
 ): Promise<bigint> =>
@@ -707,22 +706,19 @@ const applyCommand = async (run: ModelRun, next: Command) => {
       ).at(0);
       // A change keeps an erased entity erased; undoing is its own command.
       if (current?.contentHash !== null) {
-        await writeCanonical(run, entityId, contentHash());
+        await writeCanonical(entityId, contentHash());
       }
       break;
     }
     case "erase": {
       const entityId = entityOf(run, next.entity);
-      run.erasedAtEpoch.set(
-        entityId,
-        await writeCanonical(run, entityId, null),
-      );
+      run.erasedAtEpoch.set(entityId, await writeCanonical(entityId, null));
       break;
     }
     case "undo_erase": {
       const entityId = entityOf(run, next.entity);
       if (run.erasedAtEpoch.has(entityId)) {
-        await writeCanonical(run, entityId, contentHash());
+        await writeCanonical(entityId, contentHash());
       }
       break;
     }
@@ -1005,7 +1001,7 @@ const statusOf = async (revision: SafeId<"corpusIndexProjectionIntent">) =>
 describe("transitions that stop serving", () => {
   test("a replacement waits, served at its current revision", async () => {
     const { run, entityId, revision } = await servedFixture();
-    await writeCanonical(run, entityId, contentHash());
+    await writeCanonical(entityId, contentHash());
     await applyCommand(run, {
       type: "append",
       publishOnAccept: true,
@@ -1024,7 +1020,7 @@ describe("transitions that stop serving", () => {
 
   test("an erasure hides at once, and its undo appends anew", async () => {
     const { run, entityId, revision } = await servedFixture();
-    await writeCanonical(run, entityId, null);
+    await writeCanonical(entityId, null);
     // Readers stop at the desired erasure; the erasure claim un-names it.
     expect(await stateOf(entityId)).toMatchObject({ desiredAction: "erase" });
     await applyCommand(run, { type: "erasure", crash: { type: "none" } });
@@ -1034,7 +1030,7 @@ describe("transitions that stop serving", () => {
     });
     expect(await statusOf(revision)).toBe("cleanup_pending");
 
-    await writeCanonical(run, entityId, contentHash());
+    await writeCanonical(entityId, contentHash());
     expect(await stateOf(entityId)).toMatchObject({
       desiredAction: "upsert",
       appliedRevision: null,
@@ -1046,9 +1042,9 @@ describe("transitions that stop serving", () => {
   });
 
   test("an erasure undone before the erasure claim never restores the old copy", async () => {
-    const { run, entityId, revision } = await servedFixture();
-    await writeCanonical(run, entityId, null);
-    await writeCanonical(run, entityId, contentHash());
+    const { entityId, revision } = await servedFixture();
+    await writeCanonical(entityId, null);
+    await writeCanonical(entityId, contentHash());
     expect(await stateOf(entityId)).toMatchObject({
       desiredAction: "upsert",
       appliedAction: null,

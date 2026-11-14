@@ -11,7 +11,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -632,7 +632,7 @@ describe("cleanup of revisions the previous release left served", () => {
   });
 
   test("the walk advances past every row it reads", async () => {
-    const restored: string[] = [];
+    const restored: SafeId<"corpusIndexProjectionIntent">[] = [];
     for (let index = 0; index < 4; index += 1) {
       // db-await-in-loop: rows are seeded in queue order
       const { entityId, revision } = await servedEntity();
@@ -641,7 +641,7 @@ describe("cleanup of revisions the previous release left served", () => {
         fingerprint: fingerprint(1),
       });
       await previousPrepare(entityId, revision);
-      restored.push(revision);
+      restored.push(toSafeId<"corpusIndexProjectionIntent">(revision));
     }
     const first = await claim();
     expect(first.restoredIntentIds.toSorted()).toEqual(restored.toSorted());
