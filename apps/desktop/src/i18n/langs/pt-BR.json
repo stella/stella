@@ -66,6 +66,10 @@
     "accountWindowTitle": "Conectar conta",
     "accountTitle": "Conectar esta conta?",
     "accountSubtitle": "Conecte o stella desktop a esta conta e organização.",
+    "switchWindowTitle": "Trocar de conta",
+    "switchTitle": "Trocar para outra conta?",
+    "switchSubtitle": "O stella desktop está conectado a {currentEmail}. Desconectar essa conta e conectar {email} no lugar?",
+    "switchConfirm": "Desconectar e conectar",
     "accountEmail": "Conta",
     "organizationName": "Organização",
     "allow": "Permitir",
@@ -228,6 +232,8 @@
     "permissionNotificationsDescription": "Avisa quando um documento está pronto ou uma sincronização precisa de atenção.",
     "permissionAccessibility": "Acessibilidade",
     "permissionAccessibilityDescription": "Permite que a linha do tempo de atividade registre títulos de janelas.",
+    "permissionMicrophone": "Microfone",
+    "permissionMicrophoneDescription": "Permite que o ditado ouça você enquanto segura o atalho dele.",
     "permissionAllowed": "Permitido",
     "permissionAllow": "Permitir",
     "permissionOpenSettings": "Abrir configurações",
@@ -422,6 +428,16 @@
     "accessibilityRequired": "Permita o acesso de Acessibilidade para registrar detalhes. Os nomes dos aplicativos continuam sendo registrados.",
     "openAccessibilitySettings": "Abrir ajustes de Acessibilidade",
     "detailsUnavailable": "Os detalhes não estão disponíveis neste dispositivo. Os nomes dos aplicativos continuam sendo registrados.",
+    "browserTitlesWithheld": "Os títulos das janelas do {browser} não são registrados.",
+    "recordTitlesFromNow": "Registrar a partir de agora",
+    "browserTitlesRecordedFromNow": "Os títulos das janelas do {browser} são registrados a partir de agora.",
+    "earlierTimeStaysUntitled": "O tempo anterior continua sem títulos.",
+    "titlesNotRecorded": "Os títulos das janelas não são registrados.",
+    "accessibilityAccessMissing": "A stella não tem acesso de Acessibilidade. Se ela já aparece ativada na lista, desative-a e ative-a novamente.",
+    "titlesNeedAccessibility": "Sem acesso de Acessibilidade, os títulos das janelas não são registrados.",
+    "recordAppNameOnly": "Registrar apenas o nome do aplicativo {name}",
+    "recordAppDetails": "Registrar detalhes de {name}",
+    "appNameOnlyApps": "Aplicativos que registram apenas o nome",
     "recording": "Registrando",
     "paused": "Pausado",
     "pause": "Pausar",
@@ -498,8 +514,9 @@
     "mixedActivity": "Troca rápida",
     "mixedActivityLabel": "Troca rápida entre {apps}, {range}",
     "moreApps": "+{count} a mais",
-    "suggestionLabel": "Lançamento sugerido: {matter}, {hours} h",
-    "rangeHours": "{range} · {hours} h",
+    "suggestionPieceLabel": "Lançamento sugerido: {matter}, {range}, {duration}, {hours} h no total",
+    "suggestionRange": "{range} · {duration} · {hours} h",
+    "suggestionPieces": "{count, plural, one {# trecho} other {# trechos}} · {duration} · {hours} h",
     "draftedRange": "{range} · em rascunho",
     "newEntry": "Novo lançamento",
     "chooseMatter": "Escolher caso",
@@ -507,6 +524,7 @@
     "reject": "Recusar",
     "evidenceTitles": "Títulos",
     "evidenceApps": "Apps",
+    "evidenceUntitled": "Sem título · {app}",
     "rangeEmpty": "Nada foi registrado neste intervalo.",
     "rangeMostlyUnmatched": "A maior parte deste intervalo não pertence a nenhum caso, por isso nenhum foi pré-selecionado.",
     "rangeSplitBetweenMatters": "Nenhum caso ocupa sozinho a maior parte deste intervalo, por isso nenhum foi pré-selecionado.",
@@ -520,7 +538,9 @@
     "aiDraftWriting": "stella AI está redigindo a descrição…",
     "aiDraftNeedsMatter": "Escolha um caso e stella AI poderá redigir a descrição.",
     "aiDraftConsent": "stella AI pode redigir descrições a partir do caso, da data, da duração e dos nomes de aplicativos de cada lançamento, além dos nomes de documentos e títulos de janela mostrados aqui quando você os registra. Seus lançamentos anteriores no caso a ajudam a seguir seu jeito de escrever. Nada mais sobre o seu dia sai deste computador.",
-    "aiDraftAllow": "Permitir stella AI",
+    "aiDraftOffer": "A stella AI pode sugerir a descrição.",
+    "aiDraftWhatIsSent": "O que é enviado?",
+    "aiDraftAllow": "Permitir",
     "aiDraftRetry": "Tentar de novo",
     "aiDraftOff": "Seu escritório desativou as sugestões de stella AI.",
     "aiDraftConsentRequired": "Permita stella AI de novo para redigir esta descrição.",
@@ -541,7 +561,7 @@
     "aiDraftFlags": "Notas sobre as regras de faturamento",
     "aiDraftFlagSource": "{file}, {section}",
     "aiRefine": "Ajustar",
-    "aiRefinePlaceholder": "Diga à stella como ajustar esta sugestão…",
+    "aiRefinePlaceholder": "Descreva a alteração…",
     "aiRefining": "stella AI está ajustando a descrição…",
     "aiProposal": "stella AI sugere",
     "aiAccept": "Aceitar",
@@ -551,7 +571,7 @@
     "aiSteerShorter": "Mais curto",
     "aiSteerMoreDetail": "Mais detalhes",
     "aiSteerClientFriendly": "Linguagem clara para o cliente",
-    "aiSteerWriteIn": "Escrever em {language}",
+    "aiSteerWriteInLanguage": "Escrever em português",
     "aiSteerRemember": "Lembrar da próxima vez",
     "billingDraftsPreference": "Sua preferência de redação",
     "billingDraftsForgetPreference": "Esquecer preferência",
@@ -563,7 +583,18 @@
   },
   "dictation": {
     "title": "Ditado",
-    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
+    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada. Com a revisão por IA ativada, o texto transcrito, não o áudio, é enviado pela stella ao provedor de IA da sua organização para corrigir erros e formatação; a stella não o armazena.",
+    "cleanup": {
+      "title": "Revisar com IA",
+      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena."
+    },
+    "language": {
+      "title": "Idioma do ditado",
+      "description": "A fala é reconhecida neste idioma, e a revisão mantém o texto nele. Automático usa os idiomas da interface e dos teclados deste computador.",
+      "automatic": "Automático",
+      "automaticWith": "Automático ({languages})",
+      "noResults": "Nenhum idioma encontrado"
+    },
     "modelNeeded": "O modelo de voz é executado neste computador.",
     "download": "Baixar ({size} MB)",
     "downloading": "Baixando o modelo de voz: {percent}%",
@@ -574,7 +605,10 @@
       "accessibility": "Permita o acesso à Acessibilidade para que a stella possa digitar em outros aplicativos.",
       "microphone": "A stella não consegue ouvir seu microfone. Verifique o acesso ao microfone nos Ajustes do Sistema.",
       "modelMissing": "Baixe primeiro o modelo de voz.",
-      "transcription": "A transcrição falhou. Tente novamente."
+      "transcription": "A transcrição falhou. Tente novamente.",
+      "focusChanged": "Você mudou para outro aplicativo antes de o texto ficar pronto, então nada foi digitado. Tente novamente.",
+      "focusUnconfirmed": "A stella não conseguiu confirmar qual aplicativo está em foco, então nada foi digitado. Tente novamente.",
+      "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente."
     }
   },
   "shortcut": {
@@ -692,6 +726,18 @@
     "introduceActivityTitle": "Novo: linha do tempo de atividade",
     "introduceActivityBody": "A atividade agora está disponível para sua conta. Nada é registrado até você iniciá-la na janela de atividade.",
     "openActivity": "Abrir atividade",
+    "dictationModel": "O modelo de voz ({size} MB) é baixado uma vez e funciona neste computador.",
+    "dictationTurnOn": "Ativar e baixar",
+    "dictationDownloadContinues": "Você pode continuar. O download segue em segundo plano.",
+    "dictationReady": "O ditado está ativado e pronto.",
+    "dictationTryLabel": "Dite aqui",
+    "dictationTryPlaceholder": "Clique aqui, segure {shortcut} e diga uma frase.",
+    "dictationListening": "Ouvindo…",
+    "dictationTranscribing": "Escrevendo o que você disse…",
+    "dictationMicrophone": "Permite que a stella ouça você enquanto segura o atalho.",
+    "dictationAccessibility": "Permite que a stella digite o que você disse no app que está usando.",
+    "dictationFailed": "O stella desktop não conseguiu ativar o ditado. Tente novamente.",
+    "introduceDictationTitle": "Novo: ditado",
     "guideWaiting": "Ative o stella desktop na lista acima para permitir Acessibilidade.",
     "guideAllowed": "O stella desktop tem permissão",
     "never": {
@@ -756,7 +802,9 @@
         "notCompleted": "O login não foi concluído. Tente de novo.",
         "timedOut": "O login demorou demais. Tente de novo.",
         "unavailable": "Não foi possível iniciar o Claude Code neste computador. Tente de novo."
-      }
+      },
+      "unknown": "Não foi possível verificar o login no Claude Code. Verifique de novo em instantes.",
+      "checkAgain": "Verificar de novo"
     },
     "install": {
       "notInstalled": "O {name} ainda não está instalado neste computador.",
@@ -796,6 +844,27 @@
       "runs_can_write": "As execuções locais podem gravar nesta pasta, então ela não pode conter uma habilidade.",
       "network_folder": "Esta pasta está em um compartilhamento de rede. As habilidades precisam estar no disco deste computador.",
       "path_changed": "Uma pasta superior mudou. Remova esta pasta e adicione-a de novo."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Pastas vinculadas",
+    "description": "Pastas deste computador em que o agente de um chat pode trabalhar. O chat vê só o nome da pasta; o caminho dela fica neste computador.",
+    "add": "Vincular pasta",
+    "remove": "Desvincular",
+    "removeFolder": "Desvincular {name}",
+    "state": {
+      "offline": "A unidade em que esta pasta está não está conectada.",
+      "moved": "Esta pasta foi movida, renomeada ou excluída. Desvincule-a e vincule-a de novo.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
+    },
+    "notice": {
+      "action_failed": "Não funcionou. Tente de novo.",
+      "too_many": "Este computador já tem todas as pastas vinculadas que consegue guardar. Desvincule uma primeiro.",
+      "not_a_folder": "Escolha uma pasta.",
+      "network_folder": "Esta pasta está em um compartilhamento de rede. Vincule uma pasta do disco deste computador.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
     }
   }
 }

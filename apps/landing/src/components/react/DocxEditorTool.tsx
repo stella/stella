@@ -6,7 +6,7 @@ import { IntlProvider } from "use-intl";
 import { DocxEditor } from "@stll/folio-react";
 import { getFolioMessages } from "@stll/folio-react/messages";
 import { Button } from "@stll/ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 // A real Word .docx (Y Combinator's post-money SAFE, published free to use) so
 // the tool opens on a genuine, richly-formatted legal document, then lets a
@@ -128,19 +128,12 @@ export const DocxEditorTool = () => {
           />
           {source.kind === "doc" ? (
             // A long file name truncates; the tooltip gives it back in full.
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span
-                    className="max-w-[16rem] truncate text-xs"
-                    style={{ color: "var(--foreground)" }}
-                  />
-                }
-              >
-                {source.name}
-              </TooltipTrigger>
-              <TooltipPopup>{source.name}</TooltipPopup>
-            </Tooltip>
+            <TruncatedText
+              className="max-w-[16rem] text-xs"
+              style={{ color: "var(--foreground)" }}
+            >
+              {source.name}
+            </TruncatedText>
           ) : null}
           <span
             className="text-xs"

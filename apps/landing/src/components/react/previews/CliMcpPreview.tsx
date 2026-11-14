@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { StellaMark } from "@stll/ui/stella-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CLI_DEMO_TOOLS } from "../../../data/cli-demo";
@@ -546,7 +547,7 @@ export const CliMcpPreview = ({
                               ? "└"
                               : "├"}
                           </span>
-                          <span className="min-w-0 truncate">{step.label}</span>
+                          <TruncatedText>{step.label}</TruncatedText>
                           <span className="ms-auto shrink-0 tabular-nums">
                             {step.meta}
                           </span>
@@ -642,12 +643,18 @@ const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
         borderColor: "color-mix(in srgb, var(--foreground) 8%, transparent)",
       }}
     >
-      <p className="text-foreground truncate text-[clamp(.5rem,.85cqw,.8rem)] font-semibold">
+      <TruncatedText
+        className="text-foreground text-[clamp(.5rem,.85cqw,.8rem)] font-semibold"
+        render={<p />}
+      >
         {storyTeamsExchange.channel}
-      </p>
-      <p className="text-muted-foreground truncate text-[clamp(.42rem,.68cqw,.62rem)]">
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground text-[clamp(.42rem,.68cqw,.62rem)]"
+        render={<p />}
+      >
         {storyTeamsExchange.context}
-      </p>
+      </TruncatedText>
     </div>
     <div className="space-y-[clamp(.42rem,.8cqw,.7rem)] p-[clamp(.5rem,.9cqw,.8rem)] text-[clamp(.45rem,.7cqw,.66rem)] leading-snug">
       <div className="story-step story-step-visible flex gap-2">
@@ -658,9 +665,13 @@ const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
           <p className="text-foreground font-semibold">
             {storyTeamsExchange.role}
           </p>
-          <p className="text-muted-foreground line-clamp-2">
+          <TruncatedText
+            className="text-muted-foreground"
+            lines={2}
+            render={<p />}
+          >
             {storyTeamsExchange.prompt}
-          </p>
+          </TruncatedText>
         </div>
       </div>
       <div
@@ -684,9 +695,13 @@ const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
           </p>
           {/* One beat per card: the answer line carries the deviations; the
               detail lives in the review scene the story flows into. */}
-          <p className="text-muted-foreground line-clamp-2">
+          <TruncatedText
+            className="text-muted-foreground"
+            lines={2}
+            render={<p />}
+          >
             {storyTeamsExchange.response}
-          </p>
+          </TruncatedText>
         </div>
       </div>
     </div>
@@ -770,7 +785,7 @@ const WindowChrome = ({
       )}
     >
       {icon}
-      <span className="min-w-0 truncate">{label}</span>
+      <TruncatedText>{label}</TruncatedText>
     </div>
   </div>
 );

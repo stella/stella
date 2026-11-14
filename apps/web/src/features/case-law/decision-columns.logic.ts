@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { TruncatedTextLines } from "@stll/ui/truncated-text";
 import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -223,14 +224,15 @@ export const decisionColumnWidthClassNames = (
  */
 export type DecisionContentMode = TableContentMode;
 
-const DECISION_CLAMP_CLASS_NAMES = {
-  tight: "line-clamp-2",
-  "fit-content": "",
-} as const satisfies Record<DecisionContentMode, string>;
+const DECISION_CLAMP_LINES = {
+  tight: 2,
+  "fit-content": "none",
+} as const satisfies Record<DecisionContentMode, TruncatedTextLines>;
 
-/** The clamp a prose cell carries in this mode; empty when it carries none. */
-export const decisionClampClassName = (mode: DecisionContentMode): string =>
-  DECISION_CLAMP_CLASS_NAMES[mode];
+/** The lines a prose cell is cut to in this mode; `"none"` when it is not cut. */
+export const decisionClampLines = (
+  mode: DecisionContentMode,
+): TruncatedTextLines => DECISION_CLAMP_LINES[mode];
 
 /**
  * Facts the case-number cell repeats under the case number when, and only

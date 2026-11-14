@@ -370,6 +370,54 @@
       }
     },
     {
+      "name": "local_runner_not_reached",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_not_reached"
+      },
+      "expected": {
+        "kind": "local_runner_not_reached",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_relinked",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_relinked"
+      },
+      "expected": {
+        "kind": "local_runner_relinked",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_restoring",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_restoring"
+      },
+      "expected": {
+        "kind": "local_runner_restoring",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_folder_unavailable",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_folder_unavailable"
+      },
+      "expected": {
+        "kind": "local_runner_folder_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
       "name": "local_runner_turn_too_large",
       "origin": "local-runner",
       "evidence": {
@@ -377,6 +425,18 @@
       },
       "expected": {
         "kind": "local_runner_turn_too_large",
+        "status": null,
+        "grade": "client"
+      }
+    },
+    {
+      "name": "turn_too_large",
+      "origin": "run-log",
+      "evidence": {
+        "reason": "chunk-too-large"
+      },
+      "expected": {
+        "kind": "turn_too_large",
         "status": null,
         "grade": "client"
       }

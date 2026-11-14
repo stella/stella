@@ -1657,7 +1657,7 @@ describe("matter membership commands", () => {
     const result = await runCli({
       args: ["matter", "add-member", "--matter-id", "w1", "--user-id", "u1"],
       url: server.url,
-      token: makeToken(["admin_write"]),
+      token: makeToken(["matters_write"]),
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
@@ -1673,7 +1673,7 @@ describe("matter membership commands", () => {
     const result = await runCli({
       args: ["matter", "remove-member", "--matter-id", "w1", "--user-id", "u1"],
       url: server.url,
-      token: makeToken(["admin_write"]),
+      token: makeToken(["matters_write"]),
     });
     await server.stop();
     expect(result.exitCode).toBe(7);
@@ -1979,7 +1979,7 @@ describe("destructive confirm injection (S4)", () => {
         "--yes",
       ],
       url: server.url,
-      token: makeToken(["admin_write"]),
+      token: makeToken(["matters_write"]),
     });
     await server.stop();
     expect(result.exitCode).toBe(0);

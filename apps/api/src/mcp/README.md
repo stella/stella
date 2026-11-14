@@ -192,8 +192,9 @@ with `isError` set. `hint`, `retryable`, and `retryAfterMs` are omitted when abs
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
 `code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).
-Verification active and daily run limits preserve their distinct codes from
-`@stll/api-contract/verification-run-caps`. Agents branch on `code`; `hint` states the
+An organization's active and daily model run limits (list verifications, fact
+extractions, document reviews) answer with the two codes in
+`@stll/api-contract/model-run-caps`. Agents branch on `code`; `hint` states the
 next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
 CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
 the string values are a stable contract. `internal_error` never leaks internals:

@@ -10,6 +10,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
   buildCzUohsDecision as uncheckedBuildCzUohsDecision,
+  CZ_UOHS_DOCUMENT_TIMEOUT_MS,
+  CZ_UOHS_PAGE_SIZE,
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
@@ -26,6 +28,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
@@ -806,6 +809,17 @@ describe("ÚOHS JSON-LD", () => {
     expect(second.decisions).toHaveLength(1);
     expect(listingRequests).toBe(1);
     expect(second.nextCursor).not.toBe(first.nextCursor);
+  });
+
+  test("a page deadline fits a full page of gated document reads and one slow read", () => {
+    const documentsPerRecord = 2;
+    const gatedReads =
+      CZ_UOHS_PAGE_SIZE *
+      documentsPerRecord *
+      czUohsAdapter.minRequestIntervalMs;
+    expect(czUohsAdapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE).toBeGreaterThan(
+      gatedReads + CZ_UOHS_DOCUMENT_TIMEOUT_MS,
+    );
   });
 
   test("a parked walk resumes after its frontier, not from the start", async () => {

@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
 import {
   INSPECTOR_STORAGE,
   inspectorStorageBaseKey,
@@ -22,6 +23,8 @@ import {
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
+import { apiJson, respond } from "../helpers/route-mock";
+import type { RouteReply } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
@@ -165,6 +168,17 @@ const decisionTab = {
     }),
   },
 };
+const decisionReads = (value: typeof decision) =>
+  new Map<string, RouteReply>([
+    [
+      `/v1/case/decisions/${value.id}`,
+      apiJson("v1/case/decisions/:decisionId", "get", value),
+    ],
+    [
+      `/v1/case/decisions/by-slug/${value.slug}`,
+      apiJson("v1/case/decisions/by-slug/:slug", "get", value),
+    ],
+  ]);
 const views = [
   {
     kind: "decision",
@@ -173,10 +187,7 @@ const views = [
     // e2e program cannot load; the restore assertions below catch a drift.
     tab: decisionTab,
     mainPath: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
-    paths: [
-      `/v1/case/decisions/${decision.id}`,
-      `/v1/case/decisions/by-slug/${decision.slug}`,
-    ],
+    reads: decisionReads(decision),
     anchors: {
       introduction: "introduction",
       first: "heading-0",
@@ -193,10 +204,16 @@ const views = [
       statuteTitle: statute.title,
     }),
     mainPath: DOCKED_CHAT_LEGAL_ROUTES.statute.path,
-    paths: [
-      `/v1/law/statutes/${statute.id}`,
-      `/v1/law/statutes/by-slug/${statute.slug}`,
-    ],
+    reads: new Map<string, RouteReply>([
+      [
+        `/v1/law/statutes/${statute.id}`,
+        apiJson("v1/law/statutes/:documentId", "get", statute),
+      ],
+      [
+        `/v1/law/statutes/by-slug/${statute.slug}`,
+        apiJson("v1/law/statutes/by-slug/:slug", "get", statute),
+      ],
+    ]),
     anchors: {
       introduction: "introduction",
       first: "heading-0",
@@ -209,10 +226,7 @@ const views = [
     value: paragraphOnlyDecision,
     tab: decisionTab,
     mainPath: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
-    paths: [
-      `/v1/case/decisions/${paragraphOnlyDecision.id}`,
-      `/v1/case/decisions/by-slug/${paragraphOnlyDecision.slug}`,
-    ],
+    reads: decisionReads(paragraphOnlyDecision),
     anchors: {
       introduction: "introduction",
       first: "paragraph-0",
@@ -241,7 +255,7 @@ for (const view of views) {
     await page.route(
       (url) =>
         url.origin === E2E_API_ORIGIN &&
-        (view.paths.includes(url.pathname) ||
+        (view.reads.has(url.pathname) ||
           (view.analysis !== null &&
             (url.pathname ===
               `/v1/case/decisions/${paragraphOnlyDecision.id}/analysis` ||
@@ -249,12 +263,14 @@ for (const view of views) {
       async (route) => {
         const { pathname } = new URL(route.request().url());
         if (pathname.endsWith("/analysis") && view.analysis !== null) {
-          await route.fulfill({
-            json: {
+          await respond(
+            route,
+            apiJson("v1/case/decisions/:decisionId/analysis", "get", {
               status: "done",
               analysis: view.analysis,
-            } satisfies { status: "done"; analysis: DecisionAnalysis },
-          });
+              aiDisclosure: aiDisclosure("caseLaw"),
+            }),
+          );
           return;
         }
         if (pathname === "/v1/organization-settings/ai-availability") {
@@ -267,10 +283,21 @@ for (const view of views) {
             deferredServiceTierAvailable: false,
             mockAnswers: false,
           } satisfies OrganizationAIAvailability;
-          await route.fulfill({ json: availability });
+          await respond(
+            route,
+            apiJson(
+              "v1/organization-settings/ai-availability",
+              "get",
+              availability,
+            ),
+          );
           return;
         }
-        await route.fulfill({ json: view.value });
+        const read = view.reads.get(pathname);
+        if (read === undefined) {
+          throw new Error(`Unregistered reader read ${pathname}`);
+        }
+        await respond(route, read);
       },
     );
     const response = await request.get(

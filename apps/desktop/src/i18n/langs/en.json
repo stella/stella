@@ -66,6 +66,10 @@
     "accountWindowTitle": "Connect account",
     "accountTitle": "Connect this account?",
     "accountSubtitle": "Connect stella desktop to this account and organization.",
+    "switchWindowTitle": "Switch account",
+    "switchTitle": "Switch to another account?",
+    "switchSubtitle": "stella desktop is connected to {currentEmail}. Disconnect it and connect {email} instead?",
+    "switchConfirm": "Disconnect and connect",
     "accountEmail": "Account",
     "organizationName": "Organization",
     "allow": "Allow",
@@ -228,6 +232,8 @@
     "permissionNotificationsDescription": "Tells you when a document is ready or a sync needs attention.",
     "permissionAccessibility": "Accessibility",
     "permissionAccessibilityDescription": "Lets the activity timeline record window titles.",
+    "permissionMicrophone": "Microphone",
+    "permissionMicrophoneDescription": "Lets dictation hear you while you hold its shortcut.",
     "permissionAllowed": "Allowed",
     "permissionAllow": "Allow",
     "permissionOpenSettings": "Open settings",
@@ -422,6 +428,16 @@
     "accessibilityRequired": "Allow Accessibility access to record details. App names are still recorded.",
     "openAccessibilitySettings": "Open Accessibility settings",
     "detailsUnavailable": "Details are unavailable on this device. App names are still recorded.",
+    "browserTitlesWithheld": "Window titles from {browser} are not recorded.",
+    "recordTitlesFromNow": "Record from now on",
+    "browserTitlesRecordedFromNow": "Window titles from {browser} are recorded from now on.",
+    "earlierTimeStaysUntitled": "Earlier time stays without titles.",
+    "titlesNotRecorded": "Window titles are not recorded.",
+    "accessibilityAccessMissing": "stella has no Accessibility access. If it already shows as on in the list, turn it off and on again.",
+    "titlesNeedAccessibility": "Window titles are not recorded without Accessibility access.",
+    "recordAppNameOnly": "Record app name only for {name}",
+    "recordAppDetails": "Record details for {name}",
+    "appNameOnlyApps": "Apps recording names only",
     "recording": "Recording",
     "paused": "Paused",
     "pause": "Pause",
@@ -498,8 +514,9 @@
     "mixedActivity": "Quick switching",
     "mixedActivityLabel": "Quick switching between {apps}, {range}",
     "moreApps": "+{count} more",
-    "suggestionLabel": "Suggested entry: {matter}, {hours} h",
-    "rangeHours": "{range} · {hours} h",
+    "suggestionPieceLabel": "Suggested entry: {matter}, {range}, {duration}, {hours} h in total",
+    "suggestionRange": "{range} · {duration} · {hours} h",
+    "suggestionPieces": "{count, plural, one {# session} other {# sessions}} · {duration} · {hours} h",
     "draftedRange": "{range} · drafted",
     "newEntry": "New entry",
     "chooseMatter": "Choose matter",
@@ -507,6 +524,7 @@
     "reject": "Reject",
     "evidenceTitles": "Titles",
     "evidenceApps": "Apps",
+    "evidenceUntitled": "Untitled · {app}",
     "rangeEmpty": "Nothing was recorded in this range.",
     "rangeMostlyUnmatched": "Most of this range belongs to no matter, so none is preselected.",
     "rangeSplitBetweenMatters": "No single matter holds most of this range, so none is preselected.",
@@ -520,7 +538,9 @@
     "aiDraftWriting": "stella AI is drafting the description…",
     "aiDraftNeedsMatter": "Choose a matter and stella AI can draft the description.",
     "aiDraftConsent": "stella AI can draft descriptions from each entry's matter, date, duration and app names, plus the document names and window titles shown here when you record them. Your earlier entries on the matter help it match how you write. Nothing else about your day leaves this computer.",
-    "aiDraftAllow": "Allow stella AI",
+    "aiDraftOffer": "stella AI can draft the description.",
+    "aiDraftWhatIsSent": "What is sent?",
+    "aiDraftAllow": "Allow",
     "aiDraftRetry": "Try again",
     "aiDraftOff": "Your firm has turned stella AI drafts off.",
     "aiDraftConsentRequired": "Allow stella AI again to draft this description.",
@@ -541,7 +561,7 @@
     "aiDraftFlags": "Billing guideline notes",
     "aiDraftFlagSource": "{file}, {section}",
     "aiRefine": "Refine",
-    "aiRefinePlaceholder": "Tell stella how to adjust this draft…",
+    "aiRefinePlaceholder": "Describe the change…",
     "aiRefining": "stella AI is adjusting the description…",
     "aiProposal": "stella AI suggests",
     "aiAccept": "Accept",
@@ -551,7 +571,7 @@
     "aiSteerShorter": "Shorter",
     "aiSteerMoreDetail": "More detail",
     "aiSteerClientFriendly": "Client-friendly wording",
-    "aiSteerWriteIn": "Write in {language}",
+    "aiSteerWriteInLanguage": "Write in English",
     "aiSteerRemember": "Remember for next time",
     "billingDraftsPreference": "Your drafting preference",
     "billingDraftsForgetPreference": "Forget preference",
@@ -563,7 +583,18 @@
   },
   "dictation": {
     "title": "Dictation",
-    "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored.",
+    "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored. With AI cleanup on, the transcribed text, not the audio, is sent through stella to your organization’s AI provider to fix mistakes and formatting, and stella does not store it.",
+    "cleanup": {
+      "title": "Clean up with AI",
+      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it."
+    },
+    "language": {
+      "title": "Dictation language",
+      "description": "Speech is recognized in this language, and cleanup keeps the text in it. Automatic uses the languages of this computer’s display and keyboards.",
+      "automatic": "Automatic",
+      "automaticWith": "Automatic ({languages})",
+      "noResults": "No languages found"
+    },
     "modelNeeded": "The speech model runs on this computer.",
     "download": "Download ({size} MB)",
     "downloading": "Downloading the speech model: {percent}%",
@@ -574,7 +605,10 @@
       "accessibility": "Allow Accessibility access so stella can type into other apps.",
       "microphone": "stella could not hear your microphone. Check Microphone access in System Settings.",
       "modelMissing": "Download the speech model first.",
-      "transcription": "Transcription failed. Try again."
+      "transcription": "Transcription failed. Try again.",
+      "focusChanged": "You switched to another app before the text was ready, so nothing was typed. Try again.",
+      "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
+      "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again."
     }
   },
   "shortcut": {
@@ -692,6 +726,18 @@
     "introduceActivityTitle": "New: activity timeline",
     "introduceActivityBody": "Activity is now available for your account. Nothing is recorded until you start it in the activity window.",
     "openActivity": "Open activity",
+    "dictationModel": "The speech model ({size} MB) is downloaded once and runs on this computer.",
+    "dictationTurnOn": "Turn on and download",
+    "dictationDownloadContinues": "You can continue. The download goes on in the background.",
+    "dictationReady": "Dictation is on and ready.",
+    "dictationTryLabel": "Dictate here",
+    "dictationTryPlaceholder": "Click here, hold {shortcut} and say a sentence.",
+    "dictationListening": "Listening…",
+    "dictationTranscribing": "Writing down what you said…",
+    "dictationMicrophone": "Lets stella hear you while you hold the shortcut.",
+    "dictationAccessibility": "Lets stella type what you said into the app you are using.",
+    "dictationFailed": "stella desktop could not turn on dictation. Try again.",
+    "introduceDictationTitle": "New: dictation",
     "guideWaiting": "Turn on stella desktop in the list above to allow Accessibility.",
     "guideAllowed": "stella desktop is allowed",
     "never": {
@@ -756,7 +802,9 @@
         "notCompleted": "The sign-in did not finish. Try again.",
         "timedOut": "The sign-in took too long. Try again.",
         "unavailable": "Claude Code could not be started on this computer. Try again."
-      }
+      },
+      "unknown": "Couldn't check the Claude Code sign-in. Check again in a moment.",
+      "checkAgain": "Check again"
     },
     "install": {
       "notInstalled": "{name} is not installed on this computer yet.",
@@ -796,6 +844,27 @@
       "runs_can_write": "Local runs can write to this folder, so it cannot hold a skill.",
       "network_folder": "This folder is on a network share. Skills must be on this computer's own disk.",
       "path_changed": "A folder on the way to this one has changed. Remove it and add it again."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Linked folders",
+    "description": "Folders on this computer that a chat's coding agent can work in. A chat sees only a folder's name; its path stays on this computer.",
+    "add": "Link folder",
+    "remove": "Unlink",
+    "removeFolder": "Unlink {name}",
+    "state": {
+      "offline": "The drive this folder is on is not connected.",
+      "moved": "This folder was moved, renamed or deleted. Unlink it and link it again.",
+      "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
+      "unreadable": "This folder could not be read."
+    },
+    "notice": {
+      "action_failed": "That did not work. Try again.",
+      "too_many": "This computer already has as many linked folders as it can keep. Unlink one first.",
+      "not_a_folder": "Choose a folder.",
+      "network_folder": "This folder is on a network share. Link a folder on this computer's own disk.",
+      "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
+      "unreadable": "This folder could not be read."
     }
   }
 }

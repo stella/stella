@@ -132,6 +132,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CLAUSE_VERSION,
   },
+  // A firm's compliance record of one check, and its link to a matter.
+  conflictCheck: { type: "non_resource", reason: "workflow" },
+  conflictCheckMatter: { type: "non_resource", reason: "association" },
   contact: { type: "resource", resourceType: RESOURCE_TYPE.CONTACT },
   // Correspondence is matter-scoped; it has no portable ResourceRef kind.
   correspondence: { type: "non_resource", reason: "subresource" },
@@ -233,9 +236,13 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     reason: "association",
   },
   legalListGenerationRun: { type: "non_resource", reason: "job" },
-  legalListVerificationRun: { type: "non_resource", reason: "job" },
+  legalListVerificationRun: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+  },
   legalListClaim: { type: "non_resource", reason: "subresource" },
   legalListClaimReviewEvent: { type: "non_resource", reason: "subresource" },
+  legalGraphEdge: { type: "non_resource", reason: "subresource" },
   legalListGenerationSource: {
     type: "non_resource",
     reason: "association",
@@ -304,6 +311,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.NUMBER_SERIES,
   },
   schedulerJobRun: { type: "non_resource", reason: "job" },
+  dataExport: { type: "non_resource", reason: "job" },
   systemScriptRun: { type: "non_resource", reason: "job" },
   sanctionsScreeningEvent: { type: "non_resource", reason: "event" },
   sanctionsEdition: { type: "non_resource", reason: "projection" },

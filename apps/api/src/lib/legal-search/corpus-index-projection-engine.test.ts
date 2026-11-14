@@ -1,11 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
-  corpusIndexCommittedIngestTimeoutMs,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -16,10 +15,9 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
-  corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
   planCorpusProjectionAppendRequests,
+  proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -129,6 +127,94 @@ test("revision census fails closed on approximate buckets", async () => {
   if (result.isErr()) {
     expect(result.error.message).toContain("approximate");
   }
+});
+
+const censusOf = (buckets: readonly { key: string; doc_count: number }[]) => ({
+  aggregate: async () =>
+    Result.ok({
+      projection_revisions: {
+        buckets,
+        doc_count_error_upper_bound: 0,
+        sum_other_doc_count: 0,
+      },
+    }),
+});
+
+test("presence is proven only when every revision counts exactly what it wrote", async () => {
+  const expected = [
+    { revision: FIRST_REVISION, documentCount: 3 },
+    { revision: SECOND_REVISION, documentCount: 2 },
+  ];
+  const proven = await proveCorpusProjectionRevisionsPresent({
+    client: censusOf([
+      { key: FIRST_REVISION, doc_count: 3 },
+      { key: SECOND_REVISION, doc_count: 2 },
+    ]),
+    indexId: "case_law_v5_cs_sk",
+    expected,
+  });
+  const proofs =
+    proven.isOk() && proven.value.status === "proven"
+      ? proven.value.proofs
+      : panic("Expected an exact census to prove presence");
+  expect(
+    proofs.map(({ indexId, revision, documentCount }) => ({
+      indexId,
+      revision,
+      documentCount,
+    })),
+  ).toEqual(
+    expected.map((presence) => ({
+      indexId: "case_law_v5_cs_sk",
+      ...presence,
+    })),
+  );
+
+  for (const [label, buckets] of [
+    ["absent", [{ key: FIRST_REVISION, doc_count: 3 }]],
+    [
+      "partial",
+      [
+        { key: FIRST_REVISION, doc_count: 3 },
+        { key: SECOND_REVISION, doc_count: 1 },
+      ],
+    ],
+    [
+      "excess",
+      [
+        { key: FIRST_REVISION, doc_count: 4 },
+        { key: SECOND_REVISION, doc_count: 2 },
+      ],
+    ],
+  ] as const) {
+    expect({
+      label,
+      census: await proveCorpusProjectionRevisionsPresent({
+        client: censusOf(buckets),
+        indexId: "case_law_v5_cs_sk",
+        expected,
+      }),
+    }).toEqual({ label, census: Result.ok({ status: "unproven" }) });
+  }
+});
+
+test("an approximate census proves nothing", async () => {
+  const result = await proveCorpusProjectionRevisionsPresent({
+    client: {
+      aggregate: async () =>
+        Result.ok({
+          projection_revisions: {
+            buckets: [{ key: FIRST_REVISION, doc_count: 1 }],
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 1,
+          },
+        }),
+    },
+    indexId: "case_law_v5_cs_sk",
+    expected: [{ revision: FIRST_REVISION, documentCount: 1 }],
+  });
+
+  expect(result.isErr()).toBe(true);
 });
 
 test("committed appends preserve row boundaries and exact revision ownership", async () => {
@@ -429,23 +515,5 @@ test("a later part failure leaves an earlier accepted revision unknown", async (
     expect(result.error.committedRevisions).toEqual([]);
     expect(result.error.unknownRevisions).toEqual([FIRST_REVISION]);
     expect(result.error.unattemptedRevisions).toEqual([]);
-  }
-});
-
-test("unknown append cleanup waits beyond both request and engine windows", () => {
-  const startedAt = new Date("2026-08-25T12:00:00.000Z");
-  // Per generation: a longer commit window lengthens both the request budget
-  // and the engine's own publish window behind it.
-  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
-    const commitTimeoutSecs =
-      manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
-    expect(
-      corpusIndexUnknownAppendBarrierAt(startedAt, manifest).getTime(),
-    ).toBe(
-      startedAt.getTime() +
-        corpusIndexCommittedIngestTimeoutMs(commitTimeoutSecs) +
-        commitTimeoutSecs * 1000 +
-        CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
-    );
   }
 });

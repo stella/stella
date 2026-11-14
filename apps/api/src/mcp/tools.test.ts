@@ -125,6 +125,7 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
+import { windowBoundText } from "@/api/mcp/bound-text-window";
 import { CITATION_READ_DETAILS } from "@/api/mcp/case-law-citations-input";
 import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/case-law-search-input";
@@ -135,7 +136,6 @@ import {
   deriveContactDisplayName,
   MATTER_TOOL_HANDLERS,
 } from "@/api/mcp/matter-tools";
-import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import {
   PUBLIC_READ_CONTINUATION_LIMITS,
@@ -4086,9 +4086,27 @@ describe("OpenAI-compatible MCP tools", () => {
       );
       return gate;
     };
+    // No outcome here may depend on the runner's speed. A call expected to
+    // answer "running" has its work held behind a gate, so the short deadline
+    // passes first. A call expected to finish runs on a clock that stands
+    // still, so its deadline never passes and it answers when the work does.
+    const RESPONSE_DEADLINE = {
+      short: { ms: 15, continuation: {} },
+      never: {
+        ms: PUBLIC_READ_RESPONSE_DEADLINE_MS,
+        continuation: {
+          clock: {
+            now: () => 0,
+            sleep: async () => await Promise.withResolvers<never>().promise,
+          },
+        },
+      },
+    } as const;
+    type ResponseDeadline = keyof typeof RESPONSE_DEADLINE;
     const contextFor = (
       store: ReturnType<typeof createFakeContinuationStore>["store"],
       ownerId: string,
+      deadline: ResponseDeadline = "short",
     ) =>
       createContext({
         testDependencies: {
@@ -4096,8 +4114,9 @@ describe("OpenAI-compatible MCP tools", () => {
             store,
             ownerId,
             limits,
+            ...RESPONSE_DEADLINE[deadline].continuation,
           }),
-          publicReadResponseDeadlineMs: 15,
+          publicReadResponseDeadlineMs: RESPONSE_DEADLINE[deadline].ms,
         },
       });
     const search = async (
@@ -4115,6 +4134,25 @@ describe("OpenAI-compatible MCP tools", () => {
     const tokenOf = (result: Awaited<ReturnType<typeof search>>) =>
       asTestRaw<{ continuationToken: string }>(parseToolPayload(result))
         .continuationToken;
+    /**
+     * The running answer once the work has stored its progress. The first
+     * call's deadline may pass before any phrasing finishes, so the token reads
+     * the progress after it is stored instead of racing the clock.
+     */
+    const progressOnceStored = async (
+      context: AuthorizedMcpRequestContext,
+      hasProgress: (workId: string) => boolean,
+      args: Record<string, unknown>,
+    ) => {
+      const continuation_token = tokenOf(await search(context, args));
+      await waitFor(
+        () => (hasProgress(continuation_token) ? true : undefined),
+        { description: "the finished phrasings' progress is stored" },
+      );
+      return parseToolPayload(
+        await search(context, { ...args, continuation_token }),
+      );
+    };
 
     test("N parallel identical searches end in a continuation with one read and no error", async () => {
       const { store } = createFakeContinuationStore();
@@ -4201,7 +4239,7 @@ describe("OpenAI-compatible MCP tools", () => {
         async ({ body: { query } }: { body: { query: string } }) =>
           answered(query),
       );
-      const recovered = await search(contextFor(store, "live-task"), {
+      const recovered = await search(contextFor(store, "live-task", "never"), {
         ...args,
         continuation_token,
       });
@@ -4240,7 +4278,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     test("names the phrasings that finished and never presents them as the answer", async () => {
-      const { store } = createFakeContinuationStore();
+      const { store, hasProgress } = createFakeContinuationStore();
       const gate = Promise.withResolvers<undefined>();
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body: { query } }: { body: { query: string } }) => {
@@ -4259,12 +4297,10 @@ describe("OpenAI-compatible MCP tools", () => {
           decisions: { decisionId: string }[];
         };
       }>(
-        parseToolPayload(
-          await search(contextFor(store, "task-a"), {
-            country: "CZE",
-            queries: ["fast", "slow"],
-          }),
-        ),
+        await progressOnceStored(contextFor(store, "task-a"), hasProgress, {
+          country: "CZE",
+          queries: ["fast", "slow"],
+        }),
       );
       expect(payload.status).toBe("running");
       expect(payload.results).toBeUndefined();
@@ -4277,7 +4313,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     test("keeps a phrasing that ran out of time among the pending ones", async () => {
-      const { store } = createFakeContinuationStore();
+      const { store, hasProgress } = createFakeContinuationStore();
       const gate = Promise.withResolvers<undefined>();
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body: { query } }: { body: { query: string } }) => {
@@ -4297,12 +4333,10 @@ describe("OpenAI-compatible MCP tools", () => {
         status: string;
         partial: { finishedQueries: string[]; pendingQueries: string[] };
       }>(
-        parseToolPayload(
-          await search(contextFor(store, "task-a"), {
-            country: "CZE",
-            queries: ["fast", "expired", "slow"],
-          }),
-        ),
+        await progressOnceStored(contextFor(store, "task-a"), hasProgress, {
+          country: "CZE",
+          queries: ["fast", "expired", "slow"],
+        }),
       );
       expect(payload.status).toBe("running");
       expect(payload.partial.finishedQueries).toEqual(["fast"]);
@@ -4313,7 +4347,7 @@ describe("OpenAI-compatible MCP tools", () => {
     describe("the OpenAI-compatible search", () => {
       const compatContext = (
         store: ReturnType<typeof createFakeContinuationStore>["store"],
-        deadlineMs: number,
+        deadline: ResponseDeadline,
       ) =>
         createContext({
           testDependencies: {
@@ -4321,8 +4355,9 @@ describe("OpenAI-compatible MCP tools", () => {
               store,
               ownerId: "task-a",
               limits,
+              ...RESPONSE_DEADLINE[deadline].continuation,
             }),
-            publicReadResponseDeadlineMs: deadlineMs,
+            publicReadResponseDeadlineMs: RESPONSE_DEADLINE[deadline].ms,
           },
         });
       type CompatPage = {
@@ -4341,7 +4376,7 @@ describe("OpenAI-compatible MCP tools", () => {
           async ({ body: { query } }: { body: { query: string } }) =>
             answered(query),
         );
-        const result = await compatSearch(compatContext(store, 2000), {
+        const result = await compatSearch(compatContext(store, "never"), {
           query: "náhrada",
         });
         expect(result.isError).not.toBe(true);
@@ -4360,7 +4395,7 @@ describe("OpenAI-compatible MCP tools", () => {
             return await Promise.resolve(answered(query));
           },
         );
-        const context = compatContext(store, 2000);
+        const context = compatContext(store, "never");
         const result = await compatSearch(
           {
             ...context,
@@ -4394,9 +4429,9 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
       test("answers cut short with a cursor that runs the same page again", async () => {
-        const { store } = createFakeContinuationStore();
+        const { store, hasAnyFinished } = createFakeContinuationStore();
         const gate = gatedSearch();
-        const first = await compatSearch(compatContext(store, 5), {
+        const first = await compatSearch(compatContext(store, "short"), {
           query: "náhrada",
         });
         expect(first.isError).not.toBe(true);
@@ -4408,7 +4443,12 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(page.nextCursor).not.toBeNull();
 
         gate.resolve(undefined);
-        const second = await compatSearch(compatContext(store, 2000), {
+        // The cursor names the same work, so it collects the stored page
+        // instead of following a run on a clock that never moves.
+        await waitFor(() => (hasAnyFinished() ? true : undefined), {
+          description: "the cut-short search stores its page",
+        });
+        const second = await compatSearch(compatContext(store, "never"), {
           query: "náhrada",
           cursor: page.nextCursor,
         });
@@ -6370,7 +6410,7 @@ describe("OpenAI-compatible MCP tools", () => {
       createProvisionVersionRow(),
     ]);
     readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
-    const stale = windowProvisionText({
+    const stale = windowBoundText({
       limit: 3,
       subject: JSON.stringify([STATUTE_ELI, PROVISION_ANCHOR, STATUTE_ID]),
       text: "Previous provision wording",

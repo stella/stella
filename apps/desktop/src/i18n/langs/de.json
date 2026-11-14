@@ -66,6 +66,10 @@
     "accountWindowTitle": "Konto verbinden",
     "accountTitle": "Dieses Konto verbinden?",
     "accountSubtitle": "Verbinden Sie stella desktop mit diesem Konto und dieser Organisation.",
+    "switchWindowTitle": "Konto wechseln",
+    "switchTitle": "Zu einem anderen Konto wechseln?",
+    "switchSubtitle": "stella desktop ist mit {currentEmail} verbunden. Dieses Konto trennen und stattdessen {email} verbinden?",
+    "switchConfirm": "Trennen und verbinden",
     "accountEmail": "Konto",
     "organizationName": "Organisation",
     "allow": "Zulassen",
@@ -228,6 +232,8 @@
     "permissionNotificationsDescription": "Informiert Sie, wenn ein Dokument bereit ist oder eine Synchronisierung Aufmerksamkeit braucht.",
     "permissionAccessibility": "Bedienungshilfen",
     "permissionAccessibilityDescription": "Erlaubt der Aktivitätsübersicht, Fenstertitel aufzuzeichnen.",
+    "permissionMicrophone": "Mikrofon",
+    "permissionMicrophoneDescription": "Damit hört Sie das Diktieren, solange Sie sein Tastenkürzel halten.",
     "permissionAllowed": "Erlaubt",
     "permissionAllow": "Erlauben",
     "permissionOpenSettings": "Einstellungen öffnen",
@@ -422,6 +428,16 @@
     "accessibilityRequired": "Erlauben Sie den Zugriff unter Bedienungshilfen, um Details aufzuzeichnen. App-Namen werden weiterhin erfasst.",
     "openAccessibilitySettings": "Einstellungen für Bedienungshilfen öffnen",
     "detailsUnavailable": "Details sind auf diesem Gerät nicht verfügbar. App-Namen werden weiterhin erfasst.",
+    "browserTitlesWithheld": "Fenstertitel aus {browser} werden nicht aufgezeichnet.",
+    "recordTitlesFromNow": "Ab jetzt aufzeichnen",
+    "browserTitlesRecordedFromNow": "Fenstertitel aus {browser} werden ab jetzt aufgezeichnet.",
+    "earlierTimeStaysUntitled": "Frühere Zeit bleibt ohne Titel.",
+    "titlesNotRecorded": "Fenstertitel werden nicht aufgezeichnet.",
+    "accessibilityAccessMissing": "stella hat keinen Zugriff unter Bedienungshilfen. Ist stella dort bereits aktiviert, deaktivieren Sie den Eintrag und aktivieren Sie ihn erneut.",
+    "titlesNeedAccessibility": "Ohne Zugriff unter Bedienungshilfen werden keine Fenstertitel aufgezeichnet.",
+    "recordAppNameOnly": "Nur den App-Namen für {name} aufzeichnen",
+    "recordAppDetails": "Details für {name} aufzeichnen",
+    "appNameOnlyApps": "Apps mit Aufzeichnung nur des Namens",
     "recording": "Aufzeichnung läuft",
     "paused": "Pausiert",
     "pause": "Pausieren",
@@ -498,8 +514,9 @@
     "mixedActivity": "Schneller Wechsel",
     "mixedActivityLabel": "Schneller Wechsel zwischen {apps}, {range}",
     "moreApps": "+{count} weitere",
-    "suggestionLabel": "Vorgeschlagener Eintrag: {matter}, {hours} Std.",
-    "rangeHours": "{range} · {hours} Std.",
+    "suggestionPieceLabel": "Vorgeschlagener Eintrag: {matter}, {range}, {duration}, insgesamt {hours} Std.",
+    "suggestionRange": "{range} · {duration} · {hours} Std.",
+    "suggestionPieces": "{count, plural, one {# Abschnitt} other {# Abschnitte}} · {duration} · {hours} Std.",
     "draftedRange": "{range} · als Entwurf",
     "newEntry": "Neuer Eintrag",
     "chooseMatter": "Akte auswählen",
@@ -507,6 +524,7 @@
     "reject": "Ablehnen",
     "evidenceTitles": "Titel",
     "evidenceApps": "Apps",
+    "evidenceUntitled": "Ohne Titel · {app}",
     "rangeEmpty": "In diesem Zeitraum wurde nichts erfasst.",
     "rangeMostlyUnmatched": "Der Großteil dieses Zeitraums gehört zu keiner Akte, daher ist keine vorausgewählt.",
     "rangeSplitBetweenMatters": "Keine einzelne Akte umfasst den Großteil dieses Zeitraums, daher ist keine vorausgewählt.",
@@ -520,7 +538,9 @@
     "aiDraftWriting": "stella AI entwirft die Beschreibung …",
     "aiDraftNeedsMatter": "Wählen Sie eine Akte, dann kann stella AI die Beschreibung entwerfen.",
     "aiDraftConsent": "stella AI kann Beschreibungen aus Akte, Datum, Dauer und App-Namen jedes Eintrags entwerfen, dazu aus den hier gezeigten Dokumentnamen und Fenstertiteln, wenn Sie diese aufzeichnen. Ihre früheren Einträge zur Akte helfen, Ihren Stil zu treffen. Sonst verlässt nichts über Ihren Tag diesen Computer.",
-    "aiDraftAllow": "stella AI erlauben",
+    "aiDraftOffer": "stella AI kann die Beschreibung entwerfen.",
+    "aiDraftWhatIsSent": "Was wird gesendet?",
+    "aiDraftAllow": "Erlauben",
     "aiDraftRetry": "Erneut versuchen",
     "aiDraftOff": "Ihre Kanzlei hat Entwürfe mit stella AI ausgeschaltet.",
     "aiDraftConsentRequired": "Erlauben Sie stella AI erneut, um diese Beschreibung zu entwerfen.",
@@ -541,7 +561,7 @@
     "aiDraftFlags": "Hinweise zu den Abrechnungsrichtlinien",
     "aiDraftFlagSource": "{file}, {section}",
     "aiRefine": "Anpassen",
-    "aiRefinePlaceholder": "Sagen Sie stella, wie der Entwurf angepasst werden soll …",
+    "aiRefinePlaceholder": "Änderung beschreiben …",
     "aiRefining": "stella AI passt die Beschreibung an …",
     "aiProposal": "stella AI schlägt vor",
     "aiAccept": "Übernehmen",
@@ -551,7 +571,7 @@
     "aiSteerShorter": "Kürzer",
     "aiSteerMoreDetail": "Ausführlicher",
     "aiSteerClientFriendly": "Für Mandanten verständlich",
-    "aiSteerWriteIn": "Auf {language} schreiben",
+    "aiSteerWriteInLanguage": "Auf Deutsch schreiben",
     "aiSteerRemember": "Für das nächste Mal merken",
     "billingDraftsPreference": "Ihre Vorgabe für Entwürfe",
     "billingDraftsForgetPreference": "Vorgabe vergessen",
@@ -563,7 +583,18 @@
   },
   "dictation": {
     "title": "Diktieren",
-    "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert.",
+    "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert. Ist die KI-Überarbeitung aktiviert, wird der umgewandelte Text, nicht der Ton, über stella an den KI-Anbieter Ihrer Organisation gesendet, um Fehler und Formatierung zu korrigieren; stella speichert ihn nicht.",
+    "cleanup": {
+      "title": "Mit KI überarbeiten",
+      "description": "Die Sprache wird weiterhin auf diesem Computer umgewandelt, und der Ton verlässt ihn nie. Ist die Überarbeitung aktiviert, wird der umgewandelte Text über stella an den KI-Anbieter Ihrer Organisation gesendet, um Erkennungsfehler zu korrigieren und gesprochene Satzzeichen und Formatierungen wie „neue Zeile“ oder „fett“ anzuwenden. stella speichert ihn nicht."
+    },
+    "language": {
+      "title": "Diktiersprache",
+      "description": "Gesprochenes wird in dieser Sprache erkannt, und die Überarbeitung belässt den Text darin. Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers.",
+      "automatic": "Automatisch",
+      "automaticWith": "Automatisch ({languages})",
+      "noResults": "Keine Sprachen gefunden"
+    },
     "modelNeeded": "Das Sprachmodell läuft auf diesem Computer.",
     "download": "Herunterladen ({size} MB)",
     "downloading": "Sprachmodell wird geladen: {percent} %",
@@ -574,7 +605,10 @@
       "accessibility": "Erlauben Sie den Zugriff auf die Bedienungshilfen, damit stella in andere Apps schreiben kann.",
       "microphone": "stella kann Ihr Mikrofon nicht hören. Prüfen Sie den Mikrofonzugriff in den Systemeinstellungen.",
       "modelMissing": "Laden Sie zuerst das Sprachmodell herunter.",
-      "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut."
+      "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut.",
+      "focusChanged": "Sie haben zu einer anderen App gewechselt, bevor der Text fertig war, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
+      "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
+      "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut."
     }
   },
   "shortcut": {
@@ -692,6 +726,18 @@
     "introduceActivityTitle": "Neu: Aktivitätsübersicht",
     "introduceActivityBody": "Aktivität ist jetzt für Ihr Konto verfügbar. Nichts wird aufgezeichnet, bis Sie sie im Aktivitätsfenster starten.",
     "openActivity": "Aktivität öffnen",
+    "dictationModel": "Das Sprachmodell ({size} MB) wird einmal geladen und läuft auf diesem Computer.",
+    "dictationTurnOn": "Einschalten und laden",
+    "dictationDownloadContinues": "Sie können weitermachen. Der Download läuft im Hintergrund weiter.",
+    "dictationReady": "Diktieren ist eingeschaltet und bereit.",
+    "dictationTryLabel": "Hier diktieren",
+    "dictationTryPlaceholder": "Hier klicken, {shortcut} gedrückt halten und einen Satz sagen.",
+    "dictationListening": "Hört zu…",
+    "dictationTranscribing": "Schreibt auf, was Sie gesagt haben…",
+    "dictationMicrophone": "Damit hört stella Sie, solange Sie das Tastenkürzel halten.",
+    "dictationAccessibility": "Damit schreibt stella das Gesagte in die App, die Sie gerade verwenden.",
+    "dictationFailed": "stella desktop konnte das Diktieren nicht einschalten. Versuchen Sie es erneut.",
+    "introduceDictationTitle": "Neu: Diktieren",
     "guideWaiting": "Schalten Sie stella desktop in der Liste oben ein, um Bedienungshilfen zu erlauben.",
     "guideAllowed": "stella desktop ist erlaubt",
     "never": {
@@ -756,7 +802,9 @@
         "notCompleted": "Die Anmeldung wurde nicht abgeschlossen. Versuchen Sie es erneut.",
         "timedOut": "Die Anmeldung hat zu lange gedauert. Versuchen Sie es erneut.",
         "unavailable": "Claude Code konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut."
-      }
+      },
+      "unknown": "Die Anmeldung bei Claude Code konnte nicht geprüft werden. Prüfen Sie es gleich noch einmal.",
+      "checkAgain": "Erneut prüfen"
     },
     "install": {
       "notInstalled": "{name} ist auf diesem Computer noch nicht installiert.",
@@ -796,6 +844,27 @@
       "runs_can_write": "Lokale Ausführungen können in diesen Ordner schreiben, daher kann er keinen Skill enthalten.",
       "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
       "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Verknüpfte Ordner",
+    "description": "Ordner auf diesem Computer, in denen der Coding-Agent eines Chats arbeiten kann. Ein Chat sieht nur den Namen eines Ordners; sein Pfad bleibt auf diesem Computer.",
+    "add": "Ordner verknüpfen",
+    "remove": "Trennen",
+    "removeFolder": "{name} trennen",
+    "state": {
+      "offline": "Das Laufwerk mit diesem Ordner ist nicht verbunden.",
+      "moved": "Dieser Ordner wurde verschoben, umbenannt oder gelöscht. Trennen Sie ihn und verknüpfen Sie ihn erneut.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
+    },
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "too_many": "Dieser Computer hat bereits so viele verknüpfte Ordner, wie er speichern kann. Trennen Sie zuerst einen.",
+      "not_a_folder": "Wählen Sie einen Ordner.",
+      "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Verknüpfen Sie einen Ordner auf dem eigenen Laufwerk dieses Computers.",
+      "protected": "Dieser Ordner enthält die eigenen Daten von stella oder einen Skill-Ordner, daher kann der Agent darin nicht arbeiten.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden."
     }
   }
 }

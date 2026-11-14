@@ -118,8 +118,13 @@ pub async fn open_stella_account(
   let linked = crate::account::current(&account).await?;
   if linked.is_none() {
     let (api_base_url, origin) = browser_connect_target(&*state.lock().await)?;
-    return crate::account::open_browser_connection(&app, &api_base_url, &origin)
-      .await
+    return crate::account::open_browser_connection(
+      &app,
+      &api_base_url,
+      &origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
       .inspect_err(|error| {
         tracing::warn!(error = %error, web_origin = %origin, "stella web connection did not open");
       });
@@ -276,6 +281,19 @@ pub async fn pdf_sign_respond(
       Ok(PdfSignResult::Cancelled)
     }
   }
+}
+
+/// The PDF signing dialog re-reads the certificates it offers while it waits
+/// for a choice, so a smart card inserted or removed meanwhile shows up.
+/// Listing reads certificates only and never prompts.
+#[tauri::command]
+pub async fn pdf_sign_identities(
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::DialogListing, String> {
+  if window.label() != crate::pdf_signing::DIALOG_LABEL {
+    return Err("Only the PDF signing dialog lists signing certificates".into());
+  }
+  Ok(crate::pdf_signing::dialog_listing().await)
 }
 
 #[tauri::command]

@@ -77,12 +77,14 @@ export const SkillsListResponseSchema = v.object({
   ),
 });
 
-const TurnStatusSchema = v.picklist([
+export const CODEX_TURN_STATUSES = [
   "completed",
   "interrupted",
   "failed",
   "inProgress",
-]);
+] as const;
+
+const TurnStatusSchema = v.picklist(CODEX_TURN_STATUSES);
 
 const TurnErrorSchema = v.object({
   message: v.string(),
@@ -176,6 +178,11 @@ export const CodexItemSchema = v.variant("type", [
       v.object({
         path: v.string(),
         kind: v.object({ type: v.picklist(["add", "delete", "update"]) }),
+        /**
+         * The file's text for an add or a delete, a unified diff for an
+         * update. It stays on the computer (`HarnessStepOutput`).
+         */
+        diff: v.nullish(v.string()),
       }),
     ),
     status: v.picklist(["inProgress", "completed", "failed", "declined"]),
@@ -197,19 +204,119 @@ export const CodexItemSchema = v.variant("type", [
     error: v.nullish(v.object({ message: v.string() })),
   }),
   v.object({ type: v.literal("webSearch"), id: v.string(), query: v.string() }),
+  v.object({
+    type: v.literal("imageView"),
+    id: v.string(),
+    /** The image file the harness viewed. */
+    path: v.string(),
+  }),
+  /**
+   * A call to one of the tools an agent manages its subagents with. The
+   * prompt it carries and the message an agent's state reports are no part
+   * of a turn: they are kept on the computer, as the subagent's conversation.
+   */
+  v.object({
+    type: v.literal("collabAgentToolCall"),
+    id: v.string(),
+    /** What the call told the agents it addressed, when it carries any. */
+    prompt: v.nullish(v.string()),
+    /** Open upstream; `CODEX_SPAWN_AGENT_TOOL` is the one shown as a step. */
+    tool: v.string(),
+    status: v.picklist(["inProgress", "completed", "failed", "interrupted"]),
+    /** The agents the call addressed: for a spawn, the one it started. */
+    receiverThreadIds: v.array(v.string()),
+    /** The last known state of those agents, by thread. */
+    agentsStates: v.record(
+      v.string(),
+      v.object({
+        status: v.string(),
+        /** The agent's last message: its report, once it ended. */
+        message: v.nullish(v.string()),
+      }),
+    ),
+  }),
+  /** A point in a subagent's life, named by the subagent's thread. */
+  v.object({
+    type: v.literal("subAgentActivity"),
+    id: v.string(),
+    kind: v.string(),
+    agentThreadId: v.string(),
+  }),
 ]);
 export type CodexItem = v.InferOutput<typeof CodexItemSchema>;
+
+/** The subagent tool that starts an agent on a thread of its own. */
+export const CODEX_SPAWN_AGENT_TOOL = "spawnAgent";
+
+export type CodexAgentOutcome = "succeeded" | "failed" | "cancelled";
+
+/**
+ * How a subagent stands, by the state a subagent call reports for it: at
+ * work, or how it ended. A state not named here (one newer than the pinned
+ * protocol) says neither.
+ */
+export const CODEX_AGENT_STATES: ReadonlyMap<
+  string,
+  "working" | CodexAgentOutcome
+> = new Map([
+  ["pendingInit", "working"],
+  ["running", "working"],
+  ["completed", "succeeded"],
+  ["errored", "failed"],
+  ["notFound", "failed"],
+  ["interrupted", "cancelled"],
+  ["shutdown", "cancelled"],
+]);
+
+/**
+ * How a subagent ended, by the kind of activity that reports it; `started`
+ * and `interacted` are an agent still at work.
+ */
+export const CODEX_ENDED_AGENT_ACTIVITIES: ReadonlyMap<
+  string,
+  CodexAgentOutcome
+> = new Map([
+  ["completed", "succeeded"],
+  ["interrupted", "cancelled"],
+]);
 
 export const isMcpTextBlock = (
   block: unknown,
 ): block is v.InferOutput<typeof McpContentBlock> =>
   v.is(McpContentBlock, block);
 
-/** The first item fields, read before the kind decides the full schema. */
+/**
+ * The first item fields, read before the kind decides the full schema. The
+ * id is read as it comes: whether an item without a usable one is a
+ * violation is its kind's to say (`CodexTurnSession.readItem`).
+ */
 const ItemEnvelopeSchema = v.object({
   threadId: v.string(),
   turnId: v.string(),
-  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+  item: v.object({ type: v.string(), id: v.optional(v.unknown()) }),
+});
+
+const RateLimitWindowSchema = v.object({
+  usedPercent: v.number(),
+  /** Unix seconds. */
+  resetsAt: v.nullish(v.number()),
+});
+
+/** One allowance's windows; `limitId` names it (`codex` is the main one). */
+const RateLimitsSchema = v.object({
+  limitId: v.nullish(v.string()),
+  primary: v.nullish(RateLimitWindowSchema),
+  secondary: v.nullish(RateLimitWindowSchema),
+  /** Credits the account can spend once its windows are exhausted. */
+  credits: v.nullish(
+    v.object({ hasCredits: v.boolean(), unlimited: v.boolean() }),
+  ),
+});
+
+/** `account/rateLimits/read`: every allowance, by limit id when Codex says. */
+export const GetAccountRateLimitsResponseSchema = v.object({
+  rateLimits: RateLimitsSchema,
+  rateLimitsByLimitId: v.nullish(v.record(v.string(), RateLimitsSchema)),
 });
 
 /** Notifications this adapter consumes; every other method is ignored. */
@@ -254,17 +361,13 @@ export const CODEX_NOTIFICATIONS = {
     threadId: v.string(),
     requestId: RequestId,
   }),
-  "account/rateLimits/updated": v.object({
-    rateLimits: v.object({
-      limitId: v.nullish(v.string()),
-      primary: v.nullish(
-        v.object({ usedPercent: v.number(), resetsAt: v.nullish(v.number()) }),
-      ),
-      secondary: v.nullish(
-        v.object({ usedPercent: v.number(), resetsAt: v.nullish(v.number()) }),
-      ),
-    }),
+  /** An MCP server's startup changed state; stella's must not fail. */
+  "mcpServer/startupStatus/updated": v.object({
+    name: v.string(),
+    status: v.string(),
+    error: v.nullish(v.string()),
   }),
+  "account/rateLimits/updated": v.object({ rateLimits: RateLimitsSchema }),
 } as const;
 export type CodexNotificationMethod = keyof typeof CODEX_NOTIFICATIONS;
 
@@ -272,9 +375,7 @@ export type CodexPlanUpdate = v.InferOutput<
   (typeof CODEX_NOTIFICATIONS)["turn/plan/updated"]
 >;
 
-export type CodexRateLimits = v.InferOutput<
-  (typeof CODEX_NOTIFICATIONS)["account/rateLimits/updated"]
->["rateLimits"];
+export type CodexRateLimits = v.InferOutput<typeof RateLimitsSchema>;
 
 export const isCodexNotificationMethod = (
   method: string,
@@ -356,6 +457,51 @@ export const isCodexServerRequestMethod = (
   method: string,
 ): method is CodexServerRequestMethod =>
   Object.hasOwn(CODEX_SERVER_REQUESTS, method);
+
+/** The requests Stella sends the server. */
+export type CodexClientRequestMethod =
+  | "initialize"
+  | "account/read"
+  | "account/rateLimits/read"
+  | "model/list"
+  | "skills/extraRoots/set"
+  | "skills/list"
+  | "thread/start"
+  | "thread/resume"
+  | "thread/unarchive"
+  | "turn/start"
+  | "turn/interrupt"
+  | "thread/backgroundTerminals/list"
+  | "thread/backgroundTerminals/clean";
+
+/**
+ * A page of the thread's background terminals: commands the agent left
+ * running (`exec_command` past its yield), which the app-server keeps for the
+ * thread until they exit or are cleaned. Experimental protocol.
+ */
+export const BackgroundTerminalsListResponseSchema = v.object({
+  data: v.array(v.object({ itemId: v.string() })),
+  nextCursor: v.nullable(v.string()),
+});
+
+/** The item a completed item notification names. */
+export const ItemCompletedSchema = v.object({
+  item: v.object({ id: v.optional(v.string()) }),
+});
+
+/** The item a started item notification names, with its kind. */
+export const ItemStartedSchema = v.object({
+  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
+});
+
+/** The notifications Stella sends the server. */
+export type CodexClientNotificationMethod = "initialized";
+
+/**
+ * How `initialize` introduces Stella, unless a credential was registered
+ * under another client name.
+ */
+export const CODEX_CLIENT_INFO = { name: "stella", title: "stella" } as const;
 
 /** JSON-RPC "method not found". */
 export const METHOD_NOT_FOUND = -32_601;

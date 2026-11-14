@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "À propos du dossier de faits d’ancrage",
+      "addFact": "Ajouter un fait",
+      "addFactPlaceholder": "Énoncez le fait tel que les preuves l’établissent",
       "addInterpretationNote": "Ajouter une note d’interprétation",
+      "busyLine": "Les faits que vous acceptez apparaissent ici.",
+      "confidenceLevels": {
+        "high": "Confiance élevée",
+        "low": "Confiance faible",
+        "medium": "Confiance moyenne"
+      },
       "description": "Preuves tangibles (courriels, messages, relevés bancaires, faits convenus) extraites dans le dossier de faits d’ancrage auquel les affirmations sont confrontées. Relisez, modifiez ou ajoutez des faits à la main.",
       "editInterpretationNote": "Modifier la note d’interprétation",
-      "empty": "Marquez des éléments de cette liste comme des faits auxquels confronter les documents.",
-      "extractionAndReview": "Extraction et relecture",
-      "factCount": "{count, plural, one {# fait} other {# faits} many {# faits}}",
+      "emptyLine": "Extrayez des faits des documents du dossier ou ajoutez-en un à la main.",
+      "emptyTitle": "Aucun fait d’ancrage pour l’instant",
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> : leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
+      "heldFilter": "{count, plural, one {# en attente de relecture} many {# en attente de relecture} other {# en attente de relecture}}",
       "heldForReview": "En attente de relecture",
+      "hideSources": "Masquer les sources",
       "holdOutOfScoring": "Exclure de la notation",
       "inScoring": "Pris en compte",
       "includeInScoring": "Inclure dans la notation",
@@ -228,10 +238,24 @@
       "interpretiveConfidence": "Confiance interprétative",
       "openList": "Ouvrir la liste",
       "record": "Dossier de faits d’ancrage",
-      "setConfidence": "Définir la confiance",
+      "showSources": "Afficher les sources",
       "title": "Faits d’ancrage"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# affirmation repose sur ce fait} many {# affirmations reposent sur ce fait} other {# affirmations reposent sur ce fait}}",
+      "empty": "Cette liste ne contient encore aucun fait.",
+      "moreClaims": "{count, plural, one {# autre affirmation} many {# autres affirmations} other {# autres affirmations}}",
+      "undated": "Non daté"
+    },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
+        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions} many {# contradictions}}",
+        "gap": "<strong>Aucun fait d’ancrage ne couvre cette affirmation.</strong> C’est une lacune du dossier, pas un verdict faible : il n’y a encore rien pour la vérifier.",
+        "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher : un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
+        "supportCount": "{count, plural, one {# soutien} other {# soutiens} many {# soutiens}}",
+        "verdictWithheld": "Verdict suspendu"
+      },
       "escalatedReview": "Transmis à l’équipe chargée des preuves ; aucun verdict à confirmer ou à contester ici tant que le conflit sous-jacent n’est pas résolu.",
       "flagDispute": "Signaler un désaccord",
       "humanReview": "Relecture humaine",
@@ -253,11 +277,13 @@
       "overrideTooltip": "Un relecteur a consigné un verdict différent. L’analyse ci-dessous est celle de l’outil, inchangée.",
       "overrideVerdict": "Remplacer le verdict",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirmer comme déterminant",
         "description": "Deux faits d’ancrage portent sur le même point (<strong>{subject}</strong>), mais se contredisent. Les deux sources sont à <strong>confiance élevée</strong> ; ce n’est donc pas un problème de fiabilité : le dossier lui-même est incohérent. AVT s’abstient de rendre un verdict plutôt que de noter l’affirmation, car choisir un enregistrement plutôt que l’autre est un jugement qu’il vous revient de prendre et de consigner, pas une décision que l’outil devrait prendre en silence.",
         "escalatedNotice": "Signalé à l’équipe chargée des preuves. Le conflit de dossier reste ouvert et comptabilisé tant qu’un enregistrement faisant foi n’est pas choisi.",
         "flagForEvidenceTeam": "Signaler à l’équipe chargée des preuves",
         "governed": "<strong>{value}</strong> fait foi : l’affirmation est jugée par rapport à cet enregistrement. L’autre enregistrement reste consigné.",
         "reconcile": "Réconcilier le dossier",
+        "suggestedNotice": "Le document probant est suggéré plutôt que le récit d’un témoin. Confirmez-le ou choisissez l’autre élément.",
         "title": "Preuves contradictoires dans le dossier",
         "treatAsGoverningRecord": "Considérer comme faisant foi"
       },
@@ -267,17 +293,8 @@
       },
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
-      "score": {
-        "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
-        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions} many {# contradictions}}",
-        "noCoverage": "<strong>Le dossier est muet.</strong> Aucun fait d’ancrage de la base ne traite de cette affirmation. Ce n’est pas un score faible : cela signifie qu’il n’y a encore rien pour la vérifier.",
-        "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher : un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
-        "outOf100": "<strong>/ 100</strong> score de soutien",
-        "supportCount": "{count, plural, one {# soutien} other {# soutiens} many {# soutiens}}",
-        "verdictWithheld": "Verdict suspendu"
-      },
       "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
-      "whyScore": "Pourquoi ce score : faits d’ancrage"
+      "whyVerdict": "Pourquoi ce verdict : faits d’ancrage"
     },
     "claimTypes": {
       "fact": {
@@ -306,20 +323,129 @@
     "disposition": {
       "contested": "Le verdict est net, mais l’interprétation d’un fait contributif est contestée ; un coup d’œil s’impose avant validation.",
       "contradicted": "Le dossier s’écarte de cette affirmation. Une décision humaine est nécessaire avant que ce verdict soit retenu.",
-      "nocover": "Aucun fait d’ancrage ne traite de cette affirmation ; il n’y a donc rien pour la confirmer. La validation est facultative.",
+      "nocover": "Aucun fait de la liste ne couvre encore cette affirmation.",
       "notverifiable": "Écartée comme non vérifiable ; la validation est facultative. Rouvrez-la ci-dessous si elle est en réalité vérifiable.",
       "recordconflict": "Deux pièces du dossier se contredisent. Déterminez ci-dessus laquelle fait foi, ou signalez-le à l’équipe chargée des preuves ; l’outil ne choisira pas à votre place.",
+      "restsOnHeld": "Un fait sur lequel repose ce verdict est en attente de vérification ; confirmez que le verdict tient sans lui, ou revérifiez l’affirmation une fois le fait tranché.",
+      "scopeMismatch": "Un fait cité a une portée différente de celle de l’affirmation. Appréciez s’il tranche l’affirmation telle qu’elle est formulée avant que le verdict ne soit retenu.",
       "supported": "Le dossier confirme cette affirmation. Votre validation atteste que l’outil l’a bien lue ; aucun jugement à rendre.",
-      "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu."
+      "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu.",
+      "testimonyOnly": "Le dossier le confirme, mais aucun document probant ne l’étaie : il repose sur des témoignages. Votre validation confirme que l’outil l’a lu correctement ; le verdict reste signalé comme reposant sur des témoignages.",
+      "unsourcedOnly": "Le dossier l’affirme, mais seulement au moyen de faits encore sans source. Votre validation confirme que l’outil les a bien lus ; les faits restent marqués sans source."
     },
     "documents": {
       "claimSummary": "Contredite : {contradicted} · En tension : {tension} · Conflit de dossier : {conflicts}",
       "empty": "Téléversez un document dans ce dossier pour le vérifier.",
+      "kindsLoadFailed": "Impossible de charger si ces documents sont des témoignages.",
       "notVerified": "Pas encore vérifié",
       "otherList": "Vérifié par rapport à une autre liste",
       "sizeConfirmTitle": "Vérifier ce document ?",
       "statusLoadFailed": "Impossible de charger l’état de vérification de ces documents.",
+      "testimony": "Témoignage",
+      "testimonyAbout": "À propos des témoignages",
+      "testimonyLine": "Marquez comme témoignage les déclarations de témoins, les notes d’entretien et les transcriptions. Les faits qui en sont tirés comptent comme le récit d’une personne, non comme un document probant.",
       "verifyAgain": "Vérifier à nouveau"
+    },
+    "extraction": {
+      "busy": "Terminez d’abord l’extraction en cours et sa relecture.",
+      "confirmStart": "{units, plural, one {Lancer, # unité} many {Lancer, # unités} other {Lancer, # unités}}",
+      "dialogDescription": "Vous acceptez ou refusez chaque fait avant qu’il n’entre dans le dossier.",
+      "dialogTitle": "Extraire des faits de documents",
+      "documentsChosen": "{count, plural, one {# choisi, jusqu’à {max}} many {# choisis, jusqu’à {max}} other {# choisis, jusqu’à {max}}}",
+      "documentsLabel": "Documents à lire",
+      "errors": {
+        "accessRevoked": "L’extraction des faits s’est arrêtée, car l’accès n’est pas disponible.",
+        "aiUnavailable": "Aucun modèle d’IA n’est disponible pour lire les documents. Vérifiez les paramètres d’IA de l’organisation.",
+        "documentMissing": "Un document choisi ou la liste n’existe plus. Rechargez la page et choisissez à nouveau.",
+        "enqueueFailed": "L’extraction des faits n’a pas pu être lancée. Réessayez.",
+        "extractionFailed": "Les faits de ces documents n’ont pas pu être extraits.",
+        "internal": "L’extraction des faits a échoué de manière inattendue.",
+        "noText": "Aucun texte n’a pu être lu dans les documents choisis.",
+        "sourceUnavailable": "Un document a été modifié ou supprimé après le début de l’extraction. Choisissez à nouveau les documents.",
+        "unsupportedFormat": "Seuls les fichiers DOCX, les PDF et les fichiers disposant d’une version PDF peuvent être lus pour en extraire des faits."
+      },
+      "extractFromDocuments": "Extraire des documents",
+      "failedTitle": "Échec de l’extraction des faits",
+      "instructionLabel": "Ce qu’il faut rechercher (facultatif)",
+      "instructionPlaceholder": "Par exemple : les paiements entre les parties et leurs dates",
+      "nothingFound": "Aucun fait n’a été trouvé dans les documents choisis.",
+      "proposedTitle": "Faits proposés",
+      "queued": "En attente de démarrage.",
+      "reviewed": "{accepted} sur {proposed, plural, one {# fait proposé} many {# faits proposés} other {# faits proposés}} acceptés.",
+      "runSize": "{available, plural, one {Cette exécution utilise environ {estimated} de votre # unité disponible.} many {Cette exécution utilise environ {estimated} de vos # unités disponibles.} other {Cette exécution utilise environ {estimated} de vos # unités disponibles.}}",
+      "running": "Lecture des documents. Les faits proposés apparaîtront ici pour relecture.",
+      "startFailed": "Impossible de lancer l’extraction des faits",
+      "submit": "{count, plural, =0 {Extraire des faits} one {Extraire des faits de # document} many {Extraire des faits de # documents} other {Extraire des faits de # documents}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Toutes les sources non rejetées de ce fait sont des témoignages : une déclaration de témoin, une note d’entretien ou une transcription.",
+        "label": "Témoignage"
+      },
+      "unsourced": {
+        "hint": "Aucun document source non rejeté n’est lié à ce fait ; son support et sa date décrivent la preuve, mais ne constituent pas une source.",
+        "label": "Sans source"
+      }
+    },
+    "gap": {
+      "addFact": "Ajouter un fait depuis un document",
+      "addFactFailed": "Le fait n’a pas pu être ajouté",
+      "factOffList": "Un fait qui ne figure plus dans la liste",
+      "linkFact": "Lier un fait",
+      "linkFailed": "Le fait n’a pas pu être lié",
+      "linked": "Faits liés",
+      "linkedMark": "Lié",
+      "linksChanged": "Les liens ont changé depuis la dernière vérification.",
+      "noFacts": "Aucun fait de la liste ne correspond.",
+      "recheck": "Revérifier",
+      "recheckFailed": "L’affirmation n’a pas pu être revérifiée",
+      "searchFacts": "Rechercher dans les faits de la liste",
+      "sheet": {
+        "passage": "Extrait",
+        "passageHint": "Les mots du document qui établissent le fait.",
+        "statementRequired": "Rédigez le fait.",
+        "statementTooLong": "Un fait ne peut pas dépasser {limit} caractères.",
+        "submit": "Ajouter et revérifier",
+        "title": "Ajouter un fait depuis un document"
+      },
+      "showNextSteps": "Afficher les prochaines étapes",
+      "unlink": "Dissocier {fact}"
+    },
+    "graph": {
+      "claimCount": "{count, plural, one {# affirmation} many {# affirmations} other {# affirmations}}",
+      "claimTitle": "Affirmation",
+      "columns": {
+        "claims": "Affirmations",
+        "sources": "Documents sources",
+        "statements": "Déclarations"
+      },
+      "empty": "Cette liste ne contient encore aucun fait ni document vérifié.",
+      "factCount": "{count, plural, one {# fait} many {# faits} other {# faits}}",
+      "factOverflow": "Affichage des {count} premiers faits de cette liste.",
+      "filters": {
+        "allSources": "Toutes les sources",
+        "allVerdicts": "Tous les verdicts",
+        "conflicts": "Conflits",
+        "heldFacts": "Faits en attente de relecture",
+        "source": "Filtrer par source",
+        "verdict": "Filtrer par verdict"
+      },
+      "held": "En attente de relecture",
+      "linkedFacts": "{count, plural, one {# fait lié} many {# faits liés} other {# faits liés}}",
+      "listLabel": "Graphe sous forme de liste",
+      "loadMore": "Charger plus de documents",
+      "noMatch": "Aucun élément ne correspond à ces filtres.",
+      "noStatements": "Aucun document n’a encore été vérifié par rapport à cette liste.",
+      "offList": "N’est plus dans la liste",
+      "relation": {
+        "conflicts": "Contredit",
+        "governs": "Fait foi",
+        "record": "Au dossier",
+        "recordConflict": "Enregistrement contradictoire",
+        "supports": "Étaye"
+      },
+      "unlinked": "Faits sur lesquels ne repose aucune affirmation",
+      "verifyInReview": "Vérifier un document"
     },
     "guidance": {
       "escalate": "Faire remonter",
@@ -327,17 +453,124 @@
       "optional": "Facultatif",
       "readyToConfirm": "Prête à confirmer"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Acceptée de routine",
+        "conflictReopened": "Résolution de la contradiction retirée",
+        "escalated": "Signalée à l’équipe chargée des preuves",
+        "factLinked": "Fait lié",
+        "factUnlinked": "Fait dissocié",
+        "governed": "Élément faisant foi choisi",
+        "noteCleared": "Note supprimée",
+        "noteSaved": "Note enregistrée",
+        "overridden": "Verdict remplacé",
+        "overrideWithdrawn": "Remplacement du verdict retiré",
+        "rechecked": "Affirmation revérifiée",
+        "reopened": "Rouverte en tant qu’affirmation vérifiable",
+        "statusCleared": "Statut d’examen retiré",
+        "statusDisputed": "Désaccord signalé",
+        "statusNeedsEvidence": "Marquée comme nécessitant des preuves",
+        "statusReviewed": "Marquée comme examinée"
+      },
+      "carriedFrom": "De la vérification du {date}",
+      "carriedFromEarlier": "D’une vérification antérieure",
+      "empty": "Aucune action d’examen pour l’instant.",
+      "filters": {
+        "allKinds": "Toute action",
+        "allReviewers": "Tout examinateur",
+        "kind": "Filtrer par action",
+        "reviewer": "Filtrer par examinateur"
+      },
+      "formerMember": "Ancien membre",
+      "kinds": {
+        "factLink": "Liens de faits",
+        "override": "Verdicts remplacés",
+        "recheck": "Revérifications",
+        "recordConflict": "Résolutions de contradictions",
+        "reopen": "Réouvertures",
+        "status": "Changements de statut"
+      },
+      "noMatches": "Aucune action ne correspond à ces filtres.",
+      "noStatus": "Aucun statut",
+      "none": "Aucune action pour l’instant",
+      "reasonUnrecorded": "Aucune raison enregistrée : l’action date d’avant l’obligation de motiver.",
+      "runButton": "Historique de l’examen",
+      "runTitle": "Historique de l’examen"
+    },
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
     },
+    "mode": {
+      "chronology": "Chronologie",
+      "graph": "Graphe",
+      "label": "Afficher la liste en",
+      "review": "Examen"
+    },
+    "qualifiers": {
+      "heading": "Réserves",
+      "recordSilent": {
+        "hint": "Le dossier n’a pas vocation à traiter ce point : l’absence de couverture n’est donc pas une lacune.",
+        "label": "Dossier muet"
+      },
+      "restsOnHeld": {
+        "hint": "Un fait sur lequel repose ce verdict est désormais exclu de la notation.",
+        "label": "Repose sur un fait exclu"
+      },
+      "scopeMismatch": {
+        "hint": "Un fait cité porte sur une période, une population, un lieu ou une mesure autres que ceux de l’affirmation.",
+        "label": "Portée différente"
+      },
+      "testimonyOnly": {
+        "hint": "Aucun document probant n’étaie les faits sur lesquels repose ce verdict, et au moins l’un d’eux est un témoignage.",
+        "label": "Témoignages seulement"
+      },
+      "unsourcedOnly": {
+        "hint": "Aucun fait sur lequel repose ce verdict n’a encore de source.",
+        "label": "Uniquement sans source"
+      }
+    },
+    "reason": {
+      "escalate": "Pourquoi l’équipe chargée des preuves en a-t-elle besoin ?",
+      "govern": "Pourquoi cet élément fait-il foi ?",
+      "override": "Pourquoi le verdict est-il « {verdict} » ?",
+      "placeholder": "Indiquez la raison ; elle reste dans l’historique de l’affirmation",
+      "reopen": "Pourquoi cette affirmation est-elle vérifiable ?",
+      "required": "Indiquez une raison pour l’enregistrer.",
+      "unresolveConflict": "Pourquoi retirer cette résolution ?",
+      "withdrawOverride": "Pourquoi revenir au verdict de l’outil ?"
+    },
+    "recheck": {
+      "currentVerdict": "Verdict après la revérification",
+      "runVerdict": "Verdict de l’analyse",
+      "summary": "Revérifiée le {checkedAt} par rapport à {count, plural, one {# fait} other {# faits} many {# faits}}."
+    },
     "review": {
-      "disputed": "Désaccord signalé · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Acceptée de routine} other {Examinée}} · {decidedAt}",
+      "decided": "{status, select, disputed {Désaccord signalé} needsEvidence {Preuves requises} other {{origin, select, bulk {Acceptée de routine} other {Examinée}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Désaccord signalé",
+        "needsEvidence": "Preuves requises",
+        "reviewed": "Examinée"
+      },
       "undo": "Annuler la décision"
     },
     "runs": {
       "back": "Tous les documents",
+      "carryOver": {
+        "openSource": "Ouvrir la vérification du {date}",
+        "outcomes": {
+          "ambiguous": "Plusieurs correspondances possibles",
+          "textChanged": "La formulation a changé",
+          "unmatched": "Aucune affirmation correspondante",
+          "verdictChanged": "Le verdict a changé"
+        },
+        "summary": {
+          "carried": "{count, number} repris",
+          "carriedAndMissed": "{carried, number} repris · {missed, number} non",
+          "label": "Examens de la vérification du {date} : {carried, number} repris, {missed, number} non repris",
+          "missed": "{count, number} non repris"
+        }
+      },
       "errors": {
         "accessRevoked": "La vérification a été arrêtée car l’accès est indisponible.",
         "aiUnavailable": "Aucun modèle d’IA n’est disponible pour vérifier les documents. Vérifiez les paramètres d’IA de l’organisation.",
@@ -368,7 +601,39 @@
       "failed": "Non enregistré",
       "failedTitle": "Votre modification n’a pas été enregistrée"
     },
-    "sourceMediumTooltip": "Support de la source : un descripteur neutre. Il n’abaisse pas la confiance à lui seul.",
+    "scope": {
+      "checkedDocument": "Seuls les paragraphes <num>{range}</num> ont été vérifiés.",
+      "checkedOrdinal": "Seuls les paragraphes <num>{range}</num> ont été vérifiés, comptés dans l’ordre : ce document ne numérote pas ses paragraphes.",
+      "errors": {
+        "empty": "Ces paragraphes ne contiennent aucun texte à vérifier.",
+        "garbage": "Saisissez des numéros de paragraphe, par exemple 82–136.",
+        "notFound": "Ces paragraphes ne figurent pas dans ce document.",
+        "numberingUnclear": "La numérotation des paragraphes de ce document est illisible. Vérifiez le document entier.",
+        "required": "Saisissez les paragraphes à vérifier.",
+        "reversed": "La plage se termine avant de commencer.",
+        "tooWide": "Vérifiez au plus 500 paragraphes à la fois."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Aucune affirmation n’a été trouvée dans ces paragraphes.",
+      "showBefore": "Afficher le texte avant le ¶ {from}",
+      "verifyParagraphs": "Vérifier des paragraphes"
+    },
+    "staleness": {
+      "failed": "Les affirmations n’ont pas pu être revérifiées",
+      "finished": "{count, plural, one {# affirmation revérifiée} other {# affirmations revérifiées} many {# affirmations revérifiées}}",
+      "partial": "{rechecked, number} revérifiée(s), {failed, plural, one {# en échec} other {# en échec} many {# en échec}}",
+      "reasons": {
+        "factChanged": "Fait modifié",
+        "factHeld": "Fait exclu",
+        "factRemoved": "Fait retiré",
+        "newFactRelated": "Nouveau fait lié"
+      },
+      "recheckAll": "Tout revérifier",
+      "recheckLocked": "En cours de revérification avec les autres affirmations obsolètes",
+      "runLine": "{count, plural, one {# affirmation est peut-être obsolète} other {# affirmations sont peut-être obsolètes} many {# affirmations sont peut-être obsolètes}}",
+      "running": "{count, plural, one {Revérification de # affirmation…} other {Revérification de # affirmations…} many {Revérification de # affirmations…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Contredite",
@@ -376,7 +641,8 @@
       },
       "nocover": {
         "chip": "Sans couverture",
-        "label": "Aucun fait d’ancrage ne couvre cette affirmation"
+        "label": "Aucun fait d’ancrage ne couvre cette affirmation",
+        "silentChip": "Sans couverture · dossier muet"
       },
       "notverifiable": {
         "chip": "Non vérifiable",
@@ -399,7 +665,7 @@
       "acceptRoutine": "Accepter {count, plural, one {# affirmation de routine} other {# affirmations de routine} many {# affirmations de routine}}",
       "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.} many {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
       "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent} many {# affirmations requièrent}} votre jugement</strong> : contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.} many {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} needsEvidence {, preuves requises} other {}})",
       "documentView": {
         "label": "Affichage du document",
         "original": "Original",
@@ -425,100 +691,21 @@
       "pickList": "Choisissez la liste dont les faits servent à vérifier les documents de ce dossier."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Créer la version bilingue",
-      "creating": "Création…",
-      "description": "Crée une copie de ce document sur deux colonnes : le texte original à gauche, une copie à traduire à droite, avec une numérotation indépendante. La copie est enregistrée dans ce dossier comme nouveau document.",
-      "sameLanguage": "Choisissez deux langues différentes.",
-      "sourceLanguage": "Langue source",
-      "title": "Version bilingue"
-    },
-    "error": {
-      "title": "Échec de la version bilingue"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> est prêt avec {rowCount, plural, one {# ligne} other {# lignes} many {# lignes}} à traduire.",
-      "title": "Version bilingue créée"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Remplit la colonne de traduction de ce document sur deux colonnes. Vérifiez ce qui arrive à chaque ligne et la façon dont les termes définis sont rendus, puis lancez la traduction.",
-      "prepare": "Préparer",
-      "preparing": "Lecture du document…",
-      "preparingHint": "Lire l'intégralité du document et évaluer chaque ligne prend jusqu'à deux minutes.",
-      "title": "Traduire la version bilingue"
+      "prepare": "Préparer"
     },
     "dispositions": {
-      "inline": "Les deux langues",
       "keep": "Laisser tel quel"
     },
-    "error": {
-      "prepareTitle": "Le document n'a pas pu être préparé",
-      "startTitle": "La traduction n'a pas pu être lancée"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Aucun modèle d'IA n'est disponible pour la traduction.",
-      "applyFailed": "Les traductions n'ont pas pu être réécrites dans le document.",
-      "documentChanged": "Le document a changé pendant la traduction. Préparez-le à nouveau.",
-      "documentUnresolved": "Le document ou son fichier n'est plus disponible.",
-      "enqueueFailed": "La traduction n'a pas pu être mise en file d'attente.",
-      "internal": "La traduction s'est arrêtée de façon inattendue.",
-      "notBilingual": "Ce document ne contient pas de tableau bilingue.",
-      "translationFailed": "Un lot de lignes n'a pas pu être traduit.",
-      "unknown": "La traduction s'est arrêtée de façon inattendue."
-    },
-    "glossary": {
-      "add": "Ajouter un terme",
-      "description": "Ces rendus s'appliquent à toutes les lignes. Un terme sans traduction doit être complété ou supprimé.",
-      "empty": "Aucun terme défini trouvé.",
-      "formsHint": "Séparez les autres formes par des virgules.",
-      "formsSource": "Autres formes du terme",
-      "formsTarget": "Autres formes de la traduction",
-      "incomplete": "Complétez les traductions manquantes ou supprimez ces termes.",
-      "origins": {
-        "detected": "Détecté",
-        "user": "Le vôtre"
-      },
-      "term": "Terme",
-      "title": "Termes définis",
-      "tooManyForms": "Un terme peut compter au maximum {max} autres formes.",
-      "translation": "Traduction"
-    },
     "kinds": {
-      "heading": "Titre",
-      "listItem": "Élément de liste",
-      "paragraph": "Paragraphe",
-      "table": "Tableau entier"
-    },
-    "origins": {
-      "default": "Non évalué",
-      "model": "IA"
+      "paragraph": "Paragraphe"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# ligne a été ignorée} other {# lignes ont été ignorées} many {# lignes ont été ignorées}} : elles ne contiennent aucun texte traduisible.",
-      "start": "Lancer la traduction",
       "starting": "Lancement…"
     },
     "rows": {
-      "description": "Choisissez ce qui arrive à chaque ligne de la colonne de traduction.",
-      "ordinal": "#",
-      "sourceText": "Texte source",
-      "title": "Lignes",
-      "whatToDo": "Que faire"
-    },
-    "run": {
-      "cancelled": "La traduction a été annulée.",
-      "doneSummary": "{count, plural, one {# ligne traduite} other {# lignes traduites} many {# lignes traduites}}.",
-      "doneTitle": "Traduction terminée",
-      "failedRows": "{count, plural, one {# ligne n'a pas pu être traduite} other {# lignes n'ont pas pu être traduites} many {# lignes n'ont pas pu être traduites}}.",
-      "failedTitle": "Traduction interrompue",
-      "hint": "La traduction s'exécute sur le serveur. Gardez cette fenêtre ouverte pour la suivre.",
-      "moreRows": "{count, plural, one {# ligne de plus} other {# lignes de plus} many {# lignes de plus}}",
-      "progress": "{completed} lignes traduites sur {total}",
-      "title": "Traduction en cours…",
-      "warningsTitle": "Lignes à vérifier"
+      "title": "Lignes"
     }
   },
   "billing": {
@@ -1031,7 +1218,6 @@
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
       "none": "Aucune citation enregistrée pour l'instant.",
       "notInStella": "Pas encore dans stella",
-      "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
       "paragraphLabel": "Point {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1139,6 +1325,7 @@
       "count": "{count, plural, one {# langue} other {# langues} many {# langues}}",
       "matchedIn": "Correspondance en {language}"
     },
+    "linkedPassageGone": "Le passage lié ne figure plus dans ce texte.",
     "loadingMore": "Chargement en cours…",
     "marginFilter": {
       "label": "Filtre des dispositions citées",
@@ -1691,39 +1878,84 @@
     "loadEarlierMessages": "Charger les messages précédents",
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
     "loadingEarlierMessages": "Chargement des messages précédents…",
+    "localFilesUndo": {
+      "action": "Annuler les modifications de fichiers",
+      "computer": {
+        "failed": "L’annulation ne s’est pas terminée sur votre ordinateur. Certains fichiers ont peut-être déjà été modifiés ; vérifiez le dossier de la conversation.",
+        "folderBusy": "Une exécution sur votre ordinateur utilise ce dossier. Réessayez quand elle sera terminée.",
+        "noCheckpoint": "Votre ordinateur n’a pas de copie enregistrée des fichiers d’avant cette étape ; rien n’a été annulé.",
+        "notNewest": "Votre ordinateur a des modifications plus récentes dans ce dossier ; rien n’a été annulé."
+      },
+      "confirm": "Annuler les modifications",
+      "confirmDescription": "Les fichiers que cette étape a modifiés dans son dossier sur votre ordinateur reviennent à leur état d’avant l’étape. Seules les modifications de cette étape sont annulées ; celles des étapes précédentes restent.",
+      "confirmTitle": "Annuler les modifications de fichiers de cette étape ?",
+      "expired": "Votre ordinateur n’a pas répondu à temps. Réessayez.",
+      "pending": "Annulation des modifications de fichiers sur votre ordinateur",
+      "refused": {
+        "desktopOffline": "Votre ordinateur est hors ligne. Ouvrez l’application de bureau stella et réessayez.",
+        "desktopUpdateRequired": "L’application de bureau stella de votre ordinateur est trop ancienne pour annuler des modifications. Mettez-la à jour et réessayez.",
+        "noCheckpoint": "Cette étape n’a pas de copie enregistrée des fichiers à laquelle revenir.",
+        "notNewest": "Seules les modifications de fichiers de l’étape la plus récente peuvent être annulées.",
+        "threadBusy": "Une réponse est encore en cours dans cette conversation. Réessayez quand elle sera terminée."
+      },
+      "restored": "Modifications de fichiers annulées"
+    },
     "localRun": {
-      "cloud": "Cloud stella",
+      "backgroundTasks": "{count, plural, one {# tâche en arrière-plan en cours} other {# tâches en arrière-plan en cours} many {# tâches en arrière-plan en cours}}",
+      "errorFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible sur votre ordinateur. Vérifiez-le dans stella desktop, puis renvoyez ceci.",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorLimitResetsAt": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Vous pourrez réessayer à partir du {time}.",
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
+      "errorNotReached": "Votre ordinateur n'a pas pris en charge cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
+      "errorRelinked": "stella desktop a été associé à nouveau sur votre ordinateur, cette réponse s'est donc arrêtée. Renvoyez-la.",
+      "errorRestoring": "Votre ordinateur annule encore des modifications de fichiers. Renvoyez ceci dans un instant.",
       "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "filesNotShared": "Les fichiers qui n'ont pas pu être partagés restent sur votre ordinateur : {fileNames}",
-      "onThisComputer": "{harness} sur cet ordinateur",
+      "folderApprovalDescription": "Autorisez {harness} à travailler dans le dossier « {folder} » de votre ordinateur. L’agent peut y lire, modifier et supprimer des fichiers, et les fichiers joints y sont copiés.",
+      "folderApprove": "Autoriser dans {folder}",
+      "folderHint": "Liez des dossiers de votre ordinateur dans les réglages de stella desktop.",
+      "folderOwn": "Dossier propre à la conversation",
+      "folderStateMoved": "Déplacé ou supprimé",
+      "folderStateOffline": "Disque non connecté",
+      "folderStatePending": "En attente de votre accord",
+      "folderStateProtected": "Contient les données de stella",
+      "folderStateUnlinked": "N’est plus lié",
+      "folderStateUnreadable": "Illisible",
+      "limitReminderNotify": "Me prévenir une fois réinitialisée",
+      "limitReminderScheduled": "Nous vous préviendrons à partir du {time}.",
       "permissionAboveLimit": "Non autorisé par votre organisation",
       "permissionAskDescription": "Modifie seul les fichiers du dossier de la conversation ; demande avant tout le reste.",
       "permissionAutoDescription": "Fait seul ce qu’il juge sûr ; demande pour le reste.",
       "permissionFullAuto": "Entièrement automatique",
       "permissionFullAutoDescription": "Ne demande jamais rien dans le dossier de la conversation ; demande toujours avant de modifier votre ordinateur.",
+      "permissionPlan": "Planifier",
+      "permissionPlanDescription": "Lit et planifie d’abord ; demande avant chaque modification tant que vous n’avez pas approuvé le plan.",
       "permissionSandboxed": "S’exécute dans un bac à sable ; demande avant de modifier votre ordinateur.",
       "permissionUnavailable": "Indisponible sur cet ordinateur",
       "permissions": "Autorisations",
       "refusalConflictingRunMode": "Cette demande doit s’exécuter à la fois avec l’agent cloud et sur votre ordinateur. Choisissez-en un sous Exécuter sur.",
+      "refusalFolderNotApproved": "Autorisez d’abord l’agent de code à travailler dans le dossier lié à cette conversation.",
+      "refusalFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible. Vérifiez-le sous Exécuter sur ou dans stella desktop.",
       "refusalHarnessUnavailable": "L’agent de code de votre ordinateur ne peut pas traiter cette demande pour le moment. Vérifiez-le dans stella desktop.",
       "refusalModelUnavailable": "L’agent de code de votre ordinateur ne propose plus ce modèle. Choisissez-en un autre sous Exécuter sur.",
-      "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté. Ouvrez stella desktop, puis renvoyez le message.",
+      "refusalNoComputer": "Aucun de vos ordinateurs n’est connecté.",
       "refusalPermissionAboveLimit": "Votre organisation n’accorde pas ces autorisations à l’agent de code de votre ordinateur. Choisissez une autre option sous Autorisations.",
       "refusalPermissionUnavailable": "L’agent de code de votre ordinateur ne peut pas s’exécuter avec ces autorisations. Choisissez une autre option sous Autorisations.",
+      "refusalReasoningEffortUnavailable": "L’agent de code de votre ordinateur ne propose pas ce niveau de raisonnement pour le modèle. Choisissez-en un autre sous Niveau de raisonnement.",
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
-      "runOn": "Exécuter sur",
-      "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
+      "stateModelUnavailable": "Modèle plus disponible",
       "stateNeedsLogin": "Connexion requise",
       "stateNotInstalled": "Non installé",
       "stateOffline": "Ordinateur hors ligne",
       "stateUnavailable": "Indisponible pour le moment",
       "stateUnsupported": "Cette version n’est pas prise en charge",
-      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…"
+      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…",
+      "waitingForPickup": "En attente de la prise en charge de cette réponse par votre ordinateur…",
+      "waitingSentAt": "Envoyé à {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Choisissez toutes les réponses qui s’appliquent",
@@ -1733,7 +1965,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
-      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}"
+      "waitsOn": {
+        "approval": "Attend votre approbation",
+        "askUser": "Vous pose une question",
+        "clientTool": "Reprend quand vous ouvrez cette conversation",
+        "harnessQuestion": "L’agent sur votre ordinateur a une question"
+      },
+      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}",
+      "workingNow": "En cours"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {
@@ -1869,6 +2108,25 @@
     "richContentLoading": "Chargement du contenu interactif…",
     "richContentTitle": "Contenu interactif",
     "richContentUnavailable": "Ce contenu ne peut pas être affiché en toute sécurité.",
+    "runOn": {
+      "checkFailed": "Impossible de vérifier votre ordinateur",
+      "chipLabel": "Exécution : {place}",
+      "cloud": "Cloud",
+      "cloudDescription": "S’exécute dans le cloud. Fonctionne partout.",
+      "harnessModels": "Modèles {harness}",
+      "hintInstall": "Installez-le depuis stella desktop",
+      "hintOffline": "Ouvrez stella desktop sur votre ordinateur",
+      "hintSignIn": "Connectez-vous dans stella desktop",
+      "hintUpdate": "Mettez-le à jour depuis stella desktop",
+      "localFolderPlace": "Votre ordinateur, {harness}, {folder}",
+      "localFolderSelection": "Votre ordinateur · {harness} · {folder}",
+      "localPlace": "Votre ordinateur, {harness}",
+      "localSelection": "Votre ordinateur · {harness}",
+      "modelDefault": "Par défaut (recommandé)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Votre ordinateur",
+      "yourComputerDescription": "Utilise Codex ou Claude Code sur votre ordinateur avec votre propre abonnement. Il peut lire et modifier les fichiers du dossier de cette conversation ; ses autorisations fixent ce qu’il peut faire sans demander."
+    },
     "selection": {
       "askInNewChat": "Demander dans une nouvelle conversation",
       "quoteInReply": "Citer dans la réponse",
@@ -1900,6 +2158,7 @@
     "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
     "sendErrorTimedOut": "Le service de conversation n’a pas répondu à temps. Réessayez.",
     "sendErrorToolsUnsupported": "Ce modèle ne peut pas utiliser d’outils et ne peut donc pas répondre aux questions sur votre dossier. Passez à un modèle qui prend en charge les outils.",
+    "sendErrorTurnTooLarge": "Cette réponse est devenue trop volumineuse pour être transmise en entier. Envoyez un nouveau message pour continuer.",
     "sendPrompt": "Envoyer le message",
     "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
@@ -1920,6 +2179,7 @@
     "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
+    "stopping": "Arrêt en cours…",
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
     "suggestedFollowupsLabel": "Suggestions de questions de suivi",
@@ -2062,15 +2322,32 @@
       "field": "Champ",
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
+      "localOutput": {
+        "conversation": "Conversation du sous-agent",
+        "conversationPrompt": "Tâche",
+        "conversationReport": "Rapport",
+        "cut": "Affichage des {kept} premiers sur {total}",
+        "diff": "Modifications des fichiers",
+        "elsewhere": "Ouvrez-le sur l’ordinateur qui l’a exécuté",
+        "empty": "Aucun résultat",
+        "failed": "L’application de bureau stella sur cet ordinateur n’a pas pu l’afficher.",
+        "imageTooLarge": "Cette image fait {total}. Les images de plus de {kept} ne sont pas conservées sur cet ordinateur ; elle ne peut donc pas être affichée ici.",
+        "notKept": "Rien de cette étape n’est conservé sur cet ordinateur",
+        "reading": "Lecture depuis cet ordinateur"
+      },
       "output": "Résultat",
       "patternInPath": "{pattern} dans {path}",
+      "proposedPlan": "Proposition d’un plan",
       "readFile": "Lecture d’un fichier",
       "searchFiles": "Recherche dans les fichiers",
+      "signInToContinue": "Connectez-vous pour continuer",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
+      "subagent": "Exécution d’un sous-agent",
       "toggleDetails": "Afficher les détails",
       "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}",
-      "updatePlan": "Mise à jour du plan"
+      "updatePlan": "Mise à jour du plan",
+      "viewImage": "Consultation d’une image"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",
@@ -2081,6 +2358,8 @@
       "replyReadyTitle": "Réponse prête"
     },
     "turnStatus": {
+      "answerFailed": "La réponse n’a pas pu être terminée",
+      "answerReady": "Réponse prête",
       "waitingForApproval": "En attente d’approbation",
       "waitingForInput": "En attente de saisie",
       "writing": "Rédaction"
@@ -2360,6 +2639,7 @@
     "filter": "Filtrer",
     "filters": "Filtres",
     "find": "Rechercher",
+    "folder": "Dossier",
     "formula": "Formule",
     "goBack": "Retour",
     "goBackToEditing": "Revenir à l’édition",
@@ -2423,6 +2703,8 @@
     "loading": "Chargement",
     "logTime": "Saisir le temps",
     "low": "Faible",
+    "markAsRead": "Marquer comme lu",
+    "markAsUnread": "Marquer comme non lu",
     "matter": "Dossier",
     "matters": "Dossiers",
     "medium": "Moyenne",
@@ -2453,6 +2735,8 @@
     "or": "Ou",
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
+    "organizations": "Organisations",
+    "outOfDate": "Obsolète",
     "page": "Page n° {page}",
     "paymentRetryNotice": "Problème de paiement. Mettez à jour votre moyen de paiement avant le {date} pour conserver votre accès.",
     "pin": "Épingler",
@@ -2467,6 +2751,7 @@
     "queued": "En file d'attente",
     "reason": "Motif",
     "recommended": "Recommandés",
+    "reconnect": "Reconnecter",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",
@@ -2539,6 +2824,7 @@
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
+    "unread": "Non lu",
     "unsavedChanges": "Modifications non enregistrées",
     "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
@@ -2758,7 +3044,6 @@
       "vatPayerUnknown": "Inconnu",
       "year": "Année"
     },
-    "filterOrganizations": "Organisations",
     "filterPersons": "Personnes",
     "import": {
       "confirmAction": "Confirmer l'importation",
@@ -3116,6 +3401,16 @@
       "organizationMemberLimitReached": "Cette organisation a atteint sa limite de membres.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
+      "runActiveLimitReached": "Votre organisation a atteint la limite de traitements simultanés. Attendez la fin de l’un d’eux, puis réessayez.",
+      "runDailyLimitReached": "Votre organisation a atteint la limite quotidienne de traitements. Réessayez après minuit (Europe/Prague).",
+      "sharepointAccessDenied": "Microsoft a refusé l’accès à ce site, cette bibliothèque ou ce fichier.",
+      "sharepointFileTooLarge": "Ce fichier est trop volumineux pour être importé.",
+      "sharepointInvalidCursor": "La liste a changé pendant votre navigation. Rouvrez le dossier.",
+      "sharepointNotAFile": "Seuls les fichiers peuvent être importés, pas les dossiers ni les blocs-notes.",
+      "sharepointNotConnected": "Connectez votre compte Microsoft pour utiliser SharePoint et OneDrive.",
+      "sharepointNotFound": "Ce site, cette bibliothèque ou ce fichier n’existe plus ou n’est pas partagé avec vous.",
+      "sharepointReconnectRequired": "Votre connexion Microsoft a expiré. Reconnectez SharePoint et OneDrive.",
+      "sharepointThrottled": "Microsoft limite les requêtes. Réessayez dans quelques instants.",
       "skillSourceUnreachable": "La source de la compétence n’a pas pu être chargée. Vérifiez que le lien mène à un dépôt GitHub public, ou réessayez plus tard.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
@@ -3123,8 +3418,6 @@
       "validationRequired": "Un champ obligatoire est vide.",
       "validationTooLong": "Trop long : {limit, number} caractères au maximum.",
       "validationTooShort": "Trop court : {limit, number} caractères au minimum.",
-      "verificationActiveLimitReached": "Votre organisation a atteint la limite de vérifications simultanées. Attendez la fin d’une vérification, puis réessayez.",
-      "verificationDailyLimitReached": "Votre organisation a atteint la limite quotidienne de vérifications. Réessayez après minuit (Europe/Prague).",
       "versionConflict": "Quelqu’un d’autre l’a modifié pendant votre édition. Rechargez pour obtenir la version actuelle."
     },
     "failedToAcceptInvitation": "Impossible d'accepter l'invitation",
@@ -4054,6 +4347,7 @@
       "documentChanged": "Ce document a changé depuis cette révision.",
       "documentCutNotice": "<strong>{documentName} n’a pas été lu en entier.</strong> Il est trop long pour ce modèle : environ {percent} du texte a donc été omis. Une position sans réponse est signalée pour vérification, car la réponse peut se trouver dans la partie omise.",
       "documentTooLarge": "Ce document est trop long pour que ce modèle en lise une part suffisante. Essayez un modèle doté d’une fenêtre de contexte plus grande.",
+      "documentsTooLarge": "Ces documents sont trop longs pour que ce modèle les lise ensemble. Utilisez des documents moins nombreux ou plus courts, ou essayez un modèle doté d’une fenêtre de contexte plus grande.",
       "export": {
         "counterparty": "Télécharger pour la contrepartie",
         "counterpartyFailed": "Impossible d'exporter le document",
@@ -4221,7 +4515,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
-          "name": "Créer un playbook"
+          "name": "Créer un playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Ajoute des critères à l’un de mes playbooks existants.",
+              "name": "Compléter un playbook"
+            },
+            "fromContracts": {
+              "body": "Crée un playbook pour les accords de confidentialité à partir de mes accords déjà signés.",
+              "name": "Partir de contrats passés"
+            },
+            "fromMarketStandards": {
+              "body": "Crée un playbook pour les contrats fournisseurs en partant des critères conformes aux usages du marché.",
+              "name": "Partir des usages du marché"
+            }
+          }
         }
       },
       "builtInSection": "Compétences intégrées",
@@ -4232,6 +4540,7 @@
       "discoveredSkills": "{count, plural, one {# compétence trouvée} other {# compétences trouvées} many {# compétences trouvées}}",
       "discoveryEmpty": "Aucune compétence n’a été trouvée dans ce dépôt ou ce dossier.",
       "discoverySkippedInvalid": "{count, plural, one {# compétence non valide a été ignorée} other {# compétences non valides ont été ignorées} many {# compétences non valides ont été ignorées}}",
+      "dropPack": "Déposez un .zip ou SKILL.md pour importer la compétence",
       "editSkill": "Modifier la compétence",
       "enableSkill": "Activer la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
@@ -4289,6 +4598,7 @@
         }
       },
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
+      "uploadPack": "Importer un .zip ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"
     },
@@ -4341,7 +4651,6 @@
       "otherTitle": "Autres intégrations",
       "probe": "Vérifier",
       "recommendedFor": "Recommandé pour {jurisdictions}",
-      "reconnect": "Reconnecter",
       "saveToken": "Enregistrer le jeton",
       "tokenHelp": "Comment obtenir un jeton",
       "tokenLabel": "Jeton Bearer",
@@ -4470,6 +4779,10 @@
       "optionPlaceholder": "Valeur de l'option",
       "optionsLabel": "Options",
       "outline": "Plan",
+      "pendingPane": {
+        "description": "Répondez aux questions dans la conversation. Une fois le premier enregistrement approuvé, le playbook s’ouvre ici et vous pouvez le modifier à côté de la conversation.",
+        "title": "Votre playbook apparaîtra ici"
+      },
       "positionOfTotal": "Critère {index} sur {total}",
       "positionRemoved": "Critère supprimé",
       "positions": "Critères",
@@ -4704,6 +5017,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Acceptation de {done} sur {total}…"
+    },
     "sources": {
       "add": "Ajouter une source",
       "documentRequired": "Sélectionnez un document.",
@@ -4794,6 +5110,7 @@
       "flowRunAwaitingApproval": "Le flux de travail <bdi>{flowName}</bdi> attend votre approbation",
       "flowRunCompleted": "Le flux de travail <bdi>{flowName}</bdi> est terminé",
       "flowRunFailed": "Le flux de travail <bdi>{flowName}</bdi> a échoué",
+      "localRunLimitReset": "L’agent de code de votre ordinateur peut reprendre votre discussion",
       "mention": "<bdi>{actorName}</bdi> vous a mentionné dans un commentaire",
       "reportExportFailed": "Échec de l’export de votre rapport",
       "reportExportSucceeded": "Votre rapport est prêt",
@@ -4964,6 +5281,12 @@
       "selectModelForEachRole": "Ajoutez un fournisseur et choisissez un modèle pour chaque catégorie.",
       "selectedProvider": "{provider}",
       "usingDefaults": "Valeurs par défaut utilisées"
+    },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} caractères",
+      "description": "Ces instructions s’appliquent à toutes les conversations avec l’IA de votre organisation et prévalent sur les préférences personnelles. Les changements prennent effet dès le prochain message. Utilisez-les pour les règles de conformité, le traitement des données et les normes de mise en forme.",
+      "title": "Instructions de l’organisation",
+      "tooLong": "Les instructions doivent contenir au maximum {maxLength} caractères."
     },
     "creationEvaluationLimitReached": "Vous avez utilisé les {limit} périodes d’essai d’organisation. Supprimer une organisation ne rétablit pas de période d’essai. Utilisez une organisation existante ou contactez l’assistance pour obtenir un accès payant.",
     "creationInvalidName": "Saisissez un nom d’organisation valide ({maxLength} caractères maximum).",
@@ -5216,8 +5539,6 @@
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
     "caseLawEmptyState": "Commencez à saisir pour rechercher des décisions de justice.",
-    "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes} many {# décisions correspondantes}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes} many {#+ décisions correspondantes}}",
     "chatCoveragePartial": "Les conversations n’ont pas toutes été parcourues en entier.",
     "continueInChat": "Continuer dans une conversation",
     "dateFrom": "Du",
@@ -5236,7 +5557,6 @@
       "caseLaw": "Jurisprudence",
       "chat": "Conversation",
       "contact": "Contact",
-      "folder": "Dossier",
       "link": "Lien",
       "matter": "Dossier",
       "message": "Message",
@@ -5335,6 +5655,7 @@
       "deleteAccountWarning": "La suppression est irréversible. Vos identifiants de connexion et données privées du compte seront supprimés.",
       "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. L'historique terminé de l'espace de travail restera attribué à votre compte supprimé.",
       "desktop": "Bureau",
+      "desktopAccountConflict": "Sur cet ordinateur, stella desktop est connecté à un autre compte stella. Avant de changer de compte, stella desktop vous demande de confirmer.",
       "desktopAppDescription": "Retrouvez tout ce que vous copiez et ouvrez les documents stella dans les applications que vous utilisez déjà.",
       "desktopCardApproveDetail": "Approuvez pour lier cet ordinateur à <bdi>{identity}</bdi> sur {host}.",
       "desktopCardApproveTitle": "stella desktop demande à se connecter",
@@ -5349,6 +5670,7 @@
       "desktopCardOutdatedTitle": "stella desktop doit être mis à jour",
       "desktopClipboardDescription": "Ouvrez, recherchez, organisez et réutilisez le texte copié depuis n’importe quelle application.",
       "desktopClipboardTitle": "Historique du presse-papiers consultable",
+      "desktopConnectDeclined": "La connexion a été annulée dans stella desktop.",
       "desktopConnectFailed": "Impossible de connecter stella desktop.",
       "desktopConnectInstalled": "Déjà installé, connecter",
       "desktopConnectedAs": "Connecté en tant que <bdi>{email}</bdi>",
@@ -5364,11 +5686,13 @@
       "desktopInstallOpenStep": "Ouvrez stella desktop une fois. Le presse-papiers apparaît immédiatement et reste accessible depuis la barre des menus de macOS ou la zone de notification de Windows.",
       "desktopInstallTitle": "Installer et ouvrir",
       "desktopInstallWindowsStep": "Lancez le programme d’installation et suivez les instructions.",
+      "desktopKeptAccount": "stella desktop conserve le compte actuel.",
       "desktopOpenApp": "Ouvrir stella desktop",
       "desktopPrivacyDescription": "L’historique du presse-papiers est chiffré et stocké sur cet appareil.",
       "desktopPrivacyTitle": "Confidentiel par défaut",
       "desktopSelfHostDescription": "Approuvez cette URL stella dans l'application desktop signée afin que les documents de cette installation puissent s'ouvrir localement.",
       "desktopSelfHostTitle": "Édition desktop pour self-hosting",
+      "desktopSwitchAccount": "Passer stella desktop sur ce compte",
       "displayNameDescription": "Ce que vos collègues voient dans les dossiers, les commentaires et l'activité.",
       "displayNameRequired": "Saisissez un nom affiché.",
       "displayNameSaved": "Nom affiché mis à jour",
@@ -5563,6 +5887,7 @@
         "case_law_research_column": "colonne de recherche jurisprudentielle",
         "chat_browser_site_grant": "autorisation de site web dans la discussion",
         "chat_file": "fichier de discussion",
+        "chat_local_folder_approval": "autorisation de dossier local",
         "chat_message": "message de discussion",
         "chat_thread": "fil de discussion",
         "chat_tool_execution": "exécution d’outil de discussion",
@@ -5571,8 +5896,10 @@
         "clause_category": "catégorie de clauses",
         "clause_template_link": "lien entre clause et modèle",
         "clause_variant": "variante de clause",
+        "conflict_check": "vérification de conflit d'intérêts",
         "contact": "personne de contact",
         "contact_directory": "répertoire de contacts",
+        "data_export": "exportation de données",
         "desktop_edit_session": "session de modification sur ordinateur",
         "document_annotation": "annotation de document",
         "document_review_run": "révision de document",
@@ -5750,6 +6077,63 @@
       "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Les membres connectent leur propre compte Microsoft et importent des fichiers dans les dossiers. stella lit uniquement ce que chaque membre peut ouvrir dans Microsoft 365.",
+      "disableConfirm": "Désactiver",
+      "disableDescription": "La connexion Microsoft de chaque membre est supprimée et sa session enregistrée est effacée. Les documents déjà importés restent dans leurs dossiers. Les membres devront se reconnecter si vous réactivez cette fonction.",
+      "disableInputLabel": "Saisissez {confirmation} pour désactiver",
+      "disableTitle": "Désactiver SharePoint et OneDrive ?",
+      "toggleLabel": "Autoriser SharePoint et OneDrive"
+    },
+    "askAdmin": "Désactivée pour votre organisation. Demandez à un administrateur de l’activer.",
+    "connectFailed": "Impossible de connecter SharePoint et OneDrive",
+    "connected": "SharePoint et OneDrive connectés",
+    "description": "Importez des fichiers de SharePoint et OneDrive dans les dossiers.",
+    "disconnectDescription": "Votre connexion Microsoft est supprimée de stella. Les documents que vous avez déjà importés restent dans leurs dossiers.",
+    "disconnectTitle": "Déconnecter SharePoint et OneDrive ?",
+    "disconnected": "SharePoint et OneDrive déconnectés",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# fichier était déjà à jour.} many {# de fichiers étaient déjà à jour.} other {# fichiers étaient déjà à jour.}}",
+      "created": "Importé",
+      "done": "Fichiers importés depuis SharePoint ou OneDrive",
+      "failedReason": "Le fichier n’a pas pu être copié. Réessayez plus tard.",
+      "partial": "L’importation a échoué pour {failed, number} sur {total, plural, one {# fichier} many {# de fichiers} other {# fichiers}}.",
+      "progress": "{done, number} sur {total, number} importés",
+      "unchanged": "Déjà à jour",
+      "unconfirmed": "Non confirmé",
+      "unconfirmedCount": "{count, plural, one {# fichier n'a pas été confirmé ; importez-le à nouveau.} many {# de fichiers n'ont pas été confirmés ; importez-les à nouveau.} other {# fichiers n'ont pas été confirmés ; importez-les à nouveau.}}",
+      "unconfirmedReason": "L'importation s'est arrêtée avant la confirmation de ce fichier. Importez-le à nouveau.",
+      "versioned": "Nouvelle version"
+    },
+    "oauthReasons": {
+      "consentDenied": "La connexion Microsoft a été annulée ou l’accès n’a pas été accordé.",
+      "expired": "La connexion a pris trop de temps. Connectez-vous à nouveau.",
+      "notConfigured": "Cette installation de stella n’est pas configurée pour la connexion Microsoft. Contactez votre administrateur.",
+      "notEnabled": "Votre organisation n’a pas activé SharePoint et OneDrive.",
+      "tryAgain": "La connexion Microsoft ne s’est pas terminée. Connectez-vous à nouveau.",
+      "userMismatch": "La connexion a été lancée depuis un autre compte ou une autre organisation. Connectez-vous à nouveau depuis celui-ci."
+    },
+    "picker": {
+      "description": "Choisissez jusqu’à {max, number} fichiers à copier dans ce dossier.",
+      "emptyFolder": "Ce dossier est vide.",
+      "menuItem": "Depuis SharePoint ou OneDrive",
+      "myOneDrive": "Mon OneDrive",
+      "noFollowedSites": "Recherchez un site ou ouvrez Mon OneDrive.",
+      "noLibraries": "Aucune bibliothèque de documents ici.",
+      "notConnected": "Connectez votre compte Microsoft pour parcourir SharePoint et OneDrive.",
+      "notImportable": "Ne peut pas être importé",
+      "reconnectRequired": "Votre connexion Microsoft a expiré. Reconnectez-vous pour continuer à parcourir.",
+      "searchSites": "Rechercher des sites",
+      "selectedCount": "{count, plural, =0 {Aucun fichier sélectionné} one {# fichier sélectionné} many {# de fichiers sélectionnés} other {# fichiers sélectionnés}}",
+      "selectionLimit": "Vous pouvez importer jusqu’à {max, number} fichiers à la fois.",
+      "sites": "Sites SharePoint",
+      "throttledFor": "Microsoft limite les requêtes. Réessayez dans {seconds, plural, one {# seconde} many {# de secondes} other {# secondes}}.",
+      "title": "Importer depuis SharePoint ou OneDrive"
+    },
+    "reconnectRequired": "Connexion expirée",
+    "title": "SharePoint et OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Accepter et écraser les modifications récentes",
     "backToCurrent": "Revenir à la version actuelle",
@@ -5759,7 +6143,6 @@
     "comments": "Commentaires",
     "commentsEmpty": "Sélectionnez du texte pour le commenter.",
     "noRevisions": "Aucune révision pour l'instant",
-    "outOfDate": "Obsolète",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Sans résumé",
     "proposals": "Propositions",
@@ -5875,6 +6258,11 @@
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}",
     "versionAppliedInDecision": "Version appliquée dans la décision <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# disposition insérée} other {# dispositions insérées} many {# dispositions insérées}}",
+    "versionChangesChanged": "{count, plural, one {# disposition modifiée} other {# dispositions modifiées} many {# dispositions modifiées}}",
+    "versionChangesNone": "Rédaction inchangée",
+    "versionChangesRemoved": "{count, plural, one {# disposition supprimée} other {# dispositions supprimées} many {# dispositions supprimées}}",
+    "versionChangesWords": "{inserted, plural, one {# mot inséré} other {# mots insérés} many {# mots insérés}}, {deleted, plural, one {# mot supprimé} other {# mots supprimés} many {# mots supprimés}}",
     "wordingVersionUnknown": "Date de la version de la rédaction indisponible"
   },
   "styleSets": {
@@ -6595,6 +6983,7 @@
     "deletedItem": "Supprimé : {name}",
     "deletingWorkspace": "Suppression du dossier",
     "documentSwitcher": {
+      "download": "Télécharger ce fichier",
       "searchPlaceholder": "Rechercher un document…",
       "trigger": "Changer de document"
     },

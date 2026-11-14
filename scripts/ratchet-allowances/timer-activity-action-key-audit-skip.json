@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 1,
-  "reason": "Issuing a Lock Screen button key is bookkeeping on the person's own phone row, like the registry's other writes; each use of the key is audited as the person's own timer change."
-}

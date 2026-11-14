@@ -57,7 +57,8 @@ the default provider chain (see `getTanStackTextModelById`).
   answers `ask-user` from a script: does the model ask side, governing law,
   and language before drafting, search only matters the user named, read only
   the contracts the user confirmed, ask only where the contracts disagree,
-  set `scope.perspective` only for a side that maps to one, and never resend
+  set `scope.perspective` only for a side that maps to one, save one
+  position first and later ones in groups of at most five, and never resend
   an unchanged position? A scenario's follow-up messages run as later turns
   over the conversation so far, so a user who declines contracts and asks for
   their matters mid-flow is scored too. Each scenario runs on two surfaces
@@ -92,6 +93,37 @@ the default provider chain (see `getTanStackTextModelById`).
   contract never states come back empty rather than as prose, and does a
   constraint position still read a number? Scored on `gpt-5.6-luna` and
   `gpt-6-sol`.
+- `e2e/playbook-journey.ts`: the same path end to end, through the HTTP API of a
+  running stack. It saves a playbook with a position per check kind, runs it
+  from the table and from the review panel on two fixture contracts (a long
+  clause, and a precedent in another matter as reference), and checks that
+  every run completes, progress counts every finding, no verdict is `missing`
+  or unfinished, tiers match the fixture, panel deviations carry a fix and the
+  table's verdict cells hold known tiers. Unlike the others it runs weekly in
+  CI (`.github/workflows/playbook-journey.yml`) on one model. It saves the
+  organization's own Anthropic key first, so the stack itself can stay on the
+  mock; locally, start the dev stack, seed the test user, then
+  `bun run eval:playbook-journey -- --model claude-sonnet-5-5` with
+  `ANTHROPIC_API_KEY` set.
+- `avt-verification.ts`: does the verification engine reach the verdict a
+  careful reviewer would? It runs the production readers, paragraph range,
+  claim extraction and grading against the anchor facts, with no database,
+  over labelled sets (`lib/avt-verification-set.ts`): a document, its facts,
+  and each claim's expected verdict, accepted alternatives, the facts it
+  should rest on and its qualifiers. `grade` mode grades the labelled claims
+  as a run grades them; `pipeline` mode extracts claims from the document and
+  scores the claim covering each label, so a claim extraction misses counts
+  as wrong. It reports accuracy, a confusion matrix over the six verdicts,
+  recall and precision per verdict, citation and record-conflict pair
+  correctness, the false "No coverage" rate, qualifiers, accuracy per tag,
+  cost (priced from each call's tokens with the production rates) and
+  latency. Labels marked uncertain are reported, never scored. `--models` is
+  required, `--max-usd` stops a run before its next call once reached, and
+  `--seed` fixes the claim order:
+  `bun run eval:avt-verification run evals/fixtures/avt-verification-sample.json --models anthropic::claude-sonnet-5-5 --mode both --max-usd 1 --out /absolute/path`.
+  `check` validates a set and locates every quote; `text` prints the text a
+  run reads, to copy quotes from. The sample set is synthetic; keep sets
+  built from real material, and every result, outside the repository.
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?
@@ -157,3 +189,24 @@ checks; they do not execute generated HTML or certify visual quality, citations,
 or treemap semantics. The scorer unit tests use explicitly synthetic records
 and prove scoring only. Production model selection and visual quality remain
 NOT COVERED until separately exercised against a live model.
+
+## Dictation cleanup through local harnesses
+
+`dictation-cleanup-local.ts` emits the production dictation cleanup
+instructions, the transcript message and the structured output schema for
+synthetic Czech, Slovak and English dictations: spoken punctuation, line and
+paragraph breaks, bold, a self-correction, a question that must stay a
+question and an instruction that must stay dictated text. It never calls a
+provider. From `apps/api`:
+
+```sh
+bun run eval:dictation-cleanup prompts > /absolute/path/dictation-prompts.jsonl
+bun run eval:dictation-cleanup score /absolute/path/local-results.jsonl
+```
+
+Give each emitted prompt to a local harness and record its answer as JSONL:
+`{caseId, harness, output}`, where `output` is the structured answer. The
+scorer runs each answer through the server's own acceptance (an answer that
+adds content is refused) and compares the rendered text with the case's
+expectation. The scorer unit tests use synthetic answers and prove scoring
+only; model quality stays NOT COVERED until exercised against a live model.

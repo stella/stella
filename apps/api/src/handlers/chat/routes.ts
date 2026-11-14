@@ -9,8 +9,13 @@ import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
+import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
+import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
+import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
 import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
@@ -31,8 +36,11 @@ import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
+import readBackgroundTasks from "@/api/handlers/chat/threads/background-tasks";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -40,6 +48,10 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  readLocalFilesUndo,
+  undoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { routes } from "@/api/http/route";
@@ -71,11 +83,24 @@ export const chatRoute = routes(
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
     "/local-runners": { GET: getLocalRunners },
+    "/local-runs/:runId/step-output-grant": {
+      GET: getLocalRunStepOutputGrant,
+    },
+    "/local-runners/:desktopId/folders/:linkId/approval": {
+      PUT: approveLocalFolder,
+    },
     "/skill-availability": { GET: listUnavailableChatSkills },
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },
     "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
     "/threads/:threadId/model": { PATCH: updateThreadModel },
+    "/threads/:threadId/limit-reminder": {
+      GET: getChatLimitReminder,
+      PUT: setChatLimitReminder,
+      DELETE: cancelChatLimitReminder,
+    },
+    "/threads/:threadId/read-state": { PATCH: updateChatThreadReadState },
+    "/threads/:threadId/pin-state": { PATCH: updateChatThreadPinState },
     "/threads/:threadId/title": { PATCH: renameThread, GET: getThreadTitle },
     "/threads/:threadId/title/suggest": { POST: suggestThreadTitle },
     "/threads/:threadId/messages": { GET: getMessages },
@@ -96,6 +121,11 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/local-files/undo": {
+      GET: readLocalFilesUndo,
+      POST: undoLocalFiles,
+    },
+    "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

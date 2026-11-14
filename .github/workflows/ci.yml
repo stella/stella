@@ -413,11 +413,10 @@ jobs:
       # merge group validates the queued tree, so it needs no patch identity.
       - name: Checkout patch-id inputs
         if: (github.event_name == 'pull_request' && github.event.action != 'enqueued') || github.event_name == 'merge_group'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
 
       # Only pull requests and merge groups have a base, and both fetched their
@@ -922,10 +921,9 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
@@ -1775,10 +1773,10 @@ jobs:
     steps:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: ${{ needs.ci-plan.outputs.docs_checks_required == 'true' }}
@@ -1790,14 +1788,12 @@ jobs:
 
       # Parser versions must advance whenever an adapter's parser inputs
       # change. The guard needs no dependency installation.
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: "parser-version-guard: Check parser version guard"
-        if: >-
-          !cancelled()
-          && inputs.pr_depth_only != true
-          && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'
-          && needs.ci-plan.outputs.run_required != 'false'
-          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-          && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (inputs.pr_depth_only != true && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' && needs.ci-plan.outputs.run_required != 'false' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.package_checks_required == 'true') }}
         continue-on-error: false
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -1875,8 +1871,8 @@ jobs:
           GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
           GH_TOKEN: ${{ github.token }}
         # Remove the tooling checkout so later source checks see only the
-        # candidate tree. A digest that only needs a mechanical refresh is
-        # rewritten by the autofix generator; this check (the script's
+        # candidate tree. A decision for a job that is not privileged is
+        # removed by the script's write mode; this check (the script's
         # default mode) stays fail-closed. It runs git, so it cannot load the
         # offline network preload that `--check` commands must use.
         run: |
@@ -1947,6 +1943,7 @@ jobs:
     steps:
       - &checkout_input_sha
         name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -1967,6 +1964,10 @@ jobs:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run protocol and malformed-stream tests
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -2185,10 +2186,9 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -2436,9 +2436,13 @@ jobs:
           path: ${{ runner.temp }}/web-api-types.patch
           retention-days: 14
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Typecheck-cost baseline guard
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           STELLA_VERIFY: check
         # The --self-test run first proves the parser and comparison logic,
@@ -2484,10 +2488,9 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -2610,6 +2613,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
         run: |
@@ -2675,10 +2679,9 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -2795,6 +2798,13 @@ jobs:
         id: static_check_006
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_006 != 'true') }}
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
+
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Standalone lockfile guard
         env:
@@ -2916,7 +2926,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Prepares and validates baseline using target revision and external recording context."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.network_manifest_prepare.outcome == 'success') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Route network manifest coverage')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.network_manifest_prepare.outcome == 'success') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Route network manifest coverage')) }}
         timeout-minutes: 1
         run: |
           timeout 30s bash -c '
@@ -2960,6 +2970,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
           CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
@@ -3023,6 +3034,7 @@ jobs:
 
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -3109,13 +3121,14 @@ jobs:
             echo "TURBO_SCM_BASE=$COMPARISON_BASE" >> "$GITHUB_ENV"
           fi
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test .claude/mcp
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-          && matrix.shard == 'rest-web'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
         run: bun --cwd .claude/mcp test
 
       # The API test runner sizes its parallel lanes from the runner's cores
@@ -3126,9 +3139,7 @@ jobs:
 
       - name: Test API or rest
         id: test-api-or-rest
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
@@ -3139,10 +3150,6 @@ jobs:
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
           API_TEST_DURATIONS_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
           API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
-          # Quarantined tests (scripts/flaky-test-quarantine.json) still run;
-          # the preload records their failures instead of failing the run.
-          BUN_OPTIONS: --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
-          FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -3197,16 +3204,11 @@ jobs:
 
       - name: Test web
         id: test-web
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-          && matrix.shard == 'rest-web'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           SHARD: web
-          BUN_OPTIONS: --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
-          FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
         run: |
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
@@ -3259,17 +3261,6 @@ jobs:
           ${{ needs.ci-plan.outputs.changed_files }}
           CHANGED_FILES_JSON
           CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking
-
-      # Annotates each quarantined outcome and writes its recent history to the
-      # job summary; reporting only, so it never changes the job's verdict.
-      - name: Report quarantined tests
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-        timeout-minutes: 5
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/flaky-test-history.ts job-summary --reports "$RUNNER_TEMP/flaky-test-quarantine" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload quarantined test outcomes
         if: >-
@@ -3428,11 +3419,11 @@ jobs:
       actions: write
     steps:
       - &full_checkout_input_sha
+        id: checkout
         name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
@@ -3593,9 +3584,13 @@ jobs:
           browsers: chromium webkit
           dependency-mode: preinstalled
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test UI browser interactions
         # On a pull request the UI leg runs only the changed component specs.
-        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
           EVENT_NAME: ${{ github.event_name }}
@@ -3612,7 +3607,7 @@ jobs:
           bun --filter @stll/ui test:browser -- "${specs[@]}"
 
       - name: Test desktop browser interactions
-        if: matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
         run: |
@@ -3629,7 +3624,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: startsWith(matrix.suite, 'playground-') && steps.ui-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (startsWith(matrix.suite, 'playground-') && steps.ui-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
           SELECTED_SPECS: ${{ toJSON(matrix.specs) }}
@@ -3642,7 +3637,7 @@ jobs:
 
       - name: Test extension browser boundary
         # On a pull request the UI leg runs only the changed extension specs.
-        if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-extension-browser-boundary.json
           EVENT_NAME: ${{ github.event_name }}
@@ -3696,10 +3691,9 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -3877,10 +3871,9 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         with:
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -3924,6 +3917,7 @@ jobs:
         # installed there, which are outside the root lockfile. Install them
         # so this job checks the same graph a checkout with `bun run
         # setup:mcp` has.
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun run setup:mcp
         env:
           NPM_TOKEN: ""
@@ -3945,6 +3939,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           needs_file=$(mktemp)
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
@@ -4018,7 +4013,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4045,7 +4040,7 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4173,8 +4168,12 @@ jobs:
         # Keep cluster defaults for the fresh-database maintenance assertions.
         run: bun scripts/postgres-test-maintenance.ts
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Verify shared worker Postgres history and cleanup
-        if: matrix.shard == 1
+        if: ${{ success() && steps.checkout.outcome == 'success' && matrix.shard == 1 }}
         timeout-minutes: 5
         env:
           STELLA_RUN_SHARED_POSTGRES_TESTS: "true"
@@ -4182,7 +4181,7 @@ jobs:
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
-        if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}
         working-directory: apps/api
         env:
           CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}
@@ -4268,7 +4267,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4367,15 +4366,19 @@ jobs:
 
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
 
       - name: Run cross-replica collaboration suite
-        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}
         env:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
@@ -4405,6 +4408,7 @@ jobs:
 
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -4423,7 +4427,12 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test migration safety rules and historical findings
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
 
       - name: Check migration coverage
@@ -4469,7 +4478,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4645,7 +4654,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4779,6 +4788,14 @@ jobs:
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
+        env:
+          NPM_TOKEN: ""
+
+      - name: Install the docs MCP server
+        # typecheck:repo checks .claude/mcp against the packages installed
+        # there, which are outside the root lockfile.
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun run setup:mcp
         env:
           NPM_TOKEN: ""
 
@@ -5266,6 +5283,7 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5312,7 +5330,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Check route network baseline
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 6
         id: network-baseline
@@ -5327,6 +5350,14 @@ jobs:
         if: failure() && steps.network-baseline.outcome == 'failure'
         run: |
           echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
+
+      # The phone run follows the stack, not the checkout, so it gets its own
+      # quarantine setup under the same condition.
+      - name: Configure flaky-test quarantine for phone layouts
+        if: >-
+          !cancelled()
+          && steps.e2e-stack.outcome == 'success'
+        uses: ./.github/actions/flaky-test-quarantine
 
       # Same stack and route table, on the narrowest current iPhone in WebKit.
       - name: Check phone layouts
@@ -5399,10 +5430,10 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
+    # Longest leg: 17m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
     # + 2m cancellation/post hooks. Playwright uses measured p95/max plus the
     # task registry margin.
-    timeout-minutes: 43
+    timeout-minutes: 44
     permissions:
       contents: read
       packages: read
@@ -5417,6 +5448,7 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
+        id: checkout
         timeout-minutes: 7
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -5481,12 +5513,15 @@ jobs:
 
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        timeout-minutes: 1
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Check route network baseline
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 8
-        if: >-
-          steps.e2e-stack.outcome == 'success'
-          && matrix.shard == 'network-baseline'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard == 'network-baseline') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
           E2E_EXECUTION_PROFILE: network-baseline
@@ -5511,12 +5546,7 @@ jobs:
         timeout-minutes: ${{ fromJSON(steps.e2e-budget.outputs.minutes) }}
         # A selected leg planned only for a hosted browser suite (its specs in
         # e2e_production_suite_specs) has no web specs to run.
-        if: >-
-          steps.e2e-stack.outcome == 'success'
-          && matrix.shard != 'network-baseline'
-          && (needs.ci-plan.outputs.e2e_production_mode != 'selected'
-          || needs.ci-plan.outputs.e2e_production_specs != '[]'
-          || needs.ci-plan.outputs.e2e_production_suite_specs == '[]')
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline' && (needs.ci-plan.outputs.e2e_production_mode != 'selected' || needs.ci-plan.outputs.e2e_production_specs != '[]' || needs.ci-plan.outputs.e2e_production_suite_specs == '[]')) }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-playwright-shard.json
           E2E_EXECUTION_PROFILE: ci-production-parallel
@@ -5568,21 +5598,14 @@ jobs:
       # but no web app; one shard runs the whole suite.
       - name: Run API browser checks
         timeout-minutes: 3
-        if: >-
-          !cancelled()
-          && steps.e2e-stack.outcome == 'success'
-          && matrix.shard == 1
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard == 1) }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
         timeout-minutes: 3
-        if: >-
-          always()
-          && !cancelled()
-          && steps.e2e-stack.outcome == 'success'
-          && matrix.shard != 'network-baseline'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (always() && !cancelled() && steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-route-smoke-playwright-shard.json
           E2E_EXECUTION_PROFILE: standard
@@ -5688,7 +5711,12 @@ jobs:
         with:
           browsers: firefox webkit
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test browser stack redaction
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         timeout-minutes: 2
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-browser-stack-redaction.json
@@ -5820,9 +5848,13 @@ jobs:
         if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run Vite dependency canary
         timeout-minutes: 3
-        if: steps.e2e-stack.outcome == 'success'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-vite-dependency-canary.json
           E2E_EXPECT_DEV_ROUTES: "true"
@@ -5834,7 +5866,7 @@ jobs:
 
       - name: Test anonymized PDF export
         timeout-minutes: 2
-        if: steps.e2e-stack.outcome == 'success'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-anonymized-pdf-export.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
@@ -5845,7 +5877,7 @@ jobs:
       # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
         timeout-minutes: 3
-        if: steps.e2e-stack.outcome == 'success'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
           E2E_EXPECT_DEV_ROUTES: "true"
@@ -5991,6 +6023,9 @@ jobs:
         uses: ./.github/actions/setup-playwright
         with:
           package-directory: apps/landing
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check landing islands
         timeout-minutes: 2
@@ -6560,7 +6595,12 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test dev runner and process tree cleanup
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         shell: pwsh
         run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
 
@@ -6761,7 +6801,7 @@ jobs:
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests --target ${{ matrix.target }} --frozen
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests,dev-runner-stand-in --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
@@ -6911,7 +6951,7 @@ jobs:
       - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen -- -D warnings
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features dev-runner-stand-in --target ${{ matrix.target }} --frozen -- -D warnings
       - *merge_group_cancel
 
   dependency-audit:
@@ -7134,6 +7174,8 @@ jobs:
           # runner; stella does not link, bundle, modify, or distribute it in
           # product artifacts. Workflow uses must remain pinned to immutable
           # commit SHAs and receive normal dependency-update review.
+          # date-holidays ships its holiday data under CC-BY-3.0, which only
+          # requires attribution.
           # Keep these exceptions package-scoped; do not add namespace/group
           # exceptions.
           allow-dependencies-licenses: >-
@@ -7184,6 +7226,7 @@ jobs:
             pkg:npm/better-result,
             pkg:npm/client-zip,
             pkg:npm/crossws,
+            pkg:npm/date-holidays,
             pkg:npm/jszip,
             pkg:npm/marked,
             pkg:npm/posthog-js,

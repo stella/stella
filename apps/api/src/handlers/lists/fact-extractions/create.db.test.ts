@@ -18,7 +18,7 @@ import {
   fields,
   legalListGenerationRuns,
   legalLists,
-  legalListVerificationBudgets,
+  modelRunBudgets,
   properties,
   workspaceMembers,
   workspaces,
@@ -213,9 +213,9 @@ const statusOf = (result: unknown) => {
 const activeRuns = async () =>
   (
     await testDb
-      .select({ active: legalListVerificationBudgets.activeRuns })
-      .from(legalListVerificationBudgets)
-      .where(eq(legalListVerificationBudgets.organizationId, organizationId))
+      .select({ active: modelRunBudgets.activeRuns })
+      .from(modelRunBudgets)
+      .where(eq(modelRunBudgets.organizationId, organizationId))
   ).at(0)?.active ?? 0;
 
 const runsOfList = async () =>
@@ -276,7 +276,7 @@ describe("starting a fact extraction", () => {
         expect(statusOf(result)).toBe(429);
         expect(
           result instanceof HttpStatusResponse ? result.response : null,
-        ).toHaveProperty("code", "verification_active_limit_reached");
+        ).toHaveProperty("code", "run_active_limit_reached");
         expect(await runsOfList()).toBe(1);
         expect(await activeRuns()).toBe(held);
       } finally {

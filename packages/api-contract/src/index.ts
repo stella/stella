@@ -24,6 +24,7 @@ export {
   CHAT_SKILL_DOCUMENT,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
+  SKILL_RESOURCE_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "./agent-skills";
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
@@ -295,6 +296,7 @@ export type {
   EntityFindScopeType,
   PropertyContentType,
 } from "./entity-find";
+export { PROPERTY_SORT_KINDS } from "./property-sort";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
@@ -368,7 +370,9 @@ export {
   CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EDIT_ERROR_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  CHAT_THREAD_NOT_FOUND_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
@@ -491,7 +495,9 @@ export type {
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatBackgroundTasksChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   RESOURCE_MUTATION_ID_HEADER,
   parseResourceMutationId,
@@ -509,6 +515,8 @@ export {
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
@@ -574,6 +582,7 @@ export type {
   RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
+  UserEventRead,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";

@@ -26,6 +26,10 @@
       "types": "./src/starter-skills.ts",
       "import": "./src/starter-skills.ts"
     },
+    "./network-hosts": {
+      "types": "./src/network-hosts.ts",
+      "import": "./src/network-hosts.ts"
+    },
     "./static-import-graph": {
       "types": "./src/static-import-graph.ts",
       "import": "./src/static-import-graph.ts"

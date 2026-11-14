@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The reason check is added NOT VALID, so no rows are scanned under the lock; it constrains only rows inserted from now on, since events recorded before reasons were required keep their payload as written."
+}
