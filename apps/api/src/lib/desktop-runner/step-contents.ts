@@ -284,10 +284,7 @@ const writeStep = async (
     .onConflictDoUpdate({
       target: [contents.threadId, contents.stepKey],
       set: row,
-      setWhere: and(
-        eq(contents.outcome, AWAITED),
-        eq(contents.runId, run.runId),
-      ),
+      setWhere: sql`${contents.outcome} = ${AWAITED} AND ${contents.runId} = ${run.runId}`,
     })
     .returning({ stepKey: contents.stepKey });
   return written.length === 1;

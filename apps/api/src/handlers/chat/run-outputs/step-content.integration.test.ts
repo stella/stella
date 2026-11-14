@@ -69,6 +69,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { createStoreAwaitedStepContent } from "./awaited-step-content";
 import { createStoreRunStepContent } from "./step-content";
+import type { StepContentControl } from "./step-content-write";
 
 // timeout: an image goes through the real security scan and a fake object store.
 setDefaultTimeout(120_000);
@@ -257,7 +258,7 @@ const PNG = new Uint8Array(
 
 const text = (value: string) => new File([value], "content");
 
-const stepControl = () => ({
+const stepControl = (): StepContentControl => ({
   storeStepText: async (options) =>
     Result.ok(await storeStepText(runnerDb(), options)),
   recordStepTooLarge: async (options) =>

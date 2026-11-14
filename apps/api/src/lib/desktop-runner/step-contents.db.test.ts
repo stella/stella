@@ -458,7 +458,7 @@ describe("the stored content of a local run's steps", () => {
     const run = await seedRun(ownerA);
     const key = stepKey();
     const step = {
-      writer: { type: "run", owner: ownerA, runId: run.runId },
+      writer: { type: "run" as const, owner: ownerA, runId: run.runId },
       stepKey: key,
       sha256Hex: IMAGE_SHA,
     };
