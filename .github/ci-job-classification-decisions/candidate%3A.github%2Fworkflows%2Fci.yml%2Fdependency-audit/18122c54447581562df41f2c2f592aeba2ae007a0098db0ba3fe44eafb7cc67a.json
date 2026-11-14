@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Audits changed dependency resolutions and lockfile policy; no publication or deployment.",
+  "reviewedDigest": "18122c54447581562df41f2c2f592aeba2ae007a0098db0ba3fe44eafb7cc67a"
+}
