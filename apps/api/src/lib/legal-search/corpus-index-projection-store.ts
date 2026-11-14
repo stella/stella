@@ -3,6 +3,7 @@ import {
   and,
   asc,
   eq,
+  gt,
   inArray,
   isNotNull,
   notInArray,
@@ -1767,6 +1768,8 @@ export const retireAcceptedCorpusProjectionAppendsTx = async (
 type ReadProvableCorpusProjectionAppendsOptions<Family extends CorpusFamily> =
   CorpusProjectionAppendScopedWorkOptions<Family> & {
     generation: string;
+    /** The index the previous pass took; this pass takes the next one. */
+    afterIndexId: string | null;
     limit: number;
     testNow?: Date | undefined;
   };
@@ -1777,10 +1780,12 @@ type ProvableCorpusProjectionAppends = {
 };
 
 /**
- * The committed revisions of one index whose publish barrier has passed:
- * the index holding the oldest such barrier in scope, then its revisions,
- * oldest barrier first, with the document count each append wrote. Plain
- * reads: the proof transaction re-checks each one under its locks.
+ * The committed revisions of one index whose publish barrier has passed,
+ * oldest barrier first, with the document count each append wrote. The index
+ * is the first in index order after `afterIndexId` that holds such a
+ * revision, wrapping to the first, so passes rotate over the indexes in scope
+ * and one whose census keeps failing cannot hold the others back. Plain reads:
+ * the proof transaction re-checks each revision under its locks.
  */
 export const readProvableCorpusProjectionAppendsTx = async <
   Family extends CorpusFamily,
@@ -1790,6 +1795,7 @@ export const readProvableCorpusProjectionAppendsTx = async <
     family,
     generation,
     scope = CORPUS_PROJECTION_GENERATION_SCOPE,
+    afterIndexId,
     limit: requestedLimit,
     testNow,
   }: ReadProvableCorpusProjectionAppendsOptions<Family>,
@@ -1812,15 +1818,26 @@ export const readProvableCorpusProjectionAppendsTx = async <
       eq(corpusIndexProjectionIntents.status, "append_committed"),
       sql`${corpusIndexProjectionIntents.appendPublishBarrierAt} <= ${now}::timestamptz`,
     );
-  const oldest = (
-    await tx
-      .select({ indexId: corpusIndexProjectionIntents.indexId })
-      .from(corpusIndexProjectionIntents)
-      .where(provable(scopedIndexId))
-      .orderBy(asc(corpusIndexProjectionIntents.appendPublishBarrierAt))
-      .limit(1)
-  ).at(0);
-  if (oldest === undefined) {
+  const firstIndexAfter = async (after: string | null) =>
+    (
+      await tx
+        .select({ indexId: corpusIndexProjectionIntents.indexId })
+        .from(corpusIndexProjectionIntents)
+        .where(
+          and(
+            provable(scopedIndexId),
+            after === null
+              ? undefined
+              : gt(corpusIndexProjectionIntents.indexId, after),
+          ),
+        )
+        .orderBy(asc(corpusIndexProjectionIntents.indexId))
+        .limit(1)
+    ).at(0);
+  const next =
+    (await firstIndexAfter(afterIndexId)) ??
+    (afterIndexId === null ? undefined : await firstIndexAfter(null));
+  if (next === undefined) {
     return null;
   }
   const rows = await tx
@@ -1829,14 +1846,14 @@ export const readProvableCorpusProjectionAppendsTx = async <
       documentCount: corpusIndexProjectionIntents.expectedDocumentCount,
     })
     .from(corpusIndexProjectionIntents)
-    .where(provable(oldest.indexId))
+    .where(provable(next.indexId))
     .orderBy(
       asc(corpusIndexProjectionIntents.appendPublishBarrierAt),
       asc(corpusIndexProjectionIntents.id),
     )
     .limit(limit);
   return {
-    indexId: oldest.indexId,
+    indexId: next.indexId,
     revisions: rows.map(({ revision, documentCount }) => ({
       revision,
       documentCount:

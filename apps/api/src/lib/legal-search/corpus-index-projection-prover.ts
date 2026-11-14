@@ -43,12 +43,21 @@ type CorpusProjectionProofCounts = {
   superseded: number;
 };
 
+/**
+ * `afterIndexId` is the cursor the next pass takes: the index this pass took,
+ * or the one it was given when nothing was provable.
+ */
 export type CorpusProjectionProofCycleResult =
-  | { status: "idle" }
-  | ({ status: "proved"; indexId: string } & CorpusProjectionProofCounts)
+  | { status: "idle"; afterIndexId: string | null }
+  | ({
+      status: "proved";
+      indexId: string;
+      afterIndexId: string;
+    } & CorpusProjectionProofCounts)
   | {
       status: "census_failed";
       indexId: string;
+      afterIndexId: string;
       claimed: number;
       error: CorpusIndexError;
     };
@@ -99,15 +108,19 @@ type ExecuteCorpusProjectionProofCycleOptions<Family extends CorpusFamily> = {
   family: Family;
   generation: string;
   scope: CorpusProjectionAppendWorkScope<NoInfer<Family>>;
+  /** The previous pass's `afterIndexId`, or null for the first index. */
+  afterIndexId: string | null;
   /** Deterministic database-test clock; production reads PostgreSQL. */
   testNow?: Date | undefined;
 };
 
 /**
- * One bounded proof cycle. It holds no lease: it reads the committed
- * revisions of the index whose oldest barrier has passed, at most one census
- * of them, and settles them in one transaction. A crash between the census and
- * that transaction writes nothing, so the next cycle censuses again. The
+ * One bounded proof cycle. It holds no lease: it takes the next index in
+ * scope after `afterIndexId` that holds committed revisions past their
+ * barrier, at most one census of them, and settles them in one transaction. A
+ * crash between the census and that transaction writes nothing, so a later
+ * cycle censuses again. A failed census settles nothing either: the documents
+ * may well be published, so the revisions wait for a census that answers. The
  * append cycle runs it before it reserves, so a revision recorded as accepted
  * converges without another caller.
  */
@@ -119,6 +132,7 @@ export const executeCorpusProjectionProofCycle = async <
   family,
   generation,
   scope,
+  afterIndexId,
   testNow,
 }: ExecuteCorpusProjectionProofCycleOptions<Family>): Promise<CorpusProjectionProofCycleResult> => {
   const provable = await runInTransaction(
@@ -127,12 +141,13 @@ export const executeCorpusProjectionProofCycle = async <
         family,
         generation,
         scope,
+        afterIndexId,
         limit: CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS,
         testNow,
       }),
   );
   if (provable === null) {
-    return { status: "idle" };
+    return { status: "idle", afterIndexId };
   }
   const { indexId, revisions } = provable;
   const census = await proveCorpusProjectionRevisionsPresent({
@@ -144,6 +159,7 @@ export const executeCorpusProjectionProofCycle = async <
     return {
       status: "census_failed",
       indexId,
+      afterIndexId: indexId,
       claimed: revisions.length,
       error: census.error,
     };
@@ -160,6 +176,7 @@ export const executeCorpusProjectionProofCycle = async <
   return {
     status: "proved",
     indexId,
+    afterIndexId: indexId,
     claimed: revisions.length,
     ...countProofOutcomes(outcomes),
   };

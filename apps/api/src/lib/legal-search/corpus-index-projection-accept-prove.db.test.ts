@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
@@ -16,7 +16,7 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
-import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -45,6 +45,7 @@ import {
   startCorpusProjectionAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
+import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -139,11 +140,14 @@ const seedEntities = async (count: number) => {
 type FakeEngine = {
   unpublished: Map<string, number>;
   published: Map<string, number>;
+  /** Indexes whose census answers with an outage, and how many more times. */
+  censusOutages: Map<string, number>;
   /** Exact counts each census returned, per revision, since the last reset. */
   censused: Map<string, number>;
 };
 
 const createEngine = (): FakeEngine => ({
+  censusOutages: new Map(),
   unpublished: new Map(),
   published: new Map(),
   censused: new Map(),
@@ -234,8 +238,15 @@ const engineClient = (
   },
   ingestQueuedBatch: async () =>
     panic("Projection append must wait for publication"),
-  aggregate: async ({ query }: { query: string }) => {
+  aggregate: async ({ indexId, query }: { indexId: string; query: string }) => {
     crashIf(harness, harness.crash.type === "census", "census");
+    const outages = harness.engine.censusOutages.get(indexId) ?? 0;
+    if (outages > 0) {
+      harness.engine.censusOutages.set(indexId, outages - 1);
+      return Result.err(
+        new CorpusIndexError({ message: "search unavailable", status: 503 }),
+      );
+    }
     const buckets = Array.from(harness.engine.published, ([key, count]) => ({
       key,
       doc_count: count,
@@ -417,6 +428,7 @@ const proveCycle = async (run: ModelRun) =>
     client: engineClient(run.harness, PROVER_ENGINE),
     ...TARGET,
     scope: { type: "subjects", entityIds: run.entityIds.map(toLegislationId) },
+    afterIndexId: null,
     testNow: await now(run),
   });
 
@@ -451,6 +463,7 @@ const applyCommand = async (run: ModelRun, next: Command) => {
             payloadReadConcurrency: 2,
             retryDelayMs: 5000,
             payloadRetryLimit: 3,
+            proofAfterIndexId: null,
             payloadReader: async () => Result.ok(PAYLOAD),
           }),
       );
@@ -1116,11 +1129,13 @@ describe("proving an acceptance", () => {
           type: "subjects",
           entityIds: [toLegislationId(fixture.entityId)],
         },
+        afterIndexId: null,
         testNow,
       });
     const statusOf = async () => (await intentRow(fixture)).status;
     expect(await cycle(new Date(barrier.getTime() - 1))).toEqual({
       status: "idle",
+      afterIndexId: null,
     });
     expect(await statusOf()).toBe("append_committed");
     expect(await cycle(barrier)).toMatchObject({
@@ -1148,6 +1163,7 @@ const appendCycle = async (
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
     payloadReader: async () => Result.ok(PAYLOAD),
   });
 
@@ -1177,6 +1193,50 @@ const freshHarness = (crash: CrashPoint = NO_CRASH): Harness => ({
 
 const statusesOf = async (entityIds: readonly string[]) =>
   (await readIntents(entityIds)).map(({ status }) => status).toSorted();
+
+/**
+ * Committed revisions past their barrier for `entityIds`, written directly,
+ * with their documents published; `indexId` moves them and their desired
+ * state to another index.
+ */
+const insertProvableRevisions = async (
+  harness: Harness,
+  entityIds: readonly string[],
+  indexId?: string,
+) => {
+  if (indexId !== undefined) {
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({ desiredIndexId: indexId })
+      .where(inArray(corpusIndexProjectionStates.entityId, [...entityIds]));
+  }
+  const states = await db
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(inArray(corpusIndexProjectionStates.entityId, [...entityIds]));
+  const committedAt = sql`clock_timestamp() - ${PUBLISH_DELAY_MS + 1000} * interval '1 millisecond'`;
+  await db.insert(corpusIndexProjectionIntents).values(
+    states.map((state) => {
+      const id = toSafeId<"corpusIndexProjectionIntent">(Bun.randomUUIDv7());
+      harness.engine.published.set(id, 1);
+      return {
+        id,
+        family: state.family,
+        generation: state.generation,
+        entityId: state.entityId,
+        epoch: state.desiredEpoch,
+        fingerprint: state.desiredFingerprint ?? panic("No fingerprint"),
+        indexId: state.desiredIndexId ?? panic("No index"),
+        status: "append_committed" as const,
+        appendStartedAt: committedAt,
+        appendCommittedAt: committedAt,
+        appendPublishBarrierAt: sql`clock_timestamp() - interval '1 second'`,
+        appendRequestRevisionCount: 1,
+        expectedDocumentCount: 1,
+      };
+    }),
+  );
+};
 
 describe("the append cycle converges recorded acceptances", () => {
   test("a revision recorded before a crash is applied by the next append cycle alone", async () => {
@@ -1255,7 +1315,7 @@ describe("the append cycle converges recorded acceptances", () => {
         }),
     );
     const next = await appendCycle(harness, entityIds, PROVER_ENGINE);
-    expect(next.proof).toEqual({ status: "idle" });
+    expect(next.proof).toEqual({ status: "idle", afterIndexId: null });
     expect(next.reserved).toBe(0);
     expect(await statusesOf(entityIds)).toEqual(["append_committed"]);
   });
@@ -1264,38 +1324,14 @@ describe("the append cycle converges recorded acceptances", () => {
     const entityIds = await seedEntities(
       CORPUS_PROJECTION_PROOF_CYCLE_MAX_REVISIONS + 1,
     );
-    const states = await db
-      .select()
-      .from(corpusIndexProjectionStates)
-      .where(inArray(corpusIndexProjectionStates.entityId, entityIds));
     const harness = freshHarness();
-    const committedAt = sql`clock_timestamp() - ${PUBLISH_DELAY_MS + 1000} * interval '1 millisecond'`;
-    await db.insert(corpusIndexProjectionIntents).values(
-      states.map((state) => {
-        const id = toSafeId<"corpusIndexProjectionIntent">(Bun.randomUUIDv7());
-        harness.engine.published.set(id, 1);
-        return {
-          id,
-          family: state.family,
-          generation: state.generation,
-          entityId: state.entityId,
-          epoch: state.desiredEpoch,
-          fingerprint: state.desiredFingerprint ?? panic("No fingerprint"),
-          indexId: state.desiredIndexId ?? panic("No index"),
-          status: "append_committed" as const,
-          appendStartedAt: committedAt,
-          appendCommittedAt: committedAt,
-          appendPublishBarrierAt: sql`clock_timestamp() - interval '1 second'`,
-          appendRequestRevisionCount: 1,
-          expectedDocumentCount: 1,
-        };
-      }),
-    );
+    await insertProvableRevisions(harness, entityIds);
     const next = await executeCorpusProjectionProofCycle({
       runInTransaction: transactionRunner(harness),
       client: engineClient(harness, PROVER_ENGINE),
       ...TARGET,
       scope: { type: "subjects", entityIds: entityIds.map(toLegislationId) },
+      afterIndexId: null,
     });
     expect(next).toMatchObject({
       status: "proved",
@@ -1307,6 +1343,86 @@ describe("the append cycle converges recorded acceptances", () => {
         (status) => status === "append_committed",
       ),
     ).toHaveLength(1);
+  });
+
+  test("a failed census in the proof pass settles nothing, is reported, and leaves the append part running", async () => {
+    const [seededWaiting, seededEligible] = await seedEntities(2);
+    const waiting = seededWaiting ?? panic("Expected two entities");
+    const eligible = seededEligible ?? panic("Expected two entities");
+    const harness = freshHarness();
+    await insertProvableRevisions(harness, [waiting]);
+    const indexId = await desiredIndexOf(waiting);
+    harness.engine.censusOutages.set(indexId, 1);
+    const warn = spyOn(logger, "warn");
+    try {
+      const cycle = await appendCycle(
+        harness,
+        [waiting, eligible],
+        PROVER_ENGINE,
+      );
+      expect(cycle.proof).toMatchObject({
+        status: "census_failed",
+        indexId,
+        claimed: 1,
+      });
+      expect(cycle.status).toBe("engine_unavailable");
+      expect(cycle.applied).toBe(1);
+      expect(
+        warn.mock.calls.filter(
+          ([event]) => event === "corpus_projection.engine_unavailable",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+    expect(await statusesOf([waiting])).toEqual(["append_committed"]);
+    expect(await statusesOf([eligible])).toEqual(["applied"]);
+
+    const healed = await appendCycle(harness, [waiting], PROVER_ENGINE);
+    expect(healed.proof).toMatchObject({ status: "proved", applied: 1 });
+    expect(await statusesOf([waiting])).toEqual(["applied"]);
+  });
+
+  test("passes rotate over indexes, so one whose census keeps failing holds no other back and recovers when the engine does", async () => {
+    const [seededFirst, seededSecond] = await seedEntities(2);
+    const first = seededFirst ?? panic("Expected two entities");
+    const second = seededSecond ?? panic("Expected two entities");
+    const harness = freshHarness();
+    await insertProvableRevisions(harness, [first]);
+    await insertProvableRevisions(harness, [second], "legislation_v2_rotation");
+    const failing = await desiredIndexOf(first);
+    expect(failing < "legislation_v2_rotation").toBe(true);
+    harness.engine.censusOutages.set(failing, 2);
+    const pass = async (afterIndexId: string | null) =>
+      await executeCorpusProjectionProofCycle({
+        runInTransaction: transactionRunner(harness),
+        client: engineClient(harness, PROVER_ENGINE),
+        ...TARGET,
+        scope: {
+          type: "subjects",
+          entityIds: [first, second].map(toLegislationId),
+        },
+        afterIndexId,
+      });
+
+    const one = await pass(null);
+    expect(one).toMatchObject({ status: "census_failed", indexId: failing });
+    const two = await pass(one.afterIndexId);
+    expect(two).toMatchObject({
+      status: "proved",
+      indexId: "legislation_v2_rotation",
+      applied: 1,
+    });
+    const three = await pass(two.afterIndexId);
+    expect(three).toMatchObject({ status: "census_failed", indexId: failing });
+    expect(await statusesOf([first])).toEqual(["append_committed"]);
+    const four = await pass(three.afterIndexId);
+    expect(four).toMatchObject({
+      status: "proved",
+      indexId: failing,
+      applied: 1,
+    });
+    expect(await statusesOf([first, second])).toEqual(["applied", "applied"]);
   });
 });
 

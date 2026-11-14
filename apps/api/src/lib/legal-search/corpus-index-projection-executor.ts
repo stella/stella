@@ -175,6 +175,11 @@ type ExecuteCorpusProjectionAppendCycleOptions<
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
+  /**
+   * The previous cycle's `proof.afterIndexId`, or null: the cycle's proof pass
+   * takes the next index after it, so passes rotate over the indexes in scope.
+   */
+  proofAfterIndexId: string | null;
   payloadReader?: typeof loadCorpusProjectionPayload;
 };
 
@@ -1687,6 +1692,30 @@ const processPreparedStream = async ({
 };
 
 /**
+ * A cycle whose proof pass could not census reports that fault unless its
+ * append part already reports a failure of its own, so it never reads as idle
+ * or completed.
+ */
+const withProofFailure = (
+  result: CorpusProjectionAppendCycleResult,
+  proofFailure: { stopForEngine: boolean } | null,
+): CorpusProjectionAppendCycleResult => {
+  if (
+    proofFailure === null ||
+    (result.status !== "idle" && result.status !== "completed")
+  ) {
+    return result;
+  }
+  return proofFailure.stopForEngine
+    ? {
+        ...result,
+        status: "engine_unavailable",
+        cycleRetryDelayMs: CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+      }
+    : { ...result, status: "append_unknown" };
+};
+
+/**
  * Execute one bounded append cycle. The operator chooses scope, cadence,
  * limits, concurrency, and what an acceptance means; this primitive owns
  * durable ordering and exact outcomes. Both commit modes wait for publication
@@ -1707,6 +1736,7 @@ export const executeCorpusProjectionAppendCycle = async <
   payloadReadConcurrency,
   retryDelayMs,
   payloadRetryLimit,
+  proofAfterIndexId,
   payloadReader = loadCorpusProjectionPayload,
 }: ExecuteCorpusProjectionAppendCycleOptions<Family>): Promise<CorpusProjectionAppendCycleResult> => {
   validateExecutorPolicy(
@@ -1733,7 +1763,19 @@ export const executeCorpusProjectionAppendCycle = async <
     family,
     generation,
     scope,
+    afterIndexId: proofAfterIndexId,
   });
+  // A census that failed settled nothing; it is reported as the engine fault
+  // it is, and the append part still runs.
+  const proofFailure =
+    proof.status === "census_failed"
+      ? logAppendFailure({
+          indexId: proof.indexId,
+          documents: proof.claimed,
+          revisionCount: proof.claimed,
+          error: proof.error,
+        })
+      : null;
   // A case-law cycle first reconciles a bounded batch of decisions whose
   // ranking signals moved, so a generation that stores them converges on the
   // corpus as it changes; their re-projections are reserved like any other.
@@ -1762,11 +1804,14 @@ export const executeCorpusProjectionAppendCycle = async <
     },
   );
   if (leases.length === 0) {
-    return emptyResult({
-      replacementCleanupScheduled: replacements.length,
-      proof,
-      timing,
-    });
+    return withProofFailure(
+      emptyResult({
+        replacementCleanupScheduled: replacements.length,
+        proof,
+        timing,
+      }),
+      proofFailure,
+    );
   }
   const result: CorpusProjectionAppendCycleResult = {
     ...emptyResult({
@@ -1838,5 +1883,5 @@ export const executeCorpusProjectionAppendCycle = async <
   if (result.status === "completed" && result.blocked > 0) {
     result.status = "append_blocked";
   }
-  return result;
+  return withProofFailure(result, proofFailure);
 };
