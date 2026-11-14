@@ -157,11 +157,14 @@ const deleteUnheldChunkAndRemoveUsage = async (
   if (Result.isError(removed)) {
     return Result.err(removed.error);
   }
-  return Result.ok({
-    failures: checked.value.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : [],
-    ),
-  });
+  const failures: unknown[] = [];
+  for (const result of checked.value) {
+    if (result.status === "rejected") {
+      const reason: unknown = result.reason;
+      failures.push(reason);
+    }
+  }
+  return Result.ok({ failures });
 };
 
 type DeleteUnheldObjectChunkOptions = {
