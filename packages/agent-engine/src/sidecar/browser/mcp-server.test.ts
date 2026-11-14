@@ -339,6 +339,7 @@ describe("downloads of a chat's tab", () => {
     reportDownload({
       controllerId: "thread-1",
       deliveryId: crypto.randomUUID(),
+      shownDocument: null,
       type: "settled",
       download: {
         bytes: 23,
@@ -353,6 +354,7 @@ describe("downloads of a chat's tab", () => {
     reportDownload({
       controllerId: "thread-2",
       deliveryId: crypto.randomUUID(),
+      shownDocument: null,
       type: "settled",
       download: {
         outcome: "stopped",

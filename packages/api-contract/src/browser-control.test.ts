@@ -720,6 +720,7 @@ describe("stella desktop transport", () => {
         suggestedName: "Decision.pdf",
       },
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      shownDocument: null,
       source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
       type: "download",
     } as const;
@@ -753,6 +754,11 @@ describe("stella desktop transport", () => {
         source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
       }),
     ).toBeNull();
+    // A shown PDF's save names the document it saves.
+    const shown = { ...saved, shownDocument: "https://example.com/file" };
+    expect(parseBrowserDesktopResponse(shown)).toEqual(shown);
+    const { shownDocument: _shownDocument, ...unsaid } = saved;
+    expect(parseBrowserDesktopResponse(unsaid)).toBeNull();
     // Every report names its delivery.
     const { deliveryId: _deliveryId, ...unnamed } = saved;
     expect(parseBrowserDesktopResponse(unnamed)).toBeNull();

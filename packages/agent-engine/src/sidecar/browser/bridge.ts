@@ -97,6 +97,8 @@ export type BrowserBridgeDownload =
       controllerId: string;
       deliveryId: string;
       download: BrowserDownload;
+      /** The address of the PDF the tab showed, when this saved one; else null. */
+      shownDocument: string | null;
     };
 
 type BrowserDownloadListener = (report: BrowserBridgeDownload) => void;
@@ -310,6 +312,7 @@ const downloadReport = (
         controllerId: response.controllerId,
         deliveryId: response.deliveryId,
         download: response.download,
+        shownDocument: response.shownDocument,
         type: "settled",
       }
     : {

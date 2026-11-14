@@ -254,11 +254,17 @@ export const createDesktopLink = ({
      * connected.
      */
     downloadReporter: {
-      settled: (
-        chatId: string,
-        deliveryId: string,
-        download: BrowserDownload,
-      ) => {
+      settled: ({
+        chatId,
+        deliveryId,
+        download,
+        shownDocument,
+      }: {
+        chatId: string;
+        deliveryId: string;
+        download: BrowserDownload;
+        shownDocument: string | null;
+      }) => {
         if (current === null) {
           return;
         }
@@ -266,6 +272,7 @@ export const createDesktopLink = ({
           controllerId: chatId,
           deliveryId,
           download,
+          shownDocument,
           protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
           source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
           type: "download",

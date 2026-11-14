@@ -1068,6 +1068,11 @@ export const BROWSER_DOWNLOAD_STOP_REASON = {
   tooMany: "too-many",
   /** Chrome could not finish it. */
   interrupted: "interrupted",
+  /**
+   * A shown PDF's address sent its save on to an address outside the
+   * public web, or off the site the tab showed it from.
+   */
+  redirected: "redirected",
 } as const;
 
 type DownloadStopReasons = typeof BROWSER_DOWNLOAD_STOP_REASON;
@@ -1135,11 +1140,17 @@ const desktopDownloadStartedResponseSchema = v.strictObject({
  * the extension stopped it. Sent unasked; `controllerId` is the chat's id
  * as stella desktop sent it with the chat's commands. A download stopped
  * before it started has a `deliveryId` no `download-started` announced.
+ * The download's `sourceUrl` is the address Chrome fetched in the end.
  */
 const desktopDownloadResponseSchema = v.strictObject({
   controllerId: controllerIdSchema,
   deliveryId: deliveryIdSchema,
   download: browserDownloadSchema,
+  /**
+   * The address of the PDF the tab showed when this delivery saves it (see
+   * `browserDocumentAddress`); null for a download a page started.
+   */
+  shownDocument: v.nullable(urlSchema),
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
   type: v.literal("download"),

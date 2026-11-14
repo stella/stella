@@ -175,11 +175,16 @@ export const desktopDownloadVerdict = (
  */
 export type DownloadReporter = {
   started: (chatId: string, deliveryId: string) => void;
-  settled: (
-    chatId: string,
-    deliveryId: string,
-    download: BrowserDownload,
-  ) => void;
+  settled: (report: SettledDelivery) => void;
+};
+
+/** A delivery's settled report. */
+type SettledDelivery = {
+  chatId: string;
+  deliveryId: string;
+  download: BrowserDownload;
+  /** The shown PDF's address when the delivery saves one; null otherwise. */
+  shownDocument: string | null;
 };
 
 const SILENT_REPORTER: DownloadReporter = {
@@ -194,17 +199,15 @@ export const setDownloadReporter = (report: DownloadReporter): void => {
   reporter = report;
 };
 
-/**
- * How a delivery began: a download a chat's tab started, or a PDF the
- * chat's tab shows that the extension saves itself.
- */
-type DeliveryKind = "download" | "shown-pdf";
-
 /** A download a desktop chat takes, from its judgement until it settles. */
 type Delivery = {
   chatId: string;
   deliveryId: string;
-  kind: DeliveryKind;
+  /**
+   * The address of the PDF the chat's tab shows when the extension saves
+   * it itself; null for a download a page started.
+   */
+  shownDocument: string | null;
   /** Where Chrome is told to save it, relative to its download folder. */
   stagedPath: string;
   sourceUrl: string;
@@ -236,14 +239,17 @@ const sourceUrlOf = (download: DownloadFacts): string =>
 /** A fresh delivery: its id also names the staged file. */
 const newDelivery = (
   chatId: string,
-  kind: DeliveryKind,
-  { sourceUrl, suggestedName }: Pick<Delivery, "sourceUrl" | "suggestedName">,
+  {
+    shownDocument,
+    sourceUrl,
+    suggestedName,
+  }: Pick<Delivery, "shownDocument" | "sourceUrl" | "suggestedName">,
 ): Delivery => {
   const deliveryId = crypto.randomUUID();
   return {
     chatId,
     deliveryId,
-    kind,
+    shownDocument,
     sourceUrl,
     stagedPath: browserDownloadStagedPath(deliveryId),
     suggestedName,
@@ -263,7 +269,8 @@ const reserveDelivery = (
   if (verdict.type === "deliver") {
     deliveries.set(
       download.id,
-      newDelivery(chatId, "download", {
+      newDelivery(chatId, {
+        shownDocument: null,
         sourceUrl: sourceUrlOf(download),
         suggestedName: suggestedDownloadName(download),
       }),
@@ -308,16 +315,38 @@ const readDownloadReceiver = async (
 const reportStopped = (
   delivery: Pick<
     Delivery,
-    "chatId" | "deliveryId" | "sourceUrl" | "suggestedName"
+    "chatId" | "deliveryId" | "shownDocument" | "sourceUrl" | "suggestedName"
   >,
   reason: BrowserDownloadStopReason,
 ): void => {
-  reporter.settled(delivery.chatId, delivery.deliveryId, {
-    outcome: "stopped",
-    reason,
-    sourceUrl: delivery.sourceUrl,
-    suggestedName: delivery.suggestedName,
+  reporter.settled({
+    chatId: delivery.chatId,
+    deliveryId: delivery.deliveryId,
+    download: {
+      outcome: "stopped",
+      reason,
+      sourceUrl: delivery.sourceUrl,
+      suggestedName: delivery.suggestedName,
+    },
+    shownDocument: delivery.shownDocument,
   });
+};
+
+/**
+ * Whether a shown PDF's save may keep what Chrome fetched: the address
+ * Chrome ended on must be one the tab itself may load (the origin policy:
+ * public HTTPS, never stella or a private host) and on the site the tab
+ * showed the PDF from. The save is the extension's own request, outside
+ * the tab's network rules, so a redirect is judged here. Chrome reports
+ * only the address a download ended on, not the hops before it.
+ */
+export const shownSaveMayKeep = (
+  shownDocument: string,
+  fetchedUrl: string,
+): boolean => {
+  const shown = parseControllableUrl(shownDocument);
+  const fetched = parseControllableUrl(fetchedUrl);
+  return shown !== null && fetched !== null && fetched.origin === shown.origin;
 };
 
 /** Downloads stella stopped, and finished ones it kept, since the popup last showed them. */
@@ -487,7 +516,7 @@ const claimShownSave = (
     return claimed;
   }
   const starting = [...startingShownSaves.values()].find(
-    ({ sourceUrl }) => sourceUrl === download.url,
+    ({ shownDocument }) => shownDocument === download.url,
   );
   if (starting === undefined) {
     return null;
@@ -497,17 +526,60 @@ const claimShownSave = (
   return starting;
 };
 
+/** Saves refused after Chrome may have written them: removed once finished. */
+const discardOnFinish = new Set<number>();
+
+/**
+ * Stops a shown PDF's save whose fetch ended where it may not keep it:
+ * Chrome stops it, a file it already finished is removed (only this
+ * download's own file), and the chat hears where the fetch ended.
+ */
+const refuseShownSave = async (
+  downloadId: number,
+  delivery: Delivery,
+  fetchedUrl: string,
+): Promise<void> => {
+  deliveries.delete(downloadId);
+  reportStopped(
+    {
+      ...delivery,
+      sourceUrl: fetchedUrl.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+    },
+    BROWSER_DOWNLOAD_STOP_REASON.redirected,
+  );
+  discardOnFinish.add(downloadId);
+  stopped.add(downloadId);
+  await chrome.downloads.cancel(downloadId).catch(() => undefined);
+  const [after] = await chrome.downloads.search({ id: downloadId });
+  if (after?.state === "complete") {
+    await chrome.downloads.removeFile(downloadId).catch(() => undefined);
+  }
+};
+
+/** Where a download's fetch has got to: its final address once known. */
+const fetchedUrlOf = (
+  download: Pick<chrome.downloads.DownloadItem, "finalUrl" | "url">,
+): string => (download.finalUrl === "" ? download.url : download.finalUrl);
+
 /**
  * A download this extension started: only a shown PDF's save, which is
- * never traced, since the extension asked for it. One larger than the limit
+ * never traced, since the extension asked for it. One whose fetch ended
+ * where it may not keep it (`shownSaveMayKeep`) or larger than the limit
  * is stopped, as is any download of the extension's that no save explains.
+ * Chrome holds the file at its name until the judgement is done, so a
+ * refused save never gets a staged name.
  */
 const judgeOwnDownload = async (
   download: chrome.downloads.DownloadItem,
 ): Promise<void> => {
   const delivery = claimShownSave(download);
-  if (delivery === null) {
+  const shownDocument = delivery?.shownDocument ?? null;
+  if (delivery === null || shownDocument === null) {
     await cancelDownload(download.id);
+    return;
+  }
+  if (!shownSaveMayKeep(shownDocument, fetchedUrlOf(download))) {
+    await refuseShownSave(download.id, delivery, fetchedUrlOf(download));
     return;
   }
   if (download.totalBytes > BROWSER_CONTROL_LIMITS.downloadBytes) {
@@ -575,6 +647,7 @@ const runJudgement = async (
           {
             chatId: receiver.chatId,
             deliveryId: crypto.randomUUID(),
+            shownDocument: null,
             sourceUrl: sourceUrlOf(download),
             suggestedName: suggestedDownloadName(download),
           },
@@ -630,7 +703,9 @@ export const enforceStoppedDownload = async (
     return;
   }
   if (current.state === "complete") {
-    await keepFinishedDownload(delta.id);
+    await (discardOnFinish.has(delta.id)
+      ? chrome.downloads.removeFile(delta.id).catch(() => undefined)
+      : keepFinishedDownload(delta.id));
     return;
   }
   await chrome.downloads.cancel(delta.id).catch(() => undefined);
@@ -663,7 +738,7 @@ export const holdDownloadForJudgement = (
       }
       // Chrome names a page's download only here; the earlier event may
       // not have. A shown PDF keeps the name its save chose.
-      if (delivery.kind === "download") {
+      if (delivery.shownDocument === null) {
         deliveries.set(download.id, {
           ...delivery,
           suggestedName: suggestedDownloadName(download),
@@ -678,18 +753,30 @@ export const holdDownloadForJudgement = (
 
 /**
  * Called for every download change: a download a desktop chat takes is
- * reported once it settles, saved or not. Where Chrome saved it is
- * reported as Chrome says; stella desktop checks the file itself.
+ * reported once it settles, saved or not. Where Chrome saved it, and the
+ * address it fetched in the end, are reported as Chrome says; stella
+ * desktop checks the file itself. A shown PDF's save is judged again on
+ * every new final address and once more when it finishes, so a redirect
+ * Chrome reports late is never kept.
  */
 export const reportDeliveredDownload = async (
   delta: chrome.downloads.DownloadDelta,
 ): Promise<void> => {
   const delivery = deliveries.get(delta.id);
-  const settled = delta.state?.current;
+  if (delivery === undefined) {
+    return;
+  }
+  const redirectedTo = delta.finalUrl?.current;
   if (
-    delivery === undefined ||
-    (settled !== "complete" && settled !== "interrupted")
+    delivery.shownDocument !== null &&
+    redirectedTo !== undefined &&
+    !shownSaveMayKeep(delivery.shownDocument, redirectedTo)
   ) {
+    await refuseShownSave(delta.id, delivery, redirectedTo);
+    return;
+  }
+  const settled = delta.state?.current;
+  if (settled !== "complete" && settled !== "interrupted") {
     return;
   }
   deliveries.delete(delta.id);
@@ -698,15 +785,28 @@ export const reportDeliveredDownload = async (
     reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.interrupted);
     return;
   }
-  reporter.settled(delivery.chatId, delivery.deliveryId, {
-    bytes: Math.max(0, item.fileSize > 0 ? item.fileSize : item.bytesReceived),
-    mime: item.mime.slice(0, 255),
-    outcome: "saved",
-    path: item.filename.slice(0, BROWSER_CONTROL_LIMITS.downloadPathChars),
-    // A shown PDF is known by the tab's address, wherever its save went.
-    sourceUrl:
-      delivery.kind === "shown-pdf" ? delivery.sourceUrl : sourceUrlOf(item),
-    suggestedName: delivery.suggestedName,
+  if (
+    delivery.shownDocument !== null &&
+    !shownSaveMayKeep(delivery.shownDocument, fetchedUrlOf(item))
+  ) {
+    await refuseShownSave(delta.id, delivery, fetchedUrlOf(item));
+    return;
+  }
+  reporter.settled({
+    chatId: delivery.chatId,
+    deliveryId: delivery.deliveryId,
+    download: {
+      bytes: Math.max(
+        0,
+        item.fileSize > 0 ? item.fileSize : item.bytesReceived,
+      ),
+      mime: item.mime.slice(0, 255),
+      outcome: "saved",
+      path: item.filename.slice(0, BROWSER_CONTROL_LIMITS.downloadPathChars),
+      sourceUrl: sourceUrlOf(item),
+      suggestedName: delivery.suggestedName,
+    },
+    shownDocument: delivery.shownDocument,
   });
 };
 
@@ -717,15 +817,25 @@ const SHOWN_PDF_SAVES_LIMIT = 64;
 // each mark in turn so two reads of the same PDF never both save it.
 let shownSavesTail: Promise<unknown> = Promise.resolve();
 
+const readShownPdfMarks = async (): Promise<string[]> => {
+  const stored: unknown = (
+    await chrome.storage.session.get(BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY)
+  )[BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY];
+  return Array.isArray(stored)
+    ? stored.filter((entry): entry is string => typeof entry === "string")
+    : [];
+};
+
+/** Whether a shown PDF of a run was saved already, once pending marks are stored. */
+const isShownPdfMarked = async (key: string): Promise<boolean> => {
+  await shownSavesTail;
+  return (await readShownPdfMarks()).includes(key);
+};
+
 /** Marks a shown PDF of a run as saved; false when it already was. */
 const markShownPdf = async (key: string): Promise<boolean> => {
   const mark = async (): Promise<boolean> => {
-    const stored: unknown = (
-      await chrome.storage.session.get(BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY)
-    )[BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY];
-    const keys = Array.isArray(stored)
-      ? stored.filter((entry): entry is string => typeof entry === "string")
-      : [];
+    const keys = await readShownPdfMarks();
     if (keys.includes(key)) {
       return false;
     }
@@ -792,7 +902,14 @@ export const saveShownPdf = async ({
   if (address.length > BROWSER_CONTROL_LIMITS.urlChars) {
     return;
   }
-  const delivery = newDelivery(chatId, "shown-pdf", {
+  const mark = `${turnId}\n${chatId}\n${address}`;
+  // A PDF saved already in this run is never refused for the limit: its
+  // saved copy stands.
+  if (await isShownPdfMarked(mark)) {
+    return;
+  }
+  const delivery = newDelivery(chatId, {
+    shownDocument: address,
     sourceUrl: address,
     suggestedName: shownPdfName(address, title),
   });
@@ -804,9 +921,7 @@ export const saveShownPdf = async ({
     return;
   }
   startingShownSaves.set(delivery.deliveryId, delivery);
-  const first = await markShownPdf(`${turnId}\n${chatId}\n${address}`).catch(
-    () => false,
-  );
+  const first = await markShownPdf(mark).catch(() => false);
   if (!first) {
     startingShownSaves.delete(delivery.deliveryId);
     return;

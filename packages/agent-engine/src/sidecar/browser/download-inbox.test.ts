@@ -62,11 +62,16 @@ const inboxWith = (clock: ReturnType<typeof manualClock>["clock"]) =>
 
 const NOT_STOPPED = new AbortController().signal;
 
-const settled = (deliveryId: string, sourceUrl = PDF_ADDRESS) =>
+const settled = (
+  deliveryId: string,
+  sourceUrl = PDF_ADDRESS,
+  shownDocument: string | null = null,
+) =>
   ({
     controllerId: RUN.threadId,
     deliveryId,
     download: stopped(sourceUrl),
+    shownDocument,
     type: "settled",
   }) as const;
 
@@ -185,20 +190,25 @@ describe("a browser step's downloads", () => {
 });
 
 describe("a document the tab shows", () => {
-  test("its save is named by its address, and repeated on every later read of the run", async () => {
+  /** Where the save's fetch ended: on the shown site, but not the shown address. */
+  const FETCHED = "https://fixture-library.test/files/42.pdf";
+
+  test("its save is matched by the shown document, and repeated on every later read of the run", async () => {
     const inbox = inboxWith(manualClock().clock);
-    inbox.arrive(settled("d-1"));
-    inbox.arrive(settled("d-2", "https://fixture-library.test/annex"));
+    inbox.arrive(settled("d-1", FETCHED, PDF_ADDRESS));
+    // A page's own download of the same address is no save of the document.
+    inbox.arrive(settled("d-2", PDF_ADDRESS));
 
     const first = await inbox.take(RUN, {
       shownAddress: `${PDF_ADDRESS}#page=3`,
       signal: NOT_STOPPED,
       since: inbox.mark(),
     });
-    const outcome = { ...REFUSED_INTERRUPTED, sourceUrl: PDF_ADDRESS };
+    const outcome = { ...REFUSED_INTERRUPTED, sourceUrl: FETCHED };
     expect(first.shown).toEqual(outcome);
     // The same entry as in the list, so a result can leave it out there.
     expect(first.downloads.some((entry) => entry === first.shown)).toBe(true);
+    expect(first.downloads).toHaveLength(2);
 
     const again = await inbox.take(RUN, {
       shownAddress: PDF_ADDRESS,
@@ -221,5 +231,93 @@ describe("a document the tab shows", () => {
       since: inbox.mark(),
     });
     expect(forgotten.shown).toBeNull();
+  });
+
+  /** An inbox whose file move a test stands in for: a saved report is saved. */
+  const movingInbox = () =>
+    createDownloadInbox({
+      clock: manualClock().clock,
+      home: "/unused-home",
+      receive: async (download) =>
+        download.outcome === "saved"
+          ? {
+              bytes: download.bytes,
+              path: "Downloads/Judgment 42.pdf",
+              sourceUrl: download.sourceUrl,
+              status: "saved",
+            }
+          : {
+              message: "Too many downloads ran at once.",
+              reason: "too_many",
+              sourceUrl: download.sourceUrl,
+              status: "refused",
+            },
+      runOf: () => RUN,
+    });
+
+  const savedReport = (deliveryId: string) =>
+    ({
+      controllerId: RUN.threadId,
+      deliveryId,
+      download: {
+        bytes: 4096,
+        mime: "application/pdf",
+        outcome: "saved",
+        path: "/staging/file.pdf",
+        sourceUrl: FETCHED,
+        suggestedName: "Judgment 42",
+      },
+      shownDocument: PDF_ADDRESS,
+      type: "settled",
+    }) as const;
+
+  const tooMany = (deliveryId: string) =>
+    ({
+      ...settled(deliveryId, PDF_ADDRESS, PDF_ADDRESS),
+      download: {
+        outcome: "stopped",
+        reason: "too-many",
+        sourceUrl: PDF_ADDRESS,
+        suggestedName: "Judgment 42",
+      },
+    }) as const;
+
+  const readShown = async (inbox: ReturnType<typeof movingInbox>) =>
+    (
+      await inbox.take(RUN, {
+        shownAddress: PDF_ADDRESS,
+        signal: NOT_STOPPED,
+        since: inbox.mark(),
+      })
+    ).shown;
+
+  test("a refusal after the document was saved never replaces its saved copy", async () => {
+    const inbox = movingInbox();
+    inbox.arrive(savedReport("d-1"));
+    expect(await readShown(inbox)).toMatchObject({ status: "saved" });
+
+    inbox.arrive(tooMany("d-2"));
+    expect(await readShown(inbox)).toMatchObject({
+      path: "Downloads/Judgment 42.pdf",
+      status: "saved",
+    });
+
+    // Also when both arrive before one read.
+    const together = movingInbox();
+    together.arrive(savedReport("d-1"));
+    together.arrive(tooMany("d-2"));
+    expect(await readShown(together)).toMatchObject({ status: "saved" });
+  });
+
+  test("a save after a refusal for the limit replaces the refusal", async () => {
+    const inbox = movingInbox();
+    inbox.arrive(tooMany("d-1"));
+    expect(await readShown(inbox)).toMatchObject({
+      reason: "too_many",
+      status: "refused",
+    });
+
+    inbox.arrive(savedReport("d-2"));
+    expect(await readShown(inbox)).toMatchObject({ status: "saved" });
   });
 });

@@ -46,9 +46,11 @@ const MAX_KNOWN_ADDRESSES = 64;
 /** The run a result is taken for: whose folder downloads land in. */
 type InboxRun = { runId: string; threadId: string; workspaceDir: string };
 
-type HeldDownload =
+/** A settled download until a result hands it out; see `shownDocument` on the bridge's report. */
+type HeldDownload = { shownDocument: string | null } & (
   | { type: "saving"; outcome: Promise<BrowserDownloadOutcome> }
-  | { type: "waiting"; download: BrowserDownload };
+  | { type: "waiting"; download: BrowserDownload }
+);
 
 type Started = {
   /** When it was announced, in the inbox's clock. */
@@ -109,6 +111,8 @@ type InboxOptions = {
   /** The member's home folder: Chrome saves downloads under it. */
   home: string;
   clock?: InboxClock;
+  /** Judges and moves one settled download; `downloads.ts` unless a test stands in. */
+  receive?: typeof receiveBrowserDownload;
 };
 
 const emptyChat = (): ChatDownloads => ({ held: [], started: new Map() });
@@ -120,6 +124,7 @@ const newest = <K, V>(map: Map<K, V>, limit: number): Map<K, V> =>
 export const createDownloadInbox = ({
   clock = systemInboxClock,
   home,
+  receive: receiveDownload = receiveBrowserDownload,
   runOf,
 }: InboxOptions) => {
   const chats = new Map<string, ChatDownloads>();
@@ -140,7 +145,7 @@ export const createDownloadInbox = ({
   };
 
   const receive = async (download: BrowserDownload, run: InboxRun) =>
-    await receiveBrowserDownload(download, {
+    await receiveDownload(download, {
       home,
       workspaceDir: run.workspaceDir,
     });
@@ -176,11 +181,31 @@ export const createDownloadInbox = ({
     });
   };
 
-  const remember = (runId: string, outcomes: BrowserDownloadOutcome[]) => {
+  /**
+   * Records what each shown document's save became, by the document's
+   * address. A saved copy stands: a later refusal for the same document
+   * (one more read stopped for the limit, say) never replaces it.
+   */
+  const remember = (
+    runId: string,
+    settled: readonly {
+      outcome: BrowserDownloadOutcome;
+      shownDocument: string | null;
+    }[],
+  ) => {
     const record =
       known.get(runId) ?? new Map<string, BrowserDownloadOutcome>();
-    for (const outcome of outcomes) {
-      const address = browserDocumentAddress(outcome.sourceUrl);
+    for (const { outcome, shownDocument } of settled) {
+      if (shownDocument === null) {
+        continue;
+      }
+      const address = browserDocumentAddress(shownDocument);
+      if (
+        outcome.status === "refused" &&
+        record.get(address)?.status === "saved"
+      ) {
+        continue;
+      }
       record.delete(address);
       record.set(address, outcome);
     }
@@ -202,10 +227,15 @@ export const createDownloadInbox = ({
         case "settled": {
           chat.started.delete(report.deliveryId);
           const run = runOf(report.controllerId);
+          const { shownDocument } = report;
           const held: HeldDownload =
             run === null
-              ? { download: report.download, type: "waiting" }
-              : { outcome: receive(report.download, run), type: "saving" };
+              ? { download: report.download, shownDocument, type: "waiting" }
+              : {
+                  outcome: receive(report.download, run),
+                  shownDocument,
+                  type: "saving",
+                };
           chat.held = [...chat.held, held].slice(-MAX_HELD_DOWNLOADS);
           for (const listener of [...listeners]) {
             listener();
@@ -235,22 +265,28 @@ export const createDownloadInbox = ({
       chat.started = new Map(
         [...chat.started].filter(([, { at }]) => at >= expired),
       );
-      const downloads = await Promise.all(
+      const settled = await Promise.all(
         held.map(async (entry) => {
           switch (entry.type) {
             case "saving":
-              return await entry.outcome;
+              return {
+                outcome: await entry.outcome,
+                shownDocument: entry.shownDocument,
+              };
             case "waiting":
-              return await receive(entry.download, run);
+              return {
+                outcome: await receive(entry.download, run),
+                shownDocument: entry.shownDocument,
+              };
             default:
               entry satisfies never;
               return panic("Unhandled held download");
           }
         }),
       );
-      remember(run.runId, downloads);
+      remember(run.runId, settled);
       return {
-        downloads,
+        downloads: settled.map(({ outcome }) => outcome),
         saving: chat.started.size,
         shown:
           shownAddress === null
