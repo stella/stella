@@ -70,6 +70,8 @@ mod http_client;
 mod i18n;
 mod idle_time;
 mod keychain;
+mod local_linked_folder_commands;
+mod local_linked_folders;
 mod local_skill_folder_commands;
 mod local_skill_folders;
 mod local_store;

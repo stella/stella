@@ -41,10 +41,13 @@ import {
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
 import type { ParagraphScopeRefusal } from "@/api/lib/lists/verification/paragraph-scope";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import { enqueueListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import {
+  ModelRunCapError,
+  modelRunCapRefusal,
+} from "@/api/lib/usage/model-run-caps/caps";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -459,15 +462,7 @@ const createVerification = createSafeHandler(
               }),
           });
           const created = yield* inserted.mapError((error) =>
-            ListVerificationRunCapError.is(error)
-              ? new HandlerError({
-                  status: 429,
-                  code: error.code,
-                  message: error.message,
-                  hint: error.hint,
-                  retryable: true,
-                })
-              : error,
+            ModelRunCapError.is(error) ? modelRunCapRefusal(error) : error,
           );
           if (!created) {
             return Result.err(

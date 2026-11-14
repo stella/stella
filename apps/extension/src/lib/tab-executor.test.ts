@@ -368,6 +368,10 @@ const run = async (
 
 describe("taking the browser over", () => {
   const DESKTOP_ID = "desktop:thread-1";
+  const DESKTOP = {
+    controllerId: DESKTOP_ID,
+    transport: CONTROL_TRANSPORT.desktop,
+  } as const;
 
   test("a desktop takeover leaves the web connection nothing to list, switch to or act on", async () => {
     installFakeChrome();
@@ -396,7 +400,7 @@ describe("taking the browser over", () => {
       }),
     ).toBe(CONTROL_ADMISSION.takesOver);
 
-    await takeOverControl(DESKTOP_ID);
+    await takeOverControl(DESKTOP);
     // Every command of the web connection is refused before it runs,
     // including a new tab, which would list the desktop's tabs, and a
     // tab switch, which would read one.
@@ -426,6 +430,31 @@ describe("taking the browser over", () => {
     ).toBe(CONTROL_ADMISSION.holds);
   });
 
+  test("the web connection taking the browser back is recorded as no owner", async () => {
+    const installed = installFakeChrome();
+    await takeOverControl(DESKTOP);
+    expect(installed.session["browserControlOwner"]).toBe(DESKTOP_ID);
+
+    await takeOverControl({ transport: CONTROL_TRANSPORT.web });
+    // No record: ending the pairing releases the tab and its rules, and the
+    // desktop chat must open a page to take the browser again.
+    expect(installed.session).not.toHaveProperty("browserControlOwner");
+    expect(
+      await admitControl({
+        action: "snapshot",
+        controllerId: CONTROLLER_ID,
+        transport: CONTROL_TRANSPORT.web,
+      }),
+    ).toBe(CONTROL_ADMISSION.holds);
+    expect(
+      await admitControl({
+        action: "snapshot",
+        controllerId: DESKTOP_ID,
+        transport: CONTROL_TRANSPORT.desktop,
+      }),
+    ).toBe(CONTROL_ADMISSION.refused);
+  });
+
   test("a refused open leaves the previous holder's tab and rules exactly as they were", async () => {
     const installed = installFakeChrome();
     installed.session["browserContainedTabs"] = {
@@ -438,7 +467,7 @@ describe("taking the browser over", () => {
     };
     const before = structuredClone(installed.session);
     const takeOver = async () => {
-      await takeOverControl(DESKTOP_ID);
+      await takeOverControl(DESKTOP);
     };
 
     // An address the origin policy refuses.
@@ -475,7 +504,7 @@ describe("taking the browser over", () => {
       {
         takeOver: async () => {
           order.push("take-over");
-          await takeOverControl(DESKTOP_ID);
+          await takeOverControl(DESKTOP);
         },
       },
     );
@@ -680,6 +709,61 @@ describe("a page that asks for a sign-in", () => {
         }
       }
     }
+  });
+
+  test("an identity provider's frame is the member's whatever fields it shows", async () => {
+    const { handlers } = installFakeChrome();
+    const injected: {
+      func: ((operation: unknown) => unknown) | undefined;
+      operation: unknown;
+    } = { func: undefined, operation: undefined };
+    handlers["snapshot"] = (injection) => {
+      injected.func ??= injection.func;
+      injected.operation ??= injection.args?.[0];
+      return [{ frameId: 0, result: { refused: "none" } }];
+    };
+    await run({ action: "snapshot" }, desktop);
+    const { func, operation } = injected;
+    if (func === undefined) {
+      throw new TypeError("No script was injected.");
+    }
+    expect(operation).toMatchObject({ purpose: "sign-in-check" });
+
+    // An email-only first step: no password or code field to find.
+    const check = (href: string) => {
+      const globals: Record<string, unknown> = {
+        document: { querySelectorAll: () => [] },
+        window: { location: { href } },
+      };
+      const saved = Object.keys(globals).map(
+        (key) =>
+          [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+      );
+      for (const [key, value] of Object.entries(globals)) {
+        Object.defineProperty(globalThis, key, { configurable: true, value });
+      }
+      try {
+        return func(operation);
+      } finally {
+        for (const [key, descriptor] of saved) {
+          if (descriptor === undefined) {
+            Reflect.deleteProperty(globalThis, key);
+          } else {
+            Object.defineProperty(globalThis, key, descriptor);
+          }
+        }
+      }
+    };
+    expect(check("https://login.microsoftonline.com/common/oauth2")).toEqual({
+      refused: "sign-in",
+    });
+    expect(check("https://tenant.okta.com/signin")).toEqual({
+      refused: "sign-in",
+    });
+    expect(check("https://okta.com/")).toEqual({ refused: "none" });
+    expect(check("https://library.example/login")).toEqual({
+      refused: "none",
+    });
   });
 
   test("on an identity provider's page is never injected into", async () => {

@@ -95,8 +95,20 @@ import { isRecord } from "@/api/lib/type-guards";
 const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
 const ORIGIN = "https://uohs.gov.cz";
 const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
-const PAGE_SIZE = 20;
+// parser-output-unchanged: request deadlines only; no parsed record changes.
+export const CZ_UOHS_PAGE_SIZE = 20;
+const PAGE_SIZE = CZ_UOHS_PAGE_SIZE;
 const CURSOR_VERSION = 1;
+
+/** Ceiling for one decision document read. */
+export const CZ_UOHS_DOCUMENT_TIMEOUT_MS = 120_000;
+
+/**
+ * The pipeline's deadline for one crawl page. A page reads every document of
+ * its records inline, one gated request at a time, so the deadline leaves room
+ * for a full page of documents at the publisher's pace plus one slow read.
+ */
+const CZ_UOHS_PAGE_TIMEOUT_MS = 300_000;
 
 export const CZ_UOHS_COLLECTIONS = [
   "hospodarska-soutez",
@@ -166,7 +178,8 @@ const publisherReadOptions = (
 ) => ({
   adapterKey: ADAPTER_KEYS.CZ_UOHS,
   fetchStage: stage,
-  timeoutMs: stage === "document" ? 120_000 : ADAPTER_TIMEOUT.LIST,
+  timeoutMs:
+    stage === "document" ? CZ_UOHS_DOCUMENT_TIMEOUT_MS : ADAPTER_TIMEOUT.LIST,
   signal,
   redirect: "error" as const,
 });
@@ -988,6 +1001,7 @@ export const czUohsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_UOHS,
   reparseStoredRaw: reparseCzUohsStoredRaw,
   documentStage: "inline",
+  pageTimeoutMs: CZ_UOHS_PAGE_TIMEOUT_MS,
   language: "cs",
   minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.CZ_UOHS),
   sourceSurfaces: {
