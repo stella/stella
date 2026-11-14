@@ -99,40 +99,46 @@ describe.skipIf(!enabled)("scheduled receipt measurement (postgres)", () => {
   });
 });
 
+// Each case registers through its own test() call under a literal title: the
+// flaky-test quarantine wraps plain test registrations by title, not test.each.
+const EXPORT_CASES = [
+  [
+    "export measurement executes auto / quiet once without replaying writes",
+    "auto",
+    "quiet",
+  ],
+  [
+    "export measurement executes auto / transitions once without replaying writes",
+    "auto",
+    "transitions",
+  ],
+  [
+    "export measurement executes auto / queued once without replaying writes",
+    "auto",
+    "queued",
+  ],
+  [
+    "export measurement executes force_generic_plan / quiet once without replaying writes",
+    "force_generic_plan",
+    "quiet",
+  ],
+  [
+    "export measurement executes force_generic_plan / transitions once without replaying writes",
+    "force_generic_plan",
+    "transitions",
+  ],
+  [
+    "export measurement executes force_generic_plan / queued once without replaying writes",
+    "force_generic_plan",
+    "queued",
+  ],
+] as const;
+
 describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
-  // Literal titles: the flaky-test quarantine names a case by its title.
-  test.each([
-    [
-      "export measurement executes auto / quiet once without replaying writes",
-      "auto",
-      "quiet",
-    ],
-    [
-      "export measurement executes auto / transitions once without replaying writes",
-      "auto",
-      "transitions",
-    ],
-    [
-      "export measurement executes auto / queued once without replaying writes",
-      "auto",
-      "queued",
-    ],
-    [
-      "export measurement executes force_generic_plan / quiet once without replaying writes",
-      "force_generic_plan",
-      "quiet",
-    ],
-    [
-      "export measurement executes force_generic_plan / transitions once without replaying writes",
-      "force_generic_plan",
-      "transitions",
-    ],
-    [
-      "export measurement executes force_generic_plan / queued once without replaying writes",
-      "force_generic_plan",
-      "queued",
-    ],
-  ] as const)("%s", async (_title, planCacheMode, cohort) => {
+  const measureExport = async (
+    planCacheMode: (typeof EXPORT_CASES)[number][1],
+    cohort: (typeof EXPORT_CASES)[number][2],
+  ): Promise<void> => {
     await withQueryPerfFixture({
       databaseUrl:
         process.env["STELLA_POSTGRES_TEST_TEMPLATE_URL"] ??
@@ -267,5 +273,11 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
         });
       },
     });
-  });
+  };
+
+  for (const [title, planCacheMode, cohort] of EXPORT_CASES) {
+    test(title, async () => {
+      await measureExport(planCacheMode, cohort);
+    });
+  }
 });
