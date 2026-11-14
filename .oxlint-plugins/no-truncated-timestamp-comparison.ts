@@ -5,6 +5,7 @@ import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   filenameForContext,
   isAstNode,
+  isIdentifierReference,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
@@ -1683,8 +1684,11 @@ export default eslintCompatPlugin({
         schema: [],
       },
       createOnce(context) {
+        const variableOf = (node: unknown) =>
+          isIdentifierReference(node) ? resolveVariable(context, node) : null;
+
         const isTableOwner = (owner: AstNode): boolean => {
-          const variable = resolveVariable(context, owner);
+          const variable = variableOf(owner);
           return (
             variable?.defs.some((def) => {
               if (def.type === "ImportBinding") {
@@ -1706,7 +1710,7 @@ export default eslintCompatPlugin({
         };
 
         const constInitializer = (node: AstNode): unknown => {
-          const variable = resolveVariable(context, node);
+          const variable = variableOf(node);
           const [def] = variable?.defs ?? [];
           return variable?.defs.length === 1 &&
             def?.type === "Variable" &&
