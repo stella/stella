@@ -725,18 +725,21 @@ export const openMemberWaitKeys = ({
 }: {
   localRunQuestion: LocalRunQuestionPause | null;
   messages: readonly PersistedChatMessage[];
-}): readonly string[] => [
-  ...(
-    findAwaitedAssistantMessage(messages, isUserAnswerablePart)?.parts ?? []
-  ).flatMap((part) =>
-    part.type === "tool-call" && isUserAnswerablePart(part)
-      ? [`part:${part.id}`]
-      : [],
-  ),
-  ...(localRunQuestion === null
-    ? []
-    : [`interrupt:${localRunQuestion.interruptId}`]),
-];
+}): readonly string[] => {
+  const awaited = findAwaitedAssistantMessage(messages, isUserAnswerablePart);
+  return [
+    ...(awaited === null
+      ? []
+      : awaited.parts.flatMap((part) =>
+          part.type === "tool-call" && isUserAnswerablePart(part)
+            ? [`part:${part.id}`]
+            : [],
+        )),
+    ...(localRunQuestion === null
+      ? []
+      : [`interrupt:${localRunQuestion.interruptId}`]),
+  ];
+};
 
 /**
  * An unresolved auto-run folio-agents tool-call part (a read tool or

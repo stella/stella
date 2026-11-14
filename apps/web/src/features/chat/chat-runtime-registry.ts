@@ -143,10 +143,12 @@ const storedMemberWaitKeys = (
     chatResumeSnapshotSchema,
     messages.at(-1)?.metadata?.resumeSnapshot,
   );
+  const interrupts = resume.success
+    ? resume.output.pendingInterrupts
+    : undefined;
   return openMemberWaitKeys({
-    localRunQuestion: resume.success
-      ? localRunQuestionPauseOf(resume.output.pendingInterrupts ?? [])
-      : null,
+    localRunQuestion:
+      interrupts === undefined ? null : localRunQuestionPauseOf(interrupts),
     messages,
   });
 };
