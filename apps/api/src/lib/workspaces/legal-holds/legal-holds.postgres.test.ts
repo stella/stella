@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { createTestClock } from "@stll/test-kit";
@@ -53,6 +54,19 @@ import { placeLegalHold, releaseLegalHold } from "./lifecycle";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const clock = createTestClock();
+
+/**
+ * Contacts are row-level secured for every role; a fixture reads and writes
+ * them in a transaction set to the organization the rows belong to.
+ */
+const enterOrganization = async (
+  tx: { execute: (query: SQLWrapper) => PromiseLike<unknown> },
+  organizationId: string,
+): Promise<void> => {
+  await tx.execute(
+    sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+  );
+};
 
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "legal holds (postgres)",
@@ -118,11 +132,14 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               createdAt: new Date(clock.now()),
             },
           ]);
-          await db.insert(contacts).values({
-            id: contactId,
-            organizationId,
-            type: "person",
-            displayName: "Client",
+          await db.transaction(async (tx) => {
+            await enterOrganization(tx, organizationId);
+            await tx.insert(contacts).values({
+              id: contactId,
+              organizationId,
+              type: "person",
+              displayName: "Client",
+            });
           });
           await db.insert(workspaces).values({
             id: workspaceId,
@@ -471,10 +488,13 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             });
           }
           expect(
-            await db
-              .select({ id: contacts.id })
-              .from(contacts)
-              .where(eq(contacts.id, contactId)),
+            await db.transaction(async (tx) => {
+              await enterOrganization(tx, organizationId);
+              return await tx
+                .select({ id: contacts.id })
+                .from(contacts)
+                .where(eq(contacts.id, contactId));
+            }),
           ).toHaveLength(1);
           const entityRefusal = await scopedDb(
             async (tx) =>
@@ -871,7 +891,10 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const safeDbFor =
           (tx: Transaction): SafeDb =>
           async (run) =>
-            await Result.tryPromise(async () => await run(tx));
+            await Result.tryPromise(async () => {
+              await enterOrganization(tx, organizationId);
+              return await run(tx);
+            });
         try {
           await db.insert(user).values({
             id: userId,
@@ -891,16 +914,19 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             role: "owner",
             createdAt: new Date(clock.now()),
           });
-          await db.insert(contacts).values(
-            [linkedContactId, raceContactId, replacementContactId].map(
-              (id, index) => ({
-                id,
-                organizationId,
-                type: "person" as const,
-                displayName: `Held contact ${index + 1}`,
-              }),
-            ),
-          );
+          await db.transaction(async (tx) => {
+            await enterOrganization(tx, organizationId);
+            await tx.insert(contacts).values(
+              [linkedContactId, raceContactId, replacementContactId].map(
+                (id, index) => ({
+                  id,
+                  organizationId,
+                  type: "person" as const,
+                  displayName: `Held contact ${index + 1}`,
+                }),
+              ),
+            );
+          });
           await db.insert(workspaces).values({
             id: workspaceId,
             organizationId,
@@ -1026,8 +1052,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 .where(eq(workspaceContacts.contactId, raceContactId));
             },
             readState: async () => ({
-              contact: await db.query.contacts.findFirst({
-                where: { id: { eq: raceContactId } },
+              contact: await db.transaction(async (tx) => {
+                await enterOrganization(tx, organizationId);
+                return await tx.query.contacts.findFirst({
+                  where: { id: { eq: raceContactId } },
+                });
               }),
               link: await db.query.workspaceContacts.findFirst({
                 where: { contactId: { eq: raceContactId } },
@@ -1086,16 +1115,19 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             role: "owner",
             createdAt: new Date(clock.now()),
           });
-          await db.insert(contacts).values(
-            [clientContactId, witnessContactId, freeContactId].map(
-              (id, index) => ({
-                id,
-                organizationId,
-                type: "person" as const,
-                displayName: `Bulk contact ${index + 1}`,
-              }),
-            ),
-          );
+          await db.transaction(async (tx) => {
+            await enterOrganization(tx, organizationId);
+            await tx.insert(contacts).values(
+              [clientContactId, witnessContactId, freeContactId].map(
+                (id, index) => ({
+                  id,
+                  organizationId,
+                  type: "person" as const,
+                  displayName: `Bulk contact ${index + 1}`,
+                }),
+              ),
+            );
+          });
           await db.insert(workspaces).values({
             id: workspaceId,
             organizationId,
@@ -1141,10 +1173,13 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               { contactId: freeContactId, status: "deleted" },
             ]);
           }
-          const remaining = await db
-            .select({ id: contacts.id })
-            .from(contacts)
-            .where(eq(contacts.organizationId, organizationId));
+          const remaining = await db.transaction(async (tx) => {
+            await enterOrganization(tx, organizationId);
+            return await tx
+              .select({ id: contacts.id })
+              .from(contacts)
+              .where(eq(contacts.organizationId, organizationId));
+          });
           expect(remaining.map(({ id }) => id).toSorted()).toEqual(
             [clientContactId, witnessContactId].toSorted(),
           );
