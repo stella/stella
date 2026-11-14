@@ -6871,7 +6871,8 @@ describe("undoing a turn's file changes", () => {
    * A turn of the thread, running until `completeTurn` ends it. Its start
    * holds microseconds, as an accepted turn's does (the database's `now()`):
    * the newest-turn rule compares starts, and a whole millisecond would hide
-   * a comparison that drops them.
+   * a comparison that drops them. Just before the clock, so the turn can
+   * settle at it.
    */
   const newTurn = async (threadId: Thread): Promise<Turn> => {
     const turnId = createSafeId<"chatTurn">();
@@ -6885,7 +6886,7 @@ describe("undoing a turn's file changes", () => {
       status: "running",
       executionId: Bun.randomUUIDv7(),
       leaseExpiresAt: new Date(clock.now + DAY_MS),
-      createdAt: sql`${new Date(clock.now).toISOString()}::timestamptz + interval '500 microseconds'`,
+      createdAt: sql`${new Date(clock.now).toISOString()}::timestamptz - interval '500 microseconds'`,
     });
     return turnId;
   };
