@@ -64,13 +64,22 @@ const COMMIT_BUDGET = {
   Record<Bench, { open: number; close: number }>
 >;
 
+// Commits do not depend on the theme or the reading direction: the counts
+// were the same in every playground project, and each bench loads the dev
+// playground afresh, which is the slow part. One project measures them.
+const MEASURED_PROJECT = "light-ltr";
+
 for (const how of ["pointer", "keyboard"] as const) {
   for (const bench of BENCHES) {
     const budget = COMMIT_BUDGET[how][bench];
 
     test(`the ${bench} menu opened by ${how} stays within its commits to open and to close`, async ({
       page,
-    }) => {
+    }, testInfo) => {
+      test.skip(
+        testInfo.project.name !== MEASURED_PROJECT,
+        `Commits are measured in the ${MEASURED_PROJECT} project only.`,
+      );
       await page.goto("/dev?visual=menu-commits", {
         waitUntil: "domcontentloaded",
       });
@@ -99,7 +108,7 @@ for (const how of ["pointer", "keyboard"] as const) {
 
       // The numbers go to the run's output as well as its report.
       process.stdout.write(
-        `menu commits (${how}, ${test.info().project.name}): ${JSON.stringify(measured)}\n`,
+        `menu commits (${how}, ${testInfo.project.name}): ${JSON.stringify(measured)}\n`,
       );
       // Opening and closing a menu both commit: zero is a broken counter.
       expect(measured.open, "to open").toBeGreaterThan(0);
