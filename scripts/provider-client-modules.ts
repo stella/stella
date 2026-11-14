@@ -1,0 +1,46 @@
+// The modules that build a client sending requests to an AI model provider:
+// the TanStack adapters the API uses, the adapter subclass the model factory
+// builds, the provider SDKs, and the SDK families the API does not use yet,
+// so a new one starts in the model factory. `oxlint.config.ts` bans their
+// runtime imports outside the factory (`no-restricted-imports`), and
+// `ownership/provider-client-construction.ts` their dynamic imports, which
+// that rule does not read.
+export const PROVIDER_CLIENT_MODULES = [
+  "@/api/lib/stella-openrouter-text-adapter",
+  "openai",
+  "@anthropic-ai/sdk",
+  "@anthropic-ai/bedrock-sdk",
+  "@anthropic-ai/vertex-sdk",
+  "@google/genai",
+  "@google/generative-ai",
+  "@mistralai/mistralai",
+  "@openrouter/sdk",
+  "@aws-sdk/client-bedrock-runtime",
+  "@azure/openai",
+  "@huggingface/inference",
+  "@ai-sdk/amazon-bedrock",
+  "@ai-sdk/anthropic",
+  "@ai-sdk/azure",
+  "@ai-sdk/google",
+  "@ai-sdk/mistral",
+  "@ai-sdk/openai",
+  "@ai-sdk/openai-compatible",
+  "@tanstack/ai-anthropic",
+  "@tanstack/ai-anthropic/byok",
+  "@tanstack/ai-anthropic/vertex",
+  "@tanstack/ai-bedrock",
+  "@tanstack/ai-bedrock/byok",
+  "@tanstack/ai-gemini",
+  "@tanstack/ai-gemini/byok",
+  "@tanstack/ai-gemini/experimental",
+  "@tanstack/ai-mistral",
+  "@tanstack/ai-mistral/adapters/text",
+  "@tanstack/ai-mistral/byok",
+  "@tanstack/ai-mistral/vertex",
+  "@tanstack/ai-openai",
+  "@tanstack/ai-openai/byok",
+  "@tanstack/ai-openai/compatible",
+  "@tanstack/ai-openrouter",
+  "@tanstack/ai-openrouter/byok",
+  "@tanstack/openai-base",
+] as const;
