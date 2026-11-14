@@ -107,6 +107,10 @@ const formPage = (revision: string) =>
 const SEARCH_URL = "https://fixture-library.test/search";
 const DECISION_URL = "https://fixture-library.test/doc/1";
 
+/** The search page, read at another address. */
+const pageAt = (revision: string, url: string) =>
+  withPage(page(revision), (snapshot) => ({ ...snapshot, url }));
+
 const tabbed = (
   result: BrowserControlResult,
   tabs: BrowserControlSnapshot["tabs"],
@@ -810,15 +814,118 @@ describe("keys, options, history and tabs", () => {
     expect(browser.sent).toHaveLength(2);
   });
 
-  test("go_back goes back one page, with or without empty input", async () => {
+  test("go_back reaches the page the chat read before, and reads it", async () => {
     const session = createLocalBrowserSession();
-    const browser = recorder([page("r-1"), page("r-2")]);
-    await session.call("go_back", undefined, browser.context);
-    await session.call("go_back", {}, browser.context);
-    expect(browser.sent.map(({ command }) => command)).toEqual([
-      { action: "go-back" },
-      { action: "go-back" },
+    const browser = recorder([
+      pageAt("r-1", DECISION_URL),
+      page("r-2"),
+      pageAt("r-3", DECISION_URL),
     ]);
+    await session.call("open", { url: DECISION_URL }, browser.context);
+    await session.call("open", { url: SEARCH_URL }, browser.context);
+    const back = await session.call("go_back", undefined, browser.context);
+    expect(back.isError).toBe(false);
+    expect(parsed(back)).toMatchObject({
+      text: "Results\nDecision 1 [L1]",
+      url: DECISION_URL,
+    });
+    expect(browser.sent.at(2)).toEqual({
+      command: { action: "go-back" },
+      observedTab: { revision: "r-2", tabId: 7 },
+    });
+    // That was the first page read in the tab: nothing is before it.
+    const again = await session.call("go_back", {}, browser.context);
+    expect(parsed(again)).toMatchObject({ refused: "no_earlier_page" });
+    expect(browser.sent).toHaveLength(3);
+  });
+
+  test("go_back with no earlier page read in the tab is refused without navigating", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1")]);
+    const unread = await session.call("go_back", {}, browser.context);
+    await session.call("snapshot", {}, browser.context);
+    const once = await session.call("go_back", {}, browser.context);
+    for (const result of [unread, once]) {
+      expect(result.isError).toBe(true);
+      expect(parsed(result)).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+        hint: "Call open with the address of the page you want.",
+        refused: "no_earlier_page",
+      });
+    }
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+  });
+
+  test("go_back to a page the chat never read shows nothing of it and returns the tab", async () => {
+    const MEMBER_PAGE = "https://fixture-library.test/account/welcome";
+    const session = createLocalBrowserSession();
+    const browser = recorder([
+      pageAt("r-1", DECISION_URL),
+      page("r-2"),
+      // The member opened another page in the tab between the two reads.
+      withPage(pageAt("r-3", MEMBER_PAGE), (snapshot) => ({
+        ...snapshot,
+        text: "Member's own page",
+        title: "Member account",
+      })),
+      page("r-4"),
+    ]);
+    await session.call("open", { url: DECISION_URL }, browser.context);
+    await session.call("snapshot", {}, browser.context);
+    const back = await session.call("go_back", {}, browser.context);
+    expect(back.isError).toBe(true);
+    expect(parsed(back)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+      hint: "Call open with the address of the page you want.",
+      message: expect.stringContaining("back on the page it was on"),
+      refused: "not_read_before",
+    });
+    const shown = back.content.at(0)?.text ?? "";
+    for (const unreadContent of [
+      MEMBER_PAGE,
+      "Member's own page",
+      "Member account",
+    ]) {
+      expect(shown).not.toContain(unreadContent);
+    }
+    // The tab went back to the page it left, addressed as the page it
+    // reached; refs now address that page again.
+    expect(browser.sent.slice(2)).toEqual([
+      {
+        command: { action: "go-back" },
+        observedTab: { revision: "r-2", tabId: 7 },
+      },
+      {
+        command: { action: "open", url: SEARCH_URL },
+        observedTab: { revision: "r-3", tabId: 7 },
+      },
+    ]);
+    const next = recorder([page("r-5")]);
+    await session.call("click", { ref: "L1" }, next.context);
+    expect(next.sent.at(0)).toMatchObject({
+      command: { action: "click", page: { revision: "r-4" } },
+      observedTab: { revision: "r-4", tabId: 7 },
+    });
+  });
+
+  test("go_back that cannot return to the page it left still shows nothing", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([
+      pageAt("r-1", DECISION_URL),
+      page("r-2"),
+      pageAt("r-3", "https://fixture-library.test/account/welcome"),
+      NEEDS_MEMBER,
+    ]);
+    await session.call("snapshot", {}, browser.context);
+    await session.call("snapshot", {}, browser.context);
+    const back = await session.call("go_back", {}, browser.context);
+    expect(parsed(back)).toMatchObject({
+      message: expect.stringContaining("could not return"),
+      refused: "not_read_before",
+    });
+    expect(back.content.at(0)?.text ?? "").not.toContain("account/welcome");
   });
 
   test("open opens a new tab only when asked to", async () => {
@@ -963,6 +1070,7 @@ describe("keys, options, history and tabs", () => {
       const session = createLocalBrowserSession();
       const browser = recorder(
         [
+          pageAt("r-0", DECISION_URL),
           tabbed(formPage("r-1"), [
             { active: true, tabId: 7, url: SEARCH_URL },
             { active: false, tabId: 9, url: DECISION_URL },
@@ -971,8 +1079,11 @@ describe("keys, options, history and tabs", () => {
         ],
         { approvals: "full_auto" },
       );
+      // Two pages read in the tab, so going back has a page to reach.
+      await session.call("snapshot", {}, browser.context);
       await session.call("snapshot", {}, browser.context);
       const result = await session.call(tool, input, browser.context);
+      expect(browser.sent).toHaveLength(3);
       expect({ tool, result: parsed(result) }).toMatchObject({
         tool,
         result: {
@@ -1057,20 +1168,25 @@ describe("keys, options, history and tabs by the run's approval mode", () => {
       const session = createLocalBrowserSession();
       const browser = recorder(
         [
+          pageAt("r-0", DECISION_URL),
           tabbed(formPage("r-1"), [
             { active: true, tabId: 7, url: SEARCH_URL },
             { active: false, tabId: 9, url: DECISION_URL },
           ]),
-          formPage("r-2"),
+          // Going back reaches the first page read; anything else stays.
+          step === "go_back" ? pageAt("r-2", DECISION_URL) : formPage("r-2"),
         ],
         { approvals },
       );
+      await session.call("snapshot", {}, browser.context);
       await session.call("snapshot", {}, browser.context);
       const result = await session.call(step, INPUTS[step], browser.context);
       const askedAbout: string[] = browser.asked.map(({ action }) => action);
       expect(askedAbout).toEqual(gate === "ask" ? [step] : []);
       expect(browser.sent.map(({ command }) => command.action)).toEqual(
-        gate === "refuse" ? ["snapshot"] : ["snapshot", SENT[step]],
+        gate === "refuse"
+          ? ["snapshot", "snapshot"]
+          : ["snapshot", "snapshot", SENT[step]],
       );
       expect(result.isError).toBe(gate === "refuse");
       if (gate === "refuse") {

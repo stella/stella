@@ -232,7 +232,7 @@ const TOOL_DEFINITIONS = {
   },
   go_back: {
     description:
-      "Go back one page in this chat's tab, as the browser's Back button does, and read the page there. It never asks the member.",
+      "Go back to the page this chat read before the current one in this tab, as the browser's Back button does, and read it again. It never asks the member. It only reaches a page this chat read there: with none it is refused, and if the tab's history holds another page in between (one the member opened, a sign-in step), that page is not read, the tab returns to where it was and the result says to use open instead.",
     inputSchema: { type: "object", properties: {} },
   },
   switch_tab: {
@@ -424,7 +424,79 @@ type PageSeen = {
   elements: ReadonlyMap<string, BrowserControlElement>;
   /** The chat's tabs that read listed, by id, with the address each is on. */
   tabs: ReadonlyMap<number, string>;
+  /**
+   * By tab, the addresses of the pages this chat read there, oldest first:
+   * the only pages `go_back` may reach. A tab's history can hold pages the
+   * chat never read (the blank page a new tab starts on, pages the member
+   * opened there, a sign-in's redirects), so going back is checked against
+   * this record, never against the history.
+   */
+  trails: ReadonlyMap<number, readonly string[]>;
 };
+
+/** Pages of a tab's record kept for going back; older ones are dropped. */
+const TRAIL_PAGES = 50;
+
+/** The page before the current one in the record of the tab, if any. */
+const earlierPage = (seen: PageSeen | null): string | undefined =>
+  seen?.trails.get(seen.observedTab.tabId)?.at(-2);
+
+/**
+ * The chat's latest read after `snapshot`: going back drops the page it
+ * left from the tab's record; any other read adds a page it had not just
+ * read there.
+ */
+const seenAfter = (
+  previous: PageSeen | null,
+  snapshot: BrowserControlSnapshot,
+  wentBack: boolean,
+): PageSeen => {
+  const trails = new Map(previous?.trails);
+  const trail = trails.get(snapshot.tabId) ?? [];
+  const kept = (() => {
+    if (wentBack) {
+      return trail.slice(0, -1);
+    }
+    return trail.at(-1) === snapshot.url ? trail : [...trail, snapshot.url];
+  })();
+  trails.set(snapshot.tabId, kept.slice(-TRAIL_PAGES));
+  return {
+    observedTab: { revision: snapshot.revision, tabId: snapshot.tabId },
+    page: { revision: snapshot.revision, url: snapshot.url },
+    elements: new Map(
+      snapshot.elements.map((element) => [element.id, element]),
+    ),
+    tabs: new Map(snapshot.tabs.map(({ tabId, url }) => [tabId, url])),
+    trails,
+  };
+};
+
+/** Why `go_back` did not show a page. */
+const BACK_REFUSAL = {
+  /** The chat read no earlier page in this tab; nothing navigated. */
+  noEarlierPage: "no_earlier_page",
+  /** Going back reached a page the chat never read; it was not shown. */
+  notReadBefore: "not_read_before",
+} as const;
+
+type BackRefusal = (typeof BACK_REFUSAL)[keyof typeof BACK_REFUSAL];
+
+const backRefused = (
+  refused: BackRefusal,
+  message: string,
+  downloads: readonly BrowserDownloadOutcome[],
+): LocalBrowserToolResult =>
+  textResult(
+    {
+      status: "error",
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+      refused,
+      message,
+      hint: "Call open with the address of the page you want.",
+      ...(downloads.length === 0 ? {} : { downloads }),
+    },
+    true,
+  );
 
 /** The role the extension gives a search field, or a field in a search form. */
 const SEARCH_FIELD_ROLE = "searchbox";
@@ -569,7 +641,9 @@ const elementStepDecision = (
  * `approvals`. A key press can submit a form, so it is held like a click;
  * choosing an option can change what a page does, so it is held like typing
  * outside a search field. Going back and switching to another of the chat's
- * tabs move between pages, as opening one does, and never ask.
+ * tabs move between pages, as opening one does, and never ask: going back
+ * reaches only a page the chat read in that tab (`PageSeen.trails`), and
+ * switching only a tab its latest read listed.
  */
 const browserStepDecision = (
   approvals: DesktopRunnerApprovalMode,
@@ -816,10 +890,23 @@ const COMMAND_BUILDERS = {
           "select takes { ref, option }: a ref from the latest page read and the option's label or value.",
         );
   },
-  go_back: (input) =>
-    v.safeParse(INPUT_SCHEMAS.go_back, input ?? {}).success
-      ? built({ action: BROWSER_CONTROL_ACTION.goBack })
-      : invalidInput("go_back takes no arguments."),
+  go_back: (input, seen) => {
+    if (!v.safeParse(INPUT_SCHEMAS.go_back, input ?? {}).success) {
+      return invalidInput("go_back takes no arguments.");
+    }
+    // Refused before anything navigates: the page before this one is one
+    // the chat never read there, if there is one at all.
+    return earlierPage(seen) === undefined
+      ? {
+          result: backRefused(
+            BACK_REFUSAL.noEarlierPage,
+            "This chat read no earlier page in this tab, so there is nothing to go back to.",
+            [],
+          ),
+          type: "refused",
+        }
+      : built({ action: BROWSER_CONTROL_ACTION.goBack });
+  },
   switch_tab: (input, seen) => {
     const parsed = v.safeParse(INPUT_SCHEMAS.switch_tab, input);
     if (!parsed.success) {
@@ -876,16 +963,40 @@ export const createLocalBrowserSession = () => {
         await send(step, seen?.observedTab ?? null),
       );
       ticket?.finish(result.status === "success" ? "completed" : "failed");
+      const wentBack = step.action === BROWSER_CONTROL_ACTION.goBack;
+      if (
+        wentBack &&
+        result.status === "success" &&
+        result.snapshot.url !== earlierPage(seen)
+      ) {
+        // Going back reached a page this chat never read there: nothing of
+        // it is shown, and the tab returns to the page it left.
+        const left = seen;
+        const returned =
+          left === null
+            ? null
+            : readLocalBrowserResult(
+                await send(
+                  { action: BROWSER_CONTROL_ACTION.open, url: left.page.url },
+                  {
+                    revision: result.snapshot.revision,
+                    tabId: result.snapshot.tabId,
+                  },
+                ),
+              );
+        if (returned?.status === "success") {
+          seen = seenAfter(left, returned.snapshot, false);
+        }
+        return backRefused(
+          BACK_REFUSAL.notReadBefore,
+          returned?.status === "success"
+            ? "Going back reached a page this chat has not read in this tab. It was not read, and the tab is back on the page it was on: call snapshot to read that page again."
+            : "Going back reached a page this chat has not read in this tab. It was not read, and the tab could not return to the page it was on.",
+          await downloads(),
+        );
+      }
       if (result.status === "success") {
-        const { snapshot } = result;
-        seen = {
-          observedTab: { revision: snapshot.revision, tabId: snapshot.tabId },
-          page: { revision: snapshot.revision, url: snapshot.url },
-          elements: new Map(
-            snapshot.elements.map((element) => [element.id, element]),
-          ),
-          tabs: new Map(snapshot.tabs.map(({ tabId, url }) => [tabId, url])),
-        };
+        seen = seenAfter(seen, result.snapshot, wentBack);
       }
       return localBrowserToolResult(result, await downloads(), knownTabs);
     },
