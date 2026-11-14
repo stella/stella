@@ -164,6 +164,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
   "chat_thread_names",
   "chat_message_revisions",
   "document_review_finding_decisions",
+  "legal_graph_edges",
   "legal_list_item_source_decisions",
 ]);
 

@@ -154,8 +154,6 @@ export const parsePgTimestampCursorValue = (
 // UTC-anchored boundary. This factory owns that codec so each list
 // handler only supplies the timestamp column and the branded-id constructor.
 
-const LEGACY_PIPE_SEPARATOR = "|";
-
 export type TimestampIdCursor<Id> = {
   timestamp: ParsedPgTimestampCursor;
   id: Id;
@@ -206,24 +204,6 @@ type TimestampIdCursorCodecOptions<Id> = {
   isIdPart?: (value: unknown) => value is string;
 };
 
-// Accepts the canonical base64url JSON tuple and, as a fallback, the legacy
-// plain `"timestamp|uuid"` form so cursors issued before the codec was unified
-// keep decoding. base64url never contains `|`, and the timestamp half always
-// contains `:`/`-` (outside the base64url alphabet), so the two forms cannot be
-// confused.
-const timestampIdCursorTuple = (cursor: string): [unknown, unknown] | null => {
-  const parts = decodePaginationCursor(cursor);
-  if (parts !== null) {
-    return parts.length === 2 ? [parts[0], parts[1]] : null;
-  }
-
-  const separatorIndex = cursor.indexOf(LEGACY_PIPE_SEPARATOR);
-  if (separatorIndex === -1) {
-    return null;
-  }
-  return [cursor.slice(0, separatorIndex), cursor.slice(separatorIndex + 1)];
-};
-
 export const createTimestampIdCursorCodec = <Id>({
   column,
   brandId,
@@ -249,11 +229,11 @@ export const createTimestampIdCursorCodec = <Id>({
   },
   encode: (timestampValue, id) => encodePaginationCursor([timestampValue, id]),
   decode: (cursor) => {
-    const tuple = timestampIdCursorTuple(cursor);
-    if (tuple === null) {
+    const parts = decodePaginationCursor(cursor);
+    if (parts?.length !== 2) {
       return null;
     }
-    const [rawTimestamp, rawId] = tuple;
+    const [rawTimestamp, rawId] = parts;
     const timestamp = parsePgTimestampCursorValue(rawTimestamp);
     if (timestamp === null || !isIdPart(rawId)) {
       return null;

@@ -12,7 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { LiteralTextProvider } from "@stll/decision-reader/display-elision-policy";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
 import {
   CheckIcon,
   CircleAlertIcon,
@@ -20,6 +20,7 @@ import {
   FileSearchIcon,
   FilterIcon,
   FlagIcon,
+  HistoryIcon,
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -38,7 +39,10 @@ import {
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
 import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
+import { outsideSpansForBlock } from "@/features/avt/paragraph-scope.logic";
 import { RunHistorySheet } from "@/features/avt/review-history";
+import { RunStalenessLine } from "@/features/avt/run-staleness";
+import { isOutOfDate, outOfDateIdsIn } from "@/features/avt/staleness.logic";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -48,11 +52,11 @@ import {
 } from "@/features/avt/state-chip";
 import type {
   ClaimState,
-  FactId,
   VerificationClaim,
   VerificationRun,
 } from "@/features/avt/types";
 import { REVIEW_STATUS_META, STATE_META } from "@/features/avt/types";
+import { useBulkRecheck } from "@/features/avt/use-bulk-recheck";
 import { useClaimReviewActions } from "@/features/avt/use-claim-review-actions";
 import {
   claimFactsById,
@@ -62,7 +66,6 @@ import {
   isConflictState,
   isContested,
   isSettled,
-  needsAttention,
   resolveClaimView,
   routineUnsettledClaimIds,
 } from "@/features/avt/verdict";
@@ -95,6 +98,7 @@ type VerdictFilter =
   | "needsreview"
   | "needsevidence"
   | "reviewed"
+  | "outdated"
   | ClaimState;
 
 /** What the run's header can ask of the view: select a claim and bring it
@@ -152,8 +156,9 @@ export const VerificationView = ({
   const contested = contestedFactIds(run.evidence.facts);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
-  const counts = countClaims(run.claims, contested);
-  const routineIds = routineUnsettledClaimIds(run.claims, contested);
+  const counts = countClaims(run.claims);
+  const routineIds = routineUnsettledClaimIds(run.claims);
+  const bulkRecheck = useBulkRecheck({ workspaceId, runId: run.id });
 
   const [selected, setSelected] = React.useState(readingOrder.at(0) ?? null);
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
@@ -169,7 +174,7 @@ export const VerificationView = ({
   const view = hasOriginal ? documentView : "reading";
 
   const matches = (claim: VerificationClaim, value: VerdictFilter) =>
-    claimMatchesFilter(claim, value, contested);
+    claimMatchesFilter(claim, value);
 
   const selectedClaim = selected === null ? undefined : claimById.get(selected);
 
@@ -188,6 +193,8 @@ export const VerificationView = ({
       setSelected(firstMatch);
     }
   };
+
+  const outOfDateIds = outOfDateIdsIn(readingOrder, claimById);
 
   const orderedMatches =
     filter === "all"
@@ -388,6 +395,13 @@ export const VerificationView = ({
           workspaceId={workspaceId}
         />
       </AttentionBar>
+      <RunStalenessLine
+        canReview={canReview}
+        filtered={filter === "outdated"}
+        onFilter={(on) => applyFilter(on ? "outdated" : "all")}
+        outOfDateIds={outOfDateIds}
+        recheck={bulkRecheck}
+      />
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-5">
         <div className="flex h-96 flex-col overflow-hidden rounded-xl border md:col-span-3 md:h-auto md:min-h-0">
           {(hasOriginal || stepper.total > 0) && (
@@ -429,6 +443,7 @@ export const VerificationView = ({
             <ReadingDocument
               presentation={presentation}
               renderClaim={renderClaim}
+              scope={run.scope}
             />
           )}
         </div>
@@ -445,8 +460,8 @@ export const VerificationView = ({
               factsById={claimFactsById(run, selectedClaim)}
               key={selectedClaim.id}
               onReviewEvent={(event) => recordEvent(selectedClaim.id, event)}
+              recheckRun={bulkRecheck.forClaim(selectedClaim.id)}
               run={run}
-              stepper={stepper}
               workspaceId={workspaceId}
             />
           )}
@@ -578,15 +593,58 @@ const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
 
 type ReadingDocumentProps = {
   presentation: ClaimPresentation;
+  /** A paragraph range stores only the blocks it spans; the text of its
+   *  first and last block outside the range is dimmed. */
+  scope: VerificationRun["scope"];
   renderClaim: (
     claim: VerificationClaim,
     children: React.ReactNode,
   ) => React.ReactElement;
 };
 
+// The reader colours its own text, so the outside is faded as a whole.
+const renderOutsideScope = (children: React.ReactNode) => (
+  <span className="opacity-45" data-outside-scope="">
+    {children}
+  </span>
+);
+
+/** The text a range starts after, folded to one quiet control so the
+ *  range is what the reader opens on; unfolded, it reads faded. */
+const OutsideScopeLead = ({
+  from,
+  children,
+}: {
+  from: number;
+  children: React.ReactNode;
+}) => {
+  const t = useTranslations();
+  const [shown, setShown] = React.useState(false);
+  if (shown) {
+    return renderOutsideScope(children);
+  }
+  // Its own `dir` keeps the label out of the document text's direction:
+  // `dir="auto"` on the block skips an element that states one.
+  return (
+    <span className="block" dir="auto">
+      <Button
+        aria-expanded={false}
+        onClick={() => setShown(true)}
+        size="inline"
+        variant="ghost"
+      >
+        <span className="text-muted-foreground font-sans text-xs">
+          {t("avt.scope.showBefore", { from: String(from) })}
+        </span>
+      </Button>
+    </span>
+  );
+};
+
 /** The stored text in the shared reader, or the claims' own passages. */
 const ReadingDocument = ({
   presentation,
+  scope,
   renderClaim,
 }: ReadingDocumentProps) => {
   const t = useTranslations();
@@ -617,14 +675,31 @@ const ReadingDocument = ({
                       activeMatchIndex={NO_ACTIVE_MATCH}
                       anchorPresentation="embedded"
                       anchorsByPieceId={{
-                        [block.paragraph.id]: block.claimSpans.map(
-                          ({ claim, start, end }) => ({
+                        [block.paragraph.id]: [
+                          ...outsideSpansForBlock(scope, {
+                            blockId: block.paragraph.id,
+                            text: block.paragraph.plainText,
+                          }).map(({ start, end }) => ({
+                            start,
+                            end,
+                            key: `outside-${String(start)}`,
+                            render:
+                              start === 0 && scope.kind === "paragraphs"
+                                ? (children: React.ReactNode) => (
+                                    <OutsideScopeLead from={scope.from}>
+                                      {children}
+                                    </OutsideScopeLead>
+                                  )
+                                : renderOutsideScope,
+                          })),
+                          ...block.claimSpans.map(({ claim, start, end }) => ({
                             start,
                             end,
                             key: claim.id,
-                            render: (children) => renderClaim(claim, children),
-                          }),
-                        ),
+                            render: (children: React.ReactNode) =>
+                              renderClaim(claim, children),
+                          })),
+                        ].toSorted((a, b) => a.start - b.start),
                       }}
                       block={block.paragraph}
                       rangesByPieceId={NO_RANGES}
@@ -676,7 +751,6 @@ const ReadingDocument = ({
 const claimMatchesFilter = (
   claim: VerificationClaim,
   filter: VerdictFilter,
-  contested: ReadonlySet<FactId>,
 ): boolean => {
   const state = effectiveState(claim, claim.review);
   switch (filter) {
@@ -687,23 +761,16 @@ const claimMatchesFilter = (
       return isConflictState(state);
     }
     case "needsreview": {
-      return (
-        needsAttention(
-          {
-            state,
-            refs: claim.refs,
-            qualifiers: claim.qualifiers,
-            recheck: claim.recheck,
-          },
-          contested,
-        ) && !isSettled(claim.review)
-      );
+      return claim.needsAttention && !isSettled(claim.review);
     }
     case "reviewed": {
       return isSettled(claim.review);
     }
     case "needsevidence": {
       return claim.review?.status === "needs-evidence";
+    }
+    case "outdated": {
+      return isOutOfDate(claim);
     }
     case "supported":
     case "tension":
@@ -802,12 +869,14 @@ const ClaimSpan = ({
   const reviewStatus = claim.review?.status ?? null;
   const { mark, markTextClass } = STATE_COLOR[state];
   const qualifierAnnouncement = announceQualifiers(claim);
+  const outOfDate = isOutOfDate(claim);
   return (
-    // The claim's look is the review text mark, drawn by the span; the plain
-    // button only makes the run of evidence a control.
-    <Button
+    // The claim's look is the review text mark, drawn by the span. A claim is
+    // a run of the document's prose and wraps with it, so it is a text run,
+    // never a <button> (one atomic box that would lift a claim crossing a
+    // line out of the paragraph's reading order).
+    <ButtonTextRun
       aria-pressed={selected}
-      className="inline"
       id={claimDomId(claim.id)}
       onClick={() => onSelect(claim.id)}
       variant="plain"
@@ -850,6 +919,12 @@ const ClaimSpan = ({
             className="text-warning ms-0.5 inline-block size-3 align-middle"
           />
         )}
+        {outOfDate && (
+          <HistoryIcon
+            aria-hidden="true"
+            className="text-muted-foreground ms-0.5 inline-block size-3 align-middle"
+          />
+        )}
         {/* The verdict colour, the underline and each marker are visual only;
             a screen-reader user hears the verdict and markers here. */}
         <span className="sr-only">
@@ -862,8 +937,9 @@ const ClaimSpan = ({
                 : REVIEW_STATUS_META[reviewStatus].selectKey,
           })}
           {qualifierAnnouncement !== null && ` ${qualifierAnnouncement}`}
+          {outOfDate && ` ${t("common.outOfDate")}`}
         </span>
       </span>
-    </Button>
+    </ButtonTextRun>
   );
 };

@@ -12,6 +12,7 @@ import {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
+  DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   desktopRunnerAttachmentSchema,
   desktopRunnerQuestionAnswersSchema,
@@ -44,7 +45,10 @@ import {
  *   is reported in `harness.process` before it is asked anything, and is
  *   used only after `harness.process_granted`. The report is sent again
  *   whenever a connection resumes a run whose process still runs.
- * - Unknown fields are ignored (objects strip them). Unknown message types and
+ * - Unknown fields are ignored (objects strip them), except in `run.start`:
+ *   its fields set what a run may read, write and reach, so one this holder
+ *   does not know is refused rather than dropped, and the run never starts
+ *   with fewer limits than the desktop sent. Unknown message types and
  *   closed values are rejected; the sidecar answers each rejected line with a
  *   `rejected` message naming why.
  * - Run ids, approval request ids, decisions, outcomes and policies use the
@@ -52,11 +56,19 @@ import {
  * - `folder.restore` puts a run's folder back as its checkpoint saved it
  *   (`checkpoints.ts`) and is answered by one `folder.restored`. It is not a
  *   run message: it is not numbered and goes to the current connection only.
+ * - `background.tasks` says how many tasks the harness process a finished
+ *   run's completed turn kept runs in the background, while the chat waits
+ *   for its next turn: on every change, 0 once they end or the next turn
+ *   takes the process, and again to each new connection. Not numbered; the
+ *   latest count per run is what holds.
  *
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 4;
+export const SIDECAR_PROTOCOL = 6;
+
+/** Most background tasks one count reports; a larger count is capped. */
+export const SIDECAR_MAX_BACKGROUND_TASKS = 1000;
 
 /**
  * Largest line either side writes or accepts, in UTF-8 bytes. A `run.start`
@@ -89,6 +101,7 @@ export const SIDECAR_MESSAGE = {
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
   folderRestored: "folder.restored",
+  backgroundTasks: "background.tasks",
   rejected: "rejected",
 } as const;
 
@@ -151,6 +164,7 @@ const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
 const MAX_RUN_SKILL_FOLDERS = 32;
 const MAX_RUN_TOOL_DIRECTORIES = 8;
+const MAX_RUN_UNREADABLE_PATHS = 64;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
@@ -301,7 +315,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     requestId: requestIdSchema,
     ...harnessLaunchEntries,
   }),
-  v.object({
+  v.strictObject({
     type: v.literal(SIDECAR_HOST_MESSAGE.runStart),
     runId: runIdSchema,
     /** The stella thread the run's chunks are stamped with. */
@@ -311,7 +325,25 @@ export const sidecarHostMessageSchema = v.variant("type", [
     workspaceDir: absolutePathSchema,
     /** The chat's own cache folder, writable in every sandbox. */
     cacheDir: absolutePathSchema,
+    /**
+     * What the run's sandboxed commands may not read, apart from the paths
+     * the run itself is handed: every chat's folder, the app's own data and
+     * the member's credential stores.
+     */
+    unreadablePaths: v.pipe(
+      v.array(absolutePathSchema),
+      v.maxLength(MAX_RUN_UNREADABLE_PATHS),
+    ),
+    /**
+     * Where the run's steps leave what they produced (`step-outputs.ts`):
+     * beside the chat's own folder in the desktop's runs folder, whatever
+     * folder `workspaceDir` names. Never in or beside a folder the member
+     * linked; outside the harness's reach.
+     */
+    stepOutputDir: absolutePathSchema,
     model: modelIdSchema,
+    /** The effort the turn asks the model for; `null` leaves it to the harness. */
+    reasoningEffort: v.nullable(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
     messages: v.pipe(
       v.array(modelMessageSchema),
@@ -447,6 +479,10 @@ const probeOutcomeSchema = v.variant("type", [
           id: modelIdSchema,
           label: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
           isDefault: v.boolean(),
+          reasoningEfforts: v.pipe(
+            v.array(v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS)),
+            v.maxLength(DESKTOP_RUNNER_REASONING_EFFORTS.length),
+          ),
         }),
       ),
       v.maxLength(MAX_MODELS),
@@ -544,6 +580,20 @@ export const sidecarMessageSchema = v.variant("type", [
     type: v.literal(SIDECAR_MESSAGE.folderRestored),
     requestId: requestIdSchema,
     outcome: v.picklist(SIDECAR_RESTORE_OUTCOMES),
+  }),
+  /**
+   * The background tasks of the harness process `runId`'s completed turn
+   * kept for the chat's next turn; 0 once there are none.
+   */
+  v.object({
+    type: v.literal(SIDECAR_MESSAGE.backgroundTasks),
+    runId: runIdSchema,
+    count: v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(SIDECAR_MAX_BACKGROUND_TASKS),
+    ),
   }),
   v.object({
     type: v.literal(SIDECAR_MESSAGE.rejected),

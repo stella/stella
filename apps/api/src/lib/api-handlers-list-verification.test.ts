@@ -2,7 +2,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -131,6 +131,7 @@ describe("verification handler access admission", () => {
       entityVersionId: createSafeId<"entityVersion">(),
       contentSha256: "a".repeat(64),
       evidence: { listId: createSafeId<"legalList">(), facts: [] },
+      scope: { kind: "whole" },
       status: "completed",
       errorCode: null,
       requestedBy: "user_a",
@@ -317,7 +318,7 @@ test.each(["active", "daily"] as const)(
                 insertAttempts += 1;
                 throw Object.assign(new TypeError("Postgres cap fixture"), {
                   code: "23514",
-                  constraint: `legal_list_verification_${reason}_cap`,
+                  constraint: `model_run_${reason}_cap`,
                 });
               },
             }),
@@ -363,11 +364,11 @@ test.each(["active", "daily"] as const)(
           status: "error",
           error: {
             type: "structured",
-            code: VERIFICATION_RUN_CAP_CODES[reason],
+            code: MODEL_RUN_CAP_CODES[reason],
             retryable: true,
             hint:
               reason === "active"
-                ? "Wait for an active verification to finish, then retry lists.verifications.create."
+                ? "Wait for a verification or fact extraction in progress to finish, then retry lists.verifications.create."
                 : "Retry lists.verifications.create after midnight in Europe/Prague.",
           },
         });

@@ -95,6 +95,7 @@
     "check:aggregate-mutations": "bun scripts/check-aggregate-mutations.ts",
     "check:write-contracts": "bun scripts/check-write-contracts.ts",
     "check:split-buttons": "bun scripts/check-split-buttons.ts",
+    "check:tailwind-sources": "bun scripts/check-tailwind-sources.ts",
     "check:result-boundary-enrolment": "bun scripts/check-result-boundary-enrolment.ts",
     "check:test-input-coverage": "bun scripts/check-test-input-coverage.ts",
     "check:desktop-rust-inputs": "bun scripts/check-desktop-rust-inputs.ts",

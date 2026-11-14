@@ -43,6 +43,7 @@ const MODEL_BACKGROUND = {
 export const ACTION_KINDS = {
   "billing.activity-drafts": MODEL_ACTION,
   "dictation.transcribe": MODEL_ACTION,
+  "dictation.cleanup": MODEL_ACTION,
   "chat.send": MODEL_ACTION,
   "chat.generate-thread-title": MODEL_ACTION,
   "chat.improve-prompt": MODEL_ACTION,
@@ -75,6 +76,7 @@ export const ACTION_KINDS = {
   "search.summarize": MODEL_ACTION,
   "email.summarize": MODEL_ACTION,
   "email.draft-reply": MODEL_ACTION,
+  "email.ask": MODEL_ACTION,
   "playbooks.derive-ask": MODEL_ACTION,
   "case-law.analysis": MODEL_ACTION,
   "case-law.search-refine": MODEL_ACTION,

@@ -66,6 +66,16 @@ type ResourceReads =
   | {
       resources: readonly [ResourceType, ...ResourceType[]];
       scope: ResourceQueryScopeIdentity;
+      /**
+       * Writes of this client that update the reader's cached data in place
+       * (an optimistic write the server's answer confirms), so their commit
+       * does not mark it stale. Another client's write still does, through
+       * the realtime event.
+       */
+      keptCurrentBy?: readonly [
+        ResourceMutationName,
+        ...ResourceMutationName[],
+      ];
     }
   | { type: "independent" };
 
@@ -132,6 +142,20 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       },
     ],
     resources: [RESOURCE_TYPE.INVOICE],
+  },
+  updateTask: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/tasks/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ENTITY],
+    // Any change to a task, its status included. A task is an entity: its own
+    // queries and every entity collection, the matter's tasks and its
+    // overview included, refresh.
+    changedEntity: "entityId",
   },
   renameEntity: {
     writes: [
@@ -217,6 +241,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
+  // The member lets chat turns work in a folder linked on their computer;
+  // the computers' report, which lists the folder's approval, refreshes.
+  approveLocalFolder: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/chat/local-runners/:desktopId/folders/:linkId/approval",
+      },
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
   deleteOrganization: {
     writes: [
       {
@@ -235,6 +271,29 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       } satisfies AuthPluginEndpointWrite<"leaveOrganization">,
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  // A reviewer's decision on a claim changes the verification as reviewers
+  // see it: the run read (kept current in place by the decision's own cache
+  // write), its review history and the list's graph.
+  recordClaimReview: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-reviews",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
+  },
+  acceptRoutineClaims: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/lists/:workspaceId/claim-reviews/bulk",
+      },
+    ],
+    resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
   },
 } as const;
 
@@ -266,10 +325,13 @@ type ResourceMutationOptions<
   TMutation extends ResourceMutationName,
   TVariables,
   TData,
+  TRest extends unknown[] = [],
 > = {
   mutation: TMutation;
   queryClient: QueryClient;
-  mutationFn: (variables: TVariables) => Promise<TData>;
+  /** The write. Arguments after the variables (an idempotent submission's
+   *  replay request) reach it unchanged. */
+  mutationFn: (variables: TVariables, ...rest: TRest) => Promise<TData>;
 };
 
 type ResourceMutationScope =
@@ -287,12 +349,15 @@ const invalidateAfterResourceMutation = async ({
 }) => {
   const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
   const invalidations: ResourceQueryInvalidation[] =
-    registeredResourceQueryActions({ queryClient, resources, scope }).map(
-      ({ queryKey }): ResourceQueryInvalidation => ({
-        queryKey,
-        match: "prefix",
-      }),
-    );
+    registeredResourceQueryActions({
+      queryClient,
+      resources,
+      scope,
+      mutation,
+    }).map(({ queryKey }): ResourceQueryInvalidation => ({
+      queryKey,
+      match: "prefix",
+    }));
   if (scope.type === "workspace") {
     for (const resource of resources) {
       for (const policyScope of RESOURCE_REALTIME_QUERY_POLICY[resource]) {
@@ -358,11 +423,12 @@ export function resourceMutation<
     string
   >,
   TData,
+  TRest extends unknown[] = [],
 >(
-  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
+  options: ResourceMutationOptions<TMutation, TVariables, TData, TRest> & {
     scope?: { type: "workspace" };
   },
-): (variables: TVariables) => Promise<TData>;
+): (variables: TVariables, ...rest: TRest) => Promise<TData>;
 export function resourceMutation<
   TMutation extends OrganizationResourceMutationName,
   TData,
@@ -373,16 +439,16 @@ export function resourceMutation<
     scope: { type: "organization" };
   },
 ): (variables: TVariables) => Promise<TData>;
-export function resourceMutation<TVariables, TData>({
+export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   mutation,
   queryClient,
   mutationFn,
   scope,
-}: ResourceMutationOptions<ResourceMutationName, TVariables, TData> & {
+}: ResourceMutationOptions<ResourceMutationName, TVariables, TData, TRest> & {
   scope?: { type: "workspace" } | { type: "organization" };
-}): (variables: TVariables) => Promise<TData> {
-  return async (variables: TVariables) => {
-    const data = await mutationFn(variables);
+}): (variables: TVariables, ...rest: TRest) => Promise<TData> {
+  return async (variables: TVariables, ...rest: TRest) => {
+    const data = await mutationFn(variables, ...rest);
     await invalidateAfterResourceMutation({
       mutation,
       queryClient,
@@ -520,6 +586,9 @@ const RESOURCE_REALTIME_QUERY_POLICY = {
     RESOURCE_QUERY_SCOPE.EXPENSES,
   ],
   [RESOURCE_TYPE.LEGAL_LIST]: [RESOURCE_QUERY_SCOPE.LEGAL_LISTS],
+  // Only registered readers (the run, its review history, the graph) hold a
+  // verification as reviewers see it; nothing else is refreshed.
+  [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: [],
   [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: [],
   [RESOURCE_TYPE.LEGISLATION_SOURCE]: [],
   [RESOURCE_TYPE.MCP_CONNECTOR]: [
@@ -760,12 +829,16 @@ type RegisteredResourceQueryActionsOptions = {
   queryClient: QueryClient;
   resources: readonly ResourceType[];
   scope: ResourceQueryScopeIdentity;
+  /** This client's committed write, when the change is one; a realtime
+   *  event names none. */
+  mutation?: ResourceMutationName;
 };
 
 const registeredResourceQueryActions = ({
   queryClient,
   resources,
   scope,
+  mutation,
 }: RegisteredResourceQueryActionsOptions): WorkspaceRealtimeQueryAction[] =>
   queryClient
     .getQueryCache()
@@ -775,7 +848,9 @@ const registeredResourceQueryActions = ({
         if (
           !reads ||
           "type" in reads ||
-          !reads.resources.some((resource) => resources.includes(resource))
+          !reads.resources.some((resource) => resources.includes(resource)) ||
+          (mutation !== undefined &&
+            reads.keptCurrentBy?.includes(mutation) === true)
         ) {
           return false;
         }

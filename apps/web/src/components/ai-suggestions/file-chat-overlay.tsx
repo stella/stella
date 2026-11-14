@@ -1539,6 +1539,7 @@ const FileChatOverlayInner = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
@@ -2789,6 +2790,7 @@ const FileChatOverlayInner = ({
           onStop={() => {
             stop();
           }}
+          stopping={stopPending}
           onSubmit={handleComposerSubmit}
           pendingCount={0}
           presets={presets}

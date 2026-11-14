@@ -12,7 +12,7 @@ import {
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
-import type { ReviewDecision } from "@stll/api-contract/review-decision";
+import type { ReadsExactly } from "@stll/api-contract/review-decision";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
@@ -121,11 +121,22 @@ export const DOCUMENT_REVIEW_DECISION = {
   DISMISSED: "dismissed",
 } as const satisfies ConstantMap<DocumentReviewDecision>;
 
-export const DOCUMENT_REVIEW_FINDING_DECISION = {
-  open: null,
-  accepted: "accepted",
-  dismissed: "rejected",
-} as const satisfies Record<DocumentReviewDecision, ReviewDecision | null>;
+/** What each decision means in the shared vocabulary is the owner's
+ *  (`REVIEW_STATUS_DECISION.finding`). */
+true satisfies ReadsExactly<"finding", DocumentReviewDecision>;
+
+/** The longest reason a reviewer may give for a finding decision: the
+ *  history table's own length check. */
+export const DOCUMENT_REVIEW_DECISION_REASON_MAX = 2000;
+
+/**
+ * The transaction-local setting the decide handler puts its reviewer's
+ * reason in for the one change it makes; the history trigger
+ * (`stella_document_review_finding_decision_history`) writes it onto that
+ * change's event. No other writer sets it, so their events carry none.
+ */
+export const DOCUMENT_REVIEW_DECISION_REASON_SETTING =
+  "app.review_decision_reason";
 
 /**
  * Reviewer flags a finding carries, alongside its decision.

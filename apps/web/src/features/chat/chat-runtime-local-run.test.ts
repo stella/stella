@@ -144,6 +144,8 @@ test("a page loaded while the turn's computer is away shows the wait until outpu
       computerWait: { status: "waiting" },
     });
     expect(answerText(runtime)).toBe("Lease ");
+    // The page joined this turn; its live status counts from the server.
+    expect(runtime.getSnapshot().turnSentAt).toBeNull();
 
     server.send(computerEvent({ status: "connected" }), {
       type: "TEXT_MESSAGE_CONTENT",

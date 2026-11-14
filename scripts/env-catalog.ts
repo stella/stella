@@ -48,7 +48,6 @@ export type EnvOwner = (typeof ENV_OWNER)[keyof typeof ENV_OWNER];
 export type EnvCatalogEntry = {
   credentialKind: (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND];
   description: string;
-  documented: boolean;
   example: string | undefined;
   exposure: EnvExposure;
   name: string;
@@ -70,6 +69,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "EMAIL_EVENTS_TOPIC_ARN",
   "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
   "LIST_VERIFICATION_DAILY_STARTS_MAX",
+  "DOCUMENT_REVIEW_ACTIVE_RUNS_MAX",
+  "DOCUMENT_REVIEW_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
   "AGENT_REGISTRATION_DAILY_LIMIT",
   "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
@@ -117,7 +118,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
-  "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
@@ -352,9 +352,13 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   VISUAL_PREVIEW_FUNCTION_NAME:
     "Optional Lambda function name for generated-view previews. Publishing remains available when previews are not configured.",
   LIST_VERIFICATION_ACTIVE_RUNS_MAX:
-    "Maximum queued and running document verifications per organization (1–100; default 2).",
+    "Maximum queued and running list AI runs (document verifications and fact extractions) per organization (1–100; default 2).",
   LIST_VERIFICATION_DAILY_STARTS_MAX:
-    "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
+    "Maximum list AI run starts (document verifications and fact extractions) per organization per Europe/Prague day (1–1000; default 20).",
+  DOCUMENT_REVIEW_ACTIVE_RUNS_MAX:
+    "Maximum queued and running document reviews a person started, per organization (1–100; default 2). Playbook runs over a table are not counted.",
+  DOCUMENT_REVIEW_DAILY_STARTS_MAX:
+    "Maximum document review starts per organization per Europe/Prague day (1–1000; default 20). Playbook runs over a table are not counted.",
   CASE_LAW_DERIVED_AI:
     'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
   CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
@@ -788,6 +792,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ),
   LIST_VERIFICATION_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   LIST_VERIFICATION_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  DOCUMENT_REVIEW_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  DOCUMENT_REVIEW_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY:
     ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY:
@@ -833,7 +839,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DEPLOY_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
     ENV_CREDENTIAL_KIND.notCredential,
@@ -844,7 +849,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   CASE_LAW_EU_COMPLETION_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MAX_ROWS: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MODE: ENV_CREDENTIAL_KIND.notCredential,
-  CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   CONTENT_ENCRYPTION_KEY: ENV_CREDENTIAL_KIND.credential,
   CORPUS_INDEX_Q09_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
@@ -1168,11 +1172,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "VITE_PUBLIC_APP_URL",
 ]);
 
-const HIDDEN_SCHEMA_KEYS = new Set([
-  "CASE_LAW_DATABASE_POOL_MAX",
-  "CASE_LAW_DATABASE_URL",
-]);
-
 const humanizeEnvName = (name: string) => {
   const words = name
     .replace(/^VITE_/u, "")
@@ -1306,7 +1305,6 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
     return {
       credentialKind,
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
-      documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
       exposure: exposureFor({ name, owner, schema: entrySchema }),
       name,
@@ -1409,6 +1407,10 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   // harness and sidecar protocol log to holder.log; unset or `off` (the
   // default) writes none. packages/agent-engine/src/sidecar/env.ts reads it.
   "STELLA_AGENT_PROTOCOL_LOG",
+  // Extension ids besides the store's that may start the harness holder's
+  // browser host (an unpacked development build has its own), separated by
+  // commas. packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_BROWSER_EXTENSION_IDS",
   "STELLA_API_KEY",
   "STELLA_DESKTOP_ALLOWED_API_BASE_URLS",
   "STELLA_DESKTOP_ALLOWED_ORIGINS",
@@ -1520,6 +1522,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_HOME",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
+  // The fixture page the fake harness CLIs' `browse` scenario opens first.
+  "FAKE_BROWSER_START",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",

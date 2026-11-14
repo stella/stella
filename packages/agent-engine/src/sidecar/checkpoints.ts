@@ -54,8 +54,9 @@ import { SIDECAR_CHECKPOINT_STORE_SUFFIX } from "./protocol";
  * sandbox, so nothing here follows a link: a link is saved and restored as a
  * link, a file is read through a descriptor opened without following one, and
  * every folder on the way to an entry is checked to be a plain folder. Skill
- * folders, the package cache and the CLI's home are outside the folder and
- * are never read or written; a folder that holds one of them is not saved.
+ * folders, the package cache, the step output store and the CLI's home are
+ * outside the folder and are never read or written; a folder that holds one
+ * of them is not saved.
  *
  * Windows: a link in the folder makes it unsaved (`unsupported`), as do names
  * the platform reserves; modes are neither saved nor restored. Paths are
@@ -892,12 +893,13 @@ const takeLock = async (
       if (signal?.aborted === true) {
         return Result.err(refused("failed", "The capture was stopped.")());
       }
-      if (performance.now() >= deadline) {
-        return Result.err(
-          refused("failed", "Another process holds the checkpoint store.")(),
-        );
-      }
       if (taken.value === "wait") {
+        // A retry follows a lock just freed, so only a wait ends at the deadline.
+        if (performance.now() >= deadline) {
+          return Result.err(
+            refused("failed", "Another process holds the checkpoint store.")(),
+          );
+        }
         // real-time: another process holds the lock; it is polled until free.
         // await-in-loop: one wait between attempts.
         await Bun.sleep(LOCK_POLL_MS);
@@ -2097,7 +2099,8 @@ type CaptureOptions = {
   memberFiles: readonly string[];
   /**
    * Folders the run uses and never owns: skill folders, the package cache,
-   * the CLI's home. A run folder holding one, or inside one, is not saved.
+   * the step output store, the CLI's home. A run folder holding one, or
+   * inside one, is not saved.
    */
   protectedPaths: readonly string[];
   /** Ends a capture in progress when the run is stopped. */

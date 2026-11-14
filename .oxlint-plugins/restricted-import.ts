@@ -420,6 +420,26 @@ const RESTRICTED_IMPORT_RULES = {
   ],
   // Most effects are unnecessary; external-system sync goes through the
   // named wrappers so intent is explicit. See /conventions-use-effect.
+  // On iOS the native stack's bars, modals and sheets are UIKit views no app
+  // view rises above; one owner draws over every screen in the window layer
+  // above them. The scope (apps/mobile/src) is set by the rule's override in
+  // oxlint.config.ts.
+  "mobile-window-overlay-owner": [
+    {
+      messageId: "requireWindowOverlay",
+      message:
+        "Draw over every screen through WindowOverlay from " +
+        "'@/components/window-overlay', the one owner of the window layer " +
+        "above the native stack.",
+      modules: [packageWithSubpaths("react-native-screens")],
+      restriction: {
+        type: "exports",
+        names: new Set(["FullWindowOverlay"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/mobile/src/components/window-overlay.tsx"],
+    },
+  ],
   "no-raw-use-effect": [
     {
       messageId: "noRawUseEffect",

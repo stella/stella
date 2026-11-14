@@ -435,6 +435,7 @@ if (!databaseUrl || !runPostgresTests) {
               harness: "codex",
               model: "gpt-test",
               approvals: "ask",
+              reasoningEffort: null,
             },
           })
           .where(eq(chatThreads.id, messages.threadId));
@@ -468,6 +469,7 @@ if (!databaseUrl || !runPostgresTests) {
               harness: "codex",
               model: "gpt-test",
               approvals: "ask",
+              reasoningEffort: null,
             },
           })
           .where(eq(chatThreads.id, messages.threadId));
