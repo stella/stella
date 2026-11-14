@@ -299,7 +299,7 @@ test.each(TAKEDOWNS)(
           .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID))
       ).at(0) ?? panic("Expected a desired state");
     if (desired.fingerprint === null || desired.indexId === null) {
-      return panic("Expected an upsert desired state");
+      panic("Expected an upsert desired state");
     }
     const revision = toSafeId<"corpusIndexProjectionIntent">(
       "0198e331-e578-7000-8000-000000000105",

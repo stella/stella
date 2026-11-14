@@ -180,14 +180,23 @@ type GatedTransaction = Parameters<
   Parameters<GatedTestDb["transaction"]>[0]
 >[0];
 
+type Held<T> = {
+  /** The holding backend's pid, once `operation` has run. */
+  holds: Promise<number>;
+  release: () => void;
+  done: Promise<T>;
+};
+
 /**
  * Run `operation` and keep its transaction open until released. `pid` is the
- * holding backend, so a test can see who waits on its locks.
+ * holding backend, so a test can see who waits on its locks. A failure before
+ * the transaction holds rejects `holds` too, so a test waiting for it gets the
+ * error instead of waiting forever.
  */
 const holdOpen = <T>(
   db: GatedTestDb,
   operation: (tx: GatedTransaction) => Promise<T>,
-) => {
+): Held<T> => {
   const holds = Promise.withResolvers<number>();
   const release = Promise.withResolvers<undefined>();
   const done = db.transaction(async (tx) => {
@@ -202,11 +211,33 @@ const holdOpen = <T>(
     await release.promise;
     return value;
   });
+  // A no-op once `holds` has resolved; `done` still rejects for its awaiter.
+  void done.catch(holds.reject);
   return {
     holds: holds.promise,
     release: () => release.resolve(undefined),
     done,
   };
+};
+
+/**
+ * Run `body` while `held` keeps its transaction open, then release it and
+ * wait for it to end whatever `body` does: the suite's cleanup deletes rows
+ * the held transaction locks, so a failed assertion would otherwise hang the
+ * test instead of reporting. Returns what the held transaction returned.
+ */
+const whileHeld = async <T>(
+  held: Held<T>,
+  body: () => Promise<void>,
+): Promise<T> => {
+  try {
+    await body();
+  } finally {
+    held.release();
+    // When `body` failed, its error is the one to report.
+    await Promise.allSettled([held.done]);
+  }
+  return await held.done;
 };
 
 /**
@@ -306,7 +337,7 @@ const withTwoConnections = async (
   ) => Promise<void>,
 ) => {
   if (databaseUrl === undefined) {
-    return panic("DATABASE_URL is required");
+    panic("DATABASE_URL is required");
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
     const { db: first } = openClient();
@@ -343,13 +374,13 @@ if (!databaseUrl || !runPostgresTests) {
           });
         });
         await erase.holds;
-        expect(await neverWaits(claim(claimer, fixture))).toMatchObject({
-          leases: [],
-          restoredIntentIds: [],
-          skippedLocked: 1,
+        await whileHeld(erase, async () => {
+          expect(await neverWaits(claim(claimer, fixture))).toMatchObject({
+            leases: [],
+            restoredIntentIds: [],
+            skippedLocked: 1,
+          });
         });
-        erase.release();
-        await erase.done;
 
         const after = await claim(claimer, fixture);
         expect(after.restoredIntentIds).toEqual([]);
@@ -376,9 +407,10 @@ if (!databaseUrl || !runPostgresTests) {
         );
         const holder = await restore.holds;
         const erase = writeCanonical(writer, fixture, null);
-        expect(await blockedBehind(observer, holder)).toBe(true);
-        restore.release();
-        expect((await restore.done).restoredIntentIds).toHaveLength(1);
+        const restored = await whileHeld(restore, async () => {
+          expect(await blockedBehind(observer, holder)).toBe(true);
+        });
+        expect(restored.restoredIntentIds).toHaveLength(1);
         await erase;
         await writer.transaction(
           async (tx) =>
@@ -418,9 +450,9 @@ if (!databaseUrl || !runPostgresTests) {
           await writeCanonical(writer, fixture, null);
           await writeCanonical(writer, fixture, "e".repeat(64));
         })();
-        expect(await blockedBehind(observer, holder)).toBe(true);
-        restore.release();
-        await restore.done;
+        await whileHeld(restore, async () => {
+          expect(await blockedBehind(observer, holder)).toBe(true);
+        });
         await eraseThenUndo;
 
         expect(await stateOf(writer, fixture)).toEqual({
@@ -452,11 +484,11 @@ if (!databaseUrl || !runPostgresTests) {
           });
         });
         await change.holds;
-        expect((await neverWaits(claim(claimer, fixture))).skippedLocked).toBe(
-          1,
-        );
-        change.release();
-        await change.done;
+        await whileHeld(change, async () => {
+          expect(
+            (await neverWaits(claim(claimer, fixture))).skippedLocked,
+          ).toBe(1);
+        });
         // The desired value moved after the revision was queued: no proof
         // that the copy is the one to serve, so it is claimed, not restored.
         const after = await claim(claimer, fixture);
@@ -486,9 +518,12 @@ if (!databaseUrl || !runPostgresTests) {
             }),
         );
         await sweep.holds;
-        expect((await neverWaits(claim(claimer, fixture))).leases).toEqual([]);
-        sweep.release();
-        expect(await sweep.done).toHaveLength(1);
+        const swept = await whileHeld(sweep, async () => {
+          expect((await neverWaits(claim(claimer, fixture))).leases).toEqual(
+            [],
+          );
+        });
+        expect(swept).toHaveLength(1);
 
         const after = await claim(claimer, fixture);
         expect(after.claimed.served_after_delete).toBe(1);
@@ -514,9 +549,12 @@ if (!databaseUrl || !runPostgresTests) {
             }),
         );
         await repair.holds;
-        expect((await neverWaits(claim(claimer, fixture))).leases).toEqual([]);
-        repair.release();
-        expect(await repair.done).toBe(1);
+        const repaired = await whileHeld(repair, async () => {
+          expect((await neverWaits(claim(claimer, fixture))).leases).toEqual(
+            [],
+          );
+        });
+        expect(repaired).toBe(1);
         expect(await stateOf(claimer, fixture)).toEqual({
           desiredAction: "upsert",
           appliedAction: null,

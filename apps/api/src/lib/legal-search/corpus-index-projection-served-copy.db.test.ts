@@ -520,37 +520,38 @@ const readStates = async (run: ModelRun) =>
     .from(corpusIndexProjectionStates)
     .where(inArray(corpusIndexProjectionStates.entityId, run.entityIds));
 
+/**
+ * The database and the engine at one instant. The engine's deletions are
+ * copied, so a snapshot taken before a step still tells what was served
+ * before it, whatever the step deletes.
+ */
 type Snapshot = {
   states: Awaited<ReturnType<typeof readStates>>;
   intents: Awaited<ReturnType<typeof readIntents>>;
+  deleted: ReadonlySet<string>;
 };
 
 const snapshot = async (run: ModelRun): Promise<Snapshot> => ({
   states: await readStates(run),
   intents: await readIntents(run),
+  deleted: new Set(run.harness.engine.deleted),
 });
 
-/** The revision readers are served for an entity, or null. */
+/** The revision readers are served for an entity at the snapshot, or null. */
 const servedRevision = (
-  run: ModelRun,
-  { states, intents }: Snapshot,
+  { states, intents, deleted }: Snapshot,
   entityId: string,
 ) => {
   const state = states.find((row) => row.entityId === entityId);
   if (
-    state === undefined ||
-    state.desiredAction !== "upsert" ||
+    state?.desiredAction !== "upsert" ||
     state.appliedAction !== "upsert" ||
     state.appliedRevision === null
   ) {
     return null;
   }
   const named = intents.find(({ id }) => id === state.appliedRevision);
-  if (
-    named === undefined ||
-    named.status !== "applied" ||
-    run.harness.engine.deleted.has(named.id)
-  ) {
+  if (named?.status !== "applied" || deleted.has(named.id)) {
     return null;
   }
   return named;
@@ -755,7 +756,7 @@ const applyCommand = async (run: ModelRun, next: Command) => {
       break;
     case "repair": {
       const before = await snapshot(run);
-      const served = servedRevision(run, before, entityOf(run, next.entity));
+      const served = servedRevision(before, entityOf(run, next.entity));
       if (served !== null) {
         // The census found the copy damaged: its documents are gone.
         harness.engine.published.delete(served.id);
@@ -802,8 +803,8 @@ const assertStepInvariants = (
     expect(run.harness.engine.deleted.has(state.appliedRevision)).toBe(false);
   }
   for (const entityId of run.entityIds) {
-    const servedBefore = servedRevision(run, before, entityId);
-    const servedAfter = servedRevision(run, after, entityId);
+    const servedBefore = servedRevision(before, entityId);
+    const servedAfter = servedRevision(after, entityId);
     const state = after.states.find((row) => row.entityId === entityId);
     if (
       servedBefore !== null &&
@@ -850,7 +851,7 @@ const drainAndAssertLive = async (run: ModelRun) => {
     if (state.desiredAction === "erase") {
       expect(state.appliedAction).toBe("erase");
     } else if (state.workStatus !== "blocked") {
-      expect(servedRevision(run, after, state.entityId)).not.toBeNull();
+      expect(servedRevision(after, state.entityId)).not.toBeNull();
     }
   }
   expect(run.servedClaims).toBe(0);
@@ -925,9 +926,7 @@ describe("the copy a projection state serves", () => {
             });
             let before = await snapshot(run);
             expect(
-              run.entityIds.every(
-                (id) => servedRevision(run, before, id) !== null,
-              ),
+              run.entityIds.every((id) => servedRevision(before, id) !== null),
             ).toBe(true);
             for (const step of commands) {
               await applyCommand(run, step);
@@ -970,7 +969,7 @@ const servedFixture = async () => {
     reject: false,
     crash: { type: "none" },
   });
-  const served = servedRevision(run, await snapshot(run), entityOf(run, 0));
+  const served = servedRevision(await snapshot(run), entityOf(run, 0));
   if (served === null) {
     return panic("Expected the fixture entity to be served");
   }

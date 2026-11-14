@@ -136,7 +136,7 @@ beforeAll(
         ),
       );
     if (latestTransition === undefined) {
-      return panic("The newest transition function is missing");
+      panic("The newest transition function is missing");
     }
     await db.execute(sql.raw(latestTransition));
   },
