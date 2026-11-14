@@ -192,7 +192,7 @@ coverage_busy_hold() {
     # strflocaltime reads an unknown zone as UTC, which would open the window
     # at another hour: a zone without a tz database entry invalidates the
     # file, so it grants no hold.
-    if [[ ! "$time_zone" =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$ || ! -f "${TZDIR:-/usr/share/zoneinfo}/$time_zone" ]]; then
+    if [[ ! "$time_zone" =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$ || ! -f "/usr/share/zoneinfo/$time_zone" ]]; then
       printf null
       return
     fi
