@@ -120,6 +120,25 @@ export const stepContentUploader =
 
 const kindSchema = v.picklist(CHAT_LOCAL_RUN_STEP_CONTENT_KINDS);
 
+/** A wait of `ms` that resolves as `waited`, with the way to stop it. */
+export type StepUploadTimer = (ms: number) => {
+  promise: Promise<"waited">;
+  cancel: () => void;
+};
+
+const systemTimer: StepUploadTimer = (ms) => {
+  const waited = Promise.withResolvers<"waited">();
+  const timer = setTimeout(() => {
+    waited.resolve("waited");
+  }, ms);
+  return {
+    promise: waited.promise,
+    cancel: () => {
+      clearTimeout(timer);
+    },
+  };
+};
+
 type StepUploadsOptions = {
   /** The folder of markers, one per step still to send; the run's own. */
   pendingDir: string;
@@ -128,6 +147,8 @@ type StepUploadsOptions = {
   upload: UploadStepContent;
   /** One line in the holder's log; never a step's content. */
   log: (line: string) => void;
+  /** How a wait is timed; the system's timer by default. */
+  timer?: StepUploadTimer;
 };
 
 type DrainOptions = {
@@ -139,8 +160,10 @@ type DrainOptions = {
 
 export type StepUploads = {
   /**
-   * Note a kept step as still to send, then send what is waiting, for at
-   * most `waitMs`: past it the sending goes on and the caller does not wait.
+   * Note a kept step as still to send and send what is waiting. The caller
+   * waits for it at most `waitMs`, and only while sending is healthy: once a
+   * wait has passed, or steps were left waiting, later steps do not wait at
+   * all until everything waiting has been sent again.
    */
   send: (step: SpooledStep, waitMs: number) => Promise<void>;
   /**
@@ -159,6 +182,7 @@ export const createStepUploads = ({
   keptFile,
   upload,
   log,
+  timer: after = systemTimer,
 }: StepUploadsOptions): StepUploads => {
   const closed = new AbortController();
   /** The sending that is running, if any. */
@@ -253,11 +277,20 @@ export const createStepUploads = ({
 
   /** Why the last sending left steps waiting; `null` when it left none. */
   let blocked: "retry" | "away" | null = null;
+  /**
+   * Whether a step's event waits for its content. Sending is healthy until a
+   * step's wait passes before its content is sent, or a sending leaves steps
+   * waiting; it is healthy again once a sending has left none. While it is
+   * not, steps queue their content and go on at once, so trouble costs a run
+   * one wait, not one per step.
+   */
+  let healthy = true;
 
   const fly = async () => {
     const passed = await Result.tryPromise(sendAll);
     flight = null;
     blocked = Result.isError(passed) ? "away" : passed.value;
+    healthy = blocked === null;
     if (Result.isError(passed)) {
       log("sending a run's step content stopped early");
     }
@@ -268,20 +301,6 @@ export const createStepUploads = ({
     requested = true;
     flight ??= fly();
     await flight;
-  };
-
-  /** Resolves after `ms`, with the way to stop waiting for it. */
-  const after = (ms: number) => {
-    const waited = Promise.withResolvers<"waited">();
-    const timer = setTimeout(() => {
-      waited.resolve("waited");
-    }, ms);
-    return {
-      promise: waited.promise,
-      cancel: () => {
-        clearTimeout(timer);
-      },
-    };
   };
 
   const drain = async ({ waitMs, retryEveryMs, signal }: DrainOptions) => {
@@ -334,11 +353,18 @@ export const createStepUploads = ({
         log("a step's content could not be queued for sending");
         return;
       }
-      // One try within the step's wait: a step never waits on an API that
-      // is away.
+      const sent = sending();
+      if (!healthy) {
+        // Sending is in trouble: the step's content is queued and its event
+        // goes on without waiting.
+        return;
+      }
       const wait = after(waitMs);
-      await Promise.race([sending(), wait.promise]);
+      const first = await Promise.race([sent, wait.promise]);
       wait.cancel();
+      if (first === "waited") {
+        healthy = false;
+      }
     },
     drain,
     close: async () => {

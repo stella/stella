@@ -16,6 +16,7 @@ import {
   type StepContentUpload,
   stepContentUploader,
   type StepUploadOutcome,
+  type StepUploadTimer,
   type UploadStepContent,
 } from "./step-uploads";
 
@@ -56,13 +57,40 @@ const keep = async (toolCallId: string, output: string) => {
   return kept.unwrap() ?? panic("a command step keeps its output");
 };
 
-const uploadsWith = (upload: UploadStepContent) =>
+const uploadsWith = (upload: UploadStepContent, timer?: StepUploadTimer) =>
   createStepUploads({
     pendingDir: pendingDir(),
     keptFile: (stepKey) => path.join(stepOutputRunDir(root, RUN_ID), stepKey),
     upload,
     log: () => {},
+    ...(timer === undefined ? {} : { timer }),
   });
+
+/**
+ * A timer the test turns by hand: every wait asked for is counted, and
+ * passes only when the test says so.
+ */
+const handTimer = () => {
+  const waits: PromiseWithResolvers<"waited">[] = [];
+  const firstAsked = Promise.withResolvers<null>();
+  const timer: StepUploadTimer = () => {
+    const wait = Promise.withResolvers<"waited">();
+    waits.push(wait);
+    firstAsked.resolve(null);
+    return { promise: wait.promise, cancel: () => {} };
+  };
+  return {
+    timer,
+    /** Resolves once a first wait was asked for. */
+    firstAsked: firstAsked.promise,
+    /** How many waits were asked for so far. */
+    asked: () => waits.length,
+    /** Let the latest wait pass. */
+    pass: () => {
+      waits.at(-1)?.resolve("waited");
+    },
+  };
+};
 
 const text = (content: Uint8Array | null) =>
   content === null ? null : new TextDecoder().decode(content);
@@ -144,12 +172,100 @@ describe("sending what a run's steps produced", () => {
     expect(await pending()).toEqual(sorted([first.stepKey, second.stepKey]));
     away = false;
     const third = await keep("call-3", "three");
+    // Sending was in trouble, so this step does not wait for it either.
     await uploads.send(third, 1000);
+    await uploads.drain({ waitMs: 5000, retryEveryMs: 1 });
     expect(sorted(sent)).toEqual(
       sorted([first.stepKey, second.stepKey, third.stepKey]),
     );
     expect(await pending()).toEqual([]);
     expect(mostInFlight).toBe(1);
+  });
+
+  const STEPS = 200;
+
+  /** Keep and send `STEPS` steps one after another, as a turn's events do. */
+  const sendSteps = async (
+    uploads: ReturnType<typeof uploadsWith>,
+    onSent: (index: number) => void,
+  ) => {
+    const keys: string[] = [];
+    for (let index = 0; index < STEPS; index += 1) {
+      // await-in-loop: steps complete one after another, as a turn's do.
+      const step = await keep(`call-${String(index)}`, `out ${String(index)}`);
+      keys.push(step.stepKey);
+      await uploads.send(step, 3000);
+      onSent(index);
+    }
+    return keys;
+  };
+
+  test("an API that never answers costs a run one wait, not one per step", async () => {
+    const hand = handTimer();
+    const answers = Promise.withResolvers<StepUploadOutcome>();
+    const stored: string[] = [];
+    let recovered = false;
+    const uploads = uploadsWith(async ({ stepKey }) => {
+      // The first request hangs until the API is back; later ones answer.
+      const outcome = recovered ? "done" : await answers.promise;
+      stored.push(stepKey);
+      return outcome;
+    }, hand.timer);
+    const order: number[] = [];
+    // The first step waits; its wait passing is what marks the trouble.
+    const first = await keep("call-first", "out first");
+    const waiting = uploads.send(first, 3000);
+    await hand.firstAsked;
+    expect(hand.asked()).toBe(1);
+    hand.pass();
+    await waiting;
+    const keys = await sendSteps(uploads, (index) => {
+      order.push(index);
+    });
+    // No later step asked for a wait, and their events went on in order.
+    expect(hand.asked()).toBe(1);
+    expect(order).toEqual(Array.from({ length: STEPS }, (_, index) => index));
+    expect(await pending()).toHaveLength(STEPS + 1);
+    // The API recovers: everything queued is stored, each step once.
+    recovered = true;
+    answers.resolve("done");
+    await uploads.drain({ waitMs: 600_000, retryEveryMs: 1 });
+    expect(await pending()).toEqual([]);
+    expect(sorted(stored)).toEqual(sorted([first.stepKey, ...keys]));
+  });
+
+  test("an API that answers late stops being waited for, and is waited for again once it keeps up", async () => {
+    const hand = handTimer();
+    const late = Promise.withResolvers<StepUploadOutcome>();
+    const stored: string[] = [];
+    let slow = true;
+    const uploads = uploadsWith(async ({ stepKey }) => {
+      const outcome = slow ? await late.promise : "done";
+      stored.push(stepKey);
+      return outcome;
+    }, hand.timer);
+    const first = await keep("call-first", "out first");
+    const waiting = uploads.send(first, 3000);
+    await hand.firstAsked;
+    hand.pass();
+    await waiting;
+    const order: number[] = [];
+    const keys = await sendSteps(uploads, (index) => {
+      order.push(index);
+    });
+    expect(hand.asked()).toBe(1);
+    expect(order).toEqual(Array.from({ length: STEPS }, (_, index) => index));
+    // The late answer arrives; the rest follow at once.
+    slow = false;
+    late.resolve("done");
+    await uploads.drain({ waitMs: 600_000, retryEveryMs: 1 });
+    expect(await pending()).toEqual([]);
+    expect(sorted(stored)).toEqual(sorted([first.stepKey, ...keys]));
+    // Sending kept up again, so the next step's content is stored before
+    // its event goes on.
+    const next = await keep("call-next", "out next");
+    await uploads.send(next, 3000);
+    expect(stored.at(-1)).toBe(next.stepKey);
   });
 
   test("a turn's end keeps trying while the API is away, and sends once it is back", async () => {
