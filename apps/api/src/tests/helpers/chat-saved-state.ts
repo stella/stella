@@ -106,7 +106,14 @@ const statementsOf = (migration: string): string[] =>
         .join("\n")
         .trim(),
     )
-    .filter((statement) => statement !== "" && !/^SET\s/iu.test(statement));
+    .filter(
+      (statement) =>
+        statement !== "" &&
+        !/^SET\s/iu.test(statement) &&
+        // A routine's body is stored, not run by the migration: the rows it
+        // writes are written later, by whatever calls it.
+        !/^CREATE\s+(OR\s+REPLACE\s+)?(FUNCTION|PROCEDURE)\s/iu.test(statement),
+    );
 
 export const readSavedStateFixtures = (): SavedStateFixture[] =>
   readdirSync(SAVED_STATE_DIR)

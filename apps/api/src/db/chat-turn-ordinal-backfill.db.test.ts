@@ -421,7 +421,7 @@ const action: fc.Arbitrary<Action> = fc.oneof(
   }),
 );
 
-test("sends, edits and the backfill in any order keep every position unique, stable and in order", async () => {
+test("chat turn positions stay unique, stable and ordered under any interleaving of inserts, deletes and the backfill", async () => {
   await assertProperty(
     "chat turn positions stay unique, stable and ordered under any interleaving of inserts, deletes and the backfill",
     fc.asyncProperty(
