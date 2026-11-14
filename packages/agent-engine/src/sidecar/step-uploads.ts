@@ -3,8 +3,8 @@ import {
   mkdir,
   opendir,
   readFile,
+  rename,
   rm,
-  rmdir,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -34,9 +34,11 @@ import { readKeptStepOutput } from "./step-outputs";
  *
  * A run that is over takes nothing more, except the steps it named while it
  * was still going. So a run's end stops the sending and names what is left
- * (`leave`): those markers and their kept files stay on this computer, for
- * the desktop app to send once the API can be reached again. A run that ends
- * without naming anything leaves no folder.
+ * (`leave`): the folder of those markers is handed over under another name
+ * (`awaitedDir`), and with their kept files they stay on this computer for
+ * the desktop app to send once the API can be reached again. The folder's
+ * name says whose it is: this module's while the run goes, the desktop
+ * app's after. A run that ends without naming anything leaves no folder.
  */
 
 const PRIVATE_FILE_MODE = 0o600;
@@ -154,6 +156,8 @@ const systemTimer: StepUploadTimer = (ms) => {
 type StepUploadsOptions = {
   /** The folder of markers, one per step still to send; the run's own. */
   pendingDir: string;
+  /** What the folder is renamed to once the run named what is left in it. */
+  awaitedDir: string;
   /** The kept file of a step (`stepOutputPath` by step key). */
   keptFile: (stepKey: string) => string;
   upload: UploadStepContent;
@@ -186,24 +190,22 @@ export type StepUploads = {
   drain: (options: DrainOptions) => Promise<void>;
   /**
    * The run ends: stop sending and answer the steps still waiting, at most
-   * `max` of them and a count of the rest. The steps answered stay in the
-   * folder, to be sent after the run; the rest are dropped. Nothing is sent
-   * from here afterwards. A folder that cannot be listed is an error, and
-   * is dropped with the run.
+   * `max` of them and a count of the rest. The steps answered are handed
+   * over in `awaitedDir`, to be sent after the run; the rest are dropped.
+   * Nothing is sent from here afterwards. A folder that cannot be listed or
+   * handed over is an error, and is dropped with the run.
    */
   leave: (
     max: number,
   ) => Promise<Result<ChatLocalRunStepsAwaited, UnhandledException>>;
-  /**
-   * End for good: nothing more is sent. What waited is dropped, unless
-   * `leave` answered it.
-   */
+  /** End for good: nothing more is sent, and what still waited is dropped. */
   close: () => Promise<void>;
 };
 
 /** Sends a run's kept steps, one at a time, from a folder of markers. */
 export const createStepUploads = ({
   pendingDir,
+  awaitedDir,
   keptFile,
   upload,
   log,
@@ -365,10 +367,10 @@ export const createStepUploads = ({
     stops.removeEventListener("abort", stop);
   };
 
-  /** Whether `leave` answered steps: their markers outlive this. */
-  let left = false;
-
-  /** Keep at most `max` markers, drop every other entry, and count them. */
+  /**
+   * Keep at most `max` markers, drop every other entry, count them, and hand
+   * the folder over when it still holds a marker.
+   */
   const leftIn = async (max: number): Promise<ChatLocalRunStepsAwaited> => {
     await mkdir(pendingDir, { recursive: true, mode: PRIVATE_FOLDER_MODE });
     const stepKeys: string[] = [];
@@ -383,8 +385,12 @@ export const createStepUploads = ({
       more += isMarker ? 1 : 0;
       await rm(markerOf(entry.name), { recursive: true, force: true });
     }
-    if (stepKeys.length === 0) {
-      await rmdir(pendingDir);
+    if (stepKeys.length > 0) {
+      // A run's id is its own: nothing else is ever handed over there.
+      await rm(awaitedDir, { recursive: true, force: true });
+      await rename(pendingDir, awaitedDir);
+    } else {
+      await rm(pendingDir, { recursive: true, force: true });
     }
     return { stepKeys, more };
   };
@@ -419,16 +425,12 @@ export const createStepUploads = ({
     leave: async (max) => {
       closed.abort();
       await flight;
-      const listed = await Result.tryPromise(async () => await leftIn(max));
-      left = Result.isOk(listed) && listed.value.stepKeys.length > 0;
-      return listed;
+      return await Result.tryPromise(async () => await leftIn(max));
     },
     close: async () => {
       closed.abort();
       await flight;
-      if (!left) {
-        await rm(pendingDir, { recursive: true, force: true });
-      }
+      await rm(pendingDir, { recursive: true, force: true });
     },
   };
 };

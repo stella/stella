@@ -41,17 +41,21 @@ afterEach(async () => {
 });
 
 const pendingDir = () => `${stepOutputRunDir(root, RUN_ID)}.pending`;
+const awaitedDir = () => `${stepOutputRunDir(root, RUN_ID)}.awaited`;
 
 const sorted = (names: readonly string[]) =>
   names.toSorted((left, right) => (left < right ? -1 : 1));
 
-/** The step keys still waiting to be sent; none once the folder is gone. */
-const pending = async () => {
-  const names = await Result.tryPromise(
-    async () => await readdir(pendingDir()),
-  );
+const namesIn = async (dir: string) => {
+  const names = await Result.tryPromise(async () => await readdir(dir));
   return Result.isOk(names) ? sorted(names.value) : [];
 };
+
+/** The step keys still waiting to be sent; none once the folder is gone. */
+const pending = async () => await namesIn(pendingDir());
+
+/** The step keys handed over at the run's end; none without the folder. */
+const awaited = async () => await namesIn(awaitedDir());
 
 /** Keep a command step's output as the sidecar does, and answer what it kept. */
 const keep = async (toolCallId: string, output: string) => {
@@ -68,6 +72,7 @@ const keep = async (toolCallId: string, output: string) => {
 const uploadsWith = (upload: UploadStepContent, timer?: StepUploadTimer) =>
   createStepUploads({
     pendingDir: pendingDir(),
+    awaitedDir: awaitedDir(),
     keptFile: (stepKey) => path.join(stepOutputRunDir(root, RUN_ID), stepKey),
     upload,
     log: () => {},
@@ -372,8 +377,10 @@ describe("sending what a run's steps produced", () => {
     await uploads.drain({ waitMs: 1000, retryEveryMs: 1 });
     await uploads.close();
     expect(calls).toBe(before);
-    // The named markers and their kept files outlive the run.
-    expect(await pending()).toEqual(sorted(left.stepKeys));
+    // The named markers are handed over, and with their kept files outlive
+    // the run; the run's own folder is gone.
+    expect(await awaited()).toEqual(sorted(left.stepKeys));
+    expect(await readdir(root)).toEqual([RUN_ID, `${RUN_ID}.awaited`]);
     const keptDir = stepOutputRunDir(root, RUN_ID);
     expect(await readdir(keptDir)).toEqual(
       expect.arrayContaining([first.stepKey, second.stepKey]),
@@ -393,7 +400,8 @@ describe("sending what a run's steps produced", () => {
     expect(left.more).toBe(3);
     expect(kept).toEqual(expect.arrayContaining(left.stepKeys));
     await uploads.close();
-    expect(await pending()).toEqual(sorted(left.stepKeys));
+    expect(await awaited()).toEqual(sorted(left.stepKeys));
+    expect(await pending()).toEqual([]);
   });
 
   test("a run's end with nothing waiting names nothing and leaves no folder", async () => {
@@ -420,7 +428,7 @@ describe("sending what a run's steps produced", () => {
     await mkdir(path.join(pendingDir(), "b".repeat(64)));
     const left = (await uploads.leave(10)).unwrap();
     expect(left).toEqual({ stepKeys: [step.stepKey], more: 0 });
-    expect(await pending()).toEqual([step.stepKey]);
+    expect(await awaited()).toEqual([step.stepKey]);
     expect(await readFile(outside, "utf-8")).toBe("not a step");
   });
 
@@ -442,7 +450,7 @@ describe("sending what a run's steps produced", () => {
     hand.pass();
     await sent;
     expect(left).toEqual({ stepKeys: [step.stepKey], more: 0 });
-    expect(await pending()).toEqual([step.stepKey]);
+    expect(await awaited()).toEqual([step.stepKey]);
   });
 
   test("a marker that names no kept step is dropped, never sent", async () => {

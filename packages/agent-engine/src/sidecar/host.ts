@@ -452,6 +452,14 @@ const STEP_UPLOAD_END_WAIT_MS = {
   stopped: 20_000,
 } as const;
 
+/**
+ * Beside a run's kept steps, the folder of the steps still to send: the
+ * sidecar's while the run goes, and under the second name the desktop app's
+ * once the run announced them at its end.
+ */
+const STEP_PENDING_SUFFIX = ".pending";
+const STEP_AWAITED_SUFFIX = ".awaited";
+
 type RunStepsOptions = {
   /** The API the run's steps are sent to, and the proxy holding its token. */
   config: Pick<Config, "apiOrigin" | "proxy">;
@@ -477,7 +485,8 @@ const openRunSteps = ({
 }: RunStepsOptions) => {
   const runDir = stepOutputRunDir(stepOutputDir, runId);
   const uploads = createStepUploads({
-    pendingDir: `${runDir}.pending`,
+    pendingDir: `${runDir}${STEP_PENDING_SUFFIX}`,
+    awaitedDir: `${runDir}${STEP_AWAITED_SUFFIX}`,
     keptFile: (stepKey) => path.join(runDir, stepKey),
     upload: stepContentUploader({
       apiOrigin,

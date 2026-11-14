@@ -2064,8 +2064,14 @@ describe("harness holder over its socket", () => {
       const { finished, order, awaited, runId, stepOutputDir } =
         await runWithSteps(() => new Response(null), "away");
       expect(finished.outcome).toBe("completed");
-      const pendingDir = path.join(stepOutputDir, `${runId}.pending`);
-      const left = readdirSync(pendingDir).toSorted();
+      // The folder is handed over under the name the desktop app sends from.
+      expect(readdirSync(stepOutputDir).toSorted()).toEqual([
+        runId,
+        `${runId}.awaited`,
+      ]);
+      const left = readdirSync(
+        path.join(stepOutputDir, `${runId}.awaited`),
+      ).toSorted();
       expect(left).toEqual(
         expect.arrayContaining(
           ["call-heredoc", "call-long", "call-edit"].map((toolCallId) =>
