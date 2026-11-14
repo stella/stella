@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -305,6 +305,11 @@ export const foldSupersededChangelog = ({
   }
   return `${older.body}\n${PACKAGES_HEADING}\n\n${entries.map((entry) => `${entry}\n`).join("")}`;
 };
+
+const isVersionAhead = (version: StableVersion, reference: StableVersion) =>
+  (version.major - reference.major ||
+    version.minor - reference.minor ||
+    version.patch - reference.patch) > 0;
 
 export const parseStableVersion = (value: string): StableVersion => {
   const match = STABLE_VERSION_PATTERN.exec(value);
@@ -1512,13 +1517,55 @@ export const assertPreCutGates = async ({
   );
 };
 
+export class IncompleteReleaseListingError extends TaggedError(
+  "IncompleteReleaseListingError",
+)<{ message: string }> {}
+
+const OPEN_RELEASE_LIST_LIMIT = 500;
+
+export const assertNoOpenReleasePullRequests = (listing: unknown): void => {
+  if (!Array.isArray(listing) || listing.length >= OPEN_RELEASE_LIST_LIMIT) {
+    throw new IncompleteReleaseListingError({
+      message:
+        "Open release pull request listing is incomplete; cannot cut a release",
+    });
+  }
+  const blockers: string[] = [];
+  for (const pull of listing) {
+    if (
+      !isRecord(pull) ||
+      typeof pull["title"] !== "string" ||
+      typeof pull["number"] !== "number" ||
+      !Number.isSafeInteger(pull["number"]) ||
+      pull["number"] <= 0 ||
+      typeof pull["headRefOid"] !== "string" ||
+      !/^[0-9a-f]{40}$/u.test(pull["headRefOid"])
+    ) {
+      throw new IncompleteReleaseListingError({
+        message:
+          "Open release pull request listing is incomplete or invalid; cannot cut a release",
+      });
+    }
+    if (pull["title"].startsWith("chore: release v")) {
+      blockers.push(
+        `#${pull["number"]} ${pull["title"]} (head ${pull["headRefOid"].slice(0, 7)}); land it first (merge-bar ${pull["number"]})`,
+      );
+    }
+  }
+  if (blockers.length > 0) {
+    throw new MaintenanceReleaseError(
+      `Earlier release pull requests are still open: ${blockers.join("; ")}`,
+    );
+  }
+};
+
 /** Everything the cut does besides its own release file writes. */
 export type MaintenanceCutEffects = {
   readonly rootDir: string;
   readonly assertCleanWorktree: () => void;
   readonly resolveHeadSha: () => string;
   readonly latestFinalVersion: () => string;
-  readonly assertNoOpenRelease: () => void;
+  readonly listOpenPullRequests: () => unknown;
   readonly openReleasePullRequest: (version: string) => void;
   readonly runGate: CutGateRunner;
   readonly queueHistoryWarning: (baseSha: string) => string | null;
@@ -1541,14 +1588,31 @@ export const cutMaintenanceRelease = async (
   const { rootDir } = effects;
   const options = parseMaintenanceReleaseOptions(args);
   effects.assertCleanWorktree();
-  effects.assertNoOpenRelease();
-  const current = parseStableVersion(effects.latestFinalVersion());
-  const previousFinalTag = `v${current.value}`;
+  assertNoOpenReleasePullRequests(effects.listOpenPullRequests());
+  const latestFinal = parseStableVersion(effects.latestFinalVersion());
+  const previousFinalTag = `v${latestFinal.value}`;
+  const versionOnMain = parseStableVersion(
+    readFileSync(nodePath.join(rootDir, "VERSION"), "utf-8").trim(),
+  );
+  // A release pull request merged before its final tag leaves VERSION ahead of
+  // every final. Its number cannot be cut again: the changelog already exists
+  // and the release tree must change VERSION. The cut supersedes it instead.
+  const supersedesVersionOnMain = isVersionAhead(versionOnMain, latestFinal);
+  const current = supersedesVersionOnMain ? versionOnMain : latestFinal;
+  const previousTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
-  // GitHub's verdict on the previous final, read before any gate: the npm
+  // GitHub's verdict on the previous release, read before any gate: the npm
   // gate checks against the manifest the release PR will carry, which the
   // preparation writes.
-  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
+  const previousRelease = await effects.readPreviousRelease(previousTag);
+  // The fetch saw no final tag for VERSION, so any other verdict means one was
+  // pushed since. Cutting on would keep its notes out of the changelog and
+  // check npm against the older final.
+  if (supersedesVersionOnMain && previousRelease.kind !== "superseded") {
+    throw new MaintenanceReleaseError(
+      `${previousTag} gained a final tag after this cut fetched tags; run the cut again`,
+    );
+  }
   const recordedDates = readReleaseManifest(rootDir).releases;
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
@@ -1558,7 +1622,7 @@ export const cutMaintenanceRelease = async (
       releaseDates: projectReleaseDates({
         dates: recordedDates,
         previousRelease,
-        previousTag: previousFinalTag,
+        previousTag,
       }),
       rootDir,
       write: effects.write,
@@ -1662,7 +1726,7 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   assertCleanWorktree: () => {
     assertCleanWorktree(rootDir);
   },
-  assertNoOpenRelease: () => {
+  listOpenPullRequests: () => {
     const listing = spawnOutput([
       "gh",
       "pr",
@@ -1674,30 +1738,16 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       "--base",
       "main",
       "--limit",
-      "500",
+      String(OPEN_RELEASE_LIST_LIMIT),
       "--json",
-      "title",
+      "number,title,headRefOid",
     ]);
     if (listing === null) {
       throw new MaintenanceReleaseError(
         "Could not read open release pull requests",
       );
     }
-    const pulls: unknown = JSON.parse(listing);
-    if (
-      !Array.isArray(pulls) ||
-      pulls.length >= 500 ||
-      pulls.some(
-        (pull: unknown) =>
-          isRecord(pull) &&
-          typeof pull["title"] === "string" &&
-          pull["title"].startsWith("chore: release v"),
-      )
-    ) {
-      throw new MaintenanceReleaseError(
-        "An earlier release pull request is still open, or the listing is incomplete",
-      );
-    }
+    return JSON.parse(listing);
   },
   openReleasePullRequest: (version) => {
     const branch = `release/v${version}`;

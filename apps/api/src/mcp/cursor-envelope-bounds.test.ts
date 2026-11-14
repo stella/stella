@@ -26,6 +26,10 @@ import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
 import { encodeCourtCursor } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
@@ -35,10 +39,6 @@ import {
 } from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
 import { cursorInput } from "@/api/mcp/input-schemas";
-import {
-  isProvisionTextCursor,
-  windowProvisionText,
-} from "@/api/mcp/provision-text-window";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
@@ -117,7 +117,7 @@ const readerCursor = encodeReaderCursor({
 // These use the same encoders as the handlers: tuple shapes come from the
 // owning cursorForItem call, while nested envelopes pass through their codec.
 // A registry addition has no fixture by default and fails the census below.
-const provisionCursorWindow = windowProvisionText({
+const provisionCursorWindow = windowBoundText({
   limit: 1,
   subject: JSON.stringify([
     "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
@@ -165,6 +165,8 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "advanced.read_case_law_decision_blocks.content.nextCursor": readerCursor,
   "advanced.search_legislation.nextCursor": statuteCursor,
   "advanced.read_statute.nextCursor": offsetCursor,
+  "advanced.search_guidance.nextCursor": offsetCursor,
+  "advanced.read_guidance.nextCursor": offsetCursor,
   "advanced.read_provision_history.nextCursor": encodePaginationCursor([
     DATE,
     UUID,
@@ -331,7 +333,7 @@ describe("every registered pagination envelope fits its own next-call input", ()
               v.object({
                 text_cursor: cursorInput({
                   description: "Provision fixture cursor",
-                  issuedBy: isProvisionTextCursor,
+                  issuedBy: isBoundTextCursor,
                   maxLength,
                 }),
               }),

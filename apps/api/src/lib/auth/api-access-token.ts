@@ -47,7 +47,7 @@ import { McpAuthenticationError } from "@/api/mcp/errors";
  * assigns its capability exactly this scope. A realtime, file-delivery or
  * search-screen handler has no capability; its entry names that reason and the
  * scope its domain carries, and the test holds the handler to that reason
- * instead. Account-control routes
+ * instead, or to being a member plumbing endpoint. Account-control routes
  * (sign-in methods, keys, connections, deletion) never belong here: a lost
  * phone must not be able to keep itself connected.
  */
@@ -55,6 +55,27 @@ export const API_OAUTH_ROUTES = {
   "POST /v1/dictation/transcribe": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/transcribe.ts",
+  },
+  // The Outlook add-in's email helpers: a summary of the open email and a
+  // reply draft. Each sends only the email text in its body to the model and
+  // stores nothing; they are add-in buttons, not agent capabilities.
+  "POST /v1/ai/summarize": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/summarize.ts",
+    uncataloged: "native_tool_ui",
+  },
+  "POST /v1/ai/draft-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/draft-email.ts",
+    uncataloged: "native_tool_ui",
+  },
+  // A question about the open email. Naming a matter adds that matter's
+  // search results, read under the token's own scopes, so a token without
+  // `stella:read` gets an answer from the email alone.
+  "POST /v1/ai/ask-email": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/ai/ask-email.ts",
+    uncataloged: "native_tool_ui",
   },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
@@ -81,6 +102,86 @@ export const API_OAUTH_ROUTES = {
   "PUT /v1/workspaces": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/workspaces/create.ts",
+  },
+  // A new matter's client and team, as the web's create dialog offers them:
+  // an address-book contact found by name or created on the spot, and the
+  // organization's people to share the matter with.
+  "GET /v1/contacts/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/contacts/search.ts",
+  },
+  "PUT /v1/contacts": {
+    scope: "stella:contacts_write",
+    handler: "apps/api/src/handlers/contacts/create.ts",
+  },
+  "GET /v1/workspaces/member-candidates": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/member-candidates/list.ts",
+  },
+  // The organization's matter-number convention, so a number typed for a
+  // matter is checked against it as the web's hint does. Only the pattern and
+  // its padding; the organization's settings stay closed.
+  "GET /v1/workspaces/matter-numbering": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/matter-numbering/get.ts",
+  },
+  // The caller's own role, which a browser reads from its auth session: the
+  // app leaves out what the role cannot do (`@stll/permissions/role-grants`).
+  // Every request is still decided by the server.
+  "GET /v1/me/role": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/role/get.ts",
+    uncataloged: "auth_plumbing",
+  },
+  // A matter's own settings, as the web's matter info keeps them: its name,
+  // number, client and lead, its archive state, a copy of it, and deleting
+  // it, each under the matter permission a browser session needs.
+  "GET /v1/workspaces/:workspaceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/get.ts",
+  },
+  "POST /v1/workspaces/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/update.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/delete.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/archive": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/archive.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/unarchive": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/unarchive.ts",
+  },
+  "POST /v1/workspaces/:workspaceId/duplicate": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/duplicate.ts",
+  },
+  // Who works on the matter: a matter edit, gated by the same matter update
+  // permission the web's members section needs.
+  "PUT /v1/workspaces/:workspaceId/members": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/members/add.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId/members/:userId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/members/remove.ts",
+  },
+  // The matter's other parties, each a contact in a role.
+  "GET /v1/workspaces/:workspaceId/contacts": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/contacts/list.ts",
+  },
+  "PUT /v1/workspaces/:workspaceId/contacts": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/contacts/create.ts",
+  },
+  "DELETE /v1/workspaces/:workspaceId/contacts/:workspaceContactId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/contacts/delete.ts",
   },
   "PUT /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",
@@ -166,6 +267,15 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
   },
+  // The reader's own marks on a chat in the chats list.
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/read-state/update.ts",
+  },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/pin-state/update.ts",
+  },
   "GET /v1/chat/threads/:threadId/messages": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/messages/list.ts",
@@ -200,6 +310,29 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
     uncataloged: "realtime_stream",
+  },
+  // Which chats are working or waiting on the person, for the chats list.
+  "GET /v1/chat/runs/active": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/runs/list.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  // A standing approval given from an approval in a conversation: "Allow in
+  // this conversation" or "Always allow" for one tool, as the web's
+  // approval card stores it.
+  "POST /v1/chat/tool-grants": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/tool-grants/create.ts",
+    uncataloged: "chat_thread_ui",
+  },
+  // The person's event stream. Its events carry no content (notifications
+  // changed, chat runs changed, a resource set changed); the app re-reads
+  // through the routes above. It carries more than chat, so it takes the
+  // read scope.
+  "GET /v1/notifications/events": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/notifications/events.ts",
+    uncataloged: "plumbing",
   },
   // The caller's own timers. The organization-wide admin timer routes stay
   // closed to access tokens.
@@ -281,13 +414,21 @@ export const API_OAUTH_ROUTES = {
     handler: `apps/api/src/handlers/${string}.ts`;
     /** The named export serving the route, when it is not the default. */
     exportName?: string;
-    /** Why the handler has no capability: its `mcp.internal` reason. */
+    /**
+     * Why the handler has no capability: its `mcp.internal` reason, or
+     * `plumbing` for a `defineEndpoint.member` endpoint (`lib/endpoints.ts`),
+     * which has no handler config to carry one.
+     */
     uncataloged?:
+      | "auth_plumbing"
       | "realtime_stream"
       | "upload_mechanics"
       | "search_ui"
       | "native_device"
-      | "session_token_exchange";
+      | "native_tool_ui"
+      | "session_token_exchange"
+      | "chat_thread_ui"
+      | "plumbing";
   }
 >;
 

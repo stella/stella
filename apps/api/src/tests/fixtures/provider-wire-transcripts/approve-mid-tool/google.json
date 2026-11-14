@@ -53,6 +53,7 @@
           "tools": [
             {
               "functionDeclarations": [
+                "show_app",
                 "ask-user",
                 "request_secret",
                 "use_connector_secret",
@@ -193,6 +194,7 @@
           "tools": [
             {
               "functionDeclarations": [
+                "show_app",
                 "ask-user",
                 "request_secret",
                 "use_connector_secret",
@@ -352,6 +354,7 @@
           "tools": [
             {
               "functionDeclarations": [
+                "show_app",
                 "ask-user",
                 "request_secret",
                 "use_connector_secret",

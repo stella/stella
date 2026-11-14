@@ -871,6 +871,56 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
     });
 
+    test("adopts a legacy row at the document's own URL under a reissued docket and ECLI", async () => {
+      // A court adding a sibling to a docket suffixes the first document's
+      // number and reissues its ECLI: only the URL still names it.
+      const caseNumber = "22 Cdo 120/2026";
+      const url = "https://publisher.test/WebSearch/renamed-unid";
+      const legacy = plainTextIngestionResult({
+        ...decisionAt(`Renamed ${caseNumber}`, undefined),
+        caseNumber,
+        ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.1",
+        sourceUrl: url,
+      });
+      (
+        await processDecision({
+          input: legacy,
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
+      const [legacyRow] = await docketRows(caseNumber);
+      if (legacyRow === undefined) {
+        throw new Error("expected legacy row");
+      }
+
+      const renamedCaseNumber = `${caseNumber}- I.`;
+      (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...legacy,
+            caseNumber: renamedCaseNumber,
+            ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.2",
+            sourceDocumentId: "renamed-unid",
+            legacyCaseNumber: caseNumber,
+            legacySourceUrls: [url],
+            rawHash: "hash-renamed-docket",
+          }),
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        })
+      ).unwrap();
+
+      expect(await docketRows(caseNumber)).toEqual([
+        { id: legacyRow.id, sourceDocumentId: "renamed-unid" },
+      ]);
+      expect(await docketRows(renamedCaseNumber)).toEqual([]);
+    });
+
     test("adopts a legacy row stored under the docket an earlier release derived", async () => {
       // An earlier release read the docket off the CELEX and gave a case
       // numbered before 1989 a court letter; the publisher states it without.

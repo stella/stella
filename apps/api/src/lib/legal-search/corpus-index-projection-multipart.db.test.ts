@@ -24,11 +24,11 @@ import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/
 import {
   censusCorpusProjectionRevisions,
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
-  corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
   deleteCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -103,7 +103,7 @@ const runCycle = async (
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: 1,
-    leaseMs: 600_000,
+    fillWindowMs: 600_000,
     payloadReadConcurrency: 1,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
@@ -325,8 +325,11 @@ test("a later part failure leaves the whole revision pending cleanup", async () 
   expect(intents[0]?.expectedDocumentCount).toBeNull();
   expect(intents[0]?.appendStartedAt).toEqual(partStarts[1]);
   expect(intents[0]?.cleanupNotBefore).toEqual(
-    corpusIndexUnknownAppendBarrierAt(
-      partStarts[1] ?? panic("Missing last part start"),
+    corpusProjectionAppendPublishBarrier(
+      {
+        type: "unknown",
+        appendStartedAt: partStarts[1] ?? panic("Missing last part start"),
+      },
       MANIFEST,
     ),
   );

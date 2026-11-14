@@ -146,15 +146,25 @@ pub fn manage(app: &AppHandle) {
         opener.opener().open_url(url, None::<&str>).is_ok()
       }),
       changed: Box::new(move || {
-        let _ = changed.emit(CHANGED_EVENT, ());
+        crate::logging::best_effort(
+          changed.emit(CHANGED_EVENT, ()),
+          "Claude Code connection change was not announced",
+        );
+        crate::desktop_runner::harness_sign_in_changed();
       }),
     },
   );
-  app.manage(auth);
+  app.manage(auth.clone());
   let installed = app.clone();
   tauri::async_runtime::spawn(async move {
+    // Only a real install change is told here (a lease is not one), so a
+    // window's status read cannot announce a change that reads it again.
     while installs.changed().await.is_ok() {
-      let _ = installed.emit(CHANGED_EVENT, ());
+      auth.invalidate();
+      crate::logging::best_effort(
+        installed.emit(CHANGED_EVENT, ()),
+        "Claude Code connection change was not announced",
+      );
     }
   });
 }
@@ -165,7 +175,10 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if !enabled && let Some(auth) = app.try_state::<ClaudeCodeAuth>() {
     auth.cancel();
   }
-  let _ = app.emit(CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "Claude Code connection change was not announced",
+  );
 }
 
 #[cfg(test)]

@@ -2,10 +2,20 @@
 //! the user. Nothing here changes a setting by itself: macOS shows its own
 //! prompt and the user decides.
 
-use std::{path::Path, ptr::NonNull, sync::mpsc, time::Duration};
+use std::{
+  ffi::CStr,
+  path::Path,
+  ptr::NonNull,
+  sync::{OnceLock, mpsc},
+  time::Duration,
+};
 
 use block2::RcBlock;
-use objc2::runtime::Bool;
+use objc2::{
+  msg_send,
+  rc::Retained,
+  runtime::{AnyClass, AnyObject, Bool},
+};
 use objc2_foundation::{NSBundle, NSError, NSString, NSURL};
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 use objc2_user_notifications::{
@@ -35,6 +45,15 @@ pub enum LoginItemApproval {
   Unknown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MicrophoneAuthorization {
+  NotDetermined,
+  Denied,
+  Authorized,
+  /// macOS before 14, where the app cannot read its microphone permission.
+  Unavailable,
+}
+
 /// `UNUserNotificationCenter` raises an Objective-C exception in a process
 /// that does not run from an app bundle, such as a development binary.
 fn runs_from_app_bundle() -> bool {
@@ -52,7 +71,13 @@ pub fn notification_authorization() -> NotificationAuthorization {
     // SAFETY: the framework passes a live settings object for the duration of
     // the completion handler; only a copied status value leaves the block.
     let status = unsafe { settings.as_ref() }.authorizationStatus();
-    let _ = sender.try_send(status);
+    match sender.try_send(status) {
+      // The caller stops waiting after NOTIFICATION_SETTINGS_TIMEOUT.
+      Ok(()) | Err(mpsc::TrySendError::Disconnected(_)) => {}
+      Err(mpsc::TrySendError::Full(_)) => {
+        unreachable!("notification settings callback delivered more than once");
+      }
+    }
   });
   UNUserNotificationCenter::currentNotificationCenter()
     .getNotificationSettingsWithCompletionHandler(&handler);
@@ -97,4 +122,75 @@ pub fn login_item_approval(plist: &Path) -> LoginItemApproval {
     SMAppServiceStatus::RequiresApproval => LoginItemApproval::RequiresApproval,
     _ => LoginItemApproval::Unknown,
   }
+}
+
+const AVFAUDIO_PATH: &CStr = c"/System/Library/Frameworks/AVFAudio.framework/AVFAudio";
+
+/// `AVAudioApplicationRecordPermission` values, four-character codes.
+const RECORD_PERMISSION_UNDETERMINED: isize = 0x756e_6474;
+const RECORD_PERMISSION_DENIED: isize = 0x6465_6e79;
+const RECORD_PERMISSION_GRANTED: isize = 0x6772_6e74;
+
+/// `AVAudioApplication`, which reads and asks for the microphone permission
+/// from macOS 14. AVFAudio is opened on first use rather than linked, so the
+/// app still starts on a macOS that does not ship it.
+fn audio_application_class() -> Option<&'static AnyClass> {
+  static LOADED: OnceLock<bool> = OnceLock::new();
+  if !objc2::available!(macos = 14.0) {
+    return None;
+  }
+  let loaded = *LOADED.get_or_init(|| {
+    // SAFETY: the path is a NUL-terminated constant; the handle stays open
+    // for the life of the process, so the classes it registers stay valid.
+    let handle = unsafe {
+      libc::dlopen(AVFAUDIO_PATH.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL)
+    };
+    !handle.is_null()
+  });
+  if !loaded {
+    return None;
+  }
+  AnyClass::get(c"AVAudioApplication")
+}
+
+/// Whether macOS lets this app record from the microphone. Reading never
+/// prompts.
+pub fn microphone_authorization() -> MicrophoneAuthorization {
+  let Some(class) = audio_application_class() else {
+    return MicrophoneAuthorization::Unavailable;
+  };
+  // SAFETY: `sharedInstance` is a class method of AVAudioApplication, which
+  // exists from macOS 14 (checked above), and returns a shared object.
+  let shared: Option<Retained<AnyObject>> = unsafe { msg_send![class, sharedInstance] };
+  let Some(shared) = shared else {
+    return MicrophoneAuthorization::Unavailable;
+  };
+  // SAFETY: `recordPermission` is an instance method of that shared object
+  // and returns an NSInteger-backed enum.
+  let permission: isize = unsafe { msg_send![&*shared, recordPermission] };
+  match permission {
+    RECORD_PERMISSION_UNDETERMINED => MicrophoneAuthorization::NotDetermined,
+    RECORD_PERMISSION_DENIED => MicrophoneAuthorization::Denied,
+    RECORD_PERMISSION_GRANTED => MicrophoneAuthorization::Authorized,
+    _ => MicrophoneAuthorization::Unavailable,
+  }
+}
+
+/// Shows the system prompt the first time; afterwards macOS answers from the
+/// stored decision without prompting, so callers re-read the status. A
+/// process outside an app bundle has no usage description to show, and macOS
+/// would end it instead of asking.
+pub fn request_microphone_permission() {
+  if !runs_from_app_bundle() {
+    return;
+  }
+  let Some(class) = audio_application_class() else {
+    return;
+  };
+  let handler = RcBlock::new(|_granted: Bool| {});
+  // SAFETY: the class method exists from macOS 14 (checked above) and copies
+  // the completion block, which captures nothing.
+  let () = unsafe {
+    msg_send![class, requestRecordPermissionWithCompletionHandler: &*handler]
+  };
 }

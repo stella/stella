@@ -377,6 +377,8 @@ export const DESKTOP_BILLING_DRAFT_REFUSAL_CODE = {
   consentRequired: "billing_draft_consent_required",
   /** The firm guideline binding changed while the request was prepared. */
   modeChanged: "billing_draft_mode_changed",
+  /** A bound guideline file is past what the drafting prompt may carry. */
+  contextTooLarge: "billing_draft_context_too_large",
 } as const;
 
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({

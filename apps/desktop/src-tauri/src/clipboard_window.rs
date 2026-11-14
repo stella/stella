@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::{
   sync::Mutex,
   time::{Duration, Instant},
@@ -140,8 +141,14 @@ fn position_window(app: &AppHandle, window: &WebviewWindow) {
     return;
   };
   let frame = docked_frame(work_area);
-  let _ = window.set_size(LogicalSize::new(frame.width, frame.height));
-  let _ = window.set_position(LogicalPosition::new(frame.x, frame.y));
+  best_effort(
+    window.set_size(LogicalSize::new(frame.width, frame.height)),
+    "clipboard window size was not applied",
+  );
+  best_effort(
+    window.set_position(LogicalPosition::new(frame.x, frame.y)),
+    "clipboard window position was not applied",
+  );
 }
 
 /// Runs `f` on the main thread and waits for its result; `default` when the
@@ -719,9 +726,12 @@ fn build_editor(app: &AppHandle) -> Result<(), String> {
 /// Default size, centred on the target screen: where a new window opens.
 fn place_editor(app: &AppHandle, window: &WebviewWindow) {
   let size = LogicalSize::new(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT);
-  let _ = window.set_size(size);
+  crate::logging::best_effort(window.set_size(size), "resize clipboard window");
   if let Some(work_area) = window_placement::target_work_area(app) {
-    let _ = window.set_position(window_placement::centered_origin(work_area, size));
+    crate::logging::best_effort(
+      window.set_position(window_placement::centered_origin(work_area, size)),
+      "center clipboard window",
+    );
   }
 }
 

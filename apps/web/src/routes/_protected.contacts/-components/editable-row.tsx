@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useFormattingLocale } from "@/i18n/formatting-context";
@@ -59,7 +60,7 @@ export const EditableRow = ({
   const rateNeedsCurrency = field === "defaultHourlyRate" && !contact.currency;
   const displayValue =
     field === "defaultHourlyRate"
-      ? contactRateInput(contact.defaultHourlyRate, contact.currency)
+      ? contactRateInput(contact.defaultHourlyRate, contact.currency, locale)
       : value;
   const rename = useInlineRename({
     initial: displayValue ?? "",
@@ -163,18 +164,18 @@ export const EditableRow = ({
       {/* Without a currency there is nothing to edit yet: the hint stands as
           plain text (a disabled Button would dim the already subtle hint). */}
       {rateNeedsCurrency ? (
-        <span className="text-foreground-subtle min-w-0 truncate text-sm">
+        <TruncatedText className="text-foreground-subtle text-sm">
           {t("contacts.billing.selectCurrencyForRate")}
-        </span>
+        </TruncatedText>
       ) : (
         <Button
           className="min-w-0 overflow-hidden"
           onClick={() => rename.startEditing()}
           variant="plain"
         >
-          <span className="hover:text-foreground block cursor-text overflow-hidden text-sm text-ellipsis whitespace-pre">
+          <TruncatedText className="hover:text-foreground cursor-text text-sm whitespace-pre">
             {displayValue || <span className="text-foreground-subtle">—</span>}
-          </span>
+          </TruncatedText>
         </Button>
       )}
     </div>

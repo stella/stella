@@ -1,5 +1,5 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -13,7 +13,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  */
 export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
-  ...Object.values(VERIFICATION_RUN_CAP_CODES),
+  ...Object.values(MODEL_RUN_CAP_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The read result needs a smaller selection or page. */
@@ -65,6 +65,10 @@ export const MCP_ERROR_CODES = [
    * same call once the index is back succeeds.
    */
   "search_index_unavailable",
+  /** A continuation_token is unknown or expired; repeat the original call. */
+  "continuation_expired",
+  /** A continued read ran out of attempts without an answer; nothing returned. */
+  "public_read_unfinished",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
   /** An unexpected server-side failure; details are not leaked to the caller. */

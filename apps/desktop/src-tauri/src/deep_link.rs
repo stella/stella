@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,6 +24,7 @@ enum DeepLinkAction {
   ConnectAccount {
     api_base_url: String,
     web_origin: String,
+    intent: crate::account::LinkIntent,
   },
   CompleteAccount {
     correlation_id: String,
@@ -82,8 +84,10 @@ pub fn set_self_host_connect_response(approved: bool) {
   let mut guard = SELF_HOST_CONNECT_SENDER
     .lock()
     .unwrap_or_else(|e| e.into_inner());
-  if let Some(sender) = guard.take() {
-    let _ = sender.send(approved);
+  if let Some(sender) = guard.take()
+    && sender.send(approved).is_err()
+  {
+    tracing::debug!("self-host connection answer had no waiter");
   }
 }
 
@@ -105,6 +109,7 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
           .ok()?,
           web_origin: config::normalize_self_host_web_origin(params.get("webOrigin")?)
             .ok()?,
+          intent: crate::account::LinkIntent::parse(params.get("intent")?)?,
         });
       }
       "/complete" => {
@@ -219,6 +224,7 @@ pub fn handle_url(
     Some(DeepLinkAction::ConnectAccount {
       api_base_url,
       web_origin,
+      intent,
     }) => {
       tauri::async_runtime::spawn(async move {
         let static_pair = config::resolve_trusted_api_base_urls()
@@ -240,6 +246,7 @@ pub fn handle_url(
           &app_handle,
           &api_base_url,
           &web_origin,
+          intent,
         )
         .await
         {
@@ -263,7 +270,11 @@ pub fn handle_url(
         )
         .await
         {
-          tracing::warn!(error = %error, "desktop account connection could not complete");
+          tracing::warn!(
+            error = %error,
+            reason = error.reason.as_str(),
+            "desktop account connection could not complete"
+          );
           tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "account.link_failed");
           return;
         }
@@ -611,7 +622,12 @@ impl crate::handoff::ConnectionHost for DesktopConnectionHost<'_> {
     api_base_url: &str,
     web_origin: &str,
   ) -> Result<Self::Prepared, String> {
-    crate::account::prepare_browser_connection(api_base_url, web_origin).await
+    crate::account::prepare_browser_connection(
+      api_base_url,
+      web_origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
   }
 
   fn open(
@@ -725,6 +741,12 @@ pub(crate) enum ConnectionConfirmation<'a> {
     email: &'a str,
     organization_name: &'a str,
   },
+  /// Replacing the linked account; Cancel is the default answer.
+  Switch {
+    current_email: &'a str,
+    email: &'a str,
+    organization_name: &'a str,
+  },
 }
 
 pub(crate) async fn show_connection_confirmation(
@@ -814,6 +836,22 @@ pub(crate) async fn show_connection_confirmation(
       ),
       "dialog.accountWindowTitle",
     ),
+    ConnectionConfirmation::Switch {
+      current_email,
+      email,
+      organization_name,
+    } => (
+      format!(
+        "mode=switch&message={}&accountEmail={}&organizationName={}",
+        percent_encode(&crate::i18n::t_fmt(
+          "dialog.switchSubtitle",
+          &[("currentEmail", current_email), ("email", email)],
+        )),
+        percent_encode(email),
+        percent_encode(organization_name)
+      ),
+      "dialog.switchWindowTitle",
+    ),
   };
   let hash = format!(
     "{details}&strings={}&lang={}&dir={}",
@@ -856,12 +894,17 @@ pub(crate) async fn show_connection_confirmation(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
-          if let Some(sender) = sender {
-            let _ = sender.send(());
+          if let Some(sender) = sender
+            && sender.send(()).is_err()
+          {
+            tracing::debug!("self-host connection window close had no waiter");
           }
         }
       });
-      let _ = window.set_focus();
+      best_effort(
+        window.set_focus(),
+        "self-host connection window could not be focused",
+      );
       let outcome = match tokio::time::timeout(
         SELF_HOST_CONNECT_APPROVAL_TIMEOUT,
         receiver,
@@ -877,7 +920,10 @@ pub(crate) async fn show_connection_confirmation(
       };
       // The dialog closes itself once the user responds; close it explicitly so
       // a timeout or dropped sender does not leave a ghost window behind.
-      let _ = window.close();
+      best_effort(
+        window.close(),
+        "self-host connection window could not be closed",
+      );
       tokio::time::timeout(ACKNOWLEDGE_TIMEOUT, closed_receiver)
         .await
         .map_err(crate::logging::with_cause_logged(
@@ -898,7 +944,7 @@ pub(crate) async fn show_connection_confirmation(
 }
 
 fn percent_encode(value: &str) -> String {
-  use std::fmt::Write;
+  const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
   let mut encoded = String::with_capacity(value.len());
   for byte in value.bytes() {
@@ -907,7 +953,9 @@ fn percent_encode(value: &str) -> String {
         encoded.push(byte as char);
       }
       _ => {
-        let _ = write!(encoded, "%{byte:02X}");
+        encoded.push('%');
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0F)]));
       }
     }
   }
@@ -1108,8 +1156,61 @@ async fn redeem_and_open_desktop_edit(
 mod tests {
   use super::*;
 
+  #[test]
+  fn percent_encoding_spells_every_other_byte_as_uppercase_hex() {
+    assert_eq!(percent_encode("Az09-._~"), "Az09-._~");
+    for character in ['\0', ' ', '%', '/', '\u{7f}', 'é', '€', '😀'] {
+      let text = character.to_string();
+      let expected: String = text.bytes().map(|byte| format!("%{byte:02X}")).collect();
+      assert_eq!(percent_encode(&text), expected);
+    }
+  }
+
   const TOKEN: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  const ACCOUNT_LINK_CONTRACT: &str = include_str!(
+    "../../../../packages/api-contract/src/desktop-account-link.fixtures.json"
+  );
+
+  #[test]
+  fn connect_links_carry_the_intent_the_page_asked_for() {
+    let contract: serde_json::Value =
+      serde_json::from_str(ACCOUNT_LINK_CONTRACT).unwrap();
+    let mut intents = Vec::new();
+    for link in contract["connectLinks"].as_array().unwrap() {
+      let intent =
+        crate::account::LinkIntent::parse(link["intent"].as_str().unwrap()).unwrap();
+      assert_eq!(
+        parse_deep_link(link["url"].as_str().unwrap()),
+        Some(DeepLinkAction::ConnectAccount {
+          api_base_url: link["apiBaseUrl"].as_str().unwrap().into(),
+          web_origin: link["webOrigin"].as_str().unwrap().into(),
+          intent,
+        })
+      );
+      intents.push(intent);
+    }
+    assert_eq!(
+      intents,
+      [
+        crate::account::LinkIntent::Connect,
+        crate::account::LinkIntent::Switch
+      ]
+    );
+  }
+
+  #[test]
+  fn a_connect_link_without_a_known_intent_does_nothing() {
+    let base = "stella://account/connect?apiBaseUrl=https%3A%2F%2Fapi.stll.app&webOrigin=https%3A%2F%2Fmy.stll.app";
+    for url in [
+      base.to_string(),
+      format!("{base}&intent=replace"),
+      format!("{base}&intent=Switch"),
+    ] {
+      assert_eq!(parse_deep_link(&url), None);
+    }
+  }
 
   #[test]
   fn account_links_accept_provider_ids_and_require_a_uuid_correlation() {

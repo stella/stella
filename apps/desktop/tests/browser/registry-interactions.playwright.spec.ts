@@ -127,7 +127,7 @@ type BoundaryOptions = {
 const SETTINGS_SNAPSHOT = {
   bridgePort: 45_901,
   bridgeVersion: BRIDGE_VERSION,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v6"],
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v7"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,
@@ -334,6 +334,8 @@ const installNativeBoundary = async (
         claude_code_auth_get_status: () => null,
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
+        local_skill_folders_get: () => null,
+        local_linked_folders_get: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
           connectCount += 1;

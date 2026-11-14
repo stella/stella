@@ -14,17 +14,12 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1034,
+    line: 1037,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1276,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1355,
+    line: 1369,
     kind: "pending",
   },
   {
@@ -34,22 +29,27 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1494,
+    line: 1541,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1534,
+    line: 1587,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1569,
+    line: 1626,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1619,
+    line: 1661,
+    kind: "pending",
+  },
+  {
+    file: "apps/api/src/handlers/case-law/citation-resolution.ts",
+    line: 1711,
     kind: "pending",
   },
   {
@@ -199,37 +199,37 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 474,
+    line: 655,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 735,
+    line: 909,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-context.ts",
-    line: 184,
+    line: 188,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 449,
+    line: 488,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 262,
+    line: 353,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 309,
+    line: 408,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 327,
+    line: 426,
     kind: "pending",
   },
   {

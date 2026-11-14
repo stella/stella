@@ -31,11 +31,11 @@ instructions, because an orchestrator picks tools from the names it was handed:
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
   the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly 13 read tools (`search`,
+- `/mcp-law`: the public legal corpus. Exactly 15 read tools (`search`,
   `fetch`, `search_case_law`, `resolve_case_law_decision`, `resolve_law_citation`, `read_case_law_decision`,
   `read_case_law_citations`, `open_case_law_decision`, `case_law_coverage`,
   `search_legislation`, `read_statute`, `read_statute_provisions`,
-  `read_provision_history`). Resolution uses `stella:law_read` (also implied by
+  `read_provision_history`, `search_guidance`, `read_guidance`). Resolution uses `stella:law_read` (also implied by
   `stella:read`); the other tools use `stella:search` or `stella:read`. The
   decision reader app also calls two app-only tools there; `tools/list` keeps
   them for the host, which hides them from the model, and they are not
@@ -192,8 +192,9 @@ with `isError` set. `hint`, `retryable`, and `retryAfterMs` are omitted when abs
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
 `code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).
-Verification active and daily run limits preserve their distinct codes from
-`@stll/api-contract/verification-run-caps`. Agents branch on `code`; `hint` states the
+An organization's active and daily model run limits (list verifications, fact
+extractions, document reviews) answer with the two codes in
+`@stll/api-contract/model-run-caps`. Agents branch on `code`; `hint` states the
 next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
 CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
 the string values are a stable contract. `internal_error` never leaks internals:

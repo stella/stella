@@ -1,0 +1,197 @@
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
+import {
+  type Agent,
+  agentLog,
+  AGENTS,
+  chooseRunOn,
+  expandTranscript,
+  expectTurnsFinished,
+  openNewChat,
+  send,
+  setComputerOnline,
+  transcript,
+} from "./computer";
+
+// What the stand-in CLIs' `native_tools` and `harness_items` scenarios do
+// (packages/agent-engine/scripts/fake-codex-app-server.ts and
+// fake-claude-code-cli.ts): the steps chat names, and the text their inputs
+// and outputs carry that chat must never show.
+const STEPS = {
+  codex: {
+    model: "native_tools",
+    shown: [
+      "Running a command",
+      `/bin/zsh -lc "cat > notes.md <<'EOF'`,
+      "Changing files",
+      "/workspace/drafts/lease.md, /workspace/drafts/notice.md",
+    ],
+    hidden: [
+      "Tenant owes 4,200 in arrears.",
+      "Rent is due quarterly.",
+      "Working through the private plan",
+      "zsh: permission denied",
+    ],
+  },
+  "claude-code": {
+    model: "native_tools",
+    shown: [
+      "Running a command",
+      "cat > notes.md <<'EOF'",
+      "/workspace/drafts/lease.md",
+      "/elsewhere/out.md",
+      "termination",
+      "civil code lease",
+    ],
+    hidden: [
+      "Tenant owes 4,200 in arrears.",
+      "Rent is due monthly.",
+      "Rent is due quarterly.",
+      "Confidential settlement terms.",
+      "Summarise the termination rules",
+      "Working through the private plan",
+      "lease.md: termination",
+    ],
+  },
+} as const satisfies Record<
+  Agent,
+  { model: string; shown: readonly string[]; hidden: readonly string[] }
+>;
+
+/**
+ * A step's output and diff stay on the computer that ran it; an opened step
+ * reads them from stella desktop's bridge on the browser's own computer. The
+ * stand-in computer serves no bridge, so nothing answers there, whatever
+ * else runs on the computer the suite runs on.
+ */
+const STEP_OUTPUT_ON_THIS_COMPUTER =
+  /^http:\/\/127\.0\.0\.1:\d+\/v1\/runs\/[^/]+\/steps\/[^/]+\/output$/u;
+const OUTPUT_ELSEWHERE = "Open on the computer that ran it";
+
+const noDesktopOnThisComputer = async (page: Page) => {
+  await page.route(STEP_OUTPUT_ON_THIS_COMPUTER, async (route) => {
+    await route.abort("connectionrefused");
+  });
+};
+
+// `approval_outcome`: asks to run `rm draft.md`, then answers by the decision.
+const APPROVAL = {
+  codex: { approved: "Removed draft.md.", denied: "Left it in place." },
+  "claude-code": {
+    approved: "Removed draft.md.",
+    denied: "Left the draft in place.",
+  },
+} as const satisfies Record<Agent, { approved: string; denied: string }>;
+
+test.beforeEach(async ({ request }) => {
+  await setComputerOnline(request, true);
+});
+
+for (const agent of ["codex", "claude-code"] as const) {
+  const { name } = AGENTS[agent];
+
+  test(`${name} steps show what they ran on, and their output and file contents never come through the API`, async ({
+    page,
+    browserErrors,
+  }) => {
+    // The browser logs each read of a step's output that nothing answered.
+    browserErrors.expectCaptured(/net::ERR_CONNECTION_REFUSED/u);
+    await noDesktopOnThisComputer(page);
+    await openNewChat(page);
+    await chooseRunOn(page, {
+      place: "computer",
+      agent,
+      model: STEPS[agent].model,
+    });
+    await send(page, "Draft the notice");
+
+    await expectTurnsFinished(page, 1);
+    expect(await expandTranscript(page)).toBeGreaterThan(0);
+    for (const text of STEPS[agent].shown) {
+      // await-in-loop: each named step part, checked in turn.
+      await expect(
+        transcript(page).getByText(text, { exact: false }).first(),
+      ).toBeVisible();
+    }
+    // An opened command or file change says where its output is, once read.
+    await expect(
+      transcript(page).getByText(OUTPUT_ELSEWHERE).first(),
+    ).toBeVisible();
+    await expect(
+      transcript(page).getByText("Reading from this computer"),
+    ).toHaveCount(0);
+    // Not shown, and not in the page at all.
+    const shown = (await transcript(page).textContent()) ?? "";
+    for (const text of STEPS[agent].hidden) {
+      expect(shown, `chat holds "${text}"`).not.toContain(text);
+    }
+
+    // The same after a reload, from what the server kept.
+    await page.reload({ waitUntil: "commit" });
+    await expectTurnsFinished(page, 1);
+    await expect(transcript(page)).toContainText(STEPS[agent].shown[0]);
+    await expandTranscript(page);
+    await expect(
+      transcript(page).getByText(OUTPUT_ELSEWHERE).first(),
+    ).toBeVisible();
+    await expect(
+      transcript(page).getByText("Reading from this computer"),
+    ).toHaveCount(0);
+    const reloaded = (await transcript(page).textContent()) ?? "";
+    for (const text of STEPS[agent].hidden) {
+      expect(reloaded, `chat holds "${text}" after a reload`).not.toContain(
+        text,
+      );
+    }
+  });
+
+  for (const decision of ["approved", "denied"] as const) {
+    test(`${name} runs a command only once it is approved (${decision})`, async ({
+      page,
+    }) => {
+      const log = agentLog(agent);
+      await openNewChat(page);
+      await chooseRunOn(page, {
+        place: "computer",
+        agent,
+        model: "approval_outcome",
+      });
+      await send(page, "Remove the draft");
+
+      const allow = transcript(page).getByRole("button", {
+        name: "Allow once",
+      });
+      await expect(allow).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+      });
+      await expect(transcript(page)).toContainText("Running a command");
+      // Nothing ran while the request waits.
+      await expect(transcript(page)).not.toContainText(
+        APPROVAL[agent].approved,
+      );
+
+      if (decision === "approved") {
+        await allow.click();
+      } else {
+        await transcript(page).getByRole("button", { name: "Deny" }).click();
+      }
+
+      await expect(
+        transcript(page).getByRole("img", {
+          name: decision === "approved" ? "Allowed" : "Denied",
+        }),
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
+      await expect(transcript(page)).toContainText(APPROVAL[agent][decision], {
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+      });
+      const other = decision === "approved" ? "denied" : "approved";
+      await expect(transcript(page)).not.toContainText(APPROVAL[agent][other]);
+      // The agent was told the member's decision.
+      await expect
+        .poll(() => log.entries().some((entry) => "decision" in entry))
+        .toBe(true);
+    });
+  }
+}

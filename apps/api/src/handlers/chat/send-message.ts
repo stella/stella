@@ -7,7 +7,6 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserExtensionCapability,
   CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
@@ -24,7 +23,11 @@ import {
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS,
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
@@ -42,6 +45,7 @@ import {
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
 import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
+import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension-capability";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
@@ -65,10 +69,12 @@ import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
   chatVolatilePromptSection,
+  CLOUD_PROMPT_TARGET,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
+  ChatPromptTarget,
   ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
@@ -96,7 +102,7 @@ import {
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
   requireUserMessageContent,
-  resolveBrowserExtensionCapability,
+  resolveTurnBrowserExtension,
   toolCallOwnershipOf,
   validateMessage,
   validateToolCallParts,
@@ -149,7 +155,10 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
-import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import type {
+  LocalChatRun,
+  LocalRunAppIssuer,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -290,6 +299,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
+import { readLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
@@ -2382,15 +2392,36 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
   resolveCredentialMemberExecutionContext;
 
 /** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
+/**
+ * A coding agent on the member's computer answers with its own tools, so its
+ * prompt names none of stella's cloud tools or settings, and says how its web
+ * search runs at the turn's permission level. A turn bound for a computer
+ * runs there or is refused, so the run target alone decides.
+ */
+const turnPromptTarget = (
+  runTarget: ChatRunTarget | undefined,
+): ChatPromptTarget =>
+  runTarget === undefined || runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
+    ? CLOUD_PROMPT_TARGET
+    : {
+        type: "local_run",
+        webSearch:
+          CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS[runTarget.harness][
+            runTarget.approvals
+          ],
+      };
+
 const turnCopiesFiles = (
   localRun: LocalChatRun | undefined,
   sendMode: ChatSendMode,
 ) => localRun !== undefined && sendMode !== CHAT_SEND_MODE.anonymized;
 
-const localRunWithAttachments = (
+const localRunForTurn = (
   localRun: LocalChatRun | undefined,
   attachments: readonly LocalRunAttachment[],
-): LocalChatRun | undefined => localRun?.withAttachments(attachments);
+  origin: LocalRunAppIssuer,
+): LocalChatRun | undefined =>
+  localRun?.withAttachments(attachments).withResourceOrigin(origin);
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2817,6 +2848,11 @@ export const createSendMessage = (
               pinnedIds: effectiveContextMatterIds,
               accessibleWorkspaceIds,
             }),
+            readApprovalCeiling: async () =>
+              await readLocalRunApprovalCeiling(
+                safeDb,
+                session.activeOrganizationId,
+              ),
             ...(dependencies.localRunRuntime === undefined
               ? {}
               : { runtime: dependencies.localRunRuntime }),
@@ -2836,6 +2872,12 @@ export const createSendMessage = (
             workspaceId,
           }),
         );
+        // One decision for the turn: the prompt's browser line and the
+        // browser tool offer both read it, so they cannot disagree.
+        const turnBrowserExtension = resolveTurnBrowserExtension({
+          reported: body.browserExtension,
+          runsLocally: localRun !== undefined,
+        });
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -3100,6 +3142,7 @@ export const createSendMessage = (
         };
         const chatToolContext = {
           visualTools,
+          appTools: { origin: visualOrigin },
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
@@ -3131,9 +3174,7 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3185,6 +3226,7 @@ export const createSendMessage = (
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
+          promptTarget: turnPromptTarget(body.runTarget),
           recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
@@ -3219,9 +3261,7 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3301,6 +3341,7 @@ export const createSendMessage = (
             externalConnectors,
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
+            organizationAIInstructions: chatContext.organizationAIInstructions,
             skillMetadata: chatContext.skillMetadata,
             skillBindingScope: chatContext.skillBindingScope,
             activeSkillContext: chatContext.activeSkillContext,
@@ -3604,9 +3645,10 @@ export const createSendMessage = (
                   promptCachingEnabled,
                   runMode: turnRunModeOf(body),
                   sandboxRun,
-                  localRun: localRunWithAttachments(
+                  localRun: localRunForTurn(
                     localRun,
                     chatContext.localRunAttachments,
+                    visualOrigin,
                   ),
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({
@@ -3829,6 +3871,7 @@ const turnRunModeOf = (
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
   copiesFilesToComputer: boolean;
+  promptTarget: ChatPromptTarget;
   recordAuditEvent: AuditRecorder;
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
@@ -3852,7 +3895,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
-  browserExtension: BrowserExtensionCapability;
+  browserExtension: TurnBrowserExtension;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -3860,6 +3903,7 @@ type PrepareChatContextProps = {
 
 type PrepareChatContextResult = Result<
   {
+    organizationAIInstructions: string;
     hydratedMessages: ChatMessage[];
     /** The files a turn on the member's computer copies into its folder. */
     localRunAttachments: readonly LocalRunAttachment[];
@@ -3933,6 +3977,7 @@ const auditedLocalRunAttachments = async ({
 const prepareChatContext = async ({
   caseLawDb,
   copiesFilesToComputer,
+  promptTarget,
   recordAuditEvent,
   featureAccessSnapshot,
   activeDecision,
@@ -3965,10 +4010,11 @@ const prepareChatContext = async ({
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },
-          columns: { practiceJurisdictions: true },
+          columns: { aiInstructions: true, practiceJurisdictions: true },
         }),
       ),
     );
+    const organizationAIInstructions = orgSettingsRow?.aiInstructions ?? "";
     const practiceJurisdictions = normalizeOptionalArray(
       orgSettingsRow?.practiceJurisdictions,
     );
@@ -3989,6 +4035,7 @@ const prepareChatContext = async ({
         offeredToolNamesForSkills,
         organizationId,
         practiceJurisdictions,
+        organizationAIInstructions,
         refRegistry,
         safeDb,
         messages: messageWindow,
@@ -3996,6 +4043,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        promptTarget,
         browserExtension,
         userContext,
         userId,
@@ -4056,6 +4104,7 @@ const prepareChatContext = async ({
     );
 
     return Result.ok({
+      organizationAIInstructions,
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,

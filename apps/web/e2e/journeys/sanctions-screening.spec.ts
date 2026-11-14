@@ -4,9 +4,14 @@ import { createReadStream } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { JOURNEY_PREREQUISITE } from "@stll/api-contract/journey-prerequisites";
 import { parseEuList } from "@stll/sanctions";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
+import {
+  establishDeployedJourneyPrerequisites,
+  JOURNEY_PREREQUISITE_TIMEOUT_MS,
+} from "../helpers/journey-prerequisites";
 import { JOURNEY_TAG } from "../playwright.journeys.config";
 
 const EU_FIXTURE = path.resolve(
@@ -21,6 +26,8 @@ const SCREENING_STATUS = {
 const LIST_REASON_WARMING = "warming";
 const SCREENING_TIMEOUT_MS = 120_000;
 const SCREENING_POLL_MS = 5000;
+/** Reading the fixture and the requests around the two waits. */
+const JOURNEY_MARGIN_MS = 60_000;
 
 const screeningSchema = v.object({
   lists: v.array(
@@ -76,6 +83,17 @@ test(
   "the deployed EU sanctions list is available for screening",
   { tag: JOURNEY_TAG.deployed },
   async ({ request }) => {
+    // timeout: the refresh job brought forward runs first, then the screening poll.
+    test.setTimeout(
+      JOURNEY_PREREQUISITE_TIMEOUT_MS +
+        SCREENING_TIMEOUT_MS +
+        JOURNEY_MARGIN_MS,
+    );
+    // A list older than its freshness window is stale until the refresh job
+    // runs; staging may have been off for longer than that window.
+    await establishDeployedJourneyPrerequisites(
+      JOURNEY_PREREQUISITE.sanctionsScreening,
+    );
     // The deployed edition may differ from the checked-in name fixture.
     // Controlled edition fixtures cover matching in the API database suite.
     const { name, source } = await readFixtureOrganisation();

@@ -347,13 +347,25 @@ const runScopedIngestionPipeline = async ({
                   : ingestionStopKindOf(cause, "adapter"),
               }),
           });
+          // A failed fetch is graded when it settles. One that settled before
+          // our page or cycle signal fired is the publisher's (or the
+          // adapter's) own failure and keeps its grade, even if the lease
+          // renewal behind this callback is then held until the signal fires.
+          // Only a fetch that settled after the signal is a deadline.
           if (Result.isError(fetched)) {
-            return { error: fetched.error, type: "fetch-error" } as const;
+            return {
+              error: fetched.error,
+              stopKind: fetched.error.stopKind,
+              type: "fetch-error",
+            } as const;
           }
           const pageResult = fetched.value;
           if (Result.isError(pageResult)) {
             return {
               error: pageResult.error,
+              stopKind: pageSignal.aborted
+                ? INGESTION_STOP_KIND.DEADLINE
+                : pageResult.error.stopKind,
               type: "fetch-error",
             } as const;
           }
@@ -423,10 +435,10 @@ const runScopedIngestionPipeline = async ({
       // Expected operational failure: record one halt in the event/log path;
       // the runner, rather than every attempt, captures sustained stalls.
       const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
-      const pageStopKind =
-        deadline?.signal.aborted || pageSignal.aborted
-          ? INGESTION_STOP_KIND.DEADLINE
-          : observedPageResult.value.error.stopKind;
+      // Graded when the fetch settled, not now: a signal that fired after a
+      // publisher failure, while the page waited on the database, does not
+      // turn that failure into our deadline.
+      const pageStopKind = observedPageResult.value.stopKind;
       STOP_LOGGER[pageStopKind](
         "case_law.ingestion.adapter_halted",
         sanitizeErrorAttributesForOutput({

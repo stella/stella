@@ -90,5 +90,5 @@ export const scheduledJobMeasurementViolations = (
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = readBudgetProfiles satisfies Record<
   ReadBudgetId,
-  "corpus" | "tenant" | "case-law" | "coverage"
+  "corpus" | "tenant" | "coverage"
 >;

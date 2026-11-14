@@ -21,6 +21,18 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
+import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
+import {
+  countProcessWork,
+  groupProcessParts,
+  isProcessPart,
+  isVisibleProcessStep,
+  PROCESS_SUMMARY_KINDS,
+} from "@stll/api-contract/chat-tool-activity";
+import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -38,6 +50,7 @@ import {
 } from "@stll/ui/icons";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -50,8 +63,6 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
-import { countProcessWork } from "@/components/chat/chat-activity.logic";
-import type { ProcessSummaryKind } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
@@ -104,13 +115,13 @@ import {
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
-  isUserInputChatToolName,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  canUndoLocalFilesOf,
   finalChatRefusalKey,
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
@@ -119,8 +130,14 @@ import {
   ContextNotice,
   LocalRunFilesNotSharedNotice,
 } from "@/components/chat/context-notice";
+import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
+import {
+  LocalRunStepOutputDetails,
+  localRunStepOutputKindOf,
+} from "@/components/chat/local-run-step-output";
+import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -145,7 +162,7 @@ import {
 } from "@/components/chat/user-message-edit";
 import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { DocumentIcon } from "@/components/document-icon";
 import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -154,19 +171,24 @@ import {
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
+import { localRunLimitResetsAtFromThrown } from "@/features/chat/chat-local-run-limit";
 import {
   CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
   findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
+import type { NewestLocalTurn } from "@/features/chat/queries";
+import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
@@ -180,6 +202,7 @@ import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -333,25 +356,64 @@ const messageActionsThreadRef = (
  *  thread re-renders on every streamed chunk, while the line only changes
  *  with the running assistant message. */
 const ActiveTurnStatus = memo(
-  ({ assistant }: { assistant: ChatUIMessage | undefined }) => {
+  ({
+    assistant,
+    sentAt,
+  }: {
+    assistant: ChatUIMessage | undefined;
+    sentAt: number | null | undefined;
+  }) => {
     const t = useTranslations();
+    const turnSentAt = sentAt ?? null;
     return (
       <ChatTurnStatus
         turn={
           assistant === undefined
-            ? { state: "submitted", phase: null }
+            ? { state: "submitted", phase: null, sentAt: turnSentAt }
             : {
                 state: "streaming",
                 phase: turnPhaseFromParts(assistant.parts, (name) =>
                   t(getChatToolTitleKey(name)),
                 ),
                 timing: assistant.metadata?.turnTiming,
+                sentAt: turnSentAt,
               }
         }
       />
     );
   },
 );
+
+/** What the thread knows about undoing its local turns' file changes. */
+type LocalFilesUndoFacts = {
+  generationActive: boolean;
+  messages: ChatUIMessage[];
+  newestLocalTurn: NewestLocalTurn | null | undefined;
+};
+
+/**
+ * The undo props of `message`'s actions: the turn it may undo (only the
+ * newest turn's answer), whether a new undo may be asked now, and whether
+ * its turn was undone already, as the server marked the answer.
+ */
+const localFilesUndoPropsFor = (
+  { generationActive, messages, newestLocalTurn }: LocalFilesUndoFacts,
+  { id: messageId, metadata }: ChatUIMessage,
+) => {
+  const turn =
+    newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn : null;
+  return {
+    localFilesUndoTurnId: turn?.id ?? null,
+    localFilesUndoOffered:
+      turn !== null &&
+      canUndoLocalFilesOf({
+        isGenerating: generationActive,
+        messageId,
+        messages,
+      }),
+    localFilesUndone: metadata?.localFilesUndone !== undefined,
+  };
+};
 
 export const ChatThreadMessages = ({
   activitySession,
@@ -381,7 +443,9 @@ export const ChatThreadMessages = ({
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
-  waitingForComputer = false,
+  computerWait = null,
+  turnSentAt,
+  newestLocalTurn,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -400,6 +464,7 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const generationActive = error === undefined && isGenerating;
+  const undo = { generationActive, messages, newestLocalTurn };
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -457,18 +522,12 @@ export const ChatThreadMessages = ({
                 ? findCreateDocumentArtifactForMessage(messages, index)
                 : null
             }
+            {...localFilesUndoPropsFor(undo, message)}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
             <MessageContent
-              className={cn(
-                message.parts.some(
-                  (part) =>
-                    part.type === "ui-resource" &&
-                    uiResourceRenderer(part.resource.mimeType) ===
-                      "generated-visual",
-                ) && "w-full",
-              )}
+              className={cn(showsFullWidthResource(message) && "w-full")}
             >
               <MessageBodyRender
                 render={() => {
@@ -609,8 +668,8 @@ export const ChatThreadMessages = ({
           )?.message;
           const active = generationActive && turnIndex === turns.length - 1;
           const status =
-            active && !waitingForComputer ? (
-              <ActiveTurnStatus assistant={assistant} />
+            active && computerWait === null ? (
+              <ActiveTurnStatus assistant={assistant} sentAt={turnSentAt} />
             ) : null;
           if (turn.type === "orphan") {
             return (
@@ -651,9 +710,12 @@ export const ChatThreadMessages = ({
             isGenerating={generationActive}
             onResend={onResend}
             onSendWithoutAnonymization={onSendWithoutAnonymization}
+            threadRef={threadRef}
           />
         )}
-        {generationActive && waitingForComputer && <ComputerWaitingIndicator />}
+        {generationActive && computerWait !== null && (
+          <ComputerWaitIndicator wait={computerWait} />
+        )}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -954,7 +1016,11 @@ const LoadOlderSentinel = ({
 
 const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
-    <StreamdownMentionLink interactive={false} {...props} />
+    <StreamdownMentionLink
+      externalLinks="written"
+      interactive={false}
+      {...props}
+    />
   ),
 };
 
@@ -1008,6 +1074,17 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
 
   return result;
 };
+
+/** Rendered apps that lay out across the whole message column. */
+const FULL_WIDTH_RENDERERS: ReadonlySet<ReturnType<typeof uiResourceRenderer>> =
+  new Set(["generated-visual", "stella-app"]);
+
+const showsFullWidthResource = (message: ChatUIMessage) =>
+  message.parts.some(
+    (part) =>
+      part.type === "ui-resource" &&
+      FULL_WIDTH_RENDERERS.has(uiResourceRenderer(part.resource.mimeType)),
+  );
 
 const IMAGE_MEDIA_TYPES = Object.freeze([
   "image/png",
@@ -1176,22 +1253,77 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
   );
 };
 
-/** The turn's computer went away mid-turn; the turn goes on once it is back. */
-const ComputerWaitingIndicator = () => {
+/**
+ * The turn waits on its computer: for stella desktop to open before it is
+ * sent, for the computer to pick the run up, with the time since the turn
+ * was sent, or to come back after it went away mid-turn.
+ */
+const ComputerWaitIndicator = ({ wait }: { wait: ChatComputerWait }) => {
   const t = useTranslations();
+  const label = (() => {
+    switch (wait.status) {
+      case "opening_desktop":
+        return t("settings.account.desktopCardOpeningTitle");
+      case "delivering":
+        return t("chat.localRun.waitingForPickup");
+      case "waiting":
+        return t("chat.localRun.waitingForComputer");
+      default:
+        wait satisfies never;
+        return panic("Unknown computer wait");
+    }
+  })();
 
   return (
     <Message from="assistant">
       <MessageContent>
-        <div
-          className="text-muted-foreground flex items-center gap-2 text-xs"
-          role="status"
-        >
-          <StatusMark status="pending" />
-          <span>{t("chat.localRun.waitingForComputer")}</span>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
+          {/* Only the wait is announced: the count would be read out every
+              second, so it is shown but hidden from assistive technology,
+              which reads when the turn was sent instead. */}
+          <span className="flex items-center gap-2" role="status">
+            <StatusMark status="pending" />
+            {label}
+          </span>
+          {wait.status === "delivering" ? (
+            <ElapsedSince since={wait.since} />
+          ) : null}
         </div>
       </MessageContent>
     </Message>
+  );
+};
+
+/** Whole seconds since `since`, counted live, and when that was. */
+const ElapsedSince = ({ since }: { since: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const sinceMs = Temporal.Instant.from(since).epochMilliseconds;
+  const [nowMs, setNowMs] = useState(
+    () => Temporal.Now.instant().epochMilliseconds,
+  );
+  useExternalSyncEffect(() => {
+    const interval = setInterval(
+      () => setNowMs(Temporal.Now.instant().epochMilliseconds),
+      1000,
+    );
+    return () => clearInterval(interval);
+  }, [sinceMs]);
+  return (
+    <>
+      <span aria-hidden="true">
+        {format.number(Math.max(0, Math.floor((nowMs - sinceMs) / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })}
+      </span>
+      <span className="sr-only">
+        {t("chat.localRun.waitingSentAt", {
+          time: format.dateTime(new Date(sinceMs), { timeStyle: "medium" }),
+        })}
+      </span>
+    </>
   );
 };
 
@@ -1217,14 +1349,82 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   return "chat.sendError";
 };
 
+/**
+ * A local run's usage limit with the time the harness said it resets, in the
+ * member's own locale and time zone.
+ */
+const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return t("chat.localRun.errorLimitResetsAt", {
+    time: format.dateTime(new Date(resetsAt), MEDIUM_DATE_SHORT_TIME_FORMAT),
+  });
+};
+
+/**
+ * For a turn refused because none of the member's computers is connected:
+ * opens stella desktop on this click, waits for a computer to connect, and
+ * then sends the turn again by itself, unless something superseded this
+ * refusal meanwhile (`holdResend`'s signal). One click opens the desktop
+ * once; while it opens the button says so and takes no other click.
+ */
+const OpenDesktopAndResendButton = ({
+  disabled,
+  holdResend,
+  onResend,
+}: {
+  disabled: boolean;
+  /** Starts this click's resend; its signal aborts once it is superseded. */
+  holdResend: () => AbortSignal;
+  onResend: (options?: ChatResendOptions) => void | PromiseLike<void>;
+}) => {
+  const t = useTranslations();
+  const { activeOrganizationId } = useAuthenticatedUser();
+  const desktop = useDesktopLaunch(activeOrganizationId);
+  const opening = desktop.state.type === "opening";
+  return (
+    <>
+      <Button
+        disabled={disabled || opening}
+        onClick={() => {
+          const superseded = holdResend();
+          detached(
+            (async () => {
+              const outcome = await desktop.launch();
+              if (outcome === "connected" && !superseded.aborted) {
+                await onResend();
+              }
+            })(),
+            "chat-thread-messages.open-desktop-and-resend",
+          );
+        }}
+        size="sm"
+        variant="destructive-outline"
+      >
+        {opening
+          ? t("settings.account.desktopCardOpeningTitle")
+          : t("settings.account.desktopOpenApp")}
+      </Button>
+      {/* A button's label is not announced as it changes, so the launch's
+          progress has its own status region, mounted before it changes. */}
+      <span className="sr-only" role="status">
+        {opening ? t("settings.account.desktopCardOpeningTitle") : ""}
+      </span>
+    </>
+  );
+};
+
 export const ChatErrorMessage = ({
   error,
   isGenerating,
   onResend,
   onSendWithoutAnonymization,
+  threadRef,
 }: {
   error: Error;
   isGenerating: boolean;
+  /** The chat the error belongs to; offers the limit reminder when set. */
+  threadRef?: ChatThreadRef | undefined;
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
@@ -1250,6 +1450,26 @@ export const ChatErrorMessage = ({
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
+  const limitResetsAt =
+    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+      ? localRunLimitResetsAtFromThrown(error)
+      : null;
+  // The resend an "Open stella desktop" click holds until a computer
+  // connects belongs to this refusal: Resend, another refusal in its place,
+  // or the card leaving the page (a new send, another thread) drops it.
+  const desktopResend = useRef<AbortController | null>(null);
+  useExternalSyncEffect(
+    () => () => {
+      desktopResend.current?.abort();
+    },
+    [error],
+  );
+  const holdDesktopResend = () => {
+    desktopResend.current?.abort();
+    const held = new AbortController();
+    desktopResend.current = held;
+    return held.signal;
+  };
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1274,7 +1494,13 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">{errorMessage}</p>
+        <p className="text-sm">
+          {limitResetsAt === null ? (
+            errorMessage
+          ) : (
+            <LocalRunLimitResetMessage resetsAt={limitResetsAt} />
+          )}
+        </p>
         <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
@@ -1292,10 +1518,24 @@ export const ChatErrorMessage = ({
               {t("chat.sendWithoutAnonymization")}
             </Button>
           )}
+          {limitResetsAt !== null && threadRef !== undefined && (
+            <LocalRunLimitReminder
+              disabled={isGenerating}
+              threadRef={threadRef}
+            />
+          )}
+          {onResend && refusal?.code === CHAT_LOCAL_RUN_REFUSAL.noComputer && (
+            <OpenDesktopAndResendButton
+              disabled={isGenerating}
+              holdResend={holdDesktopResend}
+              onResend={onResend}
+            />
+          )}
           {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
               onClick={() => {
+                desktopResend.current?.abort();
                 detached(onResend(), "chat-thread-messages.resend");
               }}
               size="sm"
@@ -1359,7 +1599,7 @@ const AssistantMessageActions = ({
         </span>
       )}
       {text && (
-        <CopyActionButton
+        <CopyControl
           className="text-muted-foreground h-6 px-1.5"
           size="xs"
           text={text}
@@ -1472,9 +1712,18 @@ type ChatThreadMessagesProps = {
       { entityId: string }
     >,
   ) => Promise<void> | void;
-  /** The turn runs on the member's computer, which is away until it
-   *  reconnects; the turn shows the wait in place of its live status. */
-  waitingForComputer?: boolean | undefined;
+  /** The turn runs on the member's computer and waits on it (to pick the
+   *  run up, or to come back); the turn shows the wait in place of its live
+   *  status. */
+  computerWait?: ChatComputerWait | null | undefined;
+  /** When this page sent the running turn's message (`performance.now()`);
+   *  its live status counts from it. `null` for a turn the page joined. */
+  turnSentAt?: number | null | undefined;
+  /**
+   * The newest turn of a chat that runs on the member's computer: the
+   * message that answered it offers to undo its file changes.
+   */
+  newestLocalTurn?: NewestLocalTurn | null | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**
@@ -1790,31 +2039,18 @@ const toAssistantPartRenderEntries = (
   return entries;
 };
 
-// "Process" parts are the low-emphasis progress rows of a turn: reasoning
-// trace disclosures and tool-step lines. Tool-result parts are invisible
-// transport companions, so they stay inside a process run without becoming
-// visible steps or splitting the run. Interactive tool cards (ask-user,
-// create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure; an approval-gated call
-// is one of them from its first input byte, before the request arrives.
+// "Process" parts are the low-emphasis progress rows of a turn
+// (`isProcessPart`, shared with the phone). On the web an approval card
+// reads as answer content too, so it stays outside the folded process
+// disclosure; an approval-gated call is one from its first input byte,
+// before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
   }
   const { part } = entry;
-  if (part.type === "thinking") {
-    return true;
-  }
-  if (part.type === "tool-result") {
-    return true;
-  }
   return (
-    part.type === "tool-call" &&
-    !isUserInputChatToolName(part.name) &&
-    part.name !== "create-document" &&
-    part.name !== "spawn_subagents" &&
-    !isApprovalPart(part) &&
-    !isPendingApprovalPart(part)
+    isProcessPart(part) && !isApprovalPart(part) && !isPendingApprovalPart(part)
   );
 };
 
@@ -1848,31 +2084,10 @@ const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
     return isVisibleProcessEntry(entry);
   });
 
-const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
-  if (entry.type !== "standard") {
-    return true;
-  }
-  const { part } = entry;
-  if (part.type === "thinking") {
-    return part.content.trim().length > 0;
-  }
-  if (part.type === "tool-result") {
-    return false;
-  }
-  if (part.type !== "tool-call") {
-    return true;
-  }
-  if (
-    part.state === "error" &&
-    (part.name === "load-skill" || part.name === "read-skill-resource")
-  ) {
-    return false;
-  }
-  return !(
-    (part.name === "web_search" || part.name === "fetch_url") &&
-    part.state === "complete"
-  );
-};
+const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean =>
+  entry.type !== "standard" ||
+  // Finished searches and fetches show in the sources tray instead.
+  isVisibleProcessStep(entry.part, { searchesShownApart: true });
 
 type ProcessStepTitleKey =
   ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
@@ -1893,35 +2108,48 @@ const getProcessStepTitleKey = (
   return null;
 };
 
-type AssistantPartRenderGroup =
-  | {
-      kind: "process";
-      startIndex: number;
-      entries: AssistantPartRenderEntry[];
-    }
-  | { kind: "standard"; index: number; entry: AssistantPartRenderEntry };
+type ToolCallRenderEntry = {
+  entry: AssistantPartRenderEntry;
+  index: number;
+  part: Extract<ChatUIPart, { type: "tool-call" }>;
+};
+
+/** A turn's tool calls that show as steps or cards, with their place in it. */
+const toToolCallRenderEntries = (
+  entries: readonly AssistantPartRenderEntry[],
+): ToolCallRenderEntry[] =>
+  entries.flatMap((entry, index) =>
+    entry.type === "standard" &&
+    entry.part.type === "tool-call" &&
+    isVisibleProcessEntry(entry)
+      ? [{ entry, index, part: entry.part }]
+      : [],
+  );
+
+/**
+ * Which steps of a coding agent's turn show under a subagent's step. A call
+ * with an approval card is a card of its own; every other one is a row.
+ */
+const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
+  localRunSubagentGroups(
+    toolCalls.map(({ part }) => ({
+      id: part.id,
+      name: part.name,
+      input: "input" in part ? part.input : undefined,
+      parentCallId: chatLocalRunParentCallId(
+        "metadata" in part ? part.metadata : undefined,
+      ),
+      shownAs:
+        isApprovalPart(part) || isPendingApprovalPart(part) ? "card" : "row",
+    })),
+  );
 
 // Chunks render entries into runs of consecutive process parts so a
 // multi-step turn packs its reasoning/tool rows tightly instead of
 // spreading them across the message's standard part gap.
 const toAssistantPartRenderGroups = (
   entries: readonly AssistantPartRenderEntry[],
-): AssistantPartRenderGroup[] => {
-  const groups: AssistantPartRenderGroup[] = [];
-  for (const [index, entry] of entries.entries()) {
-    if (!isProcessRenderEntry(entry)) {
-      groups.push({ kind: "standard", index, entry });
-      continue;
-    }
-    const previous = groups.at(-1);
-    if (previous?.kind === "process") {
-      previous.entries.push(entry);
-      continue;
-    }
-    groups.push({ kind: "process", startIndex: index, entries: [entry] });
-  }
-  return groups;
-};
+) => groupProcessParts(entries, isProcessRenderEntry);
 
 /**
  * Renders the body of an assistant message. Splitting this out of
@@ -1996,6 +2224,13 @@ const AssistantMessageParts = ({
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
+  // A coding agent's subagent shows as one group holding the steps it took.
+  const toolCallEntries = toToolCallRenderEntries(renderEntries);
+  const subagentGroups = toLocalRunSubagentGroups(toolCallEntries);
+  const isShownInSubagent = (entry: AssistantPartRenderEntry) =>
+    entry.type === "standard" &&
+    entry.part.type === "tool-call" &&
+    subagentGroups.rowIn.has(entry.part.id);
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -2060,6 +2295,7 @@ const AssistantMessageParts = ({
     ) {
       return (
         <LocalRunQuestionCard
+          threadRef={localRunQuestion.threadRef}
           key={localRunQuestionPause.interruptId}
           onAnswer={localRunQuestion.answer}
           pause={localRunQuestionPause}
@@ -2192,18 +2428,54 @@ const AssistantMessageParts = ({
       <ContextNotice metadata={message.metadata} />
       {renderGroups.map((group) => {
         if (group.kind === "standard") {
-          return renderEntry(group.entry, group.index);
+          return renderEntry(group.item, group.index);
         }
-        const visibleEntries = group.entries.filter(isVisibleProcessEntry);
-        if (visibleEntries.length === 0) {
+        const visibleEntries = group.items.filter(isVisibleProcessEntry);
+        // A run whose steps all show inside a subagent's group draws nothing
+        // of its own.
+        if (visibleEntries.every(isShownInSubagent)) {
           return null;
         }
+        const renderStep = (entry: AssistantPartRenderEntry, index: number) => {
+          if (isShownInSubagent(entry)) {
+            return null;
+          }
+          const subagent = toolCallEntries.find((call) => call.entry === entry);
+          if (subagent === undefined) {
+            return renderEntry(entry, index);
+          }
+          const stepIds = subagentGroups.stepsOf.get(subagent.part.id);
+          if (stepIds === undefined) {
+            return renderEntry(entry, index);
+          }
+          const steps = toolCallEntries.filter(({ part }) =>
+            stepIds.includes(part.id),
+          );
+          return (
+            <LocalRunSubagentGroup
+              conversation={
+                localRunStepOutputKindOf(subagent.part) === null ? null : (
+                  <LocalRunStepOutputDetails
+                    activeOrganizationId={activeOrganizationId}
+                    part={subagent.part}
+                  />
+                )
+              }
+              key={subagent.part.id}
+              part={subagent.part}
+              rows={steps
+                .filter((step) => isShownInSubagent(step.entry))
+                .map((step) => renderEntry(step.entry, step.index))}
+              steps={steps.map(({ part }) => part)}
+            />
+          );
+        };
         // A run that is still receiving parts at the end of a streaming
         // message relays its current step in the collapsed summary.
         const isLiveGroup =
           isGenerating &&
           isLatestAssistantMessage &&
-          group.startIndex + group.entries.length === renderEntries.length;
+          group.startIndex + group.items.length === renderEntries.length;
         const lastVisibleEntry = visibleEntries.at(-1);
         return (
           <AssistantProcessGroup
@@ -2220,11 +2492,11 @@ const AssistantMessageParts = ({
             // Counted over every entry: completed web searches and fetches
             // render in the sources tray, not as steps, but are still work.
             workCounts={countProcessWork(
-              group.entries.map((entry) => entry.part),
+              group.items.map((entry) => entry.part),
             )}
           >
-            {group.entries.map((entry, offset) =>
-              renderEntry(entry, group.startIndex + offset),
+            {group.items.map((entry, offset) =>
+              renderStep(entry, group.startIndex + offset),
             )}
           </AssistantProcessGroup>
         );
@@ -2250,16 +2522,14 @@ type AssistantProcessGroupProps = {
   workCounts: ReadonlyMap<ProcessSummaryKind, number>;
 };
 
-/** The phrase each kind of work is counted in, in the order they read. */
-const PROCESS_SUMMARY_PHRASES = [
-  { key: "chat.processSummary.sourcesChecked", kind: "research" },
-  { key: "chat.processSummary.documentEdits", kind: "artifact" },
-  { key: "chat.processSummary.changesSaved", kind: "mutation" },
-  { key: "chat.processSummary.analyses", kind: "computation" },
-] as const satisfies readonly {
-  key: TranslationKey;
-  kind: ProcessSummaryKind;
-}[];
+/** The phrase each kind of work is counted in; `PROCESS_SUMMARY_KINDS`
+ *  orders them. */
+const PROCESS_SUMMARY_KEYS = {
+  research: "chat.processSummary.sourcesChecked",
+  artifact: "chat.processSummary.documentEdits",
+  mutation: "chat.processSummary.changesSaved",
+  computation: "chat.processSummary.analyses",
+} as const satisfies Record<ProcessSummaryKind, TranslationKey>;
 
 const LIVE_STEP_MIN_DWELL_MS = 1500;
 
@@ -2310,9 +2580,9 @@ const AssistantProcessGroup = ({
   // Settled, the summary says what was done ("3 sources checked · 1 document
   // edit"); a run of reasoning alone, or of steps that did not land, falls
   // back to the step count.
-  const workSummary = PROCESS_SUMMARY_PHRASES.flatMap(({ key, kind }) => {
+  const workSummary = PROCESS_SUMMARY_KINDS.flatMap((kind) => {
     const count = workCounts.get(kind) ?? 0;
-    return count > 0 ? [t(key, { count })] : [];
+    return count > 0 ? [t(PROCESS_SUMMARY_KEYS[kind], { count })] : [];
   }).join(" · ");
   const label =
     shownStepKey !== null
@@ -2467,14 +2737,11 @@ const AssistantThinkingHeader = ({
   return (
     <>
       <StatusMark status="done" />
-      <span
-        className={cn(
-          "min-w-0 truncate",
-          isStreaming && CHAT_PENDING_TEXT_CLASS,
-        )}
+      <TruncatedText
+        render={<span className={cn(isStreaming && CHAT_PENDING_TEXT_CLASS)} />}
       >
         {t("chat.reasoning")}
-      </span>
+      </TruncatedText>
       {reasoningTokenCount !== null && (
         <ReasoningTokenCount count={reasoningTokenCount} />
       )}

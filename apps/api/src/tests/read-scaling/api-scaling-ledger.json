@@ -141,10 +141,6 @@
       "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/chat/threads",
-      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/chat/threads/:threadId/messages",
       "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -757,10 +753,6 @@
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/sharepoint/drive/root",
-      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/sharepoint/oauth/callback",
       "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -1135,7 +1127,15 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "DELETE /v1/chat/browser-site-grants/:grantId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "DELETE /v1/chat/threads/:threadId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/chat/threads/:threadId/limit-reminder",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -1407,6 +1407,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "PATCH /v1/chat/threads/:threadId/pin-state",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/chat/threads/:threadId/read-state",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "PATCH /v1/chat/threads/:threadId/title",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1484,6 +1492,10 @@
     },
     {
       "id": "PATCH /v1/lists/:workspaceId/items",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/lists/:workspaceId/source-documents",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -1595,6 +1607,18 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/ai/ask-email",
+      "reason": "Model-backed surface over a bounded request; it reads organization AI settings and, when a matter is named, that matter's ranked search results under the caller's access, and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/ai/draft-email",
+      "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/ai/summarize",
+      "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
       "id": "POST /v1/api-keys",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1671,6 +1695,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/browser-site-grants",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/improve-prompt",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1703,6 +1731,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/threads/:threadId/mcp-apps/:toolCallId/call",
+      "reason": "Runs one bounded read an app asks for through the MCP read path; awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/threads/:threadId/messages/:messageId/revisions",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1732,6 +1764,10 @@
     },
     {
       "id": "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -1771,6 +1807,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/conflict-checks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/conflict-checks/:checkId/decision",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/contacts/:contactId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1805,6 +1849,10 @@
     {
       "id": "POST /v1/contacts/procuracao-upload",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/data-exports",
+      "reason": "Creates a durable export job under the organization capacity fence; archive work is covered by worker lifecycle tests, pending the write-scaling harness."
     },
     {
       "id": "POST /v1/desktop-edit-handoffs/:handoffId/opened",
@@ -1845,6 +1893,14 @@
     {
       "id": "POST /v1/desktop/billing-drafts",
       "reason": "Returns review-only proposals for at most 20 selected entries and never records time; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
+      "id": "POST /v1/desktop/dictation/cleanup",
+      "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
+      "id": "POST /v1/desktop/dictation/transcribe",
+      "reason": "Transcribes one bounded transient audio chunk and stores only usage and audit events; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
       "id": "POST /v1/desktop/presence",
@@ -2075,6 +2131,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/lists/:workspaceId/claim-rechecks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/claim-rechecks/bulk",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/lists/:workspaceId/claim-reviews",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2084,6 +2148,10 @@
     },
     {
       "id": "POST /v1/lists/:workspaceId/columns",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/fact-extractions",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2120,6 +2188,10 @@
     },
     {
       "id": "POST /v1/lists/:workspaceId/sections",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/source-documents/kinds",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2235,6 +2307,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/organization-settings/local-runs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/organization-settings/practice-jurisdictions",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2343,6 +2419,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/search/case-law",
+      "reason": "Writes nothing; the corpus search engine answers it per country with a bounded page. Awaits the write harness like the other search POST routes."
+    },
+    {
       "id": "POST /v1/search/facets",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2376,6 +2456,10 @@
     },
     {
       "id": "POST /v1/sharepoint/connect",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/sharepoint/imports/:workspaceId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2807,6 +2891,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/chat/threads/:threadId/limit-reminder",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "PUT /v1/clause-categories",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2825,6 +2917,10 @@
     {
       "id": "PUT /v1/client-invoices/:clientId",
       "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
+    },
+    {
+      "id": "PUT /v1/conflict-checks/:checkId/matter/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
       "id": "PUT /v1/contacts",

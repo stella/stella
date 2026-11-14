@@ -11,6 +11,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   notInArray,
   or,
   SQL,
@@ -25,6 +26,7 @@ import type {
 } from "drizzle-orm/pg-core/query-builders/select.types";
 import * as v from "valibot";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
@@ -52,6 +54,8 @@ import {
   fields,
   invoiceLines,
   invoices,
+  legislationDocuments,
+  organizationDataExports,
   organizationSettings,
   pdfSigningSessions,
   requestIdempotencyReceipts,
@@ -109,6 +113,36 @@ export const queryOrganizationFencedRepairBatch = async ({
   params,
 }: OrganizationFencedRepairBatchOptions) =>
   await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
+
+export const SEARCH_HISTORY_LEGACY_DOCUMENT_SQL =
+  "country IS NULL AND kind <> 'search'";
+export const SEARCH_HISTORY_PENDING_DOCUMENT_SQL = `${SEARCH_HISTORY_LEGACY_DOCUMENT_SQL} AND country_repair_failed_at IS NULL`;
+
+type SearchHistoryCountryRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  cursor: string | null;
+  size: number;
+};
+
+/** Locks at most one repair page; a country clear observes pending rows under its owner lock. */
+export const querySearchHistoryCountryRepairBatch = async ({
+  connection,
+  cursor,
+  size,
+}: SearchHistoryCountryRepairBatchOptions) => {
+  const keyset = cursor === null ? "" : "AND id > $1::uuid";
+  const limit = cursor === null ? "$1" : "$2";
+  return await connection.query(
+    `SELECT id, organization_id, ciphertext, iv
+       FROM public.search_history_entries
+      WHERE ${SEARCH_HISTORY_PENDING_DOCUMENT_SQL}
+        ${keyset}
+      ORDER BY id
+      LIMIT ${limit}
+      FOR UPDATE SKIP LOCKED`,
+    cursor === null ? [size] : [cursor, size],
+  );
+};
 
 /** Native online repairs serialize a maintenance checkpoint inside their batch transaction. */
 export const lockBackfillCheckpoint = async (
@@ -714,6 +748,7 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "organizationSettings"
       | "correspondence"
       | "desktopMembership"
       | "memory"
@@ -740,6 +775,12 @@ const auxiliaryRowResource = (
         scopeColumns: [],
         scopeValues: [],
       };
+    case "organizationSettings":
+      return byUnscopedKey(
+        "organization_settings",
+        "organization_id",
+        options.id,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -794,6 +835,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "organizationSettings":
     case "correspondence":
     case "desktopMembership":
     case "memory":
@@ -1102,6 +1144,37 @@ export const withAggregateParentBatch = async ({
     workspaceIds: new Set(matters.map(brandPersistedWorkspaceId)),
   };
 };
+
+/** Read the matter lifecycle in the same row lock that fences entity creation. */
+export const lockWorkspaceCreationStatus = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const id = brandPersistedWorkspaceId(workspaceId.toLowerCase());
+  assertBatchIdAlphabet(id);
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
+  const lock = physicalRowLock({
+    aggregate: "workspace",
+    table: getTableName(workspaces),
+    values: [id],
+    mode: "update",
+  });
+  assertLockOrder(history, lock, "block");
+  history.status = "acquiring";
+  const rows = await tx
+    .select({ status: workspaces.status })
+    .from(workspaces)
+    .where(eq(workspaces.id, id))
+    .limit(1)
+    .for("update");
+  if (rows.length > 0) {
+    retainLock(history, lock);
+  }
+  completeAcquisition(history);
+  return rows.at(0)?.status;
+};
+
 type AggregateEntityBatchOptions = {
   tx: Transaction;
   ids: readonly AggregateIdentities["entity"][];
@@ -2447,6 +2520,23 @@ export const lockCaseLawDecisionRows = async ({
   `);
 };
 
+/** Hold every summary endpoint in one ordered batch before checking revisions. */
+export const lockLegislationVersionRows = async (
+  tx: Transaction,
+  documentIds: readonly SafeId<"legislationDocument">[],
+): Promise<void> => {
+  if (documentIds.length === 0) {
+    return;
+  }
+  await tx
+    .select({ id: legislationDocuments.id })
+    .from(legislationDocuments)
+    .where(inArray(legislationDocuments.id, documentIds))
+    .orderBy(asc(legislationDocuments.id))
+    .limit(documentIds.length)
+    .for("update");
+};
+
 /** Acquire one replay reservation after its checkpoint and before its decision. */
 export const lockCaseLawReplayBatch = async ({
   tx,
@@ -2649,6 +2739,19 @@ export const lockBillingArrangement = async (
   return rows.at(0);
 };
 
+/** One statement, in key order, so holders of several matter locks cannot deadlock. */
+const lockMattersInKeyOrder = async (
+  tx: ExecuteTransaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+) => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
+      workspaceIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
+  );
+};
+
 /** Timer guards use the same advisory key order before any matter row lock. */
 export const withInvoiceMatterLocks = async (
   tx: Transaction,
@@ -2658,12 +2761,7 @@ export const withInvoiceMatterLocks = async (
   if (ids.length === 0) {
     panic("Invoice matter locks require at least one matter");
   }
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
-  );
+  await lockMattersInKeyOrder(tx, ids);
   await withAggregateParentBatch({
     tx,
     organizationIds: [],
@@ -2857,6 +2955,40 @@ export const lockOriginalInvoice = async (
     )
     .limit(1)
     .for("update");
+
+type StaleDataExportRunLockOptions = {
+  tx: Transaction;
+  exportId: SafeId<"dataExport">;
+  organizationId: SafeId<"organization">;
+  attempt: number;
+  staleBefore: Date;
+};
+
+/** Recheck the heartbeat after the worker's competing row lock is released. */
+export const lockStaleDataExportRun = async ({
+  tx,
+  exportId,
+  organizationId,
+  attempt,
+  staleBefore,
+}: StaleDataExportRunLockOptions) => {
+  const [stale] = await tx
+    .select({ id: organizationDataExports.id })
+    .from(organizationDataExports)
+    .where(
+      and(
+        eq(organizationDataExports.id, exportId),
+        eq(organizationDataExports.organizationId, organizationId),
+        eq(organizationDataExports.status, "running"),
+        eq(organizationDataExports.attempt, attempt),
+        sql<boolean>`${organizationDataExports.heartbeatAt} < ${staleBefore.toISOString()}::timestamptz`,
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return stale !== undefined;
+};
+
 type MemberAccessRowLockOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
@@ -3036,6 +3168,41 @@ export const lockWorkspaceLifecycle = async (
   workspaceId: SafeId<"workspace">,
 ): Promise<void> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+};
+
+type HoldLiveSourceWorkspacesOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceIds: readonly SafeId<"workspace">[];
+};
+
+/**
+ * Takes the lifecycle fence of every matter a row will cite as a data source,
+ * and reports whether all of them still stand. Nothing else stops such a row:
+ * its source column has no foreign key. Under the fence a deletion has either
+ * committed, so this returns false, or waits and then removes the cited row.
+ */
+export const holdLiveSourceWorkspaces = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+}: HoldLiveSourceWorkspacesOptions): Promise<boolean> => {
+  if (workspaceIds.length === 0) {
+    return true;
+  }
+  await lockMattersInKeyOrder(tx, workspaceIds);
+  const live = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, [...workspaceIds]),
+        eq(workspaces.organizationId, organizationId),
+        ne(workspaces.status, WORKSPACE_STATUS.deleting),
+      ),
+    )
+    .limit(workspaceIds.length);
+  return live.length === workspaceIds.length;
 };
 
 export const TIMER_MATTER_LOCK_SCOPE = {
@@ -3228,6 +3395,11 @@ export const lockActiveTableRun = async (
       .limit(1)
       .for("no key update")
   ).at(0);
+
+/** A table run as `lockActiveTableRun` returned it, held under its row lock. */
+export type LockedTableRun = NonNullable<
+  Awaited<ReturnType<typeof lockActiveTableRun>>
+>;
 
 /** Fence matter-client assignments while a bulk delete classifies contacts. */
 export const lockOwnedContactsForBulkDelete = async ({

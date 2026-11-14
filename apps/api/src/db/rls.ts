@@ -449,6 +449,41 @@ export const wsOrganizationPolicies = (
   }),
 ];
 
+/**
+ * Workspace policies for a table whose organization_id was added after rows
+ * existed. Every new row must record its organization and match the
+ * session's; a row written before the column carries none and stays reachable
+ * through its workspace alone, so its history and pending work keep working.
+ * Policy names match `wsPolicies`, which such a table used before.
+ */
+export const wsRecordedOrganizationPolicies = () => {
+  const recordedOrganizationCheck = sql`(
+  ${workspaceCheck} AND (organization_id IS NULL OR ${organizationCheck})
+)`;
+  return [
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_update", {
+      for: "update",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+  ];
+};
+
 const wsOrganizationUserCheck = sql`(
   ${userCheck} AND ${workspaceOrganizationCheck}
 )`;
@@ -1224,6 +1259,80 @@ export const chatToolGrantPolicies = () => [
   }),
 ];
 
+// A chat limit reminder is the member's own: only they set, read or cancel
+// it in the active org. Moving the time is a delete and a new insert.
+const chatLimitReminderCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+// Row security is forced on this table, so the owner role the reminder sweep
+// and member offboarding use needs its own policy to reach every row.
+const chatLimitReminderOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_limit_reminders'::regclass)`;
+
+export const chatLimitReminderPolicies = () => [
+  p.pgPolicy("chat_limit_reminder_owner", {
+    for: "all",
+    to: "public",
+    using: chatLimitReminderOwnerCheck,
+    withCheck: chatLimitReminderOwnerCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_select", {
+    for: "select",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_delete", {
+    for: "delete",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
+// Stored browser site approvals follow the tool grants: per user+org, never
+// edited in place, and reachable by the owner role for member offboarding.
+const chatBrowserSiteGrantOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_browser_site_grants'::regclass)`;
+
+export const chatBrowserSiteGrantPolicies = () => [
+  p.pgPolicy("chat_browser_site_grant_owner", {
+    for: "all",
+    to: "public",
+    using: chatBrowserSiteGrantOwnerCheck,
+    withCheck: chatBrowserSiteGrantOwnerCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_select", {
+    for: "select",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_delete", {
+    for: "delete",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
@@ -1335,7 +1444,7 @@ const organizationManagementRoleValues = sql.raw(
 );
 
 /** The session user holds a management role in the session organization. */
-const organizationManagerCheck = sql`EXISTS (
+export const organizationManagerCheck = sql`EXISTS (
   SELECT 1
   FROM member m
   WHERE m.organization_id = (SELECT current_setting(

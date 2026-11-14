@@ -1,6 +1,10 @@
+import { panic } from "better-result";
+import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import * as v from "valibot";
 
 import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
+import { browseAsAgent, codexMcpEndpoints } from "./fake-browser";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
@@ -13,12 +17,17 @@ import {
  * A stand-in for `codex app-server` that replays a handwritten transcript
  * over real stdio, so the adapter's process, framing and protocol handling
  * run unmodified in tests without a model provider. Every message it
- * receives is appended to `$FAKE_HARNESS_LOG` for the test to inspect.
+ * receives is appended to `$FAKE_HARNESS_LOG` for the test to inspect, and a
+ * `turn/start` whose input the real server or its model would refuse ends it
+ * with code 96.
  *
  * Usage: `bun scripts/fake-codex-app-server.ts <scenario>`.
  */
 
-type FakeStep =
+/** A notification the client is sent, or a pause. */
+type FakeOutput = { notify: string; params: unknown } | { sleep: number };
+
+export type FakeStep =
   /** Wait for the client's next request with this method and answer it. */
   | {
       expect: string;
@@ -34,9 +43,94 @@ type FakeStep =
   | { awaitResponse: true }
   /** Survive SIGTERM, as a server that ignores it would. */
   | { ignoreTerm: true }
+  /**
+   * Start a long-lived process, as an agent's command does, and log its pid.
+   * `in: "own_group"` starts it in a process group of its own, as Codex runs
+   * commands; `in: "orphan"` starts it in the background of a shell that
+   * exits at once, as `command &` does.
+   */
+  | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
-  | { exit: number };
+  /**
+   * The thread's background terminals from now on, by item id: commands
+   * left running past the turn, which `thread/backgroundTerminals/list`
+   * reports until they exit or `thread/backgroundTerminals/clean` ends them.
+   */
+  | { terminals: readonly string[] }
+  | { exit: number }
+  /**
+   * Send these while watching for `turn/interrupt`: one answers it, ends the
+   * turn `interrupted` and the scenario. No later step may expect a request.
+   */
+  | { untilInterrupted: readonly FakeOutput[] }
+  /**
+   * Play `approved` when the client's answer to the last request approved
+   * it (`accept` or `acceptForSession`), `denied` otherwise.
+   */
+  | {
+      byDecision: {
+        approved: readonly FakeStep[];
+        denied: readonly FakeStep[];
+      };
+    }
+  /**
+   * Write `text` to `file` under the working directory, as an agent's edit
+   * does on disk, and log the path written.
+   */
+  | { writeFile: string; text: string }
+  /**
+   * Browse the fixture library through the browser and stella MCP servers
+   * `thread/start` configured, and report each call and the answer.
+   */
+  | { browse: true };
+
+/** Requests answered at any time, the script's own steps done or not. */
+const ALWAYS_ANSWERED: ReadonlySet<string> = new Set([
+  "thread/backgroundTerminals/list",
+  "thread/backgroundTerminals/clean",
+  "account/rateLimits/read",
+]);
+
+/** Unix seconds well after any test runs. */
+export const FAKE_FUTURE_RESET = 1_893_456_000;
+
+/** The plan's allowance as Codex reports it, the main window at `used`. */
+const planLimits = (usedPercent: number, resetsAt = FAKE_FUTURE_RESET) => ({
+  limitId: "codex",
+  limitName: null,
+  primary: { usedPercent, windowDurationMins: 300, resetsAt },
+  secondary: {
+    usedPercent: 40,
+    windowDurationMins: 10_080,
+    resetsAt: resetsAt - 3600,
+  },
+  credits: null,
+  individualLimit: null,
+  planType: "plus",
+  rateLimitReachedType: null,
+});
+
+/** `account/rateLimits/read`, keyed by limit id as current servers do. */
+const rateLimitsRead = (codex: object) => ({
+  rateLimits: codex,
+  rateLimitsByLimitId: {
+    codex,
+    // Another model's allowance never stands for the plan's.
+    "codex-other": { ...planLimits(100), limitId: "codex-other" },
+  },
+});
+
+/** A background terminal as the app-server lists it. */
+const backgroundTerminal = (itemId: string) => ({
+  itemId,
+  processId: `process-${itemId}`,
+  command: "bun run dev",
+  cwd: "/workspace",
+  osPid: null,
+  cpuPercent: null,
+  rssKb: null,
+});
 
 const userAgent = (version: string) =>
   `stella/${version} (Mac OS 27.0; arm64) test`;
@@ -45,13 +139,21 @@ export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
+/** The server name the holder registers the browser tools under. */
+const FAKE_BROWSER_SERVER = "stella_browser";
+
+const usageLimitError = {
+  message: "You've hit your usage limit.",
+  codexErrorInfo: "usageLimitExceeded",
+  additionalDetails: null,
+};
 
 const signedIn = {
   account: { type: "chatgpt", email: null, planType: "plus" },
   requiresOpenaiAuth: false,
 };
 
-const handshake = (
+export const handshake = (
   account: unknown = signedIn,
   version = "0.166.0",
 ): FakeStep[] => [
@@ -112,6 +214,61 @@ const command = (id: string, status: string, extra: object = {}) => ({
   exitCode: null,
   ...extra,
 });
+
+/** Text a native step carries that chat must never show. */
+export const FAKE_PRIVATE_TEXT = {
+  heredoc: "Tenant owes 4,200 in arrears.",
+  diff: "-Rent is due monthly.\n+Rent is due quarterly.",
+  explanation: "Working through the private plan",
+  subagentPrompt: "Read the lease and list every clause on arrears.",
+  subagentText: "Clause 4 covers arrears.",
+  subagentThinking: "The arrears clause may be void.",
+  subagentReport: "Report: clause 4 caps arrears at 4,200.",
+} as const;
+
+/** The thread and turn the subagent of the subagent scenario works on. */
+const FAKE_SUBAGENT_THREAD_ID = "thread-subagent";
+const FAKE_SUBAGENT_TURN_ID = "turn-subagent";
+
+/** An item of the subagent's own thread. */
+const subagentItem = (
+  phase: "started" | "completed",
+  body: object,
+): FakeStep => ({
+  notify: `item/${phase}`,
+  params: {
+    threadId: FAKE_SUBAGENT_THREAD_ID,
+    turnId: FAKE_SUBAGENT_TURN_ID,
+    item: body,
+  },
+});
+
+/** A call to one of the tools an agent manages its subagents with. */
+const subagentToolCall = (
+  id: string,
+  tool: string,
+  status: string,
+  agents: Readonly<Record<string, string>>,
+) => ({
+  type: "collabAgentToolCall",
+  id,
+  tool,
+  status,
+  senderThreadId: FAKE_THREAD_ID,
+  receiverThreadIds: Object.keys(agents),
+  prompt: FAKE_PRIVATE_TEXT.subagentPrompt,
+  model: null,
+  reasoningEffort: null,
+  agentsStates: Object.fromEntries(
+    Object.entries(agents).map(([threadId, state]) => [
+      threadId,
+      { status: state, message: FAKE_PRIVATE_TEXT.subagentReport },
+    ]),
+  ),
+});
+
+/** A command longer than chat shows. */
+export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
 
 /** A connector tool: any MCP server other than the stella binding. */
 export const FAKE_MCP_CALL = {
@@ -177,9 +334,12 @@ const continuation = (outcome: FakeStep[]): FakeStep[] => [
   ...outcome,
 ];
 
-/** A command the harness asks to run, declined, then the turn's answer. */
-const commandApproval = (reason: string | null): FakeStep[] => [
-  ...freshTurn(),
+/** What the approval scenarios answer once the command ran. */
+const FAKE_APPROVED_ANSWER = "Removed draft.md.";
+const FAKE_DENIED_ANSWER = "Left it in place.";
+
+/** The command the approval scenarios ask to run, and the request for it. */
+const removeDraft = (reason: string | null): FakeStep[] => [
   item("started", {
     ...command("call-rm", "inProgress"),
     command: "rm draft.md",
@@ -197,15 +357,221 @@ const commandApproval = (reason: string | null): FakeStep[] => [
       command: "rm draft.md",
     },
   },
+];
+
+/** The command declined, whatever the client answered. */
+const draftLeft = (): FakeStep[] => [
   item("completed", {
     ...command("call-rm", "declined"),
     command: "rm draft.md",
   }),
-  item("completed", agentMessage("m-2", "Left it in place.")),
+  item("completed", agentMessage("m-2", FAKE_DENIED_ANSWER)),
   completed(),
 ];
 
-const FAKE_SCENARIOS = {
+/** A command the harness asks to run, declined, then the turn's answer. */
+const commandApproval = (reason: string | null): FakeStep[] => [
+  ...freshTurn(),
+  ...removeDraft(reason),
+  ...draftLeft(),
+];
+
+/** The file `writes_file` adds to its working directory, and its text. */
+const FAKE_WRITTEN_FILE = {
+  path: "notes.md",
+  text: "Rent is due quarterly.\n",
+} as const;
+
+const writtenNotes = (status: string) => ({
+  type: "fileChange",
+  id: "call-write",
+  changes: [
+    {
+      path: FAKE_WRITTEN_FILE.path,
+      kind: { type: "add" },
+      diff: `+${FAKE_WRITTEN_FILE.text}`,
+    },
+  ],
+  status,
+});
+
+/** The context window the fake reports, as Codex does with its token usage. */
+export const FAKE_CONTEXT_WINDOW = 258_400;
+
+/** One request's counts as Codex reports them, totals included. */
+const usageBreakdown = (counts: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+}) => ({
+  ...counts,
+  totalTokens: counts.inputTokens + counts.outputTokens,
+  cacheWriteInputTokens: 0,
+});
+
+const tokenUsage = (usage: {
+  last: object;
+  total: object;
+  modelContextWindow: number | null;
+}): FakeStep => ({
+  notify: "thread/tokenUsage/updated",
+  params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, tokenUsage: usage },
+});
+
+const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
+
+/**
+ * A turn out of its plan's limit: the rate limits Codex reports (the main
+ * window resetting at `resetsAt`, a Unix time in seconds), a retry, then the
+ * failure.
+ */
+export const usageLimitTurn = (resetsAt = FAKE_FUTURE_RESET): FakeStep[] => [
+  ...freshTurn(),
+  {
+    notify: "account/rateLimits/updated",
+    params: { rateLimits: planLimits(100, resetsAt) },
+  },
+  {
+    notify: "error",
+    params: {
+      threadId: FAKE_THREAD_ID,
+      turnId: FAKE_TURN_ID,
+      willRetry: true,
+      error: {
+        message: "Reconnecting",
+        codexErrorInfo: null,
+        additionalDetails: null,
+      },
+    },
+  },
+  completed("failed", usageLimitError),
+];
+
+/** Between paced outputs, in milliseconds. */
+const FAKE_PACE_MS = Number(process.env["FAKE_CODEX_PACE_MS"] ?? "2000");
+
+const SLOW_TEXT_WORDS = [
+  "Lease",
+  " one",
+  " is",
+  " the",
+  " office",
+  " lease;",
+  " lease",
+  " two",
+  " is",
+  " the",
+  " warehouse.",
+];
+
+const textDelta = (itemId: string, delta: string): FakeOutput => ({
+  notify: "item/agentMessage/delta",
+  params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, itemId, delta },
+});
+
+/** A dev server the agent started and left running past its yield. */
+const devServer = (status: string, extra: object = {}) =>
+  command("call-serve", status, { command: "bun run dev", ...extra });
+
+/** The next turn's message, on the same thread. */
+const nextTurnItem = (body: object): FakeStep => ({
+  notify: "item/completed",
+  params: { threadId: FAKE_THREAD_ID, turnId: CONTINUED_TURN_ID, item: body },
+});
+
+export const FAKE_SCENARIOS = {
+  /** A streamed answer and nothing else. */
+  text: [
+    ...freshTurn(),
+    {
+      notify: "turn/started",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("inProgress") },
+    },
+    textDelta("m-text", "Lease one is the office lease;"),
+    textDelta("m-text", " lease two is the warehouse."),
+    item(
+      "completed",
+      agentMessage(
+        "m-text",
+        "Lease one is the office lease; lease two is the warehouse.",
+      ),
+    ),
+    completed(),
+  ],
+  /** The local browser canary: a search, a result, a sign-in, a citation. */
+  browse: [...freshTurn(), { browse: true }, completed()],
+  /**
+   * A turn that leaves a dev server running as a background terminal, then
+   * the chat's next turn on the same thread in the same process, during
+   * which the server exits.
+   */
+  background_terminal: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    item("completed", agentMessage("m-serve", "The server runs.")),
+    completed(),
+    { expect: "turn/start", result: { turn: continuedTurn("inProgress") } },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
+    nextTurnItem(agentMessage("m-next", "It stopped.")),
+    {
+      notify: "turn/completed",
+      params: { threadId: FAKE_THREAD_ID, turn: continuedTurn("completed") },
+    },
+  ],
+  /**
+   * A turn that leaves a dev server running and answers the client's list
+   * of background terminals late: a stop can arrive after the turn
+   * completed and before its process is kept.
+   */
+  background_terminal_late_list: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    { sleep: 1000 },
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+  ],
+  /** A dev server left running, and a list of terminals that fails. */
+  background_terminal_list_fails: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_603, message: "Internal error" },
+    },
+  ],
+  /** A dev server left running, and a release without the terminal list. */
+  background_terminal_list_unsupported: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      error: { code: -32_601, message: "Method not found" },
+    },
+  ],
+  /** As above, but the server exits while the chat waits for its next turn. */
+  background_terminal_exits: [
+    ...freshTurn(),
+    item("started", devServer("inProgress")),
+    { terminals: ["call-serve"] },
+    completed(),
+    {
+      expect: "thread/backgroundTerminals/list",
+      result: { data: [backgroundTerminal("call-serve")], nextCursor: null },
+    },
+    // Once the process is kept, not while it is being listed.
+    { sleep: 200 },
+    { terminals: [] },
+    item("completed", devServer("completed", { exitCode: 0 })),
+  ],
   /**
    * The shared stella tool calls through the stella MCP binding, step by
    * step: a step's calls all start, then complete. Then an answer.
@@ -287,6 +653,192 @@ const FAKE_SCENARIOS = {
     }),
     completed(),
   ],
+  /**
+   * Subagents and viewed images. One subagent is spawned, runs a command it
+   * asks about and views an image on its own thread, is reported ended
+   * twice, and is then given more work, which fails; one fails to spawn; one
+   * is still at work when the turn ends. The
+   * prompt, the subagent's text and reasoning, and its report sit next to
+   * the steps stella shows. An item of a thread no spawn named is not the
+   * turn's.
+   */
+  subagent: [
+    ...freshTurn(),
+    item(
+      "started",
+      subagentToolCall("call-spawn", "spawnAgent", "inProgress", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn", "spawnAgent", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "pendingInit",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      agentMessage("sub-m-1", FAKE_PRIVATE_TEXT.subagentText),
+    ),
+    subagentItem("completed", {
+      type: "reasoning",
+      id: "sub-r-1",
+      summary: [FAKE_PRIVATE_TEXT.subagentThinking],
+      content: [],
+    }),
+    subagentItem("started", {
+      ...command("sub-rm", "inProgress"),
+      command: "rm draft.md",
+    }),
+    {
+      request: "item/commandExecution/requestApproval",
+      params: {
+        kind: "command",
+        threadId: FAKE_SUBAGENT_THREAD_ID,
+        turnId: FAKE_SUBAGENT_TURN_ID,
+        itemId: "sub-rm",
+        startedAtMs: 1,
+        environmentId: null,
+        reason: null,
+        command: "rm draft.md",
+      },
+    },
+    subagentItem("completed", {
+      ...command("sub-rm", "completed", { aggregatedOutput: "", exitCode: 0 }),
+      command: "rm draft.md",
+    }),
+    subagentItem("completed", {
+      type: "imageView",
+      id: "sub-image",
+      path: "/workspace/scans/Lease Page 1.png",
+    }),
+    {
+      notify: "item/completed",
+      params: {
+        threadId: "thread-of-no-spawn",
+        turnId: "turn-of-no-spawn",
+        item: command("stray", "completed"),
+      },
+    },
+    item("completed", {
+      type: "imageView",
+      id: "call-image",
+      path: "/workspace/scans/cover.png",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-wait", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "completed",
+      }),
+    ),
+    item("completed", {
+      type: "subAgentActivity",
+      id: "activity-1",
+      kind: "completed",
+      agentThreadId: FAKE_SUBAGENT_THREAD_ID,
+      agentPath: "/root/worker",
+    }),
+    item(
+      "completed",
+      subagentToolCall("call-followup", "followupTask", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "running",
+      }),
+    ),
+    subagentItem(
+      "completed",
+      command("sub-ls", "completed", { aggregatedOutput: "", exitCode: 0 }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-wait-again", "wait", "completed", {
+        [FAKE_SUBAGENT_THREAD_ID]: "errored",
+      }),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-failed", "spawnAgent", "failed", {}),
+    ),
+    item(
+      "completed",
+      subagentToolCall("call-spawn-open", "spawnAgent", "completed", {
+        "thread-subagent-open": "running",
+      }),
+    ),
+    item("completed", agentMessage("m-2", "The lease caps arrears.")),
+    completed(),
+  ],
+  /**
+   * Native steps chat names beyond their kind, as the app server reports
+   * them: the fields stella shows sit next to text it must never forward.
+   */
+  native_tools: [
+    ...freshTurn(),
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        explanation: FAKE_PRIVATE_TEXT.explanation,
+        plan: [
+          { step: "Read the lease", status: "completed" },
+          { step: "Draft the notice", status: "inProgress" },
+        ],
+      },
+    },
+    item(
+      "completed",
+      command("call-heredoc", "failed", {
+        command: `/bin/zsh -lc "cat > notes.md <<'EOF'\n${FAKE_PRIVATE_TEXT.heredoc}\nEOF"`,
+        aggregatedOutput: "zsh: permission denied",
+        exitCode: 1,
+      }),
+    ),
+    item(
+      "completed",
+      command("call-long", "completed", {
+        command: FAKE_LONG_COMMAND,
+        aggregatedOutput: "ok",
+        exitCode: 0,
+      }),
+    ),
+    item("completed", {
+      type: "fileChange",
+      id: "call-edit",
+      changes: [
+        {
+          path: "/workspace/drafts/lease.md",
+          kind: { type: "update", move_path: null },
+          diff: FAKE_PRIVATE_TEXT.diff,
+        },
+        {
+          path: "/workspace/drafts/notice.md",
+          kind: { type: "add" },
+          diff: FAKE_PRIVATE_TEXT.diff,
+        },
+      ],
+      status: "completed",
+    }),
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        explanation: null,
+        plan: [
+          { step: "Read the lease", status: "completed" },
+          { step: "Draft the notice", status: "completed" },
+        ],
+      },
+    },
+    // Another turn's plan is not this turn's step.
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: "turn-other",
+        plan: [{ step: "Elsewhere", status: "pending" }],
+      },
+    },
+    completed(),
+  ],
   /** Reasoning, an MCP tool call, a command and a streamed answer. */
   tool_calls: [
     ...freshTurn(),
@@ -323,6 +875,22 @@ const FAKE_SCENARIOS = {
         exitCode: 0,
       }),
     ),
+    // The turn's first model request; the answer below is its second.
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      total: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     {
       notify: "item/agentMessage/delta",
       params: {
@@ -333,26 +901,54 @@ const FAKE_SCENARIOS = {
       },
     },
     item("completed", agentMessage("m-1", "Found two leases.")),
-    {
-      notify: "thread/tokenUsage/updated",
-      params: {
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        tokenUsage: {
-          last: {
-            totalTokens: 150,
-            inputTokens: 120,
-            cachedInputTokens: 20,
-            cacheWriteInputTokens: 0,
-            outputTokens: 30,
-            reasoningOutputTokens: 5,
-          },
-        },
-      },
-    },
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 120,
+        cachedInputTokens: 20,
+        outputTokens: 30,
+        reasoningOutputTokens: 5,
+      }),
+      total: usageBreakdown({
+        inputTokens: 170,
+        cachedInputTokens: 20,
+        outputTokens: 40,
+        reasoningOutputTokens: 5,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     completed(),
   ],
   approval: commandApproval("Deletes a file"),
+  /** The command runs when the client approves it and not otherwise. */
+  approval_outcome: [
+    ...freshTurn(),
+    ...removeDraft("Deletes a file"),
+    {
+      byDecision: {
+        approved: [
+          item("completed", {
+            ...command("call-rm", "completed", {
+              aggregatedOutput: "",
+              exitCode: 0,
+            }),
+            command: "rm draft.md",
+          }),
+          item("completed", agentMessage("m-2", FAKE_APPROVED_ANSWER)),
+          completed(),
+        ],
+        denied: draftLeft(),
+      },
+    },
+  ],
+  /** Adds a file to the working directory on disk, as an agent's edit does. */
+  writes_file: [
+    ...freshTurn(),
+    item("started", writtenNotes("inProgress")),
+    { writeFile: FAKE_WRITTEN_FILE.path, text: FAKE_WRITTEN_FILE.text },
+    item("completed", writtenNotes("completed")),
+    item("completed", agentMessage("m-write", "Wrote notes.md.")),
+    completed(),
+  ],
   /** A harness that gives no reason, here as an empty one. */
   approval_without_reason: commandApproval(""),
   blocking_question: [
@@ -445,6 +1041,18 @@ const FAKE_SCENARIOS = {
     { notify: "fake/ready", params: {} },
     { sleep: 60_000 },
   ],
+  /**
+   * Leaves processes running the ways an agent's commands do, says when they
+   * are up, and waits for its client.
+   */
+  leaves_processes: [
+    { spawn: ["/bin/sleep", "600"] },
+    { spawn: ["/bin/sleep", "600"], in: "own_group" },
+    { spawn: ["/bin/sleep", "600"], in: "orphan" },
+    // Signals a process ignores stay ignored across exec.
+    { spawn: ["/bin/sh", "-c", "trap '' TERM; exec /bin/sleep 600"] },
+    { notify: "fake/ready", params: {} },
+  ],
   async_question: [
     ...freshTurn(),
     item(
@@ -472,6 +1080,37 @@ const FAKE_SCENARIOS = {
     item("started", command("call-long", "inProgress")),
     { expect: "turn/interrupt", result: {} },
     completed("interrupted"),
+  ],
+  /** A read and a command on the skill folder `FAKE_SKILL_PATH` names. */
+  reads_skill: [
+    ...freshTurn(),
+    item("started", {
+      ...command("call-read", "inProgress"),
+      command: `cat ${FAKE_SKILL_PATH}/SKILL.md`,
+    }),
+    item("completed", {
+      ...command("call-read", "completed", {
+        aggregatedOutput: "Licensed commentary.\n",
+        exitCode: 0,
+      }),
+      command: `cat ${FAKE_SKILL_PATH}/SKILL.md`,
+    }),
+    item("started", command("call-cmd", "inProgress")),
+    item(
+      "completed",
+      command("call-cmd", "completed", {
+        aggregatedOutput: "notes.md\n",
+        exitCode: 0,
+      }),
+    ),
+    completed(),
+  ],
+  skills_refused: [
+    ...handshake(),
+    {
+      expect: "skills/list",
+      error: { code: -32_600, message: "skills are unavailable" },
+    },
   ],
   resume_missing: [
     ...handshake(),
@@ -532,52 +1171,97 @@ const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
-  usage_limit: [
+  usage_limit: usageLimitTurn(),
+  /**
+   * An answer streamed a word at a time, `FAKE_CODEX_PACE_MS` apart; an
+   * interrupt ends it where it got to.
+   */
+  slow_text: [
     ...freshTurn(),
     {
-      notify: "account/rateLimits/updated",
-      params: {
-        rateLimits: {
-          limitId: "codex",
-          limitName: null,
-          primary: {
-            usedPercent: 100,
-            windowDurationMins: 300,
-            resetsAt: 1_793_196_000,
-          },
-          secondary: {
-            usedPercent: 40,
-            windowDurationMins: 10_080,
-            resetsAt: 1_793_700_000,
-          },
-          credits: null,
-          individualLimit: null,
-          planType: "plus",
-          rateLimitReachedType: null,
-        },
-      },
+      notify: "turn/started",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("inProgress") },
     },
     {
-      notify: "error",
+      untilInterrupted: SLOW_TEXT_WORDS.flatMap((word): FakeOutput[] => [
+        { sleep: FAKE_PACE_MS },
+        textDelta("m-slow", word),
+      ]),
+    },
+    item("completed", agentMessage("m-slow", SLOW_TEXT_WORDS.join(""))),
+    completed(),
+  ],
+  /** The first limit of a process: no update came before the failure. */
+  usage_limit_unannounced: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
+    },
+  ],
+  /** As above, and the account has no plan limits to read (an API key). */
+  usage_limit_read_fails: [
+    ...freshTurn(),
+    completed("failed", usageLimitError),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
+  ],
+  /** stella's MCP server fails to start after the turn began. */
+  stella_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "stella",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    { sleep: 5000 },
+  ],
+  /** A member's own MCP server fails; the turn runs on. */
+  other_mcp_failed: [
+    ...freshTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "their-notes",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    completed(),
+  ],
+  /** A message completes, then the model is at capacity before the next. */
+  capacity_retry: [
+    ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
       params: {
         threadId: FAKE_THREAD_ID,
         turnId: FAKE_TURN_ID,
-        willRetry: true,
-        error: {
-          message: "Reconnecting",
-          codexErrorInfo: null,
-          additionalDetails: null,
-        },
+        itemId: "m-1",
+        delta: "Reading.",
       },
     },
-    completed("failed", {
-      message: "You've hit your usage limit.",
-      codexErrorInfo: "usageLimitExceeded",
-      additionalDetails: null,
-    }),
-  ],
-  capacity_retry: [
-    ...freshTurn(),
+    {
+      notify: "item/completed",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: agentMessage("m-1", "Reading."),
+      },
+    },
     completed("failed", OVERLOADED),
     ...continuation([
       {
@@ -608,6 +1292,20 @@ const FAKE_SCENARIOS = {
         },
       ]),
     ).flat(),
+  ],
+  /** The model is at capacity while a message is still streaming. */
+  capacity_mid_message: [
+    ...freshTurn(),
+    {
+      notify: "item/agentMessage/delta",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "m-1",
+        delta: "Readi",
+      },
+    },
+    completed("failed", OVERLOADED),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   /** One blocking question asking two questions under one id. */
@@ -682,7 +1380,9 @@ const FAKE_SCENARIOS = {
             hidden: false,
             isDefault: true,
             supportedReasoningEfforts: [
+              { reasoningEffort: "high", description: "" },
               { reasoningEffort: "medium", description: "" },
+              { reasoningEffort: "turbo", description: "" },
             ],
             defaultReasoningEffort: "medium",
             inputModalities: ["text", "image"],
@@ -710,24 +1410,232 @@ const FAKE_SCENARIOS = {
         nextCursor: null,
       },
     },
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(40)),
+    },
+  ],
+  /** The limits cannot be read, as for an account without a plan. */
+  probe_limits_unreadable: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      error: {
+        code: -32_600,
+        message: "codex account authentication required to read rate limits",
+      },
+    },
+  ],
+  /** The plan's window is spent, and the account has credits to go on. */
+  probe_out_of_usage_with_credits: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead({
+        ...planLimits(100),
+        credits: { hasCredits: true, unlimited: false, balance: "12.50" },
+      }),
+    },
+  ],
+  probe_out_of_usage: [
+    ...handshake(),
+    {
+      expect: "account/rateLimits/read",
+      result: rateLimitsRead(planLimits(100)),
+    },
   ],
 } as const satisfies Record<string, readonly FakeStep[]>;
 
+/** A text-only model, beside `gpt-test`, which reads images too. */
+export const FAKE_TEXT_ONLY_MODEL = "gpt-text";
+
+/** What `model/list` answers when a scenario does not script it. */
+const TURN_MODELS = {
+  data: [
+    ["gpt-test", ["text", "image"]],
+    [FAKE_TEXT_ONLY_MODEL, ["text"]],
+  ].map(([id, inputModalities]) => ({
+    id,
+    model: id,
+    displayName: id,
+    description: "",
+    hidden: false,
+    isDefault: id === "gpt-test",
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: "medium",
+    inputModalities,
+  })),
+  nextCursor: null,
+};
+
 export type FakeScenario = keyof typeof FAKE_SCENARIOS;
 
-const isScenario = (name: string): name is FakeScenario =>
+export const isScenario = (name: string): name is FakeScenario =>
   Object.hasOwn(FAKE_SCENARIOS, name);
+
+/** The decision ids that let an approval request's action go ahead. */
+const APPROVING_DECISIONS = ["accept", "acceptForSession"] as const;
+
+const DecisionResultSchema = v.looseObject({ decision: v.string() });
+
+/**
+ * Play a step that needs no client message: the steps a `byDecision` picks
+ * by the client's last response, or a file written on disk (none follow).
+ */
+const playLocally = (
+  step: Extract<FakeStep, { byDecision: unknown } | { writeFile: string }>,
+  lastResponse: Readonly<Record<string, unknown>> | null,
+  log: (entry: object) => void,
+): readonly FakeStep[] => {
+  if ("writeFile" in step) {
+    const written = path.resolve(process.cwd(), step.writeFile);
+    writeFileSync(written, step.text);
+    log({ wrote: written });
+    return [];
+  }
+  const decision = v.safeParse(DecisionResultSchema, lastResponse?.["result"]);
+  const decided = decision.success ? decision.output.decision : null;
+  log({ decision: decided });
+  return APPROVING_DECISIONS.some((id) => id === decided)
+    ? step.byDecision.approved
+    : step.byDecision.denied;
+};
 
 const IncomingSchema = v.looseObject({
   id: v.optional(v.union([v.string(), v.number()])),
   method: v.optional(v.string()),
 });
 
-const run = async (
-  steps: readonly FakeStep[],
-  log: (entry: object) => void,
+/**
+ * `turn/start` as the app-server's `TurnStartParams` and `UserInput` define
+ * them. An image is a data URL in a format the models read.
+ */
+const TurnStartParamsSchema = v.looseObject({
+  threadId: v.string(),
+  input: v.array(
+    v.variant("type", [
+      v.strictObject({
+        type: v.literal("text"),
+        text: v.string(),
+        text_elements: v.optional(v.array(v.unknown())),
+      }),
+      v.strictObject({
+        type: v.literal("image"),
+        url: v.pipe(
+          v.string(),
+          v.regex(
+            /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/u,
+          ),
+        ),
+      }),
+      v.strictObject({ type: v.literal("localImage"), path: v.string() }),
+    ]),
+  ),
+});
+
+/** Start `argv` the way `placement` says; its pid. */
+const spawnLongLived = async (
+  argv: readonly string[],
+  placement: "own_group" | "orphan" | undefined,
 ) => {
-  const { reading, take, write } = openFakeHarnessPeer({
+  const quiet = {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  } as const;
+  switch (placement) {
+    case undefined:
+      return Bun.spawn([...argv], quiet).pid;
+    case "own_group":
+      return Bun.spawn(
+        ["perl", "-e", "setpgrp(0, 0); exec @ARGV", ...argv],
+        quiet,
+      ).pid;
+    case "orphan": {
+      const shell = Bun.spawn(
+        [
+          "/bin/sh",
+          "-c",
+          '"$@" </dev/null >/dev/null 2>&1 & echo "$!"',
+          "orphan",
+          ...argv,
+        ],
+        { stdin: "ignore", stdout: "pipe", stderr: "ignore" },
+      );
+      const pid = Number((await new Response(shell.stdout).text()).trim());
+      await shell.exited;
+      return pid;
+    }
+    default:
+      placement satisfies never;
+      return panic("Unknown spawn placement");
+  }
+};
+
+const SkillsParamsSchema = v.looseObject({
+  extraRoots: v.optional(v.array(v.string())),
+  cwds: v.optional(v.array(v.string())),
+});
+
+/** Every `SKILL.md` under a root, however deep and through any link. */
+const skillFilesUnder = (root: string, depth = 0): string[] =>
+  // A link to a file is followed like Codex follows it, but holds no folder.
+  depth > 8 || !existsSync(root) || !statSync(root).isDirectory()
+    ? []
+    : readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+        const entryPath = path.join(root, entry.name);
+        if (entry.name === "SKILL.md") {
+          return [entryPath];
+        }
+        return entry.isDirectory() || entry.isSymbolicLink()
+          ? skillFilesUnder(entryPath, depth + 1)
+          : [];
+      });
+
+const FAKE_SYSTEM_SKILL = "/fake-home/skills/.system/imagegen/SKILL.md";
+
+/**
+ * Skill discovery as Codex does it, on the real filesystem: its own skills, the
+ * roots this process was given, the member's own `~/.agents/skills`, and
+ * whatever the working directory holds in its `.agents/skills`.
+ */
+export const skillDiscovery = () => {
+  const roots: string[] = [];
+  const home = process.env["HOME"];
+  return {
+    answer: (method: string | undefined, params: unknown): object | null => {
+      const parsed = v.parse(SkillsParamsSchema, params ?? {});
+      if (method === "skills/extraRoots/set") {
+        roots.splice(0, roots.length, ...(parsed.extraRoots ?? []));
+        return {};
+      }
+      if (method !== "skills/list") {
+        return null;
+      }
+      const user = [
+        ...roots,
+        ...(home === undefined ? [] : [path.join(home, ".agents", "skills")]),
+      ].flatMap((root) => skillFilesUnder(root));
+      return {
+        data: (parsed.cwds ?? []).map((cwd) => ({
+          cwd,
+          errors: [],
+          skills: [
+            { path: FAKE_SYSTEM_SKILL, scope: "system" },
+            ...user.map((file) => ({ path: file, scope: "user" })),
+            ...skillFilesUnder(path.join(cwd, ".agents", "skills")).map(
+              (file) => ({ path: file, scope: "repo" }),
+            ),
+          ],
+        })),
+      };
+    },
+  };
+};
+
+/** The client's requests and its responses to ours, read from stdin. */
+export const openCodexPeer = (log: (entry: object) => void) =>
+  openFakeHarnessPeer({
     schema: IncomingSchema,
     queueOf: (message) => {
       if (message.method === undefined) {
@@ -739,17 +1647,220 @@ const run = async (
     log,
   });
 
-  let serverRequestId = 1000;
-  for (const step of steps) {
-    if ("expect" in step) {
+type CodexPeer = ReturnType<typeof openCodexPeer>;
+
+/**
+ * A real server exits once its client closes stdin. Until then it still
+ * answers what it answers at any time; anything else stays unanswered, as
+ * the script left it.
+ */
+const answerUntilClosed = async (
+  { take, write }: Pick<CodexPeer, "take" | "write">,
+  answer: (method: string | undefined, params: unknown) => object | null,
+) => {
+  for (;;) {
+    // await-in-loop: one request at a time, in the order they arrived.
+    const message = await take("requests");
+    if (message === null) {
+      return;
+    }
+    if (ALWAYS_ANSWERED.has(message.method ?? "")) {
+      write({
+        id: message.id,
+        result: answer(message.method, message["params"]),
+      });
+    }
+  }
+};
+
+/** Exits when `message` is not the request a step scripted, or is one the
+ *  pinned protocol refuses. */
+const exitUnlessExpected = (
+  message: { method?: string | undefined; [key: string]: unknown },
+  expected: string,
+  log: (entry: object) => void,
+) => {
+  if (message.method !== expected) {
+    log({ unexpected: message.method, wanted: expected });
+    process.exit(97);
+  }
+  if (
+    message.method === "turn/start" &&
+    !v.is(TurnStartParamsSchema, message["params"])
+  ) {
+    log({ refusedInput: "turn/start" });
+    process.exit(96);
+  }
+};
+
+type PlayBrowseOptions = {
+  /** The `thread/start` params, which configure the MCP servers. */
+  threadStart: unknown;
+  write: CodexPeer["write"];
+  log: (entry: object) => void;
+};
+
+/** The `browse` step: each call the agent made, then its answer. */
+const playBrowse = async ({ threadStart, write, log }: PlayBrowseOptions) => {
+  const browsed = await browseAsAgent({
+    browserServer: FAKE_BROWSER_SERVER,
+    endpoints: codexMcpEndpoints(threadStart),
+    stellaServer: FAKE_STELLA_SERVER,
+  });
+  // Kept on this computer, for the test to see what the agent read.
+  log({ pageCanaries: browsed.read });
+  const notifyItem = (phase: "started" | "completed", body: object) => {
+    write({
+      method: `item/${phase}`,
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        item: body,
+      },
+    });
+  };
+  for (const call of browsed.steps) {
+    const mcpCall = {
+      type: "mcpToolCall",
+      id: call.id,
+      server: call.server,
+      tool: call.tool,
+      arguments: call.arguments,
+      error: null,
+    };
+    notifyItem("started", {
+      ...mcpCall,
+      status: "inProgress",
+      result: null,
+    });
+    notifyItem("completed", {
+      ...mcpCall,
+      status: call.isError ? "failed" : "completed",
+      result: { content: [{ type: "text", text: call.text }] },
+    });
+  }
+  notifyItem("completed", agentMessage("m-browse", browsed.answer));
+};
+
+/**
+ * Plays `steps` to the client. A caller that answered the start of the
+ * conversation itself passes its `peer` and `skills`, and the `models`
+ * `model/list` answers with from then on.
+ */
+export const run = async (
+  steps: readonly FakeStep[],
+  log: (entry: object) => void,
+  options: {
+    peer?: CodexPeer;
+    skills?: ReturnType<typeof skillDiscovery>;
+    models?: object;
+  } = {},
+) => {
+  const { reading, take, write } = options.peer ?? openCodexPeer(log);
+
+  const skills = options.skills ?? skillDiscovery();
+  const models = options.models ?? TURN_MODELS;
+  /** The thread's background terminals, by item id, as the script set them. */
+  const terminals: string[] = [];
+  /**
+   * Model listing, skill discovery and the background terminals answer
+   * whenever they are asked.
+   */
+  const unscriptedAnswer = (
+    method: string | undefined,
+    params: unknown,
+  ): object | null => {
+    if (method === "model/list") {
+      return models;
+    }
+    if (method === "thread/backgroundTerminals/list") {
+      return { data: terminals.map(backgroundTerminal), nextCursor: null };
+    }
+    if (method === "thread/backgroundTerminals/clean") {
+      log({ cleaned: [...terminals] });
+      terminals.splice(0);
+      return {};
+    }
+    if (method === "account/rateLimits/read") {
+      return rateLimitsRead(planLimits(10));
+    }
+    return skills.answer(method, params);
+  };
+  /** The next request a step scripts; skill discovery answers the rest. */
+  const nextRequest = async (expected: string) => {
+    for (;;) {
+      // await-in-loop: one request at a time, in the order they arrived.
       const message = await take("requests");
+      const answer =
+        message === null || message.method === expected
+          ? null
+          : unscriptedAnswer(message.method, message["params"]);
+      if (answer === null) {
+        return message;
+      }
+      write({ id: message?.id, result: answer });
+    }
+  };
+  /**
+   * Send `outputs` while watching for `turn/interrupt`, which ends the turn
+   * `interrupted`; how the stretch ended.
+   */
+  const playUntilInterrupted = async (
+    outputs: readonly FakeOutput[],
+  ): Promise<"played" | "interrupted" | "closed"> => {
+    const interrupt = nextRequest("turn/interrupt");
+    const watched: { message: Awaited<typeof interrupt> | undefined } = {
+      message: undefined,
+    };
+    // Registered before any race below, so it has run when one settles.
+    const settled = interrupt.then((message) => {
+      watched.message = message;
+      return message;
+    });
+    for (const output of outputs) {
+      if (watched.message !== undefined) {
+        break;
+      }
+      if ("sleep" in output) {
+        // await-in-loop: the outputs are paced one after another.
+        await Promise.race([Bun.sleep(output.sleep), settled]);
+      } else {
+        write({ method: output.notify, params: output.params });
+      }
+    }
+    const message = watched.message;
+    if (message === undefined) {
+      return "played";
+    }
+    if (message === null) {
+      return "closed";
+    }
+    if (message.method !== "turn/interrupt") {
+      log({ unexpected: message.method, wanted: "turn/interrupt" });
+      process.exit(97);
+    }
+    write({ id: message.id, result: {} });
+    write({
+      method: "turn/completed",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("interrupted") },
+    });
+    return "interrupted";
+  };
+  let serverRequestId = 1000;
+  let threadStart: unknown = undefined;
+  /** The client's answer to the last request a step sent. */
+  let lastResponse: Awaited<ReturnType<typeof take>> = null;
+  const queue = [...steps];
+  for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
+    if ("expect" in step) {
+      const message = await nextRequest(step.expect);
       if (message === null) {
         return;
       }
-      if (message.method !== step.expect) {
-        log({ unexpected: message.method, wanted: step.expect });
-        process.exit(97);
+      if (message.method === "thread/start") {
+        threadStart = message["params"];
       }
+      exitUnlessExpected(message, step.expect, log);
       write(
         step.error === undefined
           ? { id: message.id, result: step.result ?? {} }
@@ -764,26 +1875,46 @@ const run = async (
         method: step.request,
         params: step.params,
       });
-      if (step.wait !== false && (await take("responses")) === null) {
-        return;
+      if (step.wait !== false) {
+        lastResponse = await take("responses");
+        if (lastResponse === null) {
+          return;
+        }
       }
     } else if ("awaitResponse" in step) {
-      if ((await take("responses")) === null) {
+      lastResponse = await take("responses");
+      if (lastResponse === null) {
         return;
       }
+    } else if ("byDecision" in step || "writeFile" in step) {
+      queue.unshift(...playLocally(step, lastResponse, log));
     } else if ("ignoreTerm" in step) {
       process.on("SIGTERM", () => {
         log({ ignored: "SIGTERM" });
       });
+    } else if ("spawn" in step) {
+      log({ spawned: await spawnLongLived(step.spawn, step.in) });
     } else if ("raw" in step) {
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
+    } else if ("untilInterrupted" in step) {
+      const played = await playUntilInterrupted(step.untilInterrupted);
+      if (played === "closed") {
+        return;
+      }
+      if (played === "interrupted") {
+        break;
+      }
+    } else if ("terminals" in step) {
+      terminals.splice(0, terminals.length, ...step.terminals);
+    } else if ("browse" in step) {
+      await playBrowse({ threadStart, write, log });
     } else {
       process.exit(step.exit);
     }
   }
-  // A real server exits once its client closes stdin.
+  await answerUntilClosed({ take, write }, unscriptedAnswer);
   await reading;
 };
 
@@ -797,6 +1928,7 @@ if (import.meta.main) {
       pid: process.pid,
       /** What follows the scenario: the launch's own arguments. */
       args: process.argv.slice(3),
+      path: process.env["PATH"],
       /** Where the turn points package managers' caches. */
       packageCache: Object.fromEntries(
         Object.entries(process.env).filter(([name]) =>

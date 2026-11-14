@@ -149,6 +149,12 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   local_runner_limit_reached: "provider_refused",
   local_runner_unavailable: "provider_unavailable",
   local_runner_turn_too_large: "provider_refused",
+  // Output grown past what one delivered run holds is an incomplete answer.
+  turn_too_large: "answer_incomplete",
+  local_runner_not_reached: "provider_unavailable",
+  local_runner_relinked: "provider_unavailable",
+  local_runner_restoring: "provider_unavailable",
+  local_runner_folder_unavailable: "provider_unavailable",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
 
@@ -170,6 +176,11 @@ const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   local_runner_limit_reached: null,
   local_runner_unavailable: null,
   local_runner_turn_too_large: null,
+  turn_too_large: "incomplete_output",
+  local_runner_not_reached: null,
+  local_runner_relinked: null,
+  local_runner_restoring: null,
+  local_runner_folder_unavailable: null,
   unknown: null,
 } as const satisfies Record<
   AIErrorKind,

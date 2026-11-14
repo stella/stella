@@ -51,6 +51,30 @@ export const listTimers = async ({
   });
 
 /**
+ * What a matter's own timer action does: pause the timer counting on it,
+ * else resume one paused on it, else start one.
+ */
+export type MatterTimerAction =
+  | { readonly type: "start" }
+  | { readonly type: "pause"; readonly timer: Timer }
+  | { readonly type: "resume"; readonly timer: Timer };
+
+export const matterTimerAction = (
+  timers: readonly Timer[],
+  matterId: string,
+): MatterTimerAction => {
+  const own = timers.filter((timer) => timer.matterId === matterId);
+  const running = own.find((timer) => timer.state === "running");
+  if (running !== undefined) {
+    return { type: "pause", timer: running };
+  }
+  const paused = own.at(0);
+  return paused === undefined
+    ? { type: "start" }
+    : { type: "resume", timer: paused };
+};
+
+/**
  * Starts a timer, on a matter or none, with what is being worked on. The
  * server pauses whichever timer was running, so only one ever counts.
  */

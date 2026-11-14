@@ -1,16 +1,30 @@
 import { expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
+import { chatThreads } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
-
-import type { ArtefactOrigin } from "./provenance";
 import {
+  ARTEFACT_SOURCE_DECISION_LIMIT,
+  ArtefactProvenanceDecodeError,
+  copyThreadArtefactTitle,
+  decodeRawThreadArtefactProvenance,
+  projectThreadArtefactProvenance,
+  readArtefactOrigin,
+} from "@/api/lib/chat/artefact-provenance";
+import type {
+  ArtefactOrigin,
+  StoredArtefactProvenance,
+} from "@/api/lib/chat/artefact-provenance";
+
+import {
+  ArtefactSourceLimitError,
   authorArtefact,
   generateArtefact,
   projectArtefactText,
-  projectThreadArtefactProvenance,
-  readArtefactOrigin,
   readArtefactText,
+  readUnsourcedArtefact,
 } from "./provenance";
 
 const first = toSafeId<"caseLawDecision">(
@@ -72,6 +86,25 @@ test("authored, recorded empty and legacy values remain readable", async () => {
     }
     expect(readArtefactText({ value: text, origin, projection })).toBe(text);
   }
+});
+
+test("an answer generated from no stored source reads back as generated, and a sourced one does not", async () => {
+  const segments = { segments: [{ type: "lineBreak" }] };
+  const unsourced = await generateArtefact({
+    generator,
+    sources: { decisionIds: [], inputs: [] },
+    generate: () => segments,
+  });
+  expect(readUnsourcedArtefact(unsourced.unwrap())).toBe(segments);
+  expect(readUnsourcedArtefact(authorArtefact(segments))).toBe(segments);
+  const sourced = await generateArtefact({
+    generator,
+    sources: { decisionIds: [first], inputs: [] },
+    generate: () => segments,
+  });
+  expect(() => readUnsourcedArtefact(sourced.unwrap())).toThrow(
+    "A sourced artefact is read through its withdrawal projection",
+  );
 });
 
 test("source unions are invariant under duplicates and input order", async () => {
@@ -144,8 +177,6 @@ test("stored provenance rejects invalid recorded states instead of treating them
 test.each(["direct", "inherited"])(
   "%s source overflow returns a tagged error before dispatch",
   async (input) => {
-    const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-      await import("./provenance");
     let dispatched = false;
     const decisionIds = Array.from(
       { length: ARTEFACT_SOURCE_DECISION_LIMIT + 1 },
@@ -184,8 +215,6 @@ test.each(["direct", "inherited"])(
 );
 
 test("an ignored tool source overflow prevents publishing an artefact", async () => {
-  const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-    await import("./provenance");
   const decisionIds = Array.from(
     { length: ARTEFACT_SOURCE_DECISION_LIMIT },
     (_, index) =>
@@ -223,9 +252,129 @@ test("an ignored tool source overflow prevents publishing an artefact", async ()
   }
 });
 
+test("thread copies retain the title origin without copying other slots", () => {
+  const title = {
+    type: "generated",
+    generator,
+    decisionIds: [first],
+    coverage: "complete",
+  } as const satisfies ArtefactOrigin;
+  const source = {
+    title: text,
+    titleSource: "ai" as const,
+    generationProvenance: {
+      version: 1 as const,
+      slots: {
+        title: { ...title, decisionIds: [...title.decisionIds] },
+        recap: { type: "authored" as const },
+      },
+    },
+  };
+  expect(copyThreadArtefactTitle(source)).toEqual({
+    title: text,
+    titleSource: "ai",
+    generationProvenance: { version: 1, slots: { title } },
+  });
+  const authored = copyThreadArtefactTitle({ ...source, titleSource: "user" });
+  expect(readArtefactOrigin(authored.generationProvenance, "title")).toEqual({
+    type: "authored",
+  });
+  expect(
+    copyThreadArtefactTitle({ ...source, generationProvenance: null })
+      .generationProvenance,
+  ).toBeNull();
+});
+
 test("provenance projection forwards stored rows rather than accepting bare values", () => {
   const row = { generationProvenance: null };
   expect(projectThreadArtefactProvenance(row)).toEqual(row);
   // @ts-expect-error -- only a stored row can be forwarded; a bare value cannot construct provenance.
   projectThreadArtefactProvenance("untrusted");
+});
+
+test("provenance selection constants are immutable and cannot manufacture stored metadata", async () => {
+  const {
+    THREAD_ARTEFACT_PROVENANCE_SELECTION,
+    THREAD_ARTEFACT_PROVENANCE_COLUMNS,
+  } = await import("@/api/lib/chat/artefact-provenance");
+  expect(Object.keys(THREAD_ARTEFACT_PROVENANCE_SELECTION)).toEqual([
+    "generationProvenance",
+  ]);
+  expect(THREAD_ARTEFACT_PROVENANCE_SELECTION.generationProvenance).toBe(
+    chatThreads.generationProvenance,
+  );
+  expect(THREAD_ARTEFACT_PROVENANCE_COLUMNS).toEqual({
+    generationProvenance: true,
+  });
+  expect(Object.isFrozen(THREAD_ARTEFACT_PROVENANCE_SELECTION)).toBe(true);
+  expect(Object.isFrozen(THREAD_ARTEFACT_PROVENANCE_COLUMNS)).toBe(true);
+  const db = createMockDatabase();
+  const selectionUpdate = db
+    .update(chatThreads)
+    .set({ ...THREAD_ARTEFACT_PROVENANCE_SELECTION })
+    .where(sql`false`)
+    .toSQL();
+  expect(selectionUpdate.sql).toContain(
+    '"generation_provenance" = "chat_threads"."generation_provenance"',
+  );
+  expect(selectionUpdate.sql).not.toMatch(/"generation_provenance" = \$/u);
+  db.update(chatThreads)
+    // @ts-expect-error -- relational column selection cannot be persisted as provenance.
+    .set({ ...THREAD_ARTEFACT_PROVENANCE_COLUMNS })
+    .where(sql`false`)
+    .toSQL();
+});
+
+test("raw provenance decoding accepts only null or validated stored records", () => {
+  const record = {
+    version: 1,
+    slots: {
+      title: {
+        type: "generated",
+        generator,
+        decisionIds: [first],
+        coverage: "complete",
+      },
+      recap: { type: "authored" },
+    },
+  } as const satisfies StoredArtefactProvenance;
+  for (const value of [null, record]) {
+    const decoded = decodeRawThreadArtefactProvenance({
+      generation_provenance: value,
+    });
+    if (decoded.isErr()) {
+      throw decoded.error;
+    }
+    expect(decoded.value).toEqual({ generationProvenance: value });
+  }
+});
+
+test("raw provenance decoding rejects absent fields and malformed metadata with a typed error", async () => {
+  for (const value of [
+    undefined,
+    {},
+    [],
+    1,
+    true,
+    "null",
+    "{invalid json",
+    '{"version":1,"slots":{}}',
+    { version: 2, slots: {} },
+    { version: 1, slots: { title: {} } },
+    { version: 1, slots: [] },
+  ]) {
+    const decoded = decodeRawThreadArtefactProvenance({
+      generation_provenance: value,
+    });
+    expect(decoded.isErr(), JSON.stringify(value)).toBe(true);
+    if (decoded.isErr()) {
+      expect(decoded.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+    }
+  }
+  // @ts-expect-error -- raw query consumers must select the required database column.
+  const missing = decodeRawThreadArtefactProvenance({});
+  expect(missing.isErr()).toBe(true);
+  if (missing.isErr()) {
+    expect(missing.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+  }
 });

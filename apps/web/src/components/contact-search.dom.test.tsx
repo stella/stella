@@ -371,7 +371,7 @@ test("picker pending read hides creation and only successful absence is empty", 
     pending.resolve(Response.json({ items: [], nextCursor: null })),
   );
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(2),
+    expect(testing.screen.getAllByRole("option").length).toBe(2),
   );
 });
 
@@ -417,7 +417,7 @@ test("picker successful empty search hides creation after failed refresh", async
   testing.act(() => input.focus());
   await typeSearch(input);
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(2),
+    expect(testing.screen.getAllByRole("option").length).toBe(2),
   );
   failing = true;
   await testing.act(async () => {
@@ -449,7 +449,7 @@ test("client picker lists recent clients before typing and searches once typed",
   testing.act(() => input.focus());
   testing.fireEvent.keyDown(input, { key: "ArrowDown" });
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByRole("option")).toHaveLength(2),
+    expect(testing.screen.getAllByRole("option").length).toBe(2),
   );
   expect(
     testing.screen.getByText(messages.workspaces.parties.recentClients),
