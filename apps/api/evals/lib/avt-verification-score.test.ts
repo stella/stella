@@ -5,7 +5,11 @@ import sample from "../fixtures/avt-verification-sample.json" with { type: "json
 import { matchLabelledSpan } from "./avt-verification-match";
 import { scoreOutcomes } from "./avt-verification-score";
 import type { ClaimOutcome, PredictedGrade } from "./avt-verification-score";
-import { labelledSetSchema, labelProblems } from "./avt-verification-set";
+import {
+  labelledSetSchema,
+  labelProblems,
+  repeatedSetIds,
+} from "./avt-verification-set";
 import type { LabelledSet } from "./avt-verification-set";
 
 const set: LabelledSet = v.parse(labelledSetSchema, sample);
@@ -177,6 +181,15 @@ describe("a set's labels", () => {
       "harbour-supply/c1: names unknown fact F99",
       "harbour-supply/c2: quote is not in its paragraph",
       "harbour-supply/c-conflict: a record conflict, and only one, names its two facts",
+    ]);
+  });
+
+  test("refuses a case id used twice in a set and a set id used twice", () => {
+    expect(labelProblems({ ...set, cases: [item, item] })).toEqual([
+      "harbour-supply: case id repeats",
+    ]);
+    expect(repeatedSetIds([set, { ...set, cases: [item] }, set])).toEqual([
+      set.id,
     ]);
   });
 });

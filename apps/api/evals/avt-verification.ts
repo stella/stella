@@ -88,7 +88,11 @@ import type {
   ClaimOutcome,
   PredictedGrade,
 } from "./lib/avt-verification-score";
-import { labelledSetSchema, labelProblems } from "./lib/avt-verification-set";
+import {
+  labelledSetSchema,
+  labelProblems,
+  repeatedSetIds,
+} from "./lib/avt-verification-set";
 import type { LabelledCase, LabelledSet } from "./lib/avt-verification-set";
 import { resolveModelTargets } from "./lib/org-model-targets";
 
@@ -108,6 +112,25 @@ const loadSet = async (file: string): Promise<LoadedSet> => {
     );
   }
   return { set: parsed.output, directory: path.dirname(path.resolve(file)) };
+};
+
+/**
+ * Every set file, refused when one has label problems or two of them share
+ * a set id: answers are matched to labels by set, case and claim id.
+ */
+const loadSets = async (files: readonly string[]): Promise<LoadedSet[]> => {
+  const loaded = await Promise.all(files.map(loadSet));
+  for (const { set } of loaded) {
+    const problems = labelProblems(set);
+    if (problems.length > 0) {
+      panic(`${set.id} has label problems:\n${problems.join("\n")}`);
+    }
+  }
+  const repeated = repeatedSetIds(loaded.map(({ set }) => set));
+  if (repeated.length > 0) {
+    panic(`set ids used by more than one file: ${repeated.join(", ")}`);
+  }
+  return loaded;
 };
 
 /** Schema, label ids and every quote's place in the text a run reads. */
@@ -732,17 +755,13 @@ type RunRecord = {
 const CASE_CONCURRENCY = 3;
 
 const run = async (options: RunOptions): Promise<void> => {
-  const loaded = await Promise.all(options.sets.map(loadSet));
+  const loaded = await loadSets(options.sets);
   const prepared: {
     setId: string;
     item: LabelledCase;
     document: CaseDocument;
   }[] = [];
   for (const { set, directory } of loaded) {
-    const problems = labelProblems(set);
-    if (problems.length > 0) {
-      panic(`${set.id} has label problems:\n${problems.join("\n")}`);
-    }
     for (const item of set.cases) {
       if (options.caseFilter !== null && item.id !== options.caseFilter) {
         continue;
@@ -1017,8 +1036,9 @@ const savedResultsSchema = v.object({
 /**
  * A saved run scored again against the sets' current labels, with no model
  * call: a label corrected after a run changes the score, not the answers.
- * Claims are matched by set, case and id; a label no longer in the sets
- * drops out.
+ * Claims are matched by set, case and id; a label or case no longer in the
+ * sets drops out. The answers stand for the text and facts they were given:
+ * after a document or a fact changes, run again instead.
  */
 const rescore = async (
   resultsFile: string,
@@ -1029,8 +1049,10 @@ const rescore = async (
     JSON.parse(await readFile(resultsFile, "utf-8")),
   );
   const labels = new Map<string, LabelledCase["claims"][number]>();
-  for (const { set } of await Promise.all(setFiles.map(loadSet))) {
+  const caseKeys = new Set<string>();
+  for (const { set } of await loadSets(setFiles)) {
     for (const item of set.cases) {
+      caseKeys.add(`${set.id}/${item.id}`);
       for (const claim of item.claims) {
         labels.set(`${set.id}/${item.id}/${claim.id}`, claim);
       }
@@ -1038,6 +1060,10 @@ const rescore = async (
   }
   const records = saved.records.map((record): RunRecord => ({
     ...record,
+    // Case totals (extraction, latency) cover only the cases still scored.
+    cases: record.cases.filter((item) =>
+      caseKeys.has(`${item.setId}/${item.caseId}`),
+    ),
     outcomes: record.outcomes.flatMap((outcome): ClaimOutcome[] => {
       const label = labels.get(
         `${outcome.setId}/${outcome.caseId}/${outcome.label.id}`,

@@ -128,10 +128,34 @@ export const labelledSetSchema = v.strictObject({
 });
 export type LabelledSet = v.InferOutput<typeof labelledSetSchema>;
 
-/** Label ids that do not resolve, or repeat, in a case: a set with any is
+/** Ids that occur more than once in `ids`, each named once. */
+const repeatedIds = (ids: readonly string[]): string[] => {
+  const seen = new Set<string>();
+  const repeated = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) {
+      repeated.add(id);
+    }
+    seen.add(id);
+  }
+  return [...repeated];
+};
+
+/**
+ * Set ids that more than one loaded set file uses. Saved answers are
+ * matched to labels by set, case and claim id, so a repeated id would let
+ * one set's labels replace another's.
+ */
+export const repeatedSetIds = (sets: readonly LabelledSet[]): string[] =>
+  repeatedIds(sets.map(({ id }) => id));
+
+/** Label ids that do not resolve, or repeat, in a set: a set with any is
  *  refused before a model is called. */
-export const labelProblems = (set: LabelledSet): string[] =>
-  set.cases.flatMap((item) => {
+export const labelProblems = (set: LabelledSet): string[] => [
+  ...repeatedIds(set.cases.map(({ id }) => id)).map(
+    (id) => `${id}: case id repeats`,
+  ),
+  ...set.cases.flatMap((item) => {
     const problems: string[] = [];
     const factIds = new Set<string>();
     for (const fact of item.facts) {
@@ -176,4 +200,5 @@ export const labelProblems = (set: LabelledSet): string[] =>
       }
     }
     return problems;
-  });
+  }),
+];
