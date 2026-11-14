@@ -11,4 +11,4 @@ export const PREVIOUS_FALLBACK_DECISION_INDEX =
 
 /** The migration whose fallback columns the online fallback indexes cover. */
 export const FALLBACK_DECISION_IDENTITY_MIGRATION =
-  "20261108001000_case_law_fallback_identity";
+  "20261114120000_case_law_fallback_identity";
