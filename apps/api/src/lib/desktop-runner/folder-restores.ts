@@ -202,7 +202,7 @@ const readOwnedTurn = async (
   { owner, threadId, turnId }: TurnOptions,
 ) => {
   const [turn] = await db
-    .select({ id: chatTurns.id, createdAt: chatTurns.createdAt })
+    .select({ id: chatTurns.id })
     .from(chatTurns)
     .where(
       and(
@@ -235,11 +235,7 @@ export const readTurnFolderRestore = async (
   const run = await readTurnRun(db, options);
   const restore = await readTurnRestore(db, options);
   // As the undo itself decides: only the thread's newest turn is undone.
-  const newest = !(await readNewerTurn(db, {
-    owner: options.owner,
-    threadId: options.threadId,
-    turn,
-  }));
+  const newest = !(await readNewerTurn(db, options));
   return {
     undoable: newest && run?.state === "finished" && run.tookCheckpoint,
     restore: restore === null ? null : viewOf(restore, options.now),
@@ -296,14 +292,14 @@ const readThreadBusy = async (
   return run !== undefined;
 };
 
-/** A later turn of the owner's in the thread. */
+/**
+ * A later turn of the owner's in the thread. The turn's start is read by id
+ * inside the comparison: it holds microseconds, which a time read out and
+ * sent back would drop, and the turn would then count as later than itself.
+ */
 const readNewerTurn = async (
   db: Pick<DesktopRunnerDb, "select">,
-  {
-    owner,
-    threadId,
-    turn,
-  }: ThreadOf & { turn: { id: string; createdAt: Date } },
+  { owner, threadId, turnId }: TurnOptions,
 ) => {
   const [newer] = await db
     .select({ id: chatTurns.id })
@@ -313,7 +309,7 @@ const readNewerTurn = async (
         eq(chatTurns.organizationId, owner.organizationId),
         eq(chatTurns.userId, owner.userId),
         eq(chatTurns.threadId, threadId),
-        sql`(${chatTurns.createdAt}, ${chatTurns.id}) > (${turn.createdAt}::timestamptz, ${turn.id}::uuid)`,
+        sql`(${chatTurns.createdAt}, ${chatTurns.id}) > (select t.created_at, t.id from chat_turns t where t.id = ${turnId})`,
       ),
     )
     .limit(1);
@@ -365,7 +361,7 @@ export const requestFolderRestore = async (
       ) {
         return { type: "existing", restore: viewOf(existing, now) };
       }
-      if (await readNewerTurn(tx, { owner, threadId, turn })) {
+      if (await readNewerTurn(tx, options)) {
         return { type: "refused", reason: "not_newest" };
       }
       if (await readThreadBusy(tx, options)) {

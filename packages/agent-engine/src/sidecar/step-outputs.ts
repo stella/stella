@@ -4,9 +4,10 @@ import { mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   chatLocalRunCallId,
   chatLocalRunImageType,
+  type ChatLocalRunStepKind,
 } from "@stll/api-contract/chat-local-run-step-output";
 import { sha256Hex } from "@stll/sha256/node";
 
@@ -22,11 +23,12 @@ import {
  * never derived from the folder the run works in, which may be one the
  * member linked: `<stepOutputDir>/<runId>/<stepKey>`, `stepKey` being the
  * SHA-256 hex of the step's chat call id. A file is its header line,
- * `{"bytes":<n>}` with how many bytes the step produced, then at most
- * `CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES` of them: a command's output, a diff
- * or a subagent's conversation as UTF-8 text, a viewed image as its own
- * bytes. The desktop reads the same layout to serve a step to a page on this
- * computer, whatever the bytes are.
+ * `{"bytes":<n>}` with how many bytes the step produced, then at most its
+ * kind's share of them (`CHAT_LOCAL_RUN_STEP_MAX_BYTES`): a command's output,
+ * a diff or a subagent's conversation as UTF-8 text, a viewed image as its
+ * own bytes. The desktop reads the same layout to serve a step to a page on
+ * this computer, whatever the bytes are, so it bounds an answer by the
+ * largest share only: no file written here may hold more than its own.
  */
 
 const PRIVATE_FILE_MODE = 0o600;
@@ -48,8 +50,15 @@ export const stepOutputPath = ({
     sha256Hex(chatLocalRunCallId(runId, toolCallId, sha256Hex)),
   );
 
-/** What is kept of a step: how many bytes it produced, and those kept. */
-type KeptStepOutput = { totalBytes: number; kept: Uint8Array };
+/**
+ * What is kept of a step: which kind it is, how many bytes it produced, and
+ * those kept.
+ */
+type KeptStepOutput = {
+  kind: ChatLocalRunStepKind;
+  totalBytes: number;
+  kept: Uint8Array;
+};
 
 /**
  * What is kept of a step's text: a whole-character prefix within the cap.
@@ -61,8 +70,9 @@ export const keptStepText = (
 ): KeptStepOutput => {
   const bytes = new TextEncoder().encode(text);
   return {
+    kind: "text",
     totalBytes: bytes.length + droppedBytes,
-    kept: utf8Prefix(bytes, CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES),
+    kept: utf8Prefix(bytes, CHAT_LOCAL_RUN_STEP_MAX_BYTES.text),
   };
 };
 
@@ -92,8 +102,8 @@ export const keptStepImage = async (
       return null;
     }
     const { size } = opened;
-    if (size > CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES) {
-      return { totalBytes: size, kept: new Uint8Array() };
+    if (size > CHAT_LOCAL_RUN_STEP_MAX_BYTES.image) {
+      return { kind: "image", totalBytes: size, kept: new Uint8Array() };
     }
     // A file may grow after its size is read: the buffer bounds what is
     // taken either way.
@@ -114,14 +124,21 @@ export const keptStepImage = async (
     const kept = buffer.subarray(0, length);
     return chatLocalRunImageType(kept) === null
       ? null
-      : { totalBytes: length, kept };
+      : { kind: "image", totalBytes: length, kept };
   } finally {
     await handle.close();
   }
 };
 
-/** The file a step is kept as: its header line, then its kept bytes. */
-export const stepOutputFile = ({ totalBytes, kept }: KeptStepOutput) => {
+/**
+ * The file a step is kept as: its header line, then its kept bytes. Every
+ * kept file is made here, and the desktop serves one without knowing its
+ * kind, so more than the kind's cap is refused here, whatever made it.
+ */
+export const stepOutputFile = ({ kind, totalBytes, kept }: KeptStepOutput) => {
+  if (kept.length > CHAT_LOCAL_RUN_STEP_MAX_BYTES[kind]) {
+    return panic("A kept step output is past its kind's cap");
+  }
   const header = new TextEncoder().encode(
     `${JSON.stringify({ bytes: totalBytes })}\n`,
   );

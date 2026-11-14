@@ -213,6 +213,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
     cache_dir: "/data/agent-package-cache".to_owned(),
+    unreadable_paths: vec!["/data/runs".to_owned(), "/data".to_owned()],
     step_output_dir: "/data/runs/1.step-outputs".to_owned(),
     model: model.to_owned(),
     reasoning_effort: None,

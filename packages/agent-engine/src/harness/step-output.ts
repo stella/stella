@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import {
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   type ChatLocalRunConversationEntry,
   chatLocalRunConversationText,
 } from "@stll/api-contract/chat-local-run-step-output";
@@ -88,7 +88,7 @@ const utf8Length = (text: string) => new TextEncoder().encode(text).length;
  * and what it reported: a share of what a step keeps each, as the line the
  * file holds for it, so both always fit and neither is the line the cap cuts.
  */
-const CONVERSATION_END_MAX_BYTES = CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4;
+const CONVERSATION_END_MAX_BYTES = CHAT_LOCAL_RUN_STEP_MAX_BYTES.text / 4;
 
 type ConversationEnd = {
   entries: ChatLocalRunConversationEntry[];
@@ -134,7 +134,7 @@ const conversationEnd = (
 /**
  * What a subagent was told, wrote and reported, held while it works so its
  * step can keep it once it ends. Bounded: past the most a step keeps
- * (`CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES`), what it writes is counted and
+ * (`CHAT_LOCAL_RUN_STEP_MAX_BYTES.text`), what it writes is counted and
  * not held, so a long-running subagent holds no more than its step may keep.
  */
 export class SubagentConversation {
@@ -148,7 +148,7 @@ export class SubagentConversation {
       return;
     }
     const bytes = utf8Length(text);
-    if (this.heldBytes + bytes > CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES) {
+    if (this.heldBytes + bytes > CHAT_LOCAL_RUN_STEP_MAX_BYTES.text) {
       this.droppedBytes += bytes;
       return;
     }

@@ -362,6 +362,7 @@ const startRun = (
     attachments: [],
     skillFolders: [],
     toolPath: [],
+    unreadablePaths: [],
     ...launch,
     configDir,
     launch: PLAIN_LAUNCH,
@@ -1735,6 +1736,7 @@ describe("harness holder over its socket", () => {
       attachments: [],
       skillFolders: [],
       toolPath: [],
+      unreadablePaths: [],
       harnessSessionId: null,
       policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
@@ -1826,6 +1828,7 @@ describe("harness holder over its socket", () => {
         attachments: [],
         skillFolders: [],
         toolPath: [],
+        unreadablePaths: [],
         harnessSessionId: null,
         policy: { network: "open", fs: "workspace", approvals: "ask" },
         mcp: {

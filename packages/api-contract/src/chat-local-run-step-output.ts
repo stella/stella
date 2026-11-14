@@ -60,11 +60,20 @@ export const chatLocalRunOfCall = (callId: string): string | null => {
 };
 
 /**
- * The most of one step's output the computer keeps, in bytes. Past it, the
- * rest of a text is left out and the step says how much there was; an image
- * past it is not kept at all, since part of one shows nothing.
+ * The most of one step's output the computer keeps, in bytes, by what the
+ * output is. Past it, the rest of a text (a command's output, a diff, a
+ * subagent's conversation) is left out and the step says how much there
+ * was; an image past it is not kept at all, since part of one shows
+ * nothing, and its cap is the larger so that an ordinary screenshot is kept.
+ * A kept file does not say which kind it holds, so the desktop bounds every
+ * answer by the largest of these; each kind's own cap is held where a step is
+ * written and where a page reads it.
  */
-export const CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES = 1024 * 1024;
+export const CHAT_LOCAL_RUN_STEP_MAX_BYTES = {
+  text: 1024 * 1024,
+  image: 10 * 1024 * 1024,
+} as const;
+export type ChatLocalRunStepKind = keyof typeof CHAT_LOCAL_RUN_STEP_MAX_BYTES;
 
 /**
  * The kinds of image a viewed image is kept and shown as. A vector image is
