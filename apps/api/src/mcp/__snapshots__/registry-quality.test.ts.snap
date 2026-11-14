@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -246,7 +246,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 12450,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+          "description": "Prior search_case_law cursor; same queries/order. Tracks each query's position, not prior output: overlapping queries can repeat decisions across pages. Key results by decisionId."
         },
         "continuation_token": {
           "type": "string",
@@ -281,7 +281,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Exact publisher category from metadata.category, for example \\"A\\" or \\"B\\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Exact metadata.category, e.g. \\"A\\"/\\"B\\"; does not imply Sbírka publication. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -314,7 +314,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "has_legal_sentence": {
           "type": "boolean",
-          "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
+          "description": "True: nonempty stored legal sentence (právní věta); false: none. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable."
         },
         "country": {
           "type": "string",
@@ -393,11 +393,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Order; default 'relevance'. relevance blends text match, citation authority and court rank; newest sorts by decision date, undated last. Docket/ECLI queries use identity lookup and ignore sort."
         },
         "strict": {
           "type": "boolean",
-          "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
+          "description": "Require every query word, including function words. Default off: questions include words absent from judgments; \`searches[].queryUsed\` reports required words. Set true when every word matters."
         }
       }
     }
@@ -412,7 +412,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
+    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -427,7 +427,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Corpus country; omit for all jurisdictions, including in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
@@ -498,7 +498,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order; \`page\`: \`max_chars\` window. Returns page/pageCount, textSource 'ast'/'fulltext'. Pass textVersion as text_version; versionChanged flags text changes. \`full: true\` returns whole text up to 200000 chars. \`query\`: matches/neighbours/deep links; matches.resumeAfter continues them. Page 1: reader/publisher URLs, metadata, textFields, citation summaries (top citers may be bounded by 2048 edges). All citations: read_case_law_citations. One id adds outline. \`include\` selects fields; []: text/identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -521,13 +521,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "minItems": 1,
           "maxItems": 20,
-          "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
+          "description": "Decisions, max 20/call; each id answered independently, including unknown ids."
         },
         "max_chars": {
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page chars per decision: 1–8000. Batch cap 40000: equal shares; unused chars finish whole decisions in input order; still-cut decisions keep equal shares. Omitted: share 8000 chars by the same rule. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -536,7 +536,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "page": {
           "type": "integer",
           "minimum": 1,
-          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page N: Nth text window, default 1; applies to every batch decision. Keep max_chars fixed while paging. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -544,12 +544,12 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
+          "description": "true: whole text, cap 200000 chars shared per batch; unused shares finish whole decisions in input order. Longer text continues on page 2. No max_chars."
         },
         "text_version": {
           "type": "string",
           "maxLength": 24,
-          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+          "description": "Prior textVersion; changed text returns the requested current page with versionChanged. Single decision only."
         },
         "preferred_language": {
           "type": "string",
@@ -562,7 +562,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",
@@ -589,7 +589,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             ],
             "type": "string"
           },
-          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Fields: details (court/date/ECLI/url/source_url), metadata (other publisher fields), textFields (published abstract/headnote/legalSentence/summary), source (publisher name), citations (summary), outline (single decision). Omit: all on page 1, none later or with query. []: text/identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
@@ -607,7 +607,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations/citing passages. \`cited_by\`: citers; \`cites\`: citations. \`doctrine\` AND \`polarity\` filters. \`polarity\`: 'unclassified': unread; 'mixed': mentions disagreed. \`doctrine\`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\`: verbatim evidence when text is available. \`passage.text\` is at most 1200 chars, cut when \`passage.truncated\`; \`passage.mention\`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -633,7 +633,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "cited_by"
           ],
           "type": "string",
-          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+          "description": "cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments."
         },
         "doctrine": {
           "enum": [
@@ -1030,6 +1030,45 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
+    "name": "verify_quote",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns occurrenceCount and the first 20 occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= 0.75; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote: max 4000 chars, 128 word/punctuation tokens, 16 nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics."
+        }
+      }
+    }
+  },
+  {
     "name": "open_case_law_decision",
     "scope": "stella:read",
     "access": "read",
@@ -1039,7 +1078,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
+    "description": "Open a decision the user asks to read/open: metadata, outline, small target window. paragraphs uses court-printed numbers (48 or 48-53); url opens that range in the web reader. Once per answer at most.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -1709,7 +1748,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -1727,7 +1766,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -1740,7 +1779,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions."
+          "description": "Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law."
         }
       }
     }
@@ -7758,7 +7797,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -7814,7 +7853,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 12450,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+          "description": "Prior search_case_law cursor; same queries/order. Tracks each query's position, not prior output: overlapping queries can repeat decisions across pages. Key results by decisionId."
         },
         "continuation_token": {
           "type": "string",
@@ -7849,7 +7888,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Exact publisher category from metadata.category, for example \\"A\\" or \\"B\\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Exact metadata.category, e.g. \\"A\\"/\\"B\\"; does not imply Sbírka publication. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -7882,7 +7921,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "has_legal_sentence": {
           "type": "boolean",
-          "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
+          "description": "True: nonempty stored legal sentence (právní věta); false: none. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable."
         },
         "country": {
           "type": "string",
@@ -7961,11 +8000,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Order; default 'relevance'. relevance blends text match, citation authority and court rank; newest sorts by decision date, undated last. Docket/ECLI queries use identity lookup and ignore sort."
         },
         "strict": {
           "type": "boolean",
-          "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
+          "description": "Require every query word, including function words. Default off: questions include words absent from judgments; \`searches[].queryUsed\` reports required words. Set true when every word matters."
         }
       }
     }
@@ -7980,7 +8019,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
+    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -7995,7 +8034,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Corpus country; omit for all jurisdictions, including in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
@@ -8066,7 +8105,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order; \`page\`: \`max_chars\` window. Returns page/pageCount, textSource 'ast'/'fulltext'. Pass textVersion as text_version; versionChanged flags text changes. \`full: true\` returns whole text up to 200000 chars. \`query\`: matches/neighbours/deep links; matches.resumeAfter continues them. Page 1: reader/publisher URLs, metadata, textFields, citation summaries (top citers may be bounded by 2048 edges). All citations: read_case_law_citations. One id adds outline. \`include\` selects fields; []: text/identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -8089,13 +8128,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 20,
-          "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
+          "description": "Decisions, max 20/call; each id answered independently, including unknown ids."
         },
         "max_chars": {
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page chars per decision: 1–8000. Batch cap 40000: equal shares; unused chars finish whole decisions in input order; still-cut decisions keep equal shares. Omitted: share 8000 chars by the same rule. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -8104,7 +8143,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "page": {
           "type": "integer",
           "minimum": 1,
-          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page N: Nth text window, default 1; applies to every batch decision. Keep max_chars fixed while paging. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -8112,12 +8151,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
+          "description": "true: whole text, cap 200000 chars shared per batch; unused shares finish whole decisions in input order. Longer text continues on page 2. No max_chars."
         },
         "text_version": {
           "type": "string",
           "maxLength": 24,
-          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+          "description": "Prior textVersion; changed text returns the requested current page with versionChanged. Single decision only."
         },
         "preferred_language": {
           "type": "string",
@@ -8130,7 +8169,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",
@@ -8157,7 +8196,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             ],
             "type": "string"
           },
-          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Fields: details (court/date/ECLI/url/source_url), metadata (other publisher fields), textFields (published abstract/headnote/legalSentence/summary), source (publisher name), citations (summary), outline (single decision). Omit: all on page 1, none later or with query. []: text/identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
@@ -8175,7 +8214,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations/citing passages. \`cited_by\`: citers; \`cites\`: citations. \`doctrine\` AND \`polarity\` filters. \`polarity\`: 'unclassified': unread; 'mixed': mentions disagreed. \`doctrine\`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\`: verbatim evidence when text is available. \`passage.text\` is at most 1200 chars, cut when \`passage.truncated\`; \`passage.mention\`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -8201,7 +8240,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "cited_by"
           ],
           "type": "string",
-          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+          "description": "cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments."
         },
         "doctrine": {
           "enum": [
@@ -8598,6 +8637,45 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "verify_quote",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns occurrenceCount and the first 20 occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= 0.75; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote: max 4000 chars, 128 word/punctuation tokens, 16 nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics."
+        }
+      }
+    }
+  },
+  {
     "name": "open_case_law_decision",
     "scope": "stella:read",
     "access": "read",
@@ -8607,7 +8685,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
+    "description": "Open a decision the user asks to read/open: metadata, outline, small target window. paragraphs uses court-printed numbers (48 or 48-53); url opens that range in the web reader. Once per answer at most.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -9277,7 +9355,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -9295,7 +9373,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -9308,7 +9386,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions."
+          "description": "Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law."
         }
       }
     }
@@ -16062,7 +16140,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16118,7 +16196,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 12450,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+          "description": "Prior search_case_law cursor; same queries/order. Tracks each query's position, not prior output: overlapping queries can repeat decisions across pages. Key results by decisionId."
         },
         "continuation_token": {
           "type": "string",
@@ -16153,7 +16231,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Exact publisher category from metadata.category, for example \\"A\\" or \\"B\\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Exact metadata.category, e.g. \\"A\\"/\\"B\\"; does not imply Sbírka publication. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -16186,7 +16264,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "has_legal_sentence": {
           "type": "boolean",
-          "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
+          "description": "True: nonempty stored legal sentence (právní věta); false: none. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable."
         },
         "country": {
           "type": "string",
@@ -16265,11 +16343,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Order; default 'relevance'. relevance blends text match, citation authority and court rank; newest sorts by decision date, undated last. Docket/ECLI queries use identity lookup and ignore sort."
         },
         "strict": {
           "type": "boolean",
-          "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
+          "description": "Require every query word, including function words. Default off: questions include words absent from judgments; \`searches[].queryUsed\` reports required words. Set true when every word matters."
         }
       }
     }
@@ -16284,7 +16362,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
+    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -16299,7 +16377,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Corpus country; omit for all jurisdictions, including in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
@@ -16370,7 +16448,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order; \`page\`: \`max_chars\` window. Returns page/pageCount, textSource 'ast'/'fulltext'. Pass textVersion as text_version; versionChanged flags text changes. \`full: true\` returns whole text up to 200000 chars. \`query\`: matches/neighbours/deep links; matches.resumeAfter continues them. Page 1: reader/publisher URLs, metadata, textFields, citation summaries (top citers may be bounded by 2048 edges). All citations: read_case_law_citations. One id adds outline. \`include\` selects fields; []: text/identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -16393,13 +16471,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 20,
-          "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
+          "description": "Decisions, max 20/call; each id answered independently, including unknown ids."
         },
         "max_chars": {
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page chars per decision: 1–8000. Batch cap 40000: equal shares; unused chars finish whole decisions in input order; still-cut decisions keep equal shares. Omitted: share 8000 chars by the same rule. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -16408,7 +16486,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "page": {
           "type": "integer",
           "minimum": 1,
-          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page N: Nth text window, default 1; applies to every batch decision. Keep max_chars fixed while paging. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -16416,12 +16494,12 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
+          "description": "true: whole text, cap 200000 chars shared per batch; unused shares finish whole decisions in input order. Longer text continues on page 2. No max_chars."
         },
         "text_version": {
           "type": "string",
           "maxLength": 24,
-          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+          "description": "Prior textVersion; changed text returns the requested current page with versionChanged. Single decision only."
         },
         "preferred_language": {
           "type": "string",
@@ -16434,7 +16512,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",
@@ -16461,7 +16539,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             ],
             "type": "string"
           },
-          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Fields: details (court/date/ECLI/url/source_url), metadata (other publisher fields), textFields (published abstract/headnote/legalSentence/summary), source (publisher name), citations (summary), outline (single decision). Omit: all on page 1, none later or with query. []: text/identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
@@ -16479,7 +16557,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations/citing passages. \`cited_by\`: citers; \`cites\`: citations. \`doctrine\` AND \`polarity\` filters. \`polarity\`: 'unclassified': unread; 'mixed': mentions disagreed. \`doctrine\`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\`: verbatim evidence when text is available. \`passage.text\` is at most 1200 chars, cut when \`passage.truncated\`; \`passage.mention\`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -16505,7 +16583,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "cited_by"
           ],
           "type": "string",
-          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+          "description": "cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments."
         },
         "doctrine": {
           "enum": [
@@ -16592,6 +16670,45 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "verify_quote",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns occurrenceCount and the first 20 occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= 0.75; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote: max 4000 chars, 128 word/punctuation tokens, 16 nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics."
+        }
+      }
+    }
+  },
+  {
     "name": "open_case_law_decision",
     "scope": "stella:read_anonymized",
     "access": "read",
@@ -16601,7 +16718,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
+    "description": "Open a decision the user asks to read/open: metadata, outline, small target window. paragraphs uses court-printed numbers (48 or 48-53); url opens that range in the web reader. Once per answer at most.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -17271,7 +17388,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -17289,7 +17406,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -17302,7 +17419,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions."
+          "description": "Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law."
         }
       }
     }
@@ -18394,7 +18511,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -18450,7 +18567,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 12450,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+          "description": "Prior search_case_law cursor; same queries/order. Tracks each query's position, not prior output: overlapping queries can repeat decisions across pages. Key results by decisionId."
         },
         "continuation_token": {
           "type": "string",
@@ -18485,7 +18602,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Exact publisher category from metadata.category, for example \\"A\\" or \\"B\\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Exact metadata.category, e.g. \\"A\\"/\\"B\\"; does not imply Sbírka publication. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -18518,7 +18635,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "has_legal_sentence": {
           "type": "boolean",
-          "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
+          "description": "True: nonempty stored legal sentence (právní věta); false: none. Filters live rows in the bounded candidate scan; corpus-index facets/total unavailable."
         },
         "country": {
           "type": "string",
@@ -18597,11 +18714,11 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Order; default 'relevance'. relevance blends text match, citation authority and court rank; newest sorts by decision date, undated last. Docket/ECLI queries use identity lookup and ignore sort."
         },
         "strict": {
           "type": "boolean",
-          "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
+          "description": "Require every query word, including function words. Default off: questions include words absent from judgments; \`searches[].queryUsed\` reports required words. Set true when every word matters."
         }
       }
     }
@@ -18616,7 +18733,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before declaring a decision missing. A listed country not yet admitted, without coverage, returns status unavailable and reason.",
+    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -18631,7 +18748,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Corpus country; omit for all jurisdictions, including those in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Corpus country; omit for all jurisdictions, including in preparation. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "minLength": 1,
           "x-stella-agent-input": {
             "kind": "country",
@@ -18665,7 +18782,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order; \`page\`: \`max_chars\` window. Returns page/pageCount, textSource 'ast'/'fulltext'. Pass textVersion as text_version; versionChanged flags text changes. \`full: true\` returns whole text up to 200000 chars. \`query\`: matches/neighbours/deep links; matches.resumeAfter continues them. Page 1: reader/publisher URLs, metadata, textFields, citation summaries (top citers may be bounded by 2048 edges). All citations: read_case_law_citations. One id adds outline. \`include\` selects fields; []: text/identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -18688,13 +18805,13 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 20,
-          "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
+          "description": "Decisions, max 20/call; each id answered independently, including unknown ids."
         },
         "max_chars": {
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page chars per decision: 1–8000. Batch cap 40000: equal shares; unused chars finish whole decisions in input order; still-cut decisions keep equal shares. Omitted: share 8000 chars by the same rule. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -18703,7 +18820,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "page": {
           "type": "integer",
           "minimum": 1,
-          "description": "Which page of the text to return, from 1 (the default): page N is the Nth window of the page size. Applies to every decision of a batch. Keep max_chars the same while paging. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page N: Nth text window, default 1; applies to every batch decision. Keep max_chars fixed while paging. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -18711,12 +18828,12 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
+          "description": "true: whole text, cap 200000 chars shared per batch; unused shares finish whole decisions in input order. Longer text continues on page 2. No max_chars."
         },
         "text_version": {
           "type": "string",
           "maxLength": 24,
-          "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+          "description": "Prior textVersion; changed text returns the requested current page with versionChanged. Single decision only."
         },
         "preferred_language": {
           "type": "string",
@@ -18729,7 +18846,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",
@@ -18756,7 +18873,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             ],
             "type": "string"
           },
-          "description": "Optional fields: details (court, date, ECLI, url, source_url), metadata (publisher fields not stated elsewhere), textFields (published abstract, headnote, legalSentence, summary), source (publisher name), citations (summary), outline (single decision only). Omit for all on page 1 and none on later pages or with query. [] returns text and identity only. Use a JSON array of strings; a single string is read as a one-item list.",
+          "description": "Fields: details (court/date/ECLI/url/source_url), metadata (other publisher fields), textFields (published abstract/headnote/legalSentence/summary), source (publisher name), citations (summary), outline (single decision). Omit: all on page 1, none later or with query. []: text/identity only. Use a JSON array of strings; a single string is read as a one-item list.",
           "x-stella-agent-input": {
             "kind": "string-list"
           }
@@ -18774,7 +18891,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations/citing passages. \`cited_by\`: citers; \`cites\`: citations. \`doctrine\` AND \`polarity\` filters. \`polarity\`: 'unclassified': unread; 'mixed': mentions disagreed. \`doctrine\`: reviewed 'distinguishes'/'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread': none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\`: verbatim evidence when text is available. \`passage.text\` is at most 1200 chars, cut when \`passage.truncated\`; \`passage.mention\`: 'sole', 'classified_section' (polarity source mention) or 'latest_of_several' (may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -18800,7 +18917,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             "cited_by"
           ],
           "type": "string",
-          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+          "description": "cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments."
         },
         "doctrine": {
           "enum": [
@@ -18856,6 +18973,45 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     }
   },
   {
+    "name": "verify_quote",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "Verify a decision quotation only retrieves or computes data.",
+      "destructiveHint": "Verify a decision quotation does not change state.",
+      "openWorldHint": "Verify a decision quotation is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns occurrenceCount and the first 20 occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= 0.75; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.",
+    "annotations": {
+      "title": "Verify a decision quotation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID from search_case_law or resolve_case_law_decision."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Quote: max 4000 chars, 128 word/punctuation tokens, 16 nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics."
+        }
+      }
+    }
+  },
+  {
     "name": "open_case_law_decision",
     "scope": "stella:read",
     "access": "read",
@@ -18865,7 +19021,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Open case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
+    "description": "Open a decision the user asks to read/open: metadata, outline, small target window. paragraphs uses court-printed numbers (48 or 48-53); url opens that range in the web reader. Once per answer at most.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -19535,7 +19691,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -19553,7 +19709,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -19566,7 +19722,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions."
+          "description": "Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law."
         }
       }
     }

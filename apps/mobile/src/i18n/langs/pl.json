@@ -219,6 +219,10 @@
       },
       "patternInPath": "{pattern} w {path}",
       "commandExited": "{command} (kod wyjścia {code})",
+      "browserClick": "Kliknij „{target}” na stronie {url}",
+      "browserPressKey": "Naciśnij klawisz {key} w „{target}” na stronie {url}",
+      "browserSelect": "Wybierz „{option}” w „{target}” na stronie {url}",
+      "browserType": "Wprowadź tekst w „{target}” na stronie {url}",
       "opensOnComputer": "Otwórz na komputerze, na którym to uruchomiono",
       "status": {
         "needs_approval": "Oczekiwanie na zatwierdzenie",

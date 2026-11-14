@@ -56,6 +56,7 @@ import {
   type ActionApprovals,
   createActionApprovals,
 } from "./browser/action-approvals";
+import { withLocalBrowserInstructions } from "./browser/instructions";
 import type { LocalBrowserMcp } from "./browser/mcp-server";
 import {
   captureCheckpoint,
@@ -1167,6 +1168,7 @@ export class SidecarHost {
     // it, or ends it.
     const taken = run.live;
     run.live = null;
+    const browser = this.browserFor(message, run, taken);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -1178,10 +1180,13 @@ export class SidecarHost {
       toolPath: message.toolPath,
       model: message.model,
       reasoningEffort: message.reasoningEffort,
-      instructions: message.instructions,
+      instructions: withLocalBrowserInstructions(
+        message.instructions,
+        browser !== null,
+      ),
       policy: message.policy,
       mcp: binding.value,
-      browser: this.browserFor(message, run, taken),
+      browser,
       transcript: transcript.output,
       inputFiles: input.files,
       continuation: continuationOf(message, taken),

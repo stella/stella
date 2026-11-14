@@ -86,6 +86,7 @@ import {
   verificationChronologyScalingScenarios,
   verificationGraphScalingScenarios,
 } from "./verification-graph";
+import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -93,6 +94,7 @@ const measuredApiScenarios = [
   ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
+  verifyQuoteApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,

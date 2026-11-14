@@ -57,6 +57,10 @@ const WEB_LOCAL_RUN_KEYS = {
   },
   patternInPath: ["chat", "toolCall", "patternInPath"],
   commandExited: ["chat", "toolCall", "commandExited"],
+  browserClick: ["chat", "toolCall", "browserClick"],
+  browserType: ["chat", "toolCall", "browserType"],
+  browserPressKey: ["chat", "toolCall", "browserPressKey"],
+  browserSelect: ["chat", "toolCall", "browserSelect"],
   opensOnComputer: ["chat", "toolCall", "localOutput", "elsewhere"],
   status: {
     needs_approval: ["chat", "turnStatus", "waitingForApproval"],

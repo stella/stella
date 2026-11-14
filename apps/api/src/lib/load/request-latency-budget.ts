@@ -229,6 +229,15 @@ export type BoundedRequestStep<T> =
     }
   | { readonly status: "failed"; readonly error: unknown };
 
+/** The optional request steps a sub-budget names, each its own telemetry
+ *  label. */
+const REQUEST_STEP_TIMEOUT_LABEL = {
+  "case-law-admitted-courts": "case-law-admitted-courts",
+  "case-law-court-filter-vocabulary": "case-law-court-filter-vocabulary",
+  "case-law-relaxed-top-up": "case-law-relaxed-top-up",
+} as const;
+export type RequestStepLabel = keyof typeof REQUEST_STEP_TIMEOUT_LABEL;
+
 /**
  * Run an optional step under a named sub-budget of the request's budget.
  *
@@ -238,11 +247,15 @@ export type BoundedRequestStep<T> =
  */
 export const runBoundedRequestStep = async <T>(
   operation: (signal: AbortSignal) => Promise<T>,
-  { label, budgetMs }: { label: string; budgetMs: number },
+  { label, budgetMs }: { label: RequestStepLabel; budgetMs: number },
 ): Promise<BoundedRequestStep<T>> => {
   const timeoutMs = requestBoundedTimeoutMs(budgetMs);
   const outcome = await Result.tryPromise({
-    try: async () => await withTimeout(operation, { label, timeoutMs }),
+    try: async () =>
+      await withTimeout(operation, {
+        label: REQUEST_STEP_TIMEOUT_LABEL[label],
+        timeoutMs,
+      }),
     catch: (cause) => cause,
   });
   if (Result.isOk(outcome)) {

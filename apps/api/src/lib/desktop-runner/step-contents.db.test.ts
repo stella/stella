@@ -20,6 +20,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
+  copyStepContents,
   isStepRunOpen,
   openStepImage,
   readVisibleStepContent,
@@ -591,6 +592,48 @@ describe("the stored content of a local run's steps", () => {
     const large = await chatLocalRunStepContentScalingScenario.measure(fixture);
     expect(small.rows).toBe(1);
     expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+
+  test("a copy is made only between two threads of the same member", async () => {
+    const source = await seedRun(ownerA);
+    const key = stepKey();
+    await storeText(ownerA, source, key, "not for anyone else");
+    const foreign = await seedRun(ownerSameOrg);
+    const steps = [{ stepKey: key, messageId: foreign.userMessageId }];
+    // Another member cannot copy a step out of a thread that is not theirs,
+    expect(
+      await copyStepContents(runnerDb(), {
+        owner: ownerSameOrg,
+        sourceThreadId: source.threadId,
+        targetThreadId: foreign.threadId,
+        steps,
+      }),
+    ).toBe(0);
+    // nor can the owner copy one into a thread that is not theirs.
+    expect(
+      await copyStepContents(runnerDb(), {
+        owner: ownerA,
+        sourceThreadId: source.threadId,
+        targetThreadId: foreign.threadId,
+        steps,
+      }),
+    ).toBe(0);
+    expect(await read(ownerSameOrg, foreign, key)).toEqual({ type: "none" });
+    // Between the owner's own threads the copy is made once.
+    const own = await seedRun(ownerA);
+    const ownSteps = [{ stepKey: key, messageId: own.userMessageId }];
+    const copy = async () =>
+      await copyStepContents(runnerDb(), {
+        owner: ownerA,
+        sourceThreadId: source.threadId,
+        targetThreadId: own.threadId,
+        steps: ownSteps,
+      });
+    expect(await copy()).toBe(1);
+    expect(await copy()).toBe(0);
+    expect(await read(ownerA, own, key)).toMatchObject({
+      text: "not for anyone else",
+    });
   });
 
   test("deleting the message a turn answers deletes its steps' content", async () => {

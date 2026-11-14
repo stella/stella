@@ -2335,6 +2335,10 @@
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
+      "browserClick": "Spustelėti „{target}“ puslapyje {url}",
+      "browserPressKey": "Paspausti klavišą {key} elemente „{target}“ puslapyje {url}",
+      "browserSelect": "Pasirinkti „{option}“ elemente „{target}“ puslapyje {url}",
+      "browserType": "Įvesti tekstą į „{target}“ puslapyje {url}",
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
       "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",
@@ -6344,6 +6348,7 @@
       "previewBody5": "Prieš konvertavimą pardavimas arba įtraukimas į prekybą suteikia Investuotojui teisę į didesnę iš pirkimo kainos arba pajamų, mokėtinų konvertavimo pagrindu, sumą.",
       "previewBody6": "Bendrovė yra tinkamai įsteigta, turi teisę sudaryti šią sutartį ir gaus visus jos vykdymui reikalingus patvirtinimus.",
       "previewBody7": "Ši sutartis apima visą šalių susitarimą ir gali būti keičiama tik raštu, gavus reikiamą sutikimą.",
+      "previewDocument": "Stilių rinkinio peržiūra",
       "previewFailed": "Nepavyko sugeneruoti peržiūros.",
       "previewIntroduction": "Ši sutartis sudaroma tarp „Example Labs Ltd.“ (toliau – Bendrovė) ir parašų puslapyje nurodyto investuotojo (toliau – Investuotojas).",
       "previewLevel1": "Investicija",

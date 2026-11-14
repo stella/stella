@@ -2335,6 +2335,10 @@
       "web_search": "Vyhledávání na webu"
     },
     "toolCall": {
+      "browserClick": "Kliknout na „{target}“ na stránce {url}",
+      "browserPressKey": "Stisknout klávesu {key} v „{target}“ na stránce {url}",
+      "browserSelect": "Vybrat „{option}“ v „{target}“ na stránce {url}",
+      "browserType": "Zadat text do „{target}“ na stránce {url}",
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků} many {# znaku}}",
       "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzole",
@@ -6344,6 +6348,7 @@
       "previewBody5": "Před konverzí opravňuje prodej nebo uvedení na burzu Investora k vyšší z částek, tedy ke kupní ceně nebo výnosu splatnému po konverzi.",
       "previewBody6": "Společnost je řádně založena, má oprávnění uzavřít tuto smlouvu a získá všechna schválení potřebná k jejímu plnění.",
       "previewBody7": "Tato smlouva obsahuje úplnou dohodu mezi stranami a lze ji změnit pouze písemně s požadovaným souhlasem.",
+      "previewDocument": "Náhled sady stylů",
       "previewFailed": "Náhled se nepodařilo vytvořit.",
       "previewIntroduction": "Tato smlouva se uzavírá mezi společností Example Labs Ltd. (dále jen „Společnost“) a investorem uvedeným na podpisové straně (dále jen „Investor“).",
       "previewLevel1": "Investice",
