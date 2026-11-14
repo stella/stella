@@ -13,7 +13,9 @@
 //            `Worker` on a queue the registry assigns to another module (or
 //            to none); a `MEMBER_RUN_QUEUES` entry the registry does not
 //            classify as a member run of that module; a raw BullMQ worker
-//            import outside the constructor owner.
+//            import outside the constructor owner. A module that calls
+//            `createDocumentRunQueue` constructs that queue's Worker: the
+//            factory builds it for the `name` its `jobs` were created with.
 //   members  (baselined, keyed without line numbers) a member-run queue whose
 //            worker module never calls the imported `createRootRunActor`
 //            (`<queue>::run-actor`); a member-run module the pinned-handle
@@ -90,6 +92,9 @@ const HOST_TABLE_FILE = "apps/api/src/bullmq-queue-hosts.ts";
 const WORKER_CONSTRUCTOR_FILE = "apps/api/src/lib/bullmq-queue.ts";
 const HOST_TABLE_NAME = "BULLMQ_QUEUE_HOSTS";
 const WORKER_CONSTRUCTOR = "BullMqWorker";
+/** Builds a document run queue's Worker for the module that calls it. */
+const DOCUMENT_RUN_QUEUE_FILE = "apps/api/src/lib/queue/document-run-queue.ts";
+const DOCUMENT_RUN_QUEUE_FACTORY = "createDocumentRunQueue";
 const PINNED_HANDLES_ROW = "pinned-workspace-handles";
 const RUN_ACTOR = "createRootRunActor";
 const RUN_ACTOR_MODULE = "@/api/lib/root-scoped-db";
@@ -473,6 +478,35 @@ const accessedMemberName = (node: Node | undefined): string | null => {
 };
 
 /**
+ * The value `key` takes in a call's first, object-literal argument, read in
+ * assignment order: a spread after the property may replace it, so the value
+ * is then unknown.
+ */
+const optionValue = (call: CallExpression, key: string): Expression | null => {
+  const first = call.arguments.at(0);
+  if (first === undefined || first.type === "SpreadElement") {
+    return null;
+  }
+  const options = unwrap(first);
+  if (options.type !== "ObjectExpression") {
+    return null;
+  }
+  let value: Expression | null = null;
+  for (const property of options.properties) {
+    if (property.type === "SpreadElement" || property.computed) {
+      // May replace the option with a value this reader cannot see.
+      value = null;
+    } else if (propertyName(property.key) === key) {
+      // A shorthand `{ name }` is the binding of that name; a method or an
+      // accessor is no static value.
+      value =
+        property.kind === "init" && !property.method ? property.value : null;
+    }
+  }
+  return value;
+};
+
+/**
  * Queue names consumed by the owned BullMQ workers a module constructs:
  * `undefined` when it constructs none, `null` when a queue name does not
  * resolve statically.
@@ -482,7 +516,11 @@ const workerQueueNames = (
   source: string,
   readFile: AuditInput["readFile"],
 ): readonly string[] | null | undefined => {
-  if (!source.includes("bullmq-queue")) {
+  // The factory's own Worker belongs to each module that calls it.
+  if (
+    relativePath === DOCUMENT_RUN_QUEUE_FILE ||
+    !(source.includes("bullmq-queue") || source.includes("document-run-queue"))
+  ) {
     return undefined;
   }
   const file = parseSource(relativePath, source);
@@ -534,16 +572,60 @@ const workerQueueNames = (
   const constructions = findNodes(file, "NewExpression").filter((node) =>
     isOwnedConstructor(node.callee),
   );
-  if (constructions.length === 0) {
+  const factoryCalls = findNodes(file, "CallExpression").filter((call) => {
+    const { callee } = call;
+    if (callee.type === "Identifier") {
+      const binding = bindings.get(callee.name);
+      return (
+        binding?.imported === DOCUMENT_RUN_QUEUE_FACTORY &&
+        resolveModulePath(relativePath, binding.module) ===
+          DOCUMENT_RUN_QUEUE_FILE
+      );
+    }
+    // A call through a namespace import of the factory's module.
+    const namespace =
+      callee.type === "MemberExpression" && callee.object.type === "Identifier"
+        ? namespaces.get(callee.object.name)
+        : undefined;
+    return (
+      namespace !== undefined &&
+      accessedMemberName(callee) === DOCUMENT_RUN_QUEUE_FACTORY &&
+      resolveModulePath(relativePath, namespace) === DOCUMENT_RUN_QUEUE_FILE
+    );
+  });
+  if (constructions.length === 0 && factoryCalls.length === 0) {
     return undefined;
   }
-  const queues = new Set<string>();
-  for (const construction of constructions) {
-    const first = construction.arguments.at(0);
-    const names =
-      first === undefined || first.type === "SpreadElement"
+  const queueNameArguments: (Expression | null)[] = [
+    ...constructions.map((construction) => {
+      const first = construction.arguments.at(0);
+      return first === undefined || first.type === "SpreadElement"
         ? null
-        : resolveStrings(first, { relativePath, file, readFile, depth: 0 });
+        : first;
+    }),
+    ...factoryCalls.map((call) => {
+      // The queue's `jobs`, from `createDocumentRunJobs({ name })`: inline or
+      // a local constant.
+      const jobs = optionValue(call, "jobs");
+      if (jobs === null) {
+        return null;
+      }
+      const jobsCall =
+        jobs.type === "Identifier"
+          ? (declarationInitializer(file, jobs.name) ?? null)
+          : jobs;
+      const unwrapped = jobsCall === null ? null : unwrap(jobsCall);
+      return unwrapped?.type === "CallExpression"
+        ? optionValue(unwrapped, "name")
+        : null;
+    }),
+  ];
+  const queues = new Set<string>();
+  for (const argument of queueNameArguments) {
+    const names =
+      argument === null
+        ? null
+        : resolveStrings(argument, { relativePath, file, readFile, depth: 0 });
     if (names === null) {
       return null;
     }
@@ -1730,6 +1812,64 @@ const selfTestWorkerConstructors = (): string[] => {
     if (rawWorkerImports("apps/api/src/lib/w.ts", source).length !== 0) {
       failures.push("other BullMQ exports must remain available");
     }
+  }
+  const factoryQueues = workerQueueNames(
+    "apps/api/src/lib/runs/run-queue.ts",
+    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const name = "runs"; const JOBS = createDocumentRunJobs({ name, jobName: "run" }); const readQueuedPage = read; export const runs = createDocumentRunQueue({ jobs: JOBS, readQueuedPage });',
+    () => null,
+  );
+  if (JSON.stringify(factoryQueues) !== JSON.stringify(["runs"])) {
+    failures.push(
+      `a createDocumentRunQueue call must count as its module's Worker; got ${JSON.stringify(factoryQueues)}`,
+    );
+  }
+  if (
+    workerQueueNames(
+      "apps/api/src/lib/runs/run-queue.ts",
+      'import { createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; export const runs = createDocumentRunQueue({ jobs: makeJobs() });',
+      () => null,
+    ) !== null
+  ) {
+    failures.push(
+      "a createDocumentRunQueue call without a literal name must not resolve",
+    );
+  }
+  const namespacedQueues = workerQueueNames(
+    "apps/api/src/lib/runs/run-queue.ts",
+    'import * as runQueues from "@/api/lib/queue/document-run-queue"; const JOBS = runQueues.createDocumentRunJobs({ name: "runs", jobName: "run" }); export const runs = runQueues.createDocumentRunQueue({ jobs: JOBS });',
+    () => null,
+  );
+  if (JSON.stringify(namespacedQueues) !== JSON.stringify(["runs"])) {
+    failures.push(
+      `a createDocumentRunQueue call through a namespace must count as its module's Worker; got ${JSON.stringify(namespacedQueues)}`,
+    );
+  }
+  for (const source of [
+    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const JOBS = createDocumentRunJobs({ name: "runs", jobName: "run", ...options }); export const runs = createDocumentRunQueue({ jobs: JOBS });',
+    'import { createDocumentRunJobs, createDocumentRunQueue } from "@/api/lib/queue/document-run-queue"; const JOBS = createDocumentRunJobs({ name: "runs", jobName: "run" }); export const runs = createDocumentRunQueue({ jobs: JOBS, ...options });',
+  ]) {
+    if (
+      workerQueueNames(
+        "apps/api/src/lib/runs/run-queue.ts",
+        source,
+        () => null,
+      ) !== null
+    ) {
+      failures.push(
+        "a spread that may replace the queue's name must not resolve",
+      );
+    }
+  }
+  if (
+    workerQueueNames(
+      DOCUMENT_RUN_QUEUE_FILE,
+      'import { BullMqWorker } from "@/api/lib/bullmq-queue"; export const createDocumentRunQueue = ({ name }) => new BullMqWorker(name, async () => {});',
+      () => null,
+    ) !== undefined
+  ) {
+    failures.push(
+      "the document run queue factory must not count as a Worker of its own",
+    );
   }
   const straySource =
     'import * as queues from "@/api/lib/bullmq-queue"; new queues.BullMqWorker("stray", async () => {});';

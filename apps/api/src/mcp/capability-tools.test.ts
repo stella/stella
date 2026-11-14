@@ -360,6 +360,19 @@ describe("list verification access grants across MCP tools", () => {
       query: { entityId: resourceId, fileFieldId: resourceId },
     },
     "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.graph.get": {
+      params,
+      query: { listId: resourceId },
+    },
+    "lists.graph.nodes.list": { params, query: { text: "delivery" } },
+    "lists.graph.neighbours.list": {
+      params,
+      query: { nodeKind: "fact", nodeId: resourceId },
+    },
+    "lists.graph.paths.list": {
+      params,
+      query: { nodeKind: "claim", nodeId: resourceId, depth: 2 },
+    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
@@ -1071,12 +1084,28 @@ describe("list verification access grants across MCP tools", () => {
         expect(parseToolPayload(result)).toEqual({
           documents: [{ documentEntityId: resourceId, sourceKind: "document" }],
         });
+      } else if (capability === "lists.graph.nodes.list") {
+        // Nothing in the fixture's matter matches.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          nodes: [],
+          nextCursor: null,
+        });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);
         expect(
           asTestRaw<{ runs: unknown[] }>(parseToolPayload(result)),
         ).toEqual({
           runs: [],
+        });
+      } else if (capability === "lists.verifications.graph.get") {
+        // The fixture's list holds nothing verified yet.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          listId: resourceId,
+          statements: [],
+          claims: [],
+          nextCursor: null,
         });
       } else {
         expect(errorEnvelope(result).code).toBe("not_found");

@@ -241,6 +241,12 @@
       "showSources": "Näita allikaid",
       "title": "Ankurfaktid"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# väide tugineb sellele faktile} other {# väidet tugineb sellele faktile}}",
+      "empty": "Selles loendis pole veel fakte.",
+      "moreClaims": "{count, plural, one {veel # väide} other {veel # väidet}}",
+      "undated": "Kuupäevata"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Ankurfaktid on vastuolus",
@@ -405,6 +411,42 @@
       "showNextSteps": "Näita järgmisi samme",
       "unlink": "Tühista seos: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# väide} other {# väidet}}",
+      "claimTitle": "Väide",
+      "columns": {
+        "claims": "Väited",
+        "sources": "Allikdokumendid",
+        "statements": "Avaldused"
+      },
+      "empty": "Selles loendis pole veel fakte ega kontrollitud dokumente.",
+      "factCount": "{count, plural, one {# fakt} other {# fakti}}",
+      "factOverflow": "Kuvatakse selle loendi esimesed {count} fakti.",
+      "filters": {
+        "allSources": "Kõik allikad",
+        "allVerdicts": "Kõik otsused",
+        "conflicts": "Vastuolud",
+        "heldFacts": "Kontrolli ootel faktid",
+        "source": "Filtreeri allika järgi",
+        "verdict": "Filtreeri otsuse järgi"
+      },
+      "held": "Kontrolli ootel",
+      "linkedFacts": "{count, plural, one {# seotud fakt} other {# seotud fakti}}",
+      "listLabel": "Graaf loendina",
+      "loadMore": "Laadi rohkem dokumente",
+      "noMatch": "Nende filtritega ei leitud midagi.",
+      "noStatements": "Selle loendi alusel pole veel ühtegi dokumenti kontrollitud.",
+      "offList": "Pole enam loendis",
+      "relation": {
+        "conflicts": "On vastuolus",
+        "governs": "Aluseks",
+        "record": "Registris",
+        "recordConflict": "Vastuoluline kanne",
+        "supports": "Toetab"
+      },
+      "unlinked": "Faktid, millele ükski väide ei tugine",
+      "verifyInReview": "Kontrolli dokumenti"
+    },
     "guidance": {
       "escalate": "Edasta edasi",
       "manualJudgement": "Inimese otsustus",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# vaste} other {# vastet}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Kronoloogia",
+      "graph": "Graaf",
+      "label": "Näita loendit kujul",
+      "review": "Kontroll"
     },
     "qualifiers": {
       "heading": "Reservatsioonid",
@@ -1875,6 +1923,8 @@
       "folderStateProtected": "Sisaldab stella enda andmeid",
       "folderStateUnlinked": "Pole enam lingitud",
       "folderStateUnreadable": "Ei saa lugeda",
+      "limitReminderNotify": "Teavita mind, kui limiit lähtestub",
+      "limitReminderScheduled": "Teavitame sind alates {time}.",
       "permissionAboveLimit": "Sinu organisatsioon seda ei luba",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",
@@ -2110,6 +2160,7 @@
     "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
     "sendErrorTimedOut": "Vestlusteenus ei vastanud õigel ajal. Proovige uuesti.",
     "sendErrorToolsUnsupported": "See mudel ei saa tööriistu kasutada, seega ei saa see sinu toimiku kohta küsimustele vastata. Vaheta mudelile, mis tööriistu toetab.",
+    "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum.",
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
@@ -5061,6 +5112,7 @@
       "flowRunAwaitingApproval": "Töövoog <bdi>{flowName}</bdi> ootab teie kinnitust",
       "flowRunCompleted": "Töövoog <bdi>{flowName}</bdi> on lõpetatud",
       "flowRunFailed": "Töövoog <bdi>{flowName}</bdi> ebaõnnestus",
+      "localRunLimitReset": "Sinu arvutis töötav programmeerimisagent saab vestlust jätkata",
       "mention": "<bdi>{actorName}</bdi> mainis teid kommentaaris",
       "reportExportFailed": "Aruande eksportimine ebaõnnestus",
       "reportExportSucceeded": "Teie aruanne on valmis",

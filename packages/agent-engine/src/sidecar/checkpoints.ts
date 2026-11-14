@@ -893,12 +893,13 @@ const takeLock = async (
       if (signal?.aborted === true) {
         return Result.err(refused("failed", "The capture was stopped.")());
       }
-      if (performance.now() >= deadline) {
-        return Result.err(
-          refused("failed", "Another process holds the checkpoint store.")(),
-        );
-      }
       if (taken.value === "wait") {
+        // A retry follows a lock just freed, so only a wait ends at the deadline.
+        if (performance.now() >= deadline) {
+          return Result.err(
+            refused("failed", "Another process holds the checkpoint store.")(),
+          );
+        }
         // real-time: another process holds the lock; it is polled until free.
         // await-in-loop: one wait between attempts.
         await Bun.sleep(LOCK_POLL_MS);

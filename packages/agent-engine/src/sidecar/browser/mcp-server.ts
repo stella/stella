@@ -7,7 +7,11 @@ import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runne
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
 import type { StellaSandboxMcpBinding } from "../../sandbox";
-import type { BrowserBridge } from "./bridge";
+import type { BrowserBridge, BrowserBridgeDownload } from "./bridge";
+import {
+  type BrowserDownloadOutcome,
+  receiveBrowserDownload,
+} from "./downloads";
 import {
   type ApproveAction,
   createLocalBrowserSession,
@@ -72,6 +76,8 @@ type BrowserMcpRun = {
   approve: ApproveAction;
   /** Cut when the run is stopped: its browser steps end at once. */
   stopped: AbortSignal;
+  /** The run's folder: a PDF its chat's tab downloads is saved there. */
+  workspaceDir: string;
 };
 
 /** A run calling through an endpoint. */
@@ -248,6 +254,11 @@ const createEndpoints = () => {
       [...endpoints.values()].some(
         (other) => other.serving?.run.threadId === threadId,
       ),
+    /** A run of `threadId` calling through an endpoint now, if any. */
+    runOf: (threadId: string): BrowserMcpRun | null =>
+      [...endpoints.values()]
+        .map((other) => other.serving?.run ?? null)
+        .find((run) => run?.threadId === threadId) ?? null,
     clear: () => {
       for (const { serving } of endpoints.values()) {
         serving?.ended.abort();
@@ -259,6 +270,69 @@ const createEndpoints = () => {
 };
 
 type LocalBrowserSession = ReturnType<typeof createLocalBrowserSession>;
+
+/** Downloads one chat keeps for its next browser result; older ones go first. */
+const MAX_HELD_DOWNLOADS = 16;
+
+type HeldDownload =
+  | { type: "saving"; outcome: Promise<BrowserDownloadOutcome> }
+  | { type: "waiting"; download: BrowserBridgeDownload["download"] };
+
+/**
+ * Each chat's downloads until a browser result of the chat reports them.
+ * One that arrives while a run of the chat is held is saved into that run's
+ * folder at once; one that arrives between runs waits for the next run's
+ * folder.
+ */
+const createDownloadInbox = (
+  runOf: (threadId: string) => BrowserMcpRun | null,
+  /** The member's home folder: Chrome saves downloads under it. */
+  home: string,
+) => {
+  const chats = new Map<string, HeldDownload[]>();
+  const receive = async (
+    download: BrowserBridgeDownload["download"],
+    run: BrowserMcpRun,
+  ) =>
+    await receiveBrowserDownload(download, {
+      home,
+      workspaceDir: run.workspaceDir,
+    });
+  return {
+    arrive: ({ controllerId, download }: BrowserBridgeDownload) => {
+      const run = runOf(controllerId);
+      const held: HeldDownload =
+        run === null
+          ? { download, type: "waiting" }
+          : { outcome: receive(download, run), type: "saving" };
+      chats.set(
+        controllerId,
+        [...(chats.get(controllerId) ?? []), held].slice(-MAX_HELD_DOWNLOADS),
+      );
+    },
+    /** The chat's downloads so far, saved into `run`'s folder; reported once. */
+    take: async (run: BrowserMcpRun): Promise<BrowserDownloadOutcome[]> => {
+      const held = chats.get(run.threadId) ?? [];
+      chats.delete(run.threadId);
+      return await Promise.all(
+        held.map(async (entry) => {
+          switch (entry.type) {
+            case "saving":
+              return await entry.outcome;
+            case "waiting":
+              return await receive(entry.download, run);
+            default:
+              entry satisfies never;
+              return panic("Unhandled held download");
+          }
+        }),
+      );
+    },
+    clear: () => {
+      chats.clear();
+    },
+  };
+};
 
 /** A chat's page state, kept while any run of the chat is held. */
 const sessionFor = (
@@ -276,14 +350,19 @@ const sessionFor = (
 
 export const startLocalBrowserMcp = ({
   bridge,
+  home,
   version,
 }: {
   bridge: BrowserBridge;
+  /** The member's home folder: Chrome's downloads are taken only from under it. */
+  home: string;
   /** The sidecar's version, reported as the server's. */
   version: string;
 }): LocalBrowserMcp => {
   const endpoints = createEndpoints();
   const sessions = new Map<string, LocalBrowserSession>();
+  const downloads = createDownloadInbox(endpoints.runOf, home);
+  bridge.onDownload(downloads.arrive);
   const listener = { host: "" };
 
   const answer = async (
@@ -345,6 +424,7 @@ export const startLocalBrowserMcp = ({
             await sessionFor(sessions, held.threadId).call(name, input, {
               approvals: held.approvals,
               approve: held.approve,
+              downloads: async () => await downloads.take(held),
               signal,
               send: async (command, observedTab) =>
                 await bridge.request(
@@ -478,6 +558,7 @@ export const startLocalBrowserMcp = ({
     stop: async () => {
       endpoints.clear();
       sessions.clear();
+      downloads.clear();
       await server.stop(true);
     },
   };

@@ -10,6 +10,7 @@ export const ONBOARDING_STEPS = [
   "activity",
   "permissions",
   "tryIt",
+  "dictation",
   "done",
 ] as const;
 
@@ -34,16 +35,25 @@ export type TrayLocation = {
   edge: (typeof SCREEN_EDGES)[number];
 };
 
+/** Features setup introduces once when they arrive after the tour. */
+export const INTRODUCED_FEATURES = ["activityTimeline", "dictation"] as const;
+
+export type IntroducedFeature = (typeof INTRODUCED_FEATURES)[number];
+
 /** The tour, permissions turned off since, or a feature that arrived later. */
 export type OnboardingMode =
   | { type: "tour" }
   | { permissions: Permission[]; type: "fix" }
-  | { feature: "activityTimeline"; type: "introduce" };
+  | { feature: IntroducedFeature; type: "introduce" };
 
 export type OnboardingSnapshot = {
   activityAvailable: boolean;
   /** Asked on the Activity step; the Permissions step shows the rest. */
   activityPermissions: Permission[];
+  /** Dictation is on for the account and this build can run it. */
+  dictationAvailable: boolean;
+  /** Asked on the Dictation step once dictation is turned on. */
+  dictationPermissions: Permission[];
   mode: OnboardingMode;
   documentApp: DocumentApp | null;
   linked: boolean;
@@ -91,7 +101,10 @@ const isMode = (value: unknown): value is OnboardingMode => {
         value["permissions"].every(isPermission)
       );
     case "introduce":
-      return value["feature"] === "activityTimeline";
+      return (
+        typeof value["feature"] === "string" &&
+        (INTRODUCED_FEATURES as readonly string[]).includes(value["feature"])
+      );
     default:
       return false;
   }
@@ -109,6 +122,9 @@ export const isOnboardingSnapshot = (
   typeof value["activityAvailable"] === "boolean" &&
   Array.isArray(value["activityPermissions"]) &&
   value["activityPermissions"].every(isPermission) &&
+  typeof value["dictationAvailable"] === "boolean" &&
+  Array.isArray(value["dictationPermissions"]) &&
+  value["dictationPermissions"].every(isPermission) &&
   (value["documentApp"] === null || isDocumentApp(value["documentApp"])) &&
   (value["trayLocation"] === null || isTrayLocation(value["trayLocation"]));
 

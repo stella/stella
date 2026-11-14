@@ -72,10 +72,11 @@ export const isContested = (
 /** A claim is SETTLED once a human decides it either way, in the shared
  *  vocabulary every review surface reads (`REVIEW_STATUS_DECISION`): marking
  *  it as needing evidence decides nothing and keeps it open. */
-export const isSettled = (review: ClaimReview | null): boolean => {
-  const status = review?.status ?? null;
-  return status !== null && REVIEW_STATUS_DECISION.claim[status] !== null;
-};
+export const isSettledStatus = (status: ClaimReview["status"]): boolean =>
+  status !== null && REVIEW_STATUS_DECISION.claim[status] !== null;
+
+export const isSettled = (review: ClaimReview | null): boolean =>
+  isSettledStatus(review?.status ?? null);
 
 /**
  * The verdict a reviewer's own decisions lead to. An override stays an
@@ -145,6 +146,7 @@ export const resolveClaimView = (
     text: claim.text,
     assertedOn: claim.assertedOn,
     anchor: claim.anchor,
+    paragraph: claim.paragraph,
     refs: [],
     review: claim.review,
     recheck: claim.recheck,
