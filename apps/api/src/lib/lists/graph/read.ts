@@ -709,8 +709,11 @@ export const walkGraph = async ({
       filter,
       after: null,
     }),
+    // Every edge the walk reached: its own LIMIT keeps the nearest ones.
+    // Cutting this id-ordered read at the cap would keep the lowest ids
+    // instead and could drop the start's own edges.
     {
-      limit: GRAPH_READ_LIMITS.WALK_EDGES_MAX,
+      limit: GRAPH_READ_LIMITS.WALK_EDGES_MAX + 1,
       cursorForItem: (row) => row.id,
     },
   );
@@ -754,7 +757,9 @@ export const walkGraph = async ({
   return {
     start,
     paths: paths.slice(0, maxPaths),
-    truncated: reached.nextCursor !== null || paths.length > maxPaths,
+    truncated:
+      edges.length > GRAPH_READ_LIMITS.WALK_EDGES_MAX ||
+      paths.length > maxPaths,
   };
 };
 
