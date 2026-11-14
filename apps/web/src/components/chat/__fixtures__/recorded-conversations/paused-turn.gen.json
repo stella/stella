@@ -210,7 +210,7 @@
     {
       "action": {
         "messageId": "00000000-0000-7000-8000-000000000006",
-        "text": "Continue",
+        "text": "Keep going",
         "type": "continue"
       },
       "exchanges": [
@@ -228,7 +228,7 @@
                     "createdAt": "2026-01-01T00:00:11.000Z"
                   }
                 },
-                "content": "Continue"
+                "content": "Keep going"
               }
             ],
             "tools": [],
@@ -246,7 +246,7 @@
                 "parts": [
                   {
                     "type": "text",
-                    "content": "Continue"
+                    "content": "Keep going"
                   }
                 ],
                 "role": "user",
@@ -266,7 +266,7 @@
                 "parts": [
                   {
                     "type": "text",
-                    "content": "Continue"
+                    "content": "Keep going"
                   }
                 ],
                 "role": "user",
@@ -409,7 +409,7 @@
                 "parts": [
                   {
                     "type": "text",
-                    "content": "Continue"
+                    "content": "Keep going"
                   }
                 ]
               },

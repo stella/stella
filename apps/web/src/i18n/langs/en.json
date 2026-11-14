@@ -2379,7 +2379,7 @@
       "replyReadyTitle": "Reply ready"
     },
     "turnPaused": {
-      "continue": "Continue",
+      "continue": "Keep going",
       "status": "Paused after {count, plural, one {# step} other {# steps}}"
     },
     "turnStatus": {
