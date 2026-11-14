@@ -595,7 +595,8 @@
       "startFailed": "No se pudo iniciar la verificación",
       "status": {
         "running": "Verificando"
-      }
+      },
+      "unreadParts": "{count, plural, one {No se pudo leer # parte del documento, así que sus afirmaciones no se verificaron.} other {No se pudieron leer # partes del documento, así que sus afirmaciones no se verificaron.} many {No se pudieron leer # partes del documento, así que sus afirmaciones no se verificaron.}}"
     },
     "save": {
       "failed": "No guardado",
@@ -1964,6 +1965,24 @@
       "dismiss": "Descartar y detener",
       "secretAnswer": "Respuesta oculta",
       "secretPlaceholder": "Su respuesta permanece oculta"
+    },
+    "makeSkill": {
+      "command": "Crear una habilidad a partir de esta conversación",
+      "drafted": "El borrador de la habilidad está listo. Revísalo y después actívalo.",
+      "drafting": "Preparando un borrador de habilidad a partir de esta conversación…",
+      "emptyThread": "Envía un mensaje primero; después podrás crear una habilidad a partir de la conversación.",
+      "failed": "No se pudo crear una habilidad a partir de esta conversación",
+      "review": {
+        "description": "El borrador de la habilidad contiene estos nombres. Cualquier persona con acceso a esta habilidad podrá verlos.",
+        "replaceHint": "Desmarca un nombre para sustituirlo por un marcador genérico.",
+        "role": {
+          "organization": "nombre de la organización",
+          "person": "nombre de la persona"
+        },
+        "saveAll": "Conservar todos y guardar",
+        "saveReplacing": "Sustituir los desmarcados y guardar",
+        "title": "¿Guardar estos nombres en la habilidad?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat espera su respuesta} other {# chats esperan su respuesta} many {# chats esperan su respuesta}}",
@@ -3413,6 +3432,11 @@
       "sharepointNotFound": "Este sitio, biblioteca o archivo ya no existe o no está compartido contigo.",
       "sharepointReconnectRequired": "Tu inicio de sesión de Microsoft ha caducado. Reconecta SharePoint y OneDrive.",
       "sharepointThrottled": "Microsoft está limitando las solicitudes. Inténtalo de nuevo en breve.",
+      "skillFromChatAnonymizedThread": "Todavía no se puede crear una habilidad a partir de una conversación anonimizada.",
+      "skillFromChatEmptyThread": "Esta conversación todavía no contiene nada a partir de lo cual crear una habilidad.",
+      "skillFromChatLocalRunThread": "Esta conversación se ejecuta en tu ordenador, así que no se crea una habilidad a partir de ella en la nube.",
+      "skillFromChatThreadNotFound": "No se encontró esta conversación.",
+      "skillFromChatWithdrawn": "El contenido de esta conversación se retiró, por lo que no se puede crear una habilidad a partir de ella.",
       "skillSourceUnreachable": "No se pudo cargar la fuente de la habilidad. Comprueba que el enlace apunte a un repositorio público de GitHub o inténtalo de nuevo más tarde.",
       "thirdPartyBoundaryRefusal": "La solicitud intentó usar contenido fuera del contexto de espacio de trabajo permitido.",
       "usageLimitExceeded": "Se alcanzó el límite de uso.",

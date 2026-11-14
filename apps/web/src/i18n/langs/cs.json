@@ -595,7 +595,8 @@
       "startFailed": "Ověření se nepodařilo spustit",
       "status": {
         "running": "Ověřování"
-      }
+      },
+      "unreadParts": "{count, plural, one {# část dokumentu se nepodařilo přečíst, její tvrzení proto nebyla ověřena.} few {# části dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.} many {# části dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.} other {# částí dokumentu se nepodařilo přečíst, jejich tvrzení proto nebyla ověřena.}}"
     },
     "save": {
       "failed": "Neuloženo",
@@ -1964,6 +1965,24 @@
       "dismiss": "Zamítnout a zastavit",
       "secretAnswer": "Odpověď je skrytá",
       "secretPlaceholder": "Vaše odpověď zůstane skrytá"
+    },
+    "makeSkill": {
+      "command": "Vytvořit dovednost z této konverzace",
+      "drafted": "Návrh dovednosti je připraven. Zkontrolujte ho a pak ho zapněte.",
+      "drafting": "Připravuji návrh dovednosti z této konverzace…",
+      "emptyThread": "Nejprve odešlete zprávu, poté bude možné z konverzace vytvořit dovednost.",
+      "failed": "Z této konverzace se nepodařilo vytvořit dovednost",
+      "review": {
+        "description": "Návrh dovednosti obsahuje tato jména. Může je vidět kdokoli, kdo má k této dovednosti přístup.",
+        "replaceHint": "Zrušte zaškrtnutí jména a nahradí se obecným zástupným textem.",
+        "role": {
+          "organization": "název organizace",
+          "person": "jméno osoby"
+        },
+        "saveAll": "Ponechat vše a uložit",
+        "saveReplacing": "Nahradit nezaškrtnutá a uložit",
+        "title": "Uložit tato jména v dovednosti?"
+      }
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
@@ -3413,6 +3432,11 @@
       "sharepointNotFound": "Tento web, knihovna nebo soubor již neexistuje nebo s vámi není sdílen.",
       "sharepointReconnectRequired": "Platnost vašeho přihlášení k Microsoftu vypršela. Připojte SharePoint a OneDrive znovu.",
       "sharepointThrottled": "Microsoft omezuje počet požadavků. Zkuste to brzy znovu.",
+      "skillFromChatAnonymizedThread": "Z anonymizované konverzace zatím nelze vytvořit dovednost.",
+      "skillFromChatEmptyThread": "Tato konverzace zatím neobsahuje nic, z čeho by šlo vytvořit dovednost.",
+      "skillFromChatLocalRunThread": "Tato konverzace běží na vašem počítači, proto se z ní dovednost v cloudu nevytváří.",
+      "skillFromChatThreadNotFound": "Tuto konverzaci se nepodařilo najít.",
+      "skillFromChatWithdrawn": "Obsah této konverzace byl stažen, proto z ní nelze vytvořit dovednost.",
       "skillSourceUnreachable": "Zdroj dovednosti se nepodařilo načíst. Zkontrolujte, že odkaz vede na veřejný repozitář GitHub, nebo to zkuste později.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",

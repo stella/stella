@@ -28,6 +28,7 @@ export const MODEL_OPERATION_MODULES = [
   "apps/api/src/handlers/playbooks/derive-ask.ts",
   "apps/api/src/handlers/search/ai.ts",
   "apps/api/src/handlers/skills/drafts/generate.ts",
+  "apps/api/src/handlers/skills/from-chat/draft.ts",
   "apps/api/src/handlers/skills/proposals/from-comments/create.ts",
   "apps/api/src/handlers/skills/resources/rewrite.ts",
   "apps/api/src/handlers/templates/prefill.ts",

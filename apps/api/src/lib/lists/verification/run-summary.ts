@@ -220,6 +220,9 @@ export const UNPROJECTED_RUN_SUMMARY_COLUMNS = [
   "pipelineVersion",
   "modelRef",
   "startedAt",
+  // Text the run could not read, said and offered again where the run is
+  // opened (lists.verifications.get).
+  "unreadParts",
 ] as const satisfies readonly (keyof RunRow)[];
 
 const runCursor = createTimestampIdCursorCodec({

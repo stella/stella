@@ -25,8 +25,10 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { act, cleanup, fireEvent, render, within } =
+const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
+// Load the real lazy renderer before assertions use its parsed Markdown.
+await import("@/components/ai-elements/message-response");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -410,7 +412,10 @@ test("opening a finished subagent shows what it was told, wrote and reported, re
       ["prompt", "List every clause on arrears."],
       // Kept ahead of what it wrote, shown after it.
       ["report", "Clause 4 caps arrears."],
-      ["message", "<b>Reading</b> the lease."],
+      [
+        "message",
+        "**Reading** the lease.\n\n![chart](https://tracker.example/pixel.png)\n\n<script>window.stolen = 1</script>",
+      ],
     ),
   });
   await view.findByText("Check the lease");
@@ -420,20 +425,34 @@ test("opening a finished subagent shows what it was told, wrote and reported, re
   await act(async () => {
     fireEvent.click(inGroup.getByRole("button", { expanded: false }));
   });
-  const conversation = within(
-    inGroup.getByRole("region", {
-      name: messages.chat.toolCall.localOutput.conversation,
-    }),
-  );
-  expect(
-    conversation.getAllByRole("listitem").map((item) => item.textContent),
-  ).toEqual([
+  const region = inGroup.getByRole("region", {
+    name: messages.chat.toolCall.localOutput.conversation,
+  });
+  // Formatted as the answer is: the emphasis is drawn, not its markers.
+  const emphasis = await waitFor(() => {
+    const strong = region.querySelector('[data-streamdown="strong"]');
+    if (strong === null) {
+      throw new Error("The conversation is not formatted yet");
+    }
+    return strong;
+  });
+  expect(emphasis.textContent).toBe("Reading");
+  // The entries themselves, not the lists a formatted entry may hold.
+  const [prompt, message, report] = [
+    ...(region.querySelector("ol")?.children ?? []),
+  ].map((item) => item.textContent);
+  expect(prompt).toBe(
     `${messages.chat.toolCall.localOutput.conversationPrompt}List every clause on arrears.`,
-    // A model wrote it: shown as the text it is, never as markup.
-    "<b>Reading</b> the lease.",
+  );
+  expect(message).toContain("Reading the lease.");
+  expect(message).not.toContain("**");
+  expect(report).toBe(
     `${messages.chat.toolCall.localOutput.conversationReport}Clause 4 caps arrears.`,
-  ]);
-  expect(groupOf(view.container).querySelector("b")).toBeNull();
+  );
+  // A model wrote it: opening it requests nothing it names and runs nothing.
+  expect(region.querySelector("img")).toBeNull();
+  expect(region.querySelector("script")).toBeNull();
+  expect(message).toContain("chart");
   // The steps it took still show beside its conversation.
   expect(inGroup.getByText("drafts/lease.md")).toBeDefined();
   queryClient.clear();

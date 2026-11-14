@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 2,
+  "reason": "The skill draft modules reuse two handler-owned rules instead of copying them: the chat's third-party boundary, which applies the organization's anonymizer, gazetteer and allowlist to find names in a draft, and the resource path grammar AI-written skill files must follow."
+}
