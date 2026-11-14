@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/chat-local-files-undo";
 import {
   CHAT_LOCAL_RUN_STEP_CONTENT_KINDS,
-  CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES,
+  CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES,
 } from "@stll/api-contract/chat-local-run-step-content";
 
 import {
@@ -496,8 +496,12 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     turnId: p.uuid("turn_id"),
     /** The message a fork copied the step for; null for a run's own row. */
     messageId: p.uuid("message_id"),
-    kind: p.text().notNull(),
-    /** How the step's content settled: stored, or why it was not. */
+    /** What the step produced; null while the step is awaited. */
+    kind: p.text(),
+    /**
+     * How the step's content settled (stored, or why it was not), or
+     * `awaited` while its run, now over, has still to send it.
+     */
     outcome: p.text().notNull(),
     /** How many bytes the step produced, stored or not. */
     totalBytes: p.bigint("total_bytes", { mode: "number" }).notNull(),
@@ -562,11 +566,16 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
     ),
     p.check(
       "chat_local_run_step_contents_outcome_check",
-      sql`${table.outcome} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES)})`,
+      sql`${table.outcome} IN (${sqlValues(CHAT_LOCAL_RUN_STEP_CONTENT_ROW_OUTCOMES)})`,
     ),
     p.check(
       "chat_local_run_step_contents_owner_check",
       sql`num_nonnulls(${table.turnId}, ${table.messageId}) = 1`,
+    ),
+    // An awaited step is known by its key alone; a settled one has a kind.
+    p.check(
+      "chat_local_run_step_contents_awaited_check",
+      sql`(${table.kind} IS NULL) = (${table.outcome} = 'awaited')`,
     ),
     p.check(
       "chat_local_run_step_contents_bytes_check",
