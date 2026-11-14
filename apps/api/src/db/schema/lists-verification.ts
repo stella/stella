@@ -30,7 +30,7 @@ import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifie
 import {
   CARRY_OUTCOMES,
   MATCHED_CARRY_OUTCOMES,
-} from "@/api/lib/review/carry-over";
+} from "@/api/lib/review/carry-outcomes";
 
 import {
   entityFeatureGateChecks,

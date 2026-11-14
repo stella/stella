@@ -50,10 +50,8 @@ import {
   gradeOf,
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
-import type {
-  CarryOutcome,
-  DocumentRunColumns,
-} from "@/api/lib/review/carry-over";
+import type { CarryOutcome } from "@/api/lib/review/carry-outcomes";
+import type { DocumentRunColumns } from "@/api/lib/review/carry-over";
 import { previousCompletedRunQuery } from "@/api/lib/review/carry-over";
 
 /** The verdict a decision was taken on: what decides whether it follows. */

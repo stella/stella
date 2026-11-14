@@ -43,10 +43,8 @@ import type {
   DocumentReviewFindingFlag,
   DocumentReviewFindingPayload,
 } from "@/api/lib/document-review/run-contract";
-import type {
-  CarryOutcome,
-  DocumentRunColumns,
-} from "@/api/lib/review/carry-over";
+import type { CarryOutcome } from "@/api/lib/review/carry-outcomes";
+import type { DocumentRunColumns } from "@/api/lib/review/carry-over";
 import { previousCompletedRunQuery } from "@/api/lib/review/carry-over";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import {

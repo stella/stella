@@ -6,9 +6,10 @@
  * List verification (`lists/verification/carry-over.ts`) and document review
  * (`document-review/decision-carry-over.ts`) each keep their own matcher and
  * writer, since a claim and a finding are compared differently; both find
- * the earlier run here and report through `CARRY_OUTCOMES`. A second
- * "previous completed run" query elsewhere is refused by the guard in
- * `carry-over.guard.test.ts`.
+ * the earlier run here and report through `CARRY_OUTCOMES`
+ * (`carry-outcomes.ts`, free of database code so the schema can name it).
+ * A second "previous completed run" query elsewhere is refused by the guard
+ * in `carry-over.guard.test.ts`.
  */
 
 import { and, desc, eq, ne } from "drizzle-orm";
@@ -21,32 +22,6 @@ import type {
 } from "drizzle-orm/pg-core";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
-
-/**
- * What became of one reviewed item when the next run of its document
- * completed. `carried`: every decision followed; `text-changed`: the matching
- * item's words or evidence changed, so decisions taken on the old ones were
- * withdrawn; `verdict-changed`: the new run reached another verdict, or
- * measured it against another standard, so decisions taken on the old one
- * were withdrawn (notes and links may still follow where a feature keeps
- * them); `unmatched`: nothing in the new run matches; `ambiguous`: more than
- * one thing could.
- */
-export const CARRY_OUTCOMES = [
-  "carried",
-  "text-changed",
-  "verdict-changed",
-  "unmatched",
-  "ambiguous",
-] as const;
-export type CarryOutcome = (typeof CARRY_OUTCOMES)[number];
-
-/** Outcomes that leave the new run with a matching item. */
-export const MATCHED_CARRY_OUTCOMES = [
-  "carried",
-  "text-changed",
-  "verdict-changed",
-] as const satisfies readonly CarryOutcome[];
 
 /** The columns of a feature's run table the lookup reads. Every review run
  *  table names a document by its entity and file field. */
