@@ -831,5 +831,26 @@
       "network_folder": "See kaust asub võrguketta jagatud alal. Oskused peavad olema selle arvuti enda kettal.",
       "path_changed": "Ülemkaust on muutunud. Eemaldage see kaust ja lisage see uuesti."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Lingitud kaustad",
+    "description": "Selle arvuti kaustad, milles vestluse agent saab töötada. Vestlus näeb ainult kausta nime; selle tee jääb sellesse arvutisse.",
+    "add": "Lingi kaust",
+    "remove": "Eemalda link",
+    "removeFolder": "Eemalda kausta {name} link",
+    "state": {
+      "offline": "Ketas, millel see kaust asub, pole ühendatud.",
+      "moved": "See kaust on teisaldatud, ümber nimetatud või kustutatud. Eemaldage link ja linkige kaust uuesti.",
+      "protected": "Selles kaustas on stella enda andmed või oskuste kaust, seega ei saa agent selles töötada.",
+      "unreadable": "Seda kausta ei õnnestunud lugeda."
+    },
+    "notice": {
+      "action_failed": "See ei õnnestunud. Proovige uuesti.",
+      "too_many": "Selles arvutis on juba nii palju lingitud kaustu, kui see hoida saab. Eemaldage kõigepealt üks link.",
+      "not_a_folder": "Valige kaust.",
+      "network_folder": "See kaust asub võrguketta jagatud alal. Linkige kaust selle arvuti enda kettalt.",
+      "protected": "Selles kaustas on stella enda andmed või oskuste kaust, seega ei saa agent selles töötada.",
+      "unreadable": "Seda kausta ei õnnestunud lugeda."
+    }
   }
 }

@@ -288,6 +288,16 @@ const serveSavedBuilder = ({
       if (pathname.endsWith("/chat/local-runners")) {
         return Response.json({ status: "hidden" });
       }
+      // Nothing of this chat runs in the background on a computer.
+      if (
+        pathname.endsWith(
+          `/chat/threads/${threadRef.threadId}/background-tasks`,
+        )
+      ) {
+        return Response.json({
+          count: 0,
+        } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["background-tasks"]["get"]["response"][200]);
+      }
       // The open chat keeps itself read.
       if (
         pathname.endsWith(`/chat/threads/${threadRef.threadId}/read-state`) &&

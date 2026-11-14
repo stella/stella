@@ -831,5 +831,26 @@
       "network_folder": "Ce dossier se trouve sur un partage réseau. Les compétences doivent être sur le disque de cet ordinateur.",
       "path_changed": "Un dossier parent a changé. Retirez ce dossier et ajoutez-le de nouveau."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Dossiers liés",
+    "description": "Dossiers de cet ordinateur dans lesquels l'agent d'une conversation peut travailler. La conversation ne voit que le nom du dossier ; son chemin reste sur cet ordinateur.",
+    "add": "Lier un dossier",
+    "remove": "Délier",
+    "removeFolder": "Délier {name}",
+    "state": {
+      "offline": "Le disque qui contient ce dossier n'est pas connecté.",
+      "moved": "Ce dossier a été déplacé, renommé ou supprimé. Déliez-le puis liez-le à nouveau.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
+    },
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "too_many": "Cet ordinateur a déjà autant de dossiers liés qu'il peut en garder. Déliez-en un d'abord.",
+      "not_a_folder": "Choisissez un dossier.",
+      "network_folder": "Ce dossier se trouve sur un partage réseau. Liez un dossier du disque de cet ordinateur.",
+      "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
+      "unreadable": "Ce dossier n'a pas pu être lu."
+    }
   }
 }

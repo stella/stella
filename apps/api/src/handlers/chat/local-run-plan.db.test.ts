@@ -6,6 +6,7 @@ import "@/api/tests/setup-env";
 
 import {
   CHAT_LOCAL_RUN_REFUSAL,
+  type ChatLocalRunApprovalCeiling,
   type ChatLocalRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import {
@@ -62,7 +63,7 @@ const safeDb = (): SafeDb =>
   asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1));
 
 /** An administrator saves the ceiling, as the settings endpoint does. */
-const setCeiling = async (maxApprovals: DesktopRunnerApprovalMode) =>
+const setCeiling = async (maxApprovals: ChatLocalRunApprovalCeiling) =>
   (
     await safeDb()(
       async (tx) =>
@@ -86,6 +87,8 @@ const SANDBOXING: PickedDesktop = {
     approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
     models: [{ id: MODEL, label: "Sonnet", reasoningEfforts: [] }],
   },
+  linkedFolders: [],
+  approvedFolderIds: [],
 };
 
 const snapshot = () =>
@@ -170,6 +173,7 @@ describe("a turn on the member's computer under the organization's ceiling", () 
     );
     expect(await send("auto")).toBe("routed");
     expect(await send("ask")).toBe("routed");
+    expect(await send("plan")).toBe("routed");
   });
 
   test("a lowered ceiling holds the next turn, while a paused run keeps the mode it started with", async () => {
