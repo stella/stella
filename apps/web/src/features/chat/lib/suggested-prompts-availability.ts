@@ -126,6 +126,7 @@ export const resolveSuggestedPromptsAvailability = ({
     return { status: "blocked", reason: "no-assistant-turn" };
   }
   const turnOutcome = resolveChatAssistantTurnOutcome(lastMessage);
+  // A paused turn offers Continue; a chip would answer for the user.
   switch (turnOutcome.type) {
     case "completed":
     case "legacy-completed":
@@ -135,6 +136,7 @@ export const resolveSuggestedPromptsAvailability = ({
     case "failed":
     case "incomplete":
     case "interrupted":
+    case "paused":
       return { status: "blocked", reason: "terminal-outcome" };
     default:
       turnOutcome satisfies never;

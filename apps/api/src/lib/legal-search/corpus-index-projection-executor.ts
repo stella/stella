@@ -720,11 +720,23 @@ export const advanceCorpusProjectionAppendTails = <
   return { flush, tails: nextTails, leaseMarginReached };
 };
 
-/** The synchronous half of a prepared entry: payload in, append request out. */
-const prepareProjectionEntry = (
+/**
+ * One reserved revision's documents as NDJSON, independent of how the block
+ * is delivered. `parts` split it at document boundaries within the ingest
+ * request ceiling (one document alone may exceed it); joined with newlines
+ * they are the whole block.
+ */
+type ProjectionRevisionBlock = {
+  material: CorpusProjectionMaterial;
+  documentCount: number;
+  parts: readonly [string, ...string[]];
+};
+
+/** A revision's documents, serialized once and checked against the ceilings. */
+const buildProjectionRevisionBlock = (
   material: CorpusProjectionMaterial,
   payload: LoadedCorpusProjectionPayload,
-): Result<PreparedProjectionEntry, PreparedProjectionFailure> => {
+): Result<ProjectionRevisionBlock, PreparedProjectionFailure> => {
   const built = (() => {
     switch (material.family) {
       case "case_law":
@@ -768,21 +780,32 @@ const prepareProjectionEntry = (
     }
     return panic(planned.error.message);
   }
-  const request = planned.value.at(0);
-  if (request === undefined) {
+  const [first, ...rest] = planned.value.map(({ ndjson }) => ndjson);
+  if (first === undefined) {
     return panic("Projection revision did not produce an append request");
   }
   return Result.ok({
     material,
     documentCount: entry.documents.length,
-    indexId: material.lease.indexId,
-    ndjson: request.ndjson,
-    ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
-    parts: planned.value.map(({ ndjson }) => ndjson),
-    leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
-    appendMode: material.lease.appendMode,
+    parts: [first, ...rest],
   });
 };
+
+/** REST delivery of a revision block: its first request and its lease. */
+const planProjectionRevisionRequest = ({
+  material,
+  documentCount,
+  parts,
+}: ProjectionRevisionBlock): PreparedProjectionEntry => ({
+  material,
+  documentCount,
+  indexId: material.lease.indexId,
+  ndjson: parts[0],
+  ndjsonBytes: Buffer.byteLength(parts[0], "utf-8") + 1,
+  parts,
+  leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
+  appendMode: material.lease.appendMode,
+});
 
 type BuildPreparedEntryOptions = {
   runInTransaction: ProjectionTransactionRunner;
@@ -800,9 +823,9 @@ const buildPreparedEntry = async ({
 }: BuildPreparedEntryOptions): Promise<
   Result<PreparedProjectionEntry, PreparedProjectionFailure>
 > => {
-  // As in `prepareProjectionEntry`: without the `catch` mapper the cause is
-  // wrapped, and every budget failure would classify as a transient
-  // `payload_unavailable` and retry forever instead of blocking.
+  // Without the `catch` mapper the cause is wrapped, and every budget failure
+  // would classify as a transient `payload_unavailable` and retry forever
+  // instead of blocking.
   const payload = await Result.tryPromise({
     try: async () => await payloadReader(runInTransaction, material),
     catch: (cause: unknown) => cause,
@@ -820,7 +843,10 @@ const buildPreparedEntry = async ({
   // The build is synchronous, so one span covers all of it and the spans of
   // concurrent revisions cannot overlap.
   const buildStartedAt = Temporal.Now.instant().epochMilliseconds;
-  const prepared = prepareProjectionEntry(material, payload.value.value);
+  const prepared = buildProjectionRevisionBlock(
+    material,
+    payload.value.value,
+  ).map(planProjectionRevisionRequest);
   recordBuildMs(Temporal.Now.instant().epochMilliseconds - buildStartedAt);
   return prepared;
 };

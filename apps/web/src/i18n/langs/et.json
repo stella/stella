@@ -2383,6 +2383,10 @@
       "replyReadyBody": "stella lõpetas vestluses vastamise.",
       "replyReadyTitle": "Vastus on valmis"
     },
+    "turnPaused": {
+      "continue": "Jätka",
+      "status": "Peatatud pärast {count, plural, one {# tööriistakutset} other {# tööriistakutset}}"
+    },
     "turnStatus": {
       "answerFailed": "Vastust ei õnnestunud lõpetada",
       "answerReady": "Vastus on valmis",

@@ -56,7 +56,7 @@ import type {
 /** The declared input of the wire tool: `note` is optional, so a strict
  *  provider widens it to `null` on the wire, and a route that fills every
  *  field sends ""; a note is never empty, so "" is not one. */
-export const WIRE_TOOL_INPUT = v.object({
+const WIRE_TOOL_INPUT = v.object({
   name: v.string(),
   note: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
@@ -73,7 +73,7 @@ const TEXT_PROMPT = `Reply with exactly this sentence and nothing else: ${EXPECT
 
 /** The one user message each scenario sends. Recordings capture exactly
  *  these prompts and nothing else. */
-export const SCENARIO_PROMPTS = {
+const SCENARIO_PROMPTS = {
   text: TEXT_PROMPT,
   "text-terminal-only": TEXT_PROMPT,
   "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with name "draft". Do not write any text.`,

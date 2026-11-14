@@ -2383,6 +2383,10 @@
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
     },
+    "turnPaused": {
+      "continue": "Pokračovat",
+      "status": "Pozastaveno po {count, plural, one {# volání nástroje} few {# voláních nástrojů} many {# volání nástroje} other {# voláních nástrojů}}"
+    },
     "turnStatus": {
       "answerFailed": "Odpověď se nepodařilo dokončit",
       "answerReady": "Odpověď je hotová",

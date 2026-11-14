@@ -2383,6 +2383,10 @@
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
     },
+    "turnPaused": {
+      "continue": "Folytatás",
+      "status": "Szüneteltetve {count, plural, one {# eszközhívás} other {# eszközhívás}} után"
+    },
     "turnStatus": {
       "answerFailed": "A választ nem sikerült befejezni",
       "answerReady": "A válasz elkészült",

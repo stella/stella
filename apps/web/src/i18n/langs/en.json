@@ -2383,6 +2383,10 @@
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
     },
+    "turnPaused": {
+      "continue": "Keep going",
+      "status": "Paused after {count, plural, one {# tool call} other {# tool calls}}"
+    },
     "turnStatus": {
       "answerFailed": "The answer could not be finished",
       "answerReady": "Answer ready",
