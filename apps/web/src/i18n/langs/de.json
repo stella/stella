@@ -2382,6 +2382,10 @@
       "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
       "replyReadyTitle": "Antwort fertig"
     },
+    "turnPaused": {
+      "continue": "Fortsetzen",
+      "status": "Nach {count, plural, one {# Tool-Aufruf} other {# Tool-Aufrufen}} pausiert"
+    },
     "turnStatus": {
       "answerFailed": "Die Antwort konnte nicht fertiggestellt werden",
       "answerReady": "Antwort fertig",

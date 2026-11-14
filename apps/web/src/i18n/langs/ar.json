@@ -2382,6 +2382,10 @@
       "replyReadyBody": "أنهت stella الرد في الدردشة.",
       "replyReadyTitle": "الرد جاهز"
     },
+    "turnPaused": {
+      "continue": "متابعة",
+      "status": "متوقف مؤقتًا بعد {count, plural, zero {# استدعاء أداة} one {استدعاء أداة واحد} two {استدعاءين لأداة} few {# استدعاءات أدوات} many {# استدعاءً لأداة} other {# استدعاء أداة}}"
+    },
     "turnStatus": {
       "answerFailed": "تعذّر إكمال الإجابة",
       "answerReady": "الإجابة جاهزة",

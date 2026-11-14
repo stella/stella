@@ -48,6 +48,7 @@ import {
   consumePlaybookSaveToolCalls,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
@@ -382,6 +383,13 @@ export const useChatSession = ({
     chat.subscribe,
     chat.getSnapshot,
     chat.getSnapshot,
+  );
+  // What the thread already waits on when this page opens it: it resumes only
+  // once the user acts. Read per page open, not per runtime, because the
+  // registry keeps a waiting thread's runtime across a reopen.
+  const workAwaitedAtOpen = useMemo(
+    () => getChatWorkAwaitedAtOpen(chat.getSnapshot().messages),
+    [chat],
   );
   const {
     error: runtimeError,
@@ -865,6 +873,15 @@ export const useChatSession = ({
       withRequestSnapshots,
     ],
   );
+
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
 
   const removeQueuedMessage = useCallback(
     (id: string) => {
@@ -1847,6 +1864,8 @@ export const useChatSession = ({
 
   return {
     activitySession: chat,
+    approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
+    workAwaitedAtOpen,
     clientStatus: status,
     reconnecting,
     refreshAnswers,
@@ -1858,6 +1877,7 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
+    continuePausedTurn,
     queuedMessages,
     removeQueuedMessage,
     sendQueuedMessageNow,

@@ -44,6 +44,7 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
@@ -280,6 +281,8 @@ export const ChatThreadPage = ({
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -465,6 +468,13 @@ export const ChatThreadPage = ({
     controller.setContent(composerStoredMarkdown(prompt.body));
     controller.focus();
   };
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      ensureAIAvailable,
+      awaitPendingSelection: composerModels.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
@@ -673,6 +683,7 @@ export const ChatThreadPage = ({
         <ChatApprovalContext
           value={{
             activeOrganizationId,
+            approvalIdsAwaitedAtOpen,
             alwaysApprovedTools,
             conversationApprovedTools,
             confirmStoredApprovalGrant,
@@ -783,6 +794,7 @@ export const ChatThreadPage = ({
                           }
                           onOpenCreatedDocument={handleOpenCreatedDocument}
                           onOpenPlaybook={handleOpenPlaybook}
+                          onContinuePausedTurn={handleContinuePausedTurn}
                           onResend={resendLatestMessage}
                           onSendWithoutAnonymization={sendWithoutAnonymization}
                           queuedMessageActions={{

@@ -2382,6 +2382,10 @@
       "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
       "replyReadyTitle": "Atsakymas paruoštas"
     },
+    "turnPaused": {
+      "continue": "Tęsti",
+      "status": "Pristabdyta po {count, plural, one {# įrankio iškvietimo} few {# įrankio iškvietimų} many {# įrankio iškvietimo} other {# įrankio iškvietimų}}"
+    },
     "turnStatus": {
       "answerFailed": "Atsakymo nepavyko užbaigti",
       "answerReady": "Atsakymas paruoštas",

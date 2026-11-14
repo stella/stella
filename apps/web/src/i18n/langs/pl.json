@@ -2382,6 +2382,10 @@
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
     },
+    "turnPaused": {
+      "continue": "Kontynuuj",
+      "status": "Wstrzymano po {count, plural, one {# wywołaniu narzędzia} few {# wywołaniach narzędzi} many {# wywołaniach narzędzi} other {# wywołania narzędzia}}"
+    },
     "turnStatus": {
       "answerFailed": "Nie udało się dokończyć odpowiedzi",
       "answerReady": "Odpowiedź gotowa",

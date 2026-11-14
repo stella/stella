@@ -2382,6 +2382,10 @@
       "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
       "replyReadyTitle": "Odpoveď je hotová"
     },
+    "turnPaused": {
+      "continue": "Pokračovať",
+      "status": "Pozastavené po {count, plural, one {# volaní nástroja} few {# volaniach nástrojov} many {# volania nástroja} other {# volaniach nástrojov}}"
+    },
     "turnStatus": {
       "answerFailed": "Odpoveď sa nepodarilo dokončiť",
       "answerReady": "Odpoveď je hotová",

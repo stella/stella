@@ -2382,6 +2382,10 @@
       "replyReadyBody": "stella a fini de répondre dans votre conversation.",
       "replyReadyTitle": "Réponse prête"
     },
+    "turnPaused": {
+      "continue": "Continuer",
+      "status": "En pause après {count, plural, one {# appel d’outil} many {# appels d’outils} other {# appels d’outils}}"
+    },
     "turnStatus": {
       "answerFailed": "La réponse n’a pas pu être terminée",
       "answerReady": "Réponse prête",

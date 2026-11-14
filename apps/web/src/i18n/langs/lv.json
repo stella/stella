@@ -2382,6 +2382,10 @@
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
     },
+    "turnPaused": {
+      "continue": "Turpināt",
+      "status": "Apturēts pēc {count, plural, zero {# rīka izsaukumiem} one {# rīka izsaukuma} other {# rīka izsaukumiem}}"
+    },
     "turnStatus": {
       "answerFailed": "Atbildi neizdevās pabeigt",
       "answerReady": "Atbilde ir gatava",

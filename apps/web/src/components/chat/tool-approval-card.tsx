@@ -565,6 +565,16 @@ const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) => {
     : LOCAL_RUN_TITLE_KEYS[titleKind];
 };
 
+/**
+ * A card the thread already waited on when the page opened is the user's to
+ * answer: answering it on its own would resume tool work on a reopened thread
+ * with no one asking.
+ */
+const awaitedAtOpen = (
+  approvalId: string | null,
+  approvalIdsAwaitedAtOpen: ReadonlySet<string>,
+) => approvalId !== null && approvalIdsAwaitedAtOpen.has(approvalId);
+
 export const ToolApprovalCard = ({
   action,
   activeFileName,
@@ -574,6 +584,7 @@ export const ToolApprovalCard = ({
 }: ToolApprovalCardProps) => {
   const {
     activeOrganizationId,
+    approvalIdsAwaitedAtOpen,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -647,6 +658,7 @@ export const ToolApprovalCard = ({
       : async () => await browserApproval.confirmSiteGrant(part.id);
   const shouldAutoApprove =
     !isBlocked &&
+    !awaitedAtOpen(approvalId, approvalIdsAwaitedAtOpen) &&
     !requiresPerCallChatApproval(name) &&
     (isGrantAutoApproval ||
       browserApproval.isReadsAutoApproval ||
