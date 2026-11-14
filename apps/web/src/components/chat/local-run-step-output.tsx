@@ -5,7 +5,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   type ChatLocalRunConversationEntry,
 } from "@stll/api-contract/chat-local-run-step-output";
 import {
@@ -217,7 +217,7 @@ const LocalRunStepOutput = ({
   const cut = isLocalRunStepOutputCut(output.totalBytes) && (
     <Note>
       {t("chat.toolCall.localOutput.cut", {
-        kept: formatFileSize(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES, format),
+        kept: formatFileSize(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text, format),
         total: formatFileSize(output.totalBytes, format),
       })}
     </Note>
@@ -336,7 +336,7 @@ const LocalRunStepImage = ({
       return (
         <Note>
           {t("chat.toolCall.localOutput.imageTooLarge", {
-            kept: formatFileSize(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES, format),
+            kept: formatFileSize(CHAT_LOCAL_RUN_STEP_MAX_BYTES.image, format),
             total: formatFileSize(image.totalBytes, format),
           })}
         </Note>

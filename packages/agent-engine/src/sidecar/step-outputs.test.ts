@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+  CHAT_LOCAL_RUN_STEP_MAX_BYTES,
   chatLocalRunImageType,
   parseChatLocalRunConversation,
 } from "@stll/api-contract/chat-local-run-step-output";
@@ -43,12 +43,12 @@ describe("a kept step output", () => {
         fc.integer({ min: 0, max: 3 }),
         (unit, padding) => {
           // Long enough to cross the cap at any offset of a multi-byte unit.
-          const text = `${"x".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES - padding)}${unit.repeat(4)}`;
+          const text = `${"x".repeat(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text - padding)}${unit.repeat(4)}`;
           const bytes = new TextEncoder().encode(text);
           const { header, kept } = read(stepOutputFile(keptStepText(text)));
           expect(header).toEqual({ bytes: bytes.length });
           expect(kept.length).toBeLessThanOrEqual(
-            CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+            CHAT_LOCAL_RUN_STEP_MAX_BYTES.text,
           );
           expect(bytes.subarray(0, kept.length)).toEqual(kept);
           const decoded = new TextDecoder("utf-8", { fatal: true }).decode(
@@ -97,9 +97,7 @@ describe("a subagent's conversation kept on the computer", () => {
             fc
               .integer({ min: 1, max: 4 })
               .map((quarters) =>
-                "x".repeat(
-                  (quarters * CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES) / 4,
-                ),
+                "x".repeat((quarters * CHAT_LOCAL_RUN_STEP_MAX_BYTES.text) / 4),
               ),
           ),
           { maxLength: 12 },
@@ -122,7 +120,7 @@ describe("a subagent's conversation kept on the computer", () => {
             0,
           );
           expect(heldBytes).toBeLessThanOrEqual(
-            CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
+            CHAT_LOCAL_RUN_STEP_MAX_BYTES.text,
           );
           // Nothing it wrote is lost from the count, and what is held is
           // what it wrote, in order.
@@ -147,7 +145,7 @@ describe("a subagent's conversation kept on the computer", () => {
       held.add("Clause 4 covers arrears.\nClause 9 does not.");
       // Held, but with the entries before it more than a step keeps: the
       // file is cut inside this entry.
-      held.add("y".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES - 100));
+      held.add("y".repeat(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text - 100));
       const output = held.ended({
         prompt: "List the arrears clauses.",
         report: "Clause 4.",
@@ -167,7 +165,7 @@ describe("a subagent's conversation kept on the computer", () => {
         ),
       );
       const { header, kept: body } = read(file);
-      expect(body.length).toBe(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES);
+      expect(body.length).toBe(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text);
       expect(header).toEqual({
         bytes: new TextEncoder().encode(
           output.entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
@@ -191,11 +189,11 @@ describe("a subagent's conversation kept on the computer", () => {
     const line = (entry: object) => `${JSON.stringify(entry)}\n`;
     for (const long of [
       // Longer than a step keeps, ending in characters of several bytes.
-      `${"z".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES)}\u00E9\u{1F4C4}`,
+      `${"z".repeat(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text)}\u00E9\u{1F4C4}`,
       // Quotes and control characters: each is several bytes once escaped.
-      '"\u0000'.repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4),
+      '"\u0000'.repeat(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text / 4),
       // Characters outside the basic plane only: a cut must not halve one.
-      "\u{1F4C4}".repeat(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 8),
+      "\u{1F4C4}".repeat(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text / 8),
     ]) {
       const output = new SubagentConversation().ended({
         prompt: long,
@@ -212,7 +210,7 @@ describe("a subagent's conversation kept on the computer", () => {
         expect(long.startsWith(text)).toBe(true);
         // The kept line, not only its text, is within the entry's share.
         expect(bytes(line(entry ?? {}))).toBeLessThanOrEqual(
-          CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES / 4,
+          CHAT_LOCAL_RUN_STEP_MAX_BYTES.text / 4,
         );
         expect(
           new TextDecoder("utf-8", { fatal: true }).decode(
@@ -270,7 +268,11 @@ describe("an image a step viewed, kept on the computer", () => {
               expect(kept).toBeNull();
               return;
             }
-            expect(kept).toEqual({ totalBytes: bytes.length, kept: bytes });
+            expect(kept).toEqual({
+              kind: "image",
+              totalBytes: bytes.length,
+              kept: bytes,
+            });
           },
         ),
         { numRuns: 60 },
@@ -278,26 +280,79 @@ describe("an image a step viewed, kept on the computer", () => {
     });
   });
 
-  test("past the cap keeps only its size, and a name that is no file keeps nothing", async () => {
+  test("at its cap is kept whole, one byte past it keeps only its size, and a name that is no file keeps nothing", async () => {
     await inFolder(async (folder) => {
-      const large = new Uint8Array(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES + 1);
+      const cap = CHAT_LOCAL_RUN_STEP_MAX_BYTES.image;
+      const large = new Uint8Array(cap + 1);
       large.set(PNG);
       writeFileSync(path.join(folder, "large.png"), large);
       expect(await keptStepImage("large.png", folder)).toEqual({
-        totalBytes: large.length,
+        kind: "image",
+        totalBytes: cap + 1,
         kept: new Uint8Array(),
       });
+      // The file it is kept as says its size and holds none of it.
+      const runId = "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f";
+      const keep = async (toolCallId: string, file: string) => {
+        const kept = await keepStepOutput({
+          stepOutputDir: folder,
+          workspaceDir: folder,
+          runId,
+          toolCallId,
+          output: { type: "image", path: file },
+        });
+        expect(kept.isOk()).toBe(true);
+        return read(
+          new Uint8Array(
+            readFileSync(
+              stepOutputPath({ stepOutputDir: folder, runId, toolCallId }),
+            ),
+          ),
+        );
+      };
+      const past = await keep("call-large", "large.png");
+      expect(past.header).toEqual({ bytes: cap + 1 });
+      expect(past.kept.length).toBe(0);
       // At the cap exactly, an image is still kept whole.
-      const atCap = large.subarray(0, CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES);
+      const atCap = large.subarray(0, cap);
       writeFileSync(path.join(folder, "at-cap.png"), atCap);
-      expect((await keptStepImage("at-cap.png", folder))?.kept.length).toBe(
-        CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
-      );
+      const whole = await keep("call-at-cap", "at-cap.png");
+      expect(whole.header).toEqual({ bytes: cap });
+      expect(whole.kept.length).toBe(cap);
+      expect(Buffer.compare(whole.kept, atCap)).toBe(0);
       // A folder is no image; neither is a text file named like one.
       expect(await keptStepImage(".", folder)).toBeNull();
       writeFileSync(path.join(folder, "notes.png"), "<svg onload=alert(1)>");
       expect(await keptStepImage("notes.png", folder)).toBeNull();
     });
+  });
+
+  test("an image past the most a text keeps is kept; a text never is, whatever its length", () => {
+    const { text, image } = CHAT_LOCAL_RUN_STEP_MAX_BYTES;
+    expect(image).toBeGreaterThan(text);
+    // A text as long as the largest image is still cut at its own cap.
+    const long = keptStepText("x".repeat(image));
+    expect(long.totalBytes).toBe(image);
+    expect(long.kept.length).toBe(text);
+    expect(read(stepOutputFile(long)).kept.length).toBe(text);
+  });
+
+  test("no file is made holding more than its kind keeps", () => {
+    for (const kind of ["text", "image"] as const) {
+      const cap = CHAT_LOCAL_RUN_STEP_MAX_BYTES[kind];
+      expect(
+        read(
+          stepOutputFile({ kind, totalBytes: cap, kept: new Uint8Array(cap) }),
+        ).kept.length,
+      ).toBe(cap);
+      expect(() =>
+        stepOutputFile({
+          kind,
+          totalBytes: cap + 1,
+          kept: new Uint8Array(cap + 1),
+        }),
+      ).toThrow("past its kind's cap");
+    }
   });
 
   // A named pipe has no counterpart to make on Windows.

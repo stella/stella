@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
+import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -47,11 +47,11 @@ describe("a step's output as its row shows it", () => {
   });
 
   test("only output past the cap reads as cut", () => {
-    expect(isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES)).toBe(
+    expect(isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text)).toBe(
       false,
     );
     expect(
-      isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES + 1),
+      isLocalRunStepOutputCut(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text + 1),
     ).toBe(true);
   });
 
@@ -210,21 +210,39 @@ describe("an image a step viewed, as its row shows it", () => {
   });
 
   test("an image past what the computer keeps says how large it is and shows nothing", () => {
-    const totalBytes = CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES + 1;
+    const cap = CHAT_LOCAL_RUN_STEP_MAX_BYTES.image;
+    const totalBytes = cap + 1;
     // The computer kept only its size.
     expect(localRunStepImageView({ chunks: [], totalBytes })).toEqual({
       status: "too-large",
       totalBytes,
     });
     // More than the cap is never shown, even if a desktop sent it.
-    const oversized = new Uint8Array(CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES + 1);
+    const oversized = new Uint8Array(cap + 1);
     oversized.set(PNG);
     expect(
-      localRunStepImageView({
-        chunks: [oversized],
-        totalBytes: CHAT_LOCAL_RUN_STEP_OUTPUT_MAX_BYTES,
-      }),
+      localRunStepImageView({ chunks: [oversized], totalBytes: cap }),
     ).toEqual({ status: "not-image" });
+  });
+
+  test("an image at its cap is shown whole, past the most a text keeps", () => {
+    const cap = CHAT_LOCAL_RUN_STEP_MAX_BYTES.image;
+    expect(cap).toBeGreaterThan(CHAT_LOCAL_RUN_STEP_MAX_BYTES.text);
+    const whole = new Uint8Array(cap);
+    whole.set(PNG);
+    // As it arrives: in chunks.
+    const half = cap / 2;
+    const view = localRunStepImageView({
+      chunks: [whole.subarray(0, half), whole.subarray(half)],
+      totalBytes: cap,
+    });
+    expect(view.status).toBe("shown");
+    if (view.status !== "shown") {
+      return;
+    }
+    expect(view.type).toBe("image/png");
+    const data = view.src.slice("data:image/png;base64,".length);
+    expect(Buffer.compare(Buffer.from(data, "base64"), whole)).toBe(0);
   });
 
   test("a read cut short shows no image and is read again", () => {
