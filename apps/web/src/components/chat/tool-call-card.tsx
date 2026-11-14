@@ -6,7 +6,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { isChatLocalRunToolName } from "@stll/api-contract/chat-local-run-tool";
+import {
+  isLocalRunInterruptedOutput,
+  localRunStepFailed,
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -28,11 +33,9 @@ import {
   getChatToolTitleKey,
   type HarnessChatToolCallPart,
   isRunningToolPart,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
-import {
-  localRunToolSubtitleText,
-  localRunToolView,
-} from "@/components/chat/local-run-tool.logic";
+import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -414,22 +417,6 @@ const TOOL_CALL_STATUS_LABEL_KEYS = {
 export type ToolCallAction = { label: string; onClick: () => void };
 
 /**
- * Whether a coding agent's own step reports that it failed: its result is
- * `{ status: "failed" }` (`chat-local-run-tool`), with no error envelope.
- */
-const localRunStepFailed = (name: string, output: unknown): boolean =>
-  isChatLocalRunToolName(name) &&
-  typeof output === "object" &&
-  output !== null &&
-  Reflect.get(output, "status") === "failed";
-
-/** The result a coding agent's run gives a call its turn cut off. */
-const isInterruptedOutput = (output: unknown): boolean =>
-  typeof output === "object" &&
-  output !== null &&
-  Reflect.get(output, "status") === "interrupted";
-
-/**
  * How a call that did not complete reads: interrupted only when it ended
  * with no result at all (its stream died mid call) or with the explicit
  * cancellation result; any other error result, an envelope, a step
@@ -453,7 +440,7 @@ export const toolFailureLabelKey = ({
   if (state !== "error") {
     return undefined;
   }
-  return output === undefined || isInterruptedOutput(output)
+  return output === undefined || isLocalRunInterruptedOutput(output)
     ? "chat.toolCall.interrupted"
     : "chat.toolCall.failed";
 };
@@ -532,12 +519,12 @@ const ToolCallCardComponent = ({
     input: getToolInput(part),
     output: part.output,
   });
-  const localRunTitleKey = localRunTool?.titleKey ?? null;
+  const localRunTitleKind = localRunTool?.titleKind ?? null;
   const label =
     catalogEntry?.brand ??
-    (localRunTitleKey === null
+    (localRunTitleKind === null
       ? t(getChatToolTitleKey(name))
-      : t(localRunTitleKey));
+      : t(LOCAL_RUN_TITLE_KEYS[localRunTitleKind]));
   const subtitle =
     localRunTool === null
       ? getToolSubtitle({
@@ -731,58 +718,57 @@ const ToolCallCardComponent = ({
           />
         )}
       </Tooltip>
-      {expanded &&
-        (showMcpExactCall ||
-          codeToolSource !== undefined ||
-          showCodeToolOutput ||
-          toolInput !== undefined ||
-          hasOutput) && (
-          <div className="space-y-1 ps-2 pt-1 pb-2">
-            {showMcpExactCall && (
+      {expanded && canExpand && (
+        <div className="space-y-1 ps-2 pt-1 pb-2">
+          {showMcpExactCall && (
+            <ToolCallCodeBlock
+              code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
+              label={t("chat.toolCall.exactCall")}
+              language="json"
+              tone="call"
+            />
+          )}
+          {!showMcpExactCall &&
+            codeToolSource === undefined &&
+            toolInput !== undefined && (
               <ToolCallCodeBlock
-                code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
-                label={t("chat.toolCall.exactCall")}
+                code={JSON.stringify(toolInput, null, 2)}
+                label={t("chat.toolCall.input")}
                 language="json"
                 tone="call"
               />
             )}
-            {!showMcpExactCall &&
-              codeToolSource === undefined &&
-              toolInput !== undefined && (
-                <ToolCallCodeBlock
-                  code={JSON.stringify(toolInput, null, 2)}
-                  label={t("chat.toolCall.input")}
-                  language="json"
-                  tone="call"
-                />
-              )}
-            {codeToolSource !== undefined && (
-              <ToolCallCodeBlock
-                code={codeToolSource}
-                label={t("chat.toolCall.sourceCode")}
-                language="typescript"
-                lineNumbers
-                tone="call"
-              />
-            )}
-            {codeToolLogs.length > 0 && (
-              <ToolCallCodeBlock
-                code={codeToolLogs.join("\n")}
-                label={t("chat.toolCall.consoleLogs")}
-                language="text"
-                tone="result"
-              />
-            )}
-            {hasOutput && "output" in part && (
-              <ToolCallCodeBlock
-                code={JSON.stringify(part.output, null, 2)}
-                label={t("chat.toolCall.output")}
-                language="json"
-                tone="result"
-              />
-            )}
-          </div>
-        )}
+          {codeToolSource !== undefined && (
+            <ToolCallCodeBlock
+              code={codeToolSource}
+              label={t("chat.toolCall.sourceCode")}
+              language="typescript"
+              lineNumbers
+              tone="call"
+            />
+          )}
+          {codeToolLogs.length > 0 && (
+            <ToolCallCodeBlock
+              code={codeToolLogs.join("\n")}
+              label={t("chat.toolCall.consoleLogs")}
+              language="text"
+              tone="result"
+            />
+          )}
+          {hasOutput && "output" in part && (
+            <ToolCallCodeBlock
+              code={JSON.stringify(part.output, null, 2)}
+              label={t("chat.toolCall.output")}
+              language="json"
+              tone="result"
+            />
+          )}
+          <LocalRunStepOutputDetails
+            activeOrganizationId={activeOrganizationId}
+            part={part}
+          />
+        </div>
+      )}
       {hasError && errorMessage && (
         <ToolCallFailureDetails
           errorMessage={errorMessage}

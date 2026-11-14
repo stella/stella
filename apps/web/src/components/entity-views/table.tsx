@@ -549,7 +549,7 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         case "document":
           return t("common.document");
         case "folder":
-          return t("search.kinds.folder");
+          return t("common.folder");
         case null:
           return null;
         case "message":

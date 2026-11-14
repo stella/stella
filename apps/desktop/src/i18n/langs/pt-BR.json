@@ -831,5 +831,26 @@
       "network_folder": "Esta pasta está em um compartilhamento de rede. As habilidades precisam estar no disco deste computador.",
       "path_changed": "Uma pasta superior mudou. Remova esta pasta e adicione-a de novo."
     }
+  },
+  "localLinkedFolders": {
+    "title": "Pastas vinculadas",
+    "description": "Pastas deste computador em que o agente de um chat pode trabalhar. O chat vê só o nome da pasta; o caminho dela fica neste computador.",
+    "add": "Vincular pasta",
+    "remove": "Desvincular",
+    "removeFolder": "Desvincular {name}",
+    "state": {
+      "offline": "A unidade em que esta pasta está não está conectada.",
+      "moved": "Esta pasta foi movida, renomeada ou excluída. Desvincule-a e vincule-a de novo.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
+    },
+    "notice": {
+      "action_failed": "Não funcionou. Tente de novo.",
+      "too_many": "Este computador já tem todas as pastas vinculadas que consegue guardar. Desvincule uma primeiro.",
+      "not_a_folder": "Escolha uma pasta.",
+      "network_folder": "Esta pasta está em um compartilhamento de rede. Vincule uma pasta do disco deste computador.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
+    }
   }
 }
