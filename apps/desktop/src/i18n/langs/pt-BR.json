@@ -296,6 +296,7 @@
     "errorReadHistory": "Não foi possível carregar o histórico da área de transferência.",
     "errorUpdateHistory": "Não foi possível atualizar o histórico da área de transferência.",
     "formattedText": "Texto formatado",
+    "dictation": "Ditado",
     "image": "Imagem",
     "imageCleanupPending": "Não foi possível remover alguns dados de imagens excluídas. A limpeza será repetida automaticamente.",
     "imageDimensions": "{width} × {height} px",
@@ -584,9 +585,32 @@
   "dictation": {
     "title": "Ditado",
     "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada. Com a revisão por IA ativada, o texto transcrito, não o áudio, é enviado pela stella ao provedor de IA da sua organização para corrigir erros e formatação; a stella não o armazena.",
+    "descriptionCloud": "Mantenha {shortcut} pressionado e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita pela stella AI e não é armazenada pela stella.",
     "cleanup": {
       "title": "Revisar com IA",
-      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena."
+      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena. A revisão também recebe o tipo de aplicativo em que você dita, como e-mail ou chat, para que o texto combine com ele.",
+      "descriptionCloud": "Com a revisão ativada, a stella AI também corrige erros de reconhecimento no texto transcrito e aplica a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A revisão também recebe o tipo de aplicativo em que você dita, como e-mail ou chat, para que o texto combine com ele."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Compartilhar o título da janela com a revisão por IA",
+        "description": "A revisão também recebe o título da janela em que você dita, para distinguir, por exemplo, um contrato de uma nota interna. Títulos de janela podem conter nomes de clientes ou de casos. O título é enviado pela stella ao provedor de IA da sua organização, e a stella não o armazena."
+      },
+      "textBeforeCursor": {
+        "title": "Compartilhar o texto antes do cursor com a revisão por IA",
+        "description": "A revisão também recebe até {limit, number} caracteres antes do cursor, para que o ditado continue o texto que você está escrevendo. Assim, parte do documento em que você está é enviada pela stella ao provedor de IA da sua organização, e a stella não a armazena."
+      }
+    },
+    "keptInHistory": "Cada ditado também fica guardado no histórico da área de transferência deste computador.",
+    "destination": {
+      "title": "Transcrever com",
+      "local": "Este computador",
+      "cloud": "stella AI",
+      "cloudDescription": "O áudio sai deste computador: é enviado à stella e, por meio do provedor de IA da stella, ao provedor do modelo selecionado para transcrição. A stella não o armazena.",
+      "unavailableRegion": "A stella AI ainda não oferece transcrição na região da sua organização.",
+      "unavailableProvider": "O provedor de IA da sua organização não oferece transcrição.",
+      "unavailable": "A transcrição pela stella AI não está disponível no momento.",
+      "model": "Modelo de transcrição"
     },
     "language": {
       "title": "Idioma do ditado",
@@ -608,8 +632,10 @@
       "transcription": "A transcrição falhou. Tente novamente.",
       "focusChanged": "Você mudou para outro aplicativo antes de o texto ficar pronto, então nada foi digitado. Tente novamente.",
       "focusUnconfirmed": "A stella não conseguiu confirmar qual aplicativo está em foco, então nada foi digitado. Tente novamente.",
-      "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente."
-    }
+      "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente.",
+      "cloudTranscription": "A stella AI não conseguiu transcrever este ditado e o modelo de voz não está neste computador. Tente novamente ou, em “Transcrever com”, escolha “Este computador” e baixe o modelo."
+    },
+    "failureKeptInHistory": "O texto está no histórico da área de transferência."
   },
   "shortcut": {
     "title": "Atalho da área de transferência",
