@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
-  "delta": 3,
-  "reason": "Un-naming a copy in the desired-state writer (an undone erasure), in erasure and in drift repair is bookkeeping on the derived public corpus projection, with no tenant data and no user actor. The erasure and repair functions' ledger rows are removed in the same change, and the removed replacement preparation takes its ledger row with it."
+  "delta": 4,
+  "reason": "Un-naming a copy in the desired-state writer (an undone erasure or a copy more than one desired change behind), in erasure and in drift repair, and moving an un-named state's queue position when its retired revision settles, are bookkeeping on the derived public corpus projection, with no tenant data and no user actor. The erasure and repair functions' ledger rows are removed in the same change, and the removed replacement preparation takes its ledger row with it."
 }
