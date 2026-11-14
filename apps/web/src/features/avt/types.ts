@@ -72,6 +72,11 @@ export const NOT_CARRIED_LABEL_KEYS = {
   ambiguous: "avt.runs.carryOver.outcomes.ambiguous",
 } as const satisfies Record<NotCarriedClaim["outcome"], TranslationKey>;
 
+/** One page of a list's verification graph: documents, claims, facts and
+ *  sources, and the links between them. */
+export type VerificationGraphPage =
+  ListsRoutes["verifications"]["graph"]["get"]["response"][200];
+
 export type ReviewHistoryPage =
   ListsRoutes["claim-reviews"]["get"]["response"][200];
 export type ReviewHistoryEntry = ReviewHistoryPage["items"][number];
