@@ -648,10 +648,10 @@
     {
       "name": "verify_quote",
       "nameChars": 12,
-      "descriptionChars": 646,
+      "descriptionChars": 675,
       "inputSchemaChars": 423,
-      "totalChars": 1081,
-      "estimatedTokens": 396
+      "totalChars": 1110,
+      "estimatedTokens": 406
     },
     {
       "name": "write_capability",
@@ -663,7 +663,7 @@
     }
   ],
   "totals": {
-    "characters": 140301,
-    "estimatedTokens": 55743
+    "characters": 140330,
+    "estimatedTokens": 55753
   }
 }

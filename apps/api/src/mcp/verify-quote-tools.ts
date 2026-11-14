@@ -166,7 +166,7 @@ const definitions = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description: `Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns all occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= ${QUOTE_FUZZY_THRESHOLD}; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.`,
+    description: `Check a quote in one stored decision; resolve docket/ECLI with resolve_case_law_decision first. Exact preserves wording/case/diacritics, normalizes whitespace, quotes, dashes, soft/line-end hyphens and č. j. spacing; returns occurrenceCount and the first ${LIMITS.caseLawQuoteMaxOccurrences} occurrences per ordered ellipsis segment, paragraph labels/links and original UTF-16 offsets. Only exact: verified:true; all others:false. Report fuzzy as an altered quote, never confirmed: closest token-edit passage, similarity >= ${QUOTE_FUZZY_THRESHOLD}; not_found: lower. Differences go passage→quote (added/dropped tokens). cannot_verify: unreadable text, not quote absence. No publisher fetch; read_case_law_decision gives context.`,
     inputSchema: verifyQuoteArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["check"],

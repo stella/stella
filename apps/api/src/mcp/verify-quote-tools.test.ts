@@ -7,6 +7,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { status } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
+import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import type { ReadCaseLawDecisionSuccess } from "./public-law-handlers";
@@ -203,5 +204,13 @@ test("unknown ids and backing read failures have distinct actionable error envel
 test("the advertised contract requires altered quotes to remain unconfirmed", () => {
   expect(VERIFY_QUOTE_TOOL_SET.definitions.at(0)?.description).toContain(
     "Report fuzzy as an altered quote, never confirmed",
+  );
+});
+
+test("the advertised contract states the occurrence cap the output applies", () => {
+  const description = VERIFY_QUOTE_TOOL_SET.definitions.at(0)?.description;
+  expect(description).not.toContain("all occurrences");
+  expect(description).toContain(
+    `occurrenceCount and the first ${LIMITS.caseLawQuoteMaxOccurrences} occurrences`,
   );
 });
