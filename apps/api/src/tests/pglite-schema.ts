@@ -1552,7 +1552,7 @@ export const installPgliteLegalHoldDeleteBackstop = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
   const statements = readMigrationStatements(
-    nodePath.join(DRIZZLE_DIR, "20261114160000_legal_holds", "migration.sql"),
+    nodePath.join(DRIZZLE_DIR, "20261114200000_legal_holds", "migration.sql"),
   ).filter((statement) =>
     /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE ALL ON FUNCTION)\s/u.test(
       executableSql(statement),

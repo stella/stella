@@ -1234,7 +1234,14 @@ describe("toolErrorLines", () => {
       { path: "hold-2", code: "entity", message: "2026-10-02T00:00:00.000Z" },
       { path: "hold-3", message: "2026-10-03T00:00:00.000Z" },
     ]);
-    expect(envelope === null ? [] : toolErrorLines(envelope, FLAGS)).toEqual([
+    expect(
+      envelope === null
+        ? []
+        : toolErrorLines(envelope, {
+            command: "matter delete",
+            flagPaths: FLAGS,
+          }),
+    ).toEqual([
       "error: Deletion is blocked by an active legal hold",
       "  hold-1: 2026-10-01T00:00:00.000Z [matter]",
       "  hold-2: 2026-10-02T00:00:00.000Z [entity]",

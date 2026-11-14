@@ -2990,13 +2990,6 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
-    "fingerprint": "5f227d959a6373d5e44649bc3de21120afd273e964de6fbf58e3ad6761027ad1",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
-    "holder": "stella_ingestion"
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "6352330a64dfb8d2240a308da96ff04b41565e6aab78deb33b9c72ac77d8f9a2",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
@@ -3040,13 +3033,6 @@
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "d14a0310d6edd84826f7b6054598011b40a1373db4a38674ae63238bb2361d49",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
-    "holder": "stella_ingestion"
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
-    "fingerprint": "e8463a14555e38a20087f2211a03cd6bc4cd5484b3bd0866b3553a0df1cbd6ca",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
     "holder": "stella_ingestion"
