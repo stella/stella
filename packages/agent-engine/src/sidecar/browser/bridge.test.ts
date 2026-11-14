@@ -198,8 +198,17 @@ describe("the browser bridge and its native host", () => {
       suggestedName: "setup.dmg",
     } as const;
 
+    const deliveryId = "0b6c1f4e-8a52-4d0e-9f3a-2c7d5e6f7a81";
     chrome.toHost({
       controllerId: "thread-1",
+      deliveryId,
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "download-started",
+    });
+    chrome.toHost({
+      controllerId: "thread-1",
+      deliveryId,
       download,
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
@@ -207,10 +216,13 @@ describe("the browser bridge and its native host", () => {
     });
 
     expect(
-      await waitFor(() => reports.at(0), {
-        description: "the download report",
+      await waitFor(() => (reports.length === 2 ? reports : undefined), {
+        description: "both download reports",
       }),
-    ).toEqual({ controllerId: "thread-1", download });
+    ).toEqual([
+      { controllerId: "thread-1", deliveryId, type: "started" },
+      { controllerId: "thread-1", deliveryId, download, type: "settled" },
+    ]);
   });
 
   test("answer disconnected while no extension is connected", async () => {

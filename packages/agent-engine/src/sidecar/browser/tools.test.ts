@@ -104,14 +104,22 @@ const recorder = (
     approvals = "auto",
     decision = APPROVAL_DECISION.approve,
     downloads = [],
+    saving = 0,
+    shownSaves = new Map(),
   }: {
     approvals?: DesktopRunnerApprovalMode;
     decision?: (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
     /** What the chat's tab downloaded before the next result. */
     downloads?: BrowserDownloadOutcome[];
+    /** Downloads still saving, as the inbox counts them. */
+    saving?: number;
+    /** What each shown document's save became, by address, as the inbox knows it. */
+    shownSaves?: Map<string, BrowserDownloadOutcome>;
   } = {},
 ) => {
   const sent: Sent[] = [];
+  /** The address each result asked the inbox about. */
+  const shownAddresses: (string | null)[] = [];
   const asked: Omit<BrowserApprovalRequest, "signal">[] = [];
   const finished: string[] = [];
   const context = {
@@ -129,7 +137,15 @@ const recorder = (
       };
     },
     // Handed out once, as the MCP server's inbox does.
-    downloads: async () => downloads.splice(0),
+    downloads: async (shownAddress: string | null) => {
+      shownAddresses.push(shownAddress);
+      return {
+        downloads: downloads.splice(0),
+        saving,
+        shown:
+          shownAddress === null ? null : (shownSaves.get(shownAddress) ?? null),
+      };
+    },
     send: async (
       command: BrowserControlCommand,
       observedTab: BrowserObservedTab | null,
@@ -139,7 +155,15 @@ const recorder = (
     },
     signal: new AbortController().signal,
   };
-  return { asked, context, downloads, finished, send: context.send, sent };
+  return {
+    asked,
+    context,
+    downloads,
+    finished,
+    send: context.send,
+    sent,
+    shownAddresses,
+  };
 };
 
 const parsed = (result: { content: { text: string }[] }): unknown =>
@@ -469,6 +493,130 @@ describe("the local browser tools", () => {
       command: { action: "click", page: { revision: "r-1" } },
       observedTab: { revision: "r-1", tabId: 7 },
     });
+  });
+});
+
+describe("a tab showing a PDF", () => {
+  const PDF_ADDRESS = "https://fixture-library.test/decisions/42/file";
+
+  /** Chrome's viewer page around a PDF, as the extension reads it. */
+  const pdfPage = (revision: string): BrowserControlResult => ({
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    snapshot: {
+      contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      document: { type: "pdf" },
+      elements: [],
+      elementsLeftOut: false,
+      facts: { meta: [] },
+      revision,
+      tabId: 7,
+      tabs: [],
+      text: "",
+      title: "Judgment 42",
+      url: `${PDF_ADDRESS}#page=2`,
+      window: { cursor: CURSOR, fromPercent: 0, toPercent: 100 },
+    },
+    status: "success",
+  });
+
+  const saved: BrowserDownloadOutcome = {
+    bytes: 4096,
+    path: "Downloads/Judgment 42.pdf",
+    sourceUrl: PDF_ADDRESS,
+    status: "saved",
+  };
+
+  test("an open that lands on a PDF says so, reads no text and gives the saved path", async () => {
+    const session = createLocalBrowserSession();
+    const other: BrowserDownloadOutcome = {
+      bytes: 10,
+      path: "Downloads/annex.pdf",
+      sourceUrl: "https://fixture-library.test/annex",
+      status: "saved",
+    };
+    const browser = recorder([pdfPage("r-1"), pdfPage("r-2")], {
+      downloads: [saved, other],
+      shownSaves: new Map([[PDF_ADDRESS, saved]]),
+    });
+
+    const opened = await session.call(
+      "open",
+      { url: `${PDF_ADDRESS}#page=2` },
+      browser.context,
+    );
+
+    expect(opened.isError).toBe(false);
+    const view = parsed(opened);
+    expect(view).toEqual({
+      contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      document: "pdf",
+      downloads: [other],
+      file: saved,
+      message: expect.stringContaining("cannot be read as a page"),
+      title: "Judgment 42",
+      url: `${PDF_ADDRESS}#page=2`,
+    });
+    // The inbox is asked by the address, without the fragment.
+    expect(browser.shownAddresses).toEqual([PDF_ADDRESS]);
+
+    // A later read of the same PDF repeats where it was saved.
+    const again = parsed(await session.call("snapshot", {}, browser.context));
+    expect(again).toMatchObject({ document: "pdf", file: saved });
+    expect(again).not.toHaveProperty("downloads");
+  });
+
+  test("a refused save comes back as its typed reason", async () => {
+    const session = createLocalBrowserSession();
+    const refused: BrowserDownloadOutcome = {
+      message: "Chrome could not finish the download.",
+      reason: "interrupted",
+      sourceUrl: PDF_ADDRESS,
+      status: "refused",
+    };
+    const browser = recorder([pdfPage("r-1")], {
+      downloads: [refused],
+      shownSaves: new Map([[PDF_ADDRESS, refused]]),
+    });
+
+    const read = parsed(await session.call("snapshot", {}, browser.context));
+
+    expect(read).toMatchObject({ document: "pdf", file: refused });
+    expect(read).not.toHaveProperty("downloads");
+  });
+
+  test("a save still running is named as such, never as page text", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([pdfPage("r-1")], { saving: 1 });
+
+    const read = parsed(await session.call("snapshot", {}, browser.context));
+
+    expect(read).toMatchObject({
+      document: "pdf",
+      file: { status: "saving" },
+      savingDownloads: 1,
+    });
+    expect(read).not.toHaveProperty("text");
+    expect(read).not.toHaveProperty("elements");
+  });
+
+  test("a PDF with no save known says it was not saved", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([pdfPage("r-1")]);
+
+    expect(
+      parsed(await session.call("snapshot", {}, browser.context)),
+    ).toMatchObject({ document: "pdf", file: { status: "not_saved" } });
+  });
+
+  test("a web page asks the inbox about no document", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1")], { saving: 2 });
+
+    const read = parsed(await session.call("snapshot", {}, browser.context));
+
+    expect(browser.shownAddresses).toEqual([null]);
+    expect(read).not.toHaveProperty("document");
+    expect(read).toMatchObject({ savingDownloads: 2 });
   });
 });
 

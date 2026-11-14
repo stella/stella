@@ -1,8 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   BROWSER_CONTROL_LIMITS,
   BROWSER_DOWNLOAD_STOP_REASON,
+  browserDocumentAddress,
   type BrowserDownload,
   browserDownloadStagedPath,
   type BrowserDownloadStopReason,
@@ -21,7 +22,12 @@ import {
   type TracedOwner,
   traceDownload,
 } from "./download-trace";
-import { BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY } from "./storage-keys";
+import { parseControllableUrl } from "./origin-policy";
+import { isPdfMimeType, type ShownPdf } from "./shown-document";
+import {
+  BROWSER_DOWNLOAD_NOTICES_STORAGE_KEY,
+  BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY,
+} from "./storage-keys";
 import {
   containedTabIds,
   readContainedTabs,
@@ -105,13 +111,11 @@ type DownloadFacts = Pick<
   "filename" | "finalUrl" | "mime" | "totalBytes" | "url"
 >;
 
-/** A desktop chat's downloads Chrome may run at once; another is stopped. */
+/**
+ * A desktop chat's downloads Chrome may run at once, shown PDFs it saves
+ * included; another is stopped.
+ */
 export const MAX_RUNNING_DELIVERIES = 4;
-
-const PDF_TYPES: ReadonlySet<string> = new Set([
-  "application/pdf",
-  "application/x-pdf",
-]);
 
 /** The last segment of a path or URL path, `/` or `\` separated. */
 const lastSegment = (value: string): string =>
@@ -144,7 +148,7 @@ const suggestedDownloadName = (download: DownloadFacts): string =>
  * file's first bytes before it takes it.
  */
 const saysPdf = (download: DownloadFacts): boolean =>
-  PDF_TYPES.has(download.mime.split(";")[0]?.trim().toLowerCase() ?? "") ||
+  isPdfMimeType(download.mime) ||
   suggestedDownloadName(download).toLowerCase().endsWith(".pdf");
 
 /** Whether a desktop chat takes a download its tab started. */
@@ -164,22 +168,43 @@ export const desktopDownloadVerdict = (
   return { type: "deliver" };
 };
 
-/** Tells stella desktop about a download of a chat's tab. */
-export type DownloadReporter = (
-  chatId: string,
-  download: BrowserDownload,
-) => void;
+/**
+ * Tells stella desktop about a download a chat takes: when Chrome starts
+ * saving it, and once it settles. Each delivery has one id throughout; a
+ * download stopped before it started is reported settled only.
+ */
+export type DownloadReporter = {
+  started: (chatId: string, deliveryId: string) => void;
+  settled: (
+    chatId: string,
+    deliveryId: string,
+    download: BrowserDownload,
+  ) => void;
+};
 
-let reporter: DownloadReporter = () => undefined;
+const SILENT_REPORTER: DownloadReporter = {
+  settled: () => undefined,
+  started: () => undefined,
+};
 
-/** Set once by the worker: the desktop link's report. */
+let reporter: DownloadReporter = SILENT_REPORTER;
+
+/** Set once by the worker: the desktop link's reports. */
 export const setDownloadReporter = (report: DownloadReporter): void => {
   reporter = report;
 };
 
+/**
+ * How a delivery began: a download a chat's tab started, or a PDF the
+ * chat's tab shows that the extension saves itself.
+ */
+type DeliveryKind = "download" | "shown-pdf";
+
 /** A download a desktop chat takes, from its judgement until it settles. */
 type Delivery = {
   chatId: string;
+  deliveryId: string;
+  kind: DeliveryKind;
   /** Where Chrome is told to save it, relative to its download folder. */
   stagedPath: string;
   sourceUrl: string;
@@ -193,11 +218,37 @@ type Delivery = {
  */
 const deliveries = new Map<number, Delivery>();
 
+/**
+ * Shown PDFs whose save was asked of Chrome, by delivery id, until Chrome
+ * names the download: they count against the limit from the start.
+ */
+const startingShownSaves = new Map<string, Delivery>();
+
+const runningDeliveries = (): number =>
+  deliveries.size + startingShownSaves.size;
+
 const sourceUrlOf = (download: DownloadFacts): string =>
   (download.finalUrl === "" ? download.url : download.finalUrl).slice(
     0,
     BROWSER_CONTROL_LIMITS.urlChars,
   );
+
+/** A fresh delivery: its id also names the staged file. */
+const newDelivery = (
+  chatId: string,
+  kind: DeliveryKind,
+  { sourceUrl, suggestedName }: Pick<Delivery, "sourceUrl" | "suggestedName">,
+): Delivery => {
+  const deliveryId = crypto.randomUUID();
+  return {
+    chatId,
+    deliveryId,
+    kind,
+    sourceUrl,
+    stagedPath: browserDownloadStagedPath(deliveryId),
+    suggestedName,
+  };
+};
 
 /**
  * The verdict for a desktop chat, and the slot it takes when it delivers,
@@ -208,44 +259,65 @@ const reserveDelivery = (
   download: DownloadFacts & { id: number },
   chatId: string,
 ): DesktopDownloadVerdict => {
-  const verdict = desktopDownloadVerdict(download, deliveries.size);
+  const verdict = desktopDownloadVerdict(download, runningDeliveries());
   if (verdict.type === "deliver") {
-    deliveries.set(download.id, {
-      chatId,
-      sourceUrl: sourceUrlOf(download),
-      stagedPath: browserDownloadStagedPath(crypto.randomUUID()),
-      suggestedName: suggestedDownloadName(download),
-    });
+    deliveries.set(
+      download.id,
+      newDelivery(chatId, "download", {
+        sourceUrl: sourceUrlOf(download),
+        suggestedName: suggestedDownloadName(download),
+      }),
+    );
   }
   return verdict;
+};
+
+/**
+ * The desktop chat that takes downloads now: the one holding the browser,
+ * while stella desktop is connected. Null under the web connection.
+ */
+const readTakingDesktopChat = async (): Promise<string | null> => {
+  const holder = await readControlHolder();
+  switch (holder.transport) {
+    case CONTROL_TRANSPORT.web:
+      return null;
+    case CONTROL_TRANSPORT.desktop: {
+      const chatId = desktopChatId(holder.controllerId);
+      return chatId !== null &&
+        (await readDesktopLinkState()) === DESKTOP_LINK_STATE.connected
+        ? chatId
+        : null;
+    }
+    default:
+      holder satisfies never;
+      return panic("Unhandled control transport");
+  }
 };
 
 /** Who takes a download traced to chat's tabs, judged now. */
 const readDownloadReceiver = async (
   download: DownloadFacts & { id: number },
 ): Promise<DownloadReceiver> => {
-  const holder = await readControlHolder();
-  switch (holder.transport) {
-    case CONTROL_TRANSPORT.web:
-      return NO_DOWNLOAD_RECEIVER;
-    case CONTROL_TRANSPORT.desktop: {
-      const chatId = desktopChatId(holder.controllerId);
-      if (
-        chatId === null ||
-        (await readDesktopLinkState()) !== DESKTOP_LINK_STATE.connected
-      ) {
-        return NO_DOWNLOAD_RECEIVER;
-      }
-      return {
-        chatId,
-        type: "desktop",
-        verdict: reserveDelivery(download, chatId),
-      };
-    }
-    default:
-      holder satisfies never;
-      return panic("Unhandled control transport");
-  }
+  const chatId = await readTakingDesktopChat();
+  return chatId === null
+    ? NO_DOWNLOAD_RECEIVER
+    : { chatId, type: "desktop", verdict: reserveDelivery(download, chatId) };
+};
+
+/** Reports a delivery stopped before Chrome saved anything. */
+const reportStopped = (
+  delivery: Pick<
+    Delivery,
+    "chatId" | "deliveryId" | "sourceUrl" | "suggestedName"
+  >,
+  reason: BrowserDownloadStopReason,
+): void => {
+  reporter.settled(delivery.chatId, delivery.deliveryId, {
+    outcome: "stopped",
+    reason,
+    sourceUrl: delivery.sourceUrl,
+    suggestedName: delivery.suggestedName,
+  });
 };
 
 /** Downloads stella stopped, and finished ones it kept, since the popup last showed them. */
@@ -402,10 +474,60 @@ const cancelDownload = async (downloadId: number): Promise<void> => {
     : recordDownloadNotice("stopped"));
 };
 
+/**
+ * The shown PDF save a download of this extension's is, moved to the
+ * deliveries under its download id; null when it is none. Matched by the
+ * address the save asked Chrome for.
+ */
+const claimShownSave = (
+  download: Pick<chrome.downloads.DownloadItem, "id" | "url">,
+): Delivery | null => {
+  const claimed = deliveries.get(download.id);
+  if (claimed !== undefined) {
+    return claimed;
+  }
+  const starting = [...startingShownSaves.values()].find(
+    ({ sourceUrl }) => sourceUrl === download.url,
+  );
+  if (starting === undefined) {
+    return null;
+  }
+  startingShownSaves.delete(starting.deliveryId);
+  deliveries.set(download.id, starting);
+  return starting;
+};
+
+/**
+ * A download this extension started: only a shown PDF's save, which is
+ * never traced, since the extension asked for it. One larger than the limit
+ * is stopped, as is any download of the extension's that no save explains.
+ */
+const judgeOwnDownload = async (
+  download: chrome.downloads.DownloadItem,
+): Promise<void> => {
+  const delivery = claimShownSave(download);
+  if (delivery === null) {
+    await cancelDownload(download.id);
+    return;
+  }
+  if (download.totalBytes > BROWSER_CONTROL_LIMITS.downloadBytes) {
+    deliveries.delete(download.id);
+    reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.tooLarge);
+    await cancelDownload(download.id);
+  }
+};
+
 const runJudgement = async (
   download: chrome.downloads.DownloadItem,
   clock: TraceClock,
 ): Promise<void> => {
+  if (
+    download.byExtensionId !== undefined &&
+    download.byExtensionId === chrome.runtime.id
+  ) {
+    await judgeOwnDownload(download);
+    return;
+  }
   const scope = scopeNow ?? (await readScope());
   if (scope.contained.length === 0) {
     return;
@@ -440,16 +562,24 @@ const runJudgement = async (
     case "keep-and-flag":
       await keepFinishedDownload(download.id);
       return;
-    case "deliver":
+    case "deliver": {
+      const delivery = deliveries.get(download.id);
+      if (delivery !== undefined) {
+        reporter.started(delivery.chatId, delivery.deliveryId);
+      }
       return;
+    }
     case "refuse":
       if (receiver.type === "desktop" && receiver.verdict.type === "stop") {
-        reporter(receiver.chatId, {
-          outcome: "stopped",
-          reason: receiver.verdict.reason,
-          sourceUrl: sourceUrlOf(download),
-          suggestedName: suggestedDownloadName(download),
-        });
+        reportStopped(
+          {
+            chatId: receiver.chatId,
+            deliveryId: crypto.randomUUID(),
+            sourceUrl: sourceUrlOf(download),
+            suggestedName: suggestedDownloadName(download),
+          },
+          receiver.verdict.reason,
+        );
       }
       await cancelDownload(download.id);
       return;
@@ -531,11 +661,14 @@ export const holdDownloadForJudgement = (
         suggest();
         return undefined;
       }
-      // Chrome names the file only here; the earlier event may not have.
-      deliveries.set(download.id, {
-        ...delivery,
-        suggestedName: suggestedDownloadName(download),
-      });
+      // Chrome names a page's download only here; the earlier event may
+      // not have. A shown PDF keeps the name its save chose.
+      if (delivery.kind === "download") {
+        deliveries.set(download.id, {
+          ...delivery,
+          suggestedName: suggestedDownloadName(download),
+        });
+      }
       suggest({ conflictAction: "uniquify", filename: delivery.stagedPath });
       return undefined;
     })
@@ -562,22 +695,143 @@ export const reportDeliveredDownload = async (
   deliveries.delete(delta.id);
   const [item] = await chrome.downloads.search({ id: delta.id });
   if (item?.state !== "complete" || item.filename === "") {
-    reporter(delivery.chatId, {
-      outcome: "stopped",
-      reason: BROWSER_DOWNLOAD_STOP_REASON.interrupted,
-      sourceUrl: delivery.sourceUrl,
-      suggestedName: delivery.suggestedName,
-    });
+    reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.interrupted);
     return;
   }
-  reporter(delivery.chatId, {
+  reporter.settled(delivery.chatId, delivery.deliveryId, {
     bytes: Math.max(0, item.fileSize > 0 ? item.fileSize : item.bytesReceived),
     mime: item.mime.slice(0, 255),
     outcome: "saved",
     path: item.filename.slice(0, BROWSER_CONTROL_LIMITS.downloadPathChars),
-    sourceUrl: sourceUrlOf(item),
+    // A shown PDF is known by the tab's address, wherever its save went.
+    sourceUrl:
+      delivery.kind === "shown-pdf" ? delivery.sourceUrl : sourceUrlOf(item),
     suggestedName: delivery.suggestedName,
   });
+};
+
+/** Shown PDF saves each run remembers; older ones are forgotten first. */
+const SHOWN_PDF_SAVES_LIMIT = 64;
+
+// Marking reads, changes and writes one stored list; the worker applies
+// each mark in turn so two reads of the same PDF never both save it.
+let shownSavesTail: Promise<unknown> = Promise.resolve();
+
+/** Marks a shown PDF of a run as saved; false when it already was. */
+const markShownPdf = async (key: string): Promise<boolean> => {
+  const mark = async (): Promise<boolean> => {
+    const stored: unknown = (
+      await chrome.storage.session.get(BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY)
+    )[BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY];
+    const keys = Array.isArray(stored)
+      ? stored.filter((entry): entry is string => typeof entry === "string")
+      : [];
+    if (keys.includes(key)) {
+      return false;
+    }
+    await chrome.storage.session.set({
+      [BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY]: [...keys, key].slice(
+        -SHOWN_PDF_SAVES_LIMIT,
+      ),
+    });
+    return true;
+  };
+  const next = shownSavesTail.then(mark, mark);
+  shownSavesTail = next.catch(() => undefined);
+  return await next;
+};
+
+/**
+ * The name a shown PDF is saved under: the address's file name when it
+ * says PDF, else the title the read returned, else the address's last
+ * segment. stella desktop makes it safe.
+ */
+const shownPdfName = (address: string, title: string): string =>
+  (
+    [
+      urlFileName(address).toLowerCase().endsWith(".pdf")
+        ? urlFileName(address)
+        : "",
+      title.trim(),
+      urlFileName(address),
+    ].find((name) => name !== "") ?? ""
+  ).slice(0, BROWSER_CONTROL_LIMITS.downloadNameChars);
+
+/** A PDF a chat's command found its tab showing, and the run it ran in. */
+export type ShownPdfRequest = ShownPdf & {
+  /** The id the chat's commands run under. */
+  controllerId: string;
+  turnId: string;
+};
+
+/**
+ * Saves a PDF the chat's tab shows through the same path as a download:
+ * only for the desktop chat holding the browser while stella desktop is
+ * connected, once per address in each of its runs, within the same limits,
+ * into the staging folder under a fresh name, reported the same way.
+ * Chrome fetches the tab's own address again, with the cookies it applies
+ * to it; a site that serves an address once answers that second request
+ * with an error, which comes back as an interrupted download or as a file
+ * stella desktop refuses.
+ */
+export const saveShownPdf = async ({
+  controllerId,
+  title,
+  turnId,
+  url,
+}: ShownPdfRequest): Promise<void> => {
+  const chatId = await readTakingDesktopChat();
+  if (
+    chatId === null ||
+    chatId !== desktopChatId(controllerId) ||
+    parseControllableUrl(url) === null
+  ) {
+    return;
+  }
+  const address = browserDocumentAddress(url);
+  if (address.length > BROWSER_CONTROL_LIMITS.urlChars) {
+    return;
+  }
+  const delivery = newDelivery(chatId, "shown-pdf", {
+    sourceUrl: address,
+    suggestedName: shownPdfName(address, title),
+  });
+  // The slot is checked and taken in one step, as a judged download's is.
+  // A PDF stopped for too many saves is not marked: showing it again tries
+  // again.
+  if (runningDeliveries() >= MAX_RUNNING_DELIVERIES) {
+    reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.tooMany);
+    return;
+  }
+  startingShownSaves.set(delivery.deliveryId, delivery);
+  const first = await markShownPdf(`${turnId}\n${chatId}\n${address}`).catch(
+    () => false,
+  );
+  if (!first) {
+    startingShownSaves.delete(delivery.deliveryId);
+    return;
+  }
+  reporter.started(chatId, delivery.deliveryId);
+  // Without the optional downloads permission there is nothing to ask.
+  const started = Reflect.has(chrome, "downloads")
+    ? await Result.tryPromise(
+        async () =>
+          await chrome.downloads.download({
+            conflictAction: "uniquify",
+            filename: delivery.stagedPath,
+            saveAs: false,
+            url: address,
+          }),
+      )
+    : null;
+  if (started === null || Result.isError(started)) {
+    startingShownSaves.delete(delivery.deliveryId);
+    reportStopped(delivery, BROWSER_DOWNLOAD_STOP_REASON.interrupted);
+    return;
+  }
+  // Chrome may have named the download already; then its judgement
+  // claimed the save.
+  claimShownSave({ id: started.value, url: address });
 };
 
 /**

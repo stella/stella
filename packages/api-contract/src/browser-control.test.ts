@@ -12,6 +12,7 @@ import {
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
+  browserDocumentAddress,
   browserDownloadStagedPath,
   formatElementReference,
   isReadOnlyBrowserCommand,
@@ -325,6 +326,20 @@ describe("browser control result contract", () => {
 
   test("accepts a bounded snapshot", () => {
     expect(parseBrowserControlResult(success)).toEqual(success);
+  });
+
+  test("a snapshot may say the tab shows a PDF, and nothing else", () => {
+    const pdf = {
+      ...success,
+      snapshot: { ...success.snapshot, document: { type: "pdf" } },
+    } as const;
+    expect(parseBrowserControlResult(pdf)).toEqual(pdf);
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: { ...success.snapshot, document: { type: "image" } },
+      }),
+    ).toBeNull();
   });
 
   test("rejects two elements with one id", () => {
@@ -695,6 +710,7 @@ describe("stella desktop transport", () => {
   test("a download report says where Chrome saved the file, or why it was stopped", () => {
     const saved = {
       controllerId: "thread-1",
+      deliveryId: "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
       download: {
         bytes: 2048,
         mime: "application/pdf",
@@ -737,6 +753,43 @@ describe("stella desktop transport", () => {
         source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
       }),
     ).toBeNull();
+    // Every report names its delivery.
+    const { deliveryId: _deliveryId, ...unnamed } = saved;
+    expect(parseBrowserDesktopResponse(unnamed)).toBeNull();
+    expect(
+      parseBrowserDesktopResponse({ ...saved, deliveryId: "delivery-1" }),
+    ).toBeNull();
+  });
+
+  test("a download start names the chat and the delivery its report will carry", () => {
+    const started = {
+      controllerId: "thread-1",
+      deliveryId: "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "download-started",
+    } as const;
+    expect(parseBrowserDesktopResponse(started)).toEqual(started);
+    expect(
+      parseBrowserDesktopResponse({
+        ...started,
+        download: {
+          outcome: "stopped",
+          reason: "not-pdf",
+          sourceUrl: "https://example.com/setup",
+          suggestedName: "setup.dmg",
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("a shown document is known by its address without the fragment", () => {
+    expect(browserDocumentAddress("https://example.com/a.pdf#page=2")).toBe(
+      "https://example.com/a.pdf",
+    );
+    expect(browserDocumentAddress("https://example.com/a.pdf?x=1")).toBe(
+      "https://example.com/a.pdf?x=1",
+    );
   });
 
   test("a staged name is a fresh UUID with the PDF extension, nothing a page chose", () => {

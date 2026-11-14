@@ -249,20 +249,40 @@ export const createDesktopLink = ({
 
   return {
     /**
-     * Tells stella desktop about a download of a chat's tab, unasked;
-     * dropped while stella desktop is not connected.
+     * Tells stella desktop about a download a chat takes, unasked: when it
+     * starts and once it settles. Dropped while stella desktop is not
+     * connected.
      */
-    reportDownload: (chatId: string, download: BrowserDownload) => {
-      if (current === null) {
-        return;
-      }
-      send(current, {
-        controllerId: chatId,
-        download,
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
-        type: "download",
-      });
+    downloadReporter: {
+      settled: (
+        chatId: string,
+        deliveryId: string,
+        download: BrowserDownload,
+      ) => {
+        if (current === null) {
+          return;
+        }
+        send(current, {
+          controllerId: chatId,
+          deliveryId,
+          download,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "download",
+        });
+      },
+      started: (chatId: string, deliveryId: string) => {
+        if (current === null) {
+          return;
+        }
+        send(current, {
+          controllerId: chatId,
+          deliveryId,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "download-started",
+        });
+      },
     },
     /** Connects unless connected; safe to call on every worker start. */
     connect,

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 7 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 8 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
 /**
@@ -469,8 +469,32 @@ const browserControlPageFactsSchema = v.strictObject({
   ),
 });
 
+/** What a tab can show that the reader does not read as a page. */
+export const BROWSER_SHOWN_DOCUMENT_TYPE = {
+  /** A PDF in Chrome's own viewer. */
+  pdf: "pdf",
+} as const;
+
+/**
+ * The address a shown document or a download is known by: its URL without
+ * the fragment, which no request carries. The extension saves a shown PDF
+ * once per address, and stella desktop matches what it saved by it.
+ */
+export const browserDocumentAddress = (url: string): string => {
+  const fragment = url.indexOf("#");
+  return fragment === -1 ? url : url.slice(0, fragment);
+};
+
 const browserControlSnapshotSchema = v.strictObject({
   contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
+  /**
+   * Present when the tab shows a document the reader cannot read as a
+   * page: a PDF in Chrome's viewer. Text and elements are then only those
+   * of the page Chrome wraps the viewer in, never the document's.
+   */
+  document: v.optional(
+    v.strictObject({ type: v.literal(BROWSER_SHOWN_DOCUMENT_TYPE.pdf) }),
+  ),
   /**
    * The window's links, then its other controls, in reading order; then the
    * page's own controls outside the window (search fields, buttons).
@@ -1088,13 +1112,33 @@ const browserDownloadSchema = v.variant("outcome", [
 
 export type BrowserDownload = v.InferOutput<typeof browserDownloadSchema>;
 
+/** One download a stella desktop chat takes, from its start to its report. */
+const deliveryIdSchema = v.pipe(v.string(), v.uuid());
+
+/**
+ * A download a stella desktop chat takes has started: Chrome is saving it
+ * into the staging folder, and a `download` with the same `deliveryId`
+ * follows once it settles. Sent unasked; when it starts during a command,
+ * it is sent before that command's result, so stella desktop can wait a
+ * moment for it.
+ */
+const desktopDownloadStartedResponseSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  deliveryId: deliveryIdSchema,
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  type: v.literal("download-started"),
+});
+
 /**
  * A download a stella desktop chat's tab started, once Chrome finished or
  * the extension stopped it. Sent unasked; `controllerId` is the chat's id
- * as stella desktop sent it with the chat's commands.
+ * as stella desktop sent it with the chat's commands. A download stopped
+ * before it started has a `deliveryId` no `download-started` announced.
  */
 const desktopDownloadResponseSchema = v.strictObject({
   controllerId: controllerIdSchema,
+  deliveryId: deliveryIdSchema,
   download: browserDownloadSchema,
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
@@ -1108,6 +1152,7 @@ export type BrowserDesktopDownload = v.InferOutput<
 const browserDesktopResponseSchema = v.variant("type", [
   desktopHelloResponseSchema,
   browserExtensionCommandResponseSchema,
+  desktopDownloadStartedResponseSchema,
   desktopDownloadResponseSchema,
 ]);
 

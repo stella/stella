@@ -41,7 +41,10 @@ export const createBrowserControlTool = () => ({
       "element action, copy the snapshot's exact page revision and URL plus the element's ref, name, role, href and " +
       "context objects, including `absent`; the extension rejects stale, disabled or changed targets. " +
       "An `open` that redirects to another origin " +
-      "returns `redirected` without reading the page; read it with a separate `snapshot`. `tab-changed` means the " +
+      "returns `redirected` without reading the page; read it with a separate `snapshot`. A snapshot with " +
+      "`document: { type: 'pdf' }` means the tab shows a PDF in Chrome's viewer: it cannot be read as a page and " +
+      "has no text here, so tell the user it is a PDF, give its address, and never describe its contents. " +
+      "`tab-changed` means the " +
       "user handed over another tab: take a `snapshot` before acting. You act in one tab at a time. The snapshot's " +
       "`tabs` lists your tabs, the active one first: tabs you opened and tabs their pages opened (for example a " +
       "link that opens in a new tab). Use `switch-tab` with a listed `tabId` and its exact `url` to act in another; " +
