@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Upozorní vás, když je dokument připravený nebo synchronizace vyžaduje pozornost.",
     "permissionAccessibility": "Zpřístupnění",
     "permissionAccessibilityDescription": "Umožní přehledu aktivity zaznamenávat názvy oken.",
+    "permissionMicrophone": "Mikrofon",
+    "permissionMicrophoneDescription": "Umožní diktování slyšet vás, dokud držíte zkratku.",
     "permissionAllowed": "Povoleno",
     "permissionAllow": "Povolit",
     "permissionOpenSettings": "Otevřít nastavení",
@@ -581,7 +583,18 @@
   },
   "dictation": {
     "title": "Diktování",
-    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se.",
+    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se. Se zapnutou úpravou pomocí AI se převedený text (ne zvuk) odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby a formátování; stella ho neukládá.",
+    "cleanup": {
+      "title": "Upravit pomocí AI",
+      "description": "Řeč se i nadále převádí na tomto počítači a zvuk ho nikdy neopustí. Se zapnutou úpravou se převedený text odešle přes stellu poskytovateli AI vaší organizace, který opraví chyby rozpoznávání a použije vyslovenou interpunkci a formátování, například „nový řádek“ nebo „tučně“. stella ho neukládá."
+    },
+    "language": {
+      "title": "Jazyk diktování",
+      "description": "Řeč se rozpoznává v tomto jazyce a úprava v něm text ponechá. Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
+      "automatic": "Automaticky",
+      "automaticWith": "Automaticky ({languages})",
+      "noResults": "Žádné jazyky nenalezeny"
+    },
     "modelNeeded": "Řečový model běží na tomto počítači.",
     "download": "Stáhnout ({size} MB)",
     "downloading": "Stahování řečového modelu: {percent} %",
@@ -592,7 +605,10 @@
       "accessibility": "Povolte přístup Zpřístupnění, aby stella mohla psát do jiných aplikací.",
       "microphone": "stella neslyší váš mikrofon. Zkontrolujte přístup k mikrofonu v Nastavení systému.",
       "modelMissing": "Nejprve stáhněte řečový model.",
-      "transcription": "Převod se nezdařil. Zkuste to znovu."
+      "transcription": "Převod se nezdařil. Zkuste to znovu.",
+      "focusChanged": "Než byl text připraven, přepnuli jste do jiné aplikace, takže se nic nenapsalo. Zkuste to znovu.",
+      "focusUnconfirmed": "stella nemohla ověřit, která aplikace je aktivní, takže se nic nenapsalo. Zkuste to znovu.",
+      "shortcutHeld": "Pusťte klávesy zkratky, aby se text mohl napsat. Nic se nenapsalo, zkuste to znovu."
     }
   },
   "shortcut": {
@@ -710,6 +726,18 @@
     "introduceActivityTitle": "Novinka: přehled aktivity",
     "introduceActivityBody": "Aktivita je teď pro váš účet dostupná. Nic se nezaznamenává, dokud ji nespustíte v okně aktivity.",
     "openActivity": "Otevřít aktivitu",
+    "dictationModel": "Řečový model ({size} MB) se stáhne jen jednou a běží na tomto počítači.",
+    "dictationTurnOn": "Zapnout a stáhnout",
+    "dictationDownloadContinues": "Můžete pokračovat. Stahování poběží na pozadí.",
+    "dictationReady": "Diktování je zapnuté a připravené.",
+    "dictationTryLabel": "Diktujte sem",
+    "dictationTryPlaceholder": "Klikněte sem, podržte {shortcut} a řekněte nějakou větu.",
+    "dictationListening": "Poslouchám…",
+    "dictationTranscribing": "Přepisuji, co jste řekli…",
+    "dictationMicrophone": "stella vás uslyší, dokud držíte zkratku.",
+    "dictationAccessibility": "stella napíše, co jste řekli, do aplikace, kterou právě používáte.",
+    "dictationFailed": "stella desktop nemohl zapnout diktování. Zkuste to znovu.",
+    "introduceDictationTitle": "Novinka: diktování",
     "guideWaiting": "Zapněte stella desktop v seznamu výše a povolte tak Zpřístupnění.",
     "guideAllowed": "stella desktop má povolení",
     "never": {
@@ -816,6 +844,27 @@
       "runs_can_write": "Do této složky mohou místní běhy zapisovat, proto v ní dovednost být nemůže.",
       "network_folder": "Tato složka je na síťovém úložišti. Dovednosti musí být na vlastním disku tohoto počítače.",
       "path_changed": "Některá nadřazená složka se změnila. Odeberte ji a přidejte znovu."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Propojené složky",
+    "description": "Složky v tomto počítači, ve kterých může pracovat agent chatu. Chat vidí jen název složky; její cesta zůstává v tomto počítači.",
+    "add": "Propojit složku",
+    "remove": "Odpojit",
+    "removeFolder": "Odpojit {name}",
+    "state": {
+      "offline": "Disk, na kterém tato složka je, není připojený.",
+      "moved": "Tato složka byla přesunuta, přejmenována nebo smazána. Odpojte ji a propojte znovu.",
+      "protected": "Tato složka obsahuje vlastní data stelly nebo složku s dovednostmi, takže v ní agent pracovat nemůže.",
+      "unreadable": "Tuto složku se nepodařilo přečíst."
+    },
+    "notice": {
+      "action_failed": "Nepodařilo se to. Zkuste to znovu.",
+      "too_many": "Tento počítač už má tolik propojených složek, kolik jich udrží. Nejdřív jednu odpojte.",
+      "not_a_folder": "Vyberte složku.",
+      "network_folder": "Tato složka je na síťovém úložišti. Propojte složku na vlastním disku tohoto počítače.",
+      "protected": "Tato složka obsahuje vlastní data stelly nebo složku s dovednostmi, takže v ní agent pracovat nemůže.",
+      "unreadable": "Tuto složku se nepodařilo přečíst."
     }
   }
 }

@@ -4,16 +4,19 @@ import verifyItemSource from "@/api/handlers/lists/items/sources/verification/up
 import createSampleCase from "@/api/handlers/lists/sample-case/create";
 import readSourceDocumentKinds from "@/api/handlers/lists/source-documents/list";
 import updateSourceDocumentKind from "@/api/handlers/lists/source-documents/update";
+import exportVerificationChronology from "@/api/handlers/lists/verifications/chronology/export";
 import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
 import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
 import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
 import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
+import createBulkClaimRechecks from "@/api/handlers/lists/verifications/claim-rechecks/bulk/create";
 import createClaimRecheck from "@/api/handlers/lists/verifications/claim-rechecks/create";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
 import listClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
 import createVerification from "@/api/handlers/lists/verifications/create";
 import readVerification from "@/api/handlers/lists/verifications/get";
+import readVerificationGraph from "@/api/handlers/lists/verifications/graph/get";
 import readLatestVerifications from "@/api/handlers/lists/verifications/latest/list";
 import readVerifications from "@/api/handlers/lists/verifications/list";
 import { routes } from "@/api/http/route";
@@ -32,6 +35,7 @@ export const createListVerificationRoutes = (
       "/claim-reviews": { GET: listClaimReviews, POST: createClaimReview },
       "/claim-reviews/bulk": { POST: createBulkClaimReviews },
       "/claim-rechecks": { POST: createClaimRecheck },
+      "/claim-rechecks/bulk": { POST: createBulkClaimRechecks },
       "/claim-comments": { GET: listClaimComments, POST: createClaimComment },
       "/claim-comments/:annotationId": {
         PATCH: updateClaimComment,
@@ -44,6 +48,10 @@ export const createListVerificationRoutes = (
         POST: createVerification,
       },
       "/verifications/latest": { POST: readLatestVerifications },
+      "/verifications/graph": { GET: readVerificationGraph },
+      "/verifications/chronology/export": {
+        GET: exportVerificationChronology,
+      },
       "/verifications/:runId": { GET: readVerification },
     },
     { middleware: [featureAccessGate("list-verification", dependencies)] },

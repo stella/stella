@@ -423,6 +423,10 @@ const installFixtureNetwork = () => {
           nextCursor: null,
         } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
       }
+      // The composer's where chip: this member runs no turns on a computer.
+      if (pathname === "/v1/chat/local-runners") {
+        return Response.json({ status: "hidden" });
+      }
       if (pathname === "/v1/chat/skill-availability") {
         return Response.json({
           unavailable: [],

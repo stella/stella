@@ -24,6 +24,7 @@ bun scripts/check-concurrency-exceptions.ts
 bun test ./scripts/check-concurrency-exceptions.test.ts
 bun scripts/check-contract-domain-ledger.ts --self-test
 bun scripts/check-contract-domain-ledger.ts
+bun scripts/check-audit-mutation-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 bun scripts/calendar-day-ledger.ts --self-test
 bun scripts/calendar-day-ledger.ts
 bun scripts/fill-diagnostics-ledger.ts --self-test

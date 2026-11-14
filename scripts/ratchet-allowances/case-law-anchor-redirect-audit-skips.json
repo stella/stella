@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 3,
-  "reason": "Decision anchor redirects are derived public corpus rows: the ingestion decision write records and flattens them, and erasure removes them under its decision fence. Each write carries the same skip as the other ingestion-owned case-law tables it sits beside."
-}

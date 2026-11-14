@@ -133,6 +133,18 @@ test("court paragraph numbers are faithful, structure-preserving and idempotent"
           expect(after).toEqual(before);
           continue;
         }
+        // The one number no marker states: a run printed from 2 implies the
+        // 1 of the paragraph before it, which keeps its text and is reported.
+        const implied =
+          numbering.type === "numbered" &&
+          numbering.evidence.some(
+            (item) => item.type === "implied" && item.blockIndex === index,
+          );
+        if (implied) {
+          expect(after).toEqual({ ...before, number: 1 });
+          expect(MARKER_PREFIX.test(before.plainText)).toBe(false);
+          continue;
+        }
         const marker = MARKER_PREFIX.exec(before.plainText);
         expect(marker).not.toBeNull();
         const stated = Number(marker?.[1] ?? marker?.[2] ?? marker?.[3]);
@@ -991,4 +1003,247 @@ test("a Roman section title is not an OCR-damaged paragraph 1", () => {
     plainText: "I. Skutkový stav",
   });
   expect(labelsOf(result.blocks).at(0)).toBeUndefined();
+});
+
+/** A decision's head matter, its ruling, and the reasoning that follows. */
+type Layout = { readonly text: string; readonly role?: "holding" }[];
+
+const blocksOf = (layout: Layout): Block[] =>
+  layout.map(({ text, role }, index) => ({
+    ...paragraphOf(index, text),
+    ...(role === undefined ? {} : { role }),
+  }));
+
+const UNNUMBERED = [
+  "Ze spisu soud zjistil a vzal za prokázáno, že žalovaný účet nezřídil.",
+  "v exekučním řízení byla vymožena částka, která nebyla vyplacena;",
+  "Soud provedl důkaz listinami, které účastníci předložili.",
+  "žalovaný nehradil své závazky;",
+] as const;
+
+const unnumbered = (count: number, seed: number): Layout =>
+  Array.from({ length: count }, (_, index) => ({
+    text: UNNUMBERED[(seed + index) % UNNUMBERED.length] ?? "Text.",
+  }));
+
+/** Head matter a parser left without a role, then the ruling. */
+const headAndRuling = (headLines: number): Layout =>
+  headLines === 0
+    ? []
+    : [
+        ...Array.from({ length: headLines }, (_, index) => ({
+          text: `Hlavička ${String(index + 1)}`,
+        })),
+        { text: "I. Žalovaný je povinen zaplatit částku.", role: "holding" },
+      ];
+
+test("a run counting up from 1 is numbered however much unnumbered text it carries", () => {
+  assertProperty(
+    "a run counting up from 1 is numbered however much unnumbered text it carries",
+    fc.property(
+      fc.record({
+        headLines: fc.integer({ min: 0, max: 8 }),
+        leadIn: fc.integer({ min: 0, max: 4 }),
+        between: fc.array(fc.integer({ min: 0, max: 20 }), {
+          minLength: 2,
+          maxLength: 24,
+        }),
+        tail: fc.integer({ min: 0, max: 4 }),
+        seed: fc.nat({ max: 3 }),
+        space: gap,
+      }),
+      ({ headLines, leadIn, between, tail: closing, seed, space }) => {
+        // A closing line or two, never more than the run spreads over.
+        const tail = Math.min(closing, Math.max(0, ...between));
+        const layout: Layout[number][] = [
+          ...headAndRuling(headLines),
+          ...unnumbered(leadIn, seed),
+        ];
+        const expected: (number | undefined)[] = layout.map(() => undefined);
+        const count = between.length + 1;
+        for (let number = 1; number <= count; number += 1) {
+          layout.push({
+            text: `${MARKERS.dot(number, space)}Soud uvážil bod ${String(number)}.`,
+          });
+          expected.push(number);
+          const filler = number === count ? tail : (between[number - 1] ?? 0);
+          for (const item of unnumbered(filler, seed + number)) {
+            layout.push(item);
+            expected.push(undefined);
+          }
+        }
+        const result = extractCourtParagraphNumbers(blocksOf(layout));
+        expect(labelsOf(result.blocks)).toEqual(expected);
+      },
+    ),
+  );
+});
+
+test("a short list that the reasoning runs on after is not numbering", () => {
+  // The items of a list, or a quoted statute's "1." and "2.", in an
+  // unnumbered reasoning: the text that follows them is not theirs.
+  assertProperty(
+    "a short list that the reasoning runs on after is not numbering",
+    fc.property(
+      fc
+        .record({
+          leadIn: fc.integer({ min: 0, max: 12 }),
+          items: fc.integer({ min: 2, max: 5 }),
+          seed: fc.nat({ max: 3 }),
+        })
+        .chain((shape) =>
+          fc.record({
+            shape: fc.constant(shape),
+            // More than a closing after the list, and more text than list.
+            tail: fc.integer({
+              min: Math.max(5, Math.ceil(shape.items * 1.5) + 1),
+              max: 40,
+            }),
+          }),
+        ),
+      ({ shape: { leadIn, items, seed }, tail }) => {
+        const layout: Layout = [
+          ...unnumbered(leadIn, seed),
+          ...Array.from({ length: items }, (_, index) => ({
+            text: `${MARKERS.dot(index + 1, " ")}Položka zákona ${String(index + 1)}.`,
+          })),
+          ...unnumbered(tail, seed + 1),
+        ];
+        const blocks = blocksOf(layout);
+        expect(extractCourtParagraphNumbers(blocks).blocks).toEqual(blocks);
+      },
+    ),
+  );
+});
+
+test("a statute quoted inside a numbered run keeps its items as text", () => {
+  assertProperty(
+    "a statute quoted inside a numbered run keeps its items as text",
+    fc.property(
+      fc.record({
+        count: fc.integer({ min: 5, max: 20 }),
+        quotedAfter: fc.integer({ min: 4, max: 19 }),
+        quoted: fc.integer({ min: 2, max: 3 }),
+        filler: fc.integer({ min: 0, max: 12 }),
+      }),
+      ({ count, quotedAfter, quoted, filler }) => {
+        const after = Math.min(quotedAfter, count - 1);
+        const layout: Layout[number][] = [];
+        const expected: (number | undefined)[] = [];
+        for (let number = 1; number <= count; number += 1) {
+          layout.push({
+            text: `${MARKERS.dot(number, " ")}Soud uvážil bod ${String(number)}.`,
+          });
+          expected.push(number);
+          const extra: Layout = [
+            ...(number === after
+              ? Array.from({ length: quoted }, (_, index) => ({
+                  text: `${MARKERS.dot(index + 1, " ")}Ustanovení odstavce ${String(index + 1)}.`,
+                }))
+              : []),
+            ...unnumbered(number === 1 ? filler : 0, number),
+          ];
+          for (const item of extra) {
+            layout.push(item);
+            expected.push(undefined);
+          }
+        }
+        const result = extractCourtParagraphNumbers(blocksOf(layout));
+        expect(labelsOf(result.blocks)).toEqual(expected);
+      },
+    ),
+  );
+});
+
+test("the one paragraph opening the reasoning before a printed 2 is paragraph 1", () => {
+  const ruling: Layout = [
+    { text: "Ústavný súd Slovenskej republiky" },
+    { text: "III. ÚS 298/2018-33" },
+    { text: "Ústavný súd na neverejnom zasadnutí rozhodol:" },
+    { text: "Základné právo porušené bolo.", role: "holding" },
+  ];
+  const run: Layout = [2, 3, 4, 5].map((number) => ({
+    text: `${String(number)}. Ústavný súd uvážil bod ${String(number)}.`,
+  }));
+  const opening = { text: "Ústavný súd predbežne prerokoval sťažnosť." };
+  const one = extractCourtParagraphNumbers(
+    blocksOf([...ruling, opening, ...run]),
+  );
+  expect(labelsOf(one.blocks)).toEqual([
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    1,
+    2,
+    3,
+    4,
+    5,
+  ]);
+  expect(one.blocks.at(4)?.plainText).toBe(opening.text);
+  expect(one.type === "numbered" ? one.evidence : []).toContainEqual({
+    type: "implied",
+    blockIndex: 4,
+    number: 1,
+  });
+
+  // Two paragraphs before the 2: which of them is the court's 1 is not
+  // fixed, so neither is given it, and the printed run is still read.
+  const two = extractCourtParagraphNumbers(
+    blocksOf([
+      ...ruling,
+      opening,
+      { text: "Sťažovateľka namieta porušenie práva." },
+      ...run,
+    ]),
+  );
+  expect(labelsOf(two.blocks)).toEqual([
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    2,
+    3,
+    4,
+    5,
+  ]);
+
+  // With no ruling before it, the paragraph does not provably open the
+  // reasoning, so it stays unnumbered.
+  const headless = extractCourtParagraphNumbers(blocksOf([opening, ...run]));
+  expect(labelsOf(headless.blocks)).toEqual([undefined, 2, 3, 4, 5]);
+});
+
+test("two titled halves of a part are not a count of its paragraphs", () => {
+  const layout: Layout = [
+    { text: "1. K výroku, kterým byl zamítnut návrh." },
+    ...unnumbered(3, 0),
+    { text: "2. K výroku, kterým bylo zrušeno ustanovení." },
+    ...unnumbered(2, 1),
+  ];
+  const blocks = blocksOf(layout);
+  expect(extractCourtParagraphNumbers(blocks).blocks).toEqual(blocks);
+});
+
+test("a form's numbered section titles keep their numbers as text", () => {
+  // A justification form: each numbered line titles a section, its rows
+  // numbered "1.1.", "1.2." and its text under it, through to the signature.
+  const layout: Layout = [
+    { text: "I. uznaje oskarżonego za winnego.", role: "holding" },
+    { text: "1. USTALENIE FAKTÓW" },
+    { text: "1.1. Fakty uznane za udowodnione" },
+    { text: "1.2. Fakty uznane za nieudowodnione" },
+    { text: "2. OCENA DOWODÓW" },
+    { text: "2.1. Dowody będące podstawą ustalenia faktów" },
+    { text: "3. PODSTAWA PRAWNA WYROKU" },
+    ...unnumbered(8, 0),
+    { text: "4. INNE ZAGADNIENIA" },
+    ...unnumbered(3, 1),
+    { text: "5. KOSZTY PROCESU" },
+    { text: "6. PODPIS" },
+  ];
+  const blocks = blocksOf(layout);
+  expect(extractCourtParagraphNumbers(blocks).blocks).toEqual(blocks);
 });

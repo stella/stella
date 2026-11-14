@@ -10,21 +10,31 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+const identity = (turnId: string, controllerId = "controller-1") => ({
+  controllerId,
+  turnId,
+});
+
 describe("browser control session", () => {
   test("rejects overlap and releases the controller after completion", async () => {
     const session = createControlSession();
     const blocker = deferred();
-    const first = session.runCommand("turn-1", async () => {
+    const first = session.runCommand(identity("turn-1"), async () => {
       await blocker.promise;
       return "first";
     });
 
     expect(
-      await session.runCommand("turn-1", async () => "hidden late action"),
+      await session.runCommand(
+        identity("turn-1"),
+        async () => "hidden late action",
+      ),
     ).toEqual({ status: "busy" });
     blocker.resolve();
     expect(await first).toEqual({ result: "first", status: "completed" });
-    expect(await session.runCommand("turn-1", async () => "next")).toEqual({
+    expect(
+      await session.runCommand(identity("turn-1"), async () => "next"),
+    ).toEqual({
       result: "next",
       status: "completed",
     });
@@ -34,7 +44,7 @@ describe("browser control session", () => {
     const session = createControlSession();
     const started = deferred();
     const running = session.runCommand(
-      "turn-1",
+      identity("turn-1"),
       async (signal) =>
         await new Promise<string>((resolve) => {
           signal.addEventListener("abort", () => resolve("aborted"));
@@ -43,7 +53,7 @@ describe("browser control session", () => {
     );
     await started.promise;
 
-    session.stopTurn("turn-1")();
+    session.stopTurn(identity("turn-1"))();
 
     expect(await running).toEqual({ result: "aborted", status: "completed" });
   });
@@ -51,12 +61,12 @@ describe("browser control session", () => {
   test("a stop never reaches a command of another turn", async () => {
     const session = createControlSession();
     const blocker = deferred();
-    const running = session.runCommand("turn-2", async (signal) => {
+    const running = session.runCommand(identity("turn-2"), async (signal) => {
       await blocker.promise;
       return signal.aborted;
     });
 
-    session.stopTurn("turn-1")();
+    session.stopTurn(identity("turn-1"))();
     blocker.resolve();
 
     expect(await running).toEqual({ result: false, status: "completed" });
@@ -64,17 +74,23 @@ describe("browser control session", () => {
 
   test("a stop verified late does not abort a command admitted after it arrived", async () => {
     const session = createControlSession();
-    const oldCommand = session.runCommand("turn-1", async () => "done");
+    const oldCommand = session.runCommand(
+      identity("turn-1"),
+      async () => "done",
+    );
     // The stop arrives while the old command runs; verifying its sender
     // takes a storage read, during which the old command finishes and the
     // next one is admitted.
-    const stopOldTurn = session.stopTurn("turn-1");
+    const stopOldTurn = session.stopTurn(identity("turn-1"));
     await oldCommand;
     const blocker = deferred();
-    const newCommand = session.runCommand("turn-1", async (signal) => {
-      await blocker.promise;
-      return signal.aborted;
-    });
+    const newCommand = session.runCommand(
+      identity("turn-1"),
+      async (signal) => {
+        await blocker.promise;
+        return signal.aborted;
+      },
+    );
 
     stopOldTurn();
     blocker.resolve();
@@ -86,7 +102,7 @@ describe("browser control session", () => {
     const session = createControlSession();
     const order: string[] = [];
     const blocker = deferred();
-    const running = session.runCommand("turn-1", async (signal) => {
+    const running = session.runCommand(identity("turn-1"), async (signal) => {
       await blocker.promise;
       order.push(`command aborted=${signal.aborted}`);
     });
@@ -106,7 +122,7 @@ describe("browser control session", () => {
       await blocker.promise;
     });
     const queued = session.runCommand(
-      "turn-1",
+      identity("turn-1"),
       async (signal) => signal.aborted,
     );
     // A pairing change during the command's wait: the command was admitted
@@ -117,7 +133,10 @@ describe("browser control session", () => {
 
     expect(await queued).toEqual({ result: true, status: "completed" });
     expect(
-      await session.runCommand("turn-1", async (signal) => signal.aborted),
+      await session.runCommand(
+        identity("turn-1"),
+        async (signal) => signal.aborted,
+      ),
     ).toEqual({ result: false, status: "completed" });
   });
 
@@ -132,9 +151,24 @@ describe("browser control session", () => {
     );
     expect(failure).toHaveProperty("message", "storage unavailable");
 
-    expect(await session.runCommand("turn-1", async () => "ran")).toEqual({
+    expect(
+      await session.runCommand(identity("turn-1"), async () => "ran"),
+    ).toEqual({
       result: "ran",
       status: "completed",
     });
+  });
+
+  test("a stop from one controller never reaches another's command of the same turn id", async () => {
+    const session = createControlSession();
+    const running = session.runCommand(
+      identity("turn-1", "desktop:thread-1"),
+      async (signal) => {
+        await Promise.resolve();
+        return signal.aborted;
+      },
+    );
+    session.stopTurn(identity("turn-1", "controller-1"))();
+    expect(await running).toEqual({ result: false, status: "completed" });
   });
 });

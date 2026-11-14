@@ -9,7 +9,6 @@ import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
-import { encodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import { searchGlobal as searchGlobalWithDatabase } from "@/api/lib/search/index-global";
 import {
@@ -370,34 +369,6 @@ describe("global search SQL scope", () => {
     expect(
       chatQuery === undefined ? undefined : sourcePageLimit(chatQuery),
     ).toBe(LIMITS.searchChatCandidateThreadsMax + 1);
-  });
-
-  test("continues legacy offset cursors during a rolling deployment", async () => {
-    const dialect = new PgDialect();
-
-    await searchGlobal({
-      query: "contract",
-      organizationId: toSafeId<"organization">("org_1"),
-      userId: toSafeId<"user">("user_1"),
-      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-      selectedWorkspaceIds: [],
-      types: [],
-      editedByUserIds: [],
-      mimeTypes: [],
-      cursor: encodeCursor(25, "global"),
-      limit: 3,
-    });
-
-    expect(rootDbExecuteMock).toHaveBeenCalledTimes(4);
-    for (const [query] of rootDbExecuteMock.mock.calls) {
-      const compiled = dialect.sqlToQuery(query);
-      expect(compiled.sql).not.toContain('COLLATE "C" <');
-      expect(sourcePageLimit(compiled)).toBe(
-        compiled.sql.includes("FROM chat_thread_search_documents cst")
-          ? LIMITS.searchChatCandidateThreadsMax + 1
-          : 29,
-      );
-    }
   });
 
   test("uses updated time as the keyset value for empty-query search", async () => {

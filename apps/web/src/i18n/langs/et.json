@@ -241,6 +241,12 @@
       "showSources": "Näita allikaid",
       "title": "Ankurfaktid"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# väide tugineb sellele faktile} other {# väidet tugineb sellele faktile}}",
+      "empty": "Selles loendis pole veel fakte.",
+      "moreClaims": "{count, plural, one {veel # väide} other {veel # väidet}}",
+      "undated": "Kuupäevata"
+    },
     "claimDetail": {
       "basis": {
         "anchorFactsDisagree": "Ankurfaktid on vastuolus",
@@ -405,6 +411,42 @@
       "showNextSteps": "Näita järgmisi samme",
       "unlink": "Tühista seos: {fact}"
     },
+    "graph": {
+      "claimCount": "{count, plural, one {# väide} other {# väidet}}",
+      "claimTitle": "Väide",
+      "columns": {
+        "claims": "Väited",
+        "sources": "Allikdokumendid",
+        "statements": "Avaldused"
+      },
+      "empty": "Selles loendis pole veel fakte ega kontrollitud dokumente.",
+      "factCount": "{count, plural, one {# fakt} other {# fakti}}",
+      "factOverflow": "Kuvatakse selle loendi esimesed {count} fakti.",
+      "filters": {
+        "allSources": "Kõik allikad",
+        "allVerdicts": "Kõik otsused",
+        "conflicts": "Vastuolud",
+        "heldFacts": "Kontrolli ootel faktid",
+        "source": "Filtreeri allika järgi",
+        "verdict": "Filtreeri otsuse järgi"
+      },
+      "held": "Kontrolli ootel",
+      "linkedFacts": "{count, plural, one {# seotud fakt} other {# seotud fakti}}",
+      "listLabel": "Graaf loendina",
+      "loadMore": "Laadi rohkem dokumente",
+      "noMatch": "Nende filtritega ei leitud midagi.",
+      "noStatements": "Selle loendi alusel pole veel ühtegi dokumenti kontrollitud.",
+      "offList": "Pole enam loendis",
+      "relation": {
+        "conflicts": "On vastuolus",
+        "governs": "Aluseks",
+        "record": "Registris",
+        "recordConflict": "Vastuoluline kanne",
+        "supports": "Toetab"
+      },
+      "unlinked": "Faktid, millele ükski väide ei tugine",
+      "verifyInReview": "Kontrolli dokumenti"
+    },
     "guidance": {
       "escalate": "Edasta edasi",
       "manualJudgement": "Inimese otsustus",
@@ -458,6 +500,12 @@
     "matches": {
       "count": "{count, plural, one {# vaste} other {# vastet}}",
       "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Kronoloogia",
+      "graph": "Graaf",
+      "label": "Näita loendit kujul",
+      "review": "Kontroll"
     },
     "qualifiers": {
       "heading": "Reservatsioonid",
@@ -571,6 +619,21 @@
       "showBefore": "Näita teksti enne ¶ {from}",
       "verifyParagraphs": "Kontrolli lõike"
     },
+    "staleness": {
+      "failed": "Väiteid ei saanud uuesti kontrollida",
+      "finished": "{count, plural, one {# väide kontrollitud uuesti} other {# väidet kontrollitud uuesti}}",
+      "partial": "Uuesti kontrollitud: {rechecked, number}, ebaõnnestus: {failed, plural, one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakt muudetud",
+        "factHeld": "Fakt välja jäetud",
+        "factRemoved": "Fakt eemaldatud",
+        "newFactRelated": "Uus seotud fakt"
+      },
+      "recheckAll": "Kontrolli kõik uuesti",
+      "recheckLocked": "Kontrollitakse uuesti koos teiste aegunud väidetega",
+      "runLine": "{count, plural, one {# väide võib olla aegunud} other {# väidet võivad olla aegunud}}",
+      "running": "{count, plural, one {# väidet kontrollitakse uuesti…} other {# väidet kontrollitakse uuesti…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Vastuolus",
@@ -628,100 +691,21 @@
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Loo kakskeelne versioon",
-      "creating": "Loomine…",
-      "description": "Loob dokumendist kahe veeruga koopia: vasakul algtekst, paremal tõlkimiseks mõeldud koopia eraldi nummerdusega. Koopia salvestatakse sellesse toimikusse uue dokumendina.",
-      "sameLanguage": "Valige kaks erinevat keelt.",
-      "sourceLanguage": "Lähtekeel",
-      "title": "Kakskeelne versioon"
-    },
-    "error": {
-      "title": "Kakskeelse versiooni loomine ebaõnnestus"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> on valmis, tõlkida on {rowCount, plural, one {# rida} other {# rida}}.",
-      "title": "Kakskeelne versioon loodud"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Täidab selle kaheveerulise dokumendi tõlkeveeru. Vaadake üle, mis iga reaga toimub ja kuidas määratletud termineid tõlgitakse, ning käivitage siis tõlge.",
-      "prepare": "Valmista ette",
-      "preparing": "Dokumendi lugemine…",
-      "preparingHint": "Kogu dokumendi lugemine ja iga rea hindamine võtab kuni kaks minutit.",
-      "title": "Tõlgi kakskeelne versioon"
+      "prepare": "Valmista ette"
     },
     "dispositions": {
-      "inline": "Mõlemad keeled",
       "keep": "Jäta muutmata"
     },
-    "error": {
-      "prepareTitle": "Dokumendi ettevalmistamine ebaõnnestus",
-      "startTitle": "Tõlke käivitamine ebaõnnestus"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Tõlkimiseks pole ühtegi tehisintellekti mudelit saadaval.",
-      "applyFailed": "Tõlkeid ei õnnestunud dokumenti tagasi kirjutada.",
-      "documentChanged": "Dokument muutus tõlkimise ajal. Valmistage see uuesti ette.",
-      "documentUnresolved": "Dokument või selle fail ei ole enam saadaval.",
-      "enqueueFailed": "Tõlget ei õnnestunud järjekorda lisada.",
-      "internal": "Tõlge katkes ootamatult.",
-      "notBilingual": "Sellel dokumendil ei ole kakskeelset tabelit.",
-      "translationFailed": "Ridade partii tõlkimine ebaõnnestus.",
-      "unknown": "Tõlge katkes ootamatult."
-    },
-    "glossary": {
-      "add": "Lisa termin",
-      "description": "Neid vasteid kasutatakse kõigil ridadel. Vasteta termin tuleb täita või eemaldada.",
-      "empty": "Määratletud termineid ei leitud.",
-      "formsHint": "Eraldage muud vormid komadega.",
-      "formsSource": "Termini muud vormid",
-      "formsTarget": "Tõlke muud vormid",
-      "incomplete": "Täitke puuduvad tõlked või eemaldage need terminid.",
-      "origins": {
-        "detected": "Leitud",
-        "user": "Teie oma"
-      },
-      "term": "Termin",
-      "title": "Määratletud terminid",
-      "tooManyForms": "Terminil võib olla kuni {max} muud vormi.",
-      "translation": "Tõlge"
-    },
     "kinds": {
-      "heading": "Pealkiri",
-      "listItem": "Loendipunkt",
-      "paragraph": "Lõik",
-      "table": "Terve tabel"
-    },
-    "origins": {
-      "default": "Hindamata",
-      "model": "AI"
+      "paragraph": "Lõik"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# rida jäeti vahele} other {# rida jäeti vahele}}: need ei sisalda tõlgitavat teksti.",
-      "start": "Käivita tõlge",
       "starting": "Käivitamine…"
     },
     "rows": {
-      "description": "Valige, mis juhtub tõlkeveeru iga reaga.",
-      "ordinal": "#",
-      "sourceText": "Lähtetekst",
-      "title": "Read",
-      "whatToDo": "Mida teha"
-    },
-    "run": {
-      "cancelled": "Tõlge tühistati.",
-      "doneSummary": "Tõlgitud {count, plural, one {# rida} other {# rida}}.",
-      "doneTitle": "Tõlge on valmis",
-      "failedRows": "{count, plural, one {# rida jäi tõlkimata} other {# rida jäi tõlkimata}}.",
-      "failedTitle": "Tõlge peatus",
-      "hint": "Tõlge töötab serveris. Jälgimiseks hoidke see aken avatuna.",
-      "moreRows": "{count, plural, one {veel # rida} other {veel # rida}}",
-      "progress": "Tõlgitud {completed} rida {total}-st",
-      "title": "Tõlkimine on pooleli…",
-      "warningsTitle": "Ülevaatamist vajavad read"
+      "title": "Read"
     }
   },
   "billing": {
@@ -1234,7 +1218,6 @@
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
       "none": "Viiteid pole veel salvestatud.",
       "notInStella": "Veel pole stellas",
-      "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
       "paragraphLabel": "Punkt {paragraph}",
       "paragraphMark": "¶ {paragraph}",
@@ -1918,7 +1901,8 @@
       "restored": "Failimuudatused on tagasi võetud"
     },
     "localRun": {
-      "cloud": "stella pilv",
+      "backgroundTasks": "{count, plural, one {Taustal käib # ülesanne} other {Taustal käib # ülesannet}}",
+      "errorFolderUnavailable": "Selle vestlusega seotud kaust pole sinu arvutis saadaval. Kontrolli seda stella desktopis ja saada see siis uuesti.",
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
       "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
       "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
@@ -1927,26 +1911,41 @@
       "errorRestoring": "Sinu arvuti võtab veel failimuudatusi tagasi. Saada see hetke pärast uuesti.",
       "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
       "filesNotShared": "Failid, mida ei õnnestunud jagada, jäävad sinu arvutisse: {fileNames}",
-      "onThisComputer": "{harness} selles arvutis",
+      "folderApprovalDescription": "Luba agendil {harness} töötada sinu arvuti kaustas „{folder}“. See saab seal faile lugeda, muuta ja kustutada ning manustatud failid kopeeritakse sinna.",
+      "folderApprove": "Luba kaustas {folder}",
+      "folderHint": "Oma arvuti kaustu saad linkida stella desktopi seadetes.",
+      "folderOwn": "Vestluse oma kaust",
+      "folderStateMoved": "Teisaldatud või kustutatud",
+      "folderStateOffline": "Ketas pole ühendatud",
+      "folderStatePending": "Ootab sinu nõusolekut",
+      "folderStateProtected": "Sisaldab stella enda andmeid",
+      "folderStateUnlinked": "Pole enam lingitud",
+      "folderStateUnreadable": "Ei saa lugeda",
+      "limitReminderNotify": "Teavita mind, kui limiit lähtestub",
+      "limitReminderScheduled": "Teavitame sind alates {time}.",
       "permissionAboveLimit": "Sinu organisatsioon seda ei luba",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",
       "permissionFullAuto": "Täisautomaatne",
       "permissionFullAutoDescription": "Ei küsi vestluse kaustas millegi kohta; küsib alati enne, kui sinu arvutis midagi muudab.",
+      "permissionPlan": "Plaan",
+      "permissionPlanDescription": "Kõigepealt loeb ja planeerib; küsib enne iga muudatust, kuni plaani kinnitad.",
       "permissionSandboxed": "Töötab liivakastis; küsib enne, kui sinu arvutis midagi muudab.",
       "permissionUnavailable": "Selles arvutis pole saadaval",
       "permissions": "Õigused",
       "refusalConflictingRunMode": "See päring soovib käivituda korraga pilveagendiga ja sinu arvutis. Vali menüüs Käivita üks.",
+      "refusalFolderNotApproved": "Luba esmalt programmeerimisagendil töötada selle vestlusega seotud kaustas.",
+      "refusalFolderUnavailable": "Selle vestlusega seotud kaust pole saadaval. Kontrolli seda menüüs Käivita või stella desktopis.",
       "refusalHarnessUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa seda päringut praegu vastu võtta. Kontrolli seda stella desktopis.",
       "refusalModelUnavailable": "Sinu arvutis töötav programmeerimisagent seda mudelit enam ei paku. Vali menüüs Käivita mõni teine.",
-      "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
+      "refusalNoComputer": "Ükski sinu arvuti pole ühendatud.",
       "refusalPermissionAboveLimit": "Sinu organisatsioon ei luba sinu arvutis töötavale programmeerimisagendile neid õigusi. Vali menüüs Õigused mõni muu valik.",
       "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
+      "refusalReasoningEffortUnavailable": "Sinu arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Vali menüüs Arutlustase mõni teine.",
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
-      "runOn": "Käivita",
-      "selectionLabel": "{harness} · {model}",
       "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "stateLimitUntil": "Limiit täis kuni {time}",
       "stateModelUnavailable": "Mudel pole enam saadaval",
       "stateNeedsLogin": "Vaja sisse logida",
@@ -2109,6 +2108,25 @@
     "richContentLoading": "Interaktiivse sisu laadimine…",
     "richContentTitle": "Interaktiivne sisu",
     "richContentUnavailable": "Seda sisu ei saa turvaliselt kuvada.",
+    "runOn": {
+      "checkFailed": "Sinu arvutit ei õnnestunud kontrollida",
+      "chipLabel": "Töötab: {place}",
+      "cloud": "Pilv",
+      "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
+      "harnessModels": "{harness} mudelid",
+      "hintInstall": "Paigalda see stella desktopist",
+      "hintOffline": "Ava oma arvutis stella desktop",
+      "hintSignIn": "Logi sisse stella desktopis",
+      "hintUpdate": "Uuenda seda stella desktopist",
+      "localFolderPlace": "Sinu arvuti, {harness}, {folder}",
+      "localFolderSelection": "Sinu arvuti · {harness} · {folder}",
+      "localPlace": "Sinu arvuti, {harness}",
+      "localSelection": "Sinu arvuti · {harness}",
+      "modelDefault": "Vaikimisi (soovitatud)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Sinu arvuti",
+      "yourComputerDescription": "Kasutab sinu arvutis Codexit või Claude Code'i sinu enda tellimusega. See saab lugeda ja muuta selle vestluse kausta faile; õigused määravad, mida see tohib küsimata teha."
+    },
     "selection": {
       "askInNewChat": "Küsi uues vestluses",
       "quoteInReply": "Tsiteeri vastuses",
@@ -2140,6 +2158,7 @@
     "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
     "sendErrorTimedOut": "Vestlusteenus ei vastanud õigel ajal. Proovige uuesti.",
     "sendErrorToolsUnsupported": "See mudel ei saa tööriistu kasutada, seega ei saa see sinu toimiku kohta küsimustele vastata. Vaheta mudelile, mis tööriistu toetab.",
+    "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum.",
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
@@ -2160,6 +2179,7 @@
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
@@ -2302,15 +2322,32 @@
       "field": "Väli",
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
+      "localOutput": {
+        "conversation": "Alamagendi vestlus",
+        "conversationPrompt": "Ülesanne",
+        "conversationReport": "Aruanne",
+        "cut": "Kuvatakse esimesed {kept} (kokku {total})",
+        "diff": "Failimuudatused",
+        "elsewhere": "Avage arvutis, kus see käivitati",
+        "empty": "Väljund puudub",
+        "failed": "stella töölauarakendus selles arvutis ei suutnud seda kuvada.",
+        "imageTooLarge": "Selle pildi suurus on {total}. Üle {kept} suuruseid pilte selles arvutis ei salvestata, seega ei saa seda siin kuvada.",
+        "notKept": "Sellest sammust pole selles arvutis midagi salvestatud",
+        "reading": "Loetakse sellest arvutist"
+      },
       "output": "Väljund",
       "patternInPath": "{pattern} asukohas {path}",
+      "proposedPlan": "Plaani ettepanek",
       "readFile": "Faili lugemine",
       "searchFiles": "Failidest otsimine",
+      "signInToContinue": "Jätkamiseks logige sisse",
       "sourceCode": "Lähtekood",
       "statusWaiting": "Ootel",
+      "subagent": "Alamagendi käivitamine",
       "toggleDetails": "Üksikasjade lülitamine",
       "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}",
-      "updatePlan": "Plaani uuendamine"
+      "updatePlan": "Plaani uuendamine",
+      "viewImage": "Pildi vaatamine"
     },
     "turnNotification": {
       "failedBody": "stella vestluse vastus jäi lõpetamata.",
@@ -2321,6 +2358,8 @@
       "replyReadyTitle": "Vastus on valmis"
     },
     "turnStatus": {
+      "answerFailed": "Vastust ei õnnestunud lõpetada",
+      "answerReady": "Vastus on valmis",
       "waitingForApproval": "Kinnituse ootamine",
       "waitingForInput": "Sisendi ootamine",
       "writing": "Kirjutamine"
@@ -2600,6 +2639,7 @@
     "filter": "Filter",
     "filters": "Filtrid",
     "find": "Leia",
+    "folder": "Kaust",
     "formula": "Valem",
     "goBack": "Mine tagasi",
     "goBackToEditing": "Tagasi muutma",
@@ -2696,6 +2736,7 @@
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "organizations": "Organisatsioonid",
+    "outOfDate": "Aegunud",
     "page": "Lehekülg {page}",
     "paymentRetryNotice": "Makseprobleem. Juurdepääsu säilitamiseks uuendage oma makseviisi hiljemalt {date}.",
     "pin": "Kinnita",
@@ -3360,6 +3401,8 @@
       "organizationMemberLimitReached": "See organisatsioon on jõudnud liikmete piirangu täitumiseni.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
+      "runActiveLimitReached": "Teie organisatsioon on jõudnud samaaegsete tööde piirmäärani. Oodake, kuni mõni töö lõpeb, ja proovige uuesti.",
+      "runDailyLimitReached": "Teie organisatsioon on jõudnud tööde päevase piirmäärani. Proovige uuesti pärast keskööd (Europe/Prague).",
       "sharepointAccessDenied": "Microsoft keelas juurdepääsu sellele saidile, teegile või failile.",
       "sharepointFileTooLarge": "See fail on importimiseks liiga suur.",
       "sharepointInvalidCursor": "Loend muutus sirvimise ajal. Avage kaust uuesti.",
@@ -3375,8 +3418,6 @@
       "validationRequired": "Kohustuslik väli on tühi.",
       "validationTooLong": "Liiga pikk: kasuta kuni {limit, number} märki.",
       "validationTooShort": "Liiga lühike: kasuta vähemalt {limit, number} märki.",
-      "verificationActiveLimitReached": "Teie organisatsioon on jõudnud samaaegsete kontrollide piirmäärani. Oodake, kuni mõni kontroll lõpeb, ja proovige uuesti.",
-      "verificationDailyLimitReached": "Teie organisatsioon on jõudnud kontrollide päevase piirmäärani. Proovige uuesti pärast keskööd (Europe/Prague).",
       "versionConflict": "Keegi teine muutis seda teie muutmise ajal. Laadige praeguse versiooni saamiseks uuesti."
     },
     "failedToAcceptInvitation": "Kutse vastuvõtmine ebaõnnestus",
@@ -5069,6 +5110,7 @@
       "flowRunAwaitingApproval": "Töövoog <bdi>{flowName}</bdi> ootab teie kinnitust",
       "flowRunCompleted": "Töövoog <bdi>{flowName}</bdi> on lõpetatud",
       "flowRunFailed": "Töövoog <bdi>{flowName}</bdi> ebaõnnestus",
+      "localRunLimitReset": "Sinu arvutis töötav programmeerimisagent saab vestlust jätkata",
       "mention": "<bdi>{actorName}</bdi> mainis teid kommentaaris",
       "reportExportFailed": "Aruande eksportimine ebaõnnestus",
       "reportExportSucceeded": "Teie aruanne on valmis",
@@ -5515,7 +5557,6 @@
       "caseLaw": "Kohtupraktika",
       "chat": "Vestlus",
       "contact": "Kontakt",
-      "folder": "Kaust",
       "link": "Link",
       "matter": "Toimik",
       "message": "Sõnum",
@@ -5846,6 +5887,7 @@
         "case_law_research_column": "kohtupraktika uurimisveerg",
         "chat_browser_site_grant": "vestluse veebisaidi luba",
         "chat_file": "vestluse fail",
+        "chat_local_folder_approval": "kohaliku kausta luba",
         "chat_message": "vestluse sõnum",
         "chat_thread": "vestluslõim",
         "chat_tool_execution": "vestlustööriista käivitus",
@@ -6101,7 +6143,6 @@
     "comments": "Kommentaarid",
     "commentsEmpty": "Kommenteerimiseks vali tekst.",
     "noRevisions": "Versioone veel pole",
-    "outOfDate": "Aegunud",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Kokkuvõte puudub",
     "proposals": "Muudatusettepanekud",

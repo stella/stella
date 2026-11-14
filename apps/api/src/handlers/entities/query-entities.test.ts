@@ -9,10 +9,14 @@ const TEST_ORGANIZATION_ID = toSafeId<"organization">("org1");
 
 describe("queryEntities sort SQL", () => {
   test("custom property sorts preserve empty-string fallback for missing values", () => {
-    const [sortExpression] = buildEntitySortExpressions({
+    const expressions = buildEntitySortExpressions({
       sorts: [{ propertyId: "prop_sparse", desc: false }],
       organizationId: TEST_ORGANIZATION_ID,
+      propertySortKinds: new Map([["prop_sparse", "text"]]),
     });
+    // One text key, then the id tiebreak.
+    expect(expressions).toHaveLength(2);
+    const [sortExpression] = expressions;
     if (!sortExpression) {
       throw new Error("expected custom property sort expression");
     }
@@ -23,7 +27,7 @@ describe("queryEntities sort SQL", () => {
     expect(compiled.sql.toLowerCase()).toContain("left(");
     expect(compiled.sql).toContain("), '') ASC");
     expect(compiled.params).toContain(ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH);
-    expect(compiled.sql).not.toContain("\uffff");
-    expect(compiled.params).not.toContain("\uffff");
+    expect(compiled.sql).not.toContain("￿");
+    expect(compiled.params).not.toContain("￿");
   });
 });

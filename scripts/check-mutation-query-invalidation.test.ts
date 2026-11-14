@@ -563,6 +563,47 @@ export const invalidQuery = () => useQuery(resourceQueryOptions(
   assertInvalidCannotBeBaselined(findings);
 });
 
+test("a reader is kept current in place only by registered writes it names literally", () => {
+  const keptCurrent = (kept: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { queryOptions } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+export const runQuery = () => useQuery(resourceQueryOptions(
+  queryOptions({ queryKey: ["run"], queryFn: async () => [] }),
+  {
+    resources: [RESOURCE_TYPE.ENTITY],
+    scope: { type: "workspace", workspaceId: "workspace" },
+    keptCurrentBy: ${kept},
+  },
+));
+`,
+    },
+  ];
+  expect(violations(keptCurrent('["renameEntity"]'))).toEqual([]);
+  for (const kept of [
+    '["unknownWrite"]',
+    "[]",
+    '["renameEntity", "renameEntity"]',
+    "[...writes]",
+    "[renameEntityName]",
+    "writes",
+  ]) {
+    const findings = violations(keptCurrent(kept));
+    expect({
+      kept,
+      invalid: findings.some(
+        ({ disposition }) => disposition === "invalid-declaration",
+      ),
+    }).toEqual({ kept, invalid: true });
+    assertInvalidCannotBeBaselined(findings);
+  }
+});
+
 test("conditional reader scope is accepted only when both branches are valid", () => {
   const invalidFixture = [
     ...validSources.slice(0, 2),
