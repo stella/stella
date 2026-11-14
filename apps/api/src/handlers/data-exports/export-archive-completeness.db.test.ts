@@ -324,6 +324,7 @@ const TABLE_CLASSIFICATIONS = {
   invoices: "included",
   justifications: FORMAT_SCOPE_EXCLUSION,
   legalGraphEdges: FORMAT_SCOPE_EXCLUSION,
+  legalHolds: FORMAT_SCOPE_EXCLUSION,
   legalListClaimCarryOutcomes: FORMAT_SCOPE_EXCLUSION,
   legalListClaimReviewEvents: FORMAT_SCOPE_EXCLUSION,
   legalListClaims: FORMAT_SCOPE_EXCLUSION,

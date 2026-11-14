@@ -48,6 +48,7 @@ import {
 } from "./document-annotations";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legalHoldScalingScenarios } from "./legal-holds";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
@@ -132,6 +133,7 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  ...legalHoldScalingScenarios,
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,

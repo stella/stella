@@ -55,6 +55,7 @@ import {
   installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
   installPgliteInvoiceObjects,
+  installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteModelRunBudgets,
@@ -925,6 +926,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.transaction(async (tx) => {
     await installPgliteCorrespondenceSources(tx);
   });
+  await installPgliteLegalHoldDeleteBackstop(db);
 
   return client;
 };
