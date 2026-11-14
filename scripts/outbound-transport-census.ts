@@ -1110,6 +1110,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:better-auth/plugins/access"],
   },
   {
+    path: "packages/scripts/src/agent-local-runner.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Reads and sets the stand-in computer's state on the configured local API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "packages/scripts/src/agent-session.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -1363,5 +1370,10 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/scripts/subset-stamp-fonts.ts",
     reason: "Issues request authority for operator-requested font downloads.",
+  },
+  {
+    path: "apps/api/src/scripts/update-qualified-tsa-trust.ts",
+    reason:
+      "Issues request authority for operator-requested EU trusted list downloads.",
   },
 ] as const satisfies readonly OutboundPermitGrantOwner[];
