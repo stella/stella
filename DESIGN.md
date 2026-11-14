@@ -334,11 +334,13 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button` `shape`: `box`, `round`
 - `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
 - `Button` `variant`: `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
+- `ButtonTextRun` `variant`: `link`, `plain`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
 - `ComboboxTrigger` `variant`: `field`, `plain`
 - `CommandItem` `size`: `default`, `row`
+- `ComposerPlaceholder` `stature`: `compact`, `large`
 - `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
 - `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle` `size`: `compact`, `touch`
@@ -366,9 +368,10 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Label` `variant`: `choice`, `choice-card`, `default`, `muted`
 - `LandingItemText` `iconTone`: `matter`, `muted`
 - `LandingRowIcon` `tone`: `matter`, `muted`
-- `ListItemDescription` `variant`: `code`, `text`
+- `ListItemDescription` `variant`: `code`, `paragraph`, `text`
 - `ListItemMedia` `variant`: `icon`, `initial`
 - `ListItemStatus` `tone`: `destructive`, `neutral`, `success`, `warning`
+- `ListItemTitle` `variant`: `name`, `statement`
 - `Loader` `animation`: `none`, `spin`
 - `Loader` `size`: `lg`, `md`, `sm`
 - `Loader` `variant`: `decorative`, `status`
@@ -380,11 +383,14 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `PreviewPane` `size`: `default`, `thumbnail`
 - `Prose` `size`: `default`, `lede`, `sm`
 - `Prose`, `TableCell`, `TableRow` `tone`: `default`, `muted`
+- `ReviewDecisionActions` `emphasis`: `primary`, `quiet`
 - `ReviewDecisionActions` `state`: `accepted`, `applying`, `dismissed`, `pending`, `rejected`
 - `ReviewOutOfDateNotice` `tone`: `muted`, `warning`
 - `ReviewSeverityDot` `level`: `critical`, `high`, `low`, `medium`, `none`
 - `ReviewStatusBadge`, `ReviewStatusDot` `tone`: `destructive`, `highlight`, `neutral`, `success`, `warning`
 - `ReviewStatusBadge` `variant`: `outline`, `solid`, `strong`
+- `RunStateMark` `size`: `badge`, `row`
+- `RunStateMark` `state`: `needs-you`, `working`
 - `ScrollArea` `axis`: `both`, `vertical`
 - `SelectTrigger` `align`: `center`, `start`
 - `SheetContent`, `SheetPopup` `side`: `block-end`, `block-start`, `inline-end`, `inline-start`

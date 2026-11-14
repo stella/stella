@@ -55,6 +55,8 @@ import { detached } from "@/lib/detached";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import "@/components/pdf/peek/peek-docx.css";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import {
   editSessionErrorDescriptionKey,
   getDocxEditorBlockingError,
@@ -960,7 +962,7 @@ const DocxLoadingPriorityExtra = () => {
         variant="ghost"
       >
         <PenLineIcon className="size-3.5" />
-        <span className="truncate">{t("trackingOff")}</span>
+        <TruncatedText>{t("trackingOff")}</TruncatedText>
       </Button>
       <StSelect value="all-markup" onValueChange={noop}>
         <StSelectTrigger

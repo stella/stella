@@ -733,6 +733,7 @@ jobs:
             scripts/api-health.ts
             apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -747,6 +748,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health,staging-ecs-readiness}.ts "$RUNNER_TEMP/scripts/"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/bullmq-queue-hosts.ts" "$RUNNER_TEMP/apps/api/src/bullmq-queue-hosts.ts"
           echo "STAGING_PROOF_GATE_DIR=$RUNNER_TEMP/scripts" >> "$GITHUB_ENV"
           echo "STAGING_PROOF_STATE_PATH=$RUNNER_TEMP/scripts/state.json" >> "$GITHUB_ENV"
 
@@ -844,12 +846,47 @@ jobs:
       # Post-deploy verification stays in the serialized promotion job. If it
       # were a separate job, a newer promotion could start while this smoke
       # still measures the previous commit.
+      - name: Checkout quarantine tooling
+        timeout-minutes: 3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .quarantine-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/flaky-test-quarantine/action.yml
+            .github/actions/flaky-test-quarantine/main.mjs
+            .github/actions/flaky-test-quarantine/post.mjs
+            scripts/flaky-test-quarantine-action.ts
+            scripts/flaky-test-quarantine-preload.ts
+            scripts/flaky-test-quarantine.json
+            scripts/flaky-test-history.ts
+            scripts/flaky-test-quarantine.ts
+            scripts/api-test-shard-plan.ts
+            scripts/ci-failure-digest.ts
+            scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve quarantine tooling across source checkouts
+        timeout-minutes: 1
+        run: |
+          mkdir -p "$RUNNER_TEMP/quarantine-tooling"
+          cp -R "$GITHUB_WORKSPACE/.quarantine-tooling/.github" "$RUNNER_TEMP/quarantine-tooling/.github"
+          cp -R "$GITHUB_WORKSPACE/.quarantine-tooling/scripts" "$RUNNER_TEMP/quarantine-tooling/scripts"
+
       - name: Checkout deployed source
         timeout-minutes: 3
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
+
+      - name: Restore quarantine tooling after source checkout
+        timeout-minutes: 1
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.quarantine-tooling"
+          cp -R "$RUNNER_TEMP/quarantine-tooling/." "$GITHUB_WORKSPACE/.quarantine-tooling/"
 
       # Journeys run from the target revision, including its dependencies.
       - name: Require target journey harness
@@ -902,6 +939,13 @@ jobs:
       - name: Verify image-provided Chromium
         timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
+
+      - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.proof-readiness.outputs.status == 'ready' }}
+        timeout-minutes: 1
+        uses: ./.quarantine-tooling/.github/actions/flaky-test-quarantine
+        with:
+          token: ${{ github.token }}
 
       - name: Run staging web smoke
         timeout-minutes: 30
@@ -1074,6 +1118,9 @@ jobs:
           # Release verification requires every journey, including the
           # authenticated probes, rather than accepting partial coverage.
           MCP_CANARY_REQUIRE_CREDENTIALS: "true"
+          # About a minute of concurrent heavy-tool calls while the scheduled
+          # corpus jobs run; each tool's p95 against its latency budget.
+          MCP_CANARY_RELEASE_LOAD: "on"
           APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
           APP_REVIEW_ORGANIZATION_ID: ${{ vars.STAGING_APP_REVIEW_ORGANIZATION_ID }}
           REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}
@@ -1084,7 +1131,9 @@ jobs:
       - name: Run deployed application journeys
         id: deployed-journeys
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
-        timeout-minutes: 20
+        # A journey may wait a scheduled job's full 30-minute run budget
+        # (SCHEDULED_JOB_MAX_RUNTIME_MS) before it judges the deployment.
+        timeout-minutes: 45
         uses: ./.github/actions/user-journeys
         with:
           project: deployed

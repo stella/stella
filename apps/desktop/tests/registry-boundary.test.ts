@@ -98,9 +98,15 @@ const accountBearerOwners = {
   "http_client.rs": "key: &crate::device_proof::DeviceKey",
   "time_entry_submit.rs": "account: &AccountRequest",
   "billing_draft_submit.rs": "account: &AccountRequest",
+  "dictation_cleanup.rs": "account: &AccountRequest",
+  "dictation_cloud.rs": "account: &AccountRequest",
+  // The development stand-in computer proves the device key it linked itself.
+  "desktop_runner/stand_in.rs": "let device = DeviceKey::from_pkcs8(&pkcs8)?;",
 } as const;
 
-const assertBearerOwner = (file: string, source: string) => {
+const assertBearerOwner = (entry: string, source: string) => {
+  // A recursive listing separates folders as the platform does.
+  const file = entry.replaceAll("\\", "/");
   const compactSource = source.replace(/\s+/gu, "");
   if (
     !compactSource.includes(".bearer_auth(") &&

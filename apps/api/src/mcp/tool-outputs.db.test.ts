@@ -90,6 +90,8 @@ const TOOL_COVERAGE = {
   set_practice_jurisdictions: RUN,
   search_legislation: excluded(PUBLIC_CORPUS),
   read_statute: excluded(PUBLIC_CORPUS),
+  search_guidance: excluded(PUBLIC_CORPUS),
+  read_guidance: excluded(PUBLIC_CORPUS),
   read_statute_provisions: excluded(PUBLIC_CORPUS),
   read_provision_history: excluded(PUBLIC_CORPUS),
   search_boe_legislation: excluded(UPSTREAM),

@@ -25,6 +25,10 @@ export const TABLE_RETENTION = {
     boundedBy:
       "One saved connection per organization, account and connector; cascade-deleted with any owner.",
   },
+  user_files: {
+    boundedBy:
+      "One row per file a member attached to, or a local run handed back in, a chat thread; deleted with its thread and cascade-deleted with its account.",
+  },
   chat_secrets: {
     boundedBy:
       "One receipt per thread tool call, cascade-deleted with its thread; encrypted payloads expire through chat.purgeSecrets.",
@@ -48,6 +52,14 @@ export const TABLE_RETENTION = {
   desktop_runner_commands: {
     boundedBy:
       "At most DESKTOP_RUNNER_LIMITS.maxCommandsPerRun commands per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_app_calls: {
+    boundedBy:
+      "MAX_APP_CALLS_PER_RUN rows per run, a few more only when calls were answered at the same moment, each within the chat app part limit, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_folder_restores: {
+    boundedBy:
+      "At most one live undo per run and one more per refused or expired attempt the member asks again, cascade-deleted when pruneEndedRuns deletes the ended run.",
   },
   desktop_runner_events: {
     boundedBy:

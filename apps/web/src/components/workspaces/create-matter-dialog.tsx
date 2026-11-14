@@ -9,6 +9,7 @@ import { useShallow } from "zustand/shallow";
 
 import type { ContactType } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { getPossibleDuplicateMatters } from "@stll/api-contract/matter-duplicates";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -25,6 +26,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { BuildingIcon, UserIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -32,7 +34,6 @@ import {
   ContactPicker,
 } from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCreateContact } from "@/lib/contacts/mutations";
@@ -62,9 +63,12 @@ export const SelectedClient = ({
     ) : (
       <BuildingIcon className="text-muted-foreground size-4" />
     )}
-    <BidiText as="span" className="truncate text-sm font-medium">
+    <TruncatedText
+      className="text-sm font-medium"
+      render={<BidiText as="span" />}
+    >
       {client.displayName}
-    </BidiText>
+    </TruncatedText>
     <Button
       aria-label={clearLabel}
       className="ms-auto"
@@ -356,7 +360,9 @@ const CreateMatterDialogBody = ({
                   className="flex items-center gap-2 text-sm"
                   key={workspace.id}
                 >
-                  <span className="truncate font-medium">{workspace.name}</span>
+                  <TruncatedText className="font-medium">
+                    {workspace.name}
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {workspace.reference}
                   </span>

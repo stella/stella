@@ -2,6 +2,8 @@ import * as v from "valibot";
 
 import {
   CHAT_CLOUD_RUN_TARGET,
+  type ChatLocalRunContext,
+  chatLocalRunContextSchema,
   type ChatLocalRunTarget,
   chatLocalRunTargetSchema,
   type ChatRunTarget,
@@ -38,7 +40,7 @@ export const chatRunTargetOf = (stored: unknown): ChatRunTarget => {
   return parsed.success ? parsed.output : CHAT_CLOUD_RUN_TARGET;
 };
 
-/** Whether two run targets send turns to the same place in the same mode. */
+/** Whether two run targets send turns to the same place in the same way. */
 export const sameChatRunTarget = (
   left: ChatRunTarget,
   right: ChatRunTarget,
@@ -47,5 +49,35 @@ export const sameChatRunTarget = (
     ? right.kind === "local" &&
       left.harness === right.harness &&
       left.model === right.model &&
-      left.approvals === right.approvals
+      left.approvals === right.approvals &&
+      left.folder?.desktopId === right.folder?.desktopId &&
+      left.folder?.linkId === right.folder?.linkId &&
+      left.reasoningEffort === right.reasoningEffort
     : right.kind === left.kind;
+
+/**
+ * How full the context of a thread whose turns run on the member's computer
+ * is: what the harness reported after the thread's latest answer, which the
+ * next turn starts from. `undefined` for a thread that runs on stella's own
+ * models, or whose latest answer carries no report; the composer then shows
+ * its own estimate.
+ */
+export const reportedLocalRunContext = ({
+  target,
+  messages,
+}: {
+  target: ChatRunTarget;
+  /** The thread's messages, oldest first, with their stored metadata. */
+  messages: readonly { role: string; metadata?: unknown }[];
+}): ChatLocalRunContext | undefined => {
+  if (target.kind !== "local") {
+    return undefined;
+  }
+  const latest = messages.findLast(({ role }) => role === "assistant");
+  const metadata: unknown = latest?.metadata;
+  const parsed = v.safeParse(
+    v.object({ localRunContext: chatLocalRunContextSchema }),
+    metadata,
+  );
+  return parsed.success ? parsed.output.localRunContext : undefined;
+};

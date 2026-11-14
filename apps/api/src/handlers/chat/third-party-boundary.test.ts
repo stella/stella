@@ -705,7 +705,12 @@ describe("chat third-party anonymization boundary", () => {
   test("every stored part type is prepared for the send mode", async () => {
     for (const [partType, part] of Object.entries(STORED_PART_CENSUS)) {
       const messages: ChatMessage[] = [
-        { id: `msg_${partType}`, role: "assistant", parts: [part] },
+        {
+          id: `msg_${partType}`,
+          // A member sends files; one on an answer never reaches a model.
+          role: isChatAttachmentPart(part) ? "user" : "assistant",
+          parts: [part],
+        },
       ];
       const raw = await prepareMessagesForThirdParty({
         boundary: createRawBoundary(),
@@ -724,6 +729,45 @@ describe("chat third-party anonymization boundary", () => {
       );
       // Anonymized mode sends it prepared, or not at all.
       expect(providerViewOf(anonymized)).not.toContain(STORED_PART_VALUE);
+    }
+  });
+
+  test("a file on an answer reaches no model, in either mode, whatever holds it", async () => {
+    for (const part of [
+      createChatAttachmentPart({
+        filename: "report.pdf",
+        mimeType: "application/pdf",
+        url: "stella://file::019a0000-0000-7000-8000-000000000001",
+      }),
+      createChatAttachmentPart({
+        filename: "chart.png",
+        mimeType: "image/png",
+        url: "stella://file::019a0000-0000-7000-8000-000000000002",
+      }),
+    ]) {
+      const text = { type: "text", content: "Here it is." } as const;
+      const withText: ChatMessage = {
+        id: "msg_answer",
+        role: "assistant",
+        parts: [text, part],
+      };
+      const fileOnly: ChatMessage = {
+        id: "msg_file_only",
+        role: "assistant",
+        parts: [part],
+      };
+      for (const boundary of [createRawBoundary(), createBoundary()]) {
+        // await-in-loop: each boundary keeps its own replacement state.
+        const prepared = await prepareMessagesForThirdParty({
+          boundary,
+          messages: [withText, fileOnly],
+        });
+        expect(Result.isOk(prepared)).toBe(true);
+        const sent = prepared.unwrap();
+        // The answer keeps its text; a message that was only a file goes.
+        expect(sent.map(({ id }) => id)).toEqual(["msg_answer"]);
+        expect(sent.at(0)?.parts.map(({ type }) => type)).toEqual(["text"]);
+      }
     }
   });
 

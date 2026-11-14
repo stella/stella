@@ -286,6 +286,23 @@ const runRegisterCheck = async ({
   }
 };
 
+type RunRegisterEntityCheckProps = {
+  observer: RegistryRequestObservation;
+  /** A register check asks a third-party source. */
+  permit: ThirdPartyOutboundPermit;
+  check: EntityCheckKind;
+  subject: CounterpartyCheckSubject;
+  signal: AbortSignal | undefined;
+};
+
+/** One register check, for callers that never screen sanctions lists. */
+export const runRegisterEntityCheck = async ({
+  permit: _permit,
+  ...props
+}: RunRegisterEntityCheckProps): Promise<
+  Result<EntityCheckResult, HandlerError>
+> => await runRegisterCheck({ ...props, runCheck: runEntityCheck });
+
 /**
  * Screen a subject against one official source, or against every sanctions
  * list. A source that could not answer is an `unavailable` outcome, not an

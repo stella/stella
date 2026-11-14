@@ -1,5 +1,6 @@
 import { createFormatter } from "use-intl/core";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import { CASE_LAW_REGION_BY_JURISDICTION } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawBrowserCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { US_ABBREVIATED_COURTS } from "@stll/api-contract/us-court-abbreviations";
@@ -380,8 +381,31 @@ const britishCitation = (input: CitationInput): string => {
   return `${named}${input.caseNumber}${locator}`;
 };
 
+/**
+ * Brazilian practice: the court by its sigla, the case, and the judgment
+ * date as "j." (julgado em) in day/month/year ("STF, RE 1234567 AgR, j.
+ * 10/02/2020"). The rapporteur and the gazette date some styles add are not
+ * part of the citation input.
+ */
+const brazilianCitation = (input: CitationInput): string => {
+  const court =
+    courtAbbreviation({
+      country: "BRA",
+      court: input.court,
+      ecli: input.ecli,
+    }) ?? input.court;
+  const date = parseDecisionDate(input.decisionDate);
+  const dated =
+    date === null
+      ? ""
+      : `, j. ${String(date.day).padStart(2, "0")}/${String(date.month).padStart(2, "0")}/${String(date.year)}`;
+  const locator = input.pincite === null ? "" : `, ${input.pincite}`;
+  return `${court}, ${input.caseNumber}${dated}${locator}`;
+};
+
 const CITATION_FORMATTERS = {
   AUT: austrianCitation,
+  BRA: brazilianCitation,
   CZE: czechCitation,
   EU: euCitation,
   GBR: britishCitation,
@@ -390,7 +414,7 @@ const CITATION_FORMATTERS = {
   SVK: slovakCitation,
   USA: usCitation,
 } as const satisfies Record<
-  CaseLawBrowserCountry | "AUT" | "GBR" | "USA",
+  CaseLawBrowserCountry | "AUT" | "BRA" | "GBR" | "USA",
   (input: CitationInput) => string
 >;
 
@@ -399,9 +423,19 @@ const hasCitationFormatter = (
 ): country is keyof typeof CITATION_FORMATTERS =>
   Object.hasOwn(CITATION_FORMATTERS, country);
 
+/** The corpus code of a jurisdiction a caller may name by its region. */
+const citationCountryOf = (normalized: string): string => {
+  if (normalized === "GB") {
+    return "GBR";
+  }
+  if (normalized === "BR") {
+    return "BRA";
+  }
+  return normalized;
+};
+
 export const formatDecisionCitation = (input: CitationInput): string => {
-  const normalized = fromCaseLawCountryParam(input.country);
-  const country = normalized === "GB" ? "GBR" : normalized;
+  const country = citationCountryOf(fromCaseLawCountryParam(input.country));
   return (
     hasCitationFormatter(country)
       ? CITATION_FORMATTERS[country]

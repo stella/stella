@@ -5,5 +5,7 @@
   "noMatter": "Asjata",
   "noDescription": "Kirjelduseta",
   "more": "{count, plural, one {veel # taimer} other {veel # taimerit}}",
-  "startedElsewhere": "Teises seadmes käivitati taimer"
+  "startedElsewhere": "Teises seadmes käivitati taimer",
+  "pause": "Peata",
+  "resume": "Jätka"
 }

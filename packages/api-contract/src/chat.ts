@@ -170,6 +170,32 @@ export const isBrowserResolvedChatToolCall = (part: unknown): boolean => {
 };
 
 /**
+ * The error a declined call stores, as the chat engine writes it when the
+ * user denies an approval: on the call's `output.error` and on its
+ * `tool-result`, whose `outcome` is `denied`. Every writer of a denial stores
+ * this shape (see `isDeclinedChatToolCall`).
+ */
+export const CHAT_TOOL_DECLINED_ERROR = "User declined tool execution";
+
+/** The parts of a tool call that decide whether it was declined. */
+type DecidedChatToolCall = {
+  type: string;
+  approval?: { approved?: boolean | undefined } | undefined;
+};
+
+/**
+ * Whether the user declined a tool call's approval. The decision is
+ * `approval.approved === false`, whatever state the call is in: a declined
+ * call is stored settled as an `error` with the engine's denial
+ * (`CHAT_TOOL_DECLINED_ERROR`), threads stored before that keep it
+ * `approval-responded` with no result, and a client posts its answer as
+ * `approval-responded`. All of them are the same decision, so every reader
+ * asks this predicate rather than reading a state.
+ */
+export const isDeclinedChatToolCall = (part: DecidedChatToolCall): boolean =>
+  part.type === "tool-call" && part.approval?.approved === false;
+
+/**
  * Title a thread is persisted with until its first message generates a real
  * one. Deliberately untranslated: it is a sentinel both sides compare
  * against, and the UI substitutes a localized label when it matches.
@@ -195,15 +221,53 @@ export const CHAT_ACTIVE_RUN_STATE = {
 export type ChatActiveRunState =
   (typeof CHAT_ACTIVE_RUN_STATE)[keyof typeof CHAT_ACTIVE_RUN_STATE];
 
+/**
+ * What a turn that `needs-you` waits on: an answer to the assistant's
+ * question, an approval, a step the app runs itself once the chat is open
+ * again, or a question from a harness on the member's computer.
+ */
+export const CHAT_TURN_INTERACTION_TYPES = [
+  "ask-user",
+  "approval",
+  "client-tool",
+  "harness-question",
+] as const;
+export type ChatTurnInteractionType =
+  (typeof CHAT_TURN_INTERACTION_TYPES)[number];
+
+/**
+ * Whether the reader has seen a chat's latest answer: `unread` once an answer
+ * settles after they last had the chat open, or after they marked it unread.
+ */
+export const CHAT_THREAD_READ_STATE = {
+  read: "read",
+  unread: "unread",
+} as const;
+export type ChatThreadReadState =
+  (typeof CHAT_THREAD_READ_STATE)[keyof typeof CHAT_THREAD_READ_STATE];
+
+/** Whether the reader pinned a chat to the top of their list. */
+export const CHAT_THREAD_PIN_STATE = {
+  pinned: "pinned",
+  unpinned: "unpinned",
+} as const;
+export type ChatThreadPinState =
+  (typeof CHAT_THREAD_PIN_STATE)[keyof typeof CHAT_THREAD_PIN_STATE];
+
 /** One unfinished chat run of the caller, as the active-runs read lists it. */
 export type ChatActiveRun = {
   threadId: string;
   threadTitle: string;
   workspaceId: string | null;
-  state: ChatActiveRunState;
   /** ISO instant the run entered its current state. */
   since: string;
-};
+} & (
+  | { state: typeof CHAT_ACTIVE_RUN_STATE.working }
+  | {
+      state: typeof CHAT_ACTIVE_RUN_STATE.needsYou;
+      interaction: ChatTurnInteractionType;
+    }
+);
 
 export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",

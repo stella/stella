@@ -4,9 +4,15 @@ import {
   CHAT_LOCAL_RUN_REFUSAL,
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
+  isApprovalModeWithin,
 } from "@stll/api-contract/chat-run-target";
-import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
+import {
+  DESKTOP_RUNNER_FEATURE_ID,
+  DESKTOP_RUNNER_LINKED_FOLDER_STATE,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   createLocalChatRun,
   type LocalChatRun,
@@ -17,10 +23,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
-import {
-  type DatabaseError,
-  HandlerError,
-} from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   type FeatureAccessSnapshot,
   isFeatureEnabled,
@@ -41,9 +44,28 @@ export type ResolveChatLocalRunOptions = {
   organizationId: SafeId<"organization">;
   chatThreadId: SafeId<"chatThread">;
   workspaceIds: readonly SafeId<"workspace">[];
+  /**
+   * The most the organization lets a run do without asking, read when the
+   * turn starts so a lowered ceiling holds the next turn.
+   */
+  readApprovalCeiling: () => Promise<
+    Result<DesktopRunnerApprovalMode, SafeDbError>
+  >;
   /** The gateway control; the process's own by default. */
   runtime?: { control: DesktopRunnerControl; runBell: DesktopRunnerRunBell };
 };
+
+/**
+ * The chat thread of the member's run that is still going, for what the run's
+ * own token may write: the run's row names the thread, never the request.
+ */
+export const readOpenLocalRunThread = async (
+  options: Parameters<DesktopRunnerControl["readOpenRunChatThread"]>[0],
+  runtime: Pick<
+    ReturnType<typeof getDesktopRunnerControl>,
+    "control"
+  > = getDesktopRunnerControl(),
+) => await runtime.control.readOpenRunChatThread(options);
 
 const refuse = (
   status: 400 | 403 | 409,
@@ -66,9 +88,10 @@ export const resolveChatLocalRun = async ({
   organizationId,
   chatThreadId,
   workspaceIds,
+  readApprovalCeiling,
   runtime = getDesktopRunnerControl(),
 }: ResolveChatLocalRunOptions): Promise<
-  Result<LocalChatRun | undefined, HandlerError | DatabaseError>
+  Result<LocalChatRun | undefined, HandlerError | SafeDbError>
 > => {
   if (
     runTarget === undefined ||
@@ -112,9 +135,25 @@ export const resolveChatLocalRun = async ({
       }),
     );
   }
+  // The organization's ceiling holds whichever computer would take the turn.
+  // A resumed run was held to it when it started and keeps its mode.
+  const ceiling = await readApprovalCeiling();
+  if (ceiling.isErr()) {
+    return Result.err(ceiling.error);
+  }
+  if (!isApprovalModeWithin(runTarget.approvals, ceiling.value)) {
+    return refuse(
+      403,
+      CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+      "Your organization does not let a run on your computer do that much without asking.",
+    );
+  }
+  const { folder } = runTarget;
+  // A turn in a linked folder runs on the computer the folder is on.
   const picked = await runtime.control.pickDesktop({
     owner,
     harness: runTarget.harness,
+    ...(folder === undefined ? {} : { desktopId: folder.desktopId }),
   });
   if (picked.isErr()) {
     return Result.err(picked.error);
@@ -122,11 +161,17 @@ export const resolveChatLocalRun = async ({
   const desktop = picked.value;
   switch (desktop.type) {
     case "no_computer":
-      return refuse(
-        409,
-        CHAT_LOCAL_RUN_REFUSAL.noComputer,
-        "None of your computers is connected.",
-      );
+      return folder === undefined
+        ? refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.noComputer,
+            "None of your computers is connected.",
+          )
+        : refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
+            "The computer the chat's folder is on is not connected.",
+          );
     case "harness_unavailable":
       return refuse(
         409,
@@ -134,11 +179,24 @@ export const resolveChatLocalRun = async ({
         "The harness on your computer cannot take a turn right now.",
       );
     case "available": {
-      if (!desktop.harness.models.some(({ id }) => id === runTarget.model)) {
+      const model = desktop.harness.models.find(
+        ({ id }) => id === runTarget.model,
+      );
+      if (model === undefined) {
         return refuse(
           409,
           CHAT_LOCAL_RUN_REFUSAL.modelUnavailable,
           "The harness on your computer does not offer that model.",
+        );
+      }
+      if (
+        runTarget.reasoningEffort !== null &&
+        !model.reasoningEfforts.includes(runTarget.reasoningEffort)
+      ) {
+        return refuse(
+          409,
+          CHAT_LOCAL_RUN_REFUSAL.reasoningEffortUnavailable,
+          "The harness on your computer does not offer that reasoning effort for the model.",
         );
       }
       if (!desktop.harness.approvalModes.includes(runTarget.approvals)) {
@@ -148,6 +206,25 @@ export const resolveChatLocalRun = async ({
           "Your computer cannot run the harness with those permissions.",
         );
       }
+      if (folder !== undefined) {
+        const linked = desktop.linkedFolders.find(
+          ({ id }) => id === folder.linkId,
+        );
+        if (linked?.state !== DESKTOP_RUNNER_LINKED_FOLDER_STATE.available) {
+          return refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.folderUnavailable,
+            "The chat's folder is not available on your computer.",
+          );
+        }
+        if (!desktop.approvedFolderIds.includes(folder.linkId)) {
+          return refuse(
+            409,
+            CHAT_LOCAL_RUN_REFUSAL.folderNotApproved,
+            "Allow the agent to work in the chat's folder first.",
+          );
+        }
+      }
       const plan: LocalRunPlan = {
         type: "start",
         destination: {
@@ -155,7 +232,9 @@ export const resolveChatLocalRun = async ({
           harness: runTarget.harness,
           harnessVersion: desktop.harness.version,
           model: runTarget.model,
+          reasoningEffort: runTarget.reasoningEffort,
           approvals: runTarget.approvals,
+          linkedFolderId: folder?.linkId ?? null,
         },
       };
       return Result.ok(createLocalChatRun(context, plan));

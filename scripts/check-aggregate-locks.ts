@@ -8,6 +8,7 @@ import {
   aggregateLockBaselineProblems,
   type AggregateLockBaselineRow,
   type AggregateLockRekey,
+  type AggregateLockSite,
   aggregateLockSites,
   aggregateLockSourceIncluded,
 } from "../.oxlint-plugins/aggregate-lock-sites.ts";
@@ -22,6 +23,7 @@ const baselineSchema = v.array(
     fingerprint: v.string(),
     count: v.number(),
     reason: v.string(),
+    holder: v.optional(v.pipe(v.string(), v.minLength(1))),
   }),
 );
 export const parseAggregateLockBaseline = (text: string) =>
@@ -147,6 +149,165 @@ export const aggregateLockNamespaceProblems = ({
   return problems;
 };
 
+/**
+ * PostgreSQL refuses every row-locking clause (FOR UPDATE, FOR NO KEY UPDATE,
+ * FOR SHARE, FOR KEY SHARE) unless the role holds UPDATE on the table or on
+ * one of its columns; SELECT, DELETE or REFERENCES do not suffice. A legacy
+ * row lock runs on the application role unless its baseline row names the
+ * role that takes it (`holder`), and the privilege census must grant that
+ * role UPDATE on every table the lock reaches. The aggregate owner's own row
+ * locks are held to the same census by `aggregate-lock-privileges.test.ts`.
+ */
+export const ROLE_PRIVILEGE_CENSUS_PATH =
+  "apps/api/src/lib/db/role-privilege-census.json";
+export const SCHEMA_INDEX_DIR = "apps/api/src/db/schema-index";
+const APPLICATION_ROLE = "stella";
+/** A transaction on the database owner, which every grant check passes. */
+const OWNER_HOLDER = "owner";
+const censusSchema = v.object({
+  public: v.array(v.string()),
+  roles: v.array(
+    v.object({ role: v.string(), privileges: v.array(v.string()) }),
+  ),
+});
+/** Which tables each census role can row-lock. */
+type RowLockGrants = ReadonlyMap<string, ReadonlySet<string>>;
+export const parseRowLockGrants = (text: string): RowLockGrants => {
+  const census = v.parse(censusSchema, JSON.parse(text));
+  const lockable = (privileges: readonly string[]) =>
+    new Set(
+      [...privileges, ...census.public].flatMap((privilege) => {
+        const table =
+          /^(?:table:public\.([^:]+)|column:public\.([^.:]+)\.[^:]+):UPDATE:EFFECTIVE$/u.exec(
+            privilege,
+          );
+        const name = table?.[1] ?? table?.[2];
+        return name === undefined ? [] : [name];
+      }),
+    );
+  return new Map(
+    census.roles.map(({ role, privileges }) => [role, lockable(privileges)]),
+  );
+};
+/** Each table's Drizzle export and SQL name, read from the schema index. */
+export const parseSchemaTableNames = (
+  indexSources: readonly string[],
+): ReadonlyMap<string, string> =>
+  new Map(
+    indexSources.flatMap((source) =>
+      [...source.matchAll(/^## (\S+) · `(\w+)`/gmu)].flatMap((match) => {
+        const [, table, exported] = match;
+        return table === undefined || exported === undefined
+          ? []
+          : [[table, table] as const, [exported, table] as const];
+      }),
+    ),
+  );
+type RowLockHolderOptions = {
+  sites: readonly AggregateLockSite[];
+  baseline: readonly AggregateLockBaselineRow[];
+  grants: RowLockGrants;
+  tables: ReadonlyMap<string, string>;
+};
+export const rowLockHolderProblems = ({
+  sites,
+  baseline,
+  grants,
+  tables,
+}: RowLockHolderOptions): string[] => {
+  const problems: string[] = [];
+  if (!grants.has(APPLICATION_ROLE)) {
+    problems.push(
+      `The privilege census has no application role ${APPLICATION_ROLE}`,
+    );
+  }
+  const holders = new Map<string, string>(
+    baseline.flatMap((row) =>
+      row.holder === undefined
+        ? []
+        : [[`${row.file}:${row.fingerprint}`, row.holder] as const],
+    ),
+  );
+  const rowLockKeys = new Set<string>();
+  for (const site of sites) {
+    if (site.rowLock === undefined) {
+      continue;
+    }
+    const key = `${site.file}:${site.fingerprint}`;
+    // Identical acquisitions share a baseline row and reach the same tables.
+    if (rowLockKeys.has(key)) {
+      continue;
+    }
+    rowLockKeys.add(key);
+    const holder = holders.get(key) ?? APPLICATION_ROLE;
+    const where = `${site.file}:${site.line}`;
+    // A Drizzle table reached through a namespace (`schema.users`) is named
+    // by its last member.
+    const locked =
+      site.rowLock.type === "unwritten"
+        ? undefined
+        : site.rowLock.relations.map((relation) =>
+            tables.get(relation.split(".").at(-1) ?? relation),
+          );
+    const unresolved =
+      locked === undefined || locked.some((table) => table === undefined);
+    const applicationLocks = grants.get(APPLICATION_ROLE);
+    const applicationCanLockAll =
+      !unresolved &&
+      applicationLocks !== undefined &&
+      locked.every(
+        (table) => table !== undefined && applicationLocks.has(table),
+      );
+    if (holder === OWNER_HOLDER) {
+      if (applicationCanLockAll) {
+        problems.push(
+          `${where}: declares holder "${OWNER_HOLDER}" but role ${APPLICATION_ROLE} can lock what it locks; drop the holder`,
+        );
+      }
+      continue;
+    }
+    if (holder === APPLICATION_ROLE && holders.has(key)) {
+      problems.push(
+        `${where}: holder "${APPLICATION_ROLE}" is the default; drop it`,
+      );
+    }
+    const lockable = grants.get(holder);
+    if (lockable === undefined) {
+      problems.push(
+        `${where}: holder "${holder}" is neither "${OWNER_HOLDER}" nor a role in ${ROLE_PRIVILEGE_CENSUS_PATH}`,
+      );
+      continue;
+    }
+    if (locked === undefined || unresolved) {
+      problems.push(
+        `${where}: cannot tell which table this row lock reaches; name the table at the site (\`.from(table)\`, \`OF table\`) or declare the baseline row's holder`,
+      );
+      continue;
+    }
+    for (const table of locked) {
+      if (table !== undefined && !lockable.has(table)) {
+        problems.push(
+          `${where}: locks public.${table}, where role ${holder} has no UPDATE, so PostgreSQL refuses the lock; grant it, lock another row, or declare the baseline row's holder`,
+        );
+      }
+    }
+  }
+  for (const key of holders.keys()) {
+    if (!rowLockKeys.has(key)) {
+      problems.push(`Holder on a baseline row that takes no row lock: ${key}`);
+    }
+  }
+  return problems;
+};
+const readRowLockGrants = () =>
+  parseRowLockGrants(readFileSync(ROLE_PRIVILEGE_CENSUS_PATH, "utf-8"));
+const readSchemaTableNames = () =>
+  parseSchemaTableNames(
+    readdirSync(SCHEMA_INDEX_DIR)
+      .filter((name) => name.endsWith(".md"))
+      .map((name) => readFileSync(path.join(SCHEMA_INDEX_DIR, name), "utf-8")),
+  );
+
 const git = (args: string[]) => {
   const result = Bun.spawnSync(["git", ...args]);
   if (result.exitCode !== 0) {
@@ -254,16 +415,21 @@ export const checkAggregateLocks = () => {
     .trim()
     .split("\n")
     .filter(aggregateLockSourceIncluded);
-  const actual = aggregateLockBaseline(
-    files.flatMap((file) =>
-      aggregateLockSites(file, readFileSync(file, "utf-8")),
-    ),
+  const sites = files.flatMap((file) =>
+    aggregateLockSites(file, readFileSync(file, "utf-8")),
   );
+  const actual = aggregateLockBaseline(sites);
   const baseline = parseAggregateLockBaseline(
     readFileSync(AGGREGATE_LOCK_BASELINE_PATH, "utf-8"),
   );
   const base = aggregateLockBase();
   return [
+    ...rowLockHolderProblems({
+      sites,
+      baseline,
+      grants: readRowLockGrants(),
+      tables: readSchemaTableNames(),
+    }),
     ...aggregateLockBaselineProblems({
       actual,
       baseline,
@@ -298,14 +464,39 @@ if (import.meta.main) {
         (rekey) => [`${rekey.file}:${rekey.to}`, rekey.reason] as const,
       ),
     ]);
+    // A rekeyed row lock keeps the holder of the row it replaces.
+    const holders = new Map<string, string>();
+    const existingHolders = new Map<string, string | undefined>(
+      existing.map(
+        (row) => [`${row.file}:${row.fingerprint}`, row.holder] as const,
+      ),
+    );
+    for (const rekey of rekeys) {
+      const holder = existingHolders.get(
+        `${rekey.fromFile ?? rekey.file}:${rekey.from}`,
+      );
+      if (holder !== undefined) {
+        holders.set(`${rekey.file}:${rekey.to}`, holder);
+      }
+    }
+    for (const [key, holder] of existingHolders) {
+      if (holder !== undefined) {
+        holders.set(key, holder);
+      }
+    }
     const rows = aggregateLockBaseline(
       files.flatMap((file) =>
         aggregateLockSites(file, readFileSync(file, "utf-8")),
       ),
-    ).map((row) => ({
-      ...row,
-      reason: reasons.get(`${row.file}:${row.fingerprint}`) ?? row.reason,
-    }));
+    ).map((row) => {
+      const key = `${row.file}:${row.fingerprint}`;
+      const holder = holders.get(key);
+      return {
+        ...row,
+        reason: reasons.get(`${row.file}:${row.fingerprint}`) ?? row.reason,
+        ...(holder === undefined ? {} : { holder }),
+      };
+    });
     const problems = aggregateLockBaselineProblems({
       actual: rows,
       baseline: rows,

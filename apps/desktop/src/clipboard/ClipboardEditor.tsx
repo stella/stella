@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -956,9 +957,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
         data-tauri-drag-region
       >
         <div className="min-w-0 flex-1" data-tauri-drag-region>
-          <h1 className="truncate text-sm font-semibold" data-tauri-drag-region>
-            {t("editItem")}
-          </h1>
+          <TruncatedText
+            className="text-sm font-semibold"
+            render={<h1 data-tauri-drag-region>{t("editItem")}</h1>}
+            tooltip={t("editItem")}
+          />
           {sourceName ? (
             // The source line truncates in the narrow header; the tooltip
             // names the app and page in full.
@@ -966,7 +969,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               <TooltipTrigger
                 render={
                   <p
-                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
+                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs"
                     data-tauri-drag-region
                   />
                 }
@@ -986,9 +989,9 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                     }}
                   />
                 )}
-                <span className="truncate" dir="auto">
+                <TruncatedText dir="auto" hint={false}>
                   {sourceName}
-                </span>
+                </TruncatedText>
               </TooltipTrigger>
               <TooltipPopup>{sourceTitle}</TooltipPopup>
             </Tooltip>
@@ -1046,6 +1049,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               }
             }}
             placeholder={clipboardUntitledName(item, {
+              dictation: t("dictation"),
               image: t("image"),
               text: t("unnamedClip"),
             })}

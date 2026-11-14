@@ -12,6 +12,13 @@
 import type { ModelRate } from "./model-rate";
 
 export const MODEL_RATES = {
+  // models.dev: google:gemini-4-carbon
+  "gemini-4-carbon": {
+    kind: "flat",
+    inputPerMTok: 200_000,
+    outputPerMTok: 1_000_000,
+    cachedInputPerMTok: 10_000,
+  },
   // models.dev: google:gemini-4-argon
   "gemini-4-argon": {
     kind: "flat",
@@ -91,6 +98,23 @@ export const MODEL_RATES = {
       outputPerMTok: 1_500_000,
       cachedInputPerMTok: 20_000,
       cachedWriteInputPerMTok: 500_000,
+    },
+  },
+  // models.dev: openai:gpt-6.1-terra
+  "gpt-6.1-terra": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 100_000,
+      outputPerMTok: 500_000,
+      cachedInputPerMTok: 5000,
+      cachedWriteInputPerMTok: 125_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 750_000,
+      cachedInputPerMTok: 10_000,
+      cachedWriteInputPerMTok: 250_000,
     },
   },
   // models.dev: openai:gpt-6-astra
@@ -262,6 +286,14 @@ export const MODEL_RATES = {
     outputPerMTok: 1_000_000,
     cachedInputPerMTok: 20_000,
     cachedWriteInputPerMTok: 250_000,
+  },
+  // models.dev: anthropic:claude-fable-5-2
+  "claude-fable-5-2": {
+    kind: "flat",
+    inputPerMTok: 800_000,
+    outputPerMTok: 4_000_000,
+    cachedInputPerMTok: 20_000,
+    cachedWriteInputPerMTok: 1_000_000,
   },
   // models.dev: anthropic:claude-fable-5-1
   "claude-fable-5-1": {

@@ -92,6 +92,7 @@
     "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
     "modelRefused": "Modelis atsisakė atsakyti",
     "nothingFound": "Nieko nerasta",
+    "nothingFoundInCutDocument": "Perskaitytoje dalyje nieko nerasta",
     "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
     "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
     "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
@@ -152,6 +153,7 @@
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
+      "providerUnavailable": "Prisijungimo paslauga šiuo metu neatsako. Bandykite dar kartą po minutės.",
       "title": "Nepavyko jūsų prijungti"
     },
     "handoffAccount": "Tęsti kaip <account>{email}</account> organizacijoje <organization>{organizationName}</organization>?",
@@ -210,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Apie atraminių faktų registrą",
+      "addFact": "Pridėti faktą",
+      "addFactPlaceholder": "Nurodykite faktą taip, kaip jis matyti iš įrodymų",
       "addInterpretationNote": "Pridėti aiškinimo pastabą",
+      "busyLine": "Jūsų priimti faktai bus rodomi čia.",
+      "confidenceLevels": {
+        "high": "Didelis tikrumas",
+        "low": "Mažas tikrumas",
+        "medium": "Vidutinis tikrumas"
+      },
       "description": "Patikimi įrodymai, pavyzdžiui, el. laiškai, žinutės, banko įrašai ir sutarti faktai, išskirti į atraminių faktų registrą, su kuriuo tikrinami teiginiai. Peržiūrėkite, redaguokite arba pridėkite faktų rankiniu būdu.",
       "editInterpretationNote": "Redaguoti aiškinimo pastabą",
-      "empty": "Pažymėkite šio sąrašo elementus kaip faktus, pagal kuriuos bus tikrinami dokumentai.",
-      "extractionAndReview": "Išskyrimas ir peržiūra",
-      "factCount": "{count, plural, one {# faktas} few {# faktai} many {# faktų} other {# fakto}}",
+      "emptyLine": "Išgaukite faktus iš bylos dokumentų arba pridėkite faktą ranka.",
+      "emptyTitle": "Atraminių faktų dar nėra",
       "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
+      "heldFilter": "{count, plural, one {# sulaikytas peržiūrai} few {# sulaikyti peržiūrai} many {# sulaikyto peržiūrai} other {# sulaikytų peržiūrai}}",
       "heldForReview": "Sulaikyta peržiūrai",
+      "hideSources": "Slėpti šaltinius",
       "holdOutOfScoring": "Neįtraukti į vertinimą",
       "inScoring": "Įtraukta į vertinimą",
       "includeInScoring": "Įtraukti į vertinimą",
@@ -226,10 +238,24 @@
       "interpretiveConfidence": "Aiškinimo patikimumas",
       "openList": "Atverti sąrašą",
       "record": "Atraminių faktų registras",
-      "setConfidence": "Nustatyti patikimumą",
+      "showSources": "Rodyti šaltinius",
       "title": "Atraminiai faktai"
     },
+    "chronology": {
+      "claims": "{count, plural, one {# teiginys grindžiamas šiuo faktu} few {# teiginiai grindžiami šiuo faktu} many {# teiginio grindžiama šiuo faktu} other {# teiginių grindžiama šiuo faktu}}",
+      "empty": "Šiame sąraše dar nėra faktų.",
+      "moreClaims": "{count, plural, one {dar # teiginys} few {dar # teiginiai} many {dar # teiginio} other {dar # teiginių}}",
+      "undated": "Be datos"
+    },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
+        "conflictCount": "{count, plural, one {# prieštaravimas} few {# prieštaravimai} many {# prieštaravimų} other {# prieštaravimo}}",
+        "gap": "<strong>Joks atraminis faktas neapima šio teiginio.</strong> Tai registro spraga, o ne silpna išvada: kol kas nėra su kuo jo palyginti.",
+        "notVerifiable": "<strong>Teiginio negalima patikrinti.</strong> Tokio teiginio negalėtų patvirtinti joks dokumentas: tai kontrafaktinis teiginys, prognozė, ketinimų pareiškimas, teisinė išvada arba pernelyg nekonkretus teiginys. Jis atidedamas, o ne vertinamas.",
+        "supportCount": "{count, plural, one {# pagrindimas} few {# pagrindimai} many {# pagrindimų} other {# pagrindimo}}",
+        "verdictWithheld": "Išvada nepateikta"
+      },
       "escalatedReview": "Perduota įrodymų grupei: kol neišspręstas pagrindinis prieštaravimas, čia nėra išvados, kurią būtų galima patvirtinti ar ginčyti.",
       "flagDispute": "Pažymėti ginčą",
       "humanReview": "Žmogaus peržiūra",
@@ -251,11 +277,13 @@
       "overrideTooltip": "Tikrintojas įrašė kitą išvadą. Toliau rodoma nepakeista paties įrankio analizė.",
       "overrideVerdict": "Pakeisti išvadą",
       "recordConflict": {
+        "confirmGoverningRecord": "Patvirtinti kaip lemiamą",
         "description": "Du atraminiai faktai susiję su tuo pačiu dalyku, <strong>{subject}</strong>, tačiau vienas kitam prieštarauja. Abu yra <strong>didelio patikimumo</strong> šaltiniai, todėl tai nėra patikimumo problema: pats registras yra vidujai prieštaringas. AVT nepateikia išvados ir nevertina teiginio, nes pasirinkti vieną įrašą vietoj kito turite jūs ir šį pasirinkimą turite užfiksuoti; įrankis neturėtų to daryti neatsiklausęs.",
         "escalatedNotice": "Pažymėta įrodymų grupei. Registro prieštaravimas lieka atviras ir skaičiuojamas, kol pasirenkamas vadovaujamasis įrašas.",
         "flagForEvidenceTeam": "Perduoti įrodymų grupei",
         "governed": "<strong>{value}</strong> yra vadovaujamasis: teiginys vertinamas pagal šį įrašą. Kitas įrašas lieka registre.",
         "reconcile": "Suderinti registrą",
+        "suggestedNotice": "Siūloma dokumento įrašui teikti pirmenybę prieš liudytojo pasakojimą. Patvirtinkite jį arba pasirinkite kitą įrašą.",
         "title": "Prieštaringi įrodymai registre",
         "treatAsGoverningRecord": "Laikyti vadovaujamuoju"
       },
@@ -265,17 +293,8 @@
       },
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
-      "score": {
-        "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
-        "conflictCount": "{count, plural, one {# prieštaravimas} few {# prieštaravimai} many {# prieštaravimų} other {# prieštaravimo}}",
-        "noCoverage": "<strong>Registre apie tai duomenų nėra.</strong> Joks duomenų bazės atraminis faktas nesusijęs su šiuo teiginiu. Tai ne tas pats, kas mažas balas: kol kas nėra su kuo jo palyginti.",
-        "notVerifiable": "<strong>Teiginio negalima patikrinti.</strong> Tokio teiginio negalėtų patvirtinti joks dokumentas: tai kontrafaktinis teiginys, prognozė, ketinimų pareiškimas, teisinė išvada arba pernelyg nekonkretus teiginys. Jis atidedamas, o ne vertinamas.",
-        "outOf100": "<strong>/ 100</strong> pagrįstumo balas",
-        "supportCount": "{count, plural, one {# pagrindimas} few {# pagrindimai} many {# pagrindimų} other {# pagrindimo}}",
-        "verdictWithheld": "Išvada nepateikta"
-      },
       "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
-      "whyScore": "Balų pagrindimas: atraminiai faktai"
+      "whyVerdict": "Išvados pagrindimas: atraminiai faktai"
     },
     "claimTypes": {
       "fact": {
@@ -304,20 +323,129 @@
     "disposition": {
       "contested": "Išvada aiški, tačiau vieno susijusio fakto aiškinimas ginčijamas; prieš patvirtindami jį peržiūrėkite.",
       "contradicted": "Registras šio teiginio nepatvirtina. Prieš patvirtinant išvadą ją turi įvertinti žmogus.",
-      "nocover": "Joks atraminis faktas nesusijęs su šiuo teiginiu, todėl nėra su kuo jo palyginti. Patvirtinti neprivaloma.",
+      "nocover": "Joks sąrašo faktas dar neapima šio teiginio.",
       "notverifiable": "Atidėta kaip nepatikrinama; patvirtinti neprivaloma. Jei teiginį iš tiesų galima patikrinti, atverkite jį iš naujo toliau.",
       "recordconflict": "Du registro įrodymai prieštarauja vienas kitam. Aukščiau nuspręskite, kuris yra vadovaujamasis, arba perduokite įrodymų grupei; įrankis už jus nepasirinks.",
+      "restsOnHeld": "Faktas, kuriuo grindžiama ši išvada, sulaikytas peržiūrai; patvirtinkite, kad išvada galioja ir be jo, arba patikrinkite teiginį iš naujo, kai faktas bus išspręstas.",
+      "scopeMismatch": "Cituojamo fakto apimtis skiriasi nuo teiginio. Prieš patvirtindami išvadą įvertinkite, ar jis išsprendžia teiginį taip, kaip jis suformuluotas.",
       "supported": "Registras tai patvirtina. Jūsų patvirtinimas rodo, kad įrankis perskaitė teisingai; vertinamojo sprendimo nereikia.",
-      "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus."
+      "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus.",
+      "testimonyOnly": "Medžiaga tai patvirtina, bet jokio dokumento įrašas to nepagrindžia: išvada grindžiama parodymais. Jūsų patvirtinimas reiškia, kad įrankis tai perskaitė teisingai; išvada lieka pažymėta kaip grindžiama parodymais.",
+      "unsourcedOnly": "Registras tai patvirtina, bet tik faktais, kurie dar neturi šaltinio. Jūsų patvirtinimas reiškia, kad įrankis juos perskaitė teisingai; faktai lieka pažymėti kaip be šaltinio."
     },
     "documents": {
       "claimSummary": "Prieštarauja: {contradicted} · Nevisiškai sutampa: {tension} · Registro prieštaravimas: {conflicts}",
       "empty": "Įkelkite į šią bylą dokumentą, kad jį patikrintumėte.",
+      "kindsLoadFailed": "Nepavyko įkelti, ar šie dokumentai yra parodymai.",
       "notVerified": "Dar nepatikrinta",
       "otherList": "Patikrinta pagal kitą sąrašą",
       "sizeConfirmTitle": "Patikrinti šį dokumentą?",
       "statusLoadFailed": "Nepavyko įkelti šių dokumentų tikrinimo būsenos.",
+      "testimony": "Parodymai",
+      "testimonyAbout": "Apie parodymus",
+      "testimonyLine": "Liudytojų parodymus, pokalbių užrašus ir stenogramas pažymėkite kaip parodymus. Iš jų paimti faktai laikomi asmens pasakojimu, o ne įrašu.",
       "verifyAgain": "Tikrinti iš naujo"
+    },
+    "extraction": {
+      "busy": "Pirmiausia užbaikite vykdomą išgavimą ir jo peržiūrą.",
+      "confirmStart": "{units, plural, one {Pradėti, # vienetas} few {Pradėti, # vienetai} many {Pradėti, # vieneto} other {Pradėti, # vienetų}}",
+      "dialogDescription": "Kiekvieną faktą priimate arba atmetate, kol jis nepateko į registrą.",
+      "dialogTitle": "Išgauti faktus iš dokumentų",
+      "documentsChosen": "{count, plural, one {Pasirinktas #, daugiausia {max}} few {Pasirinkti #, daugiausia {max}} many {Pasirinkta #, daugiausia {max}} other {Pasirinkta #, daugiausia {max}}}",
+      "documentsLabel": "Skaitomi dokumentai",
+      "errors": {
+        "accessRevoked": "Faktų išgavimas sustabdytas, nes prieiga neprieinama.",
+        "aiUnavailable": "Dokumentams skaityti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",
+        "documentMissing": "Pasirinkto dokumento arba sąrašo nebėra. Įkelkite puslapį iš naujo ir pasirinkite dar kartą.",
+        "enqueueFailed": "Nepavyko pradėti faktų išgavimo. Bandykite dar kartą.",
+        "extractionFailed": "Nepavyko išgauti faktų iš šių dokumentų.",
+        "internal": "Faktų išgavimas netikėtai nepavyko.",
+        "noText": "Iš pasirinktų dokumentų nepavyko nuskaityti teksto.",
+        "sourceUnavailable": "Pradėjus išgavimą dokumentas buvo pakeistas arba pašalintas. Pasirinkite dokumentus iš naujo.",
+        "unsupportedFormat": "Faktus galima nuskaityti tik iš DOCX, PDF failų ir failų, turinčių PDF versiją."
+      },
+      "extractFromDocuments": "Išgauti iš dokumentų",
+      "failedTitle": "Faktų išgavimas nepavyko",
+      "instructionLabel": "Ko ieškoti (neprivaloma)",
+      "instructionPlaceholder": "Pavyzdžiui: šalių tarpusavio mokėjimai ir jų datos",
+      "nothingFound": "Pasirinktuose dokumentuose faktų nerasta.",
+      "proposedTitle": "Siūlomi faktai",
+      "queued": "Laukiama pradžios.",
+      "reviewed": "Priimta {accepted} iš {proposed, plural, one {# siūlomo fakto} few {# siūlomų faktų} many {# siūlomo fakto} other {# siūlomų faktų}}.",
+      "runSize": "{available, plural, one {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimo vieneto.} few {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimų vienetų.} many {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimo vieneto.} other {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimų vienetų.}}",
+      "running": "Skaitomi dokumentai. Siūlomi faktai čia pasirodys peržiūrai.",
+      "startFailed": "Nepavyko pradėti faktų išgavimo",
+      "submit": "{count, plural, =0 {Išgauti faktus} one {Išgauti faktus iš # dokumento} few {Išgauti faktus iš # dokumentų} many {Išgauti faktus iš # dokumento} other {Išgauti faktus iš # dokumentų}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Visi neatmesti šio fakto šaltiniai yra parodymai: liudytojo parodymai, pokalbio užrašai arba stenograma.",
+        "label": "Parodymai"
+      },
+      "unsourced": {
+        "hint": "Prie šio fakto nepridėtas joks neatmestas šaltinio dokumentas; laikmena ir data apibūdina įrodymą, bet nėra šaltinis.",
+        "label": "Be šaltinio"
+      }
+    },
+    "gap": {
+      "addFact": "Pridėti faktą iš dokumento",
+      "addFactFailed": "Fakto nepavyko pridėti",
+      "factOffList": "Faktas, kurio sąraše nebėra",
+      "linkFact": "Susieti faktą",
+      "linkFailed": "Fakto nepavyko susieti",
+      "linked": "Susieti faktai",
+      "linkedMark": "Susieta",
+      "linksChanged": "Susiejimai pasikeitė nuo paskutinio patikrinimo.",
+      "noFacts": "Nė vienas sąrašo faktas netinka.",
+      "recheck": "Patikrinti iš naujo",
+      "recheckFailed": "Teiginio nepavyko patikrinti iš naujo",
+      "searchFacts": "Ieškoti sąrašo faktų",
+      "sheet": {
+        "passage": "Ištrauka",
+        "passageHint": "Dokumento žodžiai, kurie nustato faktą.",
+        "statementRequired": "Įrašykite faktą.",
+        "statementTooLong": "Faktą gali sudaryti ne daugiau kaip {limit} simbolių.",
+        "submit": "Pridėti ir patikrinti iš naujo",
+        "title": "Pridėti faktą iš dokumento"
+      },
+      "showNextSteps": "Rodyti tolesnius veiksmus",
+      "unlink": "Nutraukti ryšį su: {fact}"
+    },
+    "graph": {
+      "claimCount": "{count, plural, one {# teiginys} few {# teiginiai} many {# teiginio} other {# teiginių}}",
+      "claimTitle": "Teiginys",
+      "columns": {
+        "claims": "Teiginiai",
+        "sources": "Šaltinio dokumentai",
+        "statements": "Pareiškimai"
+      },
+      "empty": "Šiame sąraše dar nėra faktų ar patikrintų dokumentų.",
+      "factCount": "{count, plural, one {# faktas} few {# faktai} many {# fakto} other {# faktų}}",
+      "factOverflow": "Rodoma pirmųjų šio sąrašo faktų: {count}.",
+      "filters": {
+        "allSources": "Visi šaltiniai",
+        "allVerdicts": "Visos išvados",
+        "conflicts": "Prieštaravimai",
+        "heldFacts": "Sulaikyti faktai",
+        "source": "Filtruoti pagal šaltinį",
+        "verdict": "Filtruoti pagal išvadą"
+      },
+      "held": "Sulaikyta",
+      "linkedFacts": "{count, plural, one {# susietas faktas} few {# susieti faktai} many {# susieto fakto} other {# susietų faktų}}",
+      "listLabel": "Grafas sąrašo forma",
+      "loadMore": "Įkelti daugiau dokumentų",
+      "noMatch": "Pagal šiuos filtrus nieko nerasta.",
+      "noStatements": "Pagal šį sąrašą dar nepatikrintas nė vienas dokumentas.",
+      "offList": "Nebėra sąraše",
+      "relation": {
+        "conflicts": "Prieštarauja",
+        "governs": "Vadovaujamasis",
+        "record": "Registre",
+        "recordConflict": "Prieštaringas įrašas",
+        "supports": "Patvirtina"
+      },
+      "unlinked": "Faktai, kuriais negrindžiamas joks teiginys",
+      "verifyInReview": "Patikrinti dokumentą"
     },
     "guidance": {
       "escalate": "Perduoti",
@@ -325,17 +453,124 @@
       "optional": "Neprivaloma",
       "readyToConfirm": "Paruošta patvirtinti"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Priimta kaip įprasta",
+        "conflictReopened": "Prieštaravimo sprendimas atšauktas",
+        "escalated": "Perduota įrodymų grupei",
+        "factLinked": "Susietas faktas",
+        "factUnlinked": "Nutrauktas fakto ryšys",
+        "governed": "Pasirinktas vadovaujamasis įrašas",
+        "noteCleared": "Pastaba pašalinta",
+        "noteSaved": "Pastaba išsaugota",
+        "overridden": "Išvada pakeista",
+        "overrideWithdrawn": "Išvados pakeitimas atšauktas",
+        "rechecked": "Teiginys patikrintas iš naujo",
+        "reopened": "Atverta iš naujo kaip patikrinamas teiginys",
+        "statusCleared": "Peržiūros būsena pašalinta",
+        "statusDisputed": "Pažymėta kaip užginčyta",
+        "statusNeedsEvidence": "Pažymėta, kad reikia įrodymų",
+        "statusReviewed": "Pažymėta kaip peržiūrėta"
+      },
+      "carriedFrom": "Iš {date} tikrinimo",
+      "carriedFromEarlier": "Iš ankstesnio tikrinimo",
+      "empty": "Peržiūros veiksmų dar nėra.",
+      "filters": {
+        "allKinds": "Bet kuris veiksmas",
+        "allReviewers": "Bet kuris peržiūrėtojas",
+        "kind": "Filtruoti pagal veiksmą",
+        "reviewer": "Filtruoti pagal peržiūrėtoją"
+      },
+      "formerMember": "Buvęs narys",
+      "kinds": {
+        "factLink": "Fakto ryšiai",
+        "override": "Pakeistos išvados",
+        "recheck": "Pakartotinės patikros",
+        "recordConflict": "Prieštaravimų sprendimai",
+        "reopen": "Atvėrimai iš naujo",
+        "status": "Būsenos pakeitimai"
+      },
+      "noMatches": "Šiuos filtrus atitinkančių veiksmų nėra.",
+      "noStatus": "Be būsenos",
+      "none": "Veiksmų dar nėra",
+      "reasonUnrecorded": "Priežastis neįrašyta: veiksmas atliktas anksčiau, nei priežastis tapo privaloma.",
+      "runButton": "Peržiūros istorija",
+      "runTitle": "Peržiūros istorija"
+    },
     "matches": {
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
       "position": "{current}/{total}"
     },
+    "mode": {
+      "chronology": "Chronologija",
+      "graph": "Grafas",
+      "label": "Rodyti sąrašą kaip",
+      "review": "Peržiūra"
+    },
+    "qualifiers": {
+      "heading": "Išlygos",
+      "recordSilent": {
+        "hint": "Nesitikima, kad registras apimtų šį klausimą, todėl aprėpties nebuvimas nėra spraga.",
+        "label": "Registras tyli"
+      },
+      "restsOnHeld": {
+        "hint": "Faktas, kuriuo grindžiama ši išvada, dabar neįtrauktas į vertinimą.",
+        "label": "Grindžiama neįtrauktu faktu"
+      },
+      "scopeMismatch": {
+        "hint": "Cituojamas faktas apima kitą laikotarpį, asmenų grupę, vietą ar matą nei teiginys.",
+        "label": "Kita apimtis"
+      },
+      "testimonyOnly": {
+        "hint": "Jokio dokumento įrašas nepagrindžia faktų, kuriais grindžiama ši išvada, ir bent vienas iš jų yra parodymai.",
+        "label": "Tik parodymai"
+      },
+      "unsourcedOnly": {
+        "hint": "Nė vienas faktas, kuriuo grindžiama ši išvada, dar neturi šaltinio.",
+        "label": "Tik be šaltinio"
+      }
+    },
+    "reason": {
+      "escalate": "Kodėl to reikia įrodymų grupei?",
+      "govern": "Kodėl šis įrašas yra vadovaujamasis?",
+      "override": "Kodėl išvada yra „{verdict}“?",
+      "placeholder": "Nurodykite priežastį; ji liks teiginio istorijoje",
+      "reopen": "Kodėl šį teiginį galima patikrinti?",
+      "required": "Kad tai būtų įrašyta, nurodykite priežastį.",
+      "unresolveConflict": "Kodėl atšaukiamas šis sprendimas?",
+      "withdrawOverride": "Kodėl grįžtama prie įrankio išvados?"
+    },
+    "recheck": {
+      "currentVerdict": "Išvada po pakartotinės patikros",
+      "runVerdict": "Patikros išvada",
+      "summary": "Patikrinta iš naujo {checkedAt} pagal {count, plural, one {# faktą} few {# faktus} many {# fakto} other {# faktų}}."
+    },
     "review": {
-      "disputed": "Užginčyta · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}} · {decidedAt}",
+      "decided": "{status, select, disputed {Užginčyta} needsEvidence {Reikia įrodymų} other {{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Užginčyta",
+        "needsEvidence": "Reikia įrodymų",
+        "reviewed": "Peržiūrėta"
+      },
       "undo": "Anuliuoti sprendimą"
     },
     "runs": {
       "back": "Visi dokumentai",
+      "carryOver": {
+        "openSource": "Atidaryti {date} tikrinimą",
+        "outcomes": {
+          "ambiguous": "Keli galimi atitikmenys",
+          "textChanged": "Formuluotė pasikeitė",
+          "unmatched": "Atitinkamo teiginio nėra",
+          "verdictChanged": "Išvada pasikeitė"
+        },
+        "summary": {
+          "carried": "Perkelta: {count, number}",
+          "carriedAndMissed": "Perkelta: {carried, number} · ne: {missed, number}",
+          "label": "Peržiūros iš {date} tikrinimo: perkelta {carried, number}, neperkelta {missed, number}",
+          "missed": "Neperkelta: {count, number}"
+        }
+      },
       "errors": {
         "accessRevoked": "Tikrinimas sustabdytas, nes prieiga nepasiekiama.",
         "aiUnavailable": "Dokumentams tikrinti nėra prieinamo DI modelio. Patikrinkite organizacijos DI nustatymus.",
@@ -360,13 +595,46 @@
       "startFailed": "Nepavyko pradėti tikrinimo",
       "status": {
         "running": "Tikrinama"
-      }
+      },
+      "unreadParts": "{count, plural, one {Nepavyko perskaityti # dokumento dalies, todėl jos teiginiai nepatikrinti.} few {Nepavyko perskaityti # dokumento dalių, todėl jų teiginiai nepatikrinti.} many {Nepavyko perskaityti # dokumento dalies, todėl jų teiginiai nepatikrinti.} other {Nepavyko perskaityti # dokumento dalių, todėl jų teiginiai nepatikrinti.}}"
     },
     "save": {
       "failed": "Neišsaugota",
       "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
-    "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
+    "scope": {
+      "checkedDocument": "Patikrintos tik <num>{range}</num> pastraipos.",
+      "checkedOrdinal": "Patikrintos tik <num>{range}</num> pastraipos, skaičiuojant iš eilės: šiame dokumente pastraipos nenumeruotos.",
+      "errors": {
+        "empty": "Šiose pastraipose nėra teksto, kurį būtų galima patikrinti.",
+        "garbage": "Įveskite pastraipų numerius, pvz., 82–136.",
+        "notFound": "Šių pastraipų šiame dokumente nėra.",
+        "numberingUnclear": "Šio dokumento pastraipų numerių nepavyksta perskaityti. Patikrinkite visą dokumentą.",
+        "required": "Įveskite pastraipas, kurias norite patikrinti.",
+        "reversed": "Intervalas baigiasi anksčiau, nei prasideda.",
+        "tooWide": "Vienu metu tikrinkite ne daugiau kaip 500 pastraipų."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Šiose pastraipose teiginių nerasta.",
+      "showBefore": "Rodyti tekstą prieš ¶ {from}",
+      "verifyParagraphs": "Tikrinti pastraipas"
+    },
+    "staleness": {
+      "failed": "Teiginių nepavyko patikrinti iš naujo",
+      "finished": "{count, plural, one {# teiginys patikrintas iš naujo} few {# teiginiai patikrinti iš naujo} many {# teiginio patikrinta iš naujo} other {# teiginių patikrinta iš naujo}}",
+      "partial": "Patikrinta iš naujo: {rechecked, number}, nepavyko: {failed, plural, one {#} few {#} many {#} other {#}}",
+      "reasons": {
+        "factChanged": "Faktas pakeistas",
+        "factHeld": "Faktas neįtrauktas",
+        "factRemoved": "Faktas pašalintas",
+        "newFactRelated": "Naujas susijęs faktas"
+      },
+      "recheckAll": "Patikrinti visus iš naujo",
+      "recheckLocked": "Tikrinamas iš naujo kartu su kitais pasenusiais teiginiais",
+      "runLine": "{count, plural, one {# teiginys gali būti pasenęs} few {# teiginiai gali būti pasenę} many {# teiginio gali būti pasenę} other {# teiginių gali būti pasenę}}",
+      "running": "{count, plural, one {Iš naujo tikrinamas # teiginys…} few {Iš naujo tikrinami # teiginiai…} many {Iš naujo tikrinama # teiginio…} other {Iš naujo tikrinama # teiginių…}}"
+    },
     "states": {
       "contradicted": {
         "chip": "Prieštarauja",
@@ -374,7 +642,8 @@
       },
       "nocover": {
         "chip": "Nėra aprėpties",
-        "label": "Joks atraminis faktas nesusijęs su šiuo teiginiu"
+        "label": "Joks atraminis faktas nesusijęs su šiuo teiginiu",
+        "silentChip": "Nėra aprėpties · registras tyli"
       },
       "notverifiable": {
         "chip": "Nepatikrinama",
@@ -397,7 +666,7 @@
       "acceptRoutine": "{count, plural, one {Priimti # įprastą teiginį} few {Priimti # įprastus teiginius} many {Priimti # įprastų teiginių} other {Priimti # įprasto teiginio}}",
       "attentionComplete": "<strong>Visi žmogaus sprendimo reikalaujantys teiginiai sutvarkyti.</strong> {count, plural, one {# įprasto sprendimo atskirai peržiūrėti nereikia.} few {# įprastų sprendimų atskirai peržiūrėti nereikia.} many {# įprastų sprendimų atskirai peržiūrėti nereikia.} other {# įprasto sprendimo atskirai peržiūrėti nereikia.}}",
       "attentionOpen": "<strong>{count, plural, one {# teiginiui reikia} few {# teiginiams reikia} many {# teiginių reikia} other {# teiginio reikia}} jūsų sprendimo</strong>: prieštaravimai ir ginčijami aiškinimai. {routineCount, plural, one {Kitas # teiginys yra įprastas ir jo nereikia atskirai patvirtinti.} few {Kiti # teiginiai yra įprasti ir jų nereikia atskirai patvirtinti.} many {Kitų # teiginių nereikia atskirai patvirtinti.} other {Kito # teiginio nereikia atskirai patvirtinti.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} needsEvidence {, reikia įrodymų} other {}})",
       "documentView": {
         "label": "Dokumento rodinys",
         "original": "Originalas",
@@ -423,100 +692,21 @@
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
     }
   },
-  "bilingual": {
-    "dialog": {
-      "create": "Sukurti dvikalbę versiją",
-      "creating": "Kuriama…",
-      "description": "Sukuria šio dokumento kopiją dviem stulpeliais: kairėje originalus tekstas, dešinėje verčiama kopija su atskira numeracija. Kopija išsaugoma šioje byloje kaip naujas dokumentas.",
-      "sameLanguage": "Pasirinkite dvi skirtingas kalbas.",
-      "sourceLanguage": "Šaltinio kalba",
-      "title": "Dvikalbė versija"
-    },
-    "error": {
-      "title": "Nepavyko sukurti dvikalbės versijos"
-    },
-    "success": {
-      "description": "<bdi>{fileName}</bdi> paruoštas, versti reikia {rowCount, plural, one {# eilutę} few {# eilutes} many {# eilutės} other {# eilučių}}.",
-      "title": "Dvikalbė versija sukurta"
-    }
-  },
   "bilingualTranslate": {
     "dialog": {
-      "description": "Užpildo šio dviejų stulpelių dokumento vertimo stulpelį. Peržiūrėkite, kas nutiks kiekvienai eilutei ir kaip verčiami apibrėžti terminai, tada pradėkite vertimą.",
-      "prepare": "Paruošti",
-      "preparing": "Skaitomas dokumentas…",
-      "preparingHint": "Perskaityti visą dokumentą ir įvertinti kiekvieną eilutę trunka iki dviejų minučių.",
-      "title": "Versti dvikalbę versiją"
+      "prepare": "Paruošti"
     },
     "dispositions": {
-      "inline": "Abi kalbos",
       "keep": "Palikti nepakeistą"
     },
-    "error": {
-      "prepareTitle": "Nepavyko paruošti dokumento",
-      "startTitle": "Nepavyko pradėti vertimo"
-    },
-    "errorCodes": {
-      "aiUnavailable": "Vertimui nėra prieinamo DI modelio.",
-      "applyFailed": "Vertimų nepavyko įrašyti atgal į dokumentą.",
-      "documentChanged": "Dokumentas pasikeitė vykstant vertimui. Paruoškite jį iš naujo.",
-      "documentUnresolved": "Dokumentas arba jo failas nebepasiekiamas.",
-      "enqueueFailed": "Vertimo nepavyko įtraukti į eilę.",
-      "internal": "Vertimas netikėtai nutrūko.",
-      "notBilingual": "Šiame dokumente nėra dvikalbės lentelės.",
-      "translationFailed": "Nepavyko išversti eilučių paketo.",
-      "unknown": "Vertimas netikėtai nutrūko."
-    },
-    "glossary": {
-      "add": "Pridėti terminą",
-      "description": "Šie atitikmenys taikomi visoms eilutėms. Terminą be vertimo reikia užpildyti arba pašalinti.",
-      "empty": "Apibrėžtų terminų nerasta.",
-      "formsHint": "Kitas formas atskirkite kableliais.",
-      "formsSource": "Kitos termino formos",
-      "formsTarget": "Kitos vertimo formos",
-      "incomplete": "Užpildykite trūkstamus vertimus arba pašalinkite šiuos terminus.",
-      "origins": {
-        "detected": "Rasta",
-        "user": "Jūsų"
-      },
-      "term": "Terminas",
-      "title": "Apibrėžti terminai",
-      "tooManyForms": "Terminas gali turėti ne daugiau kaip {max} kitų formų.",
-      "translation": "Vertimas"
-    },
     "kinds": {
-      "heading": "Antraštė",
-      "listItem": "Sąrašo elementas",
-      "paragraph": "Pastraipa",
-      "table": "Visa lentelė"
-    },
-    "origins": {
-      "default": "Neįvertinta",
-      "model": "DI"
+      "paragraph": "Pastraipa"
     },
     "review": {
-      "droppedRows": "{count, plural, one {Praleista # eilutė} few {Praleistos # eilutės} many {Praleista # eilutės} other {Praleista # eilučių}}: jose nėra verstino teksto.",
-      "start": "Pradėti vertimą",
       "starting": "Pradedama…"
     },
     "rows": {
-      "description": "Pasirinkite, kas nutiks kiekvienai vertimo stulpelio eilutei.",
-      "ordinal": "#",
-      "sourceText": "Šaltinio tekstas",
-      "title": "Eilutės",
-      "whatToDo": "Ką daryti"
-    },
-    "run": {
-      "cancelled": "Vertimas buvo atšauktas.",
-      "doneSummary": "{count, plural, one {Išversta # eilutė} few {Išverstos # eilutės} many {Išversta # eilutės} other {Išversta # eilučių}}.",
-      "doneTitle": "Vertimas baigtas",
-      "failedRows": "{count, plural, one {Nepavyko išversti # eilutės} few {Nepavyko išversti # eilučių} many {Nepavyko išversti # eilutės} other {Nepavyko išversti # eilučių}}.",
-      "failedTitle": "Vertimas sustabdytas",
-      "hint": "Vertimas vykdomas serveryje. Kad galėtumėte jį stebėti, palikite šį langą atidarytą.",
-      "moreRows": "{count, plural, one {dar # eilutė} few {dar # eilutės} many {dar # eilutės} other {dar # eilučių}}",
-      "progress": "Išversta {completed} iš {total} eilučių",
-      "title": "Vyksta vertimas…",
-      "warningsTitle": "Tikrintinos eilutės"
+      "title": "Eilutės"
     }
   },
   "billing": {
@@ -635,6 +825,7 @@
     },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
+    "invalidNumberFormat": "Patikrinkite skaičiaus formatą",
     "invoiceComposer": {
       "addSellerProfile": "Pridėkite pardavėjo profilį atsiskaitymo nustatymuose",
       "billedHours": "Apmokamos valandos",
@@ -1028,7 +1219,6 @@
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
       "none": "Citavimų dar neužfiksuota.",
       "notInStella": "Programoje stella dar nėra",
-      "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
       "paragraphLabel": "{paragraph} punktas",
       "paragraphMark": "¶ {paragraph}",
@@ -1136,6 +1326,7 @@
       "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",
       "matchedIn": "Atitikmuo {language} kalba"
     },
+    "linkedPassageGone": "Susietos ištraukos šiame tekste nebėra.",
     "loadingMore": "Kraunama daugiau...",
     "marginFilter": {
       "label": "Cituojamų nuostatų filtras",
@@ -1246,6 +1437,7 @@
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
+    "searchStillSearching": "Paieškos paslauga užimta. Vis dar ieškoma…",
     "searchUnavailable": {
       "description": "Nepavyko pasiekti teismų praktikos paieškos. Jūsų užklausa lieka adreso juostoje, pabandykite po akimirkos dar kartą.",
       "title": "Paieška laikinai nepasiekiama"
@@ -1482,6 +1674,8 @@
         "actions": {
           "click": "Spustelėti",
           "fill": "Įvesti tekstą",
+          "find": "Ieškoti puslapyje",
+          "findHeadings": "Išvardyti puslapio antraštes",
           "open": "Atverti svetainę",
           "openNewTab": "Atverti svetainę naujame skirtuke",
           "pressKey": "Paspausti klavišą",
@@ -1490,6 +1684,8 @@
           "snapshotContinue": "Tęsti puslapio skaitymą",
           "switchTab": "Pereiti į skirtuką"
         },
+        "allowSiteFailed": "Nepavyko išsaugoti šios svetainės kaip leidžiamos. Šis veiksmas vis tiek bus atliktas; kitą kartą vėl paklausime.",
+        "alwaysAllowSite": "Visada leisti šioje svetainėje",
         "askAgain": "Klausti dar kartą",
         "autoApproveReads": "Automatiškai patvirtinti puslapių skaitymą",
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
@@ -1583,6 +1779,8 @@
       "full": "Užpildyta {percent}%",
       "instructions": "Sistemos instrukcijos",
       "percent": "{percent}%",
+      "reported": "Kaip pranešė programavimo agentas jūsų kompiuteryje po paskutinio atsakymo. Agentas pats tvarko savo kontekstą.",
+      "reportedTokens": "{used} / {total} tokenų",
       "summary": "Senesnių žinučių santrauka",
       "summaryWithCount": "{count} senesnių žinučių santrauka",
       "title": "Pokalbio kontekstas",
@@ -1683,35 +1881,84 @@
     "loadEarlierMessages": "Įkelti ankstesnes žinutes",
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
+    "localFilesUndo": {
+      "action": "Atšaukti failų pakeitimus",
+      "computer": {
+        "failed": "Atšaukimas jūsų kompiuteryje nebuvo baigtas. Kai kurie failai jau galėjo pasikeisti, todėl patikrinkite pokalbio aplanką.",
+        "folderBusy": "Šį aplanką jūsų kompiuteryje naudoja kitas vykdymas. Bandykite dar kartą, kai jis baigsis.",
+        "noCheckpoint": "Jūsų kompiuteryje nėra išsaugotos failų kopijos iš laiko prieš šį žingsnį, todėl niekas neatšaukta.",
+        "notNewest": "Jūsų kompiuteryje šiame aplanke yra naujesnių pakeitimų, todėl niekas neatšaukta."
+      },
+      "confirm": "Atšaukti pakeitimus",
+      "confirmDescription": "Failai, kuriuos šis žingsnis pakeitė savo aplanke jūsų kompiuteryje, grįš į būseną prieš šį žingsnį. Atšaukiami tik šio žingsnio pakeitimai; ankstesnių žingsnių pakeitimai lieka.",
+      "confirmTitle": "Atšaukti šio žingsnio failų pakeitimus?",
+      "expired": "Jūsų kompiuteris laiku neatsakė. Bandykite dar kartą.",
+      "pending": "Atšaukiami failų pakeitimai jūsų kompiuteryje",
+      "refused": {
+        "desktopOffline": "Jūsų kompiuteris neprisijungęs. Atidarykite stella darbalaukio programą ir bandykite dar kartą.",
+        "desktopUpdateRequired": "Jūsų kompiuteryje esanti stella darbalaukio programa per sena pakeitimams atšaukti. Atnaujinkite ją ir bandykite dar kartą.",
+        "noCheckpoint": "Šis žingsnis neturi išsaugotos failų kopijos, į kurią būtų galima grįžti.",
+        "notNewest": "Atšaukti galima tik naujausio žingsnio failų pakeitimus.",
+        "threadBusy": "Šis pokalbis dar vyksta. Bandykite dar kartą, kai jis baigsis."
+      },
+      "restored": "Failų pakeitimai atšaukti"
+    },
     "localRun": {
-      "cloud": "stella debesis",
+      "backgroundTasks": "{count, plural, one {Fone vykdoma # užduotis} few {Fone vykdomos # užduotys} many {Fone vykdoma # užduoties} other {Fone vykdoma # užduočių}}",
+      "errorFolderUnavailable": "Su šiuo pokalbiu susietas aplankas jūsų kompiuteryje nepasiekiamas. Patikrinkite jį stella desktop, tada išsiųskite tai dar kartą.",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
+      "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
+      "errorNotReached": "Jūsų kompiuteris neperėmė šio atsakymo. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
+      "errorRelinked": "stella desktop jūsų kompiuteryje buvo susietas iš naujo, todėl šis atsakymas sustojo. Išsiųskite jį dar kartą.",
+      "errorRestoring": "Jūsų kompiuteris dar atšaukia failų pakeitimus. Po akimirkos išsiųskite tai dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
-      "onThisComputer": "{harness} šiame kompiuteryje",
+      "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",
+      "folderApprovalDescription": "Leiskite {harness} dirbti jūsų kompiuterio aplanke „{folder}“. Jis gali jame skaityti, keisti ir trinti failus, o pridėti failai į jį nukopijuojami.",
+      "folderApprove": "Leisti aplanke {folder}",
+      "folderHint": "Savo kompiuterio aplankus susiekite stella desktop nustatymuose.",
+      "folderOwn": "Paties pokalbio aplankas",
+      "folderStateMoved": "Perkeltas arba ištrintas",
+      "folderStateOffline": "Diskas neprijungtas",
+      "folderStatePending": "Laukiama jūsų sutikimo",
+      "folderStateProtected": "Jame yra pačios stella duomenys",
+      "folderStateUnlinked": "Nebesusietas",
+      "folderStateUnreadable": "Negalima perskaityti",
+      "limitReminderNotify": "Pranešti, kai atsinaujins",
+      "limitReminderScheduled": "Pranešime jums po {time}.",
+      "permissionAboveLimit": "Jūsų organizacija to neleidžia",
       "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
       "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",
       "permissionFullAuto": "Visiškai automatiškai",
       "permissionFullAutoDescription": "Dėl nieko pokalbio aplanke neklausia; prieš ką nors keisdamas jūsų kompiuteryje, visada paklausia.",
+      "permissionPlan": "Planas",
+      "permissionPlanDescription": "Pirmiausia skaito ir planuoja; prieš kiekvieną pakeitimą klausia, kol nepatvirtinsite plano.",
       "permissionSandboxed": "Veikia izoliuotoje aplinkoje; prieš ką nors keisdamas jūsų kompiuteryje, paklausia.",
       "permissionUnavailable": "Šiame kompiuteryje nepasiekiama",
       "permissions": "Leidimai",
       "refusalConflictingRunMode": "Ši užklausa prašo veikti ir su debesies agentu, ir jūsų kompiuteryje. Pasirinkite vieną meniu Paleisti.",
+      "refusalFolderNotApproved": "Pirmiausia leiskite programavimo agentui dirbti su šiuo pokalbiu susietame aplanke.",
+      "refusalFolderUnavailable": "Su šiuo pokalbiu susietas aplankas nepasiekiamas. Patikrinkite jį meniu Paleisti arba per stella desktop.",
       "refusalHarnessUnavailable": "Programavimo agentas jūsų kompiuteryje dabar negali priimti šios užklausos. Patikrinkite jį per stella desktop.",
       "refusalModelUnavailable": "Programavimo agentas jūsų kompiuteryje šio modelio nebesiūlo. Pasirinkite kitą meniu Paleisti.",
-      "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas. Atidarykite stella desktop ir siųskite dar kartą.",
+      "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas.",
+      "refusalPermissionAboveLimit": "Jūsų organizacija neleidžia programavimo agentui jūsų kompiuteryje veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
       "refusalPermissionUnavailable": "Programavimo agentas jūsų kompiuteryje negali veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
+      "refusalReasoningEffortUnavailable": "Programavimo agentas jūsų kompiuteryje šiam modeliui nesiūlo šio samprotavimo lygio. Pasirinkite kitą meniu Samprotavimo lygis.",
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
-      "runOn": "Paleisti",
-      "selectionLabel": "{harness} · {model}",
+      "selectionStateLabel": "{selection} · {state}",
+      "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
+      "stateModelUnavailable": "Modelis nebepasiekiamas",
       "stateNeedsLogin": "Reikia prisijungti",
       "stateNotInstalled": "Neįdiegta",
       "stateOffline": "Kompiuteris neprisijungęs",
       "stateUnavailable": "Šiuo metu nepasiekiama",
       "stateUnsupported": "Ši versija nepalaikoma",
-      "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
+      "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…",
+      "waitingForPickup": "Laukiama, kol jūsų kompiuteris perims šį atsakymą…",
+      "waitingSentAt": "Išsiųsta {time}"
     },
     "localRunQuestion": {
       "chooseSeveral": "Pasirinkite visus tinkamus",
@@ -1719,9 +1966,34 @@
       "secretAnswer": "Atsakymas paslėptas",
       "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
     },
+    "makeSkill": {
+      "command": "Sukurti įgūdį iš šio pokalbio",
+      "drafted": "Įgūdžio juodraštis paruoštas. Peržiūrėkite jį ir tada įjunkite.",
+      "drafting": "Rengiamas įgūdžio juodraštis iš šio pokalbio…",
+      "emptyThread": "Pirmiausia išsiųskite žinutę, tada iš pokalbio bus galima sukurti įgūdį.",
+      "failed": "Nepavyko sukurti įgūdžio iš šio pokalbio",
+      "review": {
+        "description": "Įgūdžio juodraštyje yra šie vardai. Juos gali matyti visi, turintys prieigą prie šio įgūdžio.",
+        "replaceHint": "Panaikinkite vardo žymėjimą, kad jis būtų pakeistas bendru vietos rezervavimo ženklu.",
+        "role": {
+          "organization": "organizacijos pavadinimas",
+          "person": "asmens vardas"
+        },
+        "saveAll": "Palikti visus ir išsaugoti",
+        "saveReplacing": "Pakeisti nepažymėtus ir išsaugoti",
+        "title": "Išsaugoti šiuos vardus įgūdyje?"
+      }
+    },
     "matterRuns": {
       "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
-      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}"
+      "waitsOn": {
+        "approval": "Laukia jūsų patvirtinimo",
+        "askUser": "Užduoda jums klausimą",
+        "clientTool": "Tęsis, kai atidarysite šį pokalbį",
+        "harnessQuestion": "Jūsų kompiuteryje veikiantis agentas turi klausimą"
+      },
+      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}",
+      "workingNow": "Vykdoma"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
@@ -1857,6 +2129,25 @@
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
     "richContentTitle": "Interaktyvus turinys",
     "richContentUnavailable": "Šio turinio negalima saugiai rodyti.",
+    "runOn": {
+      "checkFailed": "Nepavyko patikrinti jūsų kompiuterio",
+      "chipLabel": "Kur veikia: {place}",
+      "cloud": "Debesis",
+      "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
+      "harnessModels": "{harness} modeliai",
+      "hintInstall": "Įdiekite jį per stella desktop",
+      "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
+      "hintSignIn": "Prisijunkite per stella desktop",
+      "hintUpdate": "Atnaujinkite jį per stella desktop",
+      "localFolderPlace": "Jūsų kompiuteris, {harness}, {folder}",
+      "localFolderSelection": "Jūsų kompiuteris · {harness} · {folder}",
+      "localPlace": "Jūsų kompiuteris, {harness}",
+      "localSelection": "Jūsų kompiuteris · {harness}",
+      "modelDefault": "Numatytasis (rekomenduojamas)",
+      "placeState": "{place}. {state}",
+      "yourComputer": "Jūsų kompiuteris",
+      "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus; leidimai nustato, ką jis gali daryti neklausdamas."
+    },
     "selection": {
       "askInNewChat": "Klausti naujame pokalbyje",
       "quoteInReply": "Cituoti atsakyme",
@@ -1888,6 +2179,7 @@
     "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
     "sendErrorTimedOut": "Pokalbio paslauga laiku neatsakė. Bandykite dar kartą.",
     "sendErrorToolsUnsupported": "Šis modelis negali naudoti įrankių, todėl negali atsakyti į klausimus apie jūsų bylą. Perjunkite į modelį, kuris palaiko įrankius.",
+    "sendErrorTurnTooLarge": "Šis atsakymas tapo per didelis, kad būtų pateiktas visas. Norėdami tęsti, išsiųskite naują žinutę.",
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
@@ -1908,6 +2200,7 @@
     "stopFailed": "Nepavyko sustabdyti atsakymo. Bandykite dar kartą.",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
+    "stopping": "Stabdoma…",
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
     "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",
@@ -2021,6 +2314,7 @@
       "search-past-chats": "Ieškoma ankstesniuose pokalbiuose",
       "set_field_value": "Nustatyti lauko reikšmę",
       "set_practice_jurisdictions": "Nustatyti praktikos jurisdikcijas",
+      "show_app": "Rodomas interaktyvus vaizdas",
       "show_in_document": "Rodoma dokumente",
       "spawn_subagents": "Deleguojama subagentams",
       "suggestChangesApplied": "Pritaikyta {applied, plural, one {# pakeitimas} few {# pakeitimai} other {# pakeitimų} many {# pakeitimų}}",
@@ -2042,17 +2336,39 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
+      "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",
       "exactCall": "Tikslus iškvietimas",
       "failed": "Šis žingsnis nepavyko; stella tęs kitu būdu.",
       "field": "Laukas",
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
+      "localOutput": {
+        "conversation": "Subagento pokalbis",
+        "conversationPrompt": "Užduotis",
+        "conversationReport": "Ataskaita",
+        "cut": "Rodomi pirmieji {kept} iš {total}",
+        "diff": "Failų pakeitimai",
+        "elsewhere": "Atidarykite kompiuteryje, kuriame tai buvo vykdoma",
+        "empty": "Išvesties nėra",
+        "failed": "stella darbalaukio programa šiame kompiuteryje negalėjo to parodyti.",
+        "imageTooLarge": "Šio paveikslėlio dydis – {total}. Didesni nei {kept} paveikslėliai šiame kompiuteryje nesaugomi, todėl čia jo parodyti negalima.",
+        "notKept": "Iš šio žingsnio šiame kompiuteryje nieko neišsaugota",
+        "reading": "Skaitoma iš šio kompiuterio"
+      },
       "output": "Išvestis",
+      "patternInPath": "{pattern} ({path})",
+      "proposedPlan": "Siūlomas planas",
+      "readFile": "Skaitomas failas",
+      "searchFiles": "Ieškoma failuose",
+      "signInToContinue": "Prisijunkite, kad tęstumėte",
       "sourceCode": "Pirminis kodas",
       "statusWaiting": "Laukiama",
+      "subagent": "Vykdomas subagentas",
       "toggleDetails": "Perjungti detales",
-      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
+      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}",
+      "updatePlan": "Atnaujinamas planas",
+      "viewImage": "Peržiūrimas paveikslėlis"
     },
     "turnNotification": {
       "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",
@@ -2063,6 +2379,8 @@
       "replyReadyTitle": "Atsakymas paruoštas"
     },
     "turnStatus": {
+      "answerFailed": "Atsakymo nepavyko užbaigti",
+      "answerReady": "Atsakymas paruoštas",
       "waitingForApproval": "Laukiama patvirtinimo",
       "waitingForInput": "Laukiama įvesties",
       "writing": "Rašoma"
@@ -2342,6 +2660,7 @@
     "filter": "Filtras",
     "filters": "Filtrai",
     "find": "Ieškoti",
+    "folder": "Aplankas",
     "formula": "Formulė",
     "goBack": "Grįžti atgal",
     "goBackToEditing": "Grįžti į redagavimą",
@@ -2405,6 +2724,8 @@
     "loading": "Įkeliama",
     "logTime": "Registruoti laiką",
     "low": "Žema",
+    "markAsRead": "Pažymėti kaip skaitytą",
+    "markAsUnread": "Pažymėti kaip neskaitytą",
     "matter": "Byla",
     "matters": "Bylos",
     "medium": "Vidutinė",
@@ -2435,6 +2756,8 @@
     "or": "Arba",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
+    "organizations": "Organizacijos",
+    "outOfDate": "Pasenusi",
     "page": "{page} psl.",
     "paymentRetryNotice": "Mokėjimo problema. Kad išlaikytumėte prieigą, atnaujinkite mokėjimo būdą iki {date}.",
     "pin": "Prisegti",
@@ -2449,6 +2772,7 @@
     "queued": "Eilėje",
     "reason": "Priežastis",
     "recommended": "Rekomenduojami",
+    "reconnect": "Prisijungti iš naujo",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
@@ -2521,6 +2845,7 @@
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
     "unknownUser": "Nežinomas naudotojas",
     "unpin": "Atsegti",
+    "unread": "Neskaityta",
     "unsavedChanges": "Neišsaugoti pakeitimai",
     "unsavedChangesClose": "Neišsaugoti pakeitimai. Dar kartą uždarykite, kad juos atmestumėte",
     "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte",
@@ -2740,7 +3065,6 @@
       "vatPayerUnknown": "Nežinoma",
       "year": "Metai"
     },
-    "filterOrganizations": "Organizacijos",
     "filterPersons": "Asmenys",
     "import": {
       "confirmAction": "Patvirtinti importą",
@@ -3062,6 +3386,7 @@
       "aiProviderTaskUnsupported": "Sukonfigūruotas DI teikėjas negali atlikti šios užduoties. Pasirinkite teikėją, kuris gali.",
       "aiUnknown": "DI užklausa nepavyko. Bandykite dar kartą.",
       "alreadyOrganizationMember": "Šis asmuo jau yra šios organizacijos narys.",
+      "browserSiteGrantLimitReached": "Galite leisti ne daugiau kaip 100 svetainių. Pirmiausia pašalinkite vieną skiltyje Nustatymai, Ryšiai.",
       "clauseDirectivesInvalid": "Susietoje sąlygoje yra netinkamų direktyvų. Prieš pildydami šabloną, pataisykite sąlygą.",
       "clauseDirectivesInvalidDetails": "Sąlygoje {clauseName}, esančioje lauke {slotName}, yra netinkamų direktyvų. Atidarykite sąlygų redaktorių, pataisykite nurodytas pastraipas ir dar kartą užpildykite šabloną.",
       "clauseDirectivesOverrideInvalidDetails": "Sąlygos {clauseName} pakeistas tekstas lauke {slotName} turi netinkamų direktyvų. Pataisykite šio pildymo pakeistą tekstą ir bandykite dar kartą.",
@@ -3097,14 +3422,28 @@
       "organizationMemberLimitReached": "Ši organizacija pasiekė narių ribą.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
+      "runActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų užduočių limitą. Palaukite, kol viena užduotis bus baigta, ir bandykite dar kartą.",
+      "runDailyLimitReached": "Jūsų organizacija pasiekė dienos užduočių limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
+      "sharepointAccessDenied": "Microsoft atsisakė suteikti prieigą prie šios svetainės, bibliotekos ar failo.",
+      "sharepointFileTooLarge": "Šis failas per didelis importuoti.",
+      "sharepointInvalidCursor": "Sąrašas pasikeitė naršant. Atidarykite aplanką iš naujo.",
+      "sharepointNotAFile": "Galima importuoti tik failus, o ne aplankus ar užrašų knygeles.",
+      "sharepointNotConnected": "Norėdami naudoti SharePoint ir OneDrive, prijunkite savo Microsoft paskyrą.",
+      "sharepointNotFound": "Šios svetainės, bibliotekos ar failo nebėra arba jis su jumis nebendrinamas.",
+      "sharepointReconnectRequired": "Jūsų Microsoft prisijungimas nebegalioja. Iš naujo prijunkite SharePoint ir OneDrive.",
+      "sharepointThrottled": "Microsoft riboja užklausas. Netrukus bandykite dar kartą.",
+      "skillFromChatAnonymizedThread": "Iš anonimizuoto pokalbio įgūdžio kol kas sukurti negalima.",
+      "skillFromChatEmptyThread": "Šiame pokalbyje dar nėra nieko, iš ko būtų galima sukurti įgūdį.",
+      "skillFromChatLocalRunThread": "Šis pokalbis vyksta jūsų kompiuteryje, todėl iš jo įgūdis debesyje nekuriamas.",
+      "skillFromChatThreadNotFound": "Šio pokalbio rasti nepavyko.",
+      "skillFromChatWithdrawn": "Šio pokalbio turinys buvo atšauktas, todėl iš jo negalima sukurti įgūdžio.",
+      "skillSourceUnreachable": "Nepavyko įkelti įgūdžio šaltinio. Patikrinkite, ar nuoroda veda į viešą „GitHub“ saugyklą, arba bandykite vėliau.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
       "validationInvalid": "Lauke yra reikšmė, kurios negalima išsaugoti.",
       "validationRequired": "Privalomas laukas tuščias.",
       "validationTooLong": "Per ilga: naudokite ne daugiau kaip {limit, number} simbolių.",
       "validationTooShort": "Per trumpa: naudokite ne mažiau kaip {limit, number} simbolių.",
-      "verificationActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų patikrų limitą. Palaukite, kol viena patikra bus baigta, ir bandykite dar kartą.",
-      "verificationDailyLimitReached": "Jūsų organizacija pasiekė dienos patikrų limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
     },
     "failedToAcceptInvitation": "Nepavyko priimti kvietimo",
@@ -3988,6 +4327,8 @@
     "reopenTab": "Iš naujo atidaryti {name}",
     "resizePane": "Keisti polangio dydį",
     "review": {
+      "acceptChange": "Priimti pakeitimą",
+      "acceptFinding": "Priimti išvadą",
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",
       "addNote": "Pridėti komentarą priešingai šaliai",
@@ -4028,7 +4369,11 @@
         "dismissed": "Atmesta"
       },
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
+      "dismissFinding": "Atmesti išvadą",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
+      "documentCutNotice": "<strong>Dokumentas {documentName} nebuvo perskaitytas visas.</strong> Šiam modeliui jis per ilgas, todėl praleista apie {percent} jo teksto. Pozicija be atsakymo pažymima peržiūrai, nes atsakymas gali būti praleistoje dalyje.",
+      "documentTooLarge": "Šis dokumentas per ilgas, kad šis modelis perskaitytų pakankamą jo dalį. Išbandykite modelį su didesniu konteksto langu.",
+      "documentsTooLarge": "Šie dokumentai per ilgi, kad šis modelis galėtų juos perskaityti kartu. Naudokite mažiau arba trumpesnių dokumentų arba išbandykite modelį su didesniu konteksto langu.",
       "export": {
         "counterparty": "Atsisiųsti priešingai šaliai",
         "counterpartyFailed": "Nepavyko eksportuoti dokumento",
@@ -4044,6 +4389,7 @@
       "failed": "Nepavyko peržiūrėti dokumento",
       "filterCoverage": "Aprėptis",
       "filterDeviations": "Nukrypimai",
+      "fixesWithheldNotice": "Šiai peržiūrai siūlomi pakeitimai nebuvo sukurti, nes joje naudotas referencinis dokumentas iš bylos, kuri ją paleidusiam asmeniui nepasiekiama. Išvadoms tai įtakos neturi.",
       "flag": "Pažymėti",
       "flaggedPositions": "{total, plural, one {Pažymėta {flagged, number} iš # pozicijos} few {Pažymėta {flagged, number} iš # pozicijų} many {Pažymėta {flagged, number} iš # pozicijų} other {Pažymėta {flagged, number} iš # pozicijų}}",
       "fromChat": "Iš pokalbio",
@@ -4051,6 +4397,7 @@
       "history": {
         "backToLatest": "Grįžti prie naujausios",
         "decided": "{decided, number} iš {total, number} nuspręsta",
+        "fromTable": "Iš lentelės",
         "references": "{count, plural, one {# referencija} few {# referencijos} many {# referencijos} other {# referencijų}}"
       },
       "impact": {
@@ -4075,7 +4422,6 @@
         "unanchored": "Nesusieta su jokia sąlyga"
       },
       "newTopic": "Nauja peržiūros tema",
-      "noChangeNeeded": "Pakeitimo nereikia",
       "noEditor": "Atidarykite dokumentą, kad priimtumėte pakeitimus",
       "noMaterialDifferences": "Esminių skirtumų nerasta",
       "noPassage": "Ištraukos nėra",
@@ -4159,6 +4505,11 @@
         "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų",
         "unnamedReferences": "{count, plural, one {# referencinis dokumentas} few {# referenciniai dokumentai} many {# referencinio dokumento} other {# referencinių dokumentų}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Visa šios versijos peržiūra</link> su nuorodomis ir siūlomais pakeitimais pasiekiama peržiūrų istorijoje.",
+        "origin": "<strong>Paleista iš lentelės.</strong> Šios išvados įvertintos pagal lentelei išgautas reikšmes, todėl jos nesusietos su dokumentu ir neapima siūlomų pakeitimų.",
+        "runAnotherReview": "Kad gautumėte nuorodas ir siūlomus pakeitimus, naudokite mygtuką <action>{label}</action>."
+      },
       "targetAsReference": "Peržiūrimas dokumentas negali būti pats sau referencinis dokumentas.",
       "targetColumn": "Šis dokumentas",
       "targetDocument": "Tikslinis dokumentas",
@@ -4190,7 +4541,21 @@
       "builtIn": {
         "playbookBuilder": {
           "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
-          "name": "Kurti peržiūros vadovą"
+          "name": "Kurti peržiūros vadovą",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridėk pozicijų į vieną iš mano esamų peržiūros vadovų.",
+              "name": "Papildyti peržiūros vadovą"
+            },
+            "fromContracts": {
+              "body": "Sukurk konfidencialumo sutarčių peržiūros vadovą pagal mano anksčiau pasirašytas sutartis.",
+              "name": "Pradėti nuo ankstesnių sutarčių"
+            },
+            "fromMarketStandards": {
+              "body": "Sukurk tiekimo sutarčių peržiūros vadovą pagal įprastas rinkos pozicijas.",
+              "name": "Pradėti nuo rinkos standartų"
+            }
+          }
         }
       },
       "builtInSection": "Integruoti įgūdžiai",
@@ -4201,6 +4566,7 @@
       "discoveredSkills": "{count, plural, one {Rastas # įgūdis} few {Rasti # įgūdžiai} other {Rasta # įgūdžių} many {Rasta # įgūdžių}}",
       "discoveryEmpty": "Šioje saugykloje ar aplanke įgūdžių nerasta.",
       "discoverySkippedInvalid": "{count, plural, one {Praleistas # netinkamas įgūdis} few {Praleisti # netinkami įgūdžiai} other {Praleista # netinkamų įgūdžių} many {Praleista # netinkamų įgūdžių}}",
+      "dropPack": "Vilkite .zip arba SKILL.md failą, kad importuotumėte įgūdį",
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
@@ -4258,6 +4624,7 @@
         }
       },
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
+      "uploadPack": "Įkelti .zip arba SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
     },
@@ -4310,7 +4677,6 @@
       "otherTitle": "Kitos integracijos",
       "probe": "Patikrinti",
       "recommendedFor": "Rekomenduojama: {jurisdictions}",
-      "reconnect": "Prisijungti iš naujo",
       "saveToken": "Išsaugoti tokeną",
       "tokenHelp": "Kaip gauti tokeną",
       "tokenLabel": "Bearer tokenas",
@@ -4439,6 +4805,10 @@
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atsakykite į klausimus pokalbyje. Kai patvirtinsite pirmąjį išsaugojimą, peržiūros vadovas atsidarys čia ir galėsite jį redaguoti šalia pokalbio.",
+        "title": "Jūsų peržiūros vadovas atsiras čia"
+      },
       "positionOfTotal": "Pozicija {index} iš {total}",
       "positionRemoved": "Pozicija pašalinta",
       "positions": "Pozicijos",
@@ -4673,6 +5043,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Priimama {done} iš {total}…"
+    },
     "sources": {
       "add": "Pridėti šaltinį",
       "documentRequired": "Pasirinkite dokumentą.",
@@ -4763,6 +5136,7 @@
       "flowRunAwaitingApproval": "Darbo eiga <bdi>{flowName}</bdi> laukia jūsų patvirtinimo",
       "flowRunCompleted": "Darbo eiga <bdi>{flowName}</bdi> baigta",
       "flowRunFailed": "Darbo eiga <bdi>{flowName}</bdi> nepavyko",
+      "localRunLimitReset": "Programavimo agentas jūsų kompiuteryje gali tęsti jūsų pokalbį",
       "mention": "<bdi>{actorName}</bdi> paminėjo jus komentare",
       "reportExportFailed": "Nepavyko eksportuoti ataskaitos",
       "reportExportSucceeded": "Jūsų ataskaita paruošta",
@@ -4933,6 +5307,12 @@
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",
       "usingDefaults": "Naudojami numatytieji nustatymai"
+    },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} simbolių",
+      "description": "Šie nurodymai taikomi visiems jūsų organizacijos pokalbiams su DI ir turi pirmenybę prieš asmenines nuostatas. Pakeitimai įsigalioja nuo kitos žinutės. Naudokite juos atitikties taisyklėms, duomenų tvarkymui ir formatavimo standartams nustatyti.",
+      "title": "Organizacijos nurodymai",
+      "tooLong": "Nurodymuose gali būti ne daugiau kaip {maxLength} simbolių."
     },
     "creationEvaluationLimitReached": "Išnaudojote visus {limit} organizacijų bandomuosius laikotarpius. Ištrynus organizaciją, bandomasis laikotarpis neatkuriamas. Naudokite esamą organizaciją arba kreipkitės į pagalbos tarnybą dėl mokamos prieigos.",
     "creationInvalidName": "Įveskite tinkamą organizacijos pavadinimą (iki {maxLength} simbolių).",
@@ -5185,8 +5565,6 @@
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
     "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
-    "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "chatCoveragePartial": "Ne visi pokalbiai išnagrinėti iki galo.",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
@@ -5205,7 +5583,6 @@
       "caseLaw": "Teismų praktika",
       "chat": "Pokalbis",
       "contact": "Kontaktas",
-      "folder": "Aplankas",
       "link": "Nuoroda",
       "matter": "Byla",
       "message": "Žinutė",
@@ -5304,6 +5681,7 @@
       "deleteAccountWarning": "Ištrynimas yra negrįžtamas. Prisijungimo duomenys ir privatūs paskyros duomenys bus pašalinti.",
       "deleteAccountWarningExplanation": "Atsiųsime patvirtinimo kodą į jūsų el. pašto adresą, kad patvirtintume šią užklausą. Užbaigta darbo sričių istorija liks priskirta jūsų ištrintai paskyrai.",
       "desktop": "Darbalaukis",
+      "desktopAccountConflict": "Šiame kompiuteryje „stella desktop“ prijungta prie kitos stella paskyros. Prieš perjungiant „stella desktop“ paprašys patvirtinti.",
       "desktopAppDescription": "Vėl raskite viską, ką nukopijavote, ir atidarykite „stella“ dokumentus jau naudojamose kompiuterio programose.",
       "desktopCardApproveDetail": "Patvirtinkite, kad šis kompiuteris būtų susietas su <bdi>{identity}</bdi> serveryje {host}.",
       "desktopCardApproveTitle": "stella desktop prašo prisijungti",
@@ -5318,6 +5696,7 @@
       "desktopCardOutdatedTitle": "stella desktop reikia atnaujinti",
       "desktopClipboardDescription": "Atidarykite, ieškokite, tvarkykite ir pakartotinai naudokite tekstą, nukopijuotą iš bet kurios programos.",
       "desktopClipboardTitle": "Ieškoma iškarpinės istorija",
+      "desktopConnectDeclined": "Prijungimas atšauktas „stella desktop“ programoje.",
       "desktopConnectFailed": "Nepavyko prijungti „stella desktop“.",
       "desktopConnectInstalled": "Jau įdiegta, prijungti",
       "desktopConnectedAs": "Prisijungta kaip <bdi>{email}</bdi>",
@@ -5333,11 +5712,13 @@
       "desktopInstallOpenStep": "Vieną kartą atidarykite „stella desktop“. Iškarpinė pasirodys iškart ir liks pasiekiama macOS meniu juostoje arba Windows sistemos dėkle.",
       "desktopInstallTitle": "Įdiegti ir atidaryti",
       "desktopInstallWindowsStep": "Paleiskite diegimo programą ir vykdykite nurodymus.",
+      "desktopKeptAccount": "„stella desktop“ paliko dabartinę paskyrą.",
       "desktopOpenApp": "Atidaryti stella desktop",
       "desktopPrivacyDescription": "Iškarpinės istorija užšifruojama ir saugoma šiame įrenginyje.",
       "desktopPrivacyTitle": "Privatu pagal numatytuosius nustatymus",
       "desktopSelfHostDescription": "Patikėkite šį stella URL pasirašytoje desktop programoje, kad šios instaliacijos dokumentai galėtų būti atidaromi lokaliai.",
       "desktopSelfHostTitle": "Desktop redagavimas self-hosting aplinkai",
+      "desktopSwitchAccount": "Perjungti „stella desktop“ į šią paskyrą",
       "displayNameDescription": "Taip jus mato kolegos bylose, komentaruose ir veiklos įrašuose.",
       "displayNameRequired": "Įveskite rodomą vardą.",
       "displayNameSaved": "Rodomas vardas atnaujintas",
@@ -5411,6 +5792,9 @@
       "browserExtensionDescription": "„stella“ pokalbis gali skaityti ir naudoti svetaines jūsų pasirinktoje Chrome kortelėje. Kiekvienas veiksmas laukia jūsų patvirtinimo.",
       "browserExtensionInstall": "Pridėti prie Chrome",
       "browserExtensionTitle": "Naršyklės plėtinys",
+      "browserSiteRemove": "Pašalinti {site}",
+      "browserSitesDescription": "Šiose svetainėse pokalbio veiksmai naršyklėje atliekami neklausiant. Pašalinkite svetainę, kad vėl būtumėte klausiami.",
+      "browserSitesTitle": "Leidžiamos svetainės",
       "cliDescription": "Įdiekite stella komandinės eilutės klientą ir prisijunkite, kad iš terminalo galėtumėte scenarijais valdyti bylas, dokumentus ir šablonus.",
       "cliInstallLabel": "Diegimas",
       "cliLoginLabel": "Prisijungimas",
@@ -5527,7 +5911,9 @@
         "case_law_matter_link": "teismo sprendimo sąsaja su byla",
         "case_law_reader_answer": "teismų praktikos skaitytuvo atsakymas",
         "case_law_research_column": "teismų praktikos tyrimo stulpelis",
+        "chat_browser_site_grant": "pokalbio svetainės leidimas",
         "chat_file": "pokalbio failas",
+        "chat_local_folder_approval": "vietinio aplanko leidimas",
         "chat_message": "pokalbio žinutė",
         "chat_thread": "pokalbio gija",
         "chat_tool_execution": "pokalbio įrankio vykdymas",
@@ -5536,8 +5922,10 @@
         "clause_category": "sąlygų kategorija",
         "clause_template_link": "sąlygos sąsaja su šablonu",
         "clause_variant": "sąlygos variantas",
+        "conflict_check": "interesų konflikto patikra",
         "contact": "kontaktas",
         "contact_directory": "kontaktų katalogas",
+        "data_export": "duomenų eksportas",
         "desktop_edit_session": "darbalaukio redagavimo seansas",
         "document_annotation": "dokumento anotacija",
         "document_review_run": "dokumento peržiūra",
@@ -5623,6 +6011,11 @@
         "labelAria": "Dokumento tipo pavadinimas",
         "reorder": "Keisti dokumento tipo eilės tvarką",
         "title": "Dokumentų tipai"
+      },
+      "localRuns": {
+        "description": "Daugiausia, ką programavimo agentas gali daryti neklausdamas, kai vykdo pokalbį nario kompiuteryje. Žemesnė riba taikoma nuo kito kiekvieno nario pranešimo; jau vykstantis paleidimas išlaiko savo leidimus.",
+        "title": "Programavimo agentai narių kompiuteriuose",
+        "updated": "Programavimo agentų leidimai atnaujinti"
       },
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
@@ -5710,6 +6103,63 @@
       "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
     }
   },
+  "sharepoint": {
+    "admin": {
+      "description": "Nariai prijungia savo Microsoft paskyrą ir importuoja failus į bylas. stella skaito tik tai, ką kiekvienas narys gali atidaryti Microsoft 365.",
+      "disableConfirm": "Išjungti",
+      "disableDescription": "Visų narių Microsoft ryšys bus pašalintas, o jų išsaugotas prisijungimas ištrintas. Jau importuoti dokumentai liks savo bylose. Jei vėl įjungsite šią funkciją, nariams reikės prisijungti iš naujo.",
+      "disableInputLabel": "Įveskite {confirmation}, kad išjungtumėte",
+      "disableTitle": "Išjungti SharePoint ir OneDrive?",
+      "toggleLabel": "Leisti SharePoint ir OneDrive"
+    },
+    "askAdmin": "Jūsų organizacijai išjungta. Paprašykite administratoriaus ją įjungti.",
+    "connectFailed": "Nepavyko prijungti SharePoint ir OneDrive",
+    "connected": "SharePoint ir OneDrive prijungti",
+    "description": "Importuokite failus iš SharePoint ir OneDrive į bylas.",
+    "disconnectDescription": "Jūsų Microsoft prisijungimas bus pašalintas iš stella. Jau importuoti dokumentai liks savo bylose.",
+    "disconnectTitle": "Atjungti SharePoint ir OneDrive?",
+    "disconnected": "SharePoint ir OneDrive atjungti",
+    "import": {
+      "alreadyCurrent": "{count, plural, one {# failas jau buvo atnaujintas.} few {# failai jau buvo atnaujinti.} many {# failo jau buvo atnaujinta.} other {# failų jau buvo atnaujinta.}}",
+      "created": "Importuota",
+      "done": "Failai importuoti iš SharePoint arba OneDrive",
+      "failedReason": "Failo nepavyko nukopijuoti. Bandykite vėliau.",
+      "partial": "Nepavyko importuoti {failed, number} iš {total, plural, one {# failo} few {# failų} many {# failo} other {# failų}}.",
+      "progress": "Importuota {done, number} iš {total, number}",
+      "unchanged": "Jau naujausias",
+      "unconfirmed": "Nepatvirtinta",
+      "unconfirmedCount": "{count, plural, one {# failas nepatvirtintas; importuokite jį dar kartą.} few {# failai nepatvirtinti; importuokite juos dar kartą.} many {# failo nepatvirtinta; importuokite juos dar kartą.} other {# failų nepatvirtinta; importuokite juos dar kartą.}}",
+      "unconfirmedReason": "Importavimas sustojo prieš patvirtinant šį failą. Importuokite jį dar kartą.",
+      "versioned": "Nauja versija"
+    },
+    "oauthReasons": {
+      "consentDenied": "Microsoft prisijungimas buvo atšauktas arba prieiga nesuteikta.",
+      "expired": "Prisijungimas užtruko per ilgai. Prisijunkite iš naujo.",
+      "notConfigured": "Šis stella diegimas nėra sukonfigūruotas Microsoft prisijungimui. Kreipkitės į savo administratorių.",
+      "notEnabled": "Jūsų organizacija neįjungė SharePoint ir OneDrive.",
+      "tryAgain": "Microsoft prisijungimas nebuvo užbaigtas. Prisijunkite iš naujo.",
+      "userMismatch": "Prisijungimas buvo pradėtas iš kitos paskyros ar organizacijos. Prisijunkite iš naujo iš šios."
+    },
+    "picker": {
+      "description": "Pasirinkite failus, kuriuos nukopijuoti į šią bylą (daugiausia {max, number}).",
+      "emptyFolder": "Šis aplankas tuščias.",
+      "menuItem": "Iš SharePoint arba OneDrive",
+      "myOneDrive": "Mano OneDrive",
+      "noFollowedSites": "Ieškokite svetainės arba atidarykite Mano OneDrive.",
+      "noLibraries": "Čia nėra dokumentų bibliotekų.",
+      "notConnected": "Norėdami naršyti SharePoint ir OneDrive, prijunkite savo Microsoft paskyrą.",
+      "notImportable": "Importuoti negalima",
+      "reconnectRequired": "Jūsų Microsoft prisijungimas nebegalioja. Norėdami toliau naršyti, prisijunkite iš naujo.",
+      "searchSites": "Ieškoti svetainių",
+      "selectedCount": "{count, plural, =0 {Nepasirinkta failų} one {Pasirinktas # failas} few {Pasirinkti # failai} many {Pasirinkta # failo} other {Pasirinkta # failų}}",
+      "selectionLimit": "Daugiausia failų, kuriuos galima importuoti vienu metu: {max, number}.",
+      "sites": "Svetainės",
+      "throttledFor": "Microsoft riboja užklausas. Bandykite dar kartą po {seconds, plural, one {# sekundės} few {# sekundžių} many {# sekundės} other {# sekundžių}}.",
+      "title": "Importuoti iš SharePoint arba OneDrive"
+    },
+    "reconnectRequired": "Prisijungimas nebegalioja",
+    "title": "SharePoint ir OneDrive"
+  },
   "skillHistory": {
     "acceptStale": "Priimti ir perrašyti naujesnius pakeitimus",
     "backToCurrent": "Grįžti į dabartinę versiją",
@@ -5719,7 +6169,6 @@
     "comments": "Komentarai",
     "commentsEmpty": "Pažymėkite tekstą, kad jį pakomentuotumėte.",
     "noRevisions": "Versijų dar nėra",
-    "outOfDate": "Pasenusi",
     "proposalMeta": "{author} · {date}",
     "proposalNoSummary": "Santraukos nėra",
     "proposals": "Pakeitimų pasiūlymai",
@@ -5835,6 +6284,11 @@
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}",
     "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# įterpta nuostata} few {# įterptos nuostatos} many {# įterptos nuostatos} other {# įterptų nuostatų}}",
+    "versionChangesChanged": "{count, plural, one {# pakeista nuostata} few {# pakeistos nuostatos} many {# pakeistos nuostatos} other {# pakeistų nuostatų}}",
+    "versionChangesNone": "Formuluotė nepakeista",
+    "versionChangesRemoved": "{count, plural, one {# išbraukta nuostata} few {# išbrauktos nuostatos} many {# išbrauktos nuostatos} other {# išbrauktų nuostatų}}",
+    "versionChangesWords": "{inserted, plural, one {# įterptas žodis} few {# įterpti žodžiai} many {# įterpto žodžio} other {# įterptų žodžių}}, {deleted, plural, one {# išbrauktas žodis} few {# išbraukti žodžiai} many {# išbraukto žodžio} other {# išbrauktų žodžių}}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
   "styleSets": {
@@ -6555,6 +7009,7 @@
     "deletedItem": "Ištrinta: {name}",
     "deletingWorkspace": "Byla trinama",
     "documentSwitcher": {
+      "download": "Atsisiųsti šį failą",
       "searchPlaceholder": "Rasti dokumentą…",
       "trigger": "Perjungti dokumentą"
     },

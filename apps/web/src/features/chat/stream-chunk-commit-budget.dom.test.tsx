@@ -533,6 +533,7 @@ const Composer = ({
       controller={controller}
       context={COMPOSER_CONTEXT}
       isGenerating={isGenerating}
+      models={null}
       skillsOrganizationId={ORGANIZATION_ID}
       reservedCommands={
         messages.length > 0
@@ -589,8 +590,8 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     expect(
       testing
         .within(page.view.container)
-        .queryByRole("button", { name: translations.chat.sendPrompt }),
-    ).not.toBeNull();
+        .queryByRole("button", { name: translations.chat.sendPrompt }) === null,
+    ).toBe(false);
   });
   const { firstAt, lastAt } = server.burst;
   if (firstAt === undefined || lastAt === undefined) {

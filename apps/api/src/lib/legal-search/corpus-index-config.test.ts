@@ -116,6 +116,8 @@ test("the docket is its own raw field, reachable only by an exact query", () => 
  *
  * - AUT: RIS publishes for OGH, VwGH and VfGH, 4 Oberlandesgerichte, the
  *   Landesgerichte, and the Bezirksgerichte.
+ * - BRA: the 91 courts the CNJ lists (STF, 4 superior courts, 6 TRF, 27 TJ,
+ *   24 TRT, 27 TRE, 3 TJM), each stored under its own name.
  * - CZE: Ústavní soud, NS, NSS, 2 vrchní, 8 krajské (Městský soud v Praze
  *   among them), and the okresní courts.
  * - EU: Court of Justice, General Court, and the dissolved Civil Service
@@ -136,6 +138,7 @@ test("the docket is its own raw field, reachable only by an exact query", () => 
  */
 const COURT_DOMAIN_BOUND = {
   AUT: 200,
+  BRA: 200,
   CZE: 200,
   EU: 10,
   GBR: 200,

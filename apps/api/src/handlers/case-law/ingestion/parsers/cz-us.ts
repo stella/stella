@@ -67,6 +67,8 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  czechBenchRecitalStart,
+  isCzechBareSignatoryName,
   isCzechOpeningFormula,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
@@ -85,6 +87,10 @@ import {
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
+import {
+  DOT_PARAGRAPH_MARKER_RE,
+  ITEM_OPENING_RE,
+} from "@stll/legal-ast/printed-paragraph-labels";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -101,7 +107,7 @@ import {
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
-  collapseLetterSpacing,
+  readInlineLetterSpacing,
   withAttestedLetterSpacing,
 } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -525,7 +531,7 @@ const reflowUsLines = (
       reading === null ? inlines : mapInlineText(inlines, reading.clean),
     );
   const spelled = (inlines: readonly Inline[]): Inline[] =>
-    mapInlineText(inlines, collapseLetterSpacing);
+    readInlineLetterSpacing(inlines);
 
   const lines: ParsedLine[] = [];
   let paragraph: Inline[] | null = null;
@@ -688,9 +694,6 @@ const ODUVODNENI_RE =
  */
 const SECTION_ROMAN_RE = /^(?=[IVX])(?<roman>X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 
-/** Numbered paragraph: "1. ...", "2. ..." */
-const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
-
 /** The court's first reasoning paragraph, which no ruling item opens with. */
 const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
 
@@ -699,7 +702,6 @@ const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
  * where a sentence or a printed line goes on. A title may end with a full
  * stop ("… zákona č. 128/1946 Sb."); a long line that does is a sentence.
  */
-const ITEM_OPENING_RE = /^(?:\d{1,3}[.)]|\p{L}\)|[-–•])\s/u;
 const UNFINISHED_TITLE_RE = /[,;:-]$/u;
 const TITLE_SENTENCE_MAX_WORDS = 10;
 
@@ -714,20 +716,12 @@ const DISSENT_HEADING_MAX_CHARS = 120;
  */
 const CLOSING_MAX_CHARS = 80;
 /**
- * A personal name and nothing else: two to four capitalised words, each
- * possibly double-barrelled ("Jan Novák", "Petra Svobodová-Dvořáková").
- * Read as a signature only directly under a closing or another signature.
- */
-const BARE_SIGNATORY_NAME_RE =
-  /^\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?(?:\s+\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?){1,3}$/u;
-
-/**
  * A bare name under the closing, or under the signature lines that follow
  * it, signs the decision or a separate opinion: the Court's judges often sign
  * with no academic title and no "v. r.".
  */
 const signsUnderClosing = (plainText: string, previous: Block | undefined) =>
-  BARE_SIGNATORY_NAME_RE.test(plainText) &&
+  isCzechBareSignatoryName(plainText) &&
   previous?.type === "paragraph" &&
   (previous.role === "closing" || previous.role === "signature");
 /** Longest heading an author continuation can make. */
@@ -820,7 +814,7 @@ const classifyUsBodyLine = ({
       id: makeUsBlockId(state),
       anchorId: makeAnchorId("p", state.blockIndex),
       type: "paragraph",
-      role: "intro",
+      role: "opening-formula",
       inlines,
       plainText,
     });
@@ -830,6 +824,7 @@ const classifyUsBodyLine = ({
   // "takto:" separator
   if (isCzechTaktoLine(plainText) || isCzechTaktoLine(collapsed)) {
     state.inRuling = true;
+    markBenchRecital(blocks);
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -1108,6 +1103,26 @@ const opensRuling = (
     PLENARY_BENCH_RE.test(plainText) ||
     NALEZ_CAPTION_RE.test(plainText));
 
+/**
+ * The bench recital printed before a "takto:" of its own line (`Ústavní
+ * soud České republiky` / `v senátě rozhodl ve věci …`) introduces the
+ * ruling, as the shared Czech grammar reads it.
+ */
+const markBenchRecital = (blocks: Block[]): void => {
+  // The title is kept apart from the body's blocks, which open after it.
+  const start = czechBenchRecitalStart(blocks, blocks.length, {
+    opensAfterHeadMatter: true,
+  });
+  if (start === undefined) {
+    return;
+  }
+  for (const [index, block] of blocks.entries()) {
+    if (index >= start && block.type === "paragraph") {
+      blocks[index] = { ...block, role: "intro" };
+    }
+  }
+};
+
 /** A paragraph's role: its separate opinion's, or the ruling's opener. */
 const paragraphRole = (
   state: UsClassificationState,
@@ -1138,7 +1153,7 @@ const opinionHeading = (
   line: ParsedLineData,
 ): SeparateOpinionHeading | undefined =>
   separateOpinionHeading(
-    stripInlineLinePrefix(line, NUMBERED_PARA_RE).line.plainText,
+    stripInlineLinePrefix(line, DOT_PARAGRAPH_MARKER_RE).line.plainText,
     DISSENT_HEADING_MAX_CHARS,
   );
 

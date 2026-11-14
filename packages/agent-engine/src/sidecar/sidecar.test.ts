@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -15,16 +16,22 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { parseChatLocalRunConversation } from "@stll/api-contract/chat-local-run-step-output";
+import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   FAKE_CLAUDE_VERSION,
   type FakeScenarioName,
 } from "../../scripts/fake-claude-code-cli";
 import {
   FAKE_OUTDATED_VERSION,
+  FAKE_PRIVATE_TEXT,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
+import { PROTOCOL_LOG_OFF } from "../protocol-log";
 import {
   HOLDER_ENDPOINT_FILE,
   HOLDER_LOG_FILE,
@@ -40,6 +47,7 @@ import {
   sidecarMessageSchema,
   type SidecarRunMessage,
 } from "./protocol";
+import { stepOutputPath } from "./step-outputs";
 
 /**
  * The holder as the desktop runs it: a process serving the protocol on a
@@ -155,7 +163,10 @@ const place = (): Place => {
 type HolderProcess = Place & { exited: Promise<number> };
 
 /** The holder as `main.ts`, the way the desktop starts it. */
-const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
+const spawnHolder = async (
+  at: Place = place(),
+  environment: Readonly<Record<string, string>> = {},
+): Promise<HolderProcess> => {
   const child = Bun.spawn(
     [process.execPath, MAIN, "--dir", at.dir, "--endpoint", at.endpoint],
     {
@@ -166,6 +177,7 @@ const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: at.fakeLog,
         OPENAI_API_KEY: "inherited-key",
+        ...environment,
       },
     },
   );
@@ -347,14 +359,20 @@ const startRun = (
     type: "run.start",
     runId,
     threadId: "thread-1",
+    attachments: [],
+    skillFolders: [],
+    toolPath: [],
+    unreadablePaths: [],
     ...launch,
     configDir,
     launch: PLAIN_LAUNCH,
     workspaceDir,
     cacheDir: path.join(at.root, "agent-package-cache"),
+    stepOutputDir: path.join(at.root, "runs", "chat.step-outputs"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
+    reasoningEffort: null,
     policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
       serverName: "stella",
@@ -366,6 +384,18 @@ const startRun = (
   });
   return runId;
 };
+
+/** Every entry under `dir` by relative path, with each file's text. */
+const treeOf = (dir: string) =>
+  Object.fromEntries(
+    readdirSync(dir, { recursive: true, withFileTypes: true }).map((entry) => {
+      const at = path.join(entry.parentPath, entry.name);
+      return [
+        repoRelativePath(dir, at),
+        entry.isFile() ? readFileSync(at, "utf-8") : entry.isDirectory(),
+      ] as const;
+    }),
+  );
 
 const runStart = (
   client: Client,
@@ -454,6 +484,31 @@ describe("harness holder over its socket", () => {
     await older.ended;
     expect(older.messages.some(is("hello"))).toBe(false);
     await desktop(holder);
+  });
+
+  test("a newer desktop's hello makes a holder with no runs exit, after the rejection", async () => {
+    const holder = await spawnHolder();
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    expect(await newer.waitFor(is("rejected"))).toMatchObject({
+      reason: "protocol_mismatch",
+    });
+    expect(await holder.exited).toBe(0);
+  });
+
+  test("a newer desktop's hello lets a holder finish its runs before it exits", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "interrupt_queued");
+    await client.waitFor(is("run.event", runId));
+    const newer = await connect(holder.endpoint);
+    newer.send({ ...helloMessage(holder), protocol: SIDECAR_PROTOCOL + 1 });
+    await newer.waitFor(is("rejected"));
+    // The run it holds still runs and reaches its desktop.
+    client.send({ type: "run.cancel", runId });
+    const finished = await client.waitFor(is("run.finished", runId));
+    client.send({ type: "ack", runId, seq: finished.seq });
+    expect(await holder.exited).toBe(0);
   });
 
   test("rejects unknown and invalid lines once authenticated", async () => {
@@ -569,9 +624,16 @@ describe("harness holder over its socket", () => {
       outcome: {
         type: "ready",
         version: "0.166.0",
-        capabilities: ["approvals", "interrupt", "resume"],
-        approvalModes: ["ask"],
-        models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
+        capabilities: ["approvals", "interrupt", "resume", "image_input"],
+        approvalModes: ["ask", "auto", "full_auto"],
+        models: [
+          {
+            id: "gpt-test",
+            label: "GPT Test",
+            isDefault: true,
+            reasoningEfforts: ["medium", "high"],
+          },
+        ],
       },
     });
     expect(holder.received().map(({ method }) => method)).not.toContain(
@@ -714,6 +776,123 @@ describe("harness holder over its socket", () => {
     );
     expect(server.headers.Authorization).toMatch(/^Bearer \S{43,}$/u);
     expect(JSON.stringify(holder.received())).not.toContain(RUN_TOKEN);
+    // This holder can register no browser host with Chrome (it has no
+    // home folder), so the harness is offered no browser tools.
+    expect(
+      Object.keys(
+        v.parse(
+          v.record(v.string(), v.unknown()),
+          registered?.request?.servers,
+        ),
+      ),
+    ).toEqual(["stella"]);
+  });
+
+  test("hands each harness the turn's attached image from its copy; a PDF reaches Claude only", async () => {
+    // A real 1x1 PNG and a one-page PDF, already copied by an earlier turn,
+    // so nothing is fetched: the link below is never read.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const pdf = Buffer.from(
+      "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n",
+      "latin1",
+    );
+    const image = "attachments/019a0000-0000-7000-8000-0000000000a1/plan.png";
+    const document =
+      "attachments/019a0000-0000-7000-8000-0000000000a2/smlouva.pdf";
+    const earlier =
+      "attachments/019a0000-0000-7000-8000-0000000000a3/earlier.png";
+    const holder = await spawnHolder();
+    const workspaceDir = path.join(holder.root, "workspace");
+    for (const [at, bytes] of [
+      [image, png],
+      [document, pdf],
+      [earlier, png],
+    ] as const) {
+      mkdirSync(path.join(workspaceDir, path.dirname(at)), {
+        recursive: true,
+      });
+      writeFileSync(path.join(workspaceDir, at), bytes);
+    }
+    const turn = {
+      attachments: [image, document, earlier].map((at) => ({
+        path: at,
+        url: "https://files.example.test/never-read",
+      })),
+      messages: [
+        { role: "user", content: `Earlier: ${earlier}` },
+        { role: "assistant", content: "Seen." },
+        {
+          role: "user",
+          content: [
+            { type: "text", content: "Compare the plan with the contract." },
+            { type: "text", content: `The plan is at ${image}.` },
+            { type: "text", content: `The contract is at ${document}.` },
+          ],
+        },
+      ],
+    };
+    const { client } = await desktop(holder);
+    const claudeRun = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      turn,
+    );
+    expect(await client.waitFor(is("run.finished", claudeRun))).toMatchObject({
+      outcome: "completed",
+    });
+    const codexRun = runStart(client, holder, "stella_tools", turn);
+    expect(await client.waitFor(is("run.finished", codexRun))).toMatchObject({
+      outcome: "completed",
+    });
+
+    const userMessage = holder.received().find(({ type }) => type === "user");
+    expect(userMessage).toMatchObject({
+      message: {
+        content: [
+          {
+            type: "image",
+            source: { media_type: "image/png", data: png.toString("base64") },
+          },
+          {
+            type: "document",
+            source: {
+              media_type: "application/pdf",
+              data: pdf.toString("base64"),
+            },
+          },
+          {
+            type: "text",
+            text: expect.stringContaining(`The contract is at ${document}.`),
+          },
+        ],
+      },
+    });
+    const turnStart = holder
+      .received()
+      .find(({ method }) => method === "turn/start");
+    expect(turnStart?.params).toMatchObject({
+      input: [
+        {
+          type: "image",
+          url: `data:image/png;base64,${png.toString("base64")}`,
+        },
+        {
+          type: "text",
+          text: expect.stringContaining(`The contract is at ${document}.`),
+        },
+      ],
+    });
+    expect(holder.log()).toContain(
+      "an attached file stays a path only: not_accepted",
+    );
   });
 
   test("a Claude Code run finishes as interrupted or cancelled", async () => {
@@ -772,6 +951,253 @@ describe("harness holder over its socket", () => {
     expect(client.messages.at(-1)).toMatchObject({ type: "run.finished" });
   });
 
+  test("keeps a step's output and diff in the store run.start names, never in or beside the linked folder the run works in, and no message to the desktop carries them", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    // The member's own folder, linked to the chat, with their work in it.
+    const member = path.join(holder.root, "member");
+    const linked = path.join(member, "Smith v Jones");
+    mkdirSync(path.join(linked, "drafts"), { recursive: true });
+    writeFileSync(
+      path.join(linked, "drafts", "lease.md"),
+      "The first draft.\n",
+    );
+    writeFileSync(path.join(linked, "notes.txt"), "Call the landlord.\n");
+    const linkedBefore = treeOf(linked);
+    // Stella's own place for the chat, apart from the member's folder.
+    const stepOutputDir = path.join(holder.root, "runs", "chat.step-outputs");
+    const runId = runStart(client, holder, "native_tools", {
+      workspaceDir: linked,
+      stepOutputDir,
+    });
+    await client.waitFor(is("run.finished", runId));
+    const kept = (toolCallId: string) =>
+      readFileSync(
+        stepOutputPath({ stepOutputDir, runId, toolCallId }),
+        "utf-8",
+      );
+    expect(kept("call-heredoc")).toBe(`{"bytes":22}\nzsh: permission denied`);
+    expect(kept("call-long")).toBe(`{"bytes":2}\nok`);
+    // An update keeps its diff; an added file's text reads as added lines.
+    const diff = [
+      "--- /workspace/drafts/lease.md",
+      "+++ /workspace/drafts/lease.md",
+      FAKE_PRIVATE_TEXT.diff,
+      "--- /workspace/drafts/notice.md",
+      "+++ /workspace/drafts/notice.md",
+      "+-Rent is due monthly.",
+      "++Rent is due quarterly.",
+      "",
+    ].join("\n");
+    expect(kept("call-edit")).toBe(
+      `{"bytes":${String(Buffer.byteLength(diff))}}\n${diff}`,
+    );
+    // What the API receives is what the desktop receives: none of it.
+    const sent = JSON.stringify(client.messages);
+    expect(sent).not.toContain("permission denied");
+    expect(sent).not.toContain("Rent is due");
+    // The member's folder is as they left it; no store sits beside it.
+    expect(treeOf(linked)).toEqual(linkedBefore);
+    expect(
+      readdirSync(member).filter((name) => name.endsWith(".step-outputs")),
+    ).toEqual([]);
+  });
+
+  test("keeps a subagent's conversation in the run's own store, and no message to the desktop carries what it was told, wrote or reported", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const stepOutputDir = path.join(holder.root, "runs", "chat.step-outputs");
+    const runId = runStart(client, holder, "subagent", { stepOutputDir });
+    const request = await client.waitFor(is("run.approval_request", runId));
+    client.send({
+      type: "run.approval",
+      runId,
+      requestId: request.requestId,
+      decision: "approve",
+    });
+    await client.waitFor(is("run.finished", runId));
+    const kept = readFileSync(
+      stepOutputPath({ stepOutputDir, runId, toolCallId: "call-spawn" }),
+      "utf-8",
+    );
+    const newline = kept.indexOf("\n");
+    const conversation = kept.slice(newline + 1);
+    expect(JSON.parse(kept.slice(0, newline))).toEqual({
+      bytes: Buffer.byteLength(conversation),
+    });
+    expect(parseChatLocalRunConversation(conversation)).toEqual([
+      { role: "prompt", text: FAKE_PRIVATE_TEXT.subagentPrompt },
+      { role: "report", text: FAKE_PRIVATE_TEXT.subagentReport },
+      { role: "message", text: FAKE_PRIVATE_TEXT.subagentText },
+    ]);
+    // What the API receives is what the desktop receives: none of it, and
+    // nothing the subagent thought, which is not kept either.
+    const sent = JSON.stringify(client.messages);
+    for (const text of [
+      FAKE_PRIVATE_TEXT.subagentPrompt,
+      FAKE_PRIVATE_TEXT.subagentText,
+      FAKE_PRIVATE_TEXT.subagentReport,
+      FAKE_PRIVATE_TEXT.subagentThinking,
+    ]) {
+      expect(sent).not.toContain(text);
+    }
+    expect(kept).not.toContain(FAKE_PRIVATE_TEXT.subagentThinking);
+    // Each call of the subagent names it beside the call, never in its input.
+    expect(chunksOf(client, runId)).toContainEqual(
+      expect.objectContaining({
+        type: "TOOL_CALL_START",
+        toolCallId: "sub-rm",
+        metadata: expect.objectContaining({
+          [CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY]: "call-spawn",
+        }),
+      }),
+    );
+  });
+
+  test("keeps a completed turn's process for its background work, and the chat's next run continues in it", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    expect(await client.waitFor(is("run.finished", first))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    // Reported ahead of the run's end, so the chat never misses it.
+    expect(
+      client.messages.findIndex(
+        (message) => message.type === "background.tasks",
+      ),
+    ).toBeLessThan(
+      client.messages.findIndex((message) => message.type === "run.finished"),
+    );
+    const second = runStart(client, holder, "background_terminal", {
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([
+      { type: "background.tasks", runId: first, count: 1 },
+      // The next run took the process.
+      { type: "background.tasks", runId: first, count: 0 },
+    ]);
+    expect(holder.startups()).toHaveLength(1);
+    const methods = holder.received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "turn/start")).toHaveLength(2);
+    expect(methods).not.toContain("thread/resume");
+  });
+
+  test("a stop after the turn completed keeps nothing running", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "background_terminal_late_list");
+    // The turn's last chunk is out; its process is not kept yet.
+    await client.waitFor(
+      (message): message is Extract<SidecarMessage, { type: "run.event" }> =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "RUN_FINISHED",
+    );
+    client.send({ type: "run.interrupt", runId });
+    await client.waitFor(is("run.finished", runId));
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([]);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("a desktop on another API origin ends the kept processes before a run starts in their folder", async () => {
+    const holder = await spawnHolder();
+    const first = await desktop(holder);
+    const kept = runStart(first.client, holder, "background_terminal");
+    await first.client.waitFor(is("run.finished", kept));
+    first.client.close();
+    const other = "https://other.example.test";
+    const client = await connect(holder.endpoint);
+    client.send({ ...helloMessage(holder), apiOrigin: other });
+    await client.waitFor(is("hello"));
+    const next = runStart(client, holder, "stella_tools", {
+      mcp: {
+        serverName: "stella",
+        url: `${other}/mcp`,
+        token: RUN_TOKEN,
+        expiresAt: "2026-10-28T12:00:00.000Z",
+      },
+    });
+    expect(await client.waitFor(is("run.finished", next))).toMatchObject({
+      outcome: "completed",
+    });
+    // The old origin's process and its work were gone before the new
+    // harness started in the folder.
+    const entries = fakeEntries(holder.fakeLog);
+    const cleaned = entries.findIndex((entry) => "cleaned" in entry);
+    const startups = entries.flatMap((entry, index) =>
+      "startup" in entry ? [index] : [],
+    );
+    expect(startups).toHaveLength(2);
+    expect(cleaned).toBeGreaterThan(-1);
+    expect(cleaned).toBeLessThan(startups[1] ?? -1);
+  });
+
+  test("a stop of a run that would continue a kept process ends that process, and no turn starts", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    await client.waitFor(is("run.finished", first));
+    const second = runStart(client, holder, "background_terminal", {
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    client.send({ type: "run.cancel", runId: second });
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "cancelled",
+    });
+    const methods = holder.received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "turn/start")).toHaveLength(1);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("ends a chat's kept process before a run with another session starts", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const first = runStart(client, holder, "background_terminal");
+    await client.waitFor(is("run.finished", first));
+    const second = runStart(client, holder, "stella_tools");
+    expect(await client.waitFor(is("run.finished", second))).toMatchObject({
+      outcome: "completed",
+    });
+    expect(
+      client.messages.filter((message) => message.type === "background.tasks"),
+    ).toEqual([
+      { type: "background.tasks", runId: first, count: 1 },
+      { type: "background.tasks", runId: first, count: 0 },
+    ]);
+    expect(holder.startups()).toHaveLength(2);
+    expect(
+      fakeEntries(holder.fakeLog).filter((entry) => "cleaned" in entry),
+    ).toContainEqual({ cleaned: ["call-serve"] });
+  });
+
+  test("reports a kept process's background work again to a desktop that reconnects", async () => {
+    const holder = await spawnHolder();
+    const first = await desktop(holder);
+    const runId = runStart(first.client, holder, "background_terminal");
+    await first.client.waitFor(is("run.finished", runId));
+    first.client.close();
+    const { client } = await desktop(holder);
+    expect(await client.waitFor(is("background.tasks", runId))).toEqual({
+      type: "background.tasks",
+      runId,
+      count: 1,
+    });
+  });
+
   test("hands the harness the loopback proxy and a run secret, never the run token", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -802,6 +1228,52 @@ describe("harness holder over its socket", () => {
     expect(holder.log()).not.toContain(secret);
   });
 
+  test("with the protocol log on, the holder log has each message's structure and none of its content", async () => {
+    const holder = await spawnHolder(place(), {
+      STELLA_AGENT_PROTOCOL_LOG: "redacted",
+    });
+    const { client } = await desktop(holder);
+    const codexRun = runStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", codexRun));
+    const claudeRun = claudeRunStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", claudeRun));
+    const secret = holder.secret();
+    client.send({ type: "shutdown" });
+    expect(await holder.exited).toBe(0);
+    const log = holder.log();
+    expect(log).toContain("the protocol log is on");
+    for (const line of [
+      /protocol sidecar connection=1 in type=run\.start runId=#[0-9a-f]{8} /u,
+      /protocol sidecar connection=1 out type=run\.finished /u,
+      /protocol codex pid=\d+ out method=turn\/start id=\d+ /u,
+      /protocol codex pid=\d+ in method=turn\/completed /u,
+      /protocol claude-code pid=\d+ out type=user /u,
+      /protocol claude-code pid=\d+ in type=result /u,
+    ]) {
+      expect(log).toMatch(line);
+    }
+    // What the member and the model wrote, and where the run's files are.
+    const written = [codexRun, claudeRun]
+      .flatMap((runId) => chunksOf(client, runId))
+      .flatMap((chunk) =>
+        ["delta", "content", "args", "result"].flatMap((key) => {
+          const value: unknown = chunk[key];
+          return typeof value === "string" && value.length >= 6 ? [value] : [];
+        }),
+      );
+    expect(written.length).toBeGreaterThan(0);
+    for (const content of [
+      "Find the lease decision.",
+      "Use the stella MCP server.",
+      RUN_TOKEN,
+      secret,
+      holder.root,
+      ...written,
+    ]) {
+      expect(log).not.toContain(content);
+    }
+  });
+
   test("hands the harness the run's approval mode and the computer's package cache", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -815,8 +1287,9 @@ describe("harness holder over its socket", () => {
       }),
       holder.received().find(({ method }) => method === "thread/start")?.params,
     );
+    // The run starts at Ask: Codex's untrusted policy.
     expect(threadStart).toMatchObject({
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "workspace-write",
     });
     expect(
@@ -836,6 +1309,23 @@ describe("harness holder over its socket", () => {
     expect(JSON.stringify(holder.startups())).toContain(
       '"--permission-mode","auto"',
     );
+  });
+
+  test("hands the harness the run's reasoning effort", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { reasoningEffort: "high" },
+    );
+    await client.waitFor(is("run.finished", runId));
+    expect(JSON.stringify(holder.startups())).toContain('"--effort","high"');
   });
 
   test("relays an approval with one request id and returns the decision", async () => {
@@ -1215,11 +1705,13 @@ describe("harness holder over its socket", () => {
         return true;
       },
       log: () => {},
+      protocolLog: PROTOCOL_LOG_OFF,
       environment: {
         PATH: process.env["PATH"] ?? "",
         FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       },
       processGrantTimeoutMs: WAIT_MS,
+      browser: null,
     });
     cleanups.push(() => {
       rmSync(root, { recursive: true, force: true });
@@ -1236,9 +1728,15 @@ describe("harness holder over its socket", () => {
       launch: PLAIN_LAUNCH,
       workspaceDir,
       cacheDir: path.join(root, "agent-package-cache"),
+      stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
       model: "gpt-test",
+      reasoningEffort: null,
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
+      attachments: [],
+      skillFolders: [],
+      toolPath: [],
+      unreadablePaths: [],
       harnessSessionId: null,
       policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
@@ -1258,6 +1756,150 @@ describe("harness holder over its socket", () => {
     expect(refusedAt).toHaveLength(1);
     expect(written.slice(refusedAt[0])).toEqual([await finished]);
     await host.shutdown();
+  });
+
+  describe("files a turn writes to its outputs folder", () => {
+    /**
+     * A real host and fake harness against a real listener standing in for the
+     * API. The turn pauses on an approval: what is planted during the pause
+     * was written by the turn, as far as the folder can tell.
+     */
+    const runWritingOutputs = async (
+      answer: (request: Request) => Promise<Response>,
+    ) => {
+      const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-outputs-"));
+      const configDir = path.join(root, "codex-home");
+      const workspaceDir = path.join(root, "workspace");
+      const outputs = path.join(workspaceDir, "outputs");
+      mkdirSync(configDir);
+      mkdirSync(outputs, { recursive: true });
+      writeFileSync(path.join(outputs, "earlier.txt"), "an earlier turn");
+      const api = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: answer });
+      const apiOrigin = `http://127.0.0.1:${String(api.port)}`;
+      const written: SidecarHostOutput[] = [];
+      const { promise: finished, resolve } =
+        Promise.withResolvers<
+          Extract<SidecarHostOutput, { type: "run.finished" }>
+        >();
+      const { promise: paused, resolve: pause } =
+        Promise.withResolvers<string>();
+      const host = new SidecarHost({
+        send: (message) => {
+          written.push(message);
+          if (message.type === "run.approval_request") {
+            pause(message.requestId);
+          }
+          if (message.type === "run.finished") {
+            resolve(message);
+          }
+          return true;
+        },
+        log: () => {},
+        protocolLog: PROTOCOL_LOG_OFF,
+        environment: {
+          PATH: process.env["PATH"] ?? "",
+          FAKE_HARNESS_LOG: path.join(root, "fake.log"),
+        },
+        processGrantTimeoutMs: WAIT_MS,
+        browser: null,
+      });
+      cleanups.push(async () => {
+        await host.shutdown();
+        await api.stop(true);
+        rmSync(root, { recursive: true, force: true });
+      });
+      host.configure("1.4.0", apiOrigin);
+      const runId = crypto.randomUUID();
+      host.handle({
+        type: "run.start",
+        runId,
+        threadId: "thread-1",
+        harness: "codex",
+        executable: fakeCodex(root, "approval"),
+        configDir,
+        launch: PLAIN_LAUNCH,
+        workspaceDir,
+        cacheDir: path.join(root, "agent-package-cache"),
+        stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
+        model: "gpt-test",
+        reasoningEffort: null,
+        instructions: "Use the stella MCP server.",
+        messages: [{ role: "user", content: "Write the report." }],
+        attachments: [],
+        skillFolders: [],
+        toolPath: [],
+        unreadablePaths: [],
+        harnessSessionId: null,
+        policy: { network: "open", fs: "workspace", approvals: "ask" },
+        mcp: {
+          serverName: "stella",
+          url: `${apiOrigin}/mcp`,
+          token: RUN_TOKEN,
+          expiresAt: "2026-10-28T12:00:00.000Z",
+        },
+      });
+      const requestId = await paused;
+      writeFileSync(path.join(outputs, "report.txt"), "written this turn");
+      host.handle({
+        type: "run.approval",
+        runId,
+        requestId,
+        decision: "deny",
+      });
+      return { finished: await finished, runId, written };
+    };
+
+    const chunksOfRun = (written: readonly SidecarHostOutput[]) =>
+      written.flatMap((message) =>
+        message.type === "run.event" ? [message.chunk] : [],
+      );
+
+    test("upload what the turn wrote, with the run's token, before the turn's finish", async () => {
+      const received: { body: string; authorization: string | null }[] = [];
+      const fileId = crypto.randomUUID();
+      const { finished, written } = await runWritingOutputs(async (request) => {
+        received.push({
+          body: await request.text(),
+          authorization: request.headers.get("authorization"),
+        });
+        return Response.json({ fileId });
+      });
+      // The file that was there when the run started stays out of it.
+      expect(received).toEqual([
+        {
+          body: expect.stringContaining('filename="report.txt"'),
+          authorization: `Bearer ${RUN_TOKEN}`,
+        },
+      ]);
+      expect(finished.outcome).toBe("completed");
+      const chunks = chunksOfRun(written);
+      const reportAt = chunks.findIndex(
+        (chunk) => chunk["name"] === "stella.run-output",
+      );
+      expect(chunks[reportAt]?.["value"]).toEqual({
+        status: "uploaded",
+        fileId,
+        fileName: "report.txt",
+      });
+      const lastFinish = chunks.findLastIndex(
+        (chunk) => chunk.type === "RUN_FINISHED",
+      );
+      expect(reportAt).toBeGreaterThanOrEqual(0);
+      expect(reportAt).toBeLessThan(lastFinish);
+    });
+
+    test("an API that refuses the file leaves the run completed and says so", async () => {
+      const { finished, written } = await runWritingOutputs(
+        async () => await Promise.resolve(new Response(null, { status: 500 })),
+      );
+      expect(finished.outcome).toBe("completed");
+      const reports = chunksOfRun(written).filter(
+        (chunk) => chunk["name"] === "stella.run-output",
+      );
+      expect(reports.map((chunk) => chunk["value"])).toEqual([
+        { status: "failed", fileName: "report.txt" },
+      ]);
+    });
   });
 
   test("closing the connection keeps runs going; shutdown cancels them and exits", async () => {
@@ -1342,7 +1984,9 @@ describe("holder limits and timers", () => {
       helloTimeoutMs: 5000,
       unackedRetentionMs: 60_000,
       processGrantTimeoutMs: 60_000,
+      browser: null,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
+      protocolLog: { type: "set", setting: "off" },
       ...overrides,
     });
     const server = Result.isOk(started)

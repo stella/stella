@@ -217,6 +217,7 @@ export const AgentSubscriptionsSection = ({
         onSignOut={() => {
           void runClaudeCode(async () => invoke("claude_code_auth_sign_out"));
         }}
+        onCheckAgain={refreshClaudeCode}
         status={claudeCode}
       />
     );
@@ -241,7 +242,7 @@ const readHarnessStatus = async () => invoke<unknown>("harness_get_status");
  * change and whenever `refresh` is called. `null` while unread, refused
  * (the local agents feature is off) or malformed.
  */
-const useNativeStatus = <T,>({
+export const useNativeStatus = <T,>({
   read,
   event,
   isStatus,

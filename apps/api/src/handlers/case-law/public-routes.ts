@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
+import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
@@ -498,6 +499,9 @@ export const publicCaseLawRoute = routes(
     "/decisions/latest": { GET: listLatestDecisions },
     "/decisions/by-slug/:slug": { GET: readDecisionBySlug },
     "/decisions/:decisionId": { GET: readDecision },
+    "/decisions/:decisionId/anchor-redirects": {
+      GET: readDecisionAnchorRedirectsRoute,
+    },
     "/decisions/:decisionId/citations": { GET: listDecisionCitations },
     "/decisions/:decisionId/citations/summary": {
       GET: summarizeDecisionCitations,

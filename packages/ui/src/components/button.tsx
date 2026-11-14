@@ -31,6 +31,7 @@ import {
 } from "./button.shared";
 import { Loader } from "./loader";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * Disabled styling for a button that is only `aria-disabled`.
@@ -254,13 +255,12 @@ const BUTTON_SIZE_CONTENT = {
  * A button never grows past its container (`max-w-full` on every variant).
  * A one-line text label is cut to fit with an ellipsis; the button's
  * accessible name keeps the whole text, and `tooltip` can show it. The label
- * is a plain span, not a `TruncatedText`: a tooltip root in every button's
+ * is a `TruncatedText` without its own hint: a tooltip root in every button's
  * label would cost every screen with many buttons. `layout="wrap"` lets a
  * label take several lines instead. An inline button is a word in a sentence
  * and a plain button lays out its own content, so neither has a one-line
  * label to cut.
  */
-const BUTTON_LABEL_CLASS = "block min-w-0 truncate";
 
 const cutsLabel = ({
   layout,
@@ -294,13 +294,13 @@ const containedLabel = (children: ReactNode): ReactNode => {
   const closeRun = () => {
     if (run.length > 0) {
       parts.push(
-        <span
-          className={BUTTON_LABEL_CLASS}
+        <TruncatedText
           data-slot="button-label"
+          hint={false}
           key={`label:${String(parts.length)}`}
         >
           {run}
-        </span>,
+        </TruncatedText>,
       );
       run = [];
     }
@@ -507,11 +507,23 @@ function buttonContent({
 }
 
 /**
- * The run is the visible target: underlined like a link, ringed while its
- * button has keyboard focus (per line, so a wrapped run rings each line).
+ * The run is the visible target, ringed while its button has keyboard focus
+ * (per line, so a wrapped run rings each line).
  */
 const BUTTON_TEXT_RUN_CLASS =
-  "has-focus-visible:ring-ring cursor-pointer rounded-xs underline underline-offset-2 box-decoration-clone select-text hover:decoration-2 has-focus-visible:ring-2 has-disabled:cursor-not-allowed has-disabled:opacity-64";
+  "has-focus-visible:ring-ring cursor-pointer rounded-xs box-decoration-clone select-text has-focus-visible:ring-2 has-disabled:cursor-not-allowed has-disabled:opacity-64";
+
+/**
+ * How a run shows it can be pressed: underlined like a link, or `plain`, by
+ * what it holds (a claim's text mark, which draws its own line), as a plain
+ * Button's look is its content.
+ */
+const BUTTON_TEXT_RUN_VARIANT_CLASS = {
+  link: "underline underline-offset-2 hover:decoration-2",
+  plain: "",
+} as const;
+
+type ButtonTextRunVariant = keyof typeof BUTTON_TEXT_RUN_VARIANT_CLASS;
 
 // Visually hidden but focusable: the run, not this box, shows the focus.
 const BUTTON_TEXT_RUN_TARGET_CLASS =
@@ -537,6 +549,8 @@ type ButtonTextRunProps = Omit<
 > & {
   children: ReactNode;
   className?: string | undefined;
+  /** `link` unless the run holds a text mark that draws its own line. */
+  variant?: ButtonTextRunVariant | undefined;
 };
 
 /**
@@ -552,10 +566,15 @@ const ButtonTextRun = ({
   children,
   className,
   disabled,
+  variant = "link",
   ...props
 }: ButtonTextRunProps) => (
   <label
-    className={cn(BUTTON_TEXT_RUN_CLASS, className)}
+    className={cn(
+      BUTTON_TEXT_RUN_CLASS,
+      BUTTON_TEXT_RUN_VARIANT_CLASS[variant],
+      className,
+    )}
     data-slot="button-text-run"
   >
     {/* Pinned after the spread: a value typed wider than the props could

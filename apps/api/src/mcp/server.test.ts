@@ -1461,6 +1461,8 @@ describe("handleMcpHttpRequest", () => {
         "read_statute",
         "read_statute_provisions",
         "read_provision_history",
+        "search_guidance",
+        "read_guidance",
         "resolve_case_law_decision",
         "resolve_law_citation",
       ]);

@@ -14,12 +14,12 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/redis-config",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/redis-config"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/redis-config",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/redis-config"
   },
   "dependencies": {
     "@stll/errors": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

@@ -5,5 +5,7 @@
   "noMatter": "بلا قضية",
   "noDescription": "بلا وصف",
   "more": "{count, plural, zero {لا مؤقتات أخرى} one {مؤقت آخر} two {مؤقتان آخران} few {# مؤقتات أخرى} many {# مؤقتًا آخر} other {# مؤقت آخر}}",
-  "startedElsewhere": "بدأ مؤقت على جهاز آخر"
+  "startedElsewhere": "بدأ مؤقت على جهاز آخر",
+  "pause": "إيقاف مؤقت",
+  "resume": "استئناف"
 }

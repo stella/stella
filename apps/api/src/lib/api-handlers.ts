@@ -4,10 +4,15 @@ import { panic, Result, UnhandledException } from "better-result";
 import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import {
+  parseResourceMutationId,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
 import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 import type { FailureGrade } from "@stll/errors";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -58,6 +63,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestAbortRefusal } from "@/api/lib/errors/request-abort";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -297,9 +303,15 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `organization_export`: starting or downloading a whole-organization data
+ *   export; a person performs it in the app, never an agent, because it hands
+ *   over the firm's privileged material in one action.
  * - `native_device`: a native app registering the device it runs on (push
  *   alert delivery). Only the signed-in app holds the device token; an agent
  *   that could register one could route a person's alerts elsewhere.
+ * - `agent_autonomy_ceiling`: an organization's limit on how much an agent
+ *   may do without asking. An agent that could change it could raise its
+ *   own limit, so only an administrator in the app sets it.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -324,7 +336,9 @@ type McpInternalReason =
   | "native_tool_ui"
   | "billing_ui"
   | "compound_consent"
-  | "native_device";
+  | "native_device"
+  | "organization_export"
+  | "agent_autonomy_ceiling";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -408,10 +422,9 @@ export type UsageMeteringConfig = {
  * (`v.pipe(v.string(), v.description("..."))`), which the same exporter carries
  * into the catalog's `inputSchema`.
  *
- * Optional only until the remaining gaps are closed. Every capability without
- * one is listed by id in `apps/api/capability-description-ledger.json`; a new
- * capability may not join that list, and authoring prose means deleting its
- * line in the same change (see apps/api/scripts/capability-description-guard.ts).
+ * Optional in the type, required by
+ * apps/api/scripts/capability-description-guard.ts, which fails a capability
+ * without one.
  */
 type CapabilityDescription = {
   description?: string;
@@ -1057,6 +1070,7 @@ const runSafeHandlerInDeliveryScope = async <
     const error = result.error;
 
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1129,6 +1143,7 @@ const runSafeHandlerInDeliveryScope = async <
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
     const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
@@ -1780,14 +1795,22 @@ const createSafeScopedHandler = <
           config.realtime.scope !== "none" &&
           isSuccessfulHandlerResult(result)
         ) {
-          const announcement = Result.try(() =>
+          const mutationId = parseResourceMutationId(
+            ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
+          );
+          const announcement = await Result.tryPromise(async () => {
+            const mutationDigest =
+              mutationId === undefined
+                ? undefined
+                : await resourceMutationDigest(mutationId);
             announce({
               realtime: config.realtime,
+              ...(mutationDigest === undefined ? {} : { mutationDigest }),
               result,
               organizationId: ctx.session.activeOrganizationId,
               workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
-            }),
-          );
+            });
+          });
           if (Result.isError(announcement)) {
             observeFailure(announcement.error, {
               sink: REALTIME_ANNOUNCEMENT_FAILURE,

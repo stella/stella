@@ -33,6 +33,7 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /case/decisions/by-slug/:slug": "browse",
   "GET /case/decisions/:decisionId/summary": "browse",
   "GET /case/decisions/:decisionId": "browse",
+  "GET /case/decisions/:decisionId/anchor-redirects": "browse",
   "GET /case/decisions/:decisionId/citations": "browse",
   "GET /case/decisions/:decisionId/citations/summary": "browse",
   "GET /case/decisions/:decisionId/citations/leading": "browse",

@@ -3,18 +3,17 @@ import { useState } from "react";
 import {
   type QueryClient,
   useQuery,
-  useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import {
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 
@@ -40,7 +39,6 @@ import {
   workspaceOptions,
   workspacesRouteOptions,
 } from "@/lib/workspaces/queries";
-import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
@@ -52,8 +50,6 @@ import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-
 import { loadWorkspaceRouteQueries } from "@/routes/_protected.workspaces/$workspaceId/-route-loader.logic";
 
 const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
-const ACTIVITY_INVALIDATION_DEBOUNCE_MS = 1000;
-const ACTIVITY_INVALIDATION_MAX_WAIT_MS = 5000;
 
 const extractionPreviewKey = (entityId: string, propertyId: string) =>
   `${entityId}:${propertyId}`;
@@ -155,7 +151,10 @@ const knownMatterStatus = (
   return (
     queryClient.getQueryData(workspaceOptions(workspaceId).queryKey)?.status ??
     queryClient
-      .getQueryData(workspacesRouteOptions(organizationId, "archived").queryKey)
+      .getQueryData(
+        workspacesRouteOptions(organizationId, WORKSPACE_STATUS.archived)
+          .queryKey,
+      )
       ?.workspaces.find(isThisMatter)?.status ??
     queryClient
       .getQueryData(workspacesRouteOptions(organizationId).queryKey)
@@ -218,7 +217,6 @@ function ActiveMatterRoute() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
-  const queryClient = useQueryClient();
   const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
   const liveWorkspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
@@ -228,26 +226,12 @@ function ActiveMatterRoute() {
   const [previewClearTimers] = useState(
     () => new Map<string, ReturnType<typeof setTimeout>>(),
   );
-  const invalidateActivity = useDebouncedCallback(
-    (workspaceIdToInvalidate: string) => {
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overviewActivityAll(workspaceIdToInvalidate),
-        }),
-        "workspaces.invalidate",
-      );
-    },
-    ACTIVITY_INVALIDATION_DEBOUNCE_MS,
-    { maxWait: ACTIVITY_INVALIDATION_MAX_WAIT_MS },
-  );
-
   const handleWorkspaceSSEEvent = (event: WorkspaceRealtimeEvent) => {
     switch (event.type) {
       case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
       case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
       case REALTIME_EVENT_TYPE.RESOURCES_CHANGED:
       case REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED:
-        invalidateActivity(workspaceId);
         return;
       case REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE:
         return;
@@ -341,7 +325,6 @@ function ActiveMatterRoute() {
         <RouteDocumentTitle routeId={Route.id} title={liveWorkspace.name} />
       )}
       <WorkspaceLifecycleCleanup
-        flushActivityInvalidation={invalidateActivity.flush}
         key={workspaceId}
         previewClearTimers={previewClearTimers}
       />
@@ -355,14 +338,11 @@ function ActiveMatterRoute() {
 }
 
 const WorkspaceLifecycleCleanup = ({
-  flushActivityInvalidation,
   previewClearTimers,
 }: {
-  flushActivityInvalidation: () => void;
   previewClearTimers: Map<string, ReturnType<typeof setTimeout>>;
 }) => {
   useMountEffect(() => () => {
-    flushActivityInvalidation();
     for (const timer of previewClearTimers.values()) {
       clearTimeout(timer);
     }

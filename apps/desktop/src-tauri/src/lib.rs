@@ -1,5 +1,6 @@
 mod accessibility_guide;
 mod account;
+mod account_switch;
 mod activity;
 mod activity_calls;
 mod activity_commands;
@@ -39,12 +40,19 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
-#[cfg(dictation)]
 mod dictation_audio;
+mod dictation_cleanup;
+mod dictation_cloud;
+mod dictation_context;
 #[cfg(dictation)]
 mod dictation_engine;
+mod dictation_focus;
+mod dictation_format;
 #[cfg(dictation)]
 mod dictation_input;
+mod dictation_language;
+mod dictation_live;
+mod dictation_pauses;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -65,6 +73,10 @@ mod http_client;
 mod i18n;
 mod idle_time;
 mod keychain;
+mod local_linked_folder_commands;
+mod local_linked_folders;
+mod local_skill_folder_commands;
+mod local_skill_folders;
 mod local_store;
 mod local_window;
 mod logging;
@@ -97,6 +109,7 @@ macro_rules! generate_stella_handler {
   };
 }
 
+use crate::logging::best_effort;
 use clipboard::{ClipboardAppState, ClipboardManager};
 use commands::AppState;
 use session_manager::SessionManager;
@@ -112,6 +125,21 @@ use tokio::sync::Mutex;
 pub fn run_codex_token_helper() -> Option<i32> {
   let args = std::env::args_os().collect::<Vec<_>>();
   codex_managed_token_broker::run_token_helper(&args)
+}
+
+/// Runs the development stand-in computer (`examples/runner_stand_in.rs`)
+/// until it is stopped, and returns its exit code; 2 off Unix, where it
+/// does not run.
+#[cfg(feature = "dev-runner-stand-in")]
+pub fn run_runner_stand_in() -> i32 {
+  #[cfg(unix)]
+  {
+    desktop_runner::stand_in::main()
+  }
+  #[cfg(not(unix))]
+  {
+    2
+  }
 }
 
 /// Runs the speech worker when the process was started as one, and returns
@@ -186,6 +214,7 @@ pub fn run() {
     ))
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_deep_link::init())
+    .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_opener::init())
@@ -297,6 +326,12 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::Dictation => {
               dictation::apply_feature_gate(app, enabled);
+              if enabled {
+                onboarding::feature_enabled(app, feature);
+              }
+            }
+            feature_gate::DesktopFeature::DictationCloud => {
+              dictation::apply_cloud_gate(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
@@ -370,10 +405,13 @@ pub fn run() {
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
-                  let _ = handle.notification().builder()
-                    .title(i18n::t("tray.activity"))
-                    .body(i18n::t("activity.errorUpdate"))
-                    .show();
+                  best_effort(
+                    handle.notification().builder()
+                      .title(i18n::t("tray.activity"))
+                      .body(i18n::t("activity.errorUpdate"))
+                      .show(),
+                    "activity recording failure was not notified",
+                  );
                   activity_window::show(&handle);
                 }
               }
@@ -613,16 +651,19 @@ impl PreferencesTab {
 pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
-  let _ = handle.show();
+  best_effort(handle.show(), "app could not be shown");
 
   let tab = tab.id();
   if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
-    let _ = window.show();
-    let _ = window.set_focus();
-    let _ = handle.emit_to(
-      SETTINGS_WINDOW_LABEL,
-      "activate-tab",
-      serde_json::json!({ "tab": tab }),
+    best_effort(window.show(), "settings window could not be shown");
+    best_effort(window.set_focus(), "settings window could not be focused");
+    best_effort(
+      handle.emit_to(
+        SETTINGS_WINDOW_LABEL,
+        "activate-tab",
+        serde_json::json!({ "tab": tab }),
+      ),
+      "settings tab change was not announced",
     );
     return;
   }
@@ -659,10 +700,13 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
       let handle = handle.clone();
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ = handle.emit_to(
-          SETTINGS_WINDOW_LABEL,
-          "activate-tab",
-          serde_json::json!({ "tab": tab }),
+        best_effort(
+          handle.emit_to(
+            SETTINGS_WINDOW_LABEL,
+            "activate-tab",
+            serde_json::json!({ "tab": tab }),
+          ),
+          "tab activation was not announced",
         );
       });
     }

@@ -31,6 +31,7 @@ import { applyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import createSkillComment from "@/api/handlers/skills/comments/create";
 import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
+import draftSkillFromChat from "@/api/handlers/skills/from-chat/draft";
 import createProposalFromComments from "@/api/handlers/skills/proposals/from-comments/create";
 import createSkillResource from "@/api/handlers/skills/resources/create";
 import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
@@ -177,7 +178,13 @@ const boundaryOf = (run: TaskRun) =>
 /** A handler context for the organization's owner. */
 const handlerContext = (
   run: TaskRun,
-  fields: { body?: unknown; params?: unknown; query?: unknown },
+  fields: {
+    body?: unknown;
+    params?: unknown;
+    query?: unknown;
+    /** For a builder that anonymizes through the organization's catalogs. */
+    scopedDb?: ScopedDb;
+  },
 ) =>
   createTestHandlerContext({
     scopedDb: NO_DB,
@@ -461,6 +468,28 @@ const TASK_REQUESTS = {
       );
     },
   },
+  "skill-from-chat": {
+    file: "handlers/skills/from-chat/draft.ts",
+    task: "short-text",
+    settings: { caching: true, sendMode: false },
+    run: async (run) => {
+      await draftSkillFromChat.handler(
+        asTestRaw<Parameters<typeof draftSkillFromChat.handler>[0]>(
+          handlerContext(run, {
+            body: { threadId: await seedThread() },
+            scopedDb: asTestRaw<ScopedDb>(
+              createScopedDb(
+                testDb,
+                [ids.wsA1, ids.wsA2],
+                ids.orgA,
+                ids.userA1,
+              ),
+            ),
+          }),
+        ),
+      );
+    },
+  },
   "skill-proposal": {
     file: "handlers/skills/proposals/from-comments/create.ts",
     task: "short-text",
@@ -559,6 +588,7 @@ const ROLE_REQUEST_NAMES = Object.keys(TASK_REQUESTS).filter(
  * fails the scan below.
  */
 const OUTSIDE_THE_CHAT_SURFACE: Readonly<Record<string, string>> = {
+  "handlers/ai/email-generation.ts": "Outlook add-in email summary and reply",
   "handlers/ai-autocomplete/stream.ts": "editor autocomplete",
   "handlers/case-law/analysis/generate.ts": "case-law analysis",
   "handlers/case-law/analysis/significance-run.ts": "case-law analysis",

@@ -2,13 +2,18 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  approvalModeWithin,
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   chatLocalRunAnswersRefusal,
   type ChatLocalRunQuestion,
   chatLocalRunQuestionSchema,
   chatLocalRunQuestionsSchema,
+  isApprovalModeWithin,
 } from "./chat-run-target";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   desktopRunnerQuestionAnswersSchema,
 } from "./desktop-runner";
 
@@ -155,5 +160,47 @@ describe("local run question answers", () => {
         { ...passphrase, allowsFreeText: false },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("an organization's ceiling on local run approvals", () => {
+  test("orders the modes plan, ask, auto, full auto, and the default ceiling allows every mode", () => {
+    const allowed = (ceiling: (typeof DESKTOP_RUNNER_APPROVAL_MODES)[number]) =>
+      DESKTOP_RUNNER_APPROVAL_MODES.filter((mode) =>
+        isApprovalModeWithin(mode, ceiling),
+      );
+    expect(allowed("ask")).toEqual(["plan", "ask"]);
+    expect(allowed("auto")).toEqual(["plan", "ask", "auto"]);
+    expect(allowed("full_auto")).toEqual(["plan", "ask", "auto", "full_auto"]);
+    expect(allowed(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS)).toEqual([
+      ...DESKTOP_RUNNER_APPROVAL_MODES,
+    ]);
+  });
+
+  test("a mode within the ceiling is kept, one above it falls to the highest allowed mode the computer offers", () => {
+    for (const mode of DESKTOP_RUNNER_APPROVAL_MODES) {
+      for (const ceiling of DESKTOP_RUNNER_APPROVAL_MODES) {
+        const chosen = approvalModeWithin({ mode, ceiling });
+        expect(isApprovalModeWithin(chosen, ceiling)).toBe(true);
+        expect(chosen).toBe(
+          isApprovalModeWithin(mode, ceiling) ? mode : ceiling,
+        );
+      }
+    }
+    // A computer without the in-between mode falls back past it.
+    expect(
+      approvalModeWithin({
+        mode: "full_auto",
+        ceiling: "auto",
+        offered: ["ask", "full_auto"],
+      }),
+    ).toBe(DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE);
+    expect(
+      approvalModeWithin({
+        mode: "full_auto",
+        ceiling: "auto",
+        offered: ["ask", "auto", "full_auto"],
+      }),
+    ).toBe("auto");
   });
 });
