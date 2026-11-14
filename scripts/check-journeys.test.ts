@@ -139,6 +139,9 @@ type Scenario = {
   probeRunSeconds?: string;
   coverage?: { status: string; ageSeconds: number };
   nowEpoch?: number;
+  /** The clock once the coverage call has been answered; `nowEpoch` is the
+   *  clock before it. */
+  nowEpochAfterCoverage?: number;
   busyWindowsFile?: string;
 };
 
@@ -487,6 +490,12 @@ const run = async ({
           return new Response(null, { status: 400 });
         }
         calls.push({ name: body.params.name, args: body.params.arguments });
+        if (
+          body.params.name === "case_law_coverage" &&
+          scenario.nowEpochAfterCoverage !== undefined
+        ) {
+          await Bun.write(path.join(work, "coverage-served"), "");
+        }
         result = toolResult({
           scenario,
           args: body.params.arguments,
@@ -553,6 +562,14 @@ cat "$response"
 rm -f "$response"
 `,
     );
+    // A clock that moves once the coverage call has been answered.
+    if (scenario.nowEpochAfterCoverage !== undefined) {
+      await Bun.write(
+        path.join(work, "date"),
+        `#!/usr/bin/env bash\nif [[ "$*" == "+%s" ]]; then if [[ -e "$JOURNEY_TEST_COVERAGE_SERVED" ]]; then printf '%s\\n' "$JOURNEY_TEST_CLOCK_AFTER"; else printf '%s\\n' "$JOURNEY_TEST_CLOCK_BEFORE"; fi; exit 0; fi\nexec /bin/date "$@"\n`,
+      );
+      await chmod(path.join(work, "date"), 0o755);
+    }
     await Promise.all(
       ["npm", "stella", "gh", "git"].map(async (file) => {
         await chmod(path.join(work, file), 0o755);
@@ -582,9 +599,24 @@ rm -f "$response"
           JOURNEY_PROBE_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
           JOURNEY_PROBE_RUN_SECONDS: scenario.probeRunSeconds ?? "240",
           // Outside the busy window unless a test moves the clock into it.
-          JOURNEY_NOW_EPOCH: String(
-            scenario.nowEpoch ?? busyWindowStart - 3 * HOUR_SECONDS,
-          ),
+          ...(scenario.nowEpochAfterCoverage === undefined
+            ? {
+                JOURNEY_NOW_EPOCH: String(
+                  scenario.nowEpoch ?? busyWindowStart - 3 * HOUR_SECONDS,
+                ),
+              }
+            : {
+                // Unpinned, so the canary reads the moving clock above.
+                JOURNEY_NOW_EPOCH: "",
+                JOURNEY_TEST_CLOCK_BEFORE: String(scenario.nowEpoch),
+                JOURNEY_TEST_CLOCK_AFTER: String(
+                  scenario.nowEpochAfterCoverage,
+                ),
+                JOURNEY_TEST_COVERAGE_SERVED: path.join(
+                  work,
+                  "coverage-served",
+                ),
+              }),
           ...(scenario.busyWindowsFile
             ? { JOURNEY_BUSY_WINDOWS_FILE: scenario.busyWindowsFile }
             : {}),
@@ -908,6 +940,64 @@ describe("scheduled read journeys", () => {
           coverage: {
             status: "refresh_pending",
             ageSeconds: elapsed + MINUTE_SECONDS,
+          },
+        },
+      });
+      expect(result.exit).toBe(1);
+      fails(result.stdout);
+    });
+    test("grants no hold for a time zone the tz database lacks", async () => {
+      // Read as UTC, this window would be open at any hour of the run.
+      const dir = await mkdtemp(path.join(tmpdir(), "journey-windows-"));
+      const busyWindowsFile = path.join(dir, "busy-windows.json");
+      await Bun.write(
+        busyWindowsFile,
+        JSON.stringify([
+          { start: "00:00", end: "23:59", timeZone: "Invalid/Zone" },
+        ]),
+      );
+      const elapsed = 45 * MINUTE_SECONDS;
+      try {
+        const result = await run({
+          scenario: {
+            nowEpoch: busyWindowStart + elapsed,
+            busyWindowsFile,
+            coverage: {
+              status: "refresh_pending",
+              ageSeconds: elapsed + MINUTE_SECONDS,
+            },
+          },
+        });
+        expect(result.exit).toBe(1);
+        fails(result.stdout);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+    test("reads the window when the response arrives, not before the request", async () => {
+      // Before the call the hold is 25 minutes; when the answer arrives 30
+      // minutes later it is 55, so the 30-minute-old figures pass.
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowStart + 10 * MINUTE_SECONDS,
+          nowEpochAfterCoverage: busyWindowStart + 40 * MINUTE_SECONDS,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: 30 * MINUTE_SECONDS,
+          },
+        },
+      });
+      expect(result.exit).toBe(0);
+      passes(result.stdout);
+    });
+    test("fails a pending refresh whose answer arrives after the window closed", async () => {
+      const result = await run({
+        scenario: {
+          nowEpoch: busyWindowEnd - MINUTE_SECONDS,
+          nowEpochAfterCoverage: busyWindowEnd + MINUTE_SECONDS,
+          coverage: {
+            status: "refresh_pending",
+            ageSeconds: busyWindowEnd - busyWindowStart,
           },
         },
       });

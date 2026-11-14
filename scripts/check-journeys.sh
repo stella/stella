@@ -152,7 +152,10 @@ validate_payload() {
   if [[ -n "${3:-}" ]]; then
     reason=stale_result
     detail="payload freshness check: $3"
-    jq -e --argjson busy_hold_seconds "${busy_hold_seconds:-null}" "$3" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
+    # The window is read when the response is checked, not before the
+    # request, so a response that arrives after the window closed is held to
+    # the plain rule, on a retry as well.
+    jq -e --argjson busy_hold_seconds "$(coverage_busy_hold)" "$3" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
   fi
   reason=contract_error
 }
@@ -186,6 +189,13 @@ coverage_busy_hold() {
   while IFS= read -r window; do
     [[ -n "$window" ]] || continue
     time_zone="$(jq -r '.timeZone' <<<"$window")"
+    # strflocaltime reads an unknown zone as UTC, which would open the window
+    # at another hour: a zone without a tz database entry invalidates the
+    # file, so it grants no hold.
+    if [[ ! "$time_zone" =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$ || ! -f "${TZDIR:-/usr/share/zoneinfo}/$time_zone" ]]; then
+      printf null
+      return
+    fi
     local_time="$(TZ="$time_zone" jq -nr --argjson now "$now" '$now | strflocaltime("%H:%M:%S")')" || continue
     hold="$(jq -n --argjson window "$window" --arg local_time "$local_time" --argjson margin "$busy_hold_margin_seconds" --argjson hold "$hold" '
       def seconds: split(":") | map(tonumber) | .[0] * 3600 + .[1] * 60 + (.[2] // 0);
@@ -430,7 +440,6 @@ else
     probe mcp_search mcp_tool search_case_law "$case_args" "$case_shape" "$case_nonempty"
     probe mcp_read mcp_tool read_case_law_decision "$read_args" "$read_shape" "$read_nonempty"
     probe mcp_legislation mcp_tool search_legislation '{"query":"smlouva","country":"CZE","limit":1}' "$statute_shape" "$statute_nonempty"
-    busy_hold_seconds="$(coverage_busy_hold)"
     probe mcp_coverage mcp_tool case_law_coverage '{}' "$coverage_shape" "$coverage_nonempty" "$coverage_current"
   fi
 fi
