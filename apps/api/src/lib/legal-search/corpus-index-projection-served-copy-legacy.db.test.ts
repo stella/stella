@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
@@ -12,6 +12,7 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { lockPendingCorpusProjectionCleanups } from "@/api/lib/db/aggregate-lock";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -740,7 +741,8 @@ describe("cleanup of revisions the previous release left served", () => {
           );
           // A rollback after the update means the guard admitted it.
           const admitted =
-            accepted.isErr() && String(accepted.error).includes("Rollback");
+            accepted.isErr() &&
+            accepted.error.cause instanceof TransactionRollbackError;
           expect({ admitted }).toEqual({ admitted: predicate === true });
           expect(predicate).toBe(
             !claimedBefore &&
@@ -751,5 +753,54 @@ describe("cleanup of revisions the previous release left served", () => {
       ),
       { numRuns: 24 },
     );
+  });
+});
+
+describe("the cleanup claim's row lock", () => {
+  beforeEach(async () => {
+    await installProjectionDdl(true);
+  });
+
+  const lockDue = async (revision: string) =>
+    await db.transaction(
+      async (tx) =>
+        await lockPendingCorpusProjectionCleanups(asTestRaw<Transaction>(tx), [
+          toSafeId<"corpusIndexProjectionIntent">(revision),
+        ]),
+    );
+
+  test("re-checks the fence and lease the unlocked page read", async () => {
+    // The page saw the row due; by the lock it was claimed and requeued with
+    // a later fence, or holds an unexpired lease. Neither may be claimed yet.
+    const { entityId, revision } = await servedEntity();
+    await changeDesired(entityId, 2, {
+      action: "upsert",
+      fingerprint: fingerprint(1),
+    });
+    await previousPrepare(entityId, revision);
+    expect(await lockDue(revision)).toHaveLength(1);
+
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET cleanup_not_before = clock_timestamp() + interval '1 hour'
+      WHERE id = ${revision}
+    `);
+    expect(await lockDue(revision)).toEqual([]);
+
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET cleanup_not_before = clock_timestamp() - interval '1 second',
+          lease_token = ${uuid()},
+          lease_expires_at = clock_timestamp() + interval '1 hour'
+      WHERE id = ${revision}
+    `);
+    expect(await lockDue(revision)).toEqual([]);
+
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET lease_expires_at = clock_timestamp() - interval '1 second'
+      WHERE id = ${revision}
+    `);
+    expect(await lockDue(revision)).toHaveLength(1);
   });
 });

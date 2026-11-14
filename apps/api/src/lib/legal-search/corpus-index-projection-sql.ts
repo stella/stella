@@ -140,6 +140,23 @@ export const corpusIndexProjectionRevisionIsRestorable = ({
   AND ${desiredAt} < ${revisionUpdatedAt}
 )`;
 
+/**
+ * One source of truth for "a queued cleanup may be claimed now": its fence has
+ * passed and no lease holds it. Shared by the claim's unlocked page and the row
+ * lock that follows it, because a row can leave the queue and return with a
+ * later fence in between, and the lock must not claim it early.
+ */
+export const corpusIndexProjectionCleanupIsDue = ({
+  cleanupNotBefore,
+  leaseExpiresAt,
+}: {
+  cleanupNotBefore: SQLWrapper;
+  leaseExpiresAt: SQLWrapper;
+}) => sql`(
+  ${cleanupNotBefore} <= clock_timestamp()
+  AND (${leaseExpiresAt} IS NULL OR ${leaseExpiresAt} <= clock_timestamp())
+)`;
+
 /** One source of truth for the partial append-epoch uniqueness boundary. */
 export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
   sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES)})`;

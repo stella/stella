@@ -63,6 +63,7 @@ import {
   judgeCorpusProjectionCleanupSettlement,
 } from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
 import {
+  corpusIndexProjectionCleanupIsDue,
   corpusIndexProjectionRevisionIsRestorable,
   corpusIndexProjectionStateServesRevision,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -250,11 +251,10 @@ export const corpusProjectionCleanupClaimPage = (
           ? undefined
           : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
         eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
-        sql`${corpusIndexProjectionIntents.cleanupNotBefore} <= clock_timestamp()`,
-        or(
-          isNull(corpusIndexProjectionIntents.leaseExpiresAt),
-          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
-        ),
+        corpusIndexProjectionCleanupIsDue({
+          cleanupNotBefore: corpusIndexProjectionIntents.cleanupNotBefore,
+          leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
+        }),
       ),
     )
     .orderBy(

@@ -76,6 +76,7 @@ import {
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   corpusIndexProjectionAppendIsUnblocked,
+  corpusIndexProjectionCleanupIsDue,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionNeedsWork,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -3701,7 +3702,12 @@ export const lockCorpusProjectionServingStatesForCleanup = async (
     .limit(entityIds.length)
     .for("update", { skipLocked: true });
 
-/** Cleanup candidates still pending, after their states, skipping held rows. */
+/**
+ * Cleanup candidates still pending and still due, after their states,
+ * skipping held rows. The page that found them was read without locks, so a
+ * row may have been claimed and requeued with a later fence since; such a row
+ * stays queued for a later claim.
+ */
 export const lockPendingCorpusProjectionCleanups = async (
   tx: Transaction,
   intentIds: readonly SafeId<"corpusIndexProjectionIntent">[],
@@ -3713,6 +3719,10 @@ export const lockPendingCorpusProjectionCleanups = async (
       and(
         inArray(corpusIndexProjectionIntents.id, [...intentIds]),
         eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
+        corpusIndexProjectionCleanupIsDue({
+          cleanupNotBefore: corpusIndexProjectionIntents.cleanupNotBefore,
+          leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
+        }),
       ),
     )
     .orderBy(asc(corpusIndexProjectionIntents.id))
