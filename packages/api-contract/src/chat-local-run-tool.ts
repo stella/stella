@@ -5,8 +5,8 @@ import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output"
 
 /**
  * A step a coding agent took itself on the member's computer (a command, a
- * file it read or changed, a search, a plan), as a chat turn keeps it. Only
- * what the step was about leaves the computer: a command line, file names, a
+ * file it read or changed, a search, a plan), as a chat turn keeps it. A call
+ * holds only what the step was about: a command line, file names, a
  * search query or web address, the titles of a plan, a plan the agent
  * proposes for the member to approve, in its own words, the short description
  * and agent type of a subagent it started, and the name of an image it
@@ -14,6 +14,9 @@ import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output"
  * code, the files a change touched. A command's output, a file's contents, a
  * diff, search matches, a fetched page, a subagent's prompt, messages and
  * report, and an image's bytes are never part of the call or its result.
+ * What a step produced that the member may open (a command's output, a diff,
+ * a subagent's conversation, a viewed image) is stored beside the call
+ * instead (`chat-local-run-step-content`).
  *
  * A call a subagent made, a native step or a tool of a connected server,
  * names the subagent's own step, so chat shows it under that step. The link
