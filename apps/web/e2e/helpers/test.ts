@@ -15,6 +15,14 @@ export type BrowserErrorCollector = {
    * unrelated crash) still fails the spec.
    */
   expectCaptured: (pattern: RegExp) => void;
+  /**
+   * Declare a console error this spec emits on some runs only, for a known
+   * cause outside what the spec exercises. Matching entries are excluded from
+   * the final empty-collection assertion and none has to be observed. Prefer
+   * `expectCaptured` whenever the error is deterministic: this one cannot
+   * tell when the cause is gone, so each call names it and what removes it.
+   */
+  tolerate: (pattern: RegExp) => void;
   trackPage: (page: Page) => () => void;
 };
 
@@ -86,6 +94,11 @@ export const createBrowserErrorCollector = (
 } => {
   const errors: string[] = [];
   const expectedPatterns: RegExp[] = [];
+  const toleratedPatterns: RegExp[] = [];
+  // A global or sticky RegExp carries `lastIndex` between `test()` calls, so
+  // a later matching pass could miss an entry an earlier one matched.
+  const stateless = (pattern: RegExp) =>
+    new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, ""));
 
   return {
     add: (message) => {
@@ -93,18 +106,18 @@ export const createBrowserErrorCollector = (
     },
     entries: () => [...errors],
     expectCaptured: (pattern) => {
-      // A global or sticky RegExp carries `lastIndex` between `test()`
-      // calls, so the second matching pass below could miss an entry the
-      // first pass matched. Store a stateless copy.
-      expectedPatterns.push(
-        new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, "")),
-      );
+      expectedPatterns.push(stateless(pattern));
+    },
+    tolerate: (pattern) => {
+      toleratedPatterns.push(stateless(pattern));
     },
     assertEmpty: (label) => {
       const collected = errors.splice(0);
       const patterns = expectedPatterns.splice(0);
+      const tolerated = toleratedPatterns.splice(0);
       const unmatched = collected.filter(
-        (entry) => !patterns.some((pattern) => pattern.test(entry)),
+        (entry) =>
+          ![...patterns, ...tolerated].some((pattern) => pattern.test(entry)),
       );
       const unobserved = patterns.filter(
         (pattern) => !collected.some((entry) => pattern.test(entry)),
