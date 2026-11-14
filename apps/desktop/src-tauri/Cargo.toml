@@ -9,6 +9,12 @@ license = "Apache-2.0"
 name = "local_file_creation_guard"
 required-features = ["local-file-guard-probe"]
 
+# The development stand-in computer `bun run agent:up -- --local-runner`
+# starts; the feature refuses a release build.
+[[example]]
+name = "runner_stand_in"
+required-features = ["dev-runner-stand-in"]
+
 [lib]
 name = "stella_desktop_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -29,6 +35,7 @@ filter_map_next = "warn"
 flat_map_option = "warn"
 implicit_clone = "warn"
 inefficient_to_string = "warn"
+let_underscore_must_use = "deny"
 manual_is_variant_and = "warn"
 manual_let_else = "warn"
 map_err_ignore = "deny"
@@ -86,6 +93,7 @@ tauri = { version = "2", features = [
 tauri-plugin-autostart = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
@@ -125,6 +133,12 @@ reqwest = { version = "0.13", features = [
   "query",
   "stream",
 ] }
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+  "std",
+  "tls12",
+] }
+rustls-platform-verifier = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"
@@ -132,6 +146,12 @@ sha2 = "0.11"
 tar = { version = "0.4", default-features = false }
 stella-desktop-signing-core = { path = "crates/signing-core", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
+# `__rustls-tls` takes the client configuration the runner builds with the
+# platform verifier, instead of a second root store.
+tokio-tungstenite = { version = "0.30", default-features = false, features = [
+  "connect",
+  "__rustls-tls",
+] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
@@ -139,7 +159,7 @@ zeroize = "1"
 zip = { version = "9.0.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "=1.1.4", features = ["fs", "process"] }
+rustix = { version = "=1.1.6", features = ["fs", "process"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1", features = [
@@ -191,6 +211,7 @@ winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
 [features]
 allocation-tests = []
+dev-runner-stand-in = []
 local-file-guard-probe = []
 
 [dev-dependencies]

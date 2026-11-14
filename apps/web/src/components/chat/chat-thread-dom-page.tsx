@@ -12,6 +12,7 @@ import { IntlProvider } from "use-intl";
 
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
@@ -164,34 +165,41 @@ const ChatThreadDomPage = ({
           secretAvailabilityKey: session.secretAvailabilityKey,
         }}
       >
-        {renderComposer?.(session)}
-        <ChatThreadMessages
-          activitySession={session.activitySession}
-          approvalPendingMessageId={session.approvalPendingMessageId}
-          error={session.error}
-          hasOlderMessages={session.olderCursor !== null}
-          isGenerating={session.isGenerating}
-          isLoadingOlder={session.isLoadingOlder}
-          loadOlderError={session.loadOlderError}
-          messages={session.messages}
-          onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
-          onAskUserSubmit={session.handleAskUserSubmit}
-          onCreateDocumentResolve={session.handleCreateDocumentResolve}
-          onLoadOlder={session.loadOlder}
-          onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
-          onOpenCreatedDocument={session.handleOpenCreatedDocument}
-          onOpenPlaybook={session.handleOpenPlaybook}
-          onResend={session.resendLatestMessage}
-          queuedMessageActions={{
-            remove: session.removeQueuedMessage,
-            sendNow: session.sendQueuedMessageNow,
+        <ChatLocalRunQuestionContext
+          value={{
+            pause: session.localRunQuestion,
+            answer: session.answerLocalRunQuestion,
+            threadRef,
           }}
-          queuedMessages={session.queuedMessages}
-          showThinkingIndicator
-          streamdownComponents={session.streamdownComponents}
-          threadRef={threadRef}
-          userMessageEdit={userMessageEdit}
-        />
+        >
+          {renderComposer?.(session)}
+          <ChatThreadMessages
+            activitySession={session.activitySession}
+            approvalPendingMessageId={session.approvalPendingMessageId}
+            error={session.error}
+            hasOlderMessages={session.olderCursor !== null}
+            isGenerating={session.isGenerating}
+            isLoadingOlder={session.isLoadingOlder}
+            loadOlderError={session.loadOlderError}
+            messages={session.messages}
+            onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
+            onAskUserSubmit={session.handleAskUserSubmit}
+            onCreateDocumentResolve={session.handleCreateDocumentResolve}
+            onLoadOlder={session.loadOlder}
+            onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
+            onOpenCreatedDocument={session.handleOpenCreatedDocument}
+            onOpenPlaybook={session.handleOpenPlaybook}
+            onResend={session.resendLatestMessage}
+            queuedMessageActions={{
+              remove: session.removeQueuedMessage,
+              sendNow: session.sendQueuedMessageNow,
+            }}
+            queuedMessages={session.queuedMessages}
+            streamdownComponents={session.streamdownComponents}
+            threadRef={threadRef}
+            userMessageEdit={userMessageEdit}
+          />
+        </ChatLocalRunQuestionContext>
       </ChatApprovalContext>
     </ChatMattersContext>
   );

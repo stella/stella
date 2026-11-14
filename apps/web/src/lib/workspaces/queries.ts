@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
@@ -9,6 +11,7 @@ import {
   WORKSPACE_NAVIGATION_STATUS_SCOPE,
 } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import type { MatterListStatus } from "@/lib/workspaces/archived-matters.logic";
 import {
   type MatterActivityFilters,
   toMatterActivityQuery,
@@ -143,10 +146,14 @@ export const overviewActivityActorsOptions = (
 
 const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;
 
-const readWorkspaces = async (signal?: AbortSignal) => {
-  const response = await api.workspaces.get(
-    signal ? { fetch: { signal } } : {},
-  );
+const readWorkspaces = async (
+  signal?: AbortSignal,
+  status: MatterListStatus = WORKSPACE_STATUS.active,
+) => {
+  const response = await api.workspaces.get({
+    query: { status },
+    ...(signal ? { fetch: { signal } } : {}),
+  });
 
   return unwrapApiResponse(response);
 };
@@ -161,10 +168,16 @@ export const workspacesOptions = (activeOrganizationId: string) =>
     refetchOnMount: "always",
   });
 
-export const workspacesRouteOptions = (activeOrganizationId: string) =>
+export const workspacesRouteOptions = (
+  activeOrganizationId: string,
+  status: MatterListStatus = WORKSPACE_STATUS.active,
+) =>
   queryOptions({
-    queryKey: workspacesKeys.list(activeOrganizationId),
-    queryFn: async ({ signal }) => await readWorkspaces(signal),
+    queryKey:
+      status === WORKSPACE_STATUS.active
+        ? workspacesKeys.list(activeOrganizationId)
+        : [...workspacesKeys.list(activeOrganizationId), status],
+    queryFn: async ({ signal }) => await readWorkspaces(signal, status),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 

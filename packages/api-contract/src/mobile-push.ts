@@ -112,13 +112,16 @@ export type PushDeviceRemovalResponse = { removed: boolean };
 
 /**
  * The notifications that reach a phone: those that ask something of the
- * person (a mention, an approval, a task assigned to them). Exports, finished or failed runs and announcements stay in the
- * app's inbox, so a phone buzzes only when someone needs them.
+ * person (a mention, an approval, a task assigned to them, a chat they asked
+ * to hear about once their agent's usage limit reset). Exports, finished or
+ * failed runs and announcements stay in the app's inbox, so a phone buzzes
+ * only when someone needs them.
  */
 export const MOBILE_PUSH_KINDS = [
   NOTIFICATION_KIND.MENTION,
   NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
   NOTIFICATION_KIND.TASK_ASSIGNED,
+  NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET,
 ] as const satisfies readonly NotificationKind[];
 
 const MOBILE_PUSH_KIND_SET: ReadonlySet<NotificationKind> = new Set(

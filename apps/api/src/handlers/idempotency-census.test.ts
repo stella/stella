@@ -1,9 +1,16 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { collectIdempotentCreateRoutes } from "@stll/scripts/src/idempotent-create-routes";
+import {
+  type Expression,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { apiRoutes } from "@/api/api-routes";
@@ -44,6 +51,20 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/chat/browser-site-grants/:grantId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  // Setting a limit reminder again is a no-op and cancelling one removes
+  // whatever is set, so a repeat answers the current state.
+  "DELETE /v1/chat/threads/:threadId/limit-reminder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/chat/threads/:threadId/limit-reminder": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -53,6 +74,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "DELETE /v1/clauses/:clauseId/variants/:variantId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/contacts": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -84,6 +109,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/me/timer-activity-devices/:deviceId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/memories/:memoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -105,6 +134,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
       type: "non-replay",
       reason: "current-state",
     },
+  "DELETE /v1/organization-settings/correspondence/data-boxes/:boxId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/organization-settings/deepl": {
     type: "non-replay",
     reason: "current-state",
@@ -209,6 +242,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PATCH /v1/chat/threads/:threadId/pin-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PATCH /v1/chat/threads/:threadId/read-state": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PATCH /v1/chat/threads/:threadId/title": {
     type: "non-replay",
     reason: "current-state",
@@ -296,6 +337,18 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/ai-autocomplete/stream": {
     type: "non-replay",
     reason: "stream",
+  },
+  "POST /v1/ai/ask-email": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/ai/draft-email": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/ai/summarize": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "POST /v1/api-keys": {
     type: "non-replay",
@@ -406,6 +459,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/chat/threads/:threadId/mcp-apps/:toolCallId/call": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/chat/threads/:threadId/secrets/:toolCallId": {
     type: "non-replay",
     reason: "credential",
@@ -422,10 +479,16 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  // A repeat answers the turn's undo that is queued, sent or done.
+  "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/chat/tool-grants": {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/chat/browser-site-grants": { type: "replay" },
   "POST /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -453,6 +516,13 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/clauses/import": {
     type: "non-replay",
     reason: "external-effect",
+  },
+  // Each run screens the firm's records as they stand; a retained response
+  // could disclose matters the caller may no longer open.
+  "POST /v1/conflict-checks": { type: "non-replay", reason: "current-state" },
+  "POST /v1/conflict-checks/:checkId/decision": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "POST /v1/contacts/:contactId": {
     type: "non-replay",
@@ -490,6 +560,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/data-exports": { type: "replay" },
+  "POST /v1/data-exports/:exportId/download": { type: "replay" },
   "POST /v1/desktop-registry/grant": {
     type: "non-replay",
     reason: "current-state",
@@ -630,7 +702,15 @@ const ROOT_MUTATION_DISPOSITIONS = {
       type: "non-replay",
       reason: "current-state",
     },
+  "POST /v1/organization-settings/correspondence/data-boxes": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/deepl": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/local-runs": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -711,6 +791,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/search-history/import": {
     type: "non-replay",
     reason: "external-effect",
+  },
+  "POST /v1/search/case-law": {
+    type: "non-replay",
+    reason: "read",
   },
   "POST /v1/search/facets": {
     type: "non-replay",
@@ -983,6 +1067,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/chat/local-runners/:desktopId/folders/:linkId/approval": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/clause-categories": {
     type: "non-replay",
     reason: "authorization-in-handler",
@@ -1002,6 +1090,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "PUT /v1/client-invoices/:clientId": {
     type: "replay",
   },
+  "PUT /v1/conflict-checks/:checkId/matter/:workspaceId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/contacts": {
     type: "replay",
   },
@@ -1017,6 +1109,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "PUT /v1/me/push-devices": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/me/timer-activity-devices/:deviceId": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -1091,6 +1187,21 @@ const CREATE_MUTATION_DISPOSITIONS = {
     reason:
       "Money movement keeps its current payment transaction and is never replayed.",
   },
+  "src/handlers/lists/verifications/claim-rechecks/bulk/create.ts": {
+    type: "non-replay",
+    reason:
+      "Each claim's receipt is the request key recorded on its review event and checked under the claim's lock, so a repeat reports that claim replayed; the model calls run between two transactions, outside one scoped request receipt.",
+  },
+  "src/handlers/lists/verifications/claim-rechecks/create.ts": {
+    type: "non-replay",
+    reason:
+      "The re-check's own receipt is the request key recorded on its review event and checked under the claim's lock, so a repeat returns the first outcome; the model call runs between two transactions, outside one scoped request receipt.",
+  },
+  "src/handlers/sharepoint/imports/create.ts": {
+    type: "non-replay",
+    reason:
+      "Each file is re-read from SharePoint and converges on its stored content digest, so a repeat is a no-op without a receipt; the object writes and Graph reads sit outside a scoped replay receipt.",
+  },
 } as const satisfies Record<string, { type: "non-replay"; reason: string }>;
 
 const ROOT_MUTATION_DISPOSITIONS_ENTRIES = new Map<
@@ -1110,8 +1221,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "The source form resolves a live document version before creation, so a manual retry can submit a different version for the same user intent.",
   "src/handlers/properties/create.ts":
     "Property creation participates in upload task chains whose completion is outside this create operation.",
-  "src/handlers/tasks/create.ts":
-    "Task creation is followed by field writes, so the create response does not represent the completed task workflow.",
   "src/handlers/views/create.ts":
     "View selection and template workflows generate fresh caller IDs, so a create receipt cannot represent the complete selection intent.",
   "src/handlers/workspaces/create.ts":
@@ -1177,13 +1286,12 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Rotates an inbound address containing a generated credential that must not be retained in replay receipts.",
 } as const satisfies Record<string, string>;
 
-const parse = (source: string) =>
-  ts.createSourceFile("fixture.ts", source, ts.ScriptTarget.Latest, true);
+const parse = (source: string) => parseSource("fixture.ts", source).program;
 
-const walk = (node: ts.Node, visit: (node: ts.Node) => void) => {
-  visit(node);
-  ts.forEachChild(node, (child) => walk(child, visit));
-};
+const stringLiteralValue = (node: Node | null | undefined) =>
+  node?.type === "Literal" && typeof node.value === "string"
+    ? node.value
+    : undefined;
 
 const resolveImport = (file: string, specifier: string) => {
   if (specifier.startsWith("@/api/")) {
@@ -1202,22 +1310,21 @@ const collectCreateCapabilities = (source: string) => {
   const handlers = new Set<string>();
   walk(tree, (node) => {
     if (
-      !ts.isPropertyAssignment(node) ||
-      !ts.isStringLiteral(node.name) ||
-      !node.name.text.endsWith(".create")
+      node.type !== "Property" ||
+      node.kind !== "init" ||
+      node.method ||
+      node.computed ||
+      !stringLiteralValue(node.key)?.endsWith(".create")
     ) {
       return;
     }
-    walk(node.initializer, (child) => {
-      if (
-        !ts.isCallExpression(child) ||
-        child.expression.kind !== ts.SyntaxKind.ImportKeyword
-      ) {
+    walk(node.value, (child) => {
+      if (child.type !== "ImportExpression") {
         return;
       }
-      const target = child.arguments.at(0);
-      if (target && ts.isStringLiteral(target)) {
-        const resolved = resolveImport("", target.text);
+      const target = stringLiteralValue(child.source);
+      if (target !== undefined) {
+        const resolved = resolveImport("", target);
         if (resolved) {
           handlers.add(resolved);
         }
@@ -1227,62 +1334,74 @@ const collectCreateCapabilities = (source: string) => {
   return handlers;
 };
 
-const property = (object: ts.ObjectLiteralExpression, name: string) =>
+const property = (object: ObjectExpression, name: string) =>
   object.properties.find(
-    (entry): entry is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(entry) &&
-      (ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name)) &&
-      entry.name.text === name,
-  )?.initializer;
+    (entry): entry is ObjectProperty =>
+      entry.type === "Property" &&
+      entry.kind === "init" &&
+      !entry.method &&
+      !entry.shorthand &&
+      !entry.computed &&
+      (entry.key.type === "Identifier"
+        ? entry.key.name
+        : stringLiteralValue(entry.key)) === name,
+  )?.value;
+
+const unwrapExpression = (expression: Expression): Expression =>
+  expression.type === "TSSatisfiesExpression" ||
+  expression.type === "TSAsExpression" ||
+  expression.type === "ParenthesizedExpression"
+    ? unwrapExpression(expression.expression)
+    : expression;
 
 const hasReplayConfig = (source: string) => {
   const tree = parse(source);
-  const declarations = new Map<string, ts.Expression>();
+  const declarations = new Map<string, Expression>();
   walk(tree, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init
     ) {
-      declarations.set(node.name.text, node.initializer);
+      declarations.set(node.id.name, node.init);
     }
   });
   const resolve = (
-    expression: ts.Expression,
+    node: Node,
     seen = new Set<string>(),
-  ): ts.ObjectLiteralExpression | undefined => {
-    if (ts.isObjectLiteralExpression(expression)) {
-      return expression;
+  ): ObjectExpression | undefined => {
+    if (node.type === "ObjectExpression") {
+      return node;
     }
     if (
-      ts.isSatisfiesExpression(expression) ||
-      ts.isAsExpression(expression) ||
-      ts.isParenthesizedExpression(expression)
+      node.type === "TSSatisfiesExpression" ||
+      node.type === "TSAsExpression" ||
+      node.type === "ParenthesizedExpression"
     ) {
-      return resolve(expression.expression, seen);
+      return resolve(unwrapExpression(node), seen);
     }
-    if (!ts.isIdentifier(expression) || seen.has(expression.text)) {
+    if (node.type !== "Identifier" || seen.has(node.name)) {
       return undefined;
     }
-    seen.add(expression.text);
-    const initializer = declarations.get(expression.text);
+    seen.add(node.name);
+    const initializer = declarations.get(node.name);
     return initializer ? resolve(initializer, seen) : undefined;
   };
-  const nonJsonConstructs: ts.Node[] = [];
+  const nonJsonConstructs: Node[] = [];
   walk(tree, (node) => {
     if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      ["Response", "ReadableStream", "Blob", "File"].includes(
-        node.expression.text,
-      )
+      node.type === "NewExpression" &&
+      node.callee.type === "Identifier" &&
+      ["Response", "ReadableStream", "Blob", "File"].includes(node.callee.name)
     ) {
       nonJsonConstructs.push(node);
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "stream"
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier" &&
+      node.callee.property.name === "stream"
     ) {
       nonJsonConstructs.push(node);
     }
@@ -1290,9 +1409,9 @@ const hasReplayConfig = (source: string) => {
   const eligible: boolean[] = [];
   walk(tree, (node) => {
     if (
-      !ts.isCallExpression(node) ||
-      !ts.isIdentifier(node.expression) ||
-      !/^createSafe(?:Root|Session)?Handler$/u.test(node.expression.text)
+      node.type !== "CallExpression" ||
+      node.callee.type !== "Identifier" ||
+      !/^createSafe(?:Root|Session)?Handler$/u.test(node.callee.name)
     ) {
       return;
     }
@@ -1301,17 +1420,11 @@ const hasReplayConfig = (source: string) => {
     const idempotency = config ? property(config, "idempotency") : undefined;
     const replay = idempotency ? resolve(idempotency) : undefined;
     const type = replay ? property(replay, "type") : undefined;
-    const declaresReplay =
-      type !== undefined && ts.isStringLiteral(type) && type.text === "replay";
+    const declaresReplay = stringLiteralValue(type) === "replay";
     const mcpExpression = config ? property(config, "mcp") : undefined;
     const mcp = mcpExpression ? resolve(mcpExpression) : undefined;
     const reason = mcp ? property(mcp, "reason") : undefined;
-    if (
-      declaresReplay &&
-      reason !== undefined &&
-      ts.isStringLiteral(reason) &&
-      reason.text === "provider_secret"
-    ) {
+    if (declaresReplay && stringLiteralValue(reason) === "provider_secret") {
       throw new TypeError(
         "Credential-bearing handlers cannot retain replay receipts",
       );
@@ -1499,25 +1612,33 @@ const exceptionKeys = (source: string) => {
   let keys: string[] | undefined;
   walk(parse(source), (node) => {
     if (
-      !ts.isVariableDeclaration(node) ||
-      !ts.isIdentifier(node.name) ||
-      node.name.text !== "IDEMPOTENCY_EXCEPTIONS" ||
-      !node.initializer
+      node.type !== "VariableDeclarator" ||
+      node.id.type !== "Identifier" ||
+      node.id.name !== "IDEMPOTENCY_EXCEPTIONS" ||
+      !node.init
     ) {
       return;
     }
-    let object = node.initializer;
-    while (ts.isSatisfiesExpression(object) || ts.isAsExpression(object)) {
+    let object = node.init;
+    while (
+      object.type === "TSSatisfiesExpression" ||
+      object.type === "TSAsExpression"
+    ) {
       object = object.expression;
     }
-    if (!ts.isObjectLiteralExpression(object)) {
+    if (object.type !== "ObjectExpression") {
       return;
     }
-    keys = object.properties.flatMap((entry) =>
-      ts.isPropertyAssignment(entry) && ts.isStringLiteral(entry.name)
-        ? [entry.name.text]
-        : [],
-    );
+    keys = object.properties.flatMap((entry) => {
+      const key =
+        entry.type === "Property" &&
+        entry.kind === "init" &&
+        !entry.method &&
+        !entry.computed
+          ? stringLiteralValue(entry.key)
+          : undefined;
+      return key === undefined ? [] : [key];
+    });
   });
   return keys;
 };

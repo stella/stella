@@ -1,10 +1,9 @@
 import { useTranslations } from "use-intl";
 
-import { VIEW_SORTS_MAX } from "@stll/api-contract";
+import { PROPERTY_SORT_KINDS, VIEW_SORTS_MAX } from "@stll/api-contract";
 import { SortChips as WorkspaceSortChips } from "@stll/workspace-ui/sorts";
 
 import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
-import { PROPERTY_SORT_KINDS } from "@/components/workspaces/property-utils";
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
 import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 
@@ -28,12 +27,19 @@ export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => {
       }}
       maxSorts={VIEW_SORTS_MAX}
       onUpdate={onUpdate}
-      properties={properties.map((property) => ({
-        id: property.id,
-        name: displayName(property),
-        type: property.content.type,
-        sortKind: PROPERTY_SORT_KINDS[property.content.type],
-      }))}
+      properties={properties.flatMap((property) => {
+        const sortKind = PROPERTY_SORT_KINDS[property.content.type];
+        return sortKind === null
+          ? []
+          : [
+              {
+                id: property.id,
+                name: displayName(property),
+                type: property.content.type,
+                sortKind,
+              },
+            ];
+      })}
       sorts={sorts}
     />
   );

@@ -201,6 +201,49 @@ const ownedIconRestrictions = (
   });
 
 const RESTRICTED_IMPORT_RULES = {
+  "require-oauth-grant-admission": [
+    {
+      messageId: "requireOwner",
+      message:
+        "Raw OAuth resource verifiers belong to mcp/auth.ts; use verifyOAuthToken from mcp/auth for admitted token results.",
+      modules: ["@better-auth/oauth-provider/resource-client"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/api/src/mcp/auth.ts"],
+    },
+    {
+      messageId: "requireAdmittedVerifier",
+      message:
+        "The raw OAuth provider verifier is private to mcp/auth.ts; import verifyOAuthToken, which couples verification with grant admission.",
+      modules: ["apps/api/src/mcp/auth"],
+      restriction: {
+        type: "exports",
+        names: new Set(["getVerifyBearerToken"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [],
+    },
+    {
+      messageId: "requireJwtOwner",
+      message:
+        "OAuth access tokens must use the admitted verifier. Raw JWT verification is confined to the existing identity-assertion owners.",
+      modules: ["jose"],
+      restriction: {
+        type: "exports",
+        names: new Set(["jwtVerify"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/api/src/agent-auth/id-jag.ts",
+        "apps/api/src/lib/agent-auth-idjag.ts",
+        "apps/api/src/lib/business-registries/desktop/proof.ts",
+        "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts",
+      ],
+    },
+  ],
   "no-raw-property-assert": [
     {
       messageId: "rawPropertyAssert",
@@ -377,6 +420,26 @@ const RESTRICTED_IMPORT_RULES = {
   ],
   // Most effects are unnecessary; external-system sync goes through the
   // named wrappers so intent is explicit. See /conventions-use-effect.
+  // On iOS the native stack's bars, modals and sheets are UIKit views no app
+  // view rises above; one owner draws over every screen in the window layer
+  // above them. The scope (apps/mobile/src) is set by the rule's override in
+  // oxlint.config.ts.
+  "mobile-window-overlay-owner": [
+    {
+      messageId: "requireWindowOverlay",
+      message:
+        "Draw over every screen through WindowOverlay from " +
+        "'@/components/window-overlay', the one owner of the window layer " +
+        "above the native stack.",
+      modules: [packageWithSubpaths("react-native-screens")],
+      restriction: {
+        type: "exports",
+        names: new Set(["FullWindowOverlay"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/mobile/src/components/window-overlay.tsx"],
+    },
+  ],
   "no-raw-use-effect": [
     {
       messageId: "noRawUseEffect",
@@ -458,6 +521,55 @@ const RESTRICTED_IMPORT_RULES = {
         "packages/mcp-apps/src/case-law-results/app.tsx",
         "packages/mcp-apps/src/decision-reader/app.tsx",
       ],
+    },
+  ],
+  // Every Copy goes through one owner, which writes the clipboard, confirms
+  // the Copy when the clipboard holds what it copies, and renders the Copy
+  // and Copied swap. See ./copy-feedback-owner.ts.
+  "copy-feedback-owner": [
+    {
+      messageId: "copyFeedbackOwner",
+      message:
+        "Render a Copy through @/components/copy-control, not with " +
+        "`{{name}}`: CopyControl for a value, useCopyControl with " +
+        "CopyControlButton or CopyControlFeedback for a custom trigger, " +
+        "useSelectionCopyControl for a selection bar. The owner confirms " +
+        "the press and the reader's own copy of the same text.",
+      modules: [
+        "@stll/ui/copy-button",
+        "packages/ui/src/components/copy-button",
+        "@stll/ui",
+        "packages/ui/src/index",
+      ],
+      restriction: {
+        type: "exports",
+        names: new Set([
+          "CopyButton",
+          "CopyFeedback",
+          "useCopiedFeedback",
+          "useCopyConfirmation",
+        ]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/components/copy-control.tsx",
+        // The package's public barrel re-exports every component.
+        "packages/ui/src/index.ts",
+      ],
+    },
+    {
+      messageId: "clipboardHelperOwner",
+      message:
+        "Write the clipboard through @/components/copy-control (CopyControl, " +
+        "useCopyControl, useSelectionCopyControl), not @stll/clipboard: the " +
+        "owner reports a failed copy and confirms the Copy in place.",
+      modules: ["@stll/clipboard", "packages/clipboard/src/index"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/web/src/components/copy-control.tsx"],
     },
   ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;

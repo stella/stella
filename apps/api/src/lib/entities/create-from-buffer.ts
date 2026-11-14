@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
@@ -33,6 +34,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import type { DocumentSource } from "@/api/lib/document-source";
 import {
   documentWriteRefusal,
   DocumentWriteRefusedError,
@@ -102,6 +104,8 @@ type CreateEntityFromBufferInput = {
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /** Provenance of the first version's bytes; recorded on the audit event too. */
+  source?: DocumentSource | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -183,6 +187,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  source,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
@@ -393,7 +398,7 @@ export const createEntityFromBuffer = async ({
         // Callers authorize the matter before producing the bytes; the status
         // is read again under the lock so a matter archived or scheduled for
         // deletion in between receives nothing.
-        if (workspaceStatus !== "active") {
+        if (!workspaceAcceptsWrites(workspaceStatus)) {
           throw documentWriteRefusal(
             workspaceStatus === undefined
               ? "workspace-not-found"
@@ -456,6 +461,7 @@ export const createEntityFromBuffer = async ({
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
+          ...(source !== undefined && { source }),
         });
 
         await tx
@@ -518,7 +524,12 @@ export const createEntityFromBuffer = async ({
               },
             },
           },
-          ...(provenance && { metadata: { provenance } }),
+          ...((provenance !== undefined || source !== undefined) && {
+            metadata: {
+              ...(provenance !== undefined && { provenance }),
+              ...(source !== undefined && { source }),
+            },
+          }),
         });
 
         await afterCreate?.(tx, {

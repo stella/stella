@@ -1000,6 +1000,48 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/attachments.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Copies a chat's attached file into a local run's folder from the signed storage link the API issued for that run.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/browser/bridge.ts",
+    class: "package-owned-client",
+    reason:
+      "Listens on the holder's private Unix socket for the browser native host; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/browser/native-host.ts",
+    class: "package-owned-client",
+    reason:
+      "Connects to the holder's private Unix socket by path to relay Chrome's native messages; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/holder-server.ts",
+    class: "package-owned-client",
+    reason:
+      "Listens on, and probes for a live holder at, the private Unix socket or named pipe the desktop names; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/mcp-proxy.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/outputs.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Posts a file a local run wrote to the configured stella API origin with the run's agent token, under a bounded deadline and refusing redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/api-client/src/index.ts",
     class: "package-owned-client",
     reason:
@@ -1032,13 +1074,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "package-owned-client",
     reason:
       "Standalone CLI stamps its client identity on API requests through the shared fetch owner.",
-    transports: ["global:fetch"],
-  },
-  {
-    path: "packages/cli/src/cli-release-channel.ts",
-    class: "package-owned-client",
-    reason:
-      "Standalone CLI owns public release-channel metadata reads with an injectable transport.",
     transports: ["global:fetch"],
   },
   {
@@ -1075,6 +1110,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Uses Better Auth access-control definitions; this import makes no requests.",
     transports: ["module:better-auth/plugins/access"],
+  },
+  {
+    path: "packages/scripts/src/agent-local-runner.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Reads and sets the stand-in computer's state on the configured local API.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "packages/scripts/src/agent-session.ts",
@@ -1330,5 +1372,10 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/scripts/subset-stamp-fonts.ts",
     reason: "Issues request authority for operator-requested font downloads.",
+  },
+  {
+    path: "apps/api/src/scripts/update-qualified-tsa-trust.ts",
+    reason:
+      "Issues request authority for operator-requested EU trusted list downloads.",
   },
 ] as const satisfies readonly OutboundPermitGrantOwner[];

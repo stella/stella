@@ -36,6 +36,7 @@ import { failureSink, identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import {
+  answeredFailureSeverity,
   countFailureObservation,
   legacyChannelOf,
   observeShadow,
@@ -92,7 +93,7 @@ const buildRequestLogDetails = ({
     statusCode,
     ...(failureKind === undefined ? {} : { failureKind }),
     ...(errorType === undefined ? {} : { errorType }),
-    ...(reqCtx?.requestId === undefined ? {} : { requestId: reqCtx.requestId }),
+    ...(reqCtx?.requestId !== undefined ? { requestId: reqCtx.requestId } : {}),
     ...(reqCtx?.clientAddressSource
       ? { clientAddressSource: reqCtx.clientAddressSource }
       : {}),
@@ -117,7 +118,6 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const logged = shouldLogRequest(ctx.path);
   const captured = statusCode >= 500;
   const routeName = getRouteName(ctx.route);
-  const failedSeverity = captured ? "ERROR" : "WARN";
   const scope = {
     type: "request",
     method: ctx.request.method,
@@ -142,10 +142,13 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.framework,
-    channel: legacyChannelOf({
-      severity: logged ? failedSeverity : undefined,
-      capture: captured,
-    }),
+    channel: ({ grade }) =>
+      legacyChannelOf({
+        severity: logged
+          ? answeredFailureSeverity(statusCode, grade)
+          : undefined,
+        capture: captured,
+      }),
     request: ctx.request,
     route: routeName,
     requestState: {
@@ -172,7 +175,7 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
         : {}),
       failure: grading,
       message: "request.failed",
-      severity: failedSeverity,
+      severity: answeredFailureSeverity(statusCode, grading?.grade),
     });
     logger.request({
       durationMs: 0,
@@ -314,10 +317,10 @@ const severityFor = (
   if (failure?.policy === "grade") {
     return failureOutputPolicy(failure.grade).severity;
   }
-  if (statusCode >= 500) {
-    return "ERROR";
+  if (statusCode >= 400) {
+    return answeredFailureSeverity(statusCode, failure?.grade);
   }
-  return statusCode >= 400 ? "WARN" : "INFO";
+  return "INFO";
 };
 
 /**

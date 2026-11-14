@@ -317,6 +317,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Module ownership invariants": [
     ".oxlint-plugins/__tests__/lint-single-rule.ts",
+    "scripts/generated-artefact-provenance.ts",
     "scripts/generated-artifacts.ts",
     "scripts/ownership-loader.ts",
     "scripts/ownership.test.ts",
@@ -338,6 +339,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/schema-introspection.test.ts",
     "scripts/schema-introspection.ts",
     "scripts/source-globs.ts",
+    "scripts/status-write-shapes.ts",
   ],
   "ci-checks-rest/Design token docs": [
     "scripts/design-tokens-doc.ts",
@@ -556,7 +558,10 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/changeset-guard.ts",
     "scripts/check-cli-release-coupling.test.ts",
     "scripts/check-cli-release-coupling.ts",
+    "scripts/check-marketing-recordings.ts",
     "scripts/ci-check-pool-registry.ts",
+    "scripts/prepare-maintenance-release.ts",
+    "scripts/product-media.ts",
   ],
   "ci-checks-rest/Test CLI contract changeset guard": [
     "scripts/changeset-guard.ts",

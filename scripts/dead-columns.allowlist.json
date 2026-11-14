@@ -1,10 +1,5 @@
 [
   {
-    "table": "organization_settings",
-    "column": "documentStampEnabled",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "buffer_object_cleanup_intents",
     "column": "writerUserId",
     "reason": "not app-code dead: default expression pulls the PostgreSQL session var and the column only appears inside the RLS policy predicate built alongside the table in schema/entities.ts, which this check excludes as the definitions. Allowlisted rather than a scanner fix -- picking it up would require reading inside the excluded schema files, defeating the point of the exclusion."
@@ -83,10 +78,5 @@
     "table": "usage_policies",
     "column": "storageBytesPerAssignment",
     "reason": "not app-code dead: read by the migration-owned organization_storage_capacity function in apps/api/drizzle/20261005090300_organization_effective_policy/migration.sql, which every storage reservation calls. Migrations are excluded by design."
-  },
-  {
-    "table": "expenses",
-    "column": "receiptFileId",
-    "reason": "unreferenced as of 2026-10-27: no handler writes a receipt file yet. Its only reference was the matter-deletion storage census, which expenses left when matter deletion began retaining them; decide: wire receipts or drop."
   }
 ]

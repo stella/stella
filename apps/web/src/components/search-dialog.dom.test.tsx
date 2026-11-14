@@ -16,13 +16,13 @@ import {
   SEARCH_PAGINATION_COMPLETE,
 } from "@stll/api-contract/search";
 import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import type { PublicLawData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, {
@@ -131,6 +131,7 @@ const citationResponse = {
 } satisfies PublicLawData<typeof api.case.decisions.search.post>;
 
 const searchRequestBodies: unknown[] = [];
+const caseLawSectionRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
 let searchResponseGate: Promise<void> | null = null;
 let searchChatCoverage: GlobalSearchChatCoverage =
@@ -173,12 +174,16 @@ globalThis.fetch = Object.assign(
         nextCursor: null,
       } satisfies PublicLawData<typeof api.law.statutes.get>);
     }
+    if (url.pathname.endsWith("/search/case-law")) {
+      caseLawSectionRequestBodies.push(await request.json());
+      return Response.json({ hits: [supplementalHit], nextCursor: null });
+    }
     if (url.pathname.endsWith("/search")) {
       const body = await request.json();
       searchRequestBodies.push(body);
       await searchResponseGate;
       return Response.json({
-        hits: body.types?.includes("case-law") ? [supplementalHit] : searchHits,
+        hits: searchHits,
         nextCursor: null,
         chatCoverage: searchChatCoverage,
         totalCount: 1,
@@ -229,6 +234,7 @@ afterEach(() => {
   }
   clients.length = 0;
   searchRequestBodies.length = 0;
+  caseLawSectionRequestBodies.length = 0;
   searchHits = [hit];
   searchResponseGate = null;
   searchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE;
@@ -453,8 +459,12 @@ test.each([
     expect(searchRequestBodies).toContainEqual(
       expect.objectContaining({ query: `"${citation}"` }),
     );
-    expect(searchRequestBodies).toContainEqual(
-      expect.objectContaining({ query: citation, types: ["case-law"] }),
+    // Case law is asked of the corpus search engine, never the matter search.
+    expect(caseLawSectionRequestBodies).toContainEqual(
+      expect.objectContaining({ query: citation }),
+    );
+    expect(searchRequestBodies).not.toContainEqual(
+      expect.objectContaining({ types: ["case-law"] }),
     );
     expect(
       testing.screen
@@ -464,7 +474,7 @@ test.each([
   },
 );
 
-test("Case law scope searches only case law and drops matter recents and actions", async () => {
+test("Case law scope asks only the case-law search and drops matter recents and actions", async () => {
   await mount();
   await testing.act(async () => {
     testing.fireEvent.click(
@@ -486,7 +496,13 @@ test("Case law scope searches only case law and drops matter recents and actions
   expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
 
   await typeQuery(supplementalHit.title);
-  expect(searchRequestBodies.at(-1)).toMatchObject({ types: ["case-law"] });
+  expect(caseLawSectionRequestBodies.at(-1)).toMatchObject({
+    query: "engagement",
+  });
+  expect(searchRequestBodies).toEqual([]);
+  expect(
+    await testing.screen.findByRole("button", { name: supplementalHit.title }),
+  ).toBeTruthy();
 });
 
 test.each([

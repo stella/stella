@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -586,6 +587,7 @@ const copyToWorkspaceHandler = async function* ({
       sourceEntityId,
       sourceEntities: remappedEntities,
       sourceWorkspaceId,
+      propertyIds: propertyIdMap,
       transfer: deleteSource
         ? { type: "move", sourceWorkspaceId, sourceSnapshot: sourceEntities }
         : { type: "copy" },
@@ -827,7 +829,7 @@ export const createCopyToWorkspace = (
           async () => await getWorkspaceAccess(targetWorkspaceId),
         ),
       );
-      if (!targetWorkspace || targetWorkspace.status !== "active") {
+      if (!workspaceAcceptsWrites(targetWorkspace?.status)) {
         return Result.err(
           new HandlerError({
             status: 404,

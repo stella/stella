@@ -4,12 +4,28 @@
 platform backends implement the native filesystem operations. On Unix, harness
 archives use owner-only files (0700 for executables, 0600 otherwise) and directories;
 release directories are published through the same storage owner.
+Unix operations use pinned parent descriptors and no-follow traversal:
+`create_private_dir_new` creates an exclusive 0700 directory, and
+`publish_directory` publishes a staged directory without replacing an existing
+entry, syncing both parents. `move_private` moves a file without replacing
+one. On Windows, ancestor handles deny delete sharing and reparse points are
+refused; publication uses a write-through move.
 
 `local_store::token_broker` owns the private channel directory and socket
-permissions, and Windows pipe client options. Its short-lived Unix directory
-is under the platform temporary directory; its socket is 0600 inside a 0700
-directory. Windows clients retain identification-only security quality of
-service. These channel operations do not use application-data file opens.
+permissions, and Windows pipe client options. Its Unix directory is under the
+platform temporary directory; its socket is 0600 inside a 0700 directory. The
+broker records its endpoint in application data, through
+`write_private_atomic`, and every later start listens there again, so a run
+kept through an app restart still reaches it. A recorded directory is reused
+only when it is directly in a temporary directory, this user's, 0700 and not
+a symlink, and its socket only when nothing listens on it; otherwise the start
+takes a fresh endpoint and records that. Linux binds the socket through a
+descriptor pinned to the checked directory; macOS, which has no
+directory-relative bind, binds the checked directory's path. The token helper
+connects only to a socket of its user's in a 0700 directory of its user's.
+Windows clients retain identification-only security quality of service.
+These channel operations do not use application-data file opens, apart from
+the endpoint record.
 
 The approved roots are Stella's platform data, local-data, cache and state
 directories, plus its macOS log directory. The macOS LaunchAgents directory

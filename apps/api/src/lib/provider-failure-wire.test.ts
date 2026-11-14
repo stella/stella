@@ -5,9 +5,10 @@ import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
-import { AI_ERROR_KINDS } from "@stll/api-contract";
+import { AI_ERROR_KINDS, AI_FAILURE_CODES } from "@stll/api-contract";
 import { FAILURE_GRADES, FAILURE_REASON_GRADE } from "@stll/errors";
 
+import { ChatDeliveryError } from "@/api/handlers/chat/chat-delivery-failure";
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import {
   classifyAIError,
@@ -15,6 +16,11 @@ import {
   providerFailureFacts,
   providerStatusCode,
 } from "@/api/lib/ai-error";
+import {
+  CHAT_RUN_LOG_REFUSAL_REASONS,
+  CHAT_RUN_LOG_REFUSALS,
+  ChatRunLogRefusedError,
+} from "@/api/lib/chat/run-log-refusal";
 import {
   ModelDeadlineExceededError,
   ModelOutputIncompleteError,
@@ -60,6 +66,8 @@ const fixtureSchema = v.strictObject({
         "deadline",
         "loop",
         "empty",
+        "local-runner",
+        "run-log",
       ]),
       evidence: v.optional(v.record(v.string(), v.unknown())),
       expected: v.strictObject({
@@ -140,6 +148,53 @@ const evidenceFor = (
       return new ChatEmptyCompletionError({
         message: "Run returned no answer",
       });
+    case "local-runner": {
+      // A turn run on the member's computer ends with the run error the
+      // chunk source names; no provider response is involved.
+      const code = evidence?.["code"];
+      if (typeof code !== "string") {
+        return panic("A local runner failure needs its code");
+      }
+      expect(
+        classifyRunErrorChunk({
+          type: EventType.RUN_ERROR,
+          message: "The computer stopped the turn",
+          code,
+          timestamp: 1,
+        }),
+      ).toBe(fixture.expected.kind);
+      return Object.assign(new Error("The computer stopped the turn"), {
+        code,
+      });
+    }
+    case "run-log": {
+      // The turn's delivery log refused its output; the stream reports the
+      // refusal as a delivery failure carrying the kind.
+      const reason = v.parse(
+        v.picklist(CHAT_RUN_LOG_REFUSAL_REASONS),
+        evidence?.["reason"],
+      );
+      const refusal = new ChatRunLogRefusedError({
+        message: CHAT_RUN_LOG_REFUSALS[reason],
+        reason,
+      });
+      const delivered = new ChatDeliveryError({
+        message: fixture.expected.kind,
+        kind: fixture.expected.kind,
+        code: AI_FAILURE_CODES[fixture.expected.kind],
+        cause: refusal,
+      });
+      expect(classifyAIError(delivered)).toBe(fixture.expected.kind);
+      expect(
+        classifyRunErrorChunk({
+          type: EventType.RUN_ERROR,
+          message: delivered.message,
+          code: delivered.code,
+          timestamp: 1,
+        }),
+      ).toBe(fixture.expected.kind);
+      return refusal;
+    }
     default:
       origin satisfies never;
       return panic("Unknown failure fixture origin");

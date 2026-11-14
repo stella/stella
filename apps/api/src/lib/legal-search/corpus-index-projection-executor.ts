@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/errors/handler-error-resolution";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import { drainCaseLawRankingSignalChanges } from "@/api/lib/legal-search/case-law-ranking-signal-drain";
 import {
   CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
   type CorpusIndexClient,
@@ -54,6 +55,8 @@ import {
   commitCorpusProjectionAppendTx,
   continueCorpusProjectionAppendPartTx,
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+  CORPUS_PROJECTION_LEASE_MAX_MS,
+  CORPUS_PROJECTION_LEASE_MIN_MS,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN,
   CORPUS_PROJECTION_RETRY_MAX_MS,
@@ -156,7 +159,13 @@ type ExecuteCorpusProjectionAppendCycleOptions<
    */
   commitMode: CorpusProjectionAppendCommitMode;
   limit: number;
-  leaseMs: number;
+  /**
+   * How long the cycle may read and buffer before its first append must
+   * start. The reservation lease is this plus the generation's start margin
+   * (`corpusProjectionAppendLeaseMs`), so a long commit window never leaves a
+   * cycle inside the margin before it has filled a request.
+   */
+  fillWindowMs: number;
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
@@ -546,6 +555,40 @@ export const corpusProjectionAppendStartMarginMs = (
   ) *
     CORPUS_INDEX_AGGREGATION_TIMEOUT_MS +
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
+
+type CorpusProjectionAppendLeaseOptions = {
+  manifest: CorpusIndexManifest;
+  fillWindowMs: number;
+};
+
+/**
+ * Reservation lease for an append cycle: the generation's start margin plus
+ * the time the cycle may spend filling its requests, capped at the store's
+ * longest lease.
+ *
+ * A lease chosen without the margin silently degrades a long commit window
+ * to one revision per request: every tail is inside the margin from the
+ * moment it is reserved, so the cycle flushes its first revision and stops.
+ * Deriving the lease here makes that state unrepresentable for every
+ * generation and keeps the lease longer than the ingest it covers.
+ */
+export const corpusProjectionAppendLeaseMs = ({
+  manifest,
+  fillWindowMs,
+}: CorpusProjectionAppendLeaseOptions): number => {
+  if (
+    !Number.isSafeInteger(fillWindowMs) ||
+    fillWindowMs < CORPUS_PROJECTION_LEASE_MIN_MS
+  ) {
+    return panic(
+      `Corpus projection fill window must be an integer of at least ${CORPUS_PROJECTION_LEASE_MIN_MS} ms`,
+    );
+  }
+  return Math.min(
+    corpusProjectionAppendStartMarginMs(manifest) + fillWindowMs,
+    CORPUS_PROJECTION_LEASE_MAX_MS,
+  );
+};
 
 type AdvanceProjectionAppendTailsOptions<Entry extends ProjectionAppendPart> = {
   tails: Map<string, ProjectionAppendTail<Entry>>;
@@ -1576,7 +1619,7 @@ export const executeCorpusProjectionAppendCycle = async <
   generation,
   scope,
   limit,
-  leaseMs,
+  fillWindowMs,
   payloadReadConcurrency,
   retryDelayMs,
   payloadRetryLimit,
@@ -1587,6 +1630,8 @@ export const executeCorpusProjectionAppendCycle = async <
     retryDelayMs,
     payloadRetryLimit,
   );
+  const manifest = requireCorpusIndexManifest(family, generation);
+  const leaseMs = corpusProjectionAppendLeaseMs({ manifest, fillWindowMs });
   const timing: CorpusProjectionAppendCycleTiming = {
     reservationMs: 0,
     materialReadMs: 0,
@@ -1595,6 +1640,12 @@ export const executeCorpusProjectionAppendCycle = async <
     ingestMs: 0,
     storeCommitMs: 0,
   };
+  // A case-law cycle first reconciles a bounded batch of decisions whose
+  // ranking signals moved, so a generation that stores them converges on the
+  // corpus as it changes; their re-projections are reserved like any other.
+  if (family === "case_law") {
+    await drainCaseLawRankingSignalChanges({ runInTransaction });
+  }
   const { replacements, leases } = await measured(
     async () =>
       await runInTransaction(async (tx) => ({
@@ -1674,9 +1725,7 @@ export const executeCorpusProjectionAppendCycle = async <
     runInTransaction,
     client,
     commitMode,
-    appendStartMarginMs: corpusProjectionAppendStartMarginMs(
-      requireCorpusIndexManifest(family, generation),
-    ),
+    appendStartMarginMs: corpusProjectionAppendStartMarginMs(manifest),
     materialsReady: materials.ready,
     payloadReadConcurrency,
     retryDelayMs,

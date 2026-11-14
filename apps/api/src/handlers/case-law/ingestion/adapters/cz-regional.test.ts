@@ -27,6 +27,7 @@ import {
   assembleCzRegionalDecision,
   buildCzRegionalDecision,
   czRegionalAdapter,
+  czRegionalCaseNumberOf,
   czRegionalEnvelopeWithChain,
   czRegionalListingIdentity,
   fetchCzRegionalAffectingDocs,
@@ -56,7 +57,10 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
 } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   faultedResponse,
@@ -267,6 +271,245 @@ describe("the stored payload is an envelope of every response read", () => {
     expect(rejected).toMatchObject({
       type: "rejected",
       rejection: "unsupported-content",
+    });
+  });
+});
+
+/** A row written by the previous adapter: the document payload alone. */
+const documentOnlyRow = (
+  decision: IngestionResult,
+  documentRaw: string,
+): StoredRawReparseInput => ({
+  raw: new TextEncoder().encode(documentRaw),
+  contentType: "application/json",
+  caseNumber: decision.caseNumber,
+  sourceDocumentId: decision.sourceDocumentId ?? null,
+  language: decision.language,
+  court: decision.court,
+  ecli: decision.ecli ?? null,
+  decisionDate: decision.decisionDate ?? null,
+  decisionType: decision.decisionType ?? null,
+  sourceUrl: decision.sourceUrl ?? null,
+  documentUrl: decision.documentUrl ?? null,
+  metadata: {},
+});
+
+const recapture = czRegionalAdapter.reconciliation.recapture;
+
+describe("a document-only row is recaptured from its day listing", () => {
+  test("the recaptured row is the row a crawl stores, and replays to it", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const stored = documentOnlyRow(
+      crawled,
+      await readFixture(DISTRICT_DOCUMENT),
+    );
+
+    const recaptured = recapture.recaptureStoredRaw({
+      listingPayload: await itemByDocket(LISTING, DISTRICT_DOCKET),
+      stored,
+    });
+
+    expect(recaptured).toEqual({
+      type: "recaptured",
+      raw: crawled.sourceRaw ?? panic("crawl stored no envelope"),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    });
+    const raw =
+      recaptured.type === "recaptured" ? recaptured.raw : panic("unreachable");
+    const replayed = await czRegionalAdapter.reparseStoredRaw?.({
+      ...stored,
+      raw: new TextEncoder().encode(raw),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    });
+    expect(replayed).toEqual({ type: "parsed", result: crawled });
+  });
+
+  test("the row is looked up on its publication day", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+
+    expect(
+      recapture.lookupOf(
+        documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
+      ),
+    ).toBe("2025-06-11");
+    expect(
+      recapture.lookupOf({
+        ...documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      }),
+    ).toBeNull();
+  });
+
+  test("a listing row for another decision is reported, not merged", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const stored = documentOnlyRow(
+      crawled,
+      await readFixture(DISTRICT_DOCUMENT),
+    );
+
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: await itemByDocket(LISTING, APPELLATE_DOCKET),
+        stored,
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+    // The listing names the row, but the held document is another decision.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: await itemByDocket(LISTING, DISTRICT_DOCKET),
+        stored: {
+          ...stored,
+          raw: new TextEncoder().encode(await readFixture(APPELLATE_DOCUMENT)),
+        },
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+  });
+
+  test("a row stored without its id is found and recaptured by the held document's id", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const stored = {
+      ...documentOnlyRow(crawled, await readFixture(DISTRICT_DOCUMENT)),
+      sourceDocumentId: null,
+    };
+    const listed = await itemByDocket(LISTING, DISTRICT_DOCKET);
+
+    expect(
+      recapture.matchesStored(
+        { identity: czRegionalListingIdentity(listed), payload: listed },
+        stored,
+      ),
+    ).toBe(true);
+    expect(
+      recapture.recaptureStoredRaw({ listingPayload: listed, stored }),
+    ).toEqual({
+      type: "recaptured",
+      raw: crawled.sourceRaw ?? panic("crawl stored no envelope"),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    });
+  });
+
+  test("nothing short of the held document's own id proves the listed item is it", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+    const documentRaw = await readFixture(DISTRICT_DOCUMENT);
+    const heldId = '"uuid":"e21716f9-8855-4a85-a7e6-9af23622661b"';
+    expect(documentRaw).toContain(heldId);
+    const listed = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const stored = documentOnlyRow(crawled, documentRaw);
+    const unidentified = documentOnlyRow(
+      crawled,
+      documentRaw.replace(heldId, '"uuid":null'),
+    );
+
+    // The row's id and the docket agree, but the bytes state no id.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: listed,
+        stored: unidentified,
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: listed,
+        stored: { ...unidentified, sourceDocumentId: null },
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
+    // The docket agrees, but the listed item links no document.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: { ...listed, odkaz: null },
+        stored,
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
+    // The row's own id names another document than the one it holds.
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: listed,
+        stored: {
+          ...stored,
+          sourceDocumentId: "00000000-0000-4000-8000-000000000000",
+        },
+      }),
+    ).toMatchObject({ type: "identity-mismatch" });
+  });
+
+  test("a row that already keeps its listing row is not recaptured", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+    });
+
+    expect(
+      recapture.recaptureStoredRaw({
+        listingPayload: await itemByDocket(LISTING, DISTRICT_DOCKET),
+        stored: {
+          ...documentOnlyRow(crawled, crawled.sourceRaw ?? ""),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        },
+      }),
+    ).toMatchObject({ type: "not-recapturable" });
+  });
+});
+
+describe("the docket keeps the court's registry spelling", () => {
+  test("the registry is spelled as the row's own ECLI spells it", () => {
+    // The listing prints "14 CO 25/2022-60"; the court's ECLI "14.Co.25.2022".
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "14 CO 25/2022-60",
+        ecli: "ECLI:CZ:KSBR:2023:14.Co.25.2022.1",
+      }),
+    ).toEqual({ caseNumber: "14 Co 25/2022", sheetNumber: "60" });
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "16 CO 179/2022-123",
+        ecli: "ECLI:CZ:KSOS:2022:16.Co.179.2022.1",
+      }).caseNumber,
+    ).toBe("16 Co 179/2022");
+  });
+
+  test("an ECLI of another docket, or none, leaves the docket as printed", () => {
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "14 CO 25/2022-60",
+        ecli: "ECLI:CZ:KSBR:2023:14.Co.26.2022.1",
+      }).caseNumber,
+    ).toBe("14 CO 25/2022");
+    expect(
+      czRegionalCaseNumberOf({ jednaciCislo: "12 C 157/2022-45", ecli: null })
+        .caseNumber,
+    ).toBe("12 C 157/2022");
+  });
+
+  test("the listing identity keys the row by the docket it is stored under", () => {
+    const raw = {
+      jednaciCislo: "14 CO 25/2022-60",
+      soud: "Krajský soud v Brně",
+      ecli: "ECLI:CZ:KSBR:2023:14.Co.25.2022.1",
+    };
+    expect(czRegionalListingIdentity(raw)).toMatchObject({
+      type: "case-number",
+      caseNumber: "14 Co 25/2022",
     });
   });
 });

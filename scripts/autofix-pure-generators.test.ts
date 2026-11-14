@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Converts the static manifest schema and shared version policy; no DB imports.
+  "data-export-schema": "apps/api/scripts/generate-data-export-schema.ts",
   // Emits export lines from committed entry filenames; values stay in their owners.
   "online-migration-entries": "scripts/generate-online-migration-entries.ts",
   "db-registry-entries": "scripts/db-registry-entries.ts",
@@ -34,7 +36,6 @@ const PURE_AUTOFIX = {
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
-  "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
@@ -114,8 +115,8 @@ const EXCLUDED_AUTOFIX = {
     "Mounted handler discovery runs API module initialization under its test preload",
   "playwright-devices":
     "Device descriptors are refreshed explicitly from the installed SDK",
-  "ci-job-classification-digests":
-    "Protected workflow metadata is refreshed outside pull-request autofix",
+  "ci-job-classification-decisions":
+    "Protected workflow metadata is pruned outside pull-request autofix",
   "merge-group-parser":
     "Workflow script blocks are refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
@@ -140,6 +141,8 @@ const EXCLUDED_AUTOFIX = {
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",
+  "package-api-reports":
+    "API changes require explicit review and release intent",
 } as const;
 
 test("every committed generator has an explicit autofix purity decision", () => {
@@ -232,6 +235,33 @@ test("every module the case-law re-parse imports selects it", () => {
       (file) => !inputs.some((input) => matchesGeneratedGlob(input, file)),
     ),
   ).toEqual([]);
+});
+
+test("export schema inputs select the canonical producer without database initialization", () => {
+  const manifest = readFileSync(
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "utf-8",
+  );
+  expect(manifest).toContain("@/api/lib/data-export/version-scope");
+  expect(manifest).not.toContain("@/api/db/");
+  for (const file of [
+    "apps/api/scripts/generate-data-export-schema.ts",
+    "scripts/generated-artifacts.ts",
+    "packages/scripts/src/generated-artifact-format.ts",
+    "bunfig.toml",
+    "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "apps/api/src/lib/data-export/version-scope.ts",
+    "packages/api-contract/src/api-date.ts",
+    "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
+    "packages/api-contract/src/json-schema-regex.ts",
+    "packages/legal-ast/src/analysis.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("data-export-schema");
+  }
 });
 
 test("translation content never becomes an autofix output", () => {

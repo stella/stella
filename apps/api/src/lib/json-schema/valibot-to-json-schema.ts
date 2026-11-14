@@ -1,6 +1,6 @@
 import {
   type ConversionConfig,
-  type JsonSchema,
+  type JsonSchema as ValibotJsonSchema,
   toJsonSchema as convertToJsonSchema,
 } from "@valibot/to-json-schema";
 import { type GenericSchema, safeParse } from "valibot";
@@ -10,12 +10,18 @@ import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract
 import { DISPLAY_NAME_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/display-name";
 import { wireValueOf } from "@stll/api-contract/http-input";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+import { RECORD_CELL_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/record-cell";
+import { RECORD_SCHEMA_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/record-schema";
 import { UUID_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/uuid";
 import { ANALYSIS_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/decision-identifier";
 import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast";
 
-import { isUniqueItemsCheck } from "@/api/lib/custom-schema";
+import {
+  isUniqueItemsCheck,
+  readUtf8ByteBounds,
+  type Utf8ByteBoundsKeywords,
+} from "@/api/lib/custom-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 
 /** The `v.metadata` keys that are JSON Schema annotations. */
@@ -76,6 +82,8 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
   ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
   ...DISPLAY_NAME_RUNTIME_ONLY_ACTIONS,
+  ...RECORD_CELL_RUNTIME_ONLY_CHECKS,
+  ...RECORD_SCHEMA_RUNTIME_ONLY_CHECKS,
 ]);
 
 const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
@@ -84,6 +92,8 @@ const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
     ...ANALYSIS_RUNTIME_ONLY_CHECKS,
     ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
     ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+    ...RECORD_CELL_RUNTIME_ONLY_CHECKS,
+    ...RECORD_SCHEMA_RUNTIME_ONLY_CHECKS,
   ].map(({ requirement }) => requirement),
 );
 
@@ -109,9 +119,33 @@ const uniqueItemsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
     ? { ...jsonSchema, uniqueItems: true }
     : undefined;
 
+const utf8ByteBoundsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
+  valibotAction,
+  jsonSchema,
+}) => {
+  const bounds = readUtf8ByteBounds(valibotAction);
+  return bounds === undefined
+    ? undefined
+    : {
+        ...jsonSchema,
+        // A byte bound implies this standard character upper bound as well;
+        // x- keywords retain the precise UTF-8 and segment constraints.
+        maxLength:
+          typeof jsonSchema.maxLength === "number"
+            ? Math.min(jsonSchema.maxLength, bounds.maxBytes)
+            : bounds.maxBytes,
+        "x-maxUtf8Bytes": bounds.maxBytes,
+        ...(bounds.maxSegmentBytes === undefined
+          ? {}
+          : { "x-maxSegmentUtf8Bytes": bounds.maxSegmentBytes }),
+      };
+};
+
 type ValibotJsonSchemaConfig = Omit<ConversionConfig, "overrideAction">;
 
-export type { JsonSchema };
+type ApiJsonSchema = ValibotJsonSchema & Utf8ByteBoundsKeywords;
+
+export type { JsonSchema } from "@valibot/to-json-schema";
 
 /** A valibot schema: route and tool schemas reach shared code as `unknown`. */
 export const isValibotSchema = (value: unknown): value is GenericSchema =>
@@ -121,7 +155,7 @@ export const isValibotSchema = (value: unknown): value is GenericSchema =>
   value["~standard"]["vendor"] === "valibot";
 
 /** A schema node where JSON Schema allows `true`/`false` in place of one. */
-export type JsonSchemaDefinition = JsonSchema | boolean;
+export type JsonSchemaDefinition = ValibotJsonSchema | boolean;
 
 /**
  * The only sanctioned Valibot to JSON Schema conversion in the API; a lint
@@ -130,13 +164,14 @@ export type JsonSchemaDefinition = JsonSchema | boolean;
 export const toJsonSchema = (
   schema: GenericSchema,
   config?: ValibotJsonSchemaConfig,
-): JsonSchema =>
+): ApiJsonSchema =>
   convertToJsonSchema(schema, {
     ...config,
     overrideAction: (context) =>
       stripInternalMetadata(context) ??
       keepUnicodePatternSource(context) ??
       uniqueItemsAction(context) ??
+      utf8ByteBoundsAction(context) ??
       keepRuntimeOnlyAction(context),
   });
 
@@ -227,8 +262,8 @@ const typedLiteral: NonNullable<ConversionConfig["overrideSchema"]> = ({
 
 /** An object with no required property says nothing by listing none. */
 const withoutEmptyRequired = (
-  jsonSchema: JsonSchema,
-): JsonSchema | undefined => {
+  jsonSchema: ApiJsonSchema,
+): ApiJsonSchema | undefined => {
   if (!isUnknownArray(jsonSchema.required) || jsonSchema.required.length > 0) {
     return undefined;
   }
@@ -263,7 +298,7 @@ const jsonScalars = (value: unknown): JsonScalar | JsonScalar[] | undefined => {
  * route's `x-` extension keywords are kept. Every bound the rendering shows is
  * one the route enforces.
  */
-export const toRouteJsonSchema = (schema: GenericSchema): JsonSchema =>
+export const toRouteJsonSchema = (schema: GenericSchema): ApiJsonSchema =>
   convertToJsonSchema(schema, {
     errorMode: "ignore",
     overrideSchema: (context) => {
@@ -286,6 +321,7 @@ export const toRouteJsonSchema = (schema: GenericSchema): JsonSchema =>
         stripRouteInternalMetadata(context) ??
         keepUnicodePatternSource(context) ??
         uniqueItemsAction(context) ??
+        utf8ByteBoundsAction(context) ??
         fileSizeAction(context) ??
         keepRuntimeOnlyAction(context)
       );

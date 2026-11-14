@@ -1,29 +1,128 @@
 {
   "vocabulary": {
     "protocol": {
-      "current": 1,
+      "current": 2,
       "minimum": 1
     },
     "maxFrameBytes": 4194304,
+    "runLimits": {
+      "maxMessagesPerRun": 20000,
+      "maxMessageBytesPerRun": 67108864
+    },
+    "path": "/v1/desktop/runner",
+    "desktopIdHeader": "stella-desktop-id",
+    "close": {
+      "goingAway": {
+        "code": 1001,
+        "reason": "going_away"
+      },
+      "unsupportedData": {
+        "code": 1003,
+        "reason": "binary_frame"
+      },
+      "tooLarge": {
+        "code": 1009,
+        "reason": "too_large"
+      },
+      "internalError": {
+        "code": 1011,
+        "reason": "internal_error"
+      },
+      "overloaded": {
+        "code": 1013,
+        "reason": "overloaded"
+      },
+      "upgradeRequired": {
+        "code": 4001,
+        "reason": "upgrade_required"
+      },
+      "superseded": {
+        "code": 4002,
+        "reason": "superseded"
+      },
+      "heartbeatTimeout": {
+        "code": 4003,
+        "reason": "heartbeat_timeout"
+      },
+      "sequenceGap": {
+        "code": 4004,
+        "reason": "sequence_gap"
+      },
+      "helloTimeout": {
+        "code": 4005,
+        "reason": "hello_timeout"
+      },
+      "unknownRun": {
+        "code": 4006,
+        "reason": "unknown_run"
+      },
+      "tooManyRunners": {
+        "code": 4007,
+        "reason": "too_many_runners"
+      },
+      "credentialRevoked": {
+        "code": 4008,
+        "reason": "credential_revoked"
+      },
+      "featureDisabled": {
+        "code": 4009,
+        "reason": "feature_disabled"
+      }
+    },
+    "policyViolationCode": 1008,
+    "policyReasons": [
+      "not_json",
+      "unknown_type",
+      "invalid",
+      "hello_required",
+      "hello_repeated",
+      "run_state",
+      "unfoldable_chunk",
+      "run_limit"
+    ],
+    "timing": {
+      "pingIntervalMs": 20000,
+      "maxSocketLifeMs": 3600000,
+      "helloTimeoutMs": 10000,
+      "leaseMs": 90000,
+      "runnerFreshnessMs": 60000,
+      "sweepIntervalMs": 15000,
+      "drainSpreadMs": 30000,
+      "tokenRefreshMarginMs": 300000
+    },
     "harnesses": ["codex", "claude-code", "opencode"],
     "harnessStates": [
       "ready",
       "needs_login",
       "limit_until",
       "not_installed",
-      "unsupported"
+      "unsupported",
+      "unavailable"
     ],
     "harnessCapabilities": ["approvals", "interrupt", "resume", "image_input"],
+    "harnessUnavailableReasons": [
+      "harness_failed",
+      "unexpected_answer",
+      "probe_failed"
+    ],
     "runRejectReasons": [
       "harness_not_installed",
       "harness_needs_login",
       "harness_limited",
       "harness_unsupported",
+      "harness_unavailable",
       "harness_version_unavailable",
       "model_unavailable",
       "policy_unsupported",
       "at_capacity",
-      "unknown_run"
+      "run_too_large",
+      "unknown_run",
+      "folder_busy",
+      "folder_unlinked",
+      "folder_offline",
+      "folder_moved",
+      "folder_protected",
+      "folder_unreadable"
     ],
     "approvalKinds": ["command", "file_change", "mcp_tool", "tool"],
     "approvalDecisions": ["approve", "approve_for_session", "deny"],
@@ -37,6 +136,16 @@
     ],
     "networkPolicies": ["open"],
     "fsPolicies": ["workspace"],
+    "approvalModes": ["plan", "ask", "auto", "full_auto"],
+    "reasoningEfforts": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
     "desktopMessageTypes": [
       "hello",
       "harness.status",
@@ -44,7 +153,10 @@
       "run.rejected",
       "run.event",
       "run.approval_request",
-      "run.finished"
+      "run.finished",
+      "folder.restored",
+      "linked_folders.status",
+      "run.background"
     ],
     "serverMessageTypes": [
       "welcome",
@@ -53,17 +165,51 @@
       "run.start",
       "run.input",
       "run.approval",
+      "run.answer",
       "run.interrupt",
       "run.cancel",
       "run.token",
-      "ack"
+      "ack",
+      "folder.restore"
+    ],
+    "answerLimits": {
+      "maxQuestions": 32,
+      "maxAnswersPerQuestion": 64,
+      "maxAnswerLength": 16384,
+      "maxQuestionIdLength": 256
+    },
+    "linkedFolderStates": [
+      "available",
+      "offline",
+      "moved",
+      "protected",
+      "unreadable"
+    ],
+    "folderRestoreOutcomes": [
+      "restored",
+      "no_checkpoint",
+      "not_newest",
+      "folder_busy",
+      "failed"
     ]
   },
   "valid": {
     "desktop": [
       {
         "type": "hello",
-        "protocol": 1,
+        "linkedFolders": [
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+            "name": "Smlouva o dílo",
+            "state": "available"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+            "name": "Archive",
+            "state": "offline"
+          }
+        ],
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [
@@ -72,14 +218,18 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
-                "label": "Large model"
+                "label": "Large model",
+                "isDefault": true,
+                "reasoningEfforts": ["low", "medium", "high", "xhigh"]
               },
               {
                 "id": "model-small",
-                "label": "Small model"
+                "label": "Small model",
+                "reasoningEfforts": ["none", "minimal", "low"]
               }
             ]
           },
@@ -108,7 +258,8 @@
       },
       {
         "type": "hello",
-        "protocol": 1,
+        "linkedFolders": [],
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.61-beta.1",
         "harnesses": [
@@ -131,11 +282,32 @@
       },
       {
         "type": "hello",
-        "protocol": 1,
+        "linkedFolders": [],
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [],
         "activeRuns": []
+      },
+      {
+        "type": "linked_folders.status",
+        "folders": [
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+            "name": "Smlouva o dílo",
+            "state": "moved"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+            "name": "Archive",
+            "state": "protected"
+          },
+          {
+            "id": "0192f3a0-6b1c-7d2e-8f30-0000000000d3",
+            "name": "Exhibits",
+            "state": "unreadable"
+          }
+        ]
       },
       {
         "type": "harness.status",
@@ -144,12 +316,38 @@
           "state": "ready",
           "version": "2.0.30",
           "capabilities": ["approvals"],
+          "approvalModes": ["ask", "auto"],
           "models": [
             {
               "id": "model-large",
-              "label": "Large model"
+              "label": "Large model",
+              "reasoningEfforts": ["low", "medium", "high", "max"]
             }
           ]
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "codex",
+          "state": "unavailable",
+          "reason": "harness_failed"
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "claude-code",
+          "state": "unavailable",
+          "reason": "unexpected_answer"
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "codex",
+          "state": "unavailable",
+          "reason": "probe_failed"
         }
       },
       {
@@ -160,6 +358,36 @@
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "harness_not_installed"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_busy"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_unlinked"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_offline"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_moved"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_protected"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "reason": "folder_unreadable"
       },
       {
         "type": "run.rejected",
@@ -175,6 +403,11 @@
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "harness_unsupported"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_unavailable"
       },
       {
         "type": "run.rejected",
@@ -195,6 +428,11 @@
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "at_capacity"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "run_too_large"
       },
       {
         "type": "run.rejected",
@@ -309,12 +547,47 @@
         "seq": 25,
         "outcome": "needs_login",
         "harnessSessionId": null
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "restored"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "no_checkpoint"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "not_newest"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "folder_busy"
+      },
+      {
+        "type": "folder.restored",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "outcome": "failed"
+      },
+      {
+        "type": "run.background",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "count": 2
+      },
+      {
+        "type": "run.background",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "count": 0
       }
     ],
     "server": [
       {
         "type": "welcome",
-        "protocol": 1,
+        "protocol": 2,
         "resume": [
           {
             "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
@@ -328,7 +601,7 @@
       },
       {
         "type": "welcome",
-        "protocol": 1,
+        "protocol": 2,
         "resume": []
       },
       {
@@ -342,10 +615,20 @@
       },
       {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": null,
+        "attachments": [
+          {
+            "path": "attachments/0192f3a0-6b1c-7d2e-8f30-0000000000f1/smlouva o dílo.pdf",
+            "url": "https://files.example.test/signed"
+          }
+        ],
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
+        "reasoningEffort": "xhigh",
         "harnessSessionId": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -375,7 +658,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "ask"
         },
         "mcp": {
           "serverName": "stella",
@@ -386,10 +670,15 @@
       },
       {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+        "attachments": [],
         "harness": "claude-code",
         "harnessVersion": "2.0.30",
         "model": "model-large",
+        "reasoningEffort": null,
         "harnessSessionId": "session-1",
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -405,7 +694,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "plan"
         },
         "mcp": {
           "serverName": "stella",
@@ -442,6 +732,16 @@
         "decision": "deny"
       },
       {
+        "type": "run.answer",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+        "answers": {
+          "tone": ["Formal"],
+          "recipients": ["Court", "Opposing counsel"],
+          "deadline": ["Friday before noon"]
+        }
+      },
+      {
         "type": "run.interrupt",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
       },
@@ -459,6 +759,13 @@
         "type": "ack",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "seq": 12
+      },
+      {
+        "type": "folder.restore",
+        "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "linkedFolderId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
       }
     ]
   },
@@ -468,7 +775,7 @@
       "direction": "desktop",
       "input": {
         "type": "hello",
-        "protocol": 1,
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [
@@ -477,14 +784,17 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
-                "label": "Large model"
+                "label": "Large model",
+                "reasoningEfforts": ["low", "medium", "high"]
               },
               {
                 "id": "model-small",
-                "label": "Small model"
+                "label": "Small model",
+                "reasoningEfforts": []
               }
             ],
             "binaryPath": "/opt/codex"
@@ -504,7 +814,8 @@
       },
       "parsed": {
         "type": "hello",
-        "protocol": 1,
+        "linkedFolders": [],
+        "protocol": 2,
         "appVersion": "0.9.60",
         "sidecarVersion": "0.9.60",
         "harnesses": [
@@ -513,14 +824,17 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
-                "label": "Large model"
+                "label": "Large model",
+                "reasoningEfforts": ["low", "medium", "high"]
               },
               {
                 "id": "model-small",
-                "label": "Small model"
+                "label": "Small model",
+                "reasoningEfforts": []
               }
             ]
           }
@@ -581,10 +895,15 @@
       "direction": "server",
       "input": {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": null,
+        "attachments": [],
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
+        "reasoningEffort": null,
         "harnessSessionId": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -615,6 +934,7 @@
         "policy": {
           "network": "open",
           "fs": "workspace",
+          "approvals": "full_auto",
           "clipboard": "blocked"
         },
         "mcp": {
@@ -627,10 +947,15 @@
       },
       "parsed": {
         "type": "run.start",
+        "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+        "linkedFolderId": null,
+        "attachments": [],
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
+        "reasoningEffort": null,
         "harnessSessionId": null,
         "instructions": "Use the stella MCP server for workspace actions.",
         "messages": [
@@ -660,7 +985,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "full_auto"
         },
         "mcp": {
           "serverName": "stella",
@@ -720,6 +1046,29 @@
         }
       },
       {
+        "name": "unavailable harness without a reason",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "unavailable"
+          }
+        }
+      },
+      {
+        "name": "unavailable harness with an unknown reason",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "unavailable",
+            "reason": "the harness exited"
+          }
+        }
+      },
+      {
         "name": "unknown harness",
         "reason": "invalid",
         "message": {
@@ -767,7 +1116,7 @@
         "reason": "invalid",
         "message": {
           "type": "hello",
-          "protocol": 1,
+          "protocol": 2,
           "appVersion": "0.9.60",
           "sidecarVersion": "0.9.61-beta.1",
           "harnesses": [
@@ -783,6 +1132,113 @@
             }
           ],
           "activeRuns": []
+        }
+      },
+      {
+        "name": "ready harness without the default approval mode",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["auto", "full_auto"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "ready harness listing an approval mode twice",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "ask"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "ready harness listing a reasoning effort twice",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model",
+                "reasoningEfforts": ["high", "high"]
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "unknown restore outcome",
+        "reason": "invalid",
+        "message": {
+          "type": "folder.restored",
+          "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+          "outcome": "partly"
+        }
+      },
+      {
+        "name": "restore answer without its id",
+        "reason": "invalid",
+        "message": {
+          "type": "folder.restored",
+          "outcome": "restored"
+        }
+      },
+      {
+        "name": "negative background count",
+        "reason": "invalid",
+        "message": {
+          "type": "run.background",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "count": -1
+        }
+      },
+      {
+        "name": "background count without its run",
+        "reason": "invalid",
+        "message": {
+          "type": "run.background",
+          "count": 1
         }
       }
     ],
@@ -804,13 +1260,59 @@
         }
       },
       {
+        "name": "run.answer with an empty question id",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": {
+            "": ["Formal"]
+          }
+        }
+      },
+      {
+        "name": "run.answer with an answer that is not a list",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": {
+            "tone": "Formal"
+          }
+        }
+      },
+      {
+        "name": "run.answer with an answer that is not text",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": {
+            "tone": [true]
+          }
+        }
+      },
+      {
+        "name": "run.answer without answers",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1"
+        }
+      },
+      {
         "name": "restricted network policy",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
+          "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -840,7 +1342,8 @@
           ],
           "policy": {
             "network": "restricted",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           },
           "mcp": {
             "serverName": "stella",
@@ -854,10 +1357,15 @@
         "name": "home filesystem policy",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
+          "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -887,7 +1395,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "home"
+            "fs": "home",
+            "approvals": "ask"
           },
           "mcp": {
             "serverName": "stella",
@@ -901,10 +1410,15 @@
         "name": "unknown harness",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
+          "attachments": [],
           "harness": "cursor",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -934,7 +1448,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           },
           "mcp": {
             "serverName": "stella",
@@ -948,10 +1463,15 @@
         "name": "run.start without an MCP binding",
         "message": {
           "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
+          "attachments": [],
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
+          "reasoningEffort": null,
           "harnessSessionId": null,
           "instructions": "Use the stella MCP server for workspace actions.",
           "messages": [
@@ -981,7 +1501,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           }
         }
       },
@@ -989,7 +1510,7 @@
         "name": "welcome without resume positions",
         "message": {
           "type": "welcome",
-          "protocol": 1
+          "protocol": 2
         }
       },
       {
@@ -1006,6 +1527,183 @@
           "type": "ack",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "seq": "12"
+        }
+      },
+      {
+        "name": "unknown approval mode",
+        "message": {
+          "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
+          "attachments": [],
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "reasoningEffort": null,
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace",
+            "approvals": "bypass"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "unknown reasoning effort",
+        "message": {
+          "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "attachments": [],
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "reasoningEffort": "turbo",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace",
+            "approvals": "ask"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "run.start without an approval mode",
+        "message": {
+          "type": "run.start",
+          "outputKey": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "linkedFolderId": null,
+          "attachments": [],
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "reasoningEffort": null,
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "restore of a linked folder that is not a UUID",
+        "message": {
+          "type": "folder.restore",
+          "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+          "linkedFolderId": "../cases/smith",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+        }
+      },
+      {
+        "name": "restore of a folder that is not a UUID",
+        "message": {
+          "type": "folder.restore",
+          "restoreId": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+          "folderId": "../outside",
+          "linkedFolderId": null,
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
         }
       }
     ]

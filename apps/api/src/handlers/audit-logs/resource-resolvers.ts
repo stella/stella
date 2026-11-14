@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 
+import { isAuditNamedResourceKind } from "@stll/api-contract/audit-log";
 import type {
   AuditNamedResourceKind,
   AuditResourceKind,
@@ -25,6 +26,7 @@ import {
   brandPersistedUserFileId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 type ResolveOptions = {
   tx: Transaction;
@@ -168,6 +170,11 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  // A check's title can name a prospective client, so the log never shows it.
+  [AUDIT_RESOURCE_TYPE.CONFLICT_CHECK]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
@@ -208,6 +215,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.DATA_EXPORT]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
@@ -215,6 +226,15 @@ const AUDIT_RESOURCE_RESOLVERS = {
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
+  },
+  // The website it allows travels in the entry's metadata (`browserOrigin`).
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: {
+    type: "unresolvable",
+    reason: "The folder's name stays on the member's computer",
   },
   [AUDIT_RESOURCE_TYPE.CLAUSE]: {
     type: "unresolvable",
@@ -455,6 +475,39 @@ const AUDIT_RESOURCE_RESOLVERS = {
     reason: "No canonical user-facing name source",
   },
 } as const satisfies Resolutions;
+
+/**
+ * Where a delete event's `deleted.old` snapshot keeps the resource's name: the
+ * same column its resolver reads, so a deleted resource still reads as the
+ * name it had instead of as a lost one.
+ */
+const DELETED_SNAPSHOT_NAME_KEY = {
+  [AUDIT_RESOURCE_TYPE.CONTACT]: "displayName",
+  [AUDIT_RESOURCE_TYPE.ENTITY]: "name",
+  [AUDIT_RESOURCE_TYPE.INVOICE]: "invoiceNumber",
+  [AUDIT_RESOURCE_TYPE.TEMPLATE]: "name",
+  [AUDIT_RESOURCE_TYPE.USER_FILE]: "fileName",
+  [AUDIT_RESOURCE_TYPE.WORKSPACE]: "name",
+} as const satisfies Record<AuditNamedResourceKind, string>;
+
+/**
+ * The name a delete event recorded for its resource. Reads only the changes
+ * this reader may see, so it never discloses more than the entry's details.
+ */
+export const deletedSnapshotName = (
+  kind: AuditResourceKind,
+  visibleChanges: Record<string, unknown> | null,
+): string | null => {
+  if (!isAuditNamedResourceKind(kind)) {
+    return null;
+  }
+  const deleted = visibleChanges?.["deleted"];
+  const snapshot = isRecord(deleted) ? deleted["old"] : null;
+  const name = isRecord(snapshot)
+    ? snapshot[DELETED_SNAPSHOT_NAME_KEY[kind]]
+    : null;
+  return typeof name === "string" && name.trim() !== "" ? name : null;
+};
 
 export const resolveAuditResourceNames = async ({
   tx,

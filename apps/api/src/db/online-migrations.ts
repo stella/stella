@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { sleep } from "@stll/concurrency/sleep";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
+import { isPgError, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
@@ -253,9 +254,21 @@ type PendingOnlineMigrationStep = {
   introducedBy: OnlineStepIntroduction;
 };
 
+/**
+ * A repair startup found not complete outside its deploy window: a
+ * migration-owned one once a newer migration exists, or a code-owned one.
+ */
+export type RegressedOnlineRepair = {
+  name: string;
+  introducedBy: OnlineStepIntroduction;
+  reason: string;
+};
+
 export type OnlineMigrationStartupReport = {
   newestAppliedMigration: string;
   pending: PendingOnlineMigrationStep[];
+  /** Also listed in `pending`; startup reports these as errors. */
+  regressed: RegressedOnlineRepair[];
 };
 
 /**
@@ -292,6 +305,7 @@ export const reportOnlineMigrations = async (
         const report: OnlineMigrationStartupReport = {
           newestAppliedMigration: row["name"],
           pending: [],
+          regressed: [],
         };
         const outcome = await walkOnlineMigrations({
           connection,
@@ -319,6 +333,19 @@ type ReportPendingStepOptions = {
   reason: string;
 };
 
+const recordPendingStep = (
+  report: OnlineMigrationStartupReport,
+  step: PendingOnlineMigrationStep,
+): void => {
+  if (
+    !report.pending.some(
+      ({ kind, name }) => kind === step.kind && name === step.name,
+    )
+  ) {
+    report.pending.push(step);
+  }
+};
+
 const reportPendingStep = ({
   report,
   step,
@@ -334,12 +361,73 @@ const reportPendingStep = ({
       `Online ${step.kind} ${step.name} introduced by ${step.introducedBy} is not complete: ${reason}`,
     );
   }
-  if (
-    !report.pending.some(
-      ({ kind, name }) => kind === step.kind && name === step.name,
-    )
-  ) {
-    report.pending.push(step);
+  recordPendingStep(report, step);
+};
+
+/**
+ * An online repair never refuses boot. Its completion is a live read
+ * of shared data, and every task already running serves that same data, so
+ * refusing a new task protects no reader: it only removes capacity, and a
+ * replaced task (a Spot interruption, a scale-out, an out-of-memory restart)
+ * then cannot come back. Refusing would stop every task, of every version,
+ * until something else finished the walk.
+ *
+ * - `pending` (a durable checkpoint) is resumed by the migrate run or the
+ *   repair's scheduled owner, under any release.
+ * - `incomplete` for the newest applied migration is the deploy window.
+ * - `incomplete` once a newer migration exists is an error for an operator:
+ *   either live writes broke the postcondition after a migrate run asserted it
+ *   (a defect in a writer), or a migrate run applied the newer migration and
+ *   stopped before its repair walk finished (that release never finished
+ *   deploying, and the older one already served this state in its deploy
+ *   window). The next migrate run repairs both; neither is a reason to stop
+ *   serving.
+ *
+ * - A code-owned repair (a live requirement its source owns, with no deploy
+ *   window) that is not complete is reported the same way. Its own readers
+ *   fail closed per request; the rest of the API keeps serving.
+ *
+ * This is the one rule for repairs: startup refuses only what differs between
+ * the booting release and the database (its schema migrations, index shapes),
+ * never the state of shared rows. `online-migrations.test.ts` holds every
+ * registered repair to it.
+ */
+type ReportPendingRepairOptions = Omit<ReportPendingStepOptions, "reason"> & {
+  completion: Exclude<OnlineRepairCompletion, { type: "complete" }>;
+};
+
+const reportPendingRepair = ({
+  report,
+  step,
+  completion,
+}: ReportPendingRepairOptions): void => {
+  switch (completion.type) {
+    case "pending":
+      if (typeof step.introducedBy !== "string") {
+        report.regressed.push({
+          name: step.name,
+          introducedBy: step.introducedBy,
+          reason: completion.reason,
+        });
+      }
+      recordPendingStep(report, step);
+      return;
+    case "incomplete":
+      if (
+        typeof step.introducedBy !== "string" ||
+        step.introducedBy !== report.newestAppliedMigration
+      ) {
+        report.regressed.push({
+          name: step.name,
+          introducedBy: step.introducedBy,
+          reason: completion.reason,
+        });
+      }
+      recordPendingStep(report, step);
+      return;
+    default:
+      completion satisfies never;
+      return panic(`Online repair ${step.name}: unexpected completion state`);
   }
 };
 
@@ -558,6 +646,29 @@ type OnlineRepairWalkOptions = {
   offset?: number;
 };
 
+/** How a repair attempt that threw stopped. */
+const REPAIR_STOP = {
+  /** The health verdict held the walk at a durable checkpoint. */
+  held: "held",
+  /**
+   * A statement gave up on its `lock_timeout`. Its transaction rolled back,
+   * so a walk with a durable checkpoint resumes there like a hold; a writer
+   * holding row locks longer than a batch may wait must not fail the deploy.
+   */
+  lockWaitLost: "lock_wait_lost",
+  failed: "failed",
+} as const;
+
+const classifyRepairStop = (error: unknown) => {
+  if (error instanceof BackfillHeldError) {
+    return REPAIR_STOP.held;
+  }
+  if (isPgError(error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+    return REPAIR_STOP.lockWaitLost;
+  }
+  return REPAIR_STOP.failed;
+};
+
 const processOnlineRepairAt = async ({
   connection,
   mode,
@@ -574,14 +685,14 @@ const processOnlineRepairAt = async ({
   const completion = await repair.readCompletion(connection);
   if (mode.operation === "validate") {
     if (completion.type !== "complete") {
-      reportPendingStep({
+      reportPendingRepair({
         report: mode.report,
         step: {
           kind: "repair",
           name: repair.name,
           introducedBy: repair.introducedBy,
         },
-        reason: completion.reason,
+        completion,
       });
     }
     return await processOnlineRepairAt({
@@ -625,23 +736,34 @@ const processOnlineRepairAt = async ({
           catch: (cause: unknown) => cause,
         });
         await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
-        if (
-          Result.isError(attempt) &&
-          !(attempt.error instanceof BackfillHeldError)
-        ) {
-          throw attempt.error;
+        if (Result.isError(attempt)) {
+          const stop = classifyRepairStop(attempt.error);
+          if (stop === REPAIR_STOP.failed) {
+            throw attempt.error;
+          }
+          const after = await repair.readCompletion(connection);
+          if (after.type !== "pending") {
+            switch (stop) {
+              case REPAIR_STOP.held:
+                return panic(
+                  `Online repair ${repair.name}: hold has no durable pending checkpoint`,
+                );
+              // Nothing durable to resume yet, so the lost wait is the failure.
+              case REPAIR_STOP.lockWaitLost:
+                throw attempt.error;
+              default:
+                stop satisfies never;
+                return panic(`Online repair ${repair.name}: unexpected stop`);
+            }
+          }
+          return after;
         }
         // A deferred validation leaves its constraint NOT VALID, so the next
         // run reads the repair incomplete and calls it again.
-        if (Result.isOk(attempt) && attempt.value.type === "deferred") {
+        if (attempt.value.type === "deferred") {
           return attempt.value;
         }
         const after = await repair.readCompletion(connection);
-        if (Result.isError(attempt) && after.type !== "pending") {
-          return panic(
-            `Online repair ${repair.name}: hold has no durable pending checkpoint`,
-          );
-        }
         assertRepairDeployable(repair, after);
         return after;
       },

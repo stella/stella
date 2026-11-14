@@ -14,10 +14,13 @@ const REMOVED_AST_FACADE_MODULE_IDS = new Set([
 ]);
 
 const ALLOWED_LEAF_IMPORTS = new Set([
+  "@/api/db/account-erasure-policies",
   "@/api/db/agent-auth-schema",
   "@/api/db/auth-schema",
   "@/api/db/backfill-runtime",
   "@/api/db/billing-validators",
+  "@/api/db/case-law-court-activity-indexes",
+  "@/api/db/case-law-sitemap-indexes",
   "@/api/db/case-law-parsed-input-state",
   "@/api/db/columns",
   "@/api/db/connection-budget",
@@ -29,9 +32,11 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/entity-feature-coverage",
   "@/api/db/entity-feature-gate-metadata",
   "@/api/db/entity-feature-policies",
+  "@/api/db/eu-vat-id-format",
   "@/api/db/json-utils",
   "@/api/db/indicator-query",
   "@/api/db/long-running-connection",
+  "@/api/db/organization-settings-constants",
   "@/api/db/online-migration-connection",
   "@/api/db/online-unique-indexes",
   "@/api/db/rls",
@@ -64,6 +69,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/lib/errors/client",
   "@/lib/errors/invoice-issue",
   "@/lib/errors/localization",
+  "@/lib/errors/native-fetch-failure",
   "@/lib/errors/provider-diagnostic",
   "@/lib/errors/provider-setup-guidance",
   "@/lib/errors/query-result",

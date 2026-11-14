@@ -11,12 +11,12 @@ import {
   ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
   ORGANIZATION_NAME_MAX_LENGTH,
 } from "@stll/api-contract/organization-create";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 Object.assign(globalThis, {
@@ -38,7 +38,8 @@ const {
 const { IntlProvider, createTranslator } = await import("use-intl");
 const { Button } = await import("@stll/ui/button");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
-const { drainReactScheduler } = await import("@/lib/react-scheduler-drain");
+const { drainReactScheduler } =
+  await import("@stll/property-testing/dom-environment");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
 const { CreateOrganizationDialog } =
   await import("./create-organization-dialog");
@@ -441,7 +442,7 @@ test("closing an edited draft requires confirmation and discards it before reope
     fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
     await drainReactScheduler();
   });
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
   await openDialog();
   expect(
     screen
@@ -545,7 +546,7 @@ test("a committed creation with a lost response survives sidebar remount and rep
     );
     await drainReactScheduler();
   });
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
   await act(async () => {
     original.unmount();
     await drainReactScheduler();
@@ -762,7 +763,9 @@ test.each(
     fireEvent.click(
       screen.getByRole("button", { name: original.messages.common.cancel }),
     );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog") === null).toBe(true),
+    );
     await act(async () => {
       original.unmount();
       await drainReactScheduler();
@@ -832,8 +835,8 @@ test("starting over after an unknown outcome requires confirmation and preserves
     expect(
       screen.queryByRole("dialog", {
         name: messages.organization.startOverTitle,
-      }),
-    ).toBeNull(),
+      }) === null,
+    ).toBe(true),
   );
 
   let input = screen.getByRole("textbox", {
@@ -876,8 +879,8 @@ test("starting over after an unknown outcome requires confirmation and preserves
     expect(
       screen.queryByRole("dialog", {
         name: messages.organization.startOverTitle,
-      }),
-    ).toBeNull(),
+      }) === null,
+    ).toBe(true),
   );
   input = screen.getByRole("textbox", {
     name: messages.common.organizationName,

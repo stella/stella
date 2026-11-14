@@ -6,12 +6,12 @@ import { immer } from "zustand/middleware/immer";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
 import type { api } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type PlaybookDetailData = Exclude<
   NonNullable<
@@ -192,7 +192,9 @@ const mountEditor = async (
       state.minimized ? undefined : state.tabs.find((tab) => tab.id === tabId),
     );
     const payload =
-      selected?.type === "view" && isPlaybookDraftViewPayload(selected.payload)
+      selected?.type === "view" &&
+      isPlaybookDraftViewPayload(selected.payload) &&
+      selected.payload.type === "playbook"
         ? selected.payload
         : null;
     return (
@@ -1083,12 +1085,11 @@ const otherPlaybookLifecycle = async (
   await act(async () => {
     await followReconciledPlaybookSave({
       reconciliation: {
-        playbookId: OTHER_PLAYBOOK_ID,
-        source: "live",
+        target: { playbookId: OTHER_PLAYBOOK_ID, source: "live" },
         refetched: Promise.resolve(),
       },
       isCurrent: () => true,
-      follow: (playbookId) =>
+      follow: ({ playbookId }) =>
         real.store.getState().updateView({
           id: real.tabId,
           label: other.name,
@@ -1114,6 +1115,22 @@ const otherPlaybookLifecycle = async (
     description: other.description,
   });
 };
+// A save that keeps failing is not retried, however long the editor waits.
+const persistentFailureLifecycle = async (
+  real: LifecycleReal,
+  intervals: number,
+) => {
+  const attemptsBefore = real.backend.putCount;
+  for (let interval = 0; interval < intervals; interval += 1) {
+    await act(async () => {
+      jest.advanceTimersByTime(2100);
+    });
+    await settleLifecycle();
+    expect(real.backend.putCount).toBe(attemptsBefore);
+    expect(real.backend.pending).toHaveLength(0);
+  }
+};
+
 const deleteLifecycle = async (model: LifecycleModel, real: LifecycleReal) => {
   await act(async () => {
     fireEvent.click(
@@ -1269,18 +1286,9 @@ class LifecycleCommand implements fc.AsyncCommand<
         break;
       case "unload":
         break;
-      case "persistent-failure": {
-        const attemptsBefore = real.backend.putCount;
-        for (let interval = 0; interval < action.intervals; interval += 1) {
-          await act(async () => {
-            jest.advanceTimersByTime(2100);
-          });
-          await settleLifecycle();
-          expect(real.backend.putCount).toBe(attemptsBefore);
-          expect(real.backend.pending).toHaveLength(0);
-        }
+      case "persistent-failure":
+        await persistentFailureLifecycle(real, action.intervals);
         break;
-      }
       default: {
         const exhaustive: never = action;
         throw new TypeError(String(exhaustive));

@@ -20,6 +20,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 type AppFixtureHost = {
   appCalls: unknown[];
+  courtCalls: unknown[];
   appLinks: string[];
   appSizes: { height: number }[];
   sendAppResult: (data: unknown) => void;
@@ -103,6 +104,7 @@ const mountApp = async ({
         throw new Error("App iframe is missing");
       }
       const history: unknown[] = [];
+      const courtCalls: unknown[] = [];
       const links: string[] = [];
       const sizes: { height: number }[] = [];
       const reply = (message: unknown) =>
@@ -183,6 +185,20 @@ const mountApp = async ({
             });
             break;
           case "tools/call": {
+            // The court filter reads its court list when it opens; this host
+            // has none to give, so the filter falls back to the result facets.
+            if (data.params.name === "list_case_law_courts") {
+              courtCalls.push(data.params.arguments);
+              reply({
+                jsonrpc: "2.0",
+                id: data.id,
+                result: {
+                  isError: true,
+                  content: [{ type: "text", text: "Court list unavailable" }],
+                },
+              });
+              break;
+            }
             history.push({
               name: data.params.name,
               arguments: data.params.arguments,
@@ -227,6 +243,7 @@ const mountApp = async ({
       });
       globalThis.appFixtureHost = {
         appCalls: history,
+        courtCalls,
         appLinks: links,
         appSizes: sizes,
         sendAppResult: (data: unknown) =>
@@ -271,13 +288,22 @@ const mountApp = async ({
   return page.frameLocator("#app");
 };
 
-const hostHistory = async (page: Page, key: "appCalls" | "appLinks") =>
-  page.evaluate((historyKey) => globalThis.appFixtureHost[historyKey], key);
+const hostHistory = async (
+  page: Page,
+  key: "appCalls" | "appLinks" | "courtCalls",
+) => page.evaluate((historyKey) => globalThis.appFixtureHost[historyKey], key);
+
+/** A court is named with the results it holds; a tier is named alone. */
+const courtCheckboxName = (option: string) =>
+  new RegExp(
+    `^${option.replaceAll(/[$()*+.?[\\\]^{|}]/gu, "\\$&")}(?: \\d+)?$`,
+    "u",
+  );
 
 const selectCourt = async (app: FrameLocator, option: string) => {
   const trigger = app.getByRole("button", { name: /^Court/u });
   await trigger.click();
-  await app.getByRole("checkbox", { name: option, exact: true }).click();
+  await app.getByRole("checkbox", { name: courtCheckboxName(option) }).click();
   await trigger.click();
 };
 

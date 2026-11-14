@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
+  DOCUMENT_REVIEW_DECISION_REASON_MAX,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_FINDING_FLAGS,
   DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
@@ -49,6 +50,16 @@ export const decideReviewFindingBodySchema = v.object({
     v.pipe(
       v.array(v.picklist([...DOCUMENT_REVIEW_FINDING_FLAGS])),
       v.maxLength(DOCUMENT_REVIEW_FINDING_FLAGS_MAX),
+    ),
+  ),
+  /** Why the reviewer decided, kept on the decision's history event. Read
+   *  only when the decision changes: a restated decision is no new one. */
+  reason: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.maxLength(DOCUMENT_REVIEW_DECISION_REASON_MAX),
     ),
   ),
 });

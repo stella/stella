@@ -4,8 +4,8 @@ import { load } from "@stll/html";
 import type { CheerioAPI } from "@stll/html";
 
 import {
-  excludedSourceField,
   excludedSourceSurface,
+  legacyExcludedSourceField,
   storedSourceSurface,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -522,10 +522,10 @@ const SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "sourceDocumentId" },
   },
-  topics: excludedSourceField(
+  topics: legacyExcludedSourceField(
     "Publisher topical navigation is outside the soft-law metadata contract and remains in raw HTML.",
   ),
-  feedback: excludedSourceField(
+  feedback: legacyExcludedSourceField(
     "Third-party consultation submissions are not Board-authored soft law; names and response attachments are not indexed.",
   ),
 } as const satisfies Record<

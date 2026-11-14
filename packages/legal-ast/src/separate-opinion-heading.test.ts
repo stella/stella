@@ -5,6 +5,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import {
   separateOpinionAuthorLine,
   separateOpinionHeading,
+  separateOpinionHeadingEndsAsSentence,
   separateOpinionHeadingNamesAuthor,
 } from "./separate-opinion-heading.js";
 
@@ -226,3 +227,21 @@ test.each([" JUDr. Jana Nováka", " soudce JUDr. Jana Nováka"])(
     ).toBe(tail);
   },
 );
+
+describe("how a separate-opinion heading ends", () => {
+  test.each([
+    // 7 As 155/2015: the heading ends on the docket it names.
+    "Odlišné stanovisko podle § 55a s. ř. s. soudce Karla Šimky k odůvodnění rozsudku rozšířeného senátu Nejvyššího správního soudu ze dne 21. 11. 2017, č. j. 7 As 155/2015 – 160.",
+    "Odlišné stanovisko soudce Petra Mikeše ve věci sp. zn. 9 As 264/2020",
+    "Odlišné stanovisko",
+  ])("a heading: %s", (text) => {
+    expect(separateOpinionHeadingEndsAsSentence(text)).toBe(false);
+  });
+
+  test.each([
+    "Odlišné stanovisko k rozsudku v souladu s § 55a s. ř. s. uplatnil soudce Karel Šimka. Text odlišného stanoviska je připojen.",
+    "Odlišná stanoviska k rozsudku uplatnili soudci Jan Novák a Petr Dvořák.",
+  ])("a sentence: %s", (text) => {
+    expect(separateOpinionHeadingEndsAsSentence(text)).toBe(true);
+  });
+});

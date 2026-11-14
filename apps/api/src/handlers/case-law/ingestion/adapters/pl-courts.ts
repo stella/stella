@@ -44,10 +44,7 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlDecisionContent,
-  PL_DECISION_MARKUP,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   absentDecisionTextFields,
@@ -93,6 +90,7 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1499,21 +1497,23 @@ export const buildPlDecision = ({
 
   if (content) {
     try {
-      const parserResult = parsePlDecisionContent({
-        caseNumber,
-        ecli: undefined,
-        court: courtName,
-        decisionDate,
-        decisionType,
-        sourceUrl: publicSourceUrl(saosId),
-        documentUrl,
-        content,
-        keywords,
-        statutes,
-        documentId: upstreamId ?? String(saosId ?? caseNumber),
-        superscripts: true,
-        markup: PL_DECISION_MARKUP.COMMON_COURT,
-      });
+      const parserResult = parsePlCommonCourtDecision(
+        {
+          caseNumber,
+          ecli: undefined,
+          court: courtName,
+          decisionDate,
+          decisionType,
+          sourceUrl: publicSourceUrl(saosId),
+          documentUrl,
+          content,
+          keywords,
+          statutes,
+          documentId: upstreamId ?? String(saosId ?? caseNumber),
+          superscripts: true,
+        },
+        "pl-courts",
+      );
 
       documentAst = parserResult.documentAst;
       fulltext = parserResult.fulltext;
@@ -2346,6 +2346,13 @@ const DISSENTING_OPINION_FIELD = {
   target: { type: "metadata", key: "dissentingOpinions" },
 } as const satisfies SourceFieldDisposition;
 
+type PlCourtsPublisherRecord = Readonly<
+  Record<
+    (typeof SOURCE_FIELDS)[number] | SourceRecordPaths<SaosItem, true>,
+    unknown
+  >
+>;
+
 const PL_COURTS_SOURCE_FIELDS = {
   id: { disposition: "stored", target: { type: "identity" } },
   href: { disposition: "stored", target: { type: "metadata", key: "href" } },
@@ -2470,7 +2477,7 @@ const PL_COURTS_SOURCE_FIELDS = {
   "dissentingOpinions[].textContent": DISSENTING_OPINION_FIELD,
   "dissentingOpinions[].authors": JUDGE_FIELD,
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof PlCourtsPublisherRecord,
   SourceFieldDisposition
 >;
 

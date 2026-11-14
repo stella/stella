@@ -174,10 +174,7 @@ const bunTestApi = (
   return api;
 };
 
-export const raisedTimeoutViolations = (
-  file: string,
-  source: string,
-): Violation[] => {
+const raisedTimeoutViolations = (file: string, source: string): Violation[] => {
   const parsed = parseSource(file, source);
   const bindings = bunTestBindings(parsed.program);
   const violations: Violation[] = parsed.comments.flatMap((comment) =>
@@ -239,7 +236,7 @@ export const raisedTimeoutViolations = (
 };
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-export const invalidDepthTestEntries = (
+const invalidDepthTestEntries = (
   entries: readonly string[],
   runnableScriptTests: readonly string[],
 ): string[] => {

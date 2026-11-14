@@ -1,6 +1,6 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
-import { getTableName, is, sql } from "drizzle-orm";
+import { afterAll, describe, expect, test } from "bun:test";
+import { asc, getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
 import type { Verdict } from "@stll/db-load-gate/health";
@@ -8,8 +8,9 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import { CASE_LAW_REPLAY_PENDING_INDEX } from "@/api/db/case-law-parsed-input-state";
 import * as schema from "@/api/db/schema";
 import { BACKGROUND_REPLAY_ARMS } from "@/api/handlers/case-law/ingestion/replay";
+import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
 import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -19,6 +20,7 @@ import {
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import { DATA_EXPORT_HANDOFF_PAGE_SIZE } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   indexedAccessPaths,
@@ -26,39 +28,45 @@ import {
 } from "@/api/tests/query-plans/plan-walker";
 
 import {
-  CASE_LAW_SEARCH_FETCH_LIMIT,
-  CASE_LAW_SEARCH_SIZES,
-  caseLawSearchStatement,
-  seedCaseLawSearch,
-  unboundedCaseLawSearchStatement,
-} from "./case-law-search-fixture";
-import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
   coverageRefreshWroteSummary,
   describeServed,
   EXPRESSION_ID_BACKFILL_SIZES,
+  LEGISLATION_CANDIDATE_COUNT,
   PROVISION_BACKFILL_SIZES,
   readCoverageRefreshState,
-  seedCorpusReadBudgets,
   seedExpressionIdBackfillRows,
   seedProvisionBackfillRows,
   serveCaseLaw,
 } from "./corpus-seed";
+import measureLegislationCandidates from "./corpus-statement-entries/statement.legislation.candidateRows";
+import { dropSeededCorpus, withSeededCorpus } from "./corpus-template";
+import { seedDataExportScenario } from "./data-export-seed";
 import { withQueryPerfFixture } from "./fixture";
+import {
+  applyProductionStateStatistics,
+  estimatedGenerationStates,
+  PROJECTION_STATE_READS_PER_CANDIDATE,
+  projectionStateRowsVisited,
+} from "./legislation-candidate-plan";
 import {
   budgetProblem,
   budgetViolations,
+  explainOwnerStatement,
   measureOwnerStatement,
   measureQueryPerf,
+  metricsFromPlan,
   OVER_BUDGET_REMOVAL_BAND,
   scaleViolations,
+  scheduledJobBudgetProblems,
   shapeViolations,
   sharedBlockSampleProblem,
+  writeScaleViolations,
 } from "./measurement";
-import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
 import {
+  CORPUS_STATEMENT_BUDGET_IDS,
   corpusStatementRegistry,
   queryPerfRegistry,
   READ_BUDGET_PROFILES,
@@ -66,6 +74,7 @@ import {
   type ScheduledJobScenario,
 } from "./registry";
 import { seedRequestReceiptScenario } from "./request-receipt-seed";
+import { withQueryPerfRollback } from "./rollback";
 import {
   isTransactionControl,
   measureScheduledJobRun,
@@ -74,15 +83,24 @@ import {
   statementsForMeasurement,
 } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
+import { applyPlannerSettings } from "./settings";
 import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
-const describeScheduledScenario = (scenario: ScheduledJobScenario) =>
-  scenario.type === "case-law"
-    ? describeServed(scenario.served)
-    : `receipts:${scenario.cohort}:${scenario.rows}`;
+const describeScheduledScenario = (scenario: ScheduledJobScenario) => {
+  switch (scenario.type) {
+    case "case-law":
+      return describeServed(scenario.served);
+    case "data-exports":
+    case "request-receipts":
+      return `${scenario.type}:${scenario.cohort}:${scenario.rows}`;
+    default:
+      scenario satisfies never;
+      return panic("Unknown scheduled measurement scenario", scenario);
+  }
+};
 
 const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
@@ -95,6 +113,16 @@ const profileBudgets = (
     .filter(([, owner]) => owner === profile)
     .map(([id]) => id)
     .toSorted();
+
+/** The budgets the scheduled-job measurements own: each budgeted job's own. */
+const scheduledJobBudgets = () =>
+  [
+    ...new Set(
+      DECLARED_SCHEDULER_JOBS.flatMap((job) =>
+        typeof job.reads === "object" ? [job.reads.budget] : [],
+      ),
+    ),
+  ].toSorted();
 
 const backfillFixture = (jobId: string) => {
   if (jobId === SCHEDULER_BACKFILL_IDS.provisionState) {
@@ -200,10 +228,7 @@ test("every measurement execution guard applies even when pages fit or carry an 
     "statement.documents.searchHits",
     "statement.legislation.candidateRows",
   ] as const) {
-    for (const sharedBlocks of [
-      READ_BUDGETS[id].pages,
-      READ_BUDGETS[id].pages + 1,
-    ]) {
+    for (const sharedBlocks of [readBudgetPages(id), readBudgetPages(id) + 1]) {
       expect(
         budgetProblem(id, { sharedBlocks, executionTimeMs: 10_001 }),
       ).toContain("execution time");
@@ -236,23 +261,35 @@ test("over-budget markers use hysteresis while unmarked budgets retain their edg
   ).toBeUndefined();
   expect(
     budgetProblem("statement.documents.searchHits", {
-      sharedBlocks: READ_BUDGETS["statement.documents.searchHits"].pages,
+      sharedBlocks: readBudgetPages("statement.documents.searchHits"),
       executionTimeMs: 10_000,
     }),
   ).toBeUndefined();
 });
 
+// The corpus profile's statements and scheduled jobs are measured in separate
+// tests, each judging its own part; together they own every corpus budget.
+test("corpus statement and scheduled-job measurements own every corpus budget", () => {
+  expect(
+    [
+      ...new Set([...CORPUS_STATEMENT_BUDGET_IDS, ...scheduledJobBudgets()]),
+    ].toSorted(),
+  ).toEqual(profileBudgets("corpus"));
+});
+
 describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
+  afterAll(async () => {
+    await dropSeededCorpus();
+  }, 35_000); // timeout: dropping the seeded corpus removes its files, as the fixture teardown's own 35-second limit allows.
+
   test("measuring the provision-state backfill preserves its fixture and fresh-run pages", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
       panic("DATABASE_URL required for query perf");
-    await withQueryPerfFixture({
+    await withSeededCorpus({
       databaseUrl,
-      profileId: "corpus",
       timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
-      run: async (db, _deadline, openClient) => {
-        await seedCorpusReadBudgets(db);
+      run: async ({ db, openClient }) => {
         await seedProvisionBackfillRows(db, PROVISION_BACKFILL_SIZES.base);
         const before = await provisionBackfillFixtureBytes(db);
         const first = await measureScheduledJobRun({
@@ -277,115 +314,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         expect(measuredPages(second)).toBe(measuredPages(first));
       },
     });
-  }, 420_000); // timeout: the corpus profile seeds about a million rows before the integration assertion.
-
-  test("global Case Law search enriches only its page at both corpus sizes", async () => {
-    const budgetId = "statement.caseLaw.globalSearchHits";
-    const databaseUrl =
-      process.env["DATABASE_URL"] ??
-      panic("DATABASE_URL required for query perf");
-    const measurements: number[] = [];
-    await withQueryPerfFixture({
-      databaseUrl,
-      profileId: "corpus",
-      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
-      run: async (db, deadline) => {
-        for (const rows of CASE_LAW_SEARCH_SIZES) {
-          // db-await-in-loop: grow and measure each isolated corpus sequentially.
-          await deadline.run(`case-law search corpus ${rows}`, async () => {
-            await seedCaseLawSearch(db, rows);
-            const good = await measureOwnerStatement({
-              database: db,
-              build: caseLawSearchStatement,
-              owner: budgetId,
-              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
-              profileId: "corpus",
-            });
-            const bad = await measureOwnerStatement({
-              database: db,
-              build: unboundedCaseLawSearchStatement,
-              owner: budgetId,
-              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
-              profileId: "corpus",
-            });
-            log({
-              event: "read_budget_measurement",
-              budgetId,
-              rows,
-              budgetPages: READ_BUDGETS[budgetId].pages,
-              after: good.metrics,
-              before: bad.metrics,
-            });
-            log({
-              event: "read_budget_plan",
-              budgetId,
-              rows,
-              plan: good.plan.Plan,
-              formerPlan: bad.plan.Plan,
-            });
-            expect(good.plan.Plan["Actual Rows"]).toBe(
-              CASE_LAW_SEARCH_FETCH_LIMIT,
-            );
-            expect(bad.plan.Plan["Actual Rows"]).toBe(
-              CASE_LAW_SEARCH_FETCH_LIMIT,
-            );
-            expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
-            // Fixed text hits must not walk unrelated decisions before LIMIT.
-            expect(
-              good.planViolations.filter(
-                ({ kind, node }) =>
-                  kind === "large-scan" &&
-                  node["Relation Name"] ===
-                    getTableName(schema.caseLawDecisions),
-              ),
-            ).toEqual([]);
-            expect(
-              budgetViolations(bad.metrics, READ_BUDGETS[budgetId].pages).map(
-                ({ kind }) => kind,
-              ),
-            ).toContain("shared-buffer-budget");
-            // Same values and order, including snippets, identifiers and ranking.
-            const before = executedRows(
-              await db.execute(unboundedCaseLawSearchStatement()),
-            );
-            const after = executedRows(
-              await db.execute(caseLawSearchStatement()),
-            );
-            expect(after).toEqual(before);
-            expect(after).toHaveLength(CASE_LAW_SEARCH_FETCH_LIMIT);
-            expect(Object.keys(after.at(0) ?? {}).toSorted()).toEqual(
-              [
-                "id",
-                "case_number",
-                "ecli",
-                "case_number_type",
-                "court",
-                "country",
-                "decision_date",
-                "slug",
-                "language",
-                "language_group_key",
-                "identifiers",
-                "headline",
-                "tier",
-                "score",
-                "updated_at",
-              ].toSorted(),
-            );
-            measurements.push(good.metrics.sharedBlocks);
-          });
-        }
-      },
-    });
-    expect(measurements).toHaveLength(CASE_LAW_SEARCH_SIZES.length);
-    expect(
-      scaleViolations({
-        size: measurements.at(0) ?? panic("Missing small measurement"),
-        double: measurements.at(1) ?? panic("Missing growth measurement"),
-      }),
-    ).toEqual([]);
-    expect(profileBudgets("case-law")).toEqual([budgetId]);
-  }, 420_000); // timeout: two corpus sizes, warm-cache measurements and mutation checks on an isolated database.
+  }, 420_000); // timeout: the first corpus test seeds about a million rows before the integration assertion.
 
   test("document search stays within its budget at both sizes and a correlated policy exceeds it", async () => {
     const databaseUrl =
@@ -545,7 +474,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
     });
   });
 
-  test("corpus statements and scheduled jobs stay within their budgets at production shape", async () => {
+  test("corpus statements stay within their budgets at production shape and unbounded reads are refused", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
       panic("DATABASE_URL required for query perf");
@@ -558,16 +487,10 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         problems.push(problem);
       }
     };
-    await withQueryPerfFixture({
+    await withSeededCorpus({
       databaseUrl,
-      profileId: "corpus",
       timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
-      run: async (db, deadline, openClient) => {
-        const seed = await deadline.run(
-          "seed",
-          async () => await seedCorpusReadBudgets(db),
-        );
-
+      run: async ({ db, deadline, seed }) => {
         for (const entry of corpusStatementRegistry(seed)) {
           const { budgetId } = entry;
           const id = budgetId;
@@ -588,7 +511,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             event: "read_budget_measurement",
             profileId: "corpus",
             budgetId,
-            budgetPages: READ_BUDGETS[budgetId].pages,
+            budgetPages: readBudgetPages(budgetId),
             ...result.metrics,
             perRow: result.metrics.sharedBlocks / entry.expectedRows,
           });
@@ -667,15 +590,180 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           }
         }
 
+        // The gate must refuse what it exists to refuse. The freshness
+        // report's former reads go over its budget on this fixture, and the
+        // census-readiness revision checks, which it no longer runs, grow
+        // with the generation.
+        const unbounded = await deadline.run(
+          "measure unbounded freshness reads",
+          async () => {
+            let pages = 0;
+            for (const query of UNBOUNDED_FRESHNESS_STATEMENTS) {
+              // db-await-in-loop: two fixed statements, measured one at a time.
+              const result = await measureOwnerStatement({
+                database: db,
+                build: () => query,
+                owner: "fixture.unboundedFreshness",
+                ownerDeadlineMs: undefined,
+                profileId: "corpus",
+              });
+              pages += result.metrics.sharedBlocks;
+            }
+            return pages;
+          },
+        );
+        log({
+          event: "read_budget_refusal",
+          fixture: "unbounded-freshness",
+          pages: unbounded,
+        });
+        note(
+          unbounded > readBudgetPages("scheduled.caseLaw.reportFreshness")
+            ? undefined
+            : `the former unbounded freshness reads measured ${String(unbounded)} pages, inside the job's budget: the fixture is too small to refuse them`,
+        );
+
+        const revisionChecks = async (
+          generation: CaseLawScenarioGeneration,
+        ) => {
+          const target = { family: "case_law" as const, generation };
+          let pages = 0;
+          for (const query of [
+            corpusProjectionOutstandingIntentProbe(target),
+            corpusProjectionUnpublishedIntentProbe(
+              target,
+              CORPUS_INDEX_MANIFESTS[generation],
+            ),
+          ]) {
+            // db-await-in-loop: the two revision checks, measured one at a time.
+            const result = await measureOwnerStatement({
+              database: db,
+              build: () => query,
+              owner: "fixture.convergenceRevisionChecks",
+              ownerDeadlineMs: undefined,
+              profileId: "corpus",
+            });
+            pages += result.metrics.sharedBlocks;
+          }
+          return pages;
+        };
+        const quiet = CASE_LAW_SCENARIOS.quiet;
+        const growth = await deadline.run(
+          "measure revision checks",
+          async () => ({
+            size: await revisionChecks(quiet.size.serving),
+            double: await revisionChecks(quiet.double.serving),
+          }),
+        );
+        log({
+          event: "read_budget_refusal",
+          fixture: "convergence-revision-checks",
+          ...growth,
+        });
+        note(
+          scaleViolations(growth).length > 0
+            ? undefined
+            : `the revision checks read ${String(growth.size)} and ${String(growth.double)} pages: the scale rule did not refuse them`,
+        );
+      },
+    });
+    expect(problems).toEqual([]);
+    expect([...measured].toSorted()).toEqual(
+      [...CORPUS_STATEMENT_BUDGET_IDS].toSorted(),
+    );
+  }, 420_000); // timeout: the first corpus test seeds about a million rows inside the test's own 300-second deadline.
+
+  // The generation is a constant of the eligibility lookup, so the planner
+  // may drive the semi-join from the states table. Whichever side it drives
+  // from, only the candidates' own states may be read.
+  test("legislation candidates read only their own projection states under production statistics", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    const outcomes = await withSeededCorpus({
+      databaseUrl,
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async ({ db, deadline, seed }) => {
+        const statement = measureLegislationCandidates(seed);
+        const read = async (statistics: "analyzed" | "production") =>
+          await deadline.run(
+            `legislation candidates, ${statistics} statistics`,
+            async () =>
+              await withQueryPerfRollback(db, async (tx) => {
+                await applyPlannerSettings(tx);
+                if (statistics === "production") {
+                  await applyProductionStateStatistics(tx);
+                }
+                const estimate = await estimatedGenerationStates(tx);
+                const document = await explainOwnerStatement(
+                  tx,
+                  statement.build(tx),
+                );
+                return { statistics, estimate, document };
+              }),
+          );
+        return [await read("analyzed"), await read("production")];
+      },
+    });
+    for (const { statistics, estimate, document } of outcomes) {
+      const visited = projectionStateRowsVisited(document.Plan);
+      log({
+        event: "legislation_candidate_states",
+        statistics,
+        estimatedGenerationStates: estimate,
+        statesRowsVisited: visited,
+        sharedBlocks: metricsFromPlan(document).sharedBlocks,
+        executionTimeMs: document["Execution Time"],
+      });
+      expect(document.Plan["Actual Rows"]).toBe(LEGISLATION_CANDIDATE_COUNT);
+      expect(visited).toBeLessThanOrEqual(
+        LEGISLATION_CANDIDATE_COUNT * PROJECTION_STATE_READS_PER_CANDIDATE,
+      );
+    }
+    // The production statistics must put the generation below one page of
+    // candidates, or they would not tempt the planner to drive from states.
+    expect(
+      outcomes.find(({ statistics }) => statistics === "production")?.estimate,
+    ).toBeLessThan(LEGISLATION_CANDIDATE_COUNT);
+  }, 420_000); // timeout: the first corpus test seeds about a million rows inside the test's own 300-second deadline.
+
+  test("scheduled jobs stay within their budgets at production shape", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    const measured = new Set<string>();
+    // Every measurement runs and logs before the verdict, so one run reports
+    // all of them.
+    const problems: string[] = [];
+    const note = (problem: string | undefined) => {
+      if (problem !== undefined) {
+        problems.push(problem);
+      }
+    };
+    await withSeededCorpus({
+      databaseUrl,
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async ({ db, deadline, openClient }) => {
         const runMetrics = async (
           jobId: string,
           task: string,
           scenario?: ScheduledJobScenario,
         ) => {
-          if (scenario?.type === "case-law") {
-            await serveCaseLaw(db, scenario.served);
-          } else if (scenario !== undefined) {
-            await seedRequestReceiptScenario(db, scenario);
+          switch (scenario?.type) {
+            case undefined:
+              break;
+            case "case-law":
+              await serveCaseLaw(db, scenario.served);
+              break;
+            case "data-exports":
+              await seedDataExportScenario(db, scenario);
+              break;
+            case "request-receipts":
+              await seedRequestReceiptScenario(db, scenario);
+              break;
+            default:
+              scenario satisfies never;
+              panic("Unknown scheduled measurement scenario", scenario);
           }
           const measurement =
             SCHEDULED_JOB_MEASUREMENTS[jobId] ??
@@ -693,12 +781,57 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               scenario === undefined
                 ? "backfill-source"
                 : describeScheduledScenario(scenario);
+            let enqueued = 0;
+            const exportLifecycle = async () =>
+              await db
+                .select({
+                  id: schema.organizationDataExports.id,
+                  status: schema.organizationDataExports.status,
+                })
+                .from(schema.organizationDataExports)
+                .orderBy(asc(schema.organizationDataExports.id));
+            const originalExportLifecycle =
+              scenario?.type === "data-exports"
+                ? await exportLifecycle()
+                : null;
             const run = await measureScheduledJobRun({
               database: db,
               openClient,
               jobId,
               task,
+              ...(scenario?.type === "data-exports"
+                ? {
+                    dataExportMaintenance: {
+                      handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+                      enqueue: async () => {
+                        enqueued += 1;
+                        return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+                      },
+                    },
+                  }
+                : {}),
             });
+            if (scenario?.type === "data-exports") {
+              const retained = await db.$count(schema.organizationDataExports);
+              if (retained !== scenario.rows) {
+                panic("Scheduled measurement consumed its export fixture", {
+                  retained,
+                  expected: scenario.rows,
+                });
+              }
+              const lifecycleChanged =
+                JSON.stringify(await exportLifecycle()) !==
+                JSON.stringify(originalExportLifecycle);
+              if (lifecycleChanged !== (scenario.cohort === "transitions")) {
+                panic(
+                  "Export measurement missed its transition path",
+                  scenario,
+                );
+              }
+              if (enqueued > 0 !== (scenario.cohort !== "quiet")) {
+                panic("Export measurement missed its handoff path", scenario);
+              }
+            }
             if (scenario?.type === "request-receipts") {
               const retained = await db.$count(
                 schema.requestIdempotencyReceipts,
@@ -731,6 +864,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               jobId,
               generation,
               ...run.metrics,
+              readMetrics: run.readMetrics,
+              writeMetrics: run.writeMetrics,
+              writtenRows: run.writtenRows,
               statements: run.statements,
             });
             for (const violation of run.planViolations) {
@@ -744,7 +880,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 `${jobId} on ${generation} left no proof of its work; the budget measured only its bookkeeping`,
               );
             }
-            return run.metrics;
+            return run;
           } finally {
             await release?.();
           }
@@ -772,23 +908,28 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             );
             for (const run of runs) {
               log({ event: "read_budget_job_run", jobId, ...run });
-              note(budgetProblem(budgetId, run.metrics));
+              for (const problem of scheduledJobBudgetProblems(budgetId, run)) {
+                note(problem);
+              }
             }
             const small =
               runs.at(0) ?? panic("Missing small writing-job measurement");
             const large =
               runs.at(1) ?? panic("Missing large writing-job measurement");
-            for (const violation of scaleViolations({
-              size: small.metrics.sharedBlocks,
-              double: large.metrics.sharedBlocks,
-            })) {
+            for (const violation of [
+              ...scaleViolations({
+                size: small.readMetrics.sharedBlocks,
+                double: large.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size: small, double: large }),
+            ]) {
               note(`${jobId}: ${violation}`);
             }
             continue;
           }
           const backfill = backfillFixture(jobId);
           if (backfill !== undefined) {
-            const pages: number[] = [];
+            const runs: Awaited<ReturnType<typeof runMetrics>>[] = [];
             for (const rows of [backfill.sizes.base, backfill.sizes.double]) {
               // db-await-in-loop: the source table grows before the second bounded run is measured.
               const result = await deadline.run(
@@ -826,14 +967,25 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   return await runMetrics(jobId, measurement.task);
                 },
               );
-              pages.push(result.sharedBlocks);
-              note(budgetProblem(budgetId, result));
+              runs.push(result);
+              for (const problem of scheduledJobBudgetProblems(
+                budgetId,
+                result,
+              )) {
+                note(problem);
+              }
             }
             const size =
-              pages.at(0) ?? panic("missing base backfill measurement");
+              runs.at(0) ?? panic("missing base backfill measurement");
             const double =
-              pages.at(1) ?? panic("missing double backfill measurement");
-            for (const violation of scaleViolations({ size, double })) {
+              runs.at(1) ?? panic("missing double backfill measurement");
+            for (const violation of [
+              ...scaleViolations({
+                size: size.readMetrics.sharedBlocks,
+                double: double.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size, double }),
+            ]) {
               note(`${jobId} on backfill source rows: ${violation}`);
             }
             continue;
@@ -846,7 +998,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               async () =>
                 await runMetrics(jobId, measurement.task, scenario.size),
             );
-            note(budgetProblem(budgetId, size));
+            for (const problem of scheduledJobBudgetProblems(budgetId, size)) {
+              note(problem);
+            }
             const twin = scenario.double;
             if (twin === undefined) {
               continue;
@@ -856,16 +1010,37 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               `run ${jobId} on ${describeScheduledScenario(twin)}`,
               async () => await runMetrics(jobId, measurement.task, twin),
             );
-            note(budgetProblem(budgetId, double));
-            for (const violation of scaleViolations({
-              size: size.sharedBlocks,
-              double: double.sharedBlocks,
-            })) {
+            for (const problem of scheduledJobBudgetProblems(
+              budgetId,
+              double,
+            )) {
+              note(problem);
+            }
+            for (const violation of [
+              ...scaleViolations({
+                size: size.readMetrics.sharedBlocks,
+                double: double.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size, double }),
+            ]) {
               note(`${jobId} on ${label}: ${violation}`);
             }
           }
         }
+      },
+    });
+    expect(problems).toEqual([]);
+    expect([...measured].toSorted()).toEqual(scheduledJobBudgets());
+  }, 420_000); // timeout: the first corpus test seeds about a million rows inside the test's own 300-second deadline.
 
+  test("the coverage refresh measured in place leaves its fixture as found", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    await withSeededCorpus({
+      databaseUrl,
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async ({ db, deadline, openClient }) => {
         // The coverage refresh writes. Measured twice in place, it must leave
         // the fixture exactly as found and take the same path both times.
         const coverageJob =
@@ -926,85 +1101,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           expect(held.computed).toBe(false);
           expect(await readCoverageRefreshState(db)).toEqual(found);
         });
-
-        // The gate must refuse what it exists to refuse. The freshness
-        // report's former reads go over its budget on this fixture, and the
-        // census-readiness revision checks, which it no longer runs, grow
-        // with the generation.
-        const unbounded = await deadline.run(
-          "measure unbounded freshness reads",
-          async () => {
-            let pages = 0;
-            for (const query of UNBOUNDED_FRESHNESS_STATEMENTS) {
-              // db-await-in-loop: two fixed statements, measured one at a time.
-              const result = await measureOwnerStatement({
-                database: db,
-                build: () => query,
-                owner: "fixture.unboundedFreshness",
-                ownerDeadlineMs: undefined,
-                profileId: "corpus",
-              });
-              pages += result.metrics.sharedBlocks;
-            }
-            return pages;
-          },
-        );
-        log({
-          event: "read_budget_refusal",
-          fixture: "unbounded-freshness",
-          pages: unbounded,
-        });
-        note(
-          unbounded > READ_BUDGETS["scheduled.caseLaw.reportFreshness"].pages
-            ? undefined
-            : `the former unbounded freshness reads measured ${String(unbounded)} pages, inside the job's budget: the fixture is too small to refuse them`,
-        );
-
-        const revisionChecks = async (
-          generation: CaseLawScenarioGeneration,
-        ) => {
-          const target = { family: "case_law" as const, generation };
-          let pages = 0;
-          for (const query of [
-            corpusProjectionOutstandingIntentProbe(target),
-            corpusProjectionUnpublishedIntentProbe(
-              target,
-              CORPUS_INDEX_MANIFESTS[generation],
-            ),
-          ]) {
-            // db-await-in-loop: the two revision checks, measured one at a time.
-            const result = await measureOwnerStatement({
-              database: db,
-              build: () => query,
-              owner: "fixture.convergenceRevisionChecks",
-              ownerDeadlineMs: undefined,
-              profileId: "corpus",
-            });
-            pages += result.metrics.sharedBlocks;
-          }
-          return pages;
-        };
-        const quiet = CASE_LAW_SCENARIOS.quiet;
-        const growth = await deadline.run(
-          "measure revision checks",
-          async () => ({
-            size: await revisionChecks(quiet.size.serving),
-            double: await revisionChecks(quiet.double.serving),
-          }),
-        );
-        log({
-          event: "read_budget_refusal",
-          fixture: "convergence-revision-checks",
-          ...growth,
-        });
-        note(
-          scaleViolations(growth).length > 0
-            ? undefined
-            : `the revision checks read ${String(growth.size)} and ${String(growth.double)} pages: the scale rule did not refuse them`,
-        );
       },
     });
-    expect(problems).toEqual([]);
-    expect([...measured].toSorted()).toEqual(profileBudgets("corpus"));
-  }, 420_000); // timeout: the corpus profile seeds about a million rows inside its own 300-second deadline.
+  }, 420_000); // timeout: the first corpus test seeds about a million rows inside the test's own 300-second deadline.
 });

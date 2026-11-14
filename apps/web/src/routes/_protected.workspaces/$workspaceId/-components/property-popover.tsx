@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { PROPERTY_SORT_KINDS } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   CheckCircle2Icon,
@@ -35,7 +36,6 @@ import { PropertyConditions } from "@/components/workspaces/properties/property-
 import { PropertyPopoverTrigger } from "@/components/workspaces/properties/shared";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
 import { ALL_SORT_DIRECTIONS_AVAILABLE } from "@/components/workspaces/properties/sort-property.logic";
-import { PROPERTY_SORT_KINDS } from "@/components/workspaces/property-utils";
 import type { TableHeader } from "@/components/workspaces/table/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -91,6 +91,7 @@ export const PropertyPopover = ({
 }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
+  const sortKind = PROPERTY_SORT_KINDS[property.content.type];
   const displayName = usePropertyDisplayName();
   const groupScope = useGroupScope();
   const [isOpen, setIsOpen] = useState(false);
@@ -265,10 +266,10 @@ export const PropertyPopover = ({
   // dependencies (not the server snapshot) so two edits fired before
   // the query refetches don't drop one another's in-flight changes.
   const replaceDependency = (index: number, next: PropertyDependency) => {
-    if (property.tool.type !== "ai-model") {
+    const { content, tool } = property;
+    if (tool.type !== "ai-model" || content.type === "record") {
       return;
     }
-    const tool = property.tool;
     const nextDependencies = latestDependenciesRef.current.map(
       (dependency, i) => (i === index ? next : dependency),
     );
@@ -283,7 +284,7 @@ export const PropertyPopover = ({
           workspaceId,
           propertyId: id,
           name,
-          content: property.content,
+          content,
           tool: { ...tool, dependencies: nextDependencies },
         });
         detached(startWorkflow(), "property-popover.start-workflow");
@@ -411,12 +412,16 @@ export const PropertyPopover = ({
                 <Separator />
               </>
             )}
-            <SortProperty
-              column={header.column}
-              directions={ALL_SORT_DIRECTIONS_AVAILABLE}
-              kind={PROPERTY_SORT_KINDS[property.content.type]}
-            />
-            <Separator />
+            {sortKind !== null && (
+              <>
+                <SortProperty
+                  column={header.column}
+                  directions={ALL_SORT_DIRECTIONS_AVAILABLE}
+                  kind={sortKind}
+                />
+                <Separator />
+              </>
+            )}
             <div className="flex flex-col p-1">
               <PropertyConditions
                 dependencies={displayedDependencies}

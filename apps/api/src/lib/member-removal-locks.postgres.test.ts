@@ -9,7 +9,6 @@ import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   accountDeletionRequests,
-  contacts,
   entities,
   taskAssignees,
   workspaceMembers,
@@ -34,6 +33,7 @@ import {
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -562,12 +562,14 @@ describeLocks("matter creation against organization removal (postgres)", () => {
         const data = await fixture(db);
         const clientId = createSafeId<"contact">();
         const newWorkspaceId = createSafeId<"workspace">();
-        await db.insert(contacts).values({
-          id: clientId,
-          organizationId: data.organizationId,
-          type: "person",
-          displayName: "Matter client",
-        });
+        await insertOwnerContacts(db, [
+          {
+            id: clientId,
+            organizationId: data.organizationId,
+            type: "person",
+            displayName: "Matter client",
+          },
+        ]);
         const creationHolding = Promise.withResolvers<number>();
         const releaseCreation = Promise.withResolvers<undefined>();
         const create = async (hold: boolean) =>

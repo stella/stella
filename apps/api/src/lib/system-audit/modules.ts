@@ -28,6 +28,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:statute-sitemap-refresh",
   "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts":
     "system:case-law-population-fold",
+  "apps/api/src/lib/scheduler/tasks/case-law-population-seed.ts":
+    "system:case-law-population-seed",
   "apps/api/src/lib/legal-search/legislation-facet-refresh.ts":
     "system:legislation-facet-refresh",
   "apps/api/src/lib/case-law/source-arrivals-refresh.ts":
@@ -48,6 +50,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:case-law-parsed-input-state-backfill",
   "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts":
     "system:legislation-expression-id-backfill",
+  "apps/api/src/db/search-history-country-repair.ts":
+    "system:search-history-country-repair",
   "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts":
     "system:audit-retention",
   "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts":

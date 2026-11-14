@@ -26,6 +26,10 @@ import {
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
 
+import {
+  SITEMAP_LANGUAGE_GROUP_INDEX,
+  SITEMAP_MONTH_INDEX,
+} from "@/api/db/case-law-sitemap-indexes";
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind-values";
@@ -519,6 +523,13 @@ export const caseLawCorpusJurisdictions = p.pgTable(
   () => [...globalCaseLawPolicies()],
 );
 
+// ECLI identity ignores letter case while the column keeps the published spelling.
+const ecliUpperIndex = (ecli: PgColumn) =>
+  p
+    .index("case_law_decisions_ecli_upper_idx")
+    .on(sql`upper(${ecli})`)
+    .where(isNotNull(ecli));
+
 type ParsedSourceSchemaColumns = {
   id: PgColumn;
   parsedSourceHash: SQLWrapper;
@@ -603,6 +614,47 @@ const provisionSearchIndex = (t: ProvisionSearchIndexColumns) =>
     .index(CASE_LAW_PROVISION_SEARCH_INDEX.name)
     .on(t.country, sql`${t.citationAuthority} DESC`, sql`${t.id} DESC`)
     .where(publishedCaseLawDecisionFor(t));
+
+const sitemapPublishedIndexes = (
+  t: PublishedCourtDateColumns & {
+    id: PgColumn;
+    language: PgColumn;
+    languageGroupKey: PgColumn;
+    sourceId: PgColumn;
+    updatedAt: PgColumn;
+  },
+) => [
+  // What the sitemap read before it carried the language group. Kept until the
+  // promoted release no longer requires it, then retired for the one below.
+  p
+    .index("case_law_decisions_sitemap_shard_published_idx")
+    .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
+    .where(publishedCaseLawDecisionFor(t)),
+  // Partial on the publication gate so the gate costs nothing per row, and
+  // carrying the source (for the redistribution join), `updated_at` and `id`
+  // (for the bucket), and the language group and language (for its two
+  // probes) so a month is read off the index rather than the heap. Trailing
+  // keys rather than INCLUDE for the reason given at
+  // `case_law_decisions_citation_candidate_published_idx`.
+  p
+    .index(SITEMAP_MONTH_INDEX.name)
+    .on(
+      t.country,
+      t.decisionDate,
+      t.sourceId,
+      t.updatedAt,
+      t.id,
+      t.languageGroupKey,
+      t.language,
+    )
+    .where(publishedCaseLawDecisionFor(t)),
+  // The sitemap's probes of one decision's language group, per decision of a
+  // month: read off the index, the group's rows cost no heap page each.
+  p
+    .index(SITEMAP_LANGUAGE_GROUP_INDEX.name)
+    .on(t.country, t.languageGroupKey, t.id, t.language, t.sourceId)
+    .where(publishedCaseLawDecisionFor(t)),
+];
 
 const publishedCoverageIndexes = (
   t: PublishedCourtDateColumns & { sourceId: PgColumn; caseNumber: PgColumn },
@@ -875,6 +927,26 @@ export const caseLawDecisions = p.pgTable(
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
+    /** NSS reporter entry number as published. */
+    nssReporterNumber: p.text("nss_reporter_number"),
+    /** NSS reporter year as published. */
+    nssReporterYear: p.text("nss_reporter_year"),
+    /** NSS reporter issue as published. */
+    nssReporterIssue: p.text("nss_reporter_issue"),
+    /** NSS keyword-search taxonomy code as published. */
+    nssKeywordSearchCode: p.text("nss_keyword_search_code"),
+    /** Extended-chamber registry reference for the matched original. */
+    nssRegistryCaseNumber: p.text("nss_registry_case_number"),
+    /** Full published reference of the referring order. */
+    nssRegistryReferral: p.text("nss_registry_referral"),
+    /** Referral date in the publisher’s original notation. */
+    nssRegistryReferralDate: p.text("nss_registry_referral_date"),
+    /** Cases opposed in the extended-chamber proceeding, as published. */
+    nssRegistryAgainstCases: p.text("nss_registry_against_cases"),
+    /** Publisher status of the extended-chamber proceeding. */
+    nssRegistryStatus: p.text("nss_registry_status"),
+    /** Publisher annotation of the extended-chamber proceeding. */
+    nssRegistryAnnotation: p.text("nss_registry_annotation"),
   },
   (t) => [
     parsedSourceComplete(t),
@@ -947,6 +1019,7 @@ export const caseLawDecisions = p.pgTable(
       .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
+    ecliUpperIndex(t.ecli),
     // A bare docket's lookup reads its whole case file by this key, siblings
     // stored with their sheet included.
     p
@@ -1047,15 +1120,7 @@ export const caseLawDecisions = p.pgTable(
     ...publishedCoverageIndexes(t),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
-    // Partial on the publication gate so the gate costs nothing per row, and
-    // carrying the source (for the redistribution join), `updated_at` and `id`
-    // (for the bucket) so the count is read off the index rather than the
-    // heap. Trailing keys rather than INCLUDE for the reason given at
-    // `case_law_decisions_citation_candidate_published_idx`.
-    p
-      .index("case_law_decisions_sitemap_shard_published_idx")
-      .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
-      .where(publishedCaseLawDecisionFor(t)),
+    ...sitemapPublishedIndexes(t),
     p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
@@ -1564,6 +1629,43 @@ export const caseLawDecisionAliases = p.pgTable(
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
     }),
+  ],
+);
+
+/**
+ * Where a decision's block anchors went when a write replaced its document.
+ * One row per anchor the stored document no longer holds: the anchor now
+ * holding its text, or none when nothing does. Chains are flattened on write,
+ * so a lookup is one hop. Written in the decision write's transaction.
+ */
+export const caseLawDecisionAnchorRedirects = p.pgTable(
+  "case_law_decision_anchor_redirects",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** An anchor an earlier version of the decision's document held. */
+    fromAnchor: p.text("from_anchor").notNull(),
+    /** The current anchor holding its text; null when nothing does. */
+    toAnchor: p.text("to_anchor"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.decisionId, t.fromAnchor],
+      name: "case_law_decision_anchor_redirects_pk",
+    }),
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_anchor_redirects_decision_id_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_decision_anchor_redirects_anchors_shape",
+      sql`${t.fromAnchor} <> '' AND (${t.toAnchor} IS NULL OR (${t.toAnchor} <> '' AND ${t.toAnchor} <> ${t.fromAnchor}))`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -2956,6 +3058,12 @@ export const caseLawPopulationProjections = p.pgTable(
     p
       .index("case_law_population_projection_activity_idx")
       .on(t.country, t.court, t.updatedAt.desc(), t.sourceId, t.createdAt)
+      .where(sql`${t.publication} = 'published'`),
+    // A court's arrivals as a `created_at` range: a reparse rewrites
+    // `updated_at` across the court, so the activity index cannot bound them.
+    p
+      .index("case_law_population_projection_arrivals_idx")
+      .on(t.country, t.court, t.createdAt, t.sourceId)
       .where(sql`${t.publication} = 'published'`),
     p.pgPolicy("public_law_reader_access", {
       for: "select",

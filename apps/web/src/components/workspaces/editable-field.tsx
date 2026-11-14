@@ -18,6 +18,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -89,11 +90,13 @@ export const EditableField = ({
     content?.type === "unsupported" ||
     content?.type === "clip" ||
     // Money and person render, filter, sort and calculate, but have no inline
-    // editor yet; they are not offered by the property composer either
-    // (isCreatableContentType), so a workspace only holds one if the API put
-    // it there.
+    // editor yet: a money cell is filled by an AI column or the API, and a
+    // person only by the API.
     type === "money" ||
-    type === "person"
+    type === "person" ||
+    // A record comes from its data source or AI column, never typed in.
+    type === "record" ||
+    content?.type === "record"
   ) {
     return (
       <FieldValue
@@ -365,7 +368,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <TruncatedText className="hover:bg-muted rounded-sm px-2 py-1 text-sm">
           {isEmpty ? (
             <span className="text-muted-foreground">—</span>
           ) : (
@@ -375,7 +378,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
               variant={displayVariant}
             />
           )}
-        </span>
+        </TruncatedText>
       </Button>
     );
   }
@@ -459,13 +462,13 @@ const InlineDateEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <TruncatedText className="hover:bg-muted rounded-sm px-2 py-1 text-sm">
           <FieldValue
             content={{ type: "date", version: 1, value }}
             property={property}
             variant={displayVariant}
           />
-        </span>
+        </TruncatedText>
       </Button>
     );
   }
@@ -555,7 +558,7 @@ const InlineTextEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <TruncatedText className="hover:bg-muted rounded-sm px-2 py-1 text-sm">
           {value ? (
             <FieldValue
               content={{ type: "text", version: 1, value }}
@@ -565,7 +568,7 @@ const InlineTextEditor = ({
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
-        </span>
+        </TruncatedText>
       </Button>
     );
   }
@@ -661,7 +664,7 @@ const InlineIntEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block rounded-sm px-2 py-1 text-sm">
           {value === null ? (
             <span className="text-muted-foreground">—</span>
           ) : (
@@ -843,7 +846,7 @@ const TableFileField = ({
           />
         }
       >
-        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5">
+        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5">
           <DocumentIcon
             className="size-3.5 shrink-0"
             fileName={content.fileName}
@@ -852,12 +855,13 @@ const TableFileField = ({
           />
           {/* The name, not the icon, sets the chip's baseline, so a wrapped
             row lines the name up with its neighbours' first lines. */}
-          <BidiText
-            as="span"
-            className="min-w-0 self-baseline truncate text-start"
+          <TruncatedText
+            className="self-baseline text-start"
+            hint={false}
+            render={<BidiText as="span" />}
           >
             <HighlightedText columnId={propertyId} text={content.fileName} />
-          </BidiText>
+          </TruncatedText>
         </span>
       </Tooltip>
     );
@@ -867,7 +871,7 @@ const TableFileField = ({
     <Tooltip
       content={content.fileName}
       render={
-        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
+        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5 text-start opacity-60" />
       }
     >
       <DocumentIcon
@@ -876,9 +880,13 @@ const TableFileField = ({
         mimeType={content.mimeType}
         thumbnail={thumbnail}
       />
-      <BidiText as="span" className="min-w-0 self-baseline truncate text-start">
+      <TruncatedText
+        className="self-baseline text-start"
+        hint={false}
+        render={<BidiText as="span" />}
+      >
         <HighlightedText columnId={propertyId} text={content.fileName} />
-      </BidiText>
+      </TruncatedText>
     </Tooltip>
   );
 };

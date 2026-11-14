@@ -15,6 +15,7 @@ import {
   LIST_ITEM_TYPE,
   TASK_STATUS,
 } from "@stll/api-contract/entity-options";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -137,7 +138,7 @@ const lockSampleWorkspace = async (
   workspaceId: SafeId<"workspace">,
 ) => {
   const status = await lockWorkspaceForEntityCreate(tx, workspaceId);
-  if (status !== "active") {
+  if (!workspaceAcceptsWrites(status)) {
     abortTransaction(
       documentWriteRefusal(
         status === undefined ? "workspace-not-found" : "workspace-not-active",

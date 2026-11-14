@@ -8,7 +8,8 @@ mod unix {
   const PROBES: &str = include_str!("../examples/local_file_creation_guard.rs");
 
   fn active(path: &str) -> bool {
-    !path.starts_with("plist::") || cfg!(target_os = "macos")
+    (!path.starts_with("plist::") || cfg!(target_os = "macos"))
+      && !path.starts_with("winsafe::")
   }
 
   #[test]

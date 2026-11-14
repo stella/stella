@@ -11,14 +11,25 @@ import {
 } from "@tanstack/ai-codex";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  chatLocalRunContextSchema,
+  chatLocalRunLimitSchema,
+} from "@stll/api-contract/chat-run-target";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  approvalMessage,
+  type HarnessApprovalRequest,
   type HarnessEvent,
   type HarnessFailure,
   harnessSessionId,
   type HarnessToolCall,
+  type HarnessUsage,
 } from "./events";
 import {
   HARNESS_CONTINUATION_EVENT,
@@ -29,6 +40,7 @@ import {
 const MODEL = "gpt-test";
 const RUN_ID = "run-1";
 const THREAD_ID = "thread-1";
+const WORKSPACE_DIR = "/workspace";
 
 const counter = () => {
   let next = 0;
@@ -36,6 +48,35 @@ const counter = () => {
     next += 1;
     return `id-${next}`;
   };
+};
+
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
 };
 
 async function* from<T>(items: readonly T[]): AsyncGenerator<T> {
@@ -51,6 +92,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: MODEL,
     runId: RUN_ID,
     threadId: THREAD_ID,
+    workspaceDir: WORKSPACE_DIR,
     generateId: counter(),
     now: () => 0,
   })) {
@@ -204,6 +246,7 @@ describe("local harness chunks", () => {
           cachedInputTokens: 20,
           outputTokens: 30,
           reasoningOutputTokens: 5,
+          context: null,
         },
       },
     ];
@@ -211,7 +254,10 @@ describe("local harness chunks", () => {
     const cloudStored = storedParts(fold(await cloudChunks(cloud)));
     const localStream = await localChunks(local);
     expect(cloudStored.flatMap(({ parts }) => parts).length).toBeGreaterThan(3);
-    expect(storedParts(fold(localStream))).toEqual(cloudStored);
+    expect(withoutCommandOutput(cloudStored)).toEqual(
+      storedParts(fold(localStream)),
+    );
+    expect(JSON.stringify(localStream)).not.toContain("aggregated_output");
 
     // Usage and finish reason match; each stream stamps its own time.
     const finish = (chunks: readonly StreamChunk[]) => {
@@ -296,6 +342,50 @@ describe("local harness chunks", () => {
     );
   });
 
+  test("an approval's call carries the same bounded input as the call it pauses on", async () => {
+    const write = {
+      id: "call-write",
+      name: "command_execution",
+      input: {
+        command:
+          "cat > /workspace/notes.md <<'EOF'\nPrivate settlement terms\nEOF",
+      },
+    } as const satisfies HarnessToolCall;
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-3"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId: "approval-1",
+          kind: "command",
+          toolCall: write,
+          reason: null,
+          options: [{ id: "accept", decision: "approve" }],
+        },
+      },
+    ]);
+    const shown = { command: "cat > /workspace/notes.md <<'EOF'…" };
+    const pause = chunks.find(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.outcome?.type === "interrupt",
+    );
+    expect(pause).toMatchObject({
+      outcome: { interrupts: [{ metadata: { input: shown } }] },
+    });
+    const call = fold(chunks)
+      .flatMap(({ parts }) => parts)
+      .find((part) => part.type === "tool-call" && part.id === write.id);
+    expect(call).toMatchObject({
+      input: shown,
+      arguments: JSON.stringify(shown),
+    });
+  });
+
   test("a question answered by the next message completes its call without pausing", async () => {
     const questionCall = {
       id: "call-q",
@@ -325,6 +415,7 @@ describe("local harness chunks", () => {
               prompt: "Which governing law?",
               options: [{ label: "Czech", description: "" }],
               allowsFreeText: true,
+              multiSelect: false,
               secret: false,
             },
           ],
@@ -384,6 +475,46 @@ describe("local harness chunks", () => {
         content: JSON.stringify({ status: "interrupted" }),
       }),
     );
+    // Stored as the cloud engine stores a cancelled call: an error, never
+    // a completed result.
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
+  });
+
+  test("a call the harness reports it did not run because of a stop is stored cancelled, not failed", async () => {
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-5"),
+        continuation: { type: "resumed" },
+      },
+      { type: "tool.started", toolCall: commandCall },
+      {
+        type: "tool.completed",
+        toolCall: commandCall,
+        // What the adapter built from the harness's error flag.
+        result: {
+          content: JSON.stringify({ status: "failed" }),
+          status: "cancelled",
+        },
+      },
+      { type: "turn.interrupted" },
+    ]);
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        content: JSON.stringify({ status: "interrupted" }),
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
   });
 
   test("each failure kind ends the run with its own error code", async () => {
@@ -393,6 +524,10 @@ describe("local harness chunks", () => {
         type: "usage_limit",
         message: "Limit reached.",
         resetsAt: "2026-10-28T14:00:00.000Z",
+      },
+      model_at_capacity: {
+        type: "model_at_capacity",
+        message: "Selected model is at capacity.",
       },
       provider_error: {
         type: "provider_error",
@@ -408,6 +543,18 @@ describe("local harness chunks", () => {
       protocol_violation: {
         type: "protocol_violation",
         message: "Malformed message.",
+      },
+      sandbox_unavailable: {
+        type: "sandbox_unavailable",
+        message: "The sandbox could not start.",
+      },
+      retry_stalled: {
+        type: "retry_stalled",
+        message: "The harness kept retrying the provider without progress.",
+      },
+      tools_unavailable: {
+        type: "tools_unavailable",
+        message: "The harness could not connect to the stella MCP server.",
       },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;
@@ -426,6 +573,86 @@ describe("local harness chunks", () => {
     expect(codes.size).toBe(Object.keys(failures).length);
   });
 
+  test("a model at capacity ends the run with the chat's code for a provider outage", async () => {
+    const chunks = await localChunks([
+      {
+        type: "turn.failed",
+        failure: {
+          type: "model_at_capacity",
+          message: "Selected model is at capacity.",
+        },
+      },
+    ]);
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.provider_unavailable,
+    });
+  });
+
+  test("a usage limit says when it resets, and only a limit with a known reset", async () => {
+    const limited = async (resetsAt: string | null) =>
+      (
+        await localChunks([
+          {
+            type: "turn.failed",
+            failure: {
+              type: "usage_limit",
+              message: "Limit reached.",
+              resetsAt,
+            },
+          },
+        ])
+      ).at(-1);
+    const known = await limited("2026-10-28T14:00:00.000Z");
+    expect(known).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: "harness.usage_limit",
+      metadata: {
+        [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: {
+          resetsAt: "2026-10-28T14:00:00.000Z",
+        },
+      },
+    });
+    expect(
+      v.is(
+        chatLocalRunLimitSchema,
+        known?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+      ),
+    ).toBe(true);
+    const unknown = await limited(null);
+    expect(
+      unknown?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+    ).toBeUndefined();
+  });
+
+  test("a finished turn reports the context the harness measured, and only a measured one", async () => {
+    const finished = async (context: HarnessUsage["context"]) =>
+      (
+        await localChunks([
+          {
+            type: "turn.completed",
+            usage: {
+              inputTokens: 120,
+              cachedInputTokens: 20,
+              outputTokens: 30,
+              reasoningOutputTokens: 0,
+              context,
+            },
+          },
+        ])
+      ).findLast((chunk) => chunk.type === EventType.RUN_FINISHED);
+    const measured = await finished({ usedTokens: 150, windowTokens: 258_400 });
+    const reported = measured?.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY];
+    expect(reported).toEqual({ usedTokens: 150, windowTokens: 258_400 });
+    expect(v.is(chatLocalRunContextSchema, reported)).toBe(true);
+    // Billing usage still rides the chunk as the cloud engine's does.
+    expect(measured?.usage).toBeDefined();
+    const unmeasured = await finished(null);
+    expect(
+      unmeasured?.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+    ).toBeUndefined();
+  });
+
   test("a stream that ends without a terminal event fails as a protocol violation", async () => {
     const chunks = await localChunks([
       { type: "tool.started", toolCall: commandCall },
@@ -434,6 +661,56 @@ describe("local harness chunks", () => {
       type: EventType.RUN_ERROR,
       code: "harness.protocol_violation",
     });
+  });
+});
+
+describe("approval messages", () => {
+  const request = (
+    overrides: Partial<HarnessApprovalRequest>,
+  ): HarnessApprovalRequest => ({
+    requestId: "request-1",
+    kind: "command",
+    toolCall: { id: "call-1", name: "command_execution", input: {} },
+    reason: "Lists the folder",
+    options: [],
+    ...overrides,
+  });
+
+  test("a command approval names the command, not the harness's summary", () => {
+    expect(
+      approvalMessage(
+        request({
+          toolCall: {
+            id: "call-1",
+            name: "command_execution",
+            input: { command: "rm -rf build" },
+          },
+        }),
+      ),
+    ).toBe("rm -rf build");
+  });
+
+  test("other approvals and a command without its text keep the reason", () => {
+    expect(approvalMessage(request({ kind: "file_change" }))).toBe(
+      "Lists the folder",
+    );
+    expect(
+      approvalMessage(
+        request({
+          toolCall: {
+            id: "call-1",
+            name: "command_execution",
+            input: { command: "  " },
+          },
+        }),
+      ),
+    ).toBe("Lists the folder");
+  });
+
+  test("an approval without a reason names its tool", () => {
+    expect(approvalMessage(request({ kind: "tool", reason: " " }))).toBe(
+      "Approval required to run command_execution",
+    );
   });
 });
 

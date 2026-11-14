@@ -60,6 +60,13 @@ export const runWithPublicReadStatementTimeout = <T>(
   );
 
 /** Keep every transport alive through cancellation and resource cleanup. */
+/**
+ * Run `fn` outside the current public-read scope. A scope settles only after
+ * every read inside it, so work that outlives its request has to leave.
+ */
+export const runOutsidePublicReadScope = <T>(fn: () => T): T =>
+  publicReadTimeout.exit(fn);
+
 export const runWithPublicReadScope = async <T>(
   { budgetMs, signal }: PublicReadTimeoutOptions,
   fn: () => Promise<T>,
@@ -305,9 +312,9 @@ const fetchPublicRead = async ({
       fetcher,
     });
     const owned =
-      context?.work === undefined
-        ? response
-        : ownedResponse({ response, signal, finish });
+      context?.work !== undefined
+        ? ownedResponse({ response, signal, finish })
+        : response;
     ownership = "owned";
     return owned;
   } finally {
@@ -359,7 +366,14 @@ export const withPublicReadIo = async <T>(
           const body = response.body;
           if (body !== null && !body.locked) {
             const cancellation = body.cancel();
-            if (context?.work === undefined) {
+            if (context?.work !== undefined) {
+              if (consumption === "consumed") {
+                await cancellation;
+              } else {
+                // The reader owner observes cleanup; the original read error wins.
+                await Promise.allSettled([cancellation]);
+              }
+            } else {
               const cleanup = await Result.tryPromise({
                 try: async () => await cancellation,
                 catch: observeCleanupFailure,
@@ -367,11 +381,6 @@ export const withPublicReadIo = async <T>(
               if (consumption === "consumed" && Result.isError(cleanup)) {
                 await Promise.reject(cleanup.error);
               }
-            } else if (consumption === "consumed") {
-              await cancellation;
-            } else {
-              // The reader owner observes cleanup; the original read error wins.
-              await Promise.allSettled([cancellation]);
             }
           }
         }

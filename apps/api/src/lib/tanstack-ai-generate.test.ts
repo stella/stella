@@ -21,6 +21,7 @@ import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
@@ -795,13 +796,13 @@ describe("TanStack AI structured output generation", () => {
   test("keeps call-site temperature out of fixed-sampling Anthropic requests", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-opus-4-8",
       modelOptions: {},
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -823,13 +824,13 @@ describe("TanStack AI structured output generation", () => {
     // caller's value on top of `thinking`.
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-sonnet-4-6",
       modelOptions: { thinking: { type: "adaptive" } },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -854,13 +855,13 @@ describe("TanStack AI structured output generation", () => {
     // the budget, describes a request Anthropic cannot serve.
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-haiku-4-5-20251001",
       modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -879,13 +880,13 @@ describe("TanStack AI structured output generation", () => {
 
   test("keeps a chat turn's whole Anthropic request within the model's output limit", () => {
     // SAFETY: the helpers read only provider/modelOptions/modelId.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "claude-haiku-4-5-20251001",
       modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -906,13 +907,13 @@ describe("TanStack AI structured output generation", () => {
 
   test("leaves a model the catalog does not list to the provider's output default", () => {
     // SAFETY: the helpers read only provider/modelOptions/modelId.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "a-deployment-override-no-catalog-lists",
       modelOptions: {},
       provider: "openai",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -930,6 +931,7 @@ describe("TanStack AI structured output generation", () => {
 
   test("clamps and reports a thinking budget that leaves no room for the reply", () => {
     // SAFETY: the helpers read only provider/modelOptions/modelId.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
@@ -938,7 +940,6 @@ describe("TanStack AI structured output generation", () => {
         thinking: { type: "enabled", budget_tokens: 1_000_000 },
       },
       provider: "anthropic",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
     const limit = getOutputTokenLimit(model.modelId);
     // The fixture must reach the fault: the budget exceeds the model's limit.
@@ -975,13 +976,13 @@ describe("TanStack AI structured output generation", () => {
   test("enables OpenAI prompt caching without sending a model-specific retention value", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge regression test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "gpt-5.5",
       modelOptions: {},
       provider: "openai",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -1011,13 +1012,13 @@ describe("TanStack AI structured output generation", () => {
   test("maps OpenRouter controls to the Chat Completions request shape", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge regression test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
       modelId: "google/gemini-3.5-flash",
       modelOptions: { temperature: 0 },
       provider: "openrouter",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -1161,6 +1162,7 @@ describe("TanStack AI structured output generation", () => {
   test("forwards deferred service tiers to Gemini requests", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     const model = {
       adapter: {},
       keySource: "instance",
@@ -1169,7 +1171,6 @@ describe("TanStack AI structured output generation", () => {
       modelId: "gemini-3.1-pro-preview",
       modelOptions: { temperature: 0 },
       provider: "google",
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
     } as ResolvedTanStackTextModel;
 
     const options = mergeGenerationOptions({
@@ -2221,6 +2222,29 @@ describe("prompt caching at the layer boundaries", () => {
     modelOf("bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
     modelOf("mistral", "mistral-medium-latest"),
   ];
+
+  test("organization instructions preserve enabled and disabled caching decisions", () => {
+    const system = {
+      ...layered,
+      turn: `\n\n${buildOrganizationAIInstructionsPrompt("Use numbered paragraphs.")}${layered.turn}`,
+    };
+    for (const model of markerModels) {
+      expect(systemPromptsPatch({ caching, model, system })).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          { content: layered.organization, metadata: marker },
+          system.turn,
+        ],
+      });
+      expect(systemPromptsPatch({ caching: noCaching, model, system })).toEqual(
+        {
+          systemPrompts: [
+            `${system.static}${system.organization}${system.turn}`,
+          ],
+        },
+      );
+    }
+  });
 
   test("marks the static and organization layers where the provider caches at markers", () => {
     for (const model of markerModels) {

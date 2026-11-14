@@ -10,9 +10,9 @@ import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
 import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
 import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 import { cents } from "@stll/money";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/workspaces/matter-1/timesheets",
@@ -412,7 +412,7 @@ const approvalPage = () => (
 const rowOf = (narrative: string) => {
   const row = testing.screen.getByText(narrative).closest(".rounded-md");
   if (!(row instanceof HTMLElement)) {
-    throw new Error(`No row for ${narrative}`);
+    throw new TypeError(`No row for ${narrative}`);
   }
   return row;
 };
@@ -733,7 +733,9 @@ describe("returning checked time together", () => {
       ]),
     );
     await testing.waitFor(() =>
-      expect(testing.screen.queryByText("Narrative entry-a")).toBeNull(),
+      expect(testing.screen.queryByText("Narrative entry-a") === null).toBe(
+        true,
+      ),
     );
     expect(testing.screen.queryByText("Narrative entry-c")).toBeNull();
     expect(testing.screen.getByText("Narrative entry-b")).toBeTruthy();

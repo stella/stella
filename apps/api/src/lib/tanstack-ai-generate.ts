@@ -1223,6 +1223,17 @@ const PROVIDER_OWNED_ERROR_KIND = {
   deadline_exceeded: false,
   loop_detected: false,
   empty_completion: false,
+  // Named by the computer a local turn runs on.
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: false,
+  local_runner_turn_too_large: false,
+  // Named by a chat turn's delivery log.
+  turn_too_large: false,
+  local_runner_not_reached: false,
+  local_runner_relinked: false,
+  local_runner_restoring: false,
+  local_runner_folder_unavailable: false,
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 

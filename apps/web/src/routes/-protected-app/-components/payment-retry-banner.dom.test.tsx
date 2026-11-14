@@ -2,8 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 Object.assign(import.meta.env, {
@@ -195,7 +194,7 @@ test("a delayed access response stays in its organization cache and retry copy e
     await waitFor(() => {
       expect(view.getByRole("status").textContent).toContain("Payment issue");
     });
-    await waitFor(() => expect(view.queryByRole("status")).toBeNull());
+    await waitFor(() => expect(view.queryByRole("status") === null).toBe(true));
   } finally {
     oldResponse.resolve(Response.json(none));
     newResponse.resolve(Response.json(none));

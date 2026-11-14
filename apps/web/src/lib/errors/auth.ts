@@ -3,6 +3,7 @@ import { TaggedError } from "better-result";
 
 import type { TranslationKey } from "@/i18n/types";
 import { APIError } from "@/lib/errors/api";
+import { AUTH_CLIENT_ERROR_TAG } from "@/lib/errors/api-tag";
 import {
   STATUS_ERROR_KEYS,
   STATUS_TO_KEY,
@@ -74,6 +75,7 @@ const ORGANIZATION_ERROR_KEYS = {
   YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
     "errors.apiCodes.invitationRoleNotAllowed",
   YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE: ACTION_NOT_ALLOWED,
+  YOU_ARE_NOT_ALLOWED_TO_LIST_INVITATIONS: ACTION_NOT_ALLOWED,
   YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE: ACTION_NOT_ALLOWED,
   YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER: ACTION_NOT_ALLOWED,
   YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE: ACTION_NOT_ALLOWED,
@@ -103,7 +105,7 @@ const AUTH_ERROR_KEYS = {
 
 type AuthErrorCode = keyof typeof AUTH_ERROR_KEYS;
 
-export class AuthClientError extends TaggedError("AuthClientError")<{
+export class AuthClientError extends TaggedError(AUTH_CLIENT_ERROR_TAG)<{
   code?: AuthErrorCode | undefined;
   message: string;
   status: number;

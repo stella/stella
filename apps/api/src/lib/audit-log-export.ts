@@ -36,6 +36,8 @@ export const AUDIT_LOG_EXPORT_CSV_HEADER = [
 export const auditLogExportColumns = (context: AuditReadContext) => ({
   createdAt: auditLogs.createdAt,
   userId: auditLogs.userId,
+  performerType: auditLogs.performerType,
+  performerName: auditLogs.performerName,
   action: auditLogs.action,
   resourceType: auditLogs.resourceType,
   resourceId: auditLogs.resourceId,
@@ -54,6 +56,8 @@ export const auditLogArchiveColumns = (context: AuditReadContext) => {
   return {
     createdAt: auditLogs.createdAt,
     userId: auditLogs.userId,
+    performerType: auditLogs.performerType,
+    performerName: auditLogs.performerName,
     action: auditLogs.action,
     resourceType: auditLogs.resourceType,
     resourceId: sql<
@@ -74,10 +78,14 @@ export const auditLogArchiveColumns = (context: AuditReadContext) => {
 /** The Changes Status of a row whose matter the reader cannot see. */
 export const AUDIT_LOG_MATTER_WITHHELD_STATUS = "matter_withheld";
 
+type AuditPerformerType = (typeof auditLogs.$inferSelect)["performerType"];
+
 export type AuditLogExportRow =
   | {
       createdAt: Date;
       userId: string;
+      performerType: AuditPerformerType;
+      performerName: string | null;
       action: string;
       resourceType: string;
       resourceId: string;
@@ -88,6 +96,8 @@ export type AuditLogExportRow =
   | {
       createdAt: Date;
       userId: string;
+      performerType: AuditPerformerType;
+      performerName: string | null;
       action: string;
       resourceType: string;
       matterReadable: false;
@@ -131,10 +141,15 @@ export const auditLogExportCsvLine = ({
   featureAccessSnapshot,
   principal,
 }: AuditLogExportCsvLineOptions): string => {
+  // An automation acts under its own recorded name, not a member's.
+  const actorName =
+    (row.performerType === "service" ? row.performerName : null) ??
+    actor?.name ??
+    "";
   const shared = [
     escapeCSV(new Date(row.createdAt).toISOString()),
     escapeCSV(row.userId),
-    escapeCSV(actor?.name ?? ""),
+    escapeCSV(actorName),
     escapeCSV(actor?.email ?? ""),
     escapeCSV(row.action),
     escapeCSV(row.resourceType),

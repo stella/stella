@@ -1,5 +1,5 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -24,8 +24,8 @@ const MCP_CODE_TO_CHAT_KIND = {
   [ACTION_ADMISSION_CODES.organizationStateUnreadable]: "transient",
   [ACTION_ADMISSION_CODES.leaseLost]: "transient",
   // Active runs free up as they finish; the daily cap holds until tomorrow.
-  [VERIFICATION_RUN_CAP_CODES.active]: "transient",
-  [VERIFICATION_RUN_CAP_CODES.daily]: "limit",
+  [MODEL_RUN_CAP_CODES.active]: "transient",
+  [MODEL_RUN_CAP_CODES.daily]: "limit",
   // A 409 needs a different action (refetch state, rename, regenerate), which
   // is the model correcting its input, not a defect or a bare retry.
   conflict: "invalid-input",
@@ -33,6 +33,8 @@ const MCP_CODE_TO_CHAT_KIND = {
   upstream_unavailable: "transient",
   public_read_timeout: "transient",
   search_index_unavailable: "transient",
+  continuation_expired: "transient",
+  public_read_unfinished: "transient",
   unknown_tool: "unavailable",
   internal_error: "server-defect",
 } as const satisfies Record<McpErrorCode, ChatToolErrorKind>;

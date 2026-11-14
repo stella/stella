@@ -23,6 +23,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -66,6 +67,7 @@ import {
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import {
   boundLegalDocumentLabel,
@@ -250,16 +252,26 @@ export const ChatTabPanel = ({
     getContextMatterIds,
     getSendMode,
   };
-  const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: chatThreadContext,
-    }),
-  );
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  // The same model menu and Run on choice the chat page offers. The target
+  // is read at send time; the cache key never depends on it, so the runtime
+  // addresses the entry read above.
+  const composerModels = useChatComposerModels({
+    activeOrganizationId,
+    threadRef,
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+    startsOnLastChoice: true,
+  });
+  const { getRunTarget } = composerModels;
   const chat = useChatThreadRuntime({
     activeOrganizationId,
-    context: chatThreadContext,
+    context: { ...chatThreadContext, getRunTarget },
     data,
     key: threadRef,
   });
@@ -279,9 +291,12 @@ export const ChatTabPanel = ({
     removeQueuedMessage,
     sendQueuedMessageNow,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
+    computerWait,
+    turnSentAt,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -339,12 +354,20 @@ export const ChatTabPanel = ({
         if (!(await ensureAIAvailable())) {
           return CHAT_SEND_KEPT;
         }
+        // A model or Run on choice may still be landing; the send waits so
+        // it never runs on the previous one. A failure was already toasted.
+        if (Result.isError(await composerModels.awaitPendingSelection())) {
+          return CHAT_SEND_KEPT;
+        }
 
         // PromptBar emits the raw editor HTML; the backend parses
         // `<entity-mention>` tags out of TanStack text content.
-        await sendMessage(
-          await buildChatRequestMessage({ files, html: prompt }),
-        );
+        const message = await buildChatRequestMessage({ files, html: prompt });
+        if (message.isErr()) {
+          notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+          return CHAT_SEND_KEPT;
+        }
+        await sendMessage(message.value);
         return CHAT_SEND_SENT;
       } catch (submitError) {
         // Reported here, so the composer only takes the draft back.
@@ -590,7 +613,11 @@ export const ChatTabPanel = ({
           startLabelEditingWithSuggestion();
         },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected. A queued
+      // question sent on mount is no gesture, so it never opens it.
       if (!handledReserved) {
+        composerModels.openDesktopForSend();
         return await handlePromptSubmit({ prompt, files });
       }
 
@@ -598,7 +625,11 @@ export const ChatTabPanel = ({
       if (newThreadMessage === undefined) {
         return CHAT_SEND_SENT;
       }
+      composerModels.openDesktopForSend();
       if (!(await ensureAIAvailable())) {
+        return CHAT_SEND_KEPT;
+      }
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
       const newThreadId = createChatThreadId();
@@ -610,10 +641,13 @@ export const ChatTabPanel = ({
               threadId: newThreadId,
               workspaceId: tabWorkspaceId,
             };
-      await startNewThreadCommandHandoff({
+      const handoff = await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
           ...chatThreadContext,
+          // The new thread starts where this chat's turns run, as the chat
+          // page's `/new` does.
+          getRunTarget: composerModels.getRunTarget,
           getSendMode: () => getChatSendMode(newThreadRef),
         },
         files,
@@ -621,6 +655,10 @@ export const ChatTabPanel = ({
         queryClient,
         threadRef: newThreadRef,
       });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
       leave();
       resetChatTabId(tab.id, newThreadId);
       return CHAT_SEND_SENT;
@@ -733,9 +771,10 @@ export const ChatTabPanel = ({
                     sendNow: sendQueuedMessageNow,
                   }}
                   queuedMessages={queuedMessages}
-                  showThinkingIndicator
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
+                  computerWait={computerWait}
+                  turnSentAt={turnSentAt}
                   workspaceId={tabWorkspaceId}
                 />
               )}
@@ -773,10 +812,19 @@ export const ChatTabPanel = ({
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
                     editorController.submit(async (draft) => {
+                      composerModels.openDesktopForSend();
                       if (!(await ensureAIAvailable())) {
                         return CHAT_SEND_KEPT;
                       }
-                      await sendMessage(await buildChatRequestMessage(draft));
+                      const message = await buildChatRequestMessage(draft);
+                      if (message.isErr()) {
+                        notifyUserError(
+                          message.error,
+                          t("chat.sendErrorMessageEmpty"),
+                        );
+                        return CHAT_SEND_KEPT;
+                      }
+                      await sendMessage(message.value);
                       return CHAT_SEND_SENT;
                     }),
                     "chat-tab-panel.submit",
@@ -792,14 +840,17 @@ export const ChatTabPanel = ({
             onStop={() => {
               stop();
             }}
+            stopping={stopPending}
             onNewThread={messages.length > 0 ? startNewThread : null}
             onSubmit={handleComposerSubmit}
             pendingCount={0}
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}
+            models={composerModels.models}
             skillChat={{
               contextMatterIds: tab.contextMatterIds,
               document: null,
+              runTarget: composerModels.runTarget,
               threadRef,
               webSearch: {
                 available: data.webSearchAvailable,
@@ -811,6 +862,7 @@ export const ChatTabPanel = ({
             dock={
               <ChatComposerDock
                 data={data}
+                models={composerModels.models}
                 leadingContext={
                   <ChatMatterPicker
                     matterIds={tab.contextMatterIds}
@@ -1059,6 +1111,8 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
         dock={
           <ChatComposerDock
             leadingContext={<ChatMatterPickerPending />}
+            // The live panel's menu replaces this once the thread is read.
+            models={null}
             status="pending"
             threadRef={threadRef}
           />

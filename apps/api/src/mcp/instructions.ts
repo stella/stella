@@ -26,16 +26,16 @@ export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
 export const MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS = 1800;
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
 export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
-export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
+export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1350;
 
 /**
  * The one casing convention of this surface, stated identically everywhere so a
- * client reads it once at connect: snake_case in, camelCase out. Asserted
+ * client reads it once at connect: snake_case in, mostly camelCase out. Asserted
  * present on every surface by `registry-quality.test.ts`, next to the
  * snake_case input-name ratchet that enforces the input half structurally.
  */
 export const MCP_CASING_RULE =
-  "Casing: tool inputs are snake_case (`matter_id`); response payloads are camelCase (`matterId`, `entityId`, `nextCursor`).";
+  "Casing: inputs are snake_case (`matter_id`); outputs mostly camelCase (`matterId`, `nextCursor`), with `source_url`.";
 
 const defaultInstructions = (
   mode: "advanced" | "default",
@@ -80,7 +80,7 @@ Destructive tools refuse to run unless you pass \`confirm: true\`, and you must 
  */
 const lawTools = (publicLawEnabled: boolean): string =>
   publicLawEnabled
-    ? "Corpus: search, then fetch ids (`decision:<uuid>`, `statute:<eli>`). Case law: search_case_law, resolve_case_law_decision, read_case_law_decision, read_case_law_citations, open_case_law_decision for the user; case_law_coverage before declaring a decision absent. Legislation: resolve_law_citation for a provision, search_legislation, read_statute, read_statute_provisions, read_provision_history."
+    ? "Corpus: search, then fetch ids (`decision:<uuid>`, `statute:<eli>`). Case law: search_case_law, resolve_case_law_decision, read_case_law_decision, read_case_law_citations, open_case_law_decision for the user; case_law_coverage before declaring a decision absent. Legislation: resolve_law_citation for a provision, search_legislation, read_statute, read_statute_provisions, read_provision_history. Guidance, not case law: search_guidance, read_guidance."
     : "The public legal corpus is not enabled on this deployment, so this surface lists no tools.";
 
 const lawInstructions = (

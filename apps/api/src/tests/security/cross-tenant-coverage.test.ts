@@ -75,6 +75,11 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // The runner socket reads and writes through the gateway's root connection;
+  // every row it touches is bound to the account, organization, installation
+  // and device key the upgrade proved. The binding and the refusal of another
+  // device's proof are covered by `lib/desktop-runner/gateway.db.test.ts`.
+  "desktop-runner": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
@@ -82,6 +87,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Caller-supplied audio is transient; optional matter access is authorized
   // through MemberCaller and covered by dictation/transcribe.test.ts.
   dictation: WAIVER_REASON.noTenantReadSurface,
+  // The Outlook add-in's email helpers answer from the email text in the
+  // request body and read no stored record.
+  ai: WAIVER_REASON.noTenantReadSurface,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,
@@ -200,6 +208,19 @@ const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
     "get-model-options": WAIVER_REASON.noTenantReadSurface,
+    // The caller's own computers, read on the owner connection by account and
+    // organization; gateway.db.test.ts covers that one member never reads or
+    // answers another's runs.
+    "local-runners": WAIVER_REASON.isolatedOutsideRlsHarness,
+    // Approves a folder on the caller's own computer, written on the owner
+    // connection only where account, organization and computer match;
+    // linked-folder-approval.db.test.ts covers that another member or
+    // organization records nothing.
+    "local-folder-approval": WAIVER_REASON.isolatedOutsideRlsHarness,
+    // A grant to read one of the caller's own runs' outputs on their computer,
+    // read on the owner connection by account and organization;
+    // gateway.db.test.ts covers that a grant reads only the owner's one run.
+    "local-run-step-output-grant": WAIVER_REASON.isolatedOutsideRlsHarness,
     // Rewrites the prompt text in the request body; reads no stored record.
     "improve-prompt": WAIVER_REASON.noTenantReadSurface,
     // Plans a chart from the table in the request body; reads no stored record.

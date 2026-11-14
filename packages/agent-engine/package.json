@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "build:sidecar": "bun scripts/build-sidecar.ts",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "e2e:cloud": "bun --env-file=.env.e2e scripts/e2e-cloud-run.ts",
     "e2e:mcp-canary": "bun scripts/e2e-mcp-canary.ts",
@@ -19,11 +20,16 @@
     "test:docker": "AGENT_ENGINE_DOCKER_TEST=1 bun test src/bun-docker/provider.integration.test.ts",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/agent-engine",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-engine"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/agent-engine",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/agent-engine"
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/errors": "workspace:*",
+    "@stll/fetch": "workspace:*",
+    "@stll/portable-path": "workspace:*",
+    "@stll/sha256": "workspace:*",
+    "@stll/skills": "workspace:*",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-persistence": "catalog:",
@@ -34,6 +40,7 @@
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
+    "@stll/test-kit": "0.4.1",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

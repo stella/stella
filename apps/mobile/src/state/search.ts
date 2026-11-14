@@ -3,6 +3,8 @@ import type { Result } from "better-result";
 import type { Href } from "expo-router";
 import * as v from "valibot";
 
+import { documentFormat } from "@stll/api-contract/document-format";
+import type { DocumentFormat } from "@stll/api-contract/document-format";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { GlobalSearchResultType } from "@stll/api-contract/search";
 
@@ -66,6 +68,8 @@ const hitSchema = v.object({
   title: v.nullish(v.string()),
   headline: v.nullish(v.string()),
   updatedAt: v.string(),
+  /** A document's file type, which picks its mark. */
+  mimeType: v.nullish(v.string()),
   entityId: v.nullish(v.string()),
   workspaceId: v.nullish(v.string()),
   workspaceName: v.nullish(v.string()),
@@ -110,6 +114,8 @@ export type SearchResult =
       readonly matterName: string | null;
       readonly title: string;
       readonly updatedAt: string;
+      /** A document's format, from its file type; none for other items. */
+      readonly format: DocumentFormat | undefined;
     }
   | {
       readonly kind: "matter";
@@ -226,6 +232,10 @@ const toSearchResult = (hit: SearchHit): SearchResult | null => {
           matterName: hit.workspaceName ?? null,
           title,
           updatedAt,
+          format:
+            hit.type === "document" && present(hit.mimeType)
+              ? documentFormat(hit.mimeType)
+              : undefined,
         }
       : null;
   }
@@ -268,37 +278,55 @@ const toSearchResult = (hit: SearchHit): SearchResult | null => {
   return null;
 };
 
+/**
+ * Where an item of a matter opens, by its kind: a document to its pages, a
+ * folder to its matter, anything else to its details.
+ */
+export const entityRoute = ({
+  entityId,
+  entityKind,
+  matterName,
+  name,
+  workspaceId,
+}: {
+  readonly entityId: string;
+  readonly entityKind: string;
+  readonly matterName: string | null;
+  readonly name: string;
+  readonly workspaceId: string;
+}): Href => {
+  if (entityKind === "document") {
+    return {
+      pathname: "/document/[workspaceId]/[entityId]",
+      params: {
+        entityId,
+        workspaceId,
+        ...(name === "" ? {} : { name }),
+      },
+    };
+  }
+  // A folder opens its matter at the top level, where the folder unfolds
+  // in place; the matter screen takes no folder to open at.
+  if (entityKind === "folder") {
+    return {
+      pathname: "/matter/[workspaceId]",
+      params: {
+        workspaceId,
+        ...(matterName === null ? {} : { name: matterName }),
+      },
+    };
+  }
+  return {
+    pathname: "/matter/[workspaceId]/[entityId]",
+    params: { entityId, workspaceId },
+  };
+};
+
 /** Where a result opens: the screen the app already has for its kind. */
 export const searchResultRoute = (result: SearchResult): Href => {
   switch (result.kind) {
-    case "entity": {
-      const { entityId, workspaceId } = result;
-      if (result.entityKind === "document") {
-        return {
-          pathname: "/document/[workspaceId]/[entityId]",
-          params: {
-            entityId,
-            workspaceId,
-            ...(result.title === "" ? {} : { name: result.title }),
-          },
-        };
-      }
-      // A folder opens its matter at the top level, where the folder unfolds
-      // in place; the matter screen takes no folder to open at.
-      if (result.entityKind === "folder") {
-        return {
-          pathname: "/matter/[workspaceId]",
-          params: {
-            workspaceId,
-            ...(result.matterName === null ? {} : { name: result.matterName }),
-          },
-        };
-      }
-      return {
-        pathname: "/matter/[workspaceId]/[entityId]",
-        params: { entityId, workspaceId },
-      };
-    }
+    case "entity":
+      return entityRoute({ ...result, name: result.title });
     case "matter":
       return {
         pathname: "/matter/[workspaceId]",

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
+import { RESOURCE_MUTATION_ID_HEADER } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
@@ -196,7 +197,44 @@ const capabilityLineage = {
     ? "untrusted"
     : "absent",
 } as const satisfies Record<keyof CapabilityRequest, ReplayHeaderLineage>;
-const propertyName = (name: ts.PropertyName): string | undefined => {
+// Header-name constants a call may use as a computed key. Their values come
+// from the contract itself, so a computed key resolves to the name it sends.
+const CONTRACT_HEADER_NAMES: ReadonlyMap<string, string> = new Map([
+  ["RESOURCE_MUTATION_ID_HEADER", RESOURCE_MUTATION_ID_HEADER],
+]);
+const CONTRACT_MODULE = "@stll/api-contract";
+
+/** Local names bound to a known contract header constant by this file's imports. */
+const contractHeaderImports = (tree: ts.SourceFile) => {
+  const imported = new Map<string, string>();
+  for (const statement of tree.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== CONTRACT_MODULE
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    for (const element of bindings.elements) {
+      const value = CONTRACT_HEADER_NAMES.get(
+        (element.propertyName ?? element.name).text,
+      );
+      if (value !== undefined) {
+        imported.set(element.name.text, value);
+      }
+    }
+  }
+  return imported;
+};
+
+const propertyName = (
+  name: ts.PropertyName,
+  contractHeaders: ReadonlyMap<string, string> = new Map(),
+): string | undefined => {
   if (
     ts.isIdentifier(name) ||
     ts.isStringLiteralLike(name) ||
@@ -204,9 +242,14 @@ const propertyName = (name: ts.PropertyName): string | undefined => {
   ) {
     return name.text;
   }
-  return ts.isComputedPropertyName(name) &&
-    ts.isStringLiteralLike(name.expression)
-    ? name.expression.text
+  if (!ts.isComputedPropertyName(name)) {
+    return undefined;
+  }
+  if (ts.isStringLiteralLike(name.expression)) {
+    return name.expression.text;
+  }
+  return ts.isIdentifier(name.expression)
+    ? contractHeaders.get(name.expression.text)
     : undefined;
 };
 
@@ -225,6 +268,7 @@ const createMutationViolations = ({
   roots = new Map([["api", []]]),
 }: CreateMutationViolationsOptions) => {
   const tree = parse({ file, text });
+  const contractHeaders = contractHeaderImports(tree);
   const environment = {
     declarations: declarationsIn(tree),
     roots: new Map(roots),
@@ -359,7 +403,8 @@ const createMutationViolations = ({
           name === "useIdempotentMutation") ||
         (isModule({
           module,
-          owner: "routes/_protected.admin/-hooks/use-settings-mutation",
+          owner:
+            "routes/_protected.settings/organization/-hooks/use-settings-mutation",
         }) &&
           name === "useSettingsMutation") ||
         (isModule({
@@ -653,7 +698,7 @@ const createMutationViolations = ({
         }
         continue;
       }
-      const name = propertyName(entry.name);
+      const name = propertyName(entry.name, contractHeaders);
       if (name === undefined) {
         unknownSpread = true;
       } else if (name.toLowerCase() === "idempotency-key") {
@@ -722,7 +767,7 @@ const createMutationViolations = ({
         }
         continue;
       }
-      const name = propertyName(entry.name);
+      const name = propertyName(entry.name, contractHeaders);
       if (name === undefined) {
         lineage.headers = "untrusted";
         lineage.fetch = "untrusted";
@@ -1050,6 +1095,32 @@ test.each([
   expect(result.violations.at(0)).toContain("needs submit-intent headers");
 });
 
+test("create census resolves contract header constants used as computed keys", () => {
+  const violations = (binding: string) =>
+    createMutationViolations({
+      file: "fixture.ts",
+      text: `
+    import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+    ${binding}
+    useIdempotentMutation({ mutationFn: (body, request) =>
+      api.things.put(body, { headers: { ...request.headers, [RESOURCE_MUTATION_ID_HEADER]: mutationId } }) });
+  `,
+      creates: new Set(["put:things"]),
+    }).violations;
+  expect(
+    violations(
+      'import { RESOURCE_MUTATION_ID_HEADER } from "@stll/api-contract";',
+    ),
+  ).toEqual([]);
+  // A same-named local or foreign binding could name the replay header itself.
+  expect(
+    violations('const RESOURCE_MUTATION_ID_HEADER = "Idempotency-Key";'),
+  ).toHaveLength(1);
+  expect(
+    violations('import { RESOURCE_MUTATION_ID_HEADER } from "./headers";'),
+  ).toHaveLength(1);
+});
+
 test("create census follows prepared submit headers and rejects unrelated prepare methods", () => {
   const source = `
     import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
@@ -1165,7 +1236,7 @@ test("create census follows the owned subrequest derivation and rejects an unown
 test("create census trusts owning mutation wrappers and refuses unrelated matching names", () => {
   const source = `
     import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
-    import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+    import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
     import { useIdempotentMutation } from "@/unrelated/use-idempotent-mutation";
     useCapabilityMutation({ mutationFn: (body, request) => api.things.put(body, request) });
     useSettingsMutation({ mutationFn: (body, request) => api.things.put(body, request) });

@@ -3,14 +3,14 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { ChatDecisionLocator } from "@stll/api-contract/chat-reference-href";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { AskUserInput } from "@/components/chat/chat-ui-tools";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-import type { CaseLawDecisionLocator } from "./case-law-open";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/chat",
@@ -38,6 +38,8 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { decisionOptions } =
   await import("@/features/case-law/queries/decisions");
 const { toSafeId } = await import("@/lib/safe-id");
@@ -125,7 +127,9 @@ const renderChat = async (
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
-          <router.RouterProvider router={appRouter} />
+          <WebReaderPresentationProvider>
+            <router.RouterProvider router={appRouter} />
+          </WebReaderPresentationProvider>
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
@@ -272,7 +276,7 @@ const decisionLocators = [
   },
 ] as const satisfies readonly {
   name: string;
-  locator: CaseLawDecisionLocator;
+  locator: ChatDecisionLocator;
 }[];
 
 for (const { name, locator } of decisionLocators) {
@@ -408,9 +412,11 @@ for (const { kind, path } of citations) {
             // One chip per citation: a held primary trails no publisher link
             // and carries no glyph beside its own text. The tray's disclosure
             // chevron belongs to its trigger, not to the chip.
-            expect(surface.querySelectorAll("a")).toHaveLength(1);
+            expect(surface.querySelectorAll("a").length).toBe(1);
             if (held) {
-              expect(primary?.parentElement?.querySelector("svg")).toBeNull();
+              expect(
+                primary?.parentElement?.querySelector("svg") === null,
+              ).toBe(true);
             }
           }
         });
@@ -537,8 +543,8 @@ test("default markdown and clarification analysis share publisher aliases and in
       expect(primary.getAttribute("href")).toBe(internal);
     }
     expect(
-      view.queryAllByRole("link", { name: messages.common.source }),
-    ).toHaveLength(0);
+      view.queryAllByRole("link", { name: messages.common.source }).length,
+    ).toBe(0);
   });
 });
 
@@ -555,18 +561,20 @@ test("Arabic clarification questions use automatic direction and localized numbe
   const view = await renderChat(
     <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
       <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
-        <AskUserCard
-          isAwaitingUser
-          onSubmit={() => undefined}
-          part={{
-            type: "tool-call",
-            name: "ask-user",
-            id: "arabic-ask",
-            state: "input-complete",
-            arguments: JSON.stringify(input),
-            input,
-          }}
-        />
+        <WebReaderPresentationProvider>
+          <AskUserCard
+            isAwaitingUser
+            onSubmit={() => undefined}
+            part={{
+              type: "tool-call",
+              name: "ask-user",
+              id: "arabic-ask",
+              state: "input-complete",
+              arguments: JSON.stringify(input),
+              input,
+            }}
+          />
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>,
   );
@@ -647,7 +655,7 @@ for (const anchorId of [null, "p-12"]) {
         <BidiText as="span">{target.caseNumber}</BidiText>
       </StreamdownMentionLink>,
     );
-    const primary = await view.findByRole("button", {
+    const primary = await view.findByRole("link", {
       name: decisionReference,
     });
     const reader = new URL(
@@ -670,12 +678,14 @@ for (const anchorId of [null, "p-12"]) {
       name: messages.inspector.external.openOriginal,
     });
     expect(source.getAttribute("href")).toBe(publisher);
-    const open = screen.getByRole("link", {
-      name: messages.common.openInStella,
-    });
-    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-    open.dispatchEvent(click);
-    expect(click.defaultPrevented).toBe(true);
+    expect(
+      screen
+        .getByRole("link", { name: messages.common.openInStella })
+        .getAttribute("href"),
+    ).toBe(primary.getAttribute("href"));
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.openInSidePanel }),
+    );
     await waitFor(() => {
       const decisions = useInspectorTabsStore.getState().tabs.flatMap((tab) =>
         tab.type === "view" && isCaseDecisionViewPayload(tab.payload)
@@ -711,7 +721,7 @@ for (const interactive of [false, true]) {
       expect(view.queryByRole("link")).toBeNull();
       return;
     }
-    const primary = view.getByRole("button", { name: decisionReference });
+    const primary = view.getByRole("link", { name: decisionReference });
     expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
     expect(view.container.textContent).toBe(
       `${quotedPassage} NS${fullDecision.caseNumber}`,
@@ -811,8 +821,8 @@ test("a relative held primary is one chip in the tray and the passive answer", a
       expect(primary.getAttribute("href")).toBe(primaryUrl);
     }
     expect(
-      view.queryAllByRole("link", { name: messages.common.source }),
-    ).toHaveLength(0);
+      view.queryAllByRole("link", { name: messages.common.source }).length,
+    ).toBe(0);
   });
 });
 
@@ -834,7 +844,7 @@ test("a publisher alias with a canonical decision keeps the passage before the s
     </StreamdownMentionLink>,
     fullDecision,
   );
-  const primary = view.getByRole("button", { name: decisionReference });
+  const primary = view.getByRole("link", { name: decisionReference });
   expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
   expect(view.container.textContent).toBe(
     `${quotedPassage} NS${fullDecision.caseNumber}`,
@@ -874,16 +884,15 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
       </LegalCitationLink>,
       fullDecision,
     );
-    const primary = await view.findByRole("button", {
+    const primary = await view.findByRole("link", {
       name: decisionReference,
     });
     fireEvent.focus(primary);
-    const open = await screen.findByRole("link", {
-      name: messages.common.openInStella,
-    });
-    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-    open.dispatchEvent(click);
-    expect(click.defaultPrevented).toBe(true);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: messages.common.openInSidePanel,
+      }),
+    );
     await waitFor(() => {
       const decisions = useInspectorTabsStore.getState().tabs.flatMap((tab) =>
         tab.type === "view" && isCaseDecisionViewPayload(tab.payload)
@@ -932,7 +941,9 @@ test("reply markdown and clarification analysis share bare-domain chips without 
       for (const link of links) {
         expect(link.getAttribute("target")).toBe("_blank");
         expect(link.getAttribute("rel")).toBe("noopener noreferrer");
-        expect(link.firstElementChild?.querySelector("svg")).not.toBeNull();
+        expect(link.firstElementChild?.querySelector("svg") === null).toBe(
+          false,
+        );
         expect(link.children.item(1)?.tagName).toBe("BDI");
         fireEvent.mouseEnter(link);
         fireEvent.focus(link);
@@ -1002,7 +1013,9 @@ test("maximizing a different decision docks the displaced main reader before nav
   render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        <router.RouterProvider router={appRouter} />
+        <WebReaderPresentationProvider>
+          <router.RouterProvider router={appRouter} />
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>,
   );

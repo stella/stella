@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
@@ -9,11 +10,52 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 type StartNewThreadCommandHandoffArgs = {
   activeOrganizationId: string;
-  context: ChatThreadOptionsContext;
+  /**
+   * `getRunTarget` is required: a surface that starts a thread from its
+   * composer hands over where that composer's turns run (its
+   * `useChatComposerModels` getter), so the new thread starts there; one
+   * whose turns always run on stella states `undefined`.
+   */
+  context: ChatThreadOptionsContext & {
+    getRunTarget: ChatThreadOptionsContext["getRunTarget"];
+  };
   files: ChatDraftAttachment[];
   html: string;
   queryClient: QueryClient;
   threadRef: ChatThreadRef;
+};
+
+/**
+ * The new thread's data a hand-off starts its runtime on, carrying where the
+ * first send runs. Until the server's read of the thread reflects that turn,
+ * the destination page reads this entry, so it shows the target the turn
+ * runs on rather than the draft's stored one (Auto on stella for a chat that
+ * started on the member's last choice).
+ */
+export const readHandoffThread = async ({
+  activeOrganizationId,
+  context,
+  queryClient,
+  threadRef,
+}: {
+  activeOrganizationId: string;
+  context: ChatThreadOptionsContext;
+  queryClient: QueryClient;
+  threadRef: ChatThreadRef;
+}) => {
+  const options = chatThreadOptions({
+    activeOrganizationId,
+    context,
+    key: threadRef,
+  });
+  const data = await queryClient.query({ ...options, staleTime: "static" });
+  const runTarget = context.getRunTarget?.();
+  if (runTarget === undefined) {
+    return data;
+  }
+  const seeded = { ...data, runTarget };
+  queryClient.setQueryData(options.queryKey, seeded);
+  return seeded;
 };
 
 /**
@@ -33,20 +75,21 @@ export const startNewThreadCommandHandoff = async ({
   html,
   queryClient,
   threadRef,
-}: StartNewThreadCommandHandoffArgs): Promise<void> => {
+}: StartNewThreadCommandHandoffArgs) => {
+  const message = await buildChatRequestMessage({ files, html });
+  if (message.isErr()) {
+    return Result.err(message.error);
+  }
   const activeSkill = context.getActiveSkill?.();
   if (activeSkill !== undefined) {
     setThreadActiveSkill(threadRef, activeSkill);
   }
-  const [message, data, { acquireChatRuntime }] = await Promise.all([
-    buildChatRequestMessage({ files, html }),
-    queryClient.query({
-      ...chatThreadOptions({
-        activeOrganizationId,
-        context,
-        key: threadRef,
-      }),
-      staleTime: "static",
+  const [data, { acquireChatRuntime }] = await Promise.all([
+    readHandoffThread({
+      activeOrganizationId,
+      context,
+      queryClient,
+      threadRef,
     }),
     import("@/features/chat/chat-runtime-registry"),
   ]);
@@ -58,7 +101,8 @@ export const startNewThreadCommandHandoff = async ({
     queryClient,
   });
 
-  await chat.startRouteHandoffMessage(message, {
+  await chat.startRouteHandoffMessage(message.value, {
     timingSurface: "chat-thread",
   });
+  return Result.ok();
 };

@@ -698,16 +698,57 @@ describe("extractCitations", () => {
       "Nejvyššího správního soudu citovaná v tomto rozsudku jsou " +
       "publikována na www.nssoud.cz)";
     // The docket and the collection number name one decision, so they are
-    // one citation: the entry anchors on the docket and resolves by the
-    // collection number.
+    // one citation: the entry anchors on the docket, which names the sheet
+    // and so resolves by itself.
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]).toMatchObject({
       citationText: "č.j. 3 Ads 110/2009",
       citedSheetNumber: "49",
-      identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-      identifierValue: "č. 2018/2010 Sb. NSS",
+      identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     });
+  });
+
+  describe("a docket printed beside its collection number", () => {
+    const collections = [
+      "č. 933/2006 Sb. NSS",
+      "č. 58/2011 Sb. NS",
+      "č. 12/2015 Sb. rozh. tr.",
+    ];
+    const dockets = [
+      { printed: "č. j. 1 Azs 13/2006 ‑ 39", sheet: "39" },
+      { printed: "č. j. 9 Afs 59/2007-56", sheet: "56" },
+      { printed: "č. j. 2 As 196/2016‑123", sheet: "123" },
+      { printed: "sp. zn. 29 Cdo 1234/2013", sheet: null },
+      { printed: "sp. zn. 6 Tdo 512/2014", sheet: null },
+    ];
+
+    test.each(
+      dockets.flatMap((docket) =>
+        collections.map((collection) => ({ ...docket, collection })),
+      ),
+    )(
+      "$printed, $collection: one citation, keyed by the docket exactly when it names the sheet",
+      ({ printed, sheet, collection }) => {
+        const text = `viz rozsudek ${printed}, ${collection}, a dále`;
+        const citations = extractCitations([{ index: 0, text }]);
+
+        expect(citations).toHaveLength(1);
+        const [citation] = citations;
+        expect(citation?.citedSheetNumber ?? null).toBe(sheet);
+        if (sheet === null) {
+          expect(citation).toMatchObject({
+            identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+            identifierValue: collection,
+          });
+        } else {
+          expect(citation?.identifierType).toBe(
+            DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          );
+          expect(citation?.identifierValue).toBe(citation?.citationText);
+        }
+      },
+    );
   });
 
   test("extracts a bare Cpjn plenary-opinion citation without sp. zn.", () => {
@@ -903,6 +944,73 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("sp. zn. 2 M Obdo 1/2008");
+  });
+
+  test("extracts Slovak compound registers printed as separate words", () => {
+    // The register's second word ("V", "Pr") stands apart from the ordinary
+    // register, with or without the panel's leading "M". The dockets are
+    // illustrative of each shape, including the slash and joined-digit forms.
+    for (const docket of [
+      "1 M Obdo V 13/2005",
+      "1 M Obdo V 2/2006",
+      "1 Tdo V 14/2007",
+      "2 Cdo Pr 3/2016",
+      "1 M Obdo V/13/2005",
+      "1M Obdo V 13/2005",
+      "1 Tdo V/14/2007",
+    ]) {
+      const citations = extractCitations([
+        { index: 0, text: `uznesenie sp. zn. ${docket} z 29. marca 2006` },
+      ]);
+      expect(citations.map(({ citationText }) => citationText)).toEqual([
+        `sp. zn. ${docket}`,
+      ]);
+    }
+  });
+
+  test("folds a spaced Slovak compound register onto the glued docket's key", () => {
+    const spellings = [
+      ["4mcdo/15/2010", ["4 M Cdo 15/2010", "4 MCdo 15/2010", "4MCdo/15/2010"]],
+      [
+        "1mobdov/13/2005",
+        [
+          "sp. zn. 1 M Obdo V 13/2005",
+          "1 M ObdoV 13/2005",
+          "1 MObdo V 13/2005",
+          "1 MObdoV 13/2005",
+          "1MObdoV/13/2005",
+          "1 M Obdo V/13/2005",
+        ],
+      ],
+      ["1tdov/14/2007", ["1 Tdo V 14/2007", "1 TdoV 14/2007", "1TdoV/14/2007"]],
+      ["2cdopr/3/2016", ["2 Cdo Pr 3/2016", "2 CdoPr 3/2016", "2CdoPr/3/2016"]],
+      [
+        "1mobdopr/3/2016",
+        ["1 M Obdo Pr 3/2016", "1 MObdo Pr 3/2016", "1 MObdoPr 3/2016"],
+      ],
+    ] as const;
+    for (const [key, variants] of spellings) {
+      for (const variant of variants) {
+        expect(bareCitationKey(variant)).toBe(key);
+      }
+    }
+    // The fold is idempotent over a key an earlier pass already lowercased.
+    expect(bareCitationKey("4 m cdo 15/2010")).toBe("4mcdo/15/2010");
+  });
+
+  test("keeps a compound register apart from its ordinary register", () => {
+    expect(bareCitationKey("1 Tdo V 14/2007")).not.toBe(
+      bareCitationKey("1 Tdo 14/2007"),
+    );
+    expect(bareCitationKey("4 M Cdo 15/2010")).not.toBe(
+      bareCitationKey("4 Cdo 15/2010"),
+    );
+    expect(bareCitationKey("2 Cdo Pr 3/2016")).not.toBe(
+      bareCitationKey("2 Cdo 3/2016"),
+    );
+    // A register that merely is the letter stays the single word it is.
+    expect(bareCitationKey("1 M 13/2005")).toBe("1m/13/2005");
+    expect(bareCitationKey("1 V 13/2005")).toBe("1v/13/2005");
   });
 
   test("extracts a Slovak case number with a courthouse workplace-code prefix", () => {

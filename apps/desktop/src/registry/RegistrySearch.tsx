@@ -33,6 +33,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { accountExpiryDelay } from "../shared/account-expiry";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -114,7 +115,7 @@ type RegistrySearchProps = {
   source: "clips" | "registry";
   onConnectAccount: () => Promise<unknown>;
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
-  /** The shared search field; in registry scope ArrowUp and Enter act on the highlighted result. */
+  /** The shared search field; in registry scope Enter starts the search now and ArrowUp focuses the highlighted result. */
   searchInput: RefObject<HTMLInputElement | null>;
   children: (slots: {
     connectionStatus: DesktopConnectionStatus;
@@ -159,6 +160,11 @@ export const RegistrySearch = ({
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const generation = useRef(0);
+  // The search the user confirmed with Enter: it skips the debounce. A new
+  // object per Enter, so confirming the same query again retries a failure.
+  const [confirmedSearch, setConfirmedSearch] = useState<{
+    scope: string;
+  } | null>(null);
   const connectionGeneration = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
   const formatRequests = useRef(new Map<string, number>());
@@ -288,7 +294,7 @@ export const RegistrySearch = ({
         generation.current += 1;
       };
     }
-    const timer = setTimeout(() => {
+    const search = () => {
       setSearchState({
         status: "loading",
         scope,
@@ -330,7 +336,11 @@ export const RegistrySearch = ({
                 : searchError,
           });
         });
-    }, SEARCH_DEBOUNCE_MS);
+    };
+    const timer = setTimeout(
+      search,
+      confirmedSearch?.scope === scope ? 0 : SEARCH_DEBOUNCE_MS,
+    );
     return () => {
       clearTimeout(timer);
       generation.current += 1;
@@ -342,6 +352,7 @@ export const RegistrySearch = ({
     trimmedQuery,
     composing,
     scope,
+    confirmedSearch,
     searchError,
     roleError,
   ]);
@@ -382,7 +393,7 @@ export const RegistrySearch = ({
       })
       .catch(() => setError(t("registryErrorDisconnect")));
   };
-  // The highlighted result: the last one focused, else the first, so Enter
+  // The highlighted result: the last one focused, else the first, so ArrowUp
   // from the search field always has a target.
   const activeResult =
     currentSearch.status === "ready"
@@ -534,19 +545,27 @@ export const RegistrySearch = ({
       return () => undefined;
     }
     const handleSearchKey = (event: KeyboardEvent) => {
+      if (event.isComposing) {
+        return;
+      }
+      // Enter in the search field only searches: it never copies or closes
+      // the window. Copying is Enter on a focused result card.
+      if (event.key === "Enter") {
+        event.preventDefault();
+        // Only a search that has not started yet is brought forward, so a
+        // second Enter never repeats a request already in flight or shown.
+        if (currentSearch.status === "idle") {
+          setConfirmedSearch({ scope });
+        }
+        return;
+      }
       if (
-        event.isComposing ||
         event.altKey ||
         event.ctrlKey ||
         event.metaKey ||
         event.shiftKey ||
         activeResult === null
       ) {
-        return;
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        copy(activeResult);
         return;
       }
       if (event.key === "ArrowUp") {
@@ -602,12 +621,12 @@ export const RegistrySearch = ({
             aria-label={t("registrySelect")}
           >
             <Building2Icon aria-hidden="true" className="size-4" />
-            <span className="truncate">
+            <TruncatedText hint={false}>
               {connected
                 ? (connection.registries.find(({ id }) => id === registryId)
                     ?.name ?? t("registrySelect"))
                 : t("registrySelect")}
-            </span>
+            </TruncatedText>
             <ChevronDownIcon aria-hidden="true" className="size-3.5" />
           </MenuTrigger>
           <MenuPopup align="start">
@@ -657,8 +676,7 @@ export const RegistrySearch = ({
               className="clipboard-card relative flex min-h-0 w-[246px] shrink-0 flex-col overflow-hidden rounded-2xl"
               data-registry-result={card.id}
             >
-              <button
-                type="button"
+              <Button
                 data-registry-card
                 disabled={card.status === "formatting"}
                 onKeyDown={(event) => {
@@ -710,31 +728,38 @@ export const RegistrySearch = ({
                     inline: "nearest",
                   });
                 }}
-                className="focus-visible:ring-ring flex min-h-0 flex-1 flex-col justify-start overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                // A button centres its content vertically; a column pinned to
+                // the start keeps a short result at the top of a tall card.
+                className="flex min-h-0 flex-1 flex-col justify-start overflow-y-auto"
+                // The card clips its overflow; an outside ring would be cut
+                // off.
+                focusRing="inside"
+                variant="plain"
               >
-                <h2
-                  className="shrink-0 truncate text-sm font-semibold"
-                  dir="auto"
-                >
-                  {card.name}
-                </h2>
-                <p
-                  className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
-                  dir="auto"
-                >
-                  {parseRegistryFormatMarkdown(card.rendered).map(
-                    ({ text: runText, style, start }) => {
-                      if (style === "bold") {
-                        return <strong key={start}>{runText}</strong>;
-                      }
-                      if (style === "italic") {
-                        return <em key={start}>{runText}</em>;
-                      }
-                      return <span key={start}>{runText}</span>;
-                    },
-                  )}
-                </p>
-              </button>
+                <div className="px-4 py-3">
+                  <TruncatedText
+                    className="text-sm font-semibold"
+                    render={<h2 dir="auto">{card.name}</h2>}
+                    tooltip={card.name}
+                  />
+                  <p
+                    className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
+                    dir="auto"
+                  >
+                    {parseRegistryFormatMarkdown(card.rendered).map(
+                      ({ text: runText, style, start }) => {
+                        if (style === "bold") {
+                          return <strong key={start}>{runText}</strong>;
+                        }
+                        if (style === "italic") {
+                          return <em key={start}>{runText}</em>;
+                        }
+                        return <span key={start}>{runText}</span>;
+                      },
+                    )}
+                  </p>
+                </div>
+              </Button>
               <footer className="clipboard-card-footer flex h-12 shrink-0 items-center px-2">
                 <Menu>
                   <MenuTrigger
@@ -747,11 +772,11 @@ export const RegistrySearch = ({
                     }
                     aria-label={t("registryFormat")}
                   >
-                    <span className="truncate">
+                    <TruncatedText hint={false}>
                       {currentSearch.formats.find(
                         ({ id }) => id === card.formatId,
                       )?.name ?? t("registryDefaultFormat")}
-                    </span>
+                    </TruncatedText>
                     <ChevronDownIcon aria-hidden="true" className="size-3.5" />
                   </MenuTrigger>
                   <MenuPopup align="start" side="top">
@@ -832,9 +857,8 @@ export const RegistrySearch = ({
           aria-atomic="true"
         >
           <CircleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
-          <span className="truncate" title={errorMessage}>
-            {errorMessage}
-          </span>
+          {/* A long registry error truncates; the tooltip gives it back. */}
+          <TruncatedText>{errorMessage}</TruncatedText>
         </p>
       ) : null}
     </div>

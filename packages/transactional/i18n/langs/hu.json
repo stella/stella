@@ -36,6 +36,7 @@
     "flowRunAwaitingApproval": "Egy munkafolyamat a jóváhagyására vár",
     "flowRunCompleted": "Egy munkafolyamat befejeződött",
     "flowRunFailed": "Egy munkafolyamat sikertelen",
+    "localRunLimitReset": "A számítógépén futó kódoló ügynök folytathatja a csevegést",
     "mention": "Megemlítették Önt egy hozzászólásban",
     "taskAssigned": "Feladatot rendeltek önhöz"
   },

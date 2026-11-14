@@ -338,10 +338,7 @@ const RELEASE_CUT: Identity = {
   email: "release@example.test",
 };
 const GITHUB: Identity = { name: "GitHub", email: "noreply@github.com" };
-const AUTOFIX: Identity = {
-  name: "autofix-ci[bot]",
-  email: "114827586+autofix-ci[bot]@users.noreply.github.com",
-};
+
 const DEPLOYER: Identity = {
   name: "stella-release-deployer[bot]",
   email: "281031312+stella-release-deployer[bot]@users.noreply.github.com",
@@ -452,18 +449,11 @@ const withReleaseRange = (
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "release-range-"));
   try {
-    mkdirSync(path.join(directory, ".tailwind-cache"), { recursive: true });
     mkdirSync(path.join(directory, MEDIA), { recursive: true });
     git(directory, "init", "--quiet", "--initial-branch=main", "--template=");
     git(directory, "config", "commit.gpgsign", "false");
     writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
     writeLock(directory, "1.0.0");
-    for (const name of ["a1", "b1", "c1"]) {
-      writeFileSync(
-        path.join(directory, `.tailwind-cache/${name}.decl.json`),
-        `{"${name}":true}\n`,
-      );
-    }
     writeFileSync(path.join(directory, `${MEDIA}/agent.png`), "old-image");
     writeFileSync(path.join(directory, MANIFEST), '{"recordings":[]}\n');
     git(directory, "add", ".");
@@ -570,14 +560,6 @@ const releaseCut: ReleaseCommit = {
     writeFileSync(path.join(directory, MANIFEST), '{"recordings":["agent"]}\n');
   },
 };
-const renameTailwindCache = (directory: string) => {
-  for (const name of ["a1", "b1", "c1"]) {
-    renameSync(
-      path.join(directory, `.tailwind-cache/${name}.decl.json`),
-      path.join(directory, `.tailwind-cache/${name}-next.decl.json`),
-    );
-  }
-};
 // More than the 2 MiB data bound, as a marketing reshoot is.
 const reshootProductMedia = (directory: string) => {
   writeFileSync(
@@ -591,7 +573,6 @@ test("accepts the bots' own generated release files, as a v0.9.65 range carries 
   withReleaseRange(
     [
       releaseCut,
-      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
       { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
     ],
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
@@ -601,25 +582,9 @@ test("accepts the bots' generated files in a version commit squash-merged by a p
   withReleaseRange(
     [
       releaseCut,
-      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
       { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
     ],
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
-    {},
-  ));
-
-test("refuses a person's Tailwind cache change in a squash-merged version commit", () =>
-  withReleaseRange(
-    [
-      releaseCut,
-      { author: PERSON, committer: PERSON, mutate: renameTailwindCache },
-    ],
-    (result) => {
-      expect(result.exitCode).not.toBe(0);
-      expect(stderrText(result)).toContain(
-        "Tailwind class cache changed by a commit not made by its bot",
-      );
-    },
     {},
   ));
 
@@ -627,7 +592,7 @@ test("refuses a squash-merged version commit whose tree differs from its pull re
   withReleaseRange(
     [
       releaseCut,
-      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+      { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
     ],
     (result) => {
       expect(result.exitCode).not.toBe(0);
@@ -646,7 +611,7 @@ test("refuses a squash that holds the head's tree but reverts what main gained a
   withReleaseRange(
     [
       releaseCut,
-      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+      { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
     ],
     (result) => {
       expect(result.exitCode).not.toBe(0);
@@ -665,11 +630,6 @@ test("refuses a squash that holds the head's tree but reverts what main gained a
 
 test.each([
   [
-    "a Tailwind cache change made by a person",
-    { author: PERSON, committer: PERSON, mutate: renameTailwindCache },
-    "Tailwind class cache changed by a commit not made by its bot",
-  ],
-  [
     "product media changed by a person",
     { author: PERSON, committer: PERSON, mutate: reshootProductMedia },
     "landing product media changed by a commit not made by its bot",
@@ -677,11 +637,6 @@ test.each([
   [
     "a bot author not committed by GitHub",
     { author: DEPLOYER, committer: PERSON, mutate: reshootProductMedia },
-    "landing product media changed by a commit not made by its bot",
-  ],
-  [
-    "the other bot's generated class",
-    { author: AUTOFIX, committer: GITHUB, mutate: reshootProductMedia },
     "landing product media changed by a commit not made by its bot",
   ],
 ])("refuses %s", (_name, commit, message) =>
@@ -692,10 +647,6 @@ test.each([
 );
 
 test.each([
-  [
-    "Tailwind class cache",
-    { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
-  ],
   [
     "landing product media",
     { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },

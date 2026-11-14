@@ -19,6 +19,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
 import { Temporal, Temporal as Time } from "@stll/time";
 
 // Stand-ins for the schema objects and the values that reach a comparison.
@@ -340,6 +341,11 @@ const _sqlOperandCall = lte(decisions.updatedAt, sql`now()`);
 const _clockNow = lte(decisions.updatedAt, new Date());
 const _clockDerived = lt(decisions.updatedAt, new Date(Date.now() - 60_000));
 const _clockArithmetic = lt(decisions.updatedAt, new Date(Date.now()));
+const testClock = createTestClock();
+const _testClockDerived = lt(
+  decisions.updatedAt,
+  new Date(testClock.now() - 60_000),
+);
 
 const _temporalClockDerived = lt(
   decisions.updatedAt,
@@ -450,6 +456,7 @@ export const __noTruncatedTimestampComparisonFixture = {
   _clockNow,
   _clockDerived,
   _clockArithmetic,
+  _testClockDerived,
   _temporalClockDerived,
   _temporalClockAliasedImport,
   _clockBinding,
@@ -463,3 +470,32 @@ export const __noTruncatedTimestampComparisonFixture = {
   _tupleAgainstSubselect,
   _unused: [and, or],
 };
+
+// ── no-date-under-timestamp-cast ─────────────────────────────────────────
+//
+// The cast makes the operand a timestamp in SQL; a `Date` under it already
+// lost its microseconds.
+declare const storedRow: { createdAt: Date; updatedAt: Date; id: string };
+declare const parsedCursorTime: Date;
+
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-date-under-timestamp-cast
+const _castStoredTuple = sql`(${decisions.createdAt}, ${decisions.id}) > (${storedRow.createdAt}::timestamptz, ${storedRow.id}::uuid)`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-date-under-timestamp-cast
+const _castRenderedTuple = sql`(${decisions.createdAt}, ${decisions.id}) > (${parsedCursorTime.toISOString()}::timestamptz, ${boundaryId}::uuid)`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-date-under-timestamp-cast
+const _castStoredGuard = sql`${decisions.updatedAt} IS NOT DISTINCT FROM ${storedRow.updatedAt.toISOString()}::timestamptz`;
+const _castStoredFragment = gt(
+  decisions.createdAt,
+  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-date-under-timestamp-cast
+  sql`${storedRow.createdAt}::timestamptz`,
+);
+
+// The boundary never leaves the database.
+// expect-clean: no-truncated-timestamp-comparison/no-date-under-timestamp-cast
+const _castFreeSubselect = sql`(${decisions.createdAt}, ${decisions.id}) > (select b.created_at, b.id from decisions b where b.id = ${boundaryId})`;
+// A cutoff rendered from a clock value is not a row's boundary.
+// expect-clean: no-truncated-timestamp-comparison/no-date-under-timestamp-cast
+const _castCutoff = sql`${decisions.createdAt} <= ${parsedCursorTime.toISOString()}::timestamptz`;
+// Column to column, both read in the database.
+// expect-clean: no-truncated-timestamp-comparison/no-date-under-timestamp-cast
+const _castColumn = sql`${decisions.updatedAt} >= ${decisions.createdAt}::timestamptz`;

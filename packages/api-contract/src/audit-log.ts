@@ -35,12 +35,18 @@ export const AUDIT_RESOURCE_TYPE = {
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",
+  DATA_EXPORT: "data_export",
   CHAT_TOOL_EXECUTION: "chat_tool_execution",
   CHAT_TOOL_GRANT: "chat_tool_grant",
+  /** A standing approval for chat's browser actions on one website. */
+  CHAT_BROWSER_SITE_GRANT: "chat_browser_site_grant",
+  /** The member's OK for chat turns to work in a folder linked on a computer. */
+  CHAT_LOCAL_FOLDER_APPROVAL: "chat_local_folder_approval",
   CLAUSE: "clause",
   CLAUSE_CATEGORY: "clause_category",
   CLAUSE_TEMPLATE_LINK: "clause_template_link",
   CLAUSE_VARIANT: "clause_variant",
+  CONFLICT_CHECK: "conflict_check",
   CONTACT: "contact",
   CONTACT_DIRECTORY: "contact_directory",
   CORRESPONDENCE: "correspondence",
@@ -150,3 +156,16 @@ export const AUDIT_CHANGES_STATUS = {
   featureUnavailable: "feature_unavailable",
   unrecognizedResource: "unrecognized_resource",
 } as const;
+
+/**
+ * Who performed the audited change. People covers members and the agents
+ * acting for them; automations are the background services that write under a
+ * `system:` actor.
+ */
+export const AUDIT_PERFORMER_FILTER = {
+  people: "people",
+  automations: "automations",
+} as const;
+
+export type AuditPerformerFilter =
+  (typeof AUDIT_PERFORMER_FILTER)[keyof typeof AUDIT_PERFORMER_FILTER];

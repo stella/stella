@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -57,9 +58,55 @@ pub(crate) fn browser_connect_server(manager: &SessionManager) -> String {
 }
 
 #[tauri::command]
-pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String> {
+pub async fn get_state(
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<AppSnapshot, String> {
+  let crate::account::SessionAccountRead {
+    manager: mut mgr,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
+  mgr
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  drop(mgr);
+  SessionManager::attach_pending_listeners(state.inner()).await;
   let mgr = state.lock().await;
   Ok(mgr.get_snapshot())
+}
+
+#[tauri::command]
+pub async fn open_recovery_folder(
+  target: crate::types::RecoveryTarget,
+  window: tauri::WebviewWindow,
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<(), String> {
+  if window.label() != "main" {
+    return Err("document recovery is unavailable in this window".into());
+  }
+  let crate::account::SessionAccountRead {
+    mut manager,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
+  manager
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  drop(manager);
+  SessionManager::attach_pending_listeners(state.inner()).await;
+  state.lock().await.open_recovery_folder(target)
 }
 
 #[tauri::command]
@@ -71,8 +118,13 @@ pub async fn open_stella_account(
   let linked = crate::account::current(&account).await?;
   if linked.is_none() {
     let (api_base_url, origin) = browser_connect_target(&*state.lock().await)?;
-    return crate::account::open_browser_connection(&app, &api_base_url, &origin)
-      .await
+    return crate::account::open_browser_connection(
+      &app,
+      &api_base_url,
+      &origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
       .inspect_err(|error| {
         tracing::warn!(error = %error, web_origin = %origin, "stella web connection did not open");
       });
@@ -98,7 +150,7 @@ pub async fn open_session_file(
   session_id: String,
   state: State<'_, AppState>,
 ) -> Result<bool, String> {
-  let mgr = state.lock().await;
+  let mut mgr = state.lock().await;
   Ok(mgr.open_session_file(&session_id))
 }
 
@@ -152,7 +204,7 @@ pub async fn takeover_dialog_respond(
 ) -> Result<(), String> {
   let label = window.label().to_string();
   crate::session_manager::set_takeover_response(&label, approved);
-  let _ = window.close();
+  best_effort(window.close(), "dialog window could not be closed");
   Ok(())
 }
 
@@ -200,7 +252,7 @@ pub async fn self_host_connect_dialog_respond(
   window: tauri::WebviewWindow,
 ) -> Result<(), String> {
   crate::deep_link::set_self_host_connect_response(approved);
-  let _ = window.close();
+  best_effort(window.close(), "dialog window could not be closed");
   Ok(())
 }
 
@@ -225,7 +277,7 @@ pub async fn pdf_sign_respond(
   match waiting {
     Some(outcome) => Ok(outcome.await.unwrap_or(PdfSignResult::Cancelled)),
     None => {
-      let _ = window.close();
+      best_effort(window.close(), "dialog window could not be closed");
       Ok(PdfSignResult::Cancelled)
     }
   }

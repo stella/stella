@@ -1,6 +1,7 @@
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { Building2Icon, ShieldCheckIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { formatPreviewDate } from "./format";
 import { PREVIEW_MATTERS } from "./mock-data";
@@ -47,7 +48,7 @@ export const ContactsPreview = ({
   >
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
       <div className="flex min-w-0 items-center gap-2 text-sm">
-        <span className="truncate">{company.legalForm}</span>
+        <TruncatedText>{company.legalForm}</TruncatedText>
         <span className="text-success flex shrink-0 items-center gap-1 font-medium">
           <span className="size-1.5 rounded-full bg-current" />
           {company.status}
@@ -82,7 +83,7 @@ export const ContactsPreview = ({
           {linkedMatters.map((matter) => (
             <li className="flex min-w-0 items-center gap-2" key={matter.id}>
               <MatterIcon className="size-3.5 shrink-0" matter={matter} />
-              <span className="truncate">{matter.name}</span>
+              <TruncatedText>{matter.name}</TruncatedText>
             </li>
           ))}
         </ul>

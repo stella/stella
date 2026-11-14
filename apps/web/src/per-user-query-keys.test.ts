@@ -12,10 +12,18 @@ import { documentAnnotationKeys } from "@/components/pdf/annotations/document-an
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
+import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { chatLimitReminderOptions } from "@/features/chat/chat-limit-reminder";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
+import {
+  sharepointAccessOptions,
+  sharepointChildrenOptions,
+  sharepointDrivesOptions,
+  sharepointSitesOptions,
+} from "@/features/sharepoint/sharepoint-queries";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
@@ -24,6 +32,7 @@ import {
   sessionsOptions,
 } from "@/lib/account/queries";
 import { professionalUseOptions } from "@/lib/auth-queries";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -73,10 +82,10 @@ import {
   optionalOrganizationSettingsOptions,
   organizationSettingsOptions,
 } from "@/queries/organization-settings";
-import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
+import { auditLogOptions } from "@/routes/_protected.settings/organization/-queries/audit-logs";
 import { timeReportOptions } from "@/routes/_protected.time_.report/-components/report-query";
 
 // API reads that answer for the signed-in user are cached under a key that
@@ -130,6 +139,8 @@ const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 const READ_FRESH = "read fresh at each use, never cached";
+const SHAREPOINT_QUERIES = "features/sharepoint/sharepoint-queries.ts";
+const SHAREPOINT_VIEWER = { organizationId: ORG, userId: USER };
 
 const SEARCH_PROBE = {
   editedByUserIds: [],
@@ -260,7 +271,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "audit-logs/list.ts": {
     kind: "keyed",
     calls: ['api["audit-logs"].get'],
-    files: ["routes/_protected.admin/-queries/audit-logs.ts"],
+    files: ["routes/_protected.settings/organization/-queries/audit-logs.ts"],
     keys: () => [
       auditLogOptions({
         viewer: { userId: USER, organizationId: ORG },
@@ -273,6 +284,15 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
+  },
+  "lists/verifications/graph/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipts; the returned graph is shared within the matter.",
+  },
+  "lists/verifications/chronology/export.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
   },
   "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
@@ -359,6 +379,29 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
+  "chat/limit-reminder/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat.threads()["limit-reminder"].get'],
+    files: ["features/chat/chat-limit-reminder.ts"],
+    keys: () => [
+      chatLimitReminderOptions({
+        activeOrganizationId: ORG,
+        threadRef: { scope: "global", threadId: toChatThreadId("thread") },
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/browser-site-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["browser-site-grants"].get'],
+    files: ["features/chat/browser-control/browser-site-grants.ts"],
+    keys: () => [
+      browserSiteGrantsOptions({
+        activeOrganizationId: ORG,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],
@@ -375,6 +418,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: {
       "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
+  },
+  "chat/runs/list.ts": {
+    kind: "keyed",
+    calls: ["api.chat.runs.active.get"],
+    files: ["features/chat/active-runs.ts"],
+    keys: () => [chatKeys.activeRuns(ORG, USER)],
   },
   "chat/threads/list.ts": {
     kind: "keyed",
@@ -643,17 +692,38 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
     keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
   },
-  "sharepoint/list-drive-root.ts": {
-    kind: "no-web-caller",
-    calls: ["api.sharepoint.drive.root.get"],
+  "sharepoint/drives/items/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives().items().children.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [
+      sharepointChildrenOptions(SHAREPOINT_VIEWER, {
+        driveId: "drive-probe",
+        folderId: null,
+      }).queryKey,
+    ],
+  },
+  "sharepoint/drives/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointDrivesOptions(SHAREPOINT_VIEWER, null).queryKey],
   },
   "sharepoint/oauth-callback.ts": {
     kind: "not-per-user",
     reason: OAUTH_REDIRECT,
   },
+  "sharepoint/sites/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.sites.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointSitesOptions(SHAREPOINT_VIEWER, "").queryKey],
+  },
   "sharepoint/status.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.sharepoint.connection.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointAccessOptions(SHAREPOINT_VIEWER).queryKey],
   },
   "signals/count.ts": {
     kind: "keyed",
@@ -820,6 +890,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
+  "workspaces/member-candidates/list.ts": {
+    kind: "not-per-user",
+    reason: JOINS_NAMES,
+  },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],

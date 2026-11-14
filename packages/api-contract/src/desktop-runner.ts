@@ -5,10 +5,18 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
+import { STELLA_API_VERSION_PREFIX } from "./api-version";
+import { chatLocalRunOutputKeySchema } from "./chat-local-run-step-output";
+import {
+  CHAT_LOCAL_RUN_TOOL_LIMITS,
+  chatLocalRunShownText,
+} from "./chat-local-run-tool";
+import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
   desktopVersionSchema,
 } from "./desktop-presence";
+import { desktopRunnerQuestionAnswersSchema } from "./desktop-runner-answers";
 
 /**
  * Wire contract for the outbound WebSocket a desktop runner holds to the API.
@@ -28,10 +36,196 @@ import {
  * closed value plus rejected ones; the desktop's serde types round-trip the
  * same file, so either side drifting fails its tests.
  */
-export const DESKTOP_RUNNER_PROTOCOL = { current: 1, minimum: 1 } as const;
+export const DESKTOP_RUNNER_PROTOCOL = { current: 2, minimum: 1 } as const;
+
+/**
+ * The first protocol with `folder.restore` and `folder.restored`. A desktop
+ * on an older one still runs turns, is never sent a restore, and an undo of
+ * a turn it ran is refused as `desktop_update_required`. Once a desktop
+ * release that speaks this protocol is published, `minimum` rises to it and
+ * this boundary goes.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL = 2;
 
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
+
+/**
+ * The desktop feature an account needs to hold runner sockets. The API refuses
+ * the upgrade without it and closes open sockets once it is turned off.
+ */
+export const DESKTOP_RUNNER_FEATURE_ID =
+  "local-agents" as const satisfies DesktopFeatureId;
+
+/**
+ * What one account may hold through runner sockets and what one run may
+ * store. The API enforces each; a desktop speaks the protocol without them.
+ */
+export type DesktopRunnerLimits = {
+  /** Installations (installation id and device key) per account and organization. */
+  readonly maxRunnersPerAccount: number;
+  /**
+   * How long a run written to its computer's socket may wait to be accepted,
+   * or for its computer to return, before the API ends it as lost.
+   */
+  readonly abandonedRunMs: number;
+  /**
+   * How long a run never written to a socket may wait before the API ends it
+   * as lost: its computer is not connected, and the turn says so rather than
+   * waiting on. A run once written keeps `abandonedRunMs`, since the desktop
+   * starts a run before its acceptance reaches the API.
+   */
+  readonly unacceptedRunMs: number;
+  /** Sequenced messages (events, approval requests, the final one) one run may store. */
+  readonly maxMessagesPerRun: number;
+  /** UTF-8 bytes of sequenced messages one run may store. */
+  readonly maxMessageBytesPerRun: number;
+  /** Commands one run may queue, its `run.start` included. */
+  readonly maxCommandsPerRun: number;
+  /** How long an ended run, with its messages and commands, is kept. */
+  readonly endedRunRetentionMs: number;
+  /** UTF-8 bytes of frames one socket may have waiting to be stored. */
+  readonly maxQueuedBytesPerSocket: number;
+  /** Runner sockets one account may hold open on one API task. */
+  readonly maxSocketsPerAccount: number;
+};
+
+export const DESKTOP_RUNNER_LIMITS = {
+  maxRunnersPerAccount: 10,
+  abandonedRunMs: 24 * 60 * 60_000,
+  unacceptedRunMs: 2 * 60_000,
+  maxMessagesPerRun: 20_000,
+  maxMessageBytesPerRun: 64 * 1024 * 1024,
+  maxCommandsPerRun: 2000,
+  endedRunRetentionMs: 30 * 24 * 60 * 60_000,
+  maxQueuedBytesPerSocket: 4 * DESKTOP_RUNNER_MAX_FRAME_BYTES,
+  maxSocketsPerAccount: 4,
+} as const satisfies DesktopRunnerLimits;
+
+/** Where a desktop opens its runner socket (`wss://<api>/v1/desktop/runner`). */
+export const DESKTOP_RUNNER_PATH =
+  `${STELLA_API_VERSION_PREFIX}/desktop/runner` as const;
+
+/**
+ * The installation id the desktop already reports with its presence. The
+ * credential binds the device key; this names the installation the key runs
+ * in, so runs can be bound to both.
+ */
+export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
+
+/**
+ * Why the API closed a runner socket. A desktop reconnects after every code
+ * except `upgradeRequired` (until it is updated) and `superseded` (another
+ * socket of the same installation took over). Refusals before the upgrade are
+ * HTTP answers instead: 400 without a valid installation id, 401 or 403 from
+ * account and device-proof authorization, 403 with code `feature_disabled`
+ * for an account without the runner feature, 426 without a WebSocket upgrade,
+ * 429 above the account's socket cap, 503 while the task drains.
+ *
+ * - `goingAway`: the API task is draining or the socket reached its maximum
+ *   life; a `reconnect` frame with the delay to wait precedes it.
+ * - `unsupportedData`: a binary frame; the protocol is JSON text.
+ * - 1008, `policyViolation(reason)`: a frame the contract rejects
+ *   (`not_json`, `unknown_type`, `invalid`), a message before `hello`
+ *   (`hello_required`), a second `hello` (`hello_repeated`), a run message its
+ *   run's state does not allow (`run_state`), a chunk that is not a valid
+ *   AG-UI event or pauses for a question without a UUID request id
+ *   (`unfoldable_chunk`), or a run message past what one run may
+ *   store (`run_limit`; the API ends that run as lost).
+ * - `tooLarge`: a frame above `DESKTOP_RUNNER_MAX_FRAME_BYTES`.
+ * - `overloaded`: the desktop sent frames faster than they could be stored.
+ * - `internalError`: the API could not persist or read what it needed; the
+ *   desktop resends everything after its last `ack`.
+ * - `upgradeRequired`: `hello` named a protocol outside the accepted range;
+ *   an `upgrade_required` frame with the range precedes it.
+ * - `superseded`: a newer socket of the same installation and device key
+ *   was accepted.
+ * - `heartbeatTimeout`: pings went unanswered.
+ * - `sequenceGap`: a run message skipped a position; `welcome.resume` on the
+ *   next socket says where to resume.
+ * - `helloTimeout`: no `hello` arrived in time.
+ * - `unknownRun`: a run message for a run this socket does not hold.
+ * - `tooManyRunners`: the account holds as many installations as it may, and
+ *   none can make room.
+ * - `credentialRevoked`: the device key's credential was revoked, expired or
+ *   unlinked; the desktop must link again.
+ * - `featureDisabled`: the account no longer has the runner feature.
+ */
+export const DESKTOP_RUNNER_CLOSE = {
+  goingAway: { code: 1001, reason: "going_away" },
+  unsupportedData: { code: 1003, reason: "binary_frame" },
+  tooLarge: { code: 1009, reason: "too_large" },
+  internalError: { code: 1011, reason: "internal_error" },
+  overloaded: { code: 1013, reason: "overloaded" },
+  upgradeRequired: { code: 4001, reason: "upgrade_required" },
+  superseded: { code: 4002, reason: "superseded" },
+  heartbeatTimeout: { code: 4003, reason: "heartbeat_timeout" },
+  sequenceGap: { code: 4004, reason: "sequence_gap" },
+  helloTimeout: { code: 4005, reason: "hello_timeout" },
+  unknownRun: { code: 4006, reason: "unknown_run" },
+  tooManyRunners: { code: 4007, reason: "too_many_runners" },
+  credentialRevoked: { code: 4008, reason: "credential_revoked" },
+  featureDisabled: { code: 4009, reason: "feature_disabled" },
+} as const;
+export const DESKTOP_RUNNER_POLICY_VIOLATION_CODE = 1008;
+
+/** The reason a `policyViolation` close carries. */
+export const DESKTOP_RUNNER_POLICY_REASONS = [
+  "not_json",
+  "unknown_type",
+  "invalid",
+  "hello_required",
+  "hello_repeated",
+  "run_state",
+  "unfoldable_chunk",
+  "run_limit",
+] as const;
+type DesktopRunnerPolicyReason = (typeof DESKTOP_RUNNER_POLICY_REASONS)[number];
+
+export type DesktopRunnerClose =
+  | (typeof DESKTOP_RUNNER_CLOSE)[keyof typeof DESKTOP_RUNNER_CLOSE]
+  | {
+      code: typeof DESKTOP_RUNNER_POLICY_VIOLATION_CODE;
+      reason: DesktopRunnerPolicyReason;
+    };
+
+export const policyViolation = (
+  reason: DesktopRunnerPolicyReason,
+): DesktopRunnerClose => ({
+  code: DESKTOP_RUNNER_POLICY_VIOLATION_CODE,
+  reason,
+});
+
+/** How long the gateway waits for things and how long it holds them. */
+export type DesktopRunnerTiming = {
+  /** Between pings; two unanswered intervals close the socket. */
+  readonly pingIntervalMs: number;
+  /** A socket's life before the API asks the desktop to reconnect. */
+  readonly maxSocketLifeMs: number;
+  /** Before a socket that sent no `hello` is closed. */
+  readonly helloTimeoutMs: number;
+  /** A run's lease, renewed by every heartbeat of the socket holding it. */
+  readonly leaseMs: number;
+  /** How recently a runner must have been seen for routing to pick it. */
+  readonly runnerFreshnessMs: number;
+  /** Between sweeps for expired leases and commands a doorbell missed. */
+  readonly sweepIntervalMs: number;
+  /** Upper bound of the `reconnect` delay spread over a draining task's sockets. */
+  readonly drainSpreadMs: number;
+  /** A run's MCP token is refreshed when it has less than this left. */
+  readonly tokenRefreshMarginMs: number;
+};
+
+export const DESKTOP_RUNNER_TIMING = {
+  pingIntervalMs: 20_000,
+  maxSocketLifeMs: 60 * 60_000,
+  helloTimeoutMs: 10_000,
+  leaseMs: 90_000,
+  runnerFreshnessMs: 60_000,
+  sweepIntervalMs: 15_000,
+  drainSpreadMs: 30_000,
+  tokenRefreshMarginMs: 5 * 60_000,
+} as const satisfies DesktopRunnerTiming;
 
 export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   hello: "hello",
@@ -41,7 +235,13 @@ export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   runEvent: "run.event",
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
+  folderRestored: "folder.restored",
+  linkedFoldersStatus: "linked_folders.status",
+  runBackground: "run.background",
 } as const;
+
+/** Most background tasks one `run.background` reports. */
+export const DESKTOP_RUNNER_MAX_BACKGROUND_TASKS = 1000;
 
 export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   welcome: "welcome",
@@ -50,11 +250,35 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   runStart: "run.start",
   runInput: "run.input",
   runApproval: "run.approval",
+  runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
   ack: "ack",
+  folderRestore: "folder.restore",
 } as const;
+
+/**
+ * How a folder restore ended on the computer: done, no checkpoint for the
+ * run, a newer checkpoint not undone yet, a run using the folder, or a
+ * failure that left the folder as it was before the restore. A restore asked
+ * again after it was done answers `restored` again without touching the
+ * folder.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS = [
+  "no_checkpoint",
+  "not_newest",
+  "folder_busy",
+  "failed",
+] as const;
+export type DesktopRunnerFolderRestoreRefusal =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)[number];
+export const DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES = [
+  "restored",
+  ...DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS,
+] as const;
+export type DesktopRunnerFolderRestoreOutcome =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES)[number];
 
 export const DESKTOP_RUNNER_HARNESS_STATE = {
   ready: "ready",
@@ -62,7 +286,22 @@ export const DESKTOP_RUNNER_HARNESS_STATE = {
   limitUntil: "limit_until",
   notInstalled: "not_installed",
   unsupported: "unsupported",
+  unavailable: "unavailable",
 } as const;
+
+/**
+ * Why an installed harness could not be checked, so it is neither offered nor
+ * called unsupported: the desktop only knows that it cannot run it right now.
+ *
+ * - `harness_failed`: the harness did not start, exited or stopped answering.
+ * - `unexpected_answer`: the harness answered in a way the desktop cannot read.
+ * - `probe_failed`: the desktop's own harness host could not ask it.
+ */
+export const DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS = [
+  "harness_failed",
+  "unexpected_answer",
+  "probe_failed",
+] as const;
 
 /** What a ready harness reports it can do; the API never assumes more. */
 export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
@@ -72,18 +311,61 @@ export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
   "image_input",
 ] as const;
 
-/** Why a desktop refused a run command. */
+/**
+ * Why a desktop refused a run command. `harness_unavailable` matches a harness
+ * reported `unavailable`; `run_too_large` is a `run.start` the desktop cannot
+ * hand to its harness host whole, which no retry on that computer fixes. The
+ * `folder_*` reasons refuse a run in a linked folder: the link is gone from
+ * the computer, its volume is not mounted, the folder moved, it holds what
+ * runs rely on (stella's data or a skill folder), or it cannot be read.
+ */
 export const DESKTOP_RUNNER_REJECT_REASONS = [
   "harness_not_installed",
   "harness_needs_login",
   "harness_limited",
   "harness_unsupported",
+  "harness_unavailable",
   "harness_version_unavailable",
   "model_unavailable",
   "policy_unsupported",
   "at_capacity",
+  "run_too_large",
   "unknown_run",
+  "folder_busy",
+  "folder_unlinked",
+  "folder_offline",
+  "folder_moved",
+  "folder_protected",
+  "folder_unreadable",
 ] as const;
+
+/**
+ * How a folder the member linked on a computer stands, as the computer last
+ * looked: `offline` when its volume is not mounted, `moved` when it is gone
+ * from its volume or its path leads elsewhere, `protected` when it holds or
+ * sits in what runs rely on, `unreadable` when it cannot be read.
+ */
+export const DESKTOP_RUNNER_LINKED_FOLDER_STATES = [
+  "available",
+  "offline",
+  "moved",
+  "protected",
+  "unreadable",
+] as const;
+export type DesktopRunnerLinkedFolderState =
+  (typeof DESKTOP_RUNNER_LINKED_FOLDER_STATES)[number];
+export const DESKTOP_RUNNER_LINKED_FOLDER_STATE = {
+  available: "available",
+  offline: "offline",
+  moved: "moved",
+  protected: "protected",
+  unreadable: "unreadable",
+} as const satisfies Record<
+  DesktopRunnerLinkedFolderState,
+  DesktopRunnerLinkedFolderState
+>;
+/** Linked folders one computer reports at most. */
+export const DESKTOP_RUNNER_MAX_LINKED_FOLDERS = 64;
 
 export const DESKTOP_RUNNER_APPROVAL_KINDS = [
   "command",
@@ -114,15 +396,83 @@ export const DESKTOP_RUNNER_RUN_OUTCOMES = [
 export const DESKTOP_RUNNER_NETWORK_POLICIES = ["open"] as const;
 export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
 
+/**
+ * How much a local run asks before it acts, chosen per thread, listed from
+ * the mode that does least on its own.
+ * - `plan`: nothing that changes files runs without asking. The agent reads
+ *   and researches, then proposes a plan and waits; once the member approves
+ *   the plan the run continues as in `ask`, and a declined plan leaves it
+ *   planning. Only a harness that can pause on a plan offers it.
+ * - `ask`: edits inside the run workspace go ahead; commands and anything
+ *   else are asked about.
+ * - `auto`: the harness decides what is safe to do on its own and asks
+ *   about the rest.
+ * - `full_auto`: everything inside the harness's OS sandbox (writes confined
+ *   to the run workspace and its caches) runs without asking; leaving the
+ *   sandbox is always asked about. A desktop that cannot sandbox the
+ *   harness does not offer it.
+ */
+export const DESKTOP_RUNNER_APPROVAL_MODES = [
+  "plan",
+  "ask",
+  "auto",
+  "full_auto",
+] as const;
+export type DesktopRunnerApprovalMode =
+  (typeof DESKTOP_RUNNER_APPROVAL_MODES)[number];
+/** The mode every harness supports, and a thread's mode until one is chosen. */
+export const DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE =
+  "ask" satisfies DesktopRunnerApprovalMode;
+
+/**
+ * The reasoning efforts a harness may report for a model and a run may ask
+ * for, ordered weakest to strongest. Codex and Claude Code each list the ones
+ * a model accepts; an effort outside this list is left out of the report.
+ */
+export const DESKTOP_RUNNER_REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+export type DesktopRunnerReasoningEffort =
+  (typeof DESKTOP_RUNNER_REASONING_EFFORTS)[number];
+
+/**
+ * The efforts of `reported` this contract carries, each once and in ladder
+ * order, so a harness naming an effort stella does not know yet still
+ * reports the model. A model that reports none (`undefined`) offers none.
+ */
+export const knownReasoningEfforts = (
+  reported: readonly string[] | undefined,
+): DesktopRunnerReasoningEffort[] =>
+  DESKTOP_RUNNER_REASONING_EFFORTS.filter(
+    (effort) => reported?.includes(effort) === true,
+  );
+
 const MAX_SEQ = 4_294_967_295;
 const MAX_ACTIVE_RUNS = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
 const MAX_RECONNECT_DELAY_MS = 600_000;
+/** Files one `run.start` may copy; a chat's earlier files are already there. */
+export const MAX_RUN_ATTACHMENTS = 32;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 
 const listsOnce = (keys: readonly string[]) =>
   new Set(keys).size === keys.length;
+
+// The answer limits and schemas live in a leaf module, so a client that only
+// answers a question (the phone) does not load the runner protocol.
+export {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
+  desktopRunnerQuestionAnswersSchema,
+  desktopRunnerQuestionIdSchema,
+} from "./desktop-runner-answers";
+export type { DesktopRunnerQuestionAnswers } from "./desktop-runner-answers";
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -151,11 +501,39 @@ const harnessSessionIdSchema = v.nullable(
   v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 );
 const modelIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
-const tokenSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(8192));
+/** Longest MCP token a run message carries. */
+export const DESKTOP_RUNNER_MAX_TOKEN_LENGTH = 8192;
+const tokenSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_MAX_TOKEN_LENGTH),
+);
+
+const reasoningEffortSchema = v.picklist(DESKTOP_RUNNER_REASONING_EFFORTS);
 
 const harnessModelSchema = v.object({
   id: modelIdSchema,
   label: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  /**
+   * The model the harness runs when none is named, which the chat offers
+   * first as its recommended one. A report from before desktops sent it
+   * marks none.
+   */
+  isDefault: v.optional(v.boolean()),
+  /**
+   * The efforts a run of this model may ask for; empty when the harness
+   * offers no choice. A desktop from before efforts existed lists none.
+   */
+  reasoningEfforts: v.optional(
+    v.pipe(
+      v.array(reasoningEffortSchema),
+      v.check(
+        (efforts) => listsOnce(efforts),
+        "Reasoning efforts are listed once",
+      ),
+    ),
+    [],
+  ),
 });
 
 const harnessReportSchema = v.variant("state", [
@@ -169,6 +547,21 @@ const harnessReportSchema = v.variant("state", [
         (capabilities) => listsOnce(capabilities),
         "Capabilities are listed once",
       ),
+    ),
+    /**
+     * The approval modes this desktop can run the harness in. A desktop or a
+     * stored report from before modes existed offers the default alone.
+     */
+    approvalModes: v.optional(
+      v.pipe(
+        v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
+        v.check((modes) => listsOnce(modes), "Approval modes are listed once"),
+        v.check(
+          (modes) => modes.includes(DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE),
+          "Every harness supports the default approval mode",
+        ),
+      ),
+      [DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE],
     ),
     models: v.pipe(
       v.array(harnessModelSchema),
@@ -201,10 +594,17 @@ const harnessReportSchema = v.variant("state", [
     /** `null` when this desktop cannot run the harness at any version. */
     version: v.nullable(desktopVersionSchema),
   }),
+  v.object({
+    id: harnessSchema,
+    state: v.literal(DESKTOP_RUNNER_HARNESS_STATE.unavailable),
+    reason: v.picklist(DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS),
+  }),
 ]);
 export type DesktopRunnerHarnessReport = v.InferOutput<
   typeof harnessReportSchema
 >;
+/** One harness report, for a consumer reading back reports it stored. */
+export const desktopRunnerHarnessReportSchema = harnessReportSchema;
 
 /**
  * A TanStack `StreamChunk` as it crosses the socket. Only its type is checked
@@ -225,6 +625,157 @@ export const DESKTOP_RUNNER_MESSAGE_ROLES = [
 const modelMessageSchema = v.looseObject({
   role: v.picklist(DESKTOP_RUNNER_MESSAGE_ROLES),
 });
+
+export const DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH = 8192;
+
+const ATTACHMENT_PATH = /^attachments\/[\da-f-]{36}\/[^/\\\0]{1,255}$/u;
+
+/**
+ * Where a chat's attached file lands in the run's folder, relative to it. The
+ * file's id keeps two files of one name apart and a name out of the path's
+ * structure; the name stays readable for the agent and the member.
+ */
+export const desktopRunnerAttachmentPathSchema = v.pipe(
+  v.string(),
+  v.regex(ATTACHMENT_PATH),
+  v.check(
+    (path) => !path.split("/").some((part) => part === ".." || part === "."),
+    "An attachment stays inside its folder",
+  ),
+);
+
+/** Short of every filesystem's limit, with room for a long extension. */
+const ATTACHMENT_NAME_MAX_CHARS = 120;
+const ATTACHMENT_EXTENSION = /\.[^.]{1,16}$/u;
+
+const boundedAttachmentName = (name: string) => {
+  const characters = Array.from(name);
+  if (characters.length <= ATTACHMENT_NAME_MAX_CHARS) {
+    return name;
+  }
+  const suffix = ATTACHMENT_EXTENSION.exec(name)?.[0] ?? "";
+  return `${characters
+    .slice(0, ATTACHMENT_NAME_MAX_CHARS - Array.from(suffix).length)
+    .join("")}${suffix}`;
+};
+
+export const desktopRunnerAttachmentPath = (
+  fileId: string,
+  sanitizedFileName: string,
+): string =>
+  `attachments/${fileId}/${boundedAttachmentName(sanitizedFileName)}`;
+
+/**
+ * A file to copy before the run starts. The link is signed when the command is
+ * sent and expires soon after, so a stored `run.start` never holds one.
+ */
+export const desktopRunnerAttachmentSchema = v.object({
+  path: desktopRunnerAttachmentPathSchema,
+  url: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH),
+    v.url(),
+    v.startsWith("https://"),
+  ),
+});
+export type DesktopRunnerAttachment = v.InferOutput<
+  typeof desktopRunnerAttachmentSchema
+>;
+
+/**
+ * Where a run's output file is posted, over HTTP and with the run's agent
+ * token: a file does not fit a socket frame or what one run may store.
+ */
+export const desktopRunnerOutputPath = (runId: string) =>
+  `${STELLA_API_VERSION_PREFIX}/chat/local-runs/${encodeURIComponent(runId)}/outputs` as const;
+
+/** The largest file a run hands back; both ends hold it to this. */
+export const DESKTOP_RUNNER_OUTPUT_MAX_BYTES = 50 * 1024 * 1024;
+
+/** What the API answers once it stored a run's output file. */
+export const desktopRunnerOutputUploadedSchema = v.strictObject({
+  fileId: v.pipe(v.string(), v.uuid()),
+});
+
+/**
+ * The CUSTOM chunk a desktop reports one output file with, before the run's
+ * finish. It names a file; it never makes one: the API checks an uploaded id
+ * against the run's thread and owner and mints the message part itself.
+ */
+export const DESKTOP_RUNNER_OUTPUT_EVENT = "stella.run-output";
+
+const outputFileNameSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(255),
+);
+
+export const desktopRunnerOutputEventSchema = v.variant("status", [
+  v.strictObject({
+    status: v.literal("uploaded"),
+    fileId: v.pipe(v.string(), v.uuid()),
+    fileName: outputFileNameSchema,
+  }),
+  v.strictObject({
+    status: v.literal("failed"),
+    fileName: outputFileNameSchema,
+  }),
+]);
+export type DesktopRunnerOutputEvent = v.InferOutput<
+  typeof desktopRunnerOutputEventSchema
+>;
+
+/**
+ * The CUSTOM chunk a desktop reports once per run, before its harness starts:
+ * whether the run's folder was saved as it stood, so the turn's file changes
+ * can be undone. It carries no file names, counts or sizes.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_EVENT = "stella.checkpoint";
+
+/**
+ * Why a run's folder was not saved: past a size or time bound, holding
+ * something that cannot be saved (a pipe, a name the platform reserves), or a
+ * failure reading or writing it. The run goes on either way.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS = [
+  "too_large",
+  "too_slow",
+  "unsupported",
+  "failed",
+] as const;
+
+export const desktopRunnerCheckpointEventSchema = v.variant("status", [
+  v.strictObject({ status: v.literal("taken") }),
+  v.strictObject({
+    status: v.literal("unavailable"),
+    reason: v.picklist(DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS),
+  }),
+]);
+export type DesktopRunnerCheckpointEvent = v.InferOutput<
+  typeof desktopRunnerCheckpointEventSchema
+>;
+
+/**
+ * A folder linked on the computer, by its id and name: its path never leaves
+ * the computer.
+ */
+export const desktopRunnerLinkedFolderSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  state: v.picklist(DESKTOP_RUNNER_LINKED_FOLDER_STATES),
+});
+export type DesktopRunnerLinkedFolder = v.InferOutput<
+  typeof desktopRunnerLinkedFolderSchema
+>;
+
+const linkedFoldersSchema = v.pipe(
+  v.array(desktopRunnerLinkedFolderSchema),
+  v.maxLength(DESKTOP_RUNNER_MAX_LINKED_FOLDERS),
+  v.check(
+    (folders) => listsOnce(folders.map(({ id }) => id)),
+    "Each linked folder is listed once",
+  ),
+);
 
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
@@ -249,10 +800,17 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
         "Each run is listed once",
       ),
     ),
+    /** The folders linked on the computer; none from a desktop before them. */
+    linkedFolders: v.optional(linkedFoldersSchema, []),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus),
     harness: harnessReportSchema,
+  }),
+  /** Every linked folder, sent when the list or a folder's state changed. */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.linkedFoldersStatus),
+    folders: linkedFoldersSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted),
@@ -279,7 +837,19 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     seq: seqSchema,
     requestId: requestIdSchema,
     kind: v.picklist(DESKTOP_RUNNER_APPROVAL_KINDS),
-    summary: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+    /**
+     * What the approval asks, kept as one bounded line however a desktop
+     * wrote it (`chatLocalRunApprovalMessage` already is one), so a longer
+     * summary is stored shown and the run still resumes.
+     */
+    summary: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(4000),
+      v.transform((summary) =>
+        chatLocalRunShownText(summary, CHAT_LOCAL_RUN_TOOL_LIMITS.approval),
+      ),
+    ),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished),
@@ -288,6 +858,28 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     outcome: v.picklist(DESKTOP_RUNNER_RUN_OUTCOMES),
     /** The harness session a later run resumes; `null` if none started. */
     harnessSessionId: harnessSessionIdSchema,
+  }),
+  /** How a `folder.restore` ended; it names no file. */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored),
+    restoreId: v.pipe(v.string(), v.uuid()),
+    outcome: v.picklist(DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES),
+  }),
+  /**
+   * How many tasks the harness process a finished run left behind keeps
+   * running in the background, while its chat waits for the next turn: on
+   * every change, 0 once they end or the next turn takes the process, and
+   * again after each `welcome`. Not sequenced: the latest count holds.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runBackground),
+    runId: runIdSchema,
+    count: v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(DESKTOP_RUNNER_MAX_BACKGROUND_TASKS),
+    ),
   }),
 ]);
 export type DesktopRunnerDesktopMessage = v.InferOutput<
@@ -325,9 +917,24 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runStart),
     runId: runIdSchema,
+    /** The folder the run works in; a chat's runs share one, so files stay between turns. */
+    folderId: v.pipe(v.string(), v.uuid()),
+    /**
+     * A folder the member linked on the computer, which the run works in
+     * instead; the computer alone knows its path. `null` for the chat's own,
+     * which a command queued before the field existed reads as.
+     */
+    linkedFolderId: v.optional(v.nullable(v.pipe(v.string(), v.uuid())), null),
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,
+    /**
+     * The effort the run asks the model for, one the desktop reported for
+     * it; `null` leaves it to the harness.
+     */
+    // Absent only in a command queued before this field existed; make it
+    // required once no queued row can predate it (a day after deploy).
+    reasoningEffort: v.optional(v.nullable(reasoningEffortSchema), null),
     /** The session to resume, from an earlier run's `run.finished`. */
     harnessSessionId: harnessSessionIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
@@ -336,9 +943,14 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
       v.minLength(1),
       v.maxLength(MAX_RUN_MESSAGES),
     ),
+    attachments: v.pipe(
+      v.array(desktopRunnerAttachmentSchema),
+      v.maxLength(MAX_RUN_ATTACHMENTS),
+    ),
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
+      approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),
@@ -346,6 +958,12 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
       token: tokenSchema,
       expiresAt: instantSchema,
     }),
+    /**
+     * The key the run's step outputs are read with on the computer
+     * (`chat-local-run-step-output`). Derived when the command is sent, so a
+     * stored `run.start` never holds one.
+     */
+    outputKey: chatLocalRunOutputKeySchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInput),
@@ -358,6 +976,16 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     decision: v.picklist(DESKTOP_RUNNER_APPROVAL_DECISIONS),
+  }),
+  /**
+   * Answers to a blocking question the run asked; `requestId` is the id of
+   * the question's interrupt in the run's chunks.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer),
+    runId: runIdSchema,
+    requestId: requestIdSchema,
+    answers: desktopRunnerQuestionAnswersSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt),
@@ -379,6 +1007,20 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.ack),
     runId: runIdSchema,
     seq: seqSchema,
+  }),
+  /**
+   * Put a chat's folder back as it was before the run, from the checkpoint the
+   * run took. Not a run command: it is sent to the run's computer whether or
+   * not a run is open, again on a new socket until it is answered, and the
+   * answer is `folder.restored` with the same `restoreId`.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore),
+    restoreId: v.pipe(v.string(), v.uuid()),
+    folderId: v.pipe(v.string(), v.uuid()),
+    /** The linked folder the run worked in; `null` for the chat's own. */
+    linkedFolderId: v.optional(v.nullable(v.pipe(v.string(), v.uuid())), null),
+    runId: runIdSchema,
   }),
 ]);
 export type DesktopRunnerServerMessage = v.InferOutput<

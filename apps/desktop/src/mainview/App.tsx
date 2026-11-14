@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -25,6 +26,7 @@ import { Separator } from "@stll/ui/separator";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
@@ -45,9 +47,12 @@ import type {
   AppSnapshot,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
+  DocumentRecoverySnapshot,
   LinkedAccountSnapshot,
+  RecoveryTarget,
 } from "../shared/rpc";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -59,6 +64,8 @@ import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting } from "./DictationSetting";
+import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
+import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
 
@@ -219,6 +226,102 @@ const PanelGroup = ({
   </section>
 );
 
+const DocumentRecovery = ({
+  recovery,
+  onRefresh,
+}: {
+  recovery: DocumentRecoverySnapshot;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations("settings");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const act = async (target: RecoveryTarget | "retry") => {
+    setBusy(true);
+    const result = await Result.tryPromise(async () =>
+      target === "retry"
+        ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
+        : invoke("open_recovery_folder", { target }),
+    );
+    setError(result.isErr() ? t("recoveryError") : null);
+    setBusy(false);
+  };
+  if (
+    !recovery.edits.length &&
+    !recovery.unassigned &&
+    !recovery.pending &&
+    recovery.access === "available"
+  ) {
+    return null;
+  }
+  return (
+    <PanelGroup title={t("recoveryTitle")}>
+      <div className="space-y-3 px-4 py-3 text-sm">
+        {recovery.edits.length ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryBody")}</p>
+            <ul className="space-y-1">
+              {recovery.edits.map((edit) => (
+                <li key={edit.id} className="wrap-break-word">
+                  <BidiText>{edit.fileName}</BidiText>
+                  {edit.status === "pending"
+                    ? ` (${t("recoveryFilePending")})`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("account");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenFolder")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.access === "signInRequired" ? (
+          <p className="text-muted-foreground">{t("recoverySignIn")}</p>
+        ) : null}
+        {recovery.unassigned ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("unassigned");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenUnassigned")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.pending ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryPending")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("retry");
+              }}
+              variant="outline"
+            >
+              {t("tryAgain")}
+            </Button>
+          </>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </PanelGroup>
+  );
+};
+
 type TelemetryPreferenceState =
   | { status: "loading" }
   | { status: "unavailable" }
@@ -341,6 +444,8 @@ const GeneralPane = ({
   const format = useFormatter();
   const t = useTranslations("settings");
   const tSubscriptions = useTranslations("agentSubscriptions");
+  const tLocalSkills = useTranslations("localSkills");
+  const tLinkedFolders = useTranslations("localLinkedFolders");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -359,11 +464,11 @@ const GeneralPane = ({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
+            <TruncatedText className="text-sm font-medium" render={<p />}>
               {linkedAccount?.name?.trim() ||
                 linkedAccount?.email ||
                 t("stellaDesktop")}
-            </p>
+            </TruncatedText>
           </div>
           <span
             className={cn(
@@ -439,6 +544,16 @@ const GeneralPane = ({
       <AgentSubscriptionsSection
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalSkillFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLocalSkills("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalLinkedFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLinkedFolders("title")}>{content}</PanelGroup>
         )}
       />
       <PanelGroup title={t("permissions")}>
@@ -709,6 +824,8 @@ const App = () => {
   });
   const accountRefresh = useRef<() => void>(() => undefined);
   const accountGeneration = useRef(0);
+  const snapshotGeneration = useRef(0);
+  const snapshotRefresh = useRef<() => void>(() => undefined);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
   const activityAvailability = useActivityAvailability();
   // A requested Activity tab stays shown while availability loads, so opening
@@ -775,19 +892,32 @@ const App = () => {
 
     const syncState = async () => {
       const revision = snapshotRevision.current;
+      const request = ++snapshotGeneration.current;
       try {
         const nextState = await invoke<AppSnapshot>("get_state");
-        if (disposed || revision !== snapshotRevision.current) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
+        if (!isAppSnapshot(nextState)) {
+          setError(t("errorReadState"));
+          return;
+        }
         confirmedSnapshot.current = nextState;
         startTransition(() => {
           setError(null);
           setState(nextState);
         });
       } catch (fetchError) {
-        if (disposed || revision !== snapshotRevision.current) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
@@ -795,10 +925,14 @@ const App = () => {
       }
     };
 
+    snapshotRefresh.current = () => {
+      void syncState();
+    };
     void syncState();
 
     return () => {
       disposed = true;
+      snapshotGeneration.current += 1;
       stopListening();
     };
   }, [t]);
@@ -807,6 +941,12 @@ const App = () => {
     let disposed = false;
     const refresh = () => {
       const request = ++accountGeneration.current;
+      snapshotGeneration.current += 1;
+      snapshotRevision.current += 1;
+      latestEdit.current += 1;
+      confirmedSnapshot.current = null;
+      setState(null);
+      snapshotRefresh.current();
       void invoke<
         Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
       >("account_get_state")
@@ -966,6 +1106,7 @@ const App = () => {
 
   return (
     <main className="bg-background text-foreground min-h-dvh">
+      <WindowDragRegion />
       <div
         className={cn(
           "mx-auto flex h-dvh max-w-[30rem] flex-col px-4 pb-4",
@@ -1050,6 +1191,12 @@ const App = () => {
                       void handleLanguageChange(nextLanguage);
                     }}
                   />
+                  {state ? (
+                    <DocumentRecovery
+                      recovery={state.documentRecovery}
+                      onRefresh={() => snapshotRefresh.current()}
+                    />
+                  ) : null}
                 </div>
               </ScrollArea>
             </TabsPanel>
