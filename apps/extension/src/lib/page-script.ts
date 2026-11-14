@@ -2939,13 +2939,15 @@ export const pageScript = (pageOperation: PageOperation) => {
     if (isSensitiveTarget) {
       return sensitiveFieldRefusal;
     }
-    const options = [...target.options].filter((option) => !option.disabled);
+    // `:disabled` also covers an option inside a disabled group.
+    const options = [...target.options].filter((option) => !isDisabled(option));
     const chosen = optionNamed(options, action.value);
     if (chosen === undefined) {
+      // Labels are page text: redacted as every read redacts it.
       return {
         code: errorCode.executionFailed,
         error: `The select has no option with this label or value. Its options: ${options
-          .map((option) => JSON.stringify(normalize(option.label)))
+          .map((option) => JSON.stringify(redact(normalize(option.label))))
           .join(", ")}`,
         ok: false,
       };

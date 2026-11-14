@@ -891,7 +891,7 @@ describe("keys, options, history and tabs", () => {
       expect(shown).not.toContain(unreadContent);
     }
     // The tab went back to the page it left, addressed as the page it
-    // reached; refs now address that page again.
+    // reached.
     expect(browser.sent.slice(2)).toEqual([
       {
         command: { action: "go-back" },
@@ -902,12 +902,29 @@ describe("keys, options, history and tabs", () => {
         observedTab: { revision: "r-3", tabId: 7 },
       },
     ]);
-    const next = recorder([page("r-5")]);
-    await session.call("click", { ref: "L1" }, next.context);
-    expect(next.sent.at(0)).toMatchObject({
-      command: { action: "click", page: { revision: "r-4" } },
-      observedTab: { revision: "r-4", tabId: 7 },
+    // The agent saw no read of the page the tab returned to, so no id is
+    // valid until it reads it: an id from the page before is refused here.
+    const next = recorder([page("r-5"), page("r-6")]);
+    const stale = await session.call("click", { ref: "L1" }, next.context);
+    expect(parsed(stale)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
     });
+    expect(next.sent).toEqual([]);
+    await session.call("snapshot", {}, next.context);
+    await session.call("click", { ref: "L1" }, next.context);
+    expect(next.sent).toEqual([
+      {
+        command: { action: "snapshot" },
+        observedTab: { revision: "r-4", tabId: 7 },
+      },
+      expect.objectContaining({
+        command: expect.objectContaining({
+          action: "click",
+          page: { revision: "r-5", url: SEARCH_URL },
+        }),
+        observedTab: { revision: "r-5", tabId: 7 },
+      }),
+    ]);
   });
 
   test("go_back that cannot return to the page it left still shows nothing", async () => {
@@ -926,6 +943,12 @@ describe("keys, options, history and tabs", () => {
       refused: "not_read_before",
     });
     expect(back.content.at(0)?.text ?? "").not.toContain("account/welcome");
+    // The tab is not on the page the ids came from: none is used.
+    const stale = await session.call("click", { ref: "L1" }, browser.context);
+    expect(parsed(stale)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.elementNotFound,
+    });
+    expect(browser.sent).toHaveLength(4);
   });
 
   test("open opens a new tab only when asked to", async () => {

@@ -434,6 +434,8 @@ type PageSeen = {
   trails: ReadonlyMap<number, readonly string[]>;
 };
 
+const NO_ELEMENTS: ReadonlyMap<string, BrowserControlElement> = new Map();
+
 /** Pages of a tab's record kept for going back; older ones are dropped. */
 const TRAIL_PAGES = 50;
 
@@ -984,8 +986,17 @@ export const createLocalBrowserSession = () => {
                   },
                 ),
               );
+        // The agent sees neither page, so no element id of either stays
+        // valid: an id counts only once a read the agent saw listed it, and
+        // a snapshot comes first. The tab's record and the document the
+        // extension holds do follow the page it returned to.
         if (returned?.status === "success") {
-          seen = seenAfter(left, returned.snapshot, false);
+          seen = {
+            ...seenAfter(left, returned.snapshot, false),
+            elements: NO_ELEMENTS,
+          };
+        } else if (left !== null) {
+          seen = { ...left, elements: NO_ELEMENTS };
         }
         return backRefused(
           BACK_REFUSAL.notReadBefore,
