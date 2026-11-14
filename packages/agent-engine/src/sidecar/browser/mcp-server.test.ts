@@ -94,7 +94,7 @@ const rpc = async (
   });
 
 describe("the local browser MCP endpoint", () => {
-  test("serves the four tools to the run it was registered for", async () => {
+  test("serves the browser tools to the run it was registered for", async () => {
     const { mcp, requests } = start();
     const binding = mcp.register({
       approvals: "auto",
@@ -139,6 +139,7 @@ describe("the local browser MCP endpoint", () => {
     expect(result.tools.map(({ name }) => name)).toEqual([
       "open",
       "snapshot",
+      "find",
       "click",
       "type",
     ]);

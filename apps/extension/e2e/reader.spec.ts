@@ -350,7 +350,9 @@ test("keeps generated and hidden text out of reads and finds", async ({
   const shadow = await textMatches(page, "SHADOW   words");
   expect(shadow.total).toBe(1);
   expect(shadow.matches.at(0)?.snippet).toContain("Shadow words here");
-  expect(await textMatches(page, "ignore this")).toMatchObject({ total: 1 });
+  // Matching runs on the printed words: across the hidden part, never
+  // through it.
+  expect(await textMatches(page, "ore this")).toMatchObject({ total: 1 });
   expect(await textMatches(page, "7 marked")).toMatchObject({ total: 1 });
 });
 
@@ -409,25 +411,27 @@ test("reads a block longer than a window forward and backward without a gap", as
     }
     windows.push((await readWindow(page, readRequest(last.end))).window);
   }
-  const [first, second, third] = windows;
-  if (first === undefined || second === undefined || third === undefined) {
-    throw new TypeError("Expected three windows.");
+  const [heading, first, second, third] = windows;
+  if (
+    heading === undefined ||
+    first === undefined ||
+    second === undefined ||
+    third === undefined
+  ) {
+    throw new TypeError("Expected four windows.");
   }
+  // Whole blocks first: the long one starts the next window.
+  expect(heading.text).toBe("# Long block");
   // Forward: cut at spaces, every word once.
-  const firstPart = first.text.split("\n").at(1) ?? "";
+  const thirdPart = third.text.split("\n").at(0) ?? "";
   expect(
-    `${firstPart} ${second.text} ${third.text.split("\n").at(0) ?? ""}`,
-  ).toBe(
-    LONG_BLOCK.slice(
-      0,
-      LONG_BLOCK.indexOf(third.text.split("\n").at(0) ?? "") +
-        (third.text.split("\n").at(0) ?? "").length,
-    ),
-  );
-  // Backward from the third window: the words right before it.
+    LONG_BLOCK.startsWith(`${first.text} ${second.text} ${thirdPart}`),
+  ).toBe(true);
+  // Backward from the fourth window: the words right before it.
   const back = (await readWindow(page, readRequest(third.start, "backward")))
     .window;
-  const thirdOffset = LONG_BLOCK.indexOf(third.text.split("\n").at(0) ?? "");
+  const thirdOffset = LONG_BLOCK.indexOf(thirdPart);
+  expect(thirdOffset).toBe(first.text.length + second.text.length + 2);
   expect(back.text.length).toBeGreaterThan(1000);
   expect(
     LONG_BLOCK.slice(0, thirdOffset).trimEnd().endsWith(back.text.trimEnd()),
@@ -505,7 +509,7 @@ test("reads, pages and finds through a long document, touching only what it read
   const html = longDocument();
   await serve(page, html, "/works/long#s-500");
   const size = await page.evaluate(() => ({
-    chars: (document.body.textContent ?? "").length,
+    chars: document.body.textContent.length,
     elements: document.querySelectorAll("*").length,
   }));
   expect(size.elements).toBeGreaterThanOrEqual(60_000);

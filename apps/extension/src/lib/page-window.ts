@@ -250,7 +250,7 @@ export const frameFoundSchema = v.strictObject({
 export type FrameFound = v.InferOutput<typeof frameFoundSchema>;
 
 /** Why a frame read nothing. */
-export type FrameRefusal = "sign-in" | "stale-cursor" | "top-origin";
+type FrameRefusal = "sign-in" | "stale-cursor" | "top-origin";
 
 export type FrameOutcome<T> =
   | { result: T; type: "read" }
