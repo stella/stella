@@ -39,7 +39,7 @@ const MIGRATIONS = [
   "20261109190000_list_fact_extraction_runs",
   "20261112080005_legal_list_verification_run_scope",
   OWNER_MIGRATION,
-  "20261112204612_legal_list_verification_run_unread_parts",
+  "20261114103200_legal_list_verification_run_unread_parts",
 ] as const;
 
 type Scope = {
