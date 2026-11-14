@@ -9,6 +9,7 @@
 //! Without a data folder no host runs, and every run is refused with
 //! `harness_not_installed` through the same journal and socket path.
 
+mod awaited_steps;
 mod client;
 mod harness;
 mod journal;
@@ -196,6 +197,20 @@ impl DesktopRunnerControl {
             Arc::new(NoHarnessReports),
           ),
         };
+      let auth: Arc<dyn RunnerAuth> = Arc::new(AccountAuth { app: app.clone() });
+      let awaited_steps = run_folders_directory().map(|folders| {
+        let held = Arc::clone(&journal);
+        awaited_steps::AwaitedSteps::new(awaited_steps::AwaitedStepsParts {
+          folders,
+          sender: Arc::new(awaited_steps::AccountStepSender {
+            auth: Arc::clone(&auth),
+            desktop_id,
+          }),
+          holds: Arc::new(move |run_id: &str| held.get(run_id).is_some()),
+          random: unit_random,
+        })
+      });
+      let states = state.subscribe();
       let runner = Runner::new(RunnerParts {
         config: RunnerConfig {
           desktop_id,
@@ -203,7 +218,7 @@ impl DesktopRunnerControl {
           timing: client::RunnerTiming::default(),
           random: unit_random,
         },
-        auth: Arc::new(AccountAuth { app: app.clone() }),
+        auth,
         journals: Arc::new(EncryptedJournals),
         journal,
         host,
@@ -212,7 +227,12 @@ impl DesktopRunnerControl {
         wakes: crate::presence::subscribe_wakes(),
         stop: stopped,
       });
-      runner.run().await;
+      // What runs could not send by their end is sent beside the runner,
+      // never in its way, and stops with it.
+      tokio::select! {
+        () = runner.run() => {}
+        () = send_awaited_steps(awaited_steps, states) => {}
+      }
     }));
   }
 
@@ -264,6 +284,18 @@ pub(crate) fn desktop_runner_get_state(
     return Err("the runner state is not available in this window".into());
   }
   Ok(control.state.borrow().clone())
+}
+
+/// Sends the steps runs handed over at their end; never returns. Without a
+/// data folder there are none.
+async fn send_awaited_steps(
+  awaited_steps: Option<awaited_steps::AwaitedSteps>,
+  states: watch::Receiver<RunnerState>,
+) {
+  match awaited_steps {
+    Some(awaited_steps) => awaited_steps.run(states).await,
+    None => std::future::pending().await,
+  }
 }
 
 struct AccountAuth {
