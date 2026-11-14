@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/chat-local-run-step-content";
 
 import type { Transaction } from "@/api/db/root";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   chatLocalRunStepContents,
   chatThreads,
@@ -21,15 +22,13 @@ import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { DESKTOP_RUNNER_OPEN_RUN_STATES } from "@/api/lib/desktop-runner/states";
 import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
-import {
-  brandPersistedChatThreadId,
-  brandPersistedUserFileId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * What the steps of a chat's local runs produced, as stella stores it: one
- * row per step of a thread, written for a run that is still going and read
- * for the member who owns the thread. A step's text is encrypted for the
+ * row per step of a thread, written on the gateway's owner connection for a
+ * run that is still going, and read in the member's own scope, where the
+ * database shows a step only with its thread. A step's text is encrypted for the
  * organization before it is written and opened only to answer its owner.
  *
  * Every write of a run first takes that run's row, so the writes of one run
@@ -373,18 +372,15 @@ export const storeStepImage = async (
     return { type: "settled", state: stored, adopted: true };
   });
 
-type ReadStepContentOptions = {
+type StepOfThread = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
   stepKey: string;
-  /** The run the step's call id names. */
-  runId: string;
 };
 
-/** A step's stored content, opened for its owner. */
-export type StoredStepContent =
-  | { type: "arriving" }
-  | { type: "not_stored" }
+/** What a thread the member sees holds for one step. */
+export type VisibleStepContent =
+  | { type: "none" }
   | {
       type: "unstored";
       state: Exclude<ChatLocalRunStepContentStoredState, "stored">;
@@ -409,82 +405,83 @@ export type StoredStepContent =
       };
     };
 
+/** A step's content as one read tells it apart, with nothing stored named. */
+export type StoredStepContent =
+  | Exclude<VisibleStepContent, { type: "none" }>
+  | { type: "arriving" }
+  | { type: "not_stored" };
+
 /**
- * One step's content for the member who owns its thread; `null` for a thread
- * that is not theirs. With nothing stored, a step whose run is still going in
- * this thread is `arriving`: its computer may yet send it.
+ * One step's content, read in the member's own scope: the database shows a
+ * step only with its thread, so a thread the member cannot see (another
+ * member's, another organization's, one whose matter they can no longer
+ * open) answers `null`, and `none` means the thread is theirs and holds
+ * nothing for the step. Text is opened for the member's organization.
  */
-export const readStepContent = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId, stepKey, runId }: ReadStepContentOptions,
-): Promise<StoredStepContent | null> => {
-  const row = (
-    await db
-      .select({
-        kind: contents.kind,
-        state: contents.outcome,
-        totalBytes: contents.totalBytes,
-        storedBytes: contents.storedBytes,
-        textEncrypted: contents.textEncrypted,
-        textIv: contents.textIv,
-        fileId: userFiles.id,
-        fileName: userFiles.fileName,
-        mimeType: userFiles.mimeType,
-        placeholder: userFiles.placeholder,
-        openRunId: runs.runId,
-        stepKey: contents.stepKey,
-      })
-      .from(chatThreads)
-      .leftJoin(
-        contents,
-        and(
-          eq(contents.threadId, chatThreads.id),
-          eq(contents.stepKey, stepKey),
-        ),
-      )
-      .leftJoin(userFiles, eq(userFiles.id, contents.userFileId))
-      .leftJoin(
-        runs,
-        and(
-          eq(runs.runId, runId),
-          eq(runs.chatThreadId, chatThreads.id),
-          eq(runs.userId, owner.userId),
-          eq(runs.organizationId, owner.organizationId),
-          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-        ),
-      )
-      .where(
-        and(
-          eq(chatThreads.id, threadId),
-          eq(chatThreads.userId, owner.userId),
-          eq(chatThreads.organizationId, owner.organizationId),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-  if (row === undefined) {
-    return null;
+export const readVisibleStepContent = async (
+  safeDb: SafeDb,
+  { owner, threadId, stepKey }: StepOfThread,
+): Promise<Result<VisibleStepContent | null, SafeDbError>> => {
+  const read = await safeDb(
+    async (tx) =>
+      await tx
+        .select({
+          kind: contents.kind,
+          outcome: contents.outcome,
+          totalBytes: contents.totalBytes,
+          storedBytes: contents.storedBytes,
+          textEncrypted: contents.textEncrypted,
+          textIv: contents.textIv,
+          fileId: userFiles.id,
+          fileName: userFiles.fileName,
+          mimeType: userFiles.mimeType,
+          placeholder: userFiles.placeholder,
+        })
+        .from(chatThreads)
+        .leftJoin(
+          contents,
+          and(
+            eq(contents.threadId, chatThreads.id),
+            eq(contents.stepKey, stepKey),
+          ),
+        )
+        .leftJoin(userFiles, eq(userFiles.id, contents.userFileId))
+        .where(
+          and(
+            eq(chatThreads.id, threadId),
+            eq(chatThreads.userId, owner.userId),
+            eq(chatThreads.organizationId, owner.organizationId),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows.at(0) ?? null),
+  );
+  if (Result.isError(read)) {
+    return Result.err(read.error);
+  }
+  const row = read.value;
+  if (row === null) {
+    return Result.ok(null);
   }
   if (
-    row.stepKey === null ||
     row.kind === null ||
-    row.state === null ||
+    row.outcome === null ||
     row.totalBytes === null ||
     row.storedBytes === null
   ) {
-    return { type: row.openRunId === null ? "not_stored" : "arriving" };
+    return Result.ok({ type: "none" });
   }
-  const state = storedStateOf(row.state);
+  const state = storedStateOf(row.outcome);
   if (state !== stored) {
-    return {
+    return Result.ok({
       type: "unstored",
       state,
       kind: row.kind,
       totalBytes: row.totalBytes,
-    };
+    });
   }
   if (row.textEncrypted !== null && row.textIv !== null) {
-    return {
+    return Result.ok({
       type: "text",
       kind: row.kind,
       totalBytes: row.totalBytes,
@@ -494,20 +491,51 @@ export const readStepContent = async (
         row.textEncrypted,
         row.textIv,
       ),
-    };
+    });
   }
   if (row.fileId !== null && row.fileName !== null && row.mimeType !== null) {
-    return {
+    return Result.ok({
       type: "image",
       totalBytes: row.totalBytes,
       file: {
-        id: brandPersistedUserFileId(row.fileId),
+        id: row.fileId,
         fileName: row.fileName,
         mimeType: row.mimeType,
         placeholder: row.placeholder,
       },
-    };
+    });
   }
   // The table's check gives a stored row its text or its file.
   return panic("A stored step content row holds neither text nor a file");
 };
+
+type StepRunOptions = {
+  owner: RunOwner;
+  threadId: SafeId<"chatThread">;
+  /** The run the step's call id names. */
+  runId: string;
+};
+
+/**
+ * Whether the owner's run is still going in this thread, so a step of it
+ * with nothing stored may yet be sent.
+ */
+export const isStepRunOpen = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId, runId }: StepRunOptions,
+): Promise<boolean> =>
+  (
+    await db
+      .select({ runId: runs.runId })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.runId, runId),
+          eq(runs.chatThreadId, threadId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      )
+      .limit(1)
+  ).length === 1;

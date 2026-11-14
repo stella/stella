@@ -16,6 +16,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { stepContentAnswer } from "@/api/lib/desktop-runner/step-content-answer";
+import { readVisibleStepContent } from "@/api/lib/desktop-runner/step-contents";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const byteCount = (maximum: number) =>
@@ -49,11 +50,13 @@ const config = {
 } satisfies HandlerConfig;
 
 type StepContentDependencies = {
-  control: () => Pick<DesktopRunnerControl, "readStepContent">;
+  control: () => Pick<DesktopRunnerControl, "isStepRunOpen">;
 };
 
 /** One step's content for the member who owns its thread, and for no one else. */
-const createLocalRunStepContent = (dependencies?: StepContentDependencies) =>
+export const createLocalRunStepContent = (
+  dependencies?: StepContentDependencies,
+) =>
   createSafeRootHandler(
     config,
     async function* ({
@@ -62,6 +65,7 @@ const createLocalRunStepContent = (dependencies?: StepContentDependencies) =>
         start = 0,
         limit = CHAT_LOCAL_RUN_STEP_CONTENT_WINDOW.defaultBytes,
       },
+      safeDb,
       session,
       user,
     }) {
@@ -75,20 +79,20 @@ const createLocalRunStepContent = (dependencies?: StepContentDependencies) =>
           }),
         );
       }
-      const control =
-        dependencies?.control() ?? getDesktopRunnerControl().control;
-      const content = yield* Result.await(
-        control.readStepContent({
-          owner: {
-            userId: user.id,
-            organizationId: session.activeOrganizationId,
-          },
+      const owner = {
+        userId: user.id,
+        organizationId: session.activeOrganizationId,
+      };
+      // Read in the member's own scope: the database shows a step only with
+      // its thread, so a thread this member cannot see answers nothing.
+      const visible = yield* Result.await(
+        readVisibleStepContent(safeDb, {
+          owner,
           threadId,
           stepKey: sha256Hex(callId),
-          runId,
         }),
       );
-      if (content === null) {
+      if (visible === null) {
         return Result.err(
           new HandlerError({
             status: 404,
@@ -97,6 +101,15 @@ const createLocalRunStepContent = (dependencies?: StepContentDependencies) =>
           }),
         );
       }
+      if (visible.type !== "none") {
+        return Result.ok(stepContentAnswer(visible, { start, limit }));
+      }
+      const control =
+        dependencies?.control() ?? getDesktopRunnerControl().control;
+      const open = yield* Result.await(
+        control.isStepRunOpen({ owner, threadId, runId }),
+      );
+      const content = { type: open ? "arriving" : "not_stored" } as const;
       return Result.ok(stepContentAnswer(content, { start, limit }));
     },
   );

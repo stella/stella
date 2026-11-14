@@ -6,8 +6,9 @@ SET LOCAL statement_timeout = '10s';--> statement-breakpoint
 -- per step of a thread. Text is held encrypted for the thread's organization;
 -- an image is a chat file the row names. A row goes with the turn that
 -- produced it, and so with that turn's messages and its thread.
--- Reached only through the table owner, like the desktop runner tables: a
--- write settles against its run's budget in the same transaction.
+-- A member reads a step only with its thread, under the thread's own scope.
+-- Only the table owner writes one, like the desktop runner tables: a write
+-- settles against its run's budget in the same transaction.
 CREATE TABLE "chat_local_run_step_contents" (
   "thread_id" uuid NOT NULL,
   "step_key" varchar(64) NOT NULL,
@@ -39,9 +40,66 @@ ALTER TABLE "chat_local_run_step_contents" FORCE ROW LEVEL SECURITY;--> statemen
 CREATE POLICY "chat_local_run_step_contents_owner_access" ON "chat_local_run_step_contents" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_local_run_step_contents'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_local_run_step_contents'::regclass));--> statement-breakpoint
-CREATE POLICY "auth_no_stella_access" ON "chat_local_run_step_contents" FOR ALL TO "stella" USING (false) WITH CHECK (false);--> statement-breakpoint
+CREATE POLICY "chat_local_run_step_content_select" ON "chat_local_run_step_contents" AS PERMISSIVE FOR SELECT TO "stella" USING ((
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_local_run_step_contents.thread_id
+      AND ct.user_id = (SELECT current_setting(
+        'app.user_id', true
+      ))
+      AND ct.organization_id = (SELECT current_setting(
+        'app.organization_id', true
+      ))
+      AND (ct.workspace_id IS NULL OR CASE
+  WHEN ct.workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE ct.workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END)
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              'app.workspace_ids', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.stella_authorized_workspaces aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)
+      )
+  )
+));--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "chat_local_run_step_contents" FROM PUBLIC;--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "chat_local_run_step_contents" FROM stella;--> statement-breakpoint
+GRANT SELECT ON TABLE "chat_local_run_step_contents" TO stella;--> statement-breakpoint
 
 -- What one run has stored of its steps' content, bounded per run. Constant
 -- defaults add the columns in the catalog without rewriting a row.

@@ -35,7 +35,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   openStepImage,
-  readStepContent,
+  readVisibleStepContent,
   recordStepTooLarge,
   storeStepImage,
   storeStepText,
@@ -44,6 +44,7 @@ import {
   type DesktopRunnerDb,
   readOpenRunChatThread,
 } from "@/api/lib/desktop-runner/store";
+import { ImageDerivativeError } from "@/api/lib/files/image-derivative";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/constants";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -210,13 +211,19 @@ const stateOf = async (response: Response) => {
   return v.parse(chatLocalRunStepContentUploadedSchema, answer).state;
 };
 
-const read = async (run: SeededRun, key: string) =>
-  await readStepContent(runnerDb(), {
-    owner: { userId: ids.userA1, organizationId: ids.orgA },
-    threadId: run.threadId,
-    stepKey: key,
-    runId: run.runId,
-  });
+const read = async (run: SeededRun, key: string) => {
+  const owner = { userId: ids.userA1, organizationId: ids.orgA };
+  return (
+    await readVisibleStepContent(
+      // SAFETY: the test database exposes the same Drizzle query and
+      // transaction APIs as the request connection the scope wraps.
+      asTestRaw<SafeDb>(
+        createSafeDb(testDb, [], owner.organizationId, owner.userId),
+      ),
+      { owner, threadId: run.threadId, stepKey: key },
+    )
+  ).unwrap();
+};
 
 const threadFiles = async (threadId: SafeId<"chatThread">) =>
   await testDb
@@ -280,6 +287,15 @@ beforeAll(async () => {
         Result.ok(await storeStepImage(runnerDb(), options)),
     }),
     uploads: {
+      // No thumbnail: `uploadUserFile` reserves a cleanup intent for the
+      // image and another for its thumbnail in two statements of one
+      // callsite, which a measured request refuses.
+      generateImageThumbnail: async () =>
+        await Promise.resolve(
+          Result.err(
+            new ImageDerivativeError({ message: "No thumbnail in this test" }),
+          ),
+        ),
       organizationFileUsageDb:
         asTestRaw<UploadUserFileDependencies["organizationFileUsageDb"]>(
           testDb,
@@ -433,6 +449,6 @@ describe("a run sending what a step produced", () => {
         })
       ).status,
     ).toBe(404);
-    expect(await read(ended, key)).toEqual({ type: "not_stored" });
+    expect(await read(ended, key)).toEqual({ type: "none" });
   });
 });

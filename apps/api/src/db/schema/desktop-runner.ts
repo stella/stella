@@ -10,7 +10,10 @@ import {
   CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES,
 } from "@stll/api-contract/chat-local-run-step-content";
 
-import { denyStellaAccessPolicies } from "@/api/db/rls";
+import {
+  chatLocalRunStepContentPolicies,
+  denyStellaAccessPolicies,
+} from "@/api/db/rls";
 import {
   DESKTOP_RUNNER_COMMAND_KINDS,
   DESKTOP_RUNNER_CONNECTIONS,
@@ -475,6 +478,10 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
  * is keyed by thread, since a forked thread keeps its source's call ids, and
  * names its run without depending on it, since an ended run is pruned long
  * before its conversation.
+ *
+ * A member reads a step only with its thread, under the thread's own scope.
+ * Only the gateway's owner connection writes one, in the transaction that
+ * settles it against the run sending it.
  */
 export const chatLocalRunStepContents = p.pgTable.withRLS(
   "chat_local_run_step_contents",
@@ -556,7 +563,7 @@ export const chatLocalRunStepContents = p.pgTable.withRLS(
       "chat_local_run_step_contents_content_check",
       sql`(${table.textEncrypted} IS NULL) = (${table.textIv} IS NULL) AND (${table.textEncrypted} IS NOT NULL) = (${table.outcome} = 'stored' AND ${table.kind} <> 'image') AND (${table.userFileId} IS NOT NULL) = (${table.outcome} = 'stored' AND ${table.kind} = 'image') AND (${table.outcome} = 'stored' OR ${table.storedBytes} = 0)`,
     ),
-    ...ownerOnlyPolicies("chat_local_run_step_contents"),
+    ...chatLocalRunStepContentPolicies(),
   ],
 );
 

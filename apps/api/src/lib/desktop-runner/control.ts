@@ -38,8 +38,8 @@ import {
   sealRunAnswer,
 } from "@/api/lib/desktop-runner/sealed-answers";
 import {
+  isStepRunOpen,
   openStepImage,
-  readStepContent,
   recordStepTooLarge,
   storeStepImage,
   storeStepText,
@@ -226,7 +226,7 @@ type ControlDeps = {
 const toDatabaseError = (cause: unknown) =>
   new DatabaseError({ message: "Desktop runner store is unavailable", cause });
 
-/** What a run's steps produced: stored for a run, read for its thread's owner. */
+/** What a run's steps produced, as the gateway's owner connection handles it. */
 const stepContentControl = (db: DesktopRunnerDb) => ({
   /** Store a step's text for the owner's run that is still going. */
   storeStepText: async (options: Parameters<typeof storeStepText>[1]) =>
@@ -254,10 +254,10 @@ const stepContentControl = (db: DesktopRunnerDb) => ({
       try: async () => await storeStepImage(db, options),
       catch: toDatabaseError,
     }),
-  /** One step's stored content, for the member who owns its thread. */
-  readStepContent: async (options: Parameters<typeof readStepContent>[1]) =>
+  /** Whether the owner's run is still going in this thread. */
+  isStepRunOpen: async (options: Parameters<typeof isStepRunOpen>[1]) =>
     await Result.tryPromise({
-      try: async () => await readStepContent(db, options),
+      try: async () => await isStepRunOpen(db, options),
       catch: toDatabaseError,
     }),
 });

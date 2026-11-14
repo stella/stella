@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
@@ -6,6 +5,7 @@ import { CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET } from "@stll/api-contract/chat-
 import { DESKTOP_RUNNER_PROTOCOL } from "@stll/api-contract/desktop-runner";
 import { createTestClock } from "@stll/test-kit";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatLocalRunStepContents,
   chatMessages,
@@ -15,12 +15,14 @@ import {
   desktopRunners,
   userFiles,
 } from "@/api/db/schema";
+import { createSafeDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
+  isStepRunOpen,
   openStepImage,
-  readStepContent,
+  readVisibleStepContent,
   recordStepTooLarge,
   storeStepImage,
   storeStepText,
@@ -64,7 +66,10 @@ type SeededRun = {
 };
 
 /** A running local run of `owner`, bound to a turn of a thread of theirs. */
-const seedRun = async (owner: RunOwner): Promise<SeededRun> => {
+const seedRun = async (
+  owner: RunOwner,
+  dataWorkspaceIds: SafeId<"workspace">[] = [],
+): Promise<SeededRun> => {
   const now = new Date(clock.now());
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   await db.insert(chatThreads).values({
@@ -72,6 +77,7 @@ const seedRun = async (owner: RunOwner): Promise<SeededRun> => {
     organizationId: owner.organizationId,
     userId: owner.userId,
     title: "A turn on this computer",
+    dataWorkspaceIds,
   });
   const userMessageId = createSafeId<"chatMessage">();
   await db.insert(chatMessages).values({
@@ -92,7 +98,8 @@ const seedRun = async (owner: RunOwner): Promise<SeededRun> => {
     userMessageId,
     status: "running",
     executionId: Bun.randomUUIDv7(),
-    leaseExpiresAt: new Date(now.getTime() + 60_000),
+    // After the row's own creation time, which the database stamps.
+    leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
   });
   const desktopId = Bun.randomUUIDv7();
   const deviceJkt = `jkt-${desktopId}`;
@@ -153,11 +160,35 @@ const storeText = async (
     storedBytes: Buffer.byteLength(text),
   });
 
-const read = async (owner: RunOwner, run: SeededRun, key: string) =>
-  await readStepContent(runnerDb(), {
+/**
+ * The member's own scoped connection, as a request of theirs holds it:
+ * `openMatters` are the matters the request was authorized for.
+ */
+const scopedDb = (owner: RunOwner, openMatters: SafeId<"workspace">[] = []) =>
+  // SAFETY: the test database exposes the same Drizzle query and transaction
+  // APIs as the request connection the scope wraps.
+  asTestRaw<SafeDb>(
+    createSafeDb(db, openMatters, owner.organizationId, owner.userId),
+  );
+
+const read = async (
+  owner: RunOwner,
+  run: SeededRun,
+  key: string,
+  openMatters: SafeId<"workspace">[] = [],
+) =>
+  (
+    await readVisibleStepContent(scopedDb(owner, openMatters), {
+      owner,
+      threadId: run.threadId,
+      stepKey: key,
+    })
+  ).unwrap();
+
+const runIsOpen = async (owner: RunOwner, run: SeededRun) =>
+  await isStepRunOpen(runnerDb(), {
     owner,
     threadId: run.threadId,
-    stepKey: key,
     runId: run.runId,
   });
 
@@ -242,20 +273,61 @@ describe("the stored content of a local run's steps", () => {
     });
   });
 
-  test("a step with nothing stored is arriving while its run goes, then not stored", async () => {
+  test("a step with nothing stored may yet arrive only while its run goes", async () => {
     const run = await seedRun(ownerA);
     const key = stepKey();
-    expect(await read(ownerA, run, key)).toEqual({ type: "arriving" });
+    expect(await read(ownerA, run, key)).toEqual({ type: "none" });
+    expect(await runIsOpen(ownerA, run)).toBe(true);
+    // Another member's question about the same run finds none going.
+    expect(await runIsOpen(ownerSameOrg, run)).toBe(false);
     await db
       .update(desktopRunnerRuns)
       .set({ state: "finished", outcome: "completed" })
       .where(eq(desktopRunnerRuns.runId, run.runId));
-    expect(await read(ownerA, run, key)).toEqual({ type: "not_stored" });
+    expect(await runIsOpen(ownerA, run)).toBe(false);
     // A run that ended takes nothing more.
     expect(await storeText(ownerA, run, key, "late")).toEqual({
       type: "unknown_run",
     });
-    expect(await read(ownerA, run, key)).toEqual({ type: "not_stored" });
+    expect(await read(ownerA, run, key)).toEqual({ type: "none" });
+  });
+
+  test("a member who can no longer open the thread's matter reads nothing", async () => {
+    // Member A2 holds no membership of matter A1: the thread shows only to
+    // a request authorized for that matter.
+    const run = await seedRun(ownerSameOrg, [ids.wsA1]);
+    const key = stepKey();
+    await storeText(ownerSameOrg, run, key, "from the matter's files");
+    expect(await read(ownerSameOrg, run, key, [ids.wsA1])).toMatchObject({
+      type: "text",
+      text: "from the matter's files",
+    });
+    expect(await read(ownerSameOrg, run, key)).toBeNull();
+    // The row itself is hidden, not only the thread it is read with.
+    const rows = (
+      await scopedDb(ownerSameOrg)(
+        async (tx) =>
+          await tx
+            .select({ stepKey: chatLocalRunStepContents.stepKey })
+            .from(chatLocalRunStepContents)
+            .where(eq(chatLocalRunStepContents.threadId, run.threadId)),
+      )
+    ).unwrap();
+    expect(rows).toEqual([]);
+  });
+
+  test("the member's scope reads a step and never writes one", async () => {
+    const run = await seedRun(ownerA);
+    const key = stepKey();
+    await storeText(ownerA, run, key, "kept");
+    const removed = await scopedDb(ownerA)(
+      async (tx) =>
+        await tx
+          .delete(chatLocalRunStepContents)
+          .where(eq(chatLocalRunStepContents.threadId, run.threadId)),
+    );
+    expect(removed.isErr()).toBe(true);
+    expect(await read(ownerA, run, key)).toMatchObject({ text: "kept" });
   });
 
   test("a step sent again replaces its text and is counted once", async () => {
@@ -403,19 +475,19 @@ describe("the stored content of a local run's steps", () => {
     const key = stepKey();
     await storeText(ownerA, run, key, "measured");
     // SAFETY: the counted test database exposes the same Drizzle query APIs
-    // as the owner connection the store runs on.
-    const counted = asTestRaw<DesktopRunnerDb>(
-      withQueryLogger(db, queryCountLogger),
+    // as the request connection the scope wraps.
+    const counted = asTestRaw<SafeDb>(
+      createSafeDb(
+        withQueryLogger(db, queryCountLogger),
+        [],
+        ownerA.organizationId,
+        ownerA.userId,
+      ),
     );
     const fixture = {
-      control: {
-        readStepContent: async (
-          options: Parameters<typeof readStepContent>[1],
-        ) => Result.ok(await readStepContent(counted, options)),
-      },
+      safeDb: counted,
       owner: ownerA,
       threadId: run.threadId,
-      runId: run.runId,
       stepKey: key,
     };
     const small = await chatLocalRunStepContentScalingScenario.measure(fixture);
@@ -460,6 +532,6 @@ describe("the stored content of a local run's steps", () => {
     });
     await db.delete(userFiles).where(eq(userFiles.id, file));
     expect(await fileExists(file)).toBe(false);
-    expect(await read(ownerA, run, key)).toEqual({ type: "arriving" });
+    expect(await read(ownerA, run, key)).toEqual({ type: "none" });
   });
 });
