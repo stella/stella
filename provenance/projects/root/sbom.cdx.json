@@ -614,6 +614,9 @@
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/use-desktop-launch.ts#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#1"
           },
           {
@@ -972,6 +975,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
@@ -1632,6 +1638,12 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-subagent-card.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#1"
@@ -3084,6 +3096,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-announcer.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/thread-context-line.tsx#1"
@@ -6259,6 +6274,9 @@
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/use-desktop-launch.ts#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#1"
           },
           {
@@ -6617,6 +6635,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
@@ -7277,6 +7298,12 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-subagent-card.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#1"
@@ -8729,6 +8756,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-announcer.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/thread-context-line.tsx#1"
@@ -12153,10 +12183,10 @@
             "location": "apps/api/src/lib/files/pdf-signing/handoff-preflight.ts#8"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts#1"
+            "location": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts#7"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts#7"
+            "location": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts#14"
           },
           {
             "location": "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts#8"
@@ -14828,7 +14858,7 @@
             "location": "apps/api/src/handlers/chat/compaction.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/local-run-chunks.ts#8"
+            "location": "apps/api/src/handlers/chat/local-run-chunks.ts#9"
           },
           {
             "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
@@ -16031,6 +16061,9 @@
             "location": "apps/web/src/features/chat/answer-edit/answer-edit-queries.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/background-tasks.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/browser-control/browser-site-grants.ts#1"
           },
           {
@@ -16097,6 +16130,9 @@
             "location": "apps/web/src/features/chat/local-files-undo.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/local-run-step-output.ts#5"
+          },
+          {
             "location": "apps/web/src/features/chat/queries.ts#1"
           },
           {
@@ -16107,6 +16143,9 @@
           },
           {
             "location": "apps/web/src/features/chat/thread-reader-state.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/chat/use-desktop-launch.ts#3"
           },
           {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#4"
@@ -16823,6 +16862,12 @@
             "location": "apps/web/src/components/chat/local-files-undo.tsx#4"
           },
           {
+            "location": "apps/web/src/components/chat/local-folder-approval.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#4"
           },
           {
@@ -17343,6 +17388,9 @@
           },
           {
             "location": "apps/web/src/routes/__root.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-background-tasks.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-history-page.tsx#9"
@@ -19571,6 +19619,9 @@
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#3"
           },
           {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#3"
+          },
+          {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#3"
           },
           {
@@ -20133,6 +20184,9 @@
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/use-desktop-launch.ts#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#1"
           },
           {
@@ -20491,6 +20545,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
@@ -21151,6 +21208,12 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-subagent-card.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#1"
@@ -22603,6 +22666,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-announcer.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/thread-context-line.tsx#1"
@@ -25573,6 +25639,9 @@
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/use-desktop-launch.ts#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#1"
           },
           {
@@ -25931,6 +26000,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
@@ -26591,6 +26663,12 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-subagent-card.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#1"
@@ -28043,6 +28121,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-announcer.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/thread-context-line.tsx#1"
@@ -32044,10 +32125,16 @@
             "location": "apps/api/src/handlers/chat/link-icons/response.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/local-run-chunks.ts#9"
+            "location": "apps/api/src/handlers/chat/local-folder-approval.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/local-run-chunks.ts#10"
           },
           {
             "location": "apps/api/src/handlers/chat/local-run-plan.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/local-run-step-output-grant.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/local-runners.ts#1"
@@ -32192,6 +32279,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/thread-recap-window.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/background-tasks.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/threads/delete.ts#1"
@@ -35641,10 +35731,16 @@
             "location": "apps/api/src/lib/desktop-runner/gateway.ts#1"
           },
           {
+            "location": "apps/api/src/lib/desktop-runner/output-keys.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/desktop-runner/sealed-answers.ts#1"
           },
           {
             "location": "apps/api/src/lib/desktop-runner/session.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-runner/step-output-grants.ts#1"
           },
           {
             "location": "apps/api/src/lib/desktop-runner/store.ts#1"
@@ -36115,7 +36211,7 @@
             "location": "apps/api/src/lib/files/pdf-signing/revocation.ts#18"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts#34"
+            "location": "apps/api/src/lib/files/pdf-signing/sign-pdf.ts#41"
           },
           {
             "location": "apps/api/src/lib/files/pdf-signing/stamp-font.ts#24"
@@ -38299,6 +38395,9 @@
             "location": "apps/extension/src/lib/command-budget.ts#1"
           },
           {
+            "location": "apps/extension/src/lib/control-owner.ts#1"
+          },
+          {
             "location": "apps/extension/src/lib/desktop-link.ts#1"
           },
           {
@@ -38812,9 +38911,6 @@
             "location": "apps/web/src/components/chat/generated-visual-theme.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/local-run-tool.logic.ts#1"
-          },
-          {
             "location": "apps/web/src/components/chat/public-law-open.ts#1"
           },
           {
@@ -39292,6 +39388,9 @@
             "location": "apps/web/src/features/chat/chat-snapshot-history.ts#4"
           },
           {
+            "location": "apps/web/src/features/chat/desktop-launch.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/hooks/edit-user-message.ts#1"
           },
           {
@@ -39337,6 +39436,12 @@
             "location": "apps/web/src/features/chat/local-files-undo.ts#2"
           },
           {
+            "location": "apps/web/src/features/chat/local-run-step-output.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/local-run-step-output.ts#6"
+          },
+          {
             "location": "apps/web/src/features/chat/queries.ts#8"
           },
           {
@@ -39344,6 +39449,9 @@
           },
           {
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#3"
+          },
+          {
+            "location": "apps/web/src/features/chat/use-desktop-launch.ts#4"
           },
           {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#6"
@@ -39817,6 +39925,9 @@
             "location": "apps/web/src/routes/-session-activity.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-announcer.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-caches.ts#1"
           },
           {
@@ -39982,6 +40093,9 @@
             "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
           },
           {
+            "location": "packages/agent-engine/scripts/fake-browser.ts#1"
+          },
+          {
             "location": "packages/agent-engine/scripts/fake-codex-app-server.ts#1"
           },
           {
@@ -40028,6 +40142,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/codex/items.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/codex/rate-limits.ts#1"
           },
           {
             "location": "packages/agent-engine/src/harness/codex/thread.ts#1"
@@ -40087,6 +40204,27 @@
             "location": "packages/agent-engine/src/sidecar/attachments.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/browser/action-approvals.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/bridge.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/holder-browser.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/mcp-server.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/native-host-manifest.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/native-host.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/tools.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#2"
           },
           {
@@ -40109,6 +40247,9 @@
           },
           {
             "location": "packages/agent-engine/src/sidecar/protocol.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/step-outputs.ts#1"
           },
           {
             "location": "packages/agent-engine/src/sidecar/workspace-file.ts#1"
@@ -40160,6 +40301,12 @@
           },
           {
             "location": "packages/api-contract/src/chat-decision-passage-link.ts#17"
+          },
+          {
+            "location": "packages/api-contract/src/chat-local-run-step-output.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/chat-local-run-steps.ts#1"
           },
           {
             "location": "packages/api-contract/src/chat-local-run-tool.ts#1"
@@ -41881,6 +42028,9 @@
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#4"
           },
           {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#4"
+          },
+          {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#4"
           },
           {
@@ -41959,6 +42109,9 @@
             "location": "apps/mobile/src/components/active-chat-runs.tsx#10"
           },
           {
+            "location": "apps/mobile/src/components/answer-steps.tsx#3"
+          },
+          {
             "location": "apps/mobile/src/components/case-law-list.tsx#3"
           },
           {
@@ -41966,6 +42119,9 @@
           },
           {
             "location": "apps/mobile/src/components/chat-input-card.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/chat-thread-row.tsx#1"
@@ -42218,6 +42374,12 @@
           },
           {
             "location": "apps/web/src/components/chat/local-files-undo.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-subagent-card.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat/message-export-menu.tsx#4"
@@ -45315,6 +45477,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/submit-secret.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/background-tasks.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/threads/delete.ts#2"
@@ -54452,12 +54617,6 @@
             "location": "apps/mobile/src/components/chat-draft-document.tsx#10"
           },
           {
-            "location": "apps/mobile/src/components/detail-panes.tsx#3"
-          },
-          {
-            "location": "apps/mobile/src/components/pane.tsx#2"
-          },
-          {
             "location": "apps/mobile/src/components/run-banner.tsx#15"
           },
           {
@@ -54771,7 +54930,7 @@
             "location": "apps/mobile/src/components/active-chat-runs.tsx#12"
           },
           {
-            "location": "apps/mobile/src/components/answer-steps.tsx#3"
+            "location": "apps/mobile/src/components/answer-steps.tsx#4"
           },
           {
             "location": "apps/mobile/src/components/auth-backdrop-view.tsx#1"
@@ -54792,7 +54951,7 @@
             "location": "apps/mobile/src/components/chat-input-card.tsx#4"
           },
           {
-            "location": "apps/mobile/src/components/chat-message.tsx#3"
+            "location": "apps/mobile/src/components/chat-message.tsx#4"
           },
           {
             "location": "apps/mobile/src/components/chat-thread-row.tsx#2"
@@ -55504,6 +55663,9 @@
             "location": "apps/web/src/features/chat/use-chat-turn-notifications.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/use-desktop-launch.ts#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/hooks/use-command-actions.ts#1"
           },
           {
@@ -55862,6 +56024,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
@@ -56522,6 +56687,12 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-subagent-card.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#1"
@@ -57974,6 +58145,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-announcer.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/thread-context-line.tsx#1"
@@ -60256,6 +60430,15 @@
             "location": "packages/agent-engine/src/harness/claude-code/turn.ts#2"
           },
           {
+            "location": "packages/agent-engine/src/harness/codex/adapter.ts#4"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/codex/errors.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/codex/turn.ts#2"
+          },
+          {
             "location": "packages/agent-engine/src/harness/compatibility.ts#2"
           },
           {
@@ -60401,6 +60584,15 @@
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/turn.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/codex/adapter.ts#4"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/codex/errors.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/codex/turn.ts#2"
           },
           {
             "location": "packages/agent-engine/src/harness/compatibility.ts#2"
@@ -61688,6 +61880,9 @@
             "location": "apps/desktop/src/mainview/HarnessInstallLine.tsx#1"
           },
           {
+            "location": "apps/desktop/src/mainview/LocalLinkedFoldersSection.tsx#5"
+          },
+          {
             "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#5"
           },
           {
@@ -61823,7 +62018,7 @@
             "location": "apps/mobile/src/app/timers/new.tsx#6"
           },
           {
-            "location": "apps/mobile/src/components/answer-steps.tsx#4"
+            "location": "apps/mobile/src/components/answer-steps.tsx#5"
           },
           {
             "location": "apps/mobile/src/components/case-law-list.tsx#11"
@@ -61841,7 +62036,7 @@
             "location": "apps/mobile/src/components/chat-input-card.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/chat-message.tsx#4"
+            "location": "apps/mobile/src/components/chat-message.tsx#5"
           },
           {
             "location": "apps/mobile/src/components/chat-thread-row.tsx#3"
@@ -61865,7 +62060,7 @@
             "location": "apps/mobile/src/components/decision-row.tsx#3"
           },
           {
-            "location": "apps/mobile/src/components/detail-panes.tsx#4"
+            "location": "apps/mobile/src/components/detail-panes.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/document-viewer/docx-pages.tsx#3"
@@ -61910,7 +62105,7 @@
             "location": "apps/mobile/src/components/member-chooser.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/pane.tsx#3"
+            "location": "apps/mobile/src/components/pane.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/protected-screens.tsx#3"
@@ -62225,7 +62420,16 @@
             "location": "apps/web/src/components/chat/local-files-undo.tsx#6"
           },
           {
+            "location": "apps/web/src/components/chat/local-folder-approval.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-step-output.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-subagent-card.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/mcp-reconnect-notice.tsx#8"
@@ -63446,6 +63650,9 @@
             "location": "apps/web/src/routes/-protected-app.tsx#7"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-background-tasks.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#4"
           },
           {
@@ -63462,6 +63669,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-announcer.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-turn-navigator.tsx#1"
@@ -65013,7 +65223,13 @@
             "location": "apps/api/src/handlers/chat/link-icons/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/local-run-chunks.ts#10"
+            "location": "apps/api/src/handlers/chat/local-folder-approval.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/local-run-chunks.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/local-run-step-output-grant.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/mcp-apps/call-tool.ts#3"
@@ -65083,6 +65299,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/table-chart.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/threads/background-tasks.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/threads/delete.ts#4"
@@ -67098,6 +67317,9 @@
             "location": "apps/api/src/lib/desktop-runner/gateway.ts#2"
           },
           {
+            "location": "apps/api/src/lib/desktop-runner/output-keys.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/desktop-runner/sealed-answers.ts#2"
           },
           {
@@ -68013,10 +68235,16 @@
             "location": "apps/web/src/features/chat/chat-local-run-limit.ts#2"
           },
           {
+            "location": "apps/web/src/features/chat/chat-runtime-registry.ts#3"
+          },
+          {
             "location": "apps/web/src/features/chat/chat-runtime.ts#12"
           },
           {
             "location": "apps/web/src/features/chat/local-files-undo.ts#3"
+          },
+          {
+            "location": "apps/web/src/features/chat/local-run-step-output.ts#7"
           },
           {
             "location": "apps/web/src/features/chat/run-on-preference-store.ts#1"
@@ -68199,6 +68427,9 @@
             "location": "packages/agent-engine/scripts/build-sidecar.ts#4"
           },
           {
+            "location": "packages/agent-engine/scripts/fake-browser.ts#2"
+          },
+          {
             "location": "packages/agent-engine/scripts/fake-claude-code-cli.ts#1"
           },
           {
@@ -68223,7 +68454,7 @@
             "location": "packages/agent-engine/src/harness/claude-code/turn.ts#3"
           },
           {
-            "location": "packages/agent-engine/src/harness/codex/adapter.ts#4"
+            "location": "packages/agent-engine/src/harness/codex/adapter.ts#5"
           },
           {
             "location": "packages/agent-engine/src/harness/codex/app-server-client.ts#2"
@@ -68235,10 +68466,13 @@
             "location": "packages/agent-engine/src/harness/codex/protocol.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/harness/codex/rate-limits.ts#2"
+          },
+          {
             "location": "packages/agent-engine/src/harness/codex/thread.ts#3"
           },
           {
-            "location": "packages/agent-engine/src/harness/codex/turn.ts#2"
+            "location": "packages/agent-engine/src/harness/codex/turn.ts#3"
           },
           {
             "location": "packages/agent-engine/src/harness/compatibility.ts#3"
@@ -68251,6 +68485,12 @@
           },
           {
             "location": "packages/agent-engine/src/harness/transcript-handoff.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/mcp-server.ts#3"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/browser/tools.ts#2"
           },
           {
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#21"
@@ -68301,6 +68541,9 @@
             "location": "packages/api-contract/src/chat-ask-user.ts#1"
           },
           {
+            "location": "packages/api-contract/src/chat-background-tasks.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/chat-connector.ts#1"
           },
           {
@@ -68311,6 +68554,9 @@
           },
           {
             "location": "packages/api-contract/src/chat-local-run-question.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/chat-local-run-step-output.ts#2"
           },
           {
             "location": "packages/api-contract/src/chat-local-run-tool.ts#2"
