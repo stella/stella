@@ -1,18 +1,21 @@
 import { useId } from "react";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { Switch } from "@stll/ui/switch";
+import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { aiConfigKeys } from "@/lib/organization/ai-config-queries";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
-import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 import { verificationDecisionModelSwitch } from "./verification-decision-model.logic";
 
@@ -31,34 +34,41 @@ export const VerificationDecisionModelCard = ({
 }: VerificationDecisionModelCardProps) => {
   const t = useTranslations();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
-  const mutation = useSettingsMutation({
-    exceptionScope: {
-      type: "handler",
-      handlerId: "VerificationDecisionModelCard.mutation.useSettingsMutation",
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    // Saves reach the server in the order they were flipped.
+    scope: { id: "settings:verification-decision-model" },
+    // A committed save refreshes the AI configuration read through the
+    // contract, so the switch shows what was stored.
+    mutationFn: resourceMutation({
+      mutation: "updateVerificationDecisionModel",
+      queryClient,
+      scope: { type: "organization" },
+      // The organization's AI policy is an administrator's click, never an
+      // agent's, so this write has no capability.
+      mutationFn: async (enabled: boolean) =>
+        await invokeAppOnlyWrite(
+          "organization-settings.verification-decision-model.update",
+          async () =>
+            unwrapApiResponse(
+              await api["organization-settings"][
+                "verification-decision-model"
+              ].post({
+                enabled,
+              }),
+            ),
+        ),
+    }),
+    onSuccess: () => {
+      stellaToast.add({
+        title: t("settings.organization.verificationDecisionModel.updated"),
+        type: "success",
+      });
     },
-    // The organization's AI policy is an administrator's click, never an
-    // agent's, so this write has no capability.
-    mutationFn: async (enabled: boolean) =>
-      await invokeAppOnlyWrite(
-        "organization-settings.verification-decision-model.update",
-        async () =>
-          unwrapApiResponse(
-            await api["organization-settings"][
-              "verification-decision-model"
-            ].post({
-              enabled,
-            }),
-          ),
-      ),
-    invalidate: aiConfigKeys.all,
-    // A refused or raced save reads the stored setting again.
-    invalidateOn: "settled",
-    successToast: {
-      title: t("settings.organization.verificationDecisionModel.updated"),
-    },
-    errorToast: {
-      title: t("errors.actionFailed"),
-      description: t("common.somethingWentWrong"),
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"), {
+        description: userErrorFromThrown(error, t("common.somethingWentWrong")),
+      });
     },
   });
   return (
