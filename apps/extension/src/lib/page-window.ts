@@ -28,14 +28,18 @@ import type { FindRequest, ReadRequest } from "./page-script";
  * frame goes on in the next. A backward window stays in its frame.
  */
 
+/** An element's path from the document element; `s` steps into its open shadow root. */
 const PATH_PATTERN = /^\d+(?:\.(?:s\.)?\d+)*$/u;
+
+/** A text node's container may also be a shadow root: the host's path, then `s`. */
+const CONTAINER_PATH_PATTERN = /^\d+(?:\.(?:s\.)?\d+)*(?:\.s)?$/u;
 
 const nodeAddressEntries = {
   fingerprint: v.pipe(v.string(), v.minLength(1), v.maxLength(16)),
   path: v.pipe(
     v.string(),
     v.maxLength(BROWSER_CONTROL_LIMITS.referenceChars),
-    v.regex(PATH_PATTERN),
+    v.regex(CONTAINER_PATH_PATTERN),
   ),
   text: v.pipe(v.number(), v.integer(), v.minValue(-1)),
 };

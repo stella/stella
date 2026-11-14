@@ -1082,27 +1082,102 @@ export const pageScript = (pageOperation: PageOperation) => {
       return result;
     };
     const descends = (element: Element) =>
-      element.shadowRoot === null &&
-      !UNREAD_TAGS.has(element.tagName) &&
-      element.tagName !== "BR";
+      !UNREAD_TAGS.has(element.tagName) && element.tagName !== "BR";
+
+    // The tree as the page renders it: an element with an open shadow root
+    // shows that root's content, a slot shows the nodes assigned to it (or
+    // its own content when none are), anything else its children. A host's
+    // children that no slot takes are not rendered and never reached.
+    // Closed shadow roots stay unread.
+    const slotted = (element: Element): readonly Node[] | null => {
+      if (!(element instanceof HTMLSlotElement)) {
+        return null;
+      }
+      const assigned = element.assignedNodes();
+      return assigned.length > 0 ? assigned : null;
+    };
+    const firstRendered = (element: Element): Node | null =>
+      element.shadowRoot === null
+        ? (slotted(element)?.at(0) ?? element.firstChild)
+        : element.shadowRoot.firstChild;
+    const lastRendered = (element: Element): Node | null =>
+      element.shadowRoot === null
+        ? (slotted(element)?.at(-1) ?? element.lastChild)
+        : element.shadowRoot.lastChild;
+    const slotOf = (node: Node): HTMLSlotElement | null =>
+      node instanceof Element || node instanceof Text
+        ? node.assignedSlot
+        : null;
+    const renderedSibling = (node: Node, step: -1 | 1): Node | null => {
+      const slot = slotOf(node);
+      if (slot === null) {
+        return step === 1 ? node.nextSibling : node.previousSibling;
+      }
+      const assigned = slot.assignedNodes();
+      return assigned[assigned.indexOf(node) + step] ?? null;
+    };
+    // The element a node is rendered in; null for one that is not rendered
+    // (a host's child no slot takes) or for the document's body.
+    const renderedParent = (node: Node): Element | null => {
+      if (node === root) {
+        return null;
+      }
+      const slot = slotOf(node);
+      if (slot !== null) {
+        return slot;
+      }
+      const parent = node.parentNode;
+      if (parent instanceof ShadowRoot) {
+        return parent.host;
+      }
+      return parent instanceof Element && parent.shadowRoot === null
+        ? parent
+        : null;
+    };
+    // Whether `inner` is rendered inside `outer`, across shadow roots.
+    const renderedWithin = (outer: Node, inner: Node) => {
+      for (
+        let current: Node | null = inner;
+        current !== null;
+        current = renderedParent(current)
+      ) {
+        if (current === outer) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // The block element a node is rendered in, across shadow roots; the
+    // body when there is none.
+    const renderedBlockOf = (node: Node): Element => {
+      for (
+        let current: Node | null = node;
+        current !== null;
+        current = renderedParent(current)
+      ) {
+        if (current instanceof Element && BLOCK_TAGS.has(current.tagName)) {
+          return current;
+        }
+      }
+      return root;
+    };
 
     type Place = { node: Node; phase: "close" | "open" };
     const following = (node: Node): Place | null => {
       if (node === root) {
         return null;
       }
-      const sibling = node.nextSibling;
+      const sibling = renderedSibling(node, 1);
       if (sibling !== null) {
         return { node: sibling, phase: "open" };
       }
-      const parent = node.parentNode;
-      return parent instanceof Element
-        ? { node: parent, phase: "close" }
-        : null;
+      const parent = renderedParent(node);
+      return parent === null ? null : { node: parent, phase: "close" };
     };
     const nextPlace = ({ node, phase }: Place): Place | null => {
       if (phase === "open" && node instanceof Element && readable(node)) {
-        const first = descends(node) ? node.firstChild : null;
+        const first = descends(node) ? firstRendered(node) : null;
         return first === null
           ? { node, phase: "close" }
           : { node: first, phase: "open" };
@@ -1115,18 +1190,18 @@ export const pageScript = (pageOperation: PageOperation) => {
         : { node, phase: "open" };
     const previousPlace = ({ node, phase }: Place): Place | null => {
       if (phase === "close" && node instanceof Element) {
-        const last = descends(node) ? node.lastChild : null;
+        const last = descends(node) ? lastRendered(node) : null;
         return last === null ? { node, phase: "open" } : lastPlaceIn(last);
       }
       if (node === root) {
         return null;
       }
-      const sibling = node.previousSibling;
+      const sibling = renderedSibling(node, -1);
       if (sibling !== null) {
         return lastPlaceIn(sibling);
       }
-      const parent = node.parentNode;
-      return parent instanceof Element ? { node: parent, phase: "open" } : null;
+      const parent = renderedParent(node);
+      return parent === null ? null : { node: parent, phase: "open" };
     };
 
     type Break = {
@@ -1360,9 +1435,6 @@ export const pageScript = (pageOperation: PageOperation) => {
       atom(generatedText(node, "::before"));
       if (node.tagName === "SUP" && textOf(node).trim().length <= 6) {
         atom("^");
-      }
-      if (node.shadowRoot !== null) {
-        atom(` ${collectText(node, limits.pageTextChars)} `);
       }
       return items;
     };
@@ -1644,9 +1716,10 @@ export const pageScript = (pageOperation: PageOperation) => {
     // The first words of the block around a node, read only as far as
     // needed: what tells one paragraph's "1" from another's.
     const blockSample = (node: Node) => {
-      const element = node instanceof Element ? node : node.parentElement;
-      const block = element?.closest(BLOCK_SELECTOR) ?? root;
-      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      const walker = document.createTreeWalker(
+        renderedBlockOf(node),
+        NodeFilter.SHOW_TEXT,
+      );
       let sample = "";
       for (
         let text = walker.nextNode();
@@ -1679,18 +1752,30 @@ export const pageScript = (pageOperation: PageOperation) => {
       }
       return hash.toString(36);
     };
+    // An element by its path; a text node by its container's path and its
+    // index there. A text node right inside a shadow root has the host's
+    // path with the shadow segment after it.
     const nodeAddress = (node: Node) => {
-      const element = node instanceof Element ? node : node.parentElement;
-      const path = element === null ? null : pathFor(element);
-      return element === null || path === null
+      if (node instanceof Element) {
+        const path = pathFor(node);
+        return path === null
+          ? null
+          : { fingerprint: fingerprintOf(node), path, text: -1 };
+      }
+      const container = node.parentNode;
+      let path: string | null = null;
+      if (container instanceof Element) {
+        path = pathFor(container);
+      } else if (container instanceof ShadowRoot) {
+        const hostPath = pathFor(container.host);
+        path = hostPath === null ? null : `${hostPath}.${shadowSegment}`;
+      }
+      return container === null || path === null
         ? null
         : {
             fingerprint: fingerprintOf(node),
             path,
-            text:
-              node instanceof Element
-                ? -1
-                : Array.prototype.indexOf.call(element.childNodes, node),
+            text: Array.prototype.indexOf.call(container.childNodes, node),
           };
     };
     const positionOf = (place: Place, skip: number) => {
@@ -1712,11 +1797,14 @@ export const pageScript = (pageOperation: PageOperation) => {
     };
     // Whether every element around `node`, up to the document's body, is
     // one the reader reads.
+    // Whether every element `node` is rendered in, up to the document's
+    // body and across shadow roots, is one the reader reads. False for a
+    // node that is not rendered at all.
     const ancestorsReadable = (node: Node) => {
       for (
-        let parent = node.parentElement;
+        let parent = renderedParent(node);
         parent !== null;
-        parent = parent.parentElement
+        parent = renderedParent(parent)
       ) {
         if (!readable(parent)) {
           return false;
@@ -1728,20 +1816,26 @@ export const pageScript = (pageOperation: PageOperation) => {
       return node === root;
     };
     // The one rule for where a read may start, whatever chose the place (a
-    // cursor, the address's fragment, the point in view): inside the body,
-    // and nowhere the page hides.
-    const startAllowed = (node: Node) =>
-      root.contains(node) && ancestorsReadable(node);
+    // cursor, the address's fragment, the point in view): rendered inside
+    // the body, and nowhere the page hides.
+    const startAllowed = (node: Node) => ancestorsReadable(node);
+    const SHADOW_SUFFIX = `.${shadowSegment}`;
     const addressed = (address: {
       fingerprint: string;
       path: string;
       text: number;
     }): Node | null => {
-      const element = resolveElement(address.path);
-      const node =
-        element === null || address.text < 0
-          ? element
-          : element.childNodes.item(address.text);
+      const inShadow = address.path.endsWith(SHADOW_SUFFIX);
+      const element = resolveElement(
+        inShadow ? address.path.slice(0, -SHADOW_SUFFIX.length) : address.path,
+      );
+      const container = inShadow ? (element?.shadowRoot ?? null) : element;
+      let node: Node | null = null;
+      if (address.text >= 0) {
+        node = container?.childNodes.item(address.text) ?? null;
+      } else if (!inShadow) {
+        node = element;
+      }
       if (
         node === null ||
         (address.text >= 0 && !(node instanceof Text)) ||
@@ -2372,29 +2466,75 @@ export const pageScript = (pageOperation: PageOperation) => {
           Node.DOCUMENT_POSITION_FOLLOWING + Node.DOCUMENT_POSITION_CONTAINED_BY
       );
     };
-    const blockElementOf = (node: Node): Element => {
-      const element = node instanceof Element ? node : node.parentElement;
-      return element?.closest(BLOCK_SELECTOR) ?? root;
-    };
-    // The element in the document a shadow root's text is read with: its
-    // outermost host.
-    const outermostHost = (shadowRoot: ShadowRoot): Element => {
-      let host = shadowRoot.host;
-      for (
-        let rootNode = host.getRootNode();
-        rootNode instanceof ShadowRoot;
-        rootNode = host.getRootNode()
-      ) {
-        host = rootNode.host;
+    // Rendered reading order, across shadow roots: negative when `left`
+    // comes first. Within the document tree the browser's own order
+    // answers; across shadow roots, the rendered ancestors are compared.
+    const childIndexes = new Map<Element, Map<Node, number>>();
+    const renderedIndex = (parent: Element, child: Node) => {
+      let indexes = childIndexes.get(parent);
+      if (indexes === undefined) {
+        const children =
+          parent.shadowRoot === null
+            ? [...(slotted(parent) ?? parent.childNodes)]
+            : [...parent.shadowRoot.childNodes];
+        indexes = new Map(children.map((node, index) => [node, index]));
+        childIndexes.set(parent, indexes);
       }
-      return host;
+      return indexes.get(child) ?? -1;
     };
-    // The block elements whose text holds `word`, in document order, none
-    // inside another.
-    const candidateBlocks = (word: string): Element[] => {
-      const found = new Set<Element>();
-      const folded = fold(textOf(root));
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const renderedOrder = (left: Node, right: Node): number => {
+      if (left === right) {
+        return 0;
+      }
+      // Within one tree, and outside slots, the browser's order is the
+      // rendered one.
+      if (
+        left.getRootNode() === right.getRootNode() &&
+        slotOf(left) === null &&
+        slotOf(right) === null
+      ) {
+        return follows(left, right) ? -1 : 1;
+      }
+      const chainOf = (node: Node) => {
+        const chain: Node[] = [];
+        for (
+          let current: Node | null = node;
+          current !== null;
+          current = renderedParent(current)
+        ) {
+          chain.push(current);
+        }
+        return chain.toReversed();
+      };
+      const leftChain = chainOf(left);
+      const rightChain = chainOf(right);
+      let index = 0;
+      while (
+        index < leftChain.length &&
+        index < rightChain.length &&
+        leftChain[index] === rightChain[index]
+      ) {
+        index += 1;
+      }
+      const parent = leftChain[index - 1];
+      const leftChild = leftChain[index];
+      const rightChild = rightChain[index];
+      if (leftChild === undefined) {
+        return -1;
+      }
+      if (rightChild === undefined || !(parent instanceof Element)) {
+        return 1;
+      }
+      return (
+        renderedIndex(parent, leftChild) - renderedIndex(parent, rightChild)
+      );
+    };
+    // Adds the block of each text node in `scope` (the body, or an open
+    // shadow root) that holds `word`. Script and style text is never read,
+    // so it names no block.
+    const addCandidates = (scope: Node, word: string, found: Set<Element>) => {
+      const folded = fold(textOf(scope));
+      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
       let node = walker.nextNode();
       let nodeStart = 0;
       for (
@@ -2406,7 +2546,6 @@ export const pageScript = (pageOperation: PageOperation) => {
           nodeStart += textOf(node).length;
           node = walker.nextNode();
         }
-        // Script and style text is never read, so it names no block.
         const parent = node?.parentElement ?? null;
         if (
           node !== null &&
@@ -2416,26 +2555,23 @@ export const pageScript = (pageOperation: PageOperation) => {
               UNREAD_TAGS.has(parent.tagName)
             ))
         ) {
-          found.add(blockElementOf(node));
+          found.add(renderedBlockOf(node));
         }
       }
+    };
+    // The block elements whose text holds `word`, in rendered order, none
+    // inside another.
+    const candidateBlocks = (word: string): Element[] => {
+      const found = new Set<Element>();
+      addCandidates(root, word, found);
       for (const shadowRoot of openShadowRoots) {
-        if (fold(textOf(shadowRoot)).includes(word)) {
-          const host = outermostHost(shadowRoot);
-          if (root.contains(host)) {
-            found.add(blockElementOf(host));
-          }
-        }
+        addCandidates(shadowRoot, word, found);
       }
-      const ordered = [...found].toSorted((left, right) => {
-        if (left === right) {
-          return 0;
-        }
-        return follows(left, right) ? -1 : 1;
-      });
       const outermost: Element[] = [];
-      for (const element of ordered) {
-        if (!outermost.some((kept) => kept.contains(element))) {
+      for (const element of [...found].toSorted(renderedOrder)) {
+        // In rendered order, a block inside another comes right after it.
+        const kept = outermost.at(-1);
+        if (kept === undefined || !renderedWithin(kept, element)) {
           outermost.push(element);
         }
       }
@@ -2482,7 +2618,8 @@ export const pageScript = (pageOperation: PageOperation) => {
         ...candidateBlocks(longest).filter(
           (element) =>
             resumeAt === null ||
-            (!resumeAt.contains(element) && follows(resumeAt, element)),
+            (!renderedWithin(resumeAt, element) &&
+              renderedOrder(resumeAt, element) < 0),
         ),
       ];
       const matches: {
@@ -2552,35 +2689,58 @@ export const pageScript = (pageOperation: PageOperation) => {
       if (after.node === null && request.after.type === "node") {
         return null;
       }
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
-        acceptNode: (node) =>
+      // The next node in rendered order, into shadow roots and slots: into
+      // `node`'s own content unless `skipContent`.
+      const nextRendered = (node: Node, skipContent: boolean): Node | null => {
+        if (
+          !skipContent &&
           node instanceof Element &&
-          (SKIPPED_TAGS.has(node.tagName) || UNREAD_TAGS.has(node.tagName))
-            ? NodeFilter.FILTER_REJECT
-            : NodeFilter.FILTER_ACCEPT,
-      });
-      if (after.node !== null) {
-        walker.currentNode = after.node;
-      }
+          !SKIPPED_TAGS.has(node.tagName) &&
+          !UNREAD_TAGS.has(node.tagName)
+        ) {
+          const child = firstRendered(node);
+          if (child !== null) {
+            return child;
+          }
+        }
+        for (
+          let current: Node | null = node;
+          current !== null && current !== root;
+          current = renderedParent(current)
+        ) {
+          const sibling = renderedSibling(current, 1);
+          if (sibling !== null) {
+            return sibling;
+          }
+        }
+        return null;
+      };
       const headings: {
         level: number;
         position: NonNullable<ReturnType<typeof positionOf>>;
         text: string;
       }[] = [];
-      // A heading's own content is never a heading of its own.
       let last: Node | null = after.node;
+      // A heading's own content is never a heading of its own: after one,
+      // the walk goes on past its content.
+      let skipContent: boolean;
       for (
-        let node = walker.nextNode();
+        let node =
+          after.node === null
+            ? firstRendered(root)
+            : nextRendered(after.node, true);
         node !== null;
-        node = walker.nextNode()
+        node = nextRendered(node, skipContent)
       ) {
-        if (!(node instanceof Element) || last?.contains(node) === true) {
+        skipContent = false;
+        if (!(node instanceof Element)) {
           continue;
         }
         const level = headingLevelOf(node);
         if (level === 0) {
           continue;
         }
+        skipContent = true;
         const text = blocksWithin(node)
           .map((block) => cleanText(block.text))
           .join(" ")

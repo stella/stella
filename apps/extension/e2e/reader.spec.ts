@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import * as v from "valibot";
 
 import {
+  BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_TARGET_METADATA,
   ELEMENT_REFERENCE_SHADOW_SEGMENT,
@@ -18,6 +19,7 @@ import {
 import { frameFoundSchema, frameReadSchema } from "../src/lib/page-window";
 import {
   IDENTITY_PROVIDER_HOSTS,
+  SIGN_IN_MESSAGE,
   SIGN_IN_POLICY,
 } from "../src/lib/sign-in-policy";
 
@@ -383,6 +385,139 @@ test("a link to a section inside hidden content starts no read there", async ({
   await page.goto(`${ORIGIN}/works/anchors#shown`);
   const { window } = await readWindow(page, readRequest({ type: "viewport" }));
   expect(window.text.split("\n").at(0)).toBe("Visible section");
+});
+
+const SHADOW_PARAGRAPHS = 2500;
+const shadowLine = (index: number) =>
+  `Shadow paragraph ${String(index)}: the notice period runs from delivery, see part ${String(index + 1)}.`;
+
+test("reads a page that lives in an open shadow root like any other", async ({
+  page,
+}) => {
+  const paragraphs = Array.from(
+    { length: SHADOW_PARAGRAPHS },
+    (_, index) =>
+      `<p>Shadow paragraph ${String(index + 1)}: the notice period runs from delivery, see <a href="#part-${String(index + 2)}">part ${String(index + 2)}</a>.</p>`,
+  ).join("");
+  await serve(
+    page,
+    `<!doctype html><html lang="en"><head><title>Shadow page</title></head><body>
+<article-view><p>Slotted light paragraph</p></article-view>
+<p>After the host</p>
+<template id="content"><style>.gone { display: none; }</style><h2>Shadow heading</h2>${paragraphs}<p class="gone">SHADOW-HIDDEN</p><slot></slot></template>
+<script>
+  customElements.define("article-view", class extends HTMLElement {
+    connectedCallback() {
+      this.attachShadow({ mode: "open" }).append(
+        document.getElementById("content").content.cloneNode(true),
+      );
+    }
+  });
+</script>
+</body></html>`,
+    "/works/shadow",
+  );
+  const expected = [
+    "## Shadow heading",
+    ...Array.from({ length: SHADOW_PARAGRAPHS }, (_, index) =>
+      shadowLine(index + 1),
+    ),
+    "Slotted light paragraph",
+    "After the host",
+  ];
+
+  // Paging runs through the shadow root, the slot and out past the host,
+  // with no gap or repeat.
+  const windows = [
+    (await readWindow(page, readRequest({ type: "start" }))).window,
+  ];
+  for (let step = 0; step < 12; step += 1) {
+    const last = windows.at(-1);
+    if (last === undefined || !last.hasAfter) {
+      break;
+    }
+    windows.push((await readWindow(page, readRequest(last.end))).window);
+  }
+  expect(windows.length).toBeGreaterThan(2);
+  expect(
+    windows.flatMap(({ text }) => text.split("\n").map(withoutLinkMarks)),
+  ).toEqual(expected);
+  expect(windows.map(({ text }) => text).join("\n")).not.toContain(
+    "SHADOW-HIDDEN",
+  );
+
+  // Back from the last window: the lines right before it.
+  const last = windows.at(-1);
+  if (last === undefined) {
+    throw new TypeError("No last window.");
+  }
+  const back = (await readWindow(page, readRequest(last.start, "backward")))
+    .window;
+  const backLines = back.text.split("\n").map(withoutLinkMarks);
+  const lastStart = expected.indexOf(
+    withoutLinkMarks(last.text.split("\n").at(0) ?? ""),
+  );
+  expect(backLines).toEqual(
+    expected.slice(lastStart - backLines.length, lastStart),
+  );
+
+  // A link inside gets an id, and its path is one an action resolves.
+  const second = windows[1];
+  const link = second?.links.at(0);
+  if (second === undefined || link === undefined) {
+    throw new TypeError("No link in the second window.");
+  }
+  expect(link.id).toMatch(/^L\d+$/u);
+  expect(second.text).toContain(`[${link.id}]`);
+  expect(link.path).toContain(".s.");
+  const target = {
+    context: link.context,
+    href: link.href,
+    name: link.name,
+    ref: `e:0:${link.path}`,
+    role: link.role,
+  };
+  const clicked: unknown = await page.evaluate(pageScript, {
+    action: {
+      action: "click",
+      page: { revision: "revision-1", url: page.url() },
+      target,
+    },
+    errorCode: BROWSER_CONTROL_ERROR_CODE,
+    expectedOrigin: ORIGIN,
+    identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
+    kind: "action",
+    limits: BROWSER_CONTROL_LIMITS,
+    metadataType: BROWSER_CONTROL_TARGET_METADATA,
+    path: link.path,
+    shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+    signIn: SIGN_IN_POLICY.withholdSecrets,
+    signInMessage: SIGN_IN_MESSAGE,
+    signInPolicies: SIGN_IN_POLICY,
+  } satisfies PageOperation);
+  expect(clicked).toEqual({ ok: true });
+  expect(link.href).toMatchObject({
+    type: BROWSER_CONTROL_TARGET_METADATA.present,
+  });
+  const href =
+    link.href.type === BROWSER_CONTROL_TARGET_METADATA.present
+      ? link.href.value
+      : "";
+  expect(await page.evaluate(() => window.location.hash)).toBe(
+    new URL(href).hash,
+  );
+
+  // Find and the outline reach inside; hidden text inside stays out.
+  const found = await textMatches(page, "paragraph   1500:");
+  expect(found.total).toBe(1);
+  expect(found.matches.at(0)?.snippet).toContain("Shadow paragraph 1500:");
+  expect(await textMatches(page, "shadow-hidden")).toMatchObject({
+    total: 0,
+  });
+  expect(await textMatches(page, "slotted light")).toMatchObject({ total: 1 });
+  expect(await find(page, headingsFind())).toMatchObject({
+    headings: [{ level: 2, text: "Shadow heading" }],
+  });
 });
 
 /** One block far longer than a window, sentences numbered to place a cut. */
