@@ -111,6 +111,7 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
+import { isSearchBusy } from "@/features/case-law/search-busy.logic";
 import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logic";
 import { useCaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
@@ -135,6 +136,7 @@ import {
 } from "@/routes/law/-components/public-law-list-failure";
 
 import { caseLawResultsFeedback } from "./-case-law-filter-notice";
+import { usePageSelection } from "./-case-law-page-selection";
 import {
   type CaseLawSearchChange,
   nextCaseLawIndexSearch,
@@ -143,7 +145,6 @@ import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { Route } from "./index";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
-const EMPTY_SELECTION: readonly string[] = [];
 const NO_SHOWN_QUESTIONS: readonly string[] = [];
 const EMPTY_DECISIONS: readonly Decision[] = [];
 const NO_BROWSE_FACETS: CaseLawBrowseFacets = {
@@ -222,6 +223,24 @@ const useCaseLawResultsTiming = ({
     query ?? "",
     page !== undefined && !isPlaceholderData,
   );
+};
+
+type SearchStillBusyNoticeProps = {
+  failureReason: unknown;
+  isFetching: boolean;
+};
+
+/** The first answer was "busy" and its one retry is on the way. */
+const SearchStillBusyNotice = ({
+  failureReason,
+  isFetching,
+}: SearchStillBusyNoticeProps) => {
+  const t = useTranslations();
+  return isFetching && isSearchBusy(failureReason) ? (
+    <p className="text-muted-foreground text-sm" role="status">
+      {t("caseLaw.searchStillSearching")}
+    </p>
+  ) : null;
 };
 
 type PublicCaseLawIndexProps = {
@@ -479,17 +498,12 @@ export function PublicCaseLawIndex({
     });
   };
 
-  // Picked rows narrow a run to them; the page they belong to is the only
-  // page they mean anything on, so a step forward clears them.
   const openDecision = useOpenDecisionInspector(rowsQuery);
-  const [selectedIds, setSelectedIds] =
-    useState<readonly string[]>(EMPTY_SELECTION);
-  const [selectionPage, setSelectionPage] = useState(pager.currentPage);
-  if (selectionPage !== pager.currentPage) {
-    setSelectionPage(pager.currentPage);
-    setSelectedIds(EMPTY_SELECTION);
-  }
   const pageDecisionIds = decisions.map((decision) => decision.id);
+  const [selectedIds, setSelectedIds] = usePageSelection(
+    pager.currentPage,
+    pageDecisionIds,
+  );
   const questions = useQuestionColumns({
     // The results page is where questions are authored, so the columns are
     // read whether or not this particular search returned anything.
@@ -873,6 +887,10 @@ export function PublicCaseLawIndex({
           />
         </div>
         {feedback.aboveResults}
+        <SearchStillBusyNotice
+          failureReason={pageQuery.failureReason}
+          isFetching={pageQuery.isFetching}
+        />
 
         {isSearchUnavailable ? (
           <PublicLawListFailure

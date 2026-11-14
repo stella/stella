@@ -7,6 +7,7 @@ import {
 
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { ApnsAlert, ApnsOutcome } from "@/api/lib/push/apns-client";
+import { pushTokenHash } from "@/api/lib/push/push-delivery-queue";
 import { deliverPushNotification } from "@/api/lib/push/push-delivery-worker";
 import type {
   PushDeliveryDeps,
@@ -121,7 +122,7 @@ describe("push delivery", () => {
 
     expect(result).toEqual({
       status: "sent",
-      deliveredTokens: devices.map(({ token }) => token),
+      deliveredTokenHashes: devices.map(({ token }) => pushTokenHash(token)),
       removed: 0,
       retryable: 0,
       rejected: [],
@@ -173,7 +174,7 @@ describe("push delivery", () => {
     expect(removed).toEqual([[gone, unregistered]]);
     expect(result).toMatchObject({
       status: "sent",
-      deliveredTokens: [live.token],
+      deliveredTokenHashes: [pushTokenHash(live.token)],
       removed: 2,
       retryable: 0,
     });
@@ -195,23 +196,28 @@ describe("push delivery", () => {
     );
     expect(attempt).toMatchObject({
       status: "sent",
-      deliveredTokens: [reached.token],
+      deliveredTokenHashes: [pushTokenHash(reached.token)],
       retryable: 1,
     });
+    // The record of reached devices is written into the job, which a failed
+    // delivery keeps for a week: it names devices without their tokens.
+    const recorded = JSON.stringify(attempt);
+    expect(recorded).not.toContain(reached.token);
+    expect(recorded).not.toContain(throttled.token);
 
     const second = harness({ devices: [reached, throttled] });
     const retry = await deliverPushNotification(
       {
         notificationId: NOTIFICATION_ID,
-        deliveredTokens:
-          attempt.status === "sent" ? attempt.deliveredTokens : [],
+        deliveredTokenHashes:
+          attempt.status === "sent" ? attempt.deliveredTokenHashes : [],
       },
       second.deps,
     );
     expect(second.sent.map(({ token }) => token)).toEqual([throttled.token]);
     expect(retry).toMatchObject({
       status: "sent",
-      deliveredTokens: [reached.token, throttled.token],
+      deliveredTokenHashes: [reached.token, throttled.token].map(pushTokenHash),
       retryable: 0,
     });
   });
@@ -230,7 +236,7 @@ describe("push delivery", () => {
       await deliverPushNotification({ notificationId: NOTIFICATION_ID }, deps),
     ).toEqual({
       status: "sent",
-      deliveredTokens: [],
+      deliveredTokenHashes: [],
       removed: 0,
       retryable: 0,
       rejected: [{ reason: "PayloadTooLarge", status: 413 }],

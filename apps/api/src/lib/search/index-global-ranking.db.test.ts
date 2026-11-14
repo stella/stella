@@ -30,27 +30,28 @@ const accessibleWorkspaceIds = [documentWorkspaceId, ...matterIds];
 let testDb: TestDatabase;
 
 const search = async (overrides: Partial<GlobalSearchQuery> = {}) =>
-  await searchGlobal(
-    {
-      query: "Zaloba Prehled.pdf",
-      organizationId,
-      userId,
-      accessibleWorkspaceIds,
-      selectedWorkspaceIds: [],
-      types: ["document", "matter"],
-      editedByUserIds: [],
-      mimeTypes: [],
-      limit: 2,
-      ...overrides,
-    },
-    {
-      scopedDb: executeRowsScopedDb(
-        async (read) => await testDb.transaction(read),
-      ),
-      readLanguageAlternates: async () =>
-        await Promise.resolve({ alternatesFor: () => [] }),
-    },
-  );
+  (
+    await searchGlobal(
+      {
+        query: "Zaloba Prehled.pdf",
+        organizationId,
+        userId,
+        accessibleWorkspaceIds,
+        selectedWorkspaceIds: [],
+        types: ["document", "matter"],
+        grantedScopes: undefined,
+        editedByUserIds: [],
+        mimeTypes: [],
+        limit: 2,
+        ...overrides,
+      },
+      {
+        scopedDb: executeRowsScopedDb(
+          async (read) => await testDb.transaction(read),
+        ),
+      },
+    )
+  ).unwrap();
 
 beforeAll(async () => {
   testDb = await getTestDb();

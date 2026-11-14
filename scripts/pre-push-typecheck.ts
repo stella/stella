@@ -29,6 +29,11 @@ export const TYPECHECK_BUDGET_EXCLUSIONS = [
     measuredTime: "75.6 s",
     measuredMemory: "1.14 GB",
   },
+  {
+    name: "@stll/api",
+    measuredTime: "1651.9 s",
+    measuredMemory: "1.10 GB",
+  },
 ] as const satisfies readonly TypecheckBudgetExclusion[];
 
 class StaleTypecheckBudgetExclusionError extends TaggedError(

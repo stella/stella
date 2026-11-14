@@ -368,10 +368,10 @@ updates:
       - dependency-name: "katex"
         versions:
           - ">=0.17"
-      # Remove when intl-messageformat moves past 3.5.16.
+      # Remove when intl-messageformat moves past 3.5.18.
       - dependency-name: "@formatjs/icu-messageformat-parser"
         versions:
-          - ">3.5.16"
+          - ">3.5.18"
       # Expo packages ship as one SDK-coordinated major. Upgrade the complete
       # SDK intentionally instead of mixing majors through partial PRs.
       - dependency-name: "expo"

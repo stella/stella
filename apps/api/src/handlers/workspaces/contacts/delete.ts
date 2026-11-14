@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
 import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -12,11 +12,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { requireNoHold } from "@/api/lib/legal-holds/holds";
-import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const config = {
   contract: "patch",
@@ -111,12 +111,16 @@ export const deleteWorkspaceContactHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(
-    createErrorCapture(
-      handlerErrorContext(
-        "deleteWorkspaceContactHandler.flushWorkspaceSearchRepairs",
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteWorkspaceContactHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
       ),
-    ),
+    "contacts-delete.flush-workspace-search-repairs",
   );
 
   return Result.ok({ id: deleted.id });

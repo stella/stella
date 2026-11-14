@@ -33,6 +33,20 @@ export type ModelReasoningCapabilities = {
 // Native Anthropic currently emits signed thinking only; redacted blocks are
 // not exposed by the installed adapter, so they are not admitted for replay.
 export const MODEL_REASONING_CAPABILITIES = {
+  "gemini-4-carbon": {
+    support: "supported",
+    emittedFormats: ["google-thought-signature"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "google",
+        model: "gemini-4-carbon",
+        format: "google-thought-signature",
+      },
+    ],
+  },
   "gemini-4-argon": {
     support: "supported",
     emittedFormats: ["google-thought-signature"],
@@ -153,6 +167,14 @@ export const MODEL_REASONING_CAPABILITIES = {
     anthropicThinking: "none",
     replayCompatibility: [],
   },
+  "openai/gpt-6.1-terra": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
   "openai/gpt-6-astra": {
     support: "supported",
     emittedFormats: ["none"],
@@ -194,6 +216,14 @@ export const MODEL_REASONING_CAPABILITIES = {
     replayCompatibility: [],
   },
   "openai/gpt-5.6-luna": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
+  "google/gemini-4-carbon": {
     support: "supported",
     emittedFormats: ["none"],
     openAIIncludeEncryptedContent: false,
@@ -339,6 +369,20 @@ export const MODEL_REASONING_CAPABILITIES = {
       {
         provider: "openai",
         model: "gpt-6.1-sol",
+        format: "openai-encrypted-content",
+      },
+    ],
+  },
+  "gpt-6.1-terra": {
+    support: "supported",
+    emittedFormats: ["openai-encrypted-content"],
+    openAIIncludeEncryptedContent: true,
+    openAIStore: false,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "openai",
+        model: "gpt-6.1-terra",
         format: "openai-encrypted-content",
       },
     ],
@@ -521,6 +565,20 @@ export const MODEL_REASONING_CAPABILITIES = {
       {
         provider: "anthropic",
         model: "claude-sonnet-5",
+        format: "anthropic-thinking-signature",
+      },
+    ],
+  },
+  "claude-fable-5-2": {
+    support: "supported",
+    emittedFormats: ["anthropic-thinking-signature"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "adaptive",
+    replayCompatibility: [
+      {
+        provider: "anthropic",
+        model: "claude-fable-5-2",
         format: "anthropic-thinking-signature",
       },
     ],

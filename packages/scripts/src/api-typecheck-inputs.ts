@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 

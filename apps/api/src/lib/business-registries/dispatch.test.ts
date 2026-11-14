@@ -47,6 +47,9 @@ import {
 } from "@/api/lib/business-registries/dispatch";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { WebSearchProvider } from "@/api/lib/web-search/types";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const permit = grantThirdPartyOutboundPermit();
 
@@ -205,15 +208,19 @@ describe("ORSR lookup detail", () => {
   ): Promise<{ paths: string[]; result: unknown }> => {
     const paths: string[] = [];
     const original = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (input: URL | Request | string) => {
-        const { pathname } = new URL(
-          typeof input === "string" || input instanceof URL ? input : input.url,
-        );
-        paths.push(pathname);
-        return Response.json(BODY_BY_PATH[pathname]);
-      },
-      { preconnect: original.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (input: URL | Request | string) => {
+          const { pathname } = new URL(
+            typeof input === "string" || input instanceof URL
+              ? input
+              : input.url,
+          );
+          paths.push(pathname);
+          return Response.json(BODY_BY_PATH[pathname]);
+        },
+        { preconnect: original.preconnect },
+      ),
     );
     try {
       const result = await executeRegistryLookup({
@@ -226,7 +233,7 @@ describe("ORSR lookup detail", () => {
       });
       return { paths, result };
     } finally {
-      globalThis.fetch = original;
+      testFetchState.restore();
     }
   };
 
@@ -381,11 +388,13 @@ describe("Companies House hit address", () => {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: original.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: original.preconnect,
+      }),
+    );
     return (): void => {
-      globalThis.fetch = original;
+      testFetchState.restore();
     };
   };
 
@@ -486,9 +495,11 @@ describe("DENUE deployment gating", () => {
           headers: { "Content-Type": "application/json" },
         },
       );
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     try {
       const hit = await BUSINESS_REGISTRY_DISPATCH.denue.lookup("6281106", {
         observer: "unobserved",
@@ -506,7 +517,7 @@ describe("DENUE deployment gating", () => {
         }),
       });
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       if (previousToken === undefined) {
         delete process.env["INEGI_DENUE_API_TOKEN"];
       } else {

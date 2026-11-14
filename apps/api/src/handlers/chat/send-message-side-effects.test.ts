@@ -41,6 +41,7 @@ const selectNoChatMessages = () => ({
 const threadData: ChatThreadState["data"] = {
   chatModel: null,
   chatReasoningEffort: null,
+  chatLocalRunTarget: null,
   contextMatterIds: [],
   dataWorkspaceIds: [workspaceId],
   historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,

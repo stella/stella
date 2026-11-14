@@ -19,7 +19,10 @@ test("commits the entity withdrawal fence before storage cleanup is dispatched",
 
 test("transfers durable room objects before the entity cascade removes their pointers", () => {
   const roomRead = source.indexOf(".from(folioCollabRooms)");
-  const roomLock = source.indexOf('aggregate: "folioCollabRoom"', roomRead);
+  const roomLock = source.indexOf(
+    "await withAggregateFolioCollabRoomBatch(",
+    roomRead,
+  );
   const entityLock = source.indexOf("await withAggregateEntityBatch(");
   const roomFiles = source.indexOf("collectFolioCollabStoredRoomFiles(room)");
   const deleteEntity = source.indexOf(".delete(entities)");

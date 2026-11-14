@@ -1,11 +1,10 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_ERROR_CODE,
-  type BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_CONTROL_TARGET_METADATA,
@@ -13,6 +12,7 @@ import {
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
+  type BrowserControlTab,
   type BrowserObservedTab,
   ELEMENT_REFERENCE_SHADOW_SEGMENT,
   parseBrowserControlResult,
@@ -25,14 +25,46 @@ import type { CommandBudget } from "./command-budget";
 import { readBrowserController } from "./controller";
 import { isControllableFrame, parseControllableUrl } from "./origin-policy";
 import {
+  type FindRequest,
+  type PageOperation,
+  pageScript,
+  SNAPSHOT_PURPOSE,
+} from "./page-script";
+import {
+  findInPage,
+  frameFoundSchema,
+  type FrameOutcome,
+  frameReadSchema,
+  type PageReadFailure,
+  type ReaderFrame,
+  readPageWindow,
+} from "./page-window";
+import {
+  IDENTITY_PROVIDER_HOSTS,
+  isIdentityProviderUrl,
+  needsMember,
+  SIGN_IN_MESSAGE,
+  SIGN_IN_POLICY,
+  type SignInPolicy,
+} from "./sign-in-policy";
+import {
   checkCommandIdentity,
   type LiveTopDocument,
   type SnapshotState,
   type TopDocument,
 } from "./snapshot-guard";
-import { frameSnapshotSchema, mergeFrameSnapshots } from "./snapshot-merge";
+import { readStellaTabs } from "./stella-tabs";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
-import { containControlledTab, forgetContainedTab } from "./tab-containment";
+import {
+  chatTabsAtLimit,
+  containControlledTab,
+  forgetContainedTab,
+  operableTabIds,
+  readContainedTabs,
+  readTabOwner,
+  reclaimControlledTab,
+  switchContainedTab,
+} from "./tab-containment";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const PAGE_SETTLE_MS = 250;
@@ -68,6 +100,14 @@ const cancelled = (): BrowserControlResult =>
     BROWSER_CONTROL_ERROR_CODE.cancelled,
     "The browser action was stopped before it ran.",
   );
+
+/** A frame's answer to a snapshot when its document asks for a sign-in. */
+const signInRefusalSchema = v.strictObject({ refused: v.literal("sign-in") });
+
+/** A frame's answer when it read nothing (see `FrameRefusal`). */
+const pageRefusalSchema = v.strictObject({
+  refused: v.picklist(["sign-in", "stale-cursor", "top-origin"]),
+});
 
 const frameLocationSchema = v.strictObject({
   origin: v.string(),
@@ -406,825 +446,34 @@ const createTabNavigationObserver = (tabId: number) => {
 
 type TabNavigationObserver = ReturnType<typeof createTabNavigationObserver>;
 
-type PageOperation =
-  | {
-      action: BrowserControlElementCommand;
-      errorCode: typeof BROWSER_CONTROL_ERROR_CODE;
-      /** The frame origin the worker checked; the action refuses any other. */
-      expectedOrigin: string;
-      kind: "action";
-      limits: typeof BROWSER_CONTROL_LIMITS;
-      metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
-      path: string;
-      shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
-    }
-  | { kind: "locate" }
-  | {
-      kind: "snapshot";
-      limits: typeof BROWSER_CONTROL_LIMITS;
-      metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
-      shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
-    };
+/**
+ * A value `chrome.scripting.executeScript` hands to the injected function as
+ * it was sent. Chrome drops an object property whose value is `null`, so the
+ * page would read `undefined` there; no injected argument may hold one.
+ * `undefined` is allowed: it arrives as itself.
+ */
+type InjectableArgument =
+  | boolean
+  | number
+  | string
+  | undefined
+  | readonly InjectableArgument[]
+  | { readonly [key: string]: InjectableArgument };
 
 /**
- * The one script injected into a frame of the controlled tab. Chrome
- * serializes `func`, so every DOM helper lives inside it; all operations
- * share this single copy. Element paths are frame-local; the worker qualifies
- * them with the frame id. Every operation reports or checks the frame's
- * origin, which the worker holds to the origin policy.
+ * Runs the page script (`page-script`) in frames of the controlled tab.
+ * Chrome serializes it, so all operations share its single copy. Element
+ * paths and reading positions are frame-local; the worker qualifies them
+ * with the frame and its document. Every operation reports or checks the
+ * frame's origin, which the worker holds to the origin policy.
  */
 const runPageOperation = async (
   injectionTarget: chrome.scripting.InjectionTarget,
-  operation: PageOperation,
+  operation: PageOperation & InjectableArgument,
 ) =>
   await chrome.scripting.executeScript({
     args: [operation],
-    func: (pageOperation) => {
-      if (pageOperation.kind === "locate") {
-        return { origin: window.origin, url: window.location.href };
-      }
-      const { limits, metadataType, shadowSegment } = pageOperation;
-      const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
-      const normalize = (value: string) =>
-        value.replaceAll(/\s+/gu, " ").trim();
-      const visible = (element: Element) => {
-        const style = window.getComputedStyle(element);
-        return (
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          (style.display === "contents" || element.getClientRects().length > 0)
-        );
-      };
-      // `-webkit-text-security` is how pages mask secrets outside
-      // type=password; it is inherited, so masked descendants count too.
-      const masked = (element: Element) => {
-        const security = window
-          .getComputedStyle(element)
-          .getPropertyValue("-webkit-text-security");
-        return security !== "" && security !== "none";
-      };
-      const SENSITIVE_AUTOCOMPLETE_TOKENS = new Set([
-        "current-password",
-        "new-password",
-        "one-time-code",
-      ]);
-      // Whole words of a field's name or id that mark it secret: `userPassword`
-      // and `one_time_code` count, `hotplate` and `photoprint` do not.
-      const SECRET_NAME_WORDS = new Set([
-        "csc",
-        "cvc",
-        "cvv",
-        "onetime",
-        "otp",
-        "passcode",
-        "passphrase",
-        "passwd",
-        "password",
-        "pwd",
-        "totp",
-      ]);
-      const nameWords = (identifier: string) =>
-        identifier
-          .replaceAll(/([a-z\d])([A-Z])/gu, "$1 $2")
-          .toLowerCase()
-          .split(/[^a-z\d]+/u)
-          .filter((word) => word.length > 0);
-      const nameMarksSecret = (identifier: string) => {
-        const words = nameWords(identifier);
-        return words.some(
-          (word, index) =>
-            SECRET_NAME_WORDS.has(word) ||
-            (word === "one" && words[index + 1] === "time"),
-        );
-      };
-      // Values of secret fields seen in this document. A page can reveal a
-      // password by swapping the field for a new element or by printing it;
-      // any field holding one, and any text containing one, is withheld.
-      // Values shorter than this are too common to match safely.
-      const SECRET_VALUE_MIN_CHARS = 4;
-      const SECRETS_KEY = "stellaSecretValues";
-      const isSecretSet = (value: unknown): value is Set<string> =>
-        value instanceof Set;
-      const storedSecrets: unknown = Reflect.get(globalThis, SECRETS_KEY);
-      const secretValues = isSecretSet(storedSecrets)
-        ? storedSecrets
-        : new Set<string>();
-      Reflect.set(globalThis, SECRETS_KEY, secretValues);
-      const REDACTED = "[hidden]";
-      const holdsSecret = (text: string) => {
-        for (const secret of secretValues) {
-          if (text.includes(secret)) {
-            return true;
-          }
-        }
-        return false;
-      };
-      const redact = (text: string) => {
-        let redacted = text;
-        for (const secret of secretValues) {
-          redacted = redacted.replaceAll(secret, () => REDACTED);
-        }
-        return redacted;
-      };
-      // A field once seen as secret stays secret for the life of its
-      // document, so a "show password" toggle that turns type=password into
-      // text does not make the value readable. The extension's isolated world
-      // keeps this set across injections; the page can neither see nor clear
-      // it.
-      const HISTORY_KEY = "stellaSensitiveFields";
-      const storedHistory: unknown = Reflect.get(globalThis, HISTORY_KEY);
-      const sensitiveHistory: WeakSet<Element> =
-        storedHistory instanceof WeakSet ? storedHistory : new WeakSet();
-      Reflect.set(globalThis, HISTORY_KEY, sensitiveHistory);
-      const isTextField = (
-        element: Element,
-      ): element is HTMLInputElement | HTMLTextAreaElement =>
-        element instanceof HTMLInputElement ||
-        element instanceof HTMLTextAreaElement;
-      const namedLikeSecret = (element: Element) =>
-        isTextField(element) &&
-        (nameMarksSecret(element.name) || nameMarksSecret(element.id));
-      // Passwords, payment cards and one-time codes: their values and text
-      // are never read, and the model may not type or choose them.
-      const isSensitiveField = (element: Element) => {
-        if (sensitiveHistory.has(element)) {
-          return true;
-        }
-        const sensitive =
-          (isTextField(element) && holdsSecret(element.value)) ||
-          (element instanceof HTMLInputElement &&
-            element.type === "password") ||
-          (element.getAttribute("autocomplete") ?? "")
-            .toLowerCase()
-            .split(/\s+/u)
-            .some(
-              (token) =>
-                token.startsWith("cc-") ||
-                SENSITIVE_AUTOCOMPLETE_TOKENS.has(token),
-            ) ||
-          masked(element) ||
-          namedLikeSecret(element);
-        if (sensitive) {
-          sensitiveHistory.add(element);
-        }
-        return sensitive;
-      };
-      // Every secret field's current value joins the secrets, whenever it
-      // is seen, so a value typed after the first look counts too.
-      const rememberSecretValue = (element: Element) => {
-        if (
-          isTextField(element) &&
-          element.value.length >= SECRET_VALUE_MIN_CHARS &&
-          isSensitiveField(element)
-        ) {
-          secretValues.add(element.value);
-        }
-      };
-      // Records every field that is secret right now, before anything reads
-      // the page or acts on it.
-      const rememberSensitiveFields = (root: ParentNode) => {
-        for (const element of root.querySelectorAll("*")) {
-          if (
-            element instanceof HTMLInputElement ||
-            element instanceof HTMLTextAreaElement ||
-            element instanceof HTMLSelectElement
-          ) {
-            isSensitiveField(element);
-            rememberSecretValue(element);
-          }
-          if (element.shadowRoot) {
-            rememberSensitiveFields(element.shadowRoot);
-          }
-        }
-      };
-      rememberSensitiveFields(document);
-      // From the first injection on, secret values are learned as they
-      // change, not only when a command looks: a password typed while the
-      // user has the tab, then shown by a page that swaps or retypes the
-      // field, is still known. Installed once per document, in the
-      // extension's isolated world, where the page cannot remove it.
-      const WATCH_KEY = "stellaSecretWatch";
-      if (Reflect.get(globalThis, WATCH_KEY) !== true) {
-        Reflect.set(globalThis, WATCH_KEY, true);
-        const learn = (node: unknown) => {
-          if (node instanceof Element) {
-            rememberSecretValue(node);
-          }
-        };
-        const onEdit = (event: Event) => {
-          learn(event.composedPath().at(0));
-        };
-        document.addEventListener("input", onEdit, true);
-        document.addEventListener("change", onEdit, true);
-        new MutationObserver((records) => {
-          for (const record of records) {
-            if (
-              record.type === "attributes" &&
-              record.attributeName === "type" &&
-              record.oldValue?.toLowerCase() === "password" &&
-              record.target instanceof Element
-            ) {
-              sensitiveHistory.add(record.target);
-            }
-            learn(record.target);
-            for (const removed of record.removedNodes) {
-              if (removed instanceof Element) {
-                learn(removed);
-                for (const field of removed.querySelectorAll(
-                  "input, textarea",
-                )) {
-                  learn(field);
-                }
-              }
-            }
-          }
-        }).observe(document, {
-          attributeFilter: ["autocomplete", "id", "name", "type"],
-          attributeOldValue: true,
-          attributes: true,
-          childList: true,
-          subtree: true,
-        });
-      }
-      // A rect(...) clip or a clip-path that leaves nothing to see.
-      const clippedAway = (style: CSSStyleDeclaration) => {
-        // Computed as `rect(top, right, bottom, left)`; `auto` edges parse
-        // to NaN and never count as collapsed.
-        const clip = style.getPropertyValue("clip");
-        const edges = clip.startsWith("rect(")
-          ? clip
-              .slice("rect(".length, -1)
-              .split(",")
-              .map((edge) => Number.parseFloat(edge))
-          : [];
-        const [
-          top = Number.NaN,
-          right = Number.NaN,
-          bottom = Number.NaN,
-          left = Number.NaN,
-        ] = edges;
-        if (edges.length === 4 && (right - left <= 1 || bottom - top <= 1)) {
-          return true;
-        }
-        return /^(?:inset\((?:[5-9]\d|\d{3,})%|circle\(0(?:px)?[\s)])/u.test(
-          style.clipPath,
-        );
-      };
-      const CLIPPING_OVERFLOW = new Set(["clip", "hidden"]);
-      // Content a reader of the rendered page cannot see: hidden from
-      // assistive technology, transparent, clipped away, collapsed to a
-      // pixel or pushed off the page. Pages hide instructions for AI readers
-      // there, so neither its text nor its controls are collected.
-      const concealed = (element: Element) => {
-        if (element.getAttribute("aria-hidden") === "true") {
-          return true;
-        }
-        const style = window.getComputedStyle(element);
-        if (style.display === "contents") {
-          return false;
-        }
-        if (Number.parseFloat(style.opacity) === 0 || clippedAway(style)) {
-          return true;
-        }
-        const rect = element.getBoundingClientRect();
-        if (
-          (CLIPPING_OVERFLOW.has(style.overflowX) && rect.width <= 1) ||
-          (CLIPPING_OVERFLOW.has(style.overflowY) && rect.height <= 1)
-        ) {
-          return true;
-        }
-        return (
-          (rect.width > 0 || rect.height > 0) &&
-          (rect.right + window.scrollX <= 0 ||
-            rect.bottom + window.scrollY <= 0)
-        );
-      };
-      // Text inside a visible box that still does not show: zero-size or
-      // transparent glyphs, or text indented off the page.
-      const TRANSPARENT_COLORS = new Set(["rgba(0, 0, 0, 0)", "transparent"]);
-      const concealsText = (element: Element) => {
-        const style = window.getComputedStyle(element);
-        return (
-          style.fontSize === "0px" ||
-          Number.parseFloat(style.textIndent) <= -999 ||
-          (TRANSPARENT_COLORS.has(style.color) &&
-            style.backgroundClip !== "text" &&
-            style.getPropertyValue("-webkit-background-clip") !== "text")
-        );
-      };
-      const concealedCache = new Map<Element, boolean>();
-      const concealedInTree = (element: Element): boolean => {
-        const cached = concealedCache.get(element);
-        if (cached !== undefined) {
-          return cached;
-        }
-        const root = element.getRootNode();
-        const parent =
-          element.parentElement ??
-          (root instanceof ShadowRoot ? root.host : null);
-        const hidden =
-          concealed(element) || (parent !== null && concealedInTree(parent));
-        concealedCache.set(element, hidden);
-        return hidden;
-      };
-      const childNodesOf = (element: Element): readonly Node[] => {
-        if (element instanceof HTMLSlotElement) {
-          const assigned = element.assignedNodes({ flatten: true });
-          if (assigned.length > 0) {
-            return assigned;
-          }
-        }
-        return [...(element.shadowRoot ?? element).childNodes];
-      };
-      const collectText = (root: Node, maxChars: number) => {
-        const parts: string[] = [];
-        let total = 0;
-        const stack: Node[] = [root];
-        while (total < maxChars) {
-          const node = stack.pop();
-          if (!node) {
-            break;
-          }
-          if (node instanceof Text) {
-            const value = (node.nodeValue ?? "").slice(0, maxChars - total);
-            if (value.trim().length > 0) {
-              parts.push(value);
-              total += value.length;
-            }
-            continue;
-          }
-          if (
-            !(node instanceof Element) ||
-            SKIPPED_TAGS.has(node.tagName) ||
-            !visible(node) ||
-            concealed(node) ||
-            concealsText(node) ||
-            isSensitiveField(node)
-          ) {
-            continue;
-          }
-          const children = childNodesOf(node);
-          for (let index = children.length - 1; index >= 0; index -= 1) {
-            const child = children[index];
-            if (child) {
-              stack.push(child);
-            }
-          }
-        }
-        return redact(normalize(parts.join(" ")));
-      };
-      const roleFor = (element: Element) => {
-        const explicit = element.getAttribute("role");
-        if (explicit) {
-          return explicit;
-        }
-        if (element instanceof HTMLAnchorElement) {
-          return "link";
-        }
-        if (element instanceof HTMLButtonElement) {
-          return "button";
-        }
-        if (element instanceof HTMLSelectElement) {
-          return "select";
-        }
-        if (element instanceof HTMLTextAreaElement) {
-          return "textbox";
-        }
-        if (element instanceof HTMLInputElement) {
-          return element.type === "checkbox" || element.type === "radio"
-            ? element.type
-            : "textbox";
-        }
-        return "interactive";
-      };
-      const nameFor = (element: Element) =>
-        redact(
-          normalize(
-            element.getAttribute("aria-label") ??
-              element.getAttribute("title") ??
-              element.getAttribute("placeholder") ??
-              collectText(element, limits.elementNameChars),
-          ),
-        ).slice(0, limits.elementNameChars);
-      const valueFor = (element: Element) => {
-        if (
-          (element instanceof HTMLInputElement ||
-            element instanceof HTMLTextAreaElement ||
-            element instanceof HTMLSelectElement) &&
-          !isSensitiveField(element)
-        ) {
-          return element.value.slice(0, limits.valueChars);
-        }
-        return undefined;
-      };
-      const hrefFor = (element: Element) =>
-        element instanceof HTMLAnchorElement && element.href !== ""
-          ? redact(element.href).slice(0, limits.urlChars)
-          : undefined;
-      const isDisabled = (element: Element) =>
-        element.matches(":disabled") ||
-        element.getAttribute("aria-disabled") === "true";
-      // The row, list item or form around a control: identical controls in
-      // repeated rows differ only by this text, so it is part of the identity
-      // a later action must match.
-      const CONTEXT_SELECTOR =
-        "tr, li, [role='row'], [role='listitem'], article, fieldset, form, section";
-      const contextFor = (element: Element) => {
-        const container = element.closest(CONTEXT_SELECTOR);
-        if (!container || container === document.body) {
-          return undefined;
-        }
-        const text = collectText(container, limits.contextChars).slice(
-          0,
-          limits.contextChars,
-        );
-        return text.length === 0 || text === nameFor(element)
-          ? undefined
-          : text;
-      };
-      const metadataFor = (value: string | undefined) =>
-        value === undefined
-          ? { type: metadataType.absent }
-          : { type: metadataType.present, value };
-      const focusableSelector =
-        "a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])";
-      const moveFocus = (element: HTMLElement) => {
-        const focusables = [
-          ...document.querySelectorAll(focusableSelector),
-        ].filter(
-          (candidate): candidate is HTMLElement =>
-            candidate instanceof HTMLElement &&
-            visible(candidate) &&
-            !isDisabled(candidate),
-        );
-        focusables[focusables.indexOf(element) + 1]?.focus();
-      };
-      const editValue = (
-        element: HTMLElement,
-        edit: (value: string) => string,
-      ) => {
-        if (
-          !(element instanceof HTMLInputElement) &&
-          !(element instanceof HTMLTextAreaElement)
-        ) {
-          return;
-        }
-        Reflect.set(
-          element instanceof HTMLInputElement
-            ? HTMLInputElement.prototype
-            : HTMLTextAreaElement.prototype,
-          "value",
-          edit(element.value),
-          element,
-        );
-        element.dispatchEvent(
-          new InputEvent("input", {
-            bubbles: true,
-            inputType: "deleteContentBackward",
-          }),
-        );
-        element.dispatchEvent(new Event("change", { bubbles: true }));
-      };
-      const stepSelect = (element: HTMLElement, delta: number) => {
-        if (!(element instanceof HTMLSelectElement)) {
-          return;
-        }
-        const next = Math.min(
-          Math.max(element.selectedIndex + delta, 0),
-          element.options.length - 1,
-        );
-        if (next === element.selectedIndex) {
-          return;
-        }
-        element.selectedIndex = next;
-        element.dispatchEvent(new Event("input", { bubbles: true }));
-        element.dispatchEvent(new Event("change", { bubbles: true }));
-      };
-      // Synthetic KeyboardEvents reach page listeners but never trigger the
-      // browser's default action, so each supported key performs it here.
-      // A total map rather than a switch: this function is serialized into the
-      // page, where panic() is unavailable for an exhaustive default.
-      const defaultKeyActions: Record<
-        (typeof BROWSER_CONTROL_KEYS)[number],
-        (element: HTMLElement) => void
-      > = {
-        ArrowDown: (element) => stepSelect(element, 1),
-        ArrowLeft: (element) => stepSelect(element, -1),
-        ArrowRight: (element) => stepSelect(element, 1),
-        ArrowUp: (element) => stepSelect(element, -1),
-        Backspace: (element) =>
-          editValue(element, (value) => value.slice(0, -1)),
-        Enter: (element) => {
-          if (element instanceof HTMLTextAreaElement) {
-            editValue(element, (value) => `${value}\n`);
-          } else if (element instanceof HTMLInputElement && element.form) {
-            element.form.requestSubmit();
-          } else if (
-            element instanceof HTMLButtonElement ||
-            element instanceof HTMLAnchorElement
-          ) {
-            element.click();
-          }
-        },
-        Escape: (element) => element.blur(),
-        Space: (element) => {
-          if (
-            element instanceof HTMLButtonElement ||
-            (element instanceof HTMLInputElement &&
-              (element.type === "checkbox" || element.type === "radio"))
-          ) {
-            element.click();
-          }
-        },
-        Tab: (element) => moveFocus(element),
-      };
-      const performDefaultKeyAction = (
-        element: HTMLElement,
-        key: (typeof BROWSER_CONTROL_KEYS)[number],
-      ) => {
-        defaultKeyActions[key](element);
-      };
-      const pathFor = (element: Element) => {
-        const segments: string[] = [];
-        let current: Element = element;
-        while (current !== document.documentElement) {
-          const parent = current.parentElement;
-          if (parent) {
-            segments.push(
-              String(Array.prototype.indexOf.call(parent.children, current)),
-            );
-            current = parent;
-            continue;
-          }
-          const root = current.parentNode;
-          if (!(root instanceof ShadowRoot)) {
-            return null;
-          }
-          segments.push(
-            String(Array.prototype.indexOf.call(root.children, current)),
-            shadowSegment,
-          );
-          current = root.host;
-        }
-        return segments.toReversed().join(".");
-      };
-      const resolveElement = (path: string): Element | null => {
-        let container: Element | ShadowRoot = document.documentElement;
-        for (const segment of path.split(".")) {
-          if (segment === shadowSegment) {
-            if (!(container instanceof Element) || !container.shadowRoot) {
-              return null;
-            }
-            container = container.shadowRoot;
-            continue;
-          }
-          const next = container.children.item(Number(segment));
-          if (!next) {
-            return null;
-          }
-          container = next;
-        }
-        return container instanceof Element ? container : null;
-      };
-
-      if (pageOperation.kind === "snapshot") {
-        const interactiveSelector = [
-          "a[href]",
-          "button",
-          "input",
-          "textarea",
-          "select",
-          "[contenteditable='true']",
-          "[role='button']",
-          "[role='checkbox']",
-          "[role='combobox']",
-          "[role='link']",
-          "[role='menuitem']",
-          "[role='radio']",
-          "[role='tab']",
-          "[role='textbox']",
-        ].join(",");
-        const elements: {
-          context:
-            | { type: typeof metadataType.absent }
-            | { type: typeof metadataType.present; value: string };
-          href:
-            | { type: typeof metadataType.absent }
-            | { type: typeof metadataType.present; value: string };
-          name: string;
-          path: string;
-          role: string;
-          value?: string;
-        }[] = [];
-        const visit = (root: ParentNode) => {
-          for (const element of root.querySelectorAll("*")) {
-            if (elements.length >= limits.elements) {
-              return;
-            }
-            if (
-              element.matches(interactiveSelector) &&
-              visible(element) &&
-              !isDisabled(element) &&
-              !concealedInTree(element)
-            ) {
-              const path = pathFor(element);
-              if (path !== null) {
-                const context = contextFor(element);
-                const href = hrefFor(element);
-                const value = valueFor(element);
-                elements.push({
-                  context: metadataFor(context),
-                  href: metadataFor(href),
-                  name: nameFor(element),
-                  path,
-                  role: roleFor(element),
-                  ...(value === undefined ? {} : { value }),
-                });
-              }
-            }
-            if (element.shadowRoot) {
-              visit(element.shadowRoot);
-            }
-          }
-        };
-        visit(document);
-
-        return {
-          elements,
-          origin: window.origin,
-          text: collectText(document.body, limits.pageTextTotalChars),
-          title: redact(document.title).slice(0, limits.titleChars),
-          url: window.location.href.slice(0, limits.urlChars),
-        };
-      }
-
-      const { action, errorCode } = pageOperation;
-      if (window.origin !== pageOperation.expectedOrigin) {
-        return {
-          code: errorCode.staleSnapshot,
-          error: "The frame navigated after the page snapshot.",
-          ok: false,
-        };
-      }
-      const target = resolveElement(pageOperation.path);
-      if (!target) {
-        return {
-          error: "The referenced element is no longer on the page.",
-          code: errorCode.elementNotFound,
-          ok: false,
-        };
-      }
-      // Why the element can no longer take the action; null when it still
-      // matches the snapshot and accepts it.
-      const targetMetadataMatches = (
-        expected:
-          | { type: typeof metadataType.absent }
-          | { type: typeof metadataType.present; value: string },
-        current: string | undefined,
-      ) => {
-        switch (expected.type) {
-          case metadataType.absent:
-            return current === undefined;
-          case metadataType.present:
-            return current === expected.value;
-          default:
-            expected satisfies never;
-            return panic("Unhandled browser target metadata type");
-        }
-      };
-      const targetRefusal = (element: Element) => {
-        if (
-          nameFor(element) !== action.target.name ||
-          roleFor(element) !== action.target.role ||
-          !targetMetadataMatches(action.target.href, hrefFor(element)) ||
-          !targetMetadataMatches(action.target.context, contextFor(element))
-        ) {
-          return {
-            error: "The referenced element changed after the page snapshot.",
-            code: errorCode.staleSnapshot,
-            ok: false,
-          } as const;
-        }
-        if (!visible(element) || concealedInTree(element)) {
-          return {
-            error: "The referenced element is no longer visible on the page.",
-            code: errorCode.staleSnapshot,
-            ok: false,
-          } as const;
-        }
-        if (isDisabled(element)) {
-          return {
-            code: errorCode.executionFailed,
-            error:
-              "The control is disabled; the page does not accept this action.",
-            ok: false,
-          } as const;
-        }
-        return null;
-      };
-      const refusal = targetRefusal(target);
-      if (refusal !== null) {
-        return refusal;
-      }
-      const sensitiveFieldRefusal = {
-        code: errorCode.sensitiveField,
-        error:
-          "Passwords, payment card details and one-time codes must be entered manually.",
-        ok: false,
-      } as const;
-      const isSensitiveTarget = isSensitiveField(target);
-
-      if (action.action === "click") {
-        if (!(target instanceof HTMLElement)) {
-          return {
-            error: "The referenced element cannot be clicked.",
-            code: errorCode.elementNotFound,
-            ok: false,
-          };
-        }
-        target.click();
-        return { ok: true };
-      }
-
-      if (action.action === "fill") {
-        if (target instanceof HTMLInputElement) {
-          if (target.type === "file") {
-            return {
-              code: errorCode.executionFailed,
-              error: "File inputs are not supported.",
-              ok: false,
-            };
-          }
-          if (isSensitiveTarget) {
-            return sensitiveFieldRefusal;
-          }
-          Reflect.set(
-            HTMLInputElement.prototype,
-            "value",
-            action.value,
-            target,
-          );
-        } else if (isSensitiveTarget) {
-          return sensitiveFieldRefusal;
-        } else if (target instanceof HTMLTextAreaElement) {
-          Reflect.set(
-            HTMLTextAreaElement.prototype,
-            "value",
-            action.value,
-            target,
-          );
-        } else if (target instanceof HTMLElement && target.isContentEditable) {
-          target.textContent = action.value;
-        } else {
-          return {
-            error: "The referenced element is not editable.",
-            code: errorCode.elementNotFound,
-            ok: false,
-          };
-        }
-        target.dispatchEvent(
-          new InputEvent("input", { bubbles: true, inputType: "insertText" }),
-        );
-        target.dispatchEvent(new Event("change", { bubbles: true }));
-        return { ok: true };
-      }
-
-      if (action.action === "select") {
-        if (!(target instanceof HTMLSelectElement)) {
-          return {
-            error: "The referenced element is not a select control.",
-            code: errorCode.elementNotFound,
-            ok: false,
-          };
-        }
-        if (isSensitiveTarget) {
-          return sensitiveFieldRefusal;
-        }
-        Reflect.set(HTMLSelectElement.prototype, "value", action.value, target);
-        target.dispatchEvent(new Event("input", { bubbles: true }));
-        target.dispatchEvent(new Event("change", { bubbles: true }));
-        return { ok: true };
-      }
-
-      if (!(target instanceof HTMLElement)) {
-        return {
-          error: "The referenced element cannot receive a key.",
-          code: errorCode.elementNotFound,
-          ok: false,
-        };
-      }
-      if (isSensitiveTarget) {
-        return sensitiveFieldRefusal;
-      }
-      target.focus();
-      const key = action.key === "Space" ? " " : action.key;
-      target.dispatchEvent(
-        new KeyboardEvent("keydown", { bubbles: true, key }),
-      );
-      performDefaultKeyAction(target, action.key);
-      target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key }));
-      return { ok: true };
-    },
+    func: pageScript,
     target: injectionTarget,
   });
 
@@ -1286,13 +535,24 @@ type DomActionOutcome =
   | { status: "dispatched" }
   | { status: "unobserved" };
 
-const injectDomAction = async (
-  tabId: number,
-  documentId: string,
-  path: string,
-  expectedOrigin: string,
-  command: BrowserControlElementCommand,
-): Promise<DomActionOutcome> => {
+type InjectDomActionOptions = {
+  command: BrowserControlElementCommand;
+  documentId: string;
+  /** The frame origin the worker checked; the action refuses any other. */
+  expectedOrigin: string;
+  path: string;
+  signIn: SignInPolicy;
+  tabId: number;
+};
+
+const injectDomAction = async ({
+  command,
+  documentId,
+  expectedOrigin,
+  path,
+  signIn,
+  tabId,
+}: InjectDomActionOptions): Promise<DomActionOutcome> => {
   let results: Awaited<ReturnType<typeof runPageOperation>>;
   try {
     results = await runPageOperation(
@@ -1306,6 +566,10 @@ const injectDomAction = async (
         metadataType: BROWSER_CONTROL_TARGET_METADATA,
         path,
         shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+        signIn,
+        signInMessage: SIGN_IN_MESSAGE,
+        signInPolicies: SIGN_IN_POLICY,
+        identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
       },
     );
   } catch {
@@ -1339,17 +603,217 @@ const injectDomAction = async (
   };
 };
 
-type ReadSnapshotOptions = {
-  controllerId: string;
-  tabId: number;
-  textOffset: number;
+/**
+ * A tab's address as chat's tab list shows it: origin and path only. Query
+ * strings and fragments can carry what a page put there for itself, and
+ * `switch-tab` matches on the origin. Null for a page chat may not operate.
+ */
+const listedTabUrl = (rawUrl: string): string | null => {
+  const url = parseControllableUrl(rawUrl);
+  return url === null
+    ? null
+    : `${url.origin}${url.pathname}`.slice(0, BROWSER_CONTROL_LIMITS.urlChars);
 };
 
-const readSnapshot = async ({
-  controllerId,
-  tabId,
-  textOffset,
-}: ReadSnapshotOptions): Promise<BrowserControlResult> => {
+/**
+ * Chat's tabs for a snapshot: the one just read first, at the URL that read
+ * returned; then chat's others, newest first, at the URL Chrome reports.
+ * Tabs that are only confined are never listed. A tab on a page chat may not
+ * operate (an error page, another scheme) is left out, since chat could not
+ * switch to it.
+ */
+const listChatTabs = async (
+  activeTabId: number,
+  activeUrl: string,
+): Promise<BrowserControlTab[]> => {
+  const others = operableTabIds(await readContainedTabs())
+    .filter((tabId) => tabId !== activeTabId)
+    .toReversed();
+  const tabs = await Promise.all(
+    others.map(async (tabId): Promise<BrowserControlTab | null> => {
+      const tab = await chrome.tabs.get(tabId).catch(() => null);
+      const url = tab?.url !== undefined ? listedTabUrl(tab.url) : null;
+      return url === null ? null : { active: false, tabId, url };
+    }),
+  );
+  const active = listedTabUrl(activeUrl);
+  return [
+    ...(active === null
+      ? []
+      : [{ active: true, tabId: activeTabId, url: active }]),
+    ...tabs.filter((tab) => tab !== null),
+  ].slice(0, BROWSER_CONTROL_LIMITS.tabs);
+};
+
+/** The tab's frames a read pages through: the top frame first, then by frame id. */
+const listReaderFrames = async (tabId: number): Promise<ReaderFrame[]> => {
+  const frames = (await chrome.webNavigation.getAllFrames({ tabId })) ?? [];
+  return frames
+    .filter(({ errorOccurred }) => !errorOccurred)
+    .map(({ documentId, frameId }) => ({ documentId, frameId }))
+    .toSorted((left, right) => left.frameId - right.frameId)
+    .slice(0, BROWSER_CONTROL_LIMITS.frames);
+};
+
+/** What every read-only page operation carries. */
+const readOperationBase = (
+  signIn: SignInPolicy,
+  requiredOrigin: string | undefined,
+) => ({
+  ...(requiredOrigin === undefined
+    ? {}
+    : { expectedTopOrigin: requiredOrigin }),
+  identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
+  limits: BROWSER_CONTROL_LIMITS,
+  metadataType: BROWSER_CONTROL_TARGET_METADATA,
+  shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+  signIn,
+  signInPolicies: SIGN_IN_POLICY,
+});
+
+/**
+ * Runs a read in one frame's document, by the id the frame list gave. A
+ * subframe that cannot be reached (gone, or without host access) is passed
+ * over; the top frame's failure fails the command.
+ */
+const runInFrame = async (
+  tabId: number,
+  frame: ReaderFrame,
+  operation: PageOperation & InjectableArgument,
+): Promise<unknown> => {
+  try {
+    const results = await runPageOperation(
+      { documentIds: [frame.documentId], tabId },
+      operation,
+    );
+    return results.at(0)?.result;
+  } catch (error) {
+    if (frame.frameId === TOP_FRAME_ID) {
+      throw error;
+    }
+    return undefined;
+  }
+};
+
+/**
+ * A frame's answer, held to the origin policy: a subframe outside it is
+ * passed over unread. The top frame's address is checked by the caller,
+ * which refuses the whole read.
+ */
+const frameOutcome = <T extends { origin: string; url: string }>(
+  frame: ReaderFrame,
+  result: unknown,
+  schema: v.GenericSchema<unknown, T>,
+): FrameOutcome<T> => {
+  const refusal = v.safeParse(pageRefusalSchema, result);
+  if (refusal.success) {
+    return { reason: refusal.output.refused, type: "refused" };
+  }
+  // No answer: a subframe Chrome could not reach.
+  if (result === undefined) {
+    return { type: "skipped" };
+  }
+  const parsed = v.safeParse(schema, result);
+  if (!parsed.success) {
+    return { type: "invalid" };
+  }
+  if (
+    frame.frameId !== TOP_FRAME_ID &&
+    !isControllableFrame({
+      isTopFrame: false,
+      origin: parsed.output.origin,
+      url: parsed.output.url,
+    })
+  ) {
+    return { type: "skipped" };
+  }
+  return { result: parsed.output, type: "read" };
+};
+
+const STALE_CURSOR_MESSAGE =
+  "The page changed since this cursor was issued. Call snapshot without a cursor, or find, to read it again.";
+
+/** A read that could not start, or a frame that refused it. */
+const readRefusal = (
+  outcome: PageReadFailure,
+  requiredOrigin: ReadSnapshotOptions["requiredOrigin"],
+): BrowserControlResult => {
+  if (outcome.type === "invalid-cursor") {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+      "This cursor is not one a read of this page issued. Use a cursor from the latest snapshot or find result.",
+    );
+  }
+  if (outcome.type === "stale-cursor") {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+      STALE_CURSOR_MESSAGE,
+    );
+  }
+  if (outcome.type === "unreadable-page") {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "The page returned a read outside the protocol bounds.",
+    );
+  }
+  switch (outcome.reason) {
+    case "sign-in":
+      return needsMember();
+    case "stale-cursor":
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+        STALE_CURSOR_MESSAGE,
+      );
+    case "top-origin":
+      return (
+        requiredOrigin?.refusal ??
+        browserControlError(
+          BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+          UNSUPPORTED_PAGE_MESSAGE,
+        )
+      );
+    default:
+      outcome.reason satisfies never;
+      return panic("Unhandled page refusal");
+  }
+};
+
+/**
+ * Whether the top document that was read may be returned: the tab URL was
+ * checked before injection, but the page may have navigated since.
+ */
+const topDocumentRefusal = (
+  top: { origin: string; url: string },
+  signIn: SignInPolicy,
+  requiredOrigin: ReadSnapshotOptions["requiredOrigin"],
+): BrowserControlResult | null => {
+  if (requiredOrigin !== undefined && top.origin !== requiredOrigin.origin) {
+    return requiredOrigin.refusal;
+  }
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    isIdentityProviderUrl(top.url)
+  ) {
+    return needsMember();
+  }
+  return isControllableFrame({
+    isTopFrame: true,
+    origin: top.origin,
+    url: top.url,
+  })
+    ? null
+    : browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+        UNSUPPORTED_PAGE_MESSAGE,
+      );
+};
+
+/** Checks every read does before it touches the page. */
+const readPreflight = async (
+  tabId: number,
+  signIn: SignInPolicy,
+): Promise<BrowserControlResult | ReaderFrame[]> => {
+  const handsSignInToMember = signIn === SIGN_IN_POLICY.handToMember;
   const tab = await chrome.tabs.get(tabId);
   if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
     return browserControlError(
@@ -1357,86 +821,232 @@ const readSnapshot = async ({
       UNSUPPORTED_PAGE_MESSAGE,
     );
   }
-  const results = await runPageOperation(
-    { allFrames: true, tabId },
-    {
-      kind: "snapshot",
-      limits: BROWSER_CONTROL_LIMITS,
-      metadataType: BROWSER_CONTROL_TARGET_METADATA,
-      shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
-    },
-  );
-  const frames = results.flatMap(({ documentId, frameId, result }) => {
-    const parsed = v.safeParse(frameSnapshotSchema, result);
-    return parsed.success
-      ? [{ documentId, frameId, snapshot: parsed.output }]
-      : [];
-  });
-  // The tab URL was checked before injection; the page may have navigated
-  // since, so the document that was actually read is checked again.
-  const top = frames.find(({ frameId }) => frameId === TOP_FRAME_ID);
-  if (
-    top &&
-    !isControllableFrame({
-      isTopFrame: true,
-      origin: top.snapshot.origin,
-      url: top.snapshot.url,
-    })
-  ) {
-    return browserControlError(
-      BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
-      UNSUPPORTED_PAGE_MESSAGE,
-    );
+  if (handsSignInToMember && isIdentityProviderUrl(tab.url)) {
+    return needsMember();
   }
-  const merged = mergeFrameSnapshots({ frames, textOffset });
-  if (!merged) {
+  // Every frame is checked before any is read: a frame without a sign-in
+  // is never read for a tab another frame hands to the member. Each frame
+  // checks again as it reads, for a sign-in that appears in between.
+  if (handsSignInToMember && (await tabAsksForSignIn(tabId))) {
+    return needsMember();
+  }
+  const frames = await listReaderFrames(tabId);
+  if (frames.at(0)?.frameId !== TOP_FRAME_ID) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.executionFailed,
-      "The page returned an invalid snapshot.",
+      "Chrome could not say which document the tab shows. Take a snapshot again.",
     );
   }
+  return frames;
+};
+
+type ReadSnapshotOptions = {
+  controllerId: string;
+  /** Where the window starts; absent reads from the first block in view. */
+  cursor?: string;
+  /**
+   * The only origin the page may be read on, and what to return otherwise.
+   * The page refuses before reading anything, and nothing is stored.
+   */
+  requiredOrigin?: { origin: string; refusal: BrowserControlResult };
+  signIn: SignInPolicy;
+  tabId: number;
+};
+
+const readSnapshot = async ({
+  controllerId,
+  cursor,
+  requiredOrigin,
+  signIn,
+  tabId,
+}: ReadSnapshotOptions): Promise<BrowserControlResult> => {
+  const frames = await readPreflight(tabId, signIn);
+  if (!Array.isArray(frames)) {
+    return frames;
+  }
+  const outcome = await readPageWindow({
+    cursor,
+    frames,
+    readFrame: async (frame, request) =>
+      frameOutcome(
+        frame,
+        await runInFrame(tabId, frame, {
+          ...readOperationBase(signIn, requiredOrigin?.origin),
+          facts: request.facts,
+          idPrefix: request.idPrefix,
+          kind: "snapshot",
+          pageControls: request.pageControls,
+          purpose: SNAPSHOT_PURPOSE.read,
+          purposes: SNAPSHOT_PURPOSE,
+          ...(request.read === undefined ? {} : { read: request.read }),
+        }),
+        frameReadSchema,
+      ),
+  });
+  // A sign-in in any frame, or a top document that turned out to be an
+  // identity provider's, is the member's: nothing is returned or stored.
+  if (outcome.type !== "window") {
+    return readRefusal(outcome, requiredOrigin);
+  }
+  const { window } = outcome;
+  const refusal = topDocumentRefusal(window.top, signIn, requiredOrigin);
+  if (refusal !== null) {
+    return refusal;
+  }
+  const url = window.top.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars);
   const parsed = parseBrowserControlResult({
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     snapshot: {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      elements: window.elements,
+      elementsLeftOut: window.elementsLeftOut,
+      facts: window.facts,
       revision: crypto.randomUUID(),
       tabId,
-      ...merged,
+      tabs: await listChatTabs(tabId, url),
+      text: window.text,
+      title: window.top.title.slice(0, BROWSER_CONTROL_LIMITS.titleChars),
+      url,
+      window: window.window,
     },
     status: "success",
   } satisfies BrowserControlResult);
-  if (!parsed) {
+  if (parsed?.status !== "success") {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.executionFailed,
       "The page returned a snapshot outside the protocol bounds.",
     );
   }
-  if (parsed.status === "success") {
-    const current = await readControlledTabState();
-    await writeControlledTabState({
-      adopted: current?.adopted ?? false,
-      controllerId,
-      // Chat has now seen this document: the one this read returned, not
-      // whatever the tab shows by the time the read is stored.
-      settled: {
-        documentId: top?.documentId ?? null,
-        url: top?.snapshot.url ?? null,
-      },
-      snapshot: {
-        documents: Object.fromEntries(
-          frames.map(({ documentId, frameId }) => [
-            String(frameId),
-            documentId,
-          ]),
-        ),
-        revision: parsed.snapshot.revision,
-        tabId,
-        url: parsed.snapshot.url,
-      },
+  const current = await readControlledTabState();
+  await writeControlledTabState({
+    adopted: current?.adopted ?? false,
+    controllerId,
+    // Chat has now seen this document: the one this read returned, not
+    // whatever the tab shows by the time the read is stored.
+    settled: {
+      documentId: frames.at(0)?.documentId ?? null,
+      url: parsed.snapshot.url,
+    },
+    snapshot: {
+      documents: window.documents,
+      revision: parsed.snapshot.revision,
       tabId,
-    });
-  }
+      url: parsed.snapshot.url,
+    },
+    tabId,
+  });
   return parsed;
+};
+
+/**
+ * Finds text, or lists headings, in the page the controlled tab shows.
+ * Read-only: what chat's element refs address stays as the last read left
+ * it.
+ */
+const runFind = async (
+  command: Extract<
+    BrowserControlCommand,
+    { action: typeof BROWSER_CONTROL_ACTION.find }
+  >,
+  { signIn, tabId }: { signIn: SignInPolicy; tabId: number },
+): Promise<BrowserControlResult> => {
+  const frames = await readPreflight(tabId, signIn);
+  if (!Array.isArray(frames)) {
+    return frames;
+  }
+  const outcome = await findInPage({
+    after: command.after,
+    findFrame: async (frame, request: FindRequest) =>
+      frameOutcome(
+        frame,
+        await runInFrame(tabId, frame, {
+          ...readOperationBase(signIn, undefined),
+          find: request,
+          kind: "find",
+        }),
+        frameFoundSchema,
+      ),
+    frames,
+    search: command.search,
+  });
+  if (outcome.type !== "found") {
+    return readRefusal(outcome, undefined);
+  }
+  const topFrame = frames.at(0);
+  const top =
+    outcome.top ??
+    (topFrame === undefined
+      ? null
+      : await readTopPage(tabId, topFrame, signIn));
+  if (top === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "The page could not be read.",
+    );
+  }
+  if ("status" in top) {
+    return top;
+  }
+  const refusal = topDocumentRefusal(top, signIn, undefined);
+  if (refusal !== null) {
+    return refusal;
+  }
+  const parsed = parseBrowserControlResult({
+    found: {
+      ...outcome.found,
+      contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      tabId,
+      title: top.title.slice(0, BROWSER_CONTROL_LIMITS.titleChars),
+      url: top.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+    },
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "found",
+  } satisfies BrowserControlResult);
+  return (
+    parsed ??
+    browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "The page returned find results outside the protocol bounds.",
+    )
+  );
+};
+
+/** The top document's address and title, read without any of its text. */
+const readTopPage = async (
+  tabId: number,
+  frame: ReaderFrame,
+  signIn: SignInPolicy,
+): Promise<
+  BrowserControlResult | { origin: string; title: string; url: string }
+> => {
+  const outcome = frameOutcome(
+    frame,
+    await runInFrame(tabId, frame, {
+      ...readOperationBase(signIn, undefined),
+      facts: false,
+      idPrefix: "",
+      kind: "snapshot",
+      pageControls: 0,
+      purpose: SNAPSHOT_PURPOSE.read,
+      purposes: SNAPSHOT_PURPOSE,
+    }),
+    frameReadSchema,
+  );
+  switch (outcome.type) {
+    case "read":
+      return outcome.result;
+    case "refused":
+      return readRefusal(outcome, undefined);
+    case "skipped":
+    case "invalid":
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.executionFailed,
+        "The page could not be read.",
+      );
+    default:
+      outcome satisfies never;
+      return panic("Unhandled frame outcome");
+  }
 };
 
 /**
@@ -1446,9 +1056,8 @@ const readSnapshot = async ({
  */
 const readOutcome = async (
   navigation: TabNavigationObserver,
-  controllerId: string,
   tabId: number,
-  signal: AbortSignal,
+  { controllerId, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
   for (let attempt = 0; attempt < OUTCOME_SNAPSHOT_ATTEMPTS; attempt += 1) {
     const settled = await navigation.waitForSettled(signal);
@@ -1463,21 +1072,32 @@ const readOutcome = async (
     const generation = navigation.generation();
     let result: BrowserControlResult | null;
     try {
-      result = await readSnapshot({ controllerId, tabId, textOffset: 0 });
+      result = await readSnapshot({
+        controllerId,
+        signIn,
+        tabId,
+      });
     } catch {
       result = null;
     }
     if (navigation.generation() !== generation) {
       continue;
     }
-    if (result?.status === "success") {
+    // The action led to a sign-in: what happened is known, and the page
+    // is the member's.
+    if (
+      result?.status === "success" ||
+      (result?.status === "error" &&
+        result.code === BROWSER_CONTROL_ERROR_CODE.needsMember)
+    ) {
       return result;
     }
-    return outcomeUnknown(
-      result === null
-        ? "Chrome could not read the page after the action."
-        : `The page after the action could not be read: ${result.message}`,
-    );
+    if (result?.status === "error") {
+      return outcomeUnknown(
+        `The page after the action could not be read: ${result.message}`,
+      );
+    }
+    return outcomeUnknown("Chrome could not read the page after the action.");
   }
   return outcomeUnknown("The page kept navigating after the action.");
 };
@@ -1489,23 +1109,34 @@ export type AdoptControlledTabResult =
 /**
  * Makes a tab the user already has open the controlled tab, so chat can read
  * and act on it without re-navigating. Same origin policy and containment as
- * a tab opened by `open`; the controller's own stella tab is never adopted.
+ * a tab opened by `open`; a tab stella runs in is never adopted, even after
+ * it navigated elsewhere.
  */
 export const adoptControlledTab = async (
   controllerId: string,
   tab: chrome.tabs.Tab,
+  /** Takes the browser back for this connection, once the tab qualifies. */
+  takeOver: (() => Promise<void>) | null,
 ): Promise<AdoptControlledTabResult> => {
-  const controller = await readBrowserController();
+  const [controller, stellaTabs] = await Promise.all([
+    readBrowserController(),
+    readStellaTabs(),
+  ]);
   if (
     controller?.controllerId !== controllerId ||
     tab.id === undefined ||
-    tab.id === controller.tabId ||
+    stellaTabs.has(tab.id) ||
     tab.url === undefined ||
     parseControllableUrl(tab.url) === null
   ) {
     return { status: "unsupported-page" };
   }
-  await containControlledTab(tab.id);
+  if (takeOver !== null) {
+    await takeOver();
+  }
+  // The user's hand-over always succeeds: at chat's tab limit the oldest of
+  // chat's other tabs stays confined but is no longer chat's.
+  await containControlledTab(tab.id, { adopted: true, atLimit: "drop-oldest" });
   await writeControlledTabState({
     adopted: true,
     controllerId,
@@ -1519,43 +1150,72 @@ export const adoptControlledTab = async (
 type OpenedControlledTab =
   | { status: "cancelled" }
   | { loaded: boolean; status: "navigated"; tabId: number }
+  | { status: "navigation-refused" }
+  | { status: "over-limit" }
   | { status: "unavailable" };
 
 /**
- * Points the controlled tab at an approved URL. A new tab starts at
- * `about:blank` so the containment rules are in place before it requests
- * anything.
+ * Points the controlled tab, or with `newTab` a tab created for it, at an
+ * approved URL. A new tab starts at `about:blank` so the containment rules
+ * are in place before it requests anything; the tab controlled until then
+ * stays contained beside it as one of chat's tabs.
  */
 const openControlledTab = async (
   controllerId: string,
   url: URL,
-  signal: AbortSignal,
+  { newTab, signal }: { newTab: boolean; signal: AbortSignal },
 ): Promise<OpenedControlledTab> => {
   const existing = await readControlledTab(controllerId);
+  const reused = newTab ? null : existing;
   const tabId =
-    existing?.tab.id ??
+    reused?.tab.id ??
     (await chrome.tabs.create({ active: true, url: "about:blank" })).id;
   if (tabId === undefined) {
     return { status: "unavailable" };
   }
-  // A tab created for this command and stopped before it navigated holds
-  // nothing; closing it leaves no controlled tab chat has never read.
+  // Not yet chat's: the tab Chrome just created is confined as unknown, and
+  // nothing else changed.
+  const closeCreatedTab = async (): Promise<void> => {
+    await forgetContainedTab(tabId);
+    await chrome.tabs.remove(tabId).catch(() => undefined);
+  };
+  // A tab created for this command that did not navigate holds nothing;
+  // closing it hands control back to the tab chat had, but only while that
+  // tab is still chat's: one the user navigated or that closed meanwhile is
+  // not taken back, and no tab is left controlled. Either way no controlled
+  // tab is one chat has never read.
   const discardCreatedTab = async (): Promise<void> => {
-    if (existing === null) {
-      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-      await forgetContainedTab(tabId);
-      await chrome.tabs.remove(tabId).catch(() => undefined);
+    if (reused !== null) {
+      return;
     }
+    const restored =
+      existing === null ? null : await switchContainedTab(existing.state.tabId);
+    if (existing !== null && restored?.status === "switched") {
+      await writeControlledTabState({
+        ...existing.state,
+        adopted: restored.adopted,
+      });
+    } else {
+      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
+    }
+    await closeCreatedTab();
   };
   if (isStopped(signal)) {
-    await discardCreatedTab();
+    if (reused === null) {
+      await closeCreatedTab();
+    }
     return { status: "cancelled" };
   }
-  await containControlledTab(tabId);
+  // Checked again where the tab joins chat's: a tab a page opened since the
+  // caller's check may have taken the last place.
+  if ((await containControlledTab(tabId)) === "over-limit") {
+    await closeCreatedTab();
+    return { status: "over-limit" };
+  }
   await writeControlledTabState({
-    adopted: existing?.state.adopted ?? false,
+    adopted: reused?.state.adopted ?? false,
     controllerId,
-    settled: existing?.state.settled ?? null,
+    settled: reused?.state.settled ?? null,
     snapshot: null,
     tabId,
   });
@@ -1565,7 +1225,16 @@ const openControlledTab = async (
   }
   const navigation = createTabNavigationObserver(tabId);
   try {
-    await chrome.tabs.update(tabId, { active: true, url: url.href });
+    const navigated = await Result.tryPromise(
+      async () =>
+        await chrome.tabs.update(tabId, { active: true, url: url.href }),
+    );
+    if (Result.isError(navigated)) {
+      // Chrome refused the navigation, so the page never loaded: a new tab
+      // is discarded as if stopped.
+      await discardCreatedTab();
+      return { status: "navigation-refused" };
+    }
     return {
       loaded: await navigation.waitForNavigation(signal),
       status: "navigated",
@@ -1583,6 +1252,14 @@ type ExecuteBrowserCommandOptions = {
   observedTab: BrowserObservedTab | null;
   /** Aborts when chat stops the command or control changes. */
   signal: AbortSignal;
+  /** How a page that asks for a sign-in is treated; set by the transport. */
+  signIn: SignInPolicy;
+  /**
+   * For an `open` by a controller that does not hold the browser: hands it
+   * over, run once every check of the open passed and right before the tab
+   * changes. `null` when the controller holds it already.
+   */
+  takeOver: (() => Promise<void>) | null;
 };
 
 /** The tab's top document now; see `TopDocument`. */
@@ -1641,7 +1318,10 @@ type ControlledTab = NonNullable<Awaited<ReturnType<typeof readControlledTab>>>;
  */
 type CommandProgress = { dispatched: boolean };
 
-type CommandRun = Pick<ExecuteBrowserCommandOptions, "budget" | "signal"> & {
+type CommandRun = Pick<
+  ExecuteBrowserCommandOptions,
+  "budget" | "signal" | "signIn" | "takeOver"
+> & {
   controllerId: string;
   progress: CommandProgress;
 };
@@ -1653,8 +1333,10 @@ const readCommandIdentity = async (
   observedTab: BrowserObservedTab | null,
 ) => {
   const tabId = controlledTab?.tab.id;
+  // Only these move the controlled tab away from the page it shows.
   const isNavigation =
-    command.action === BROWSER_CONTROL_ACTION.open ||
+    (command.action === BROWSER_CONTROL_ACTION.open &&
+      command.newTab !== true) ||
     command.action === BROWSER_CONTROL_ACTION.goBack;
   return checkCommandIdentity({
     command,
@@ -1684,7 +1366,7 @@ const runOpen = async (
     BrowserControlCommand,
     { action: typeof BROWSER_CONTROL_ACTION.open }
   >,
-  { budget, controllerId, progress, signal }: CommandRun,
+  { budget, controllerId, progress, signal, signIn, takeOver }: CommandRun,
 ): Promise<BrowserControlResult> => {
   const requested = parseControllableUrl(command.url);
   if (requested === null) {
@@ -1693,15 +1375,54 @@ const runOpen = async (
       "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
     );
   }
+  const newTab = command.newTab === true;
+  const tabLimitReached = (): BrowserControlResult =>
+    browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
+      `Chat already has ${BROWSER_CONTROL_LIMITS.tabs} tabs open, the most it may keep. Switch to one of them with switch-tab, or open the page in the current tab without newTab.`,
+    );
+  // Spares creating a tab only to close it; the limit itself holds where
+  // the tab joins chat's.
+  // A takeover's new holder keeps none of the previous holder's tabs: the
+  // limit then holds where the tab joins.
+  if (
+    newTab &&
+    takeOver === null &&
+    chatTabsAtLimit(await readContainedTabs())
+  ) {
+    return tabLimitReached();
+  }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
   }
+  // Nothing refused the page: only now may the browser change hands.
+  if (takeOver !== null) {
+    if (isStopped(signal)) {
+      await budget.refund();
+      return cancelled();
+    }
+    await takeOver();
+  }
   progress.dispatched = true;
-  const opened = await openControlledTab(controllerId, requested, signal);
+  const opened = await openControlledTab(controllerId, requested, {
+    newTab,
+    signal,
+  });
   if (opened.status === "cancelled") {
     await budget.refund();
     return cancelled();
+  }
+  if (opened.status === "over-limit") {
+    await budget.refund();
+    return tabLimitReached();
+  }
+  if (opened.status === "navigation-refused") {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+      "Chrome refused to open this page in the tab; nothing was loaded.",
+    );
   }
   if (opened.status === "unavailable") {
     return browserControlError(
@@ -1723,24 +1444,36 @@ const runOpen = async (
   const landed = await chrome.tabs.get(opened.tabId);
   const landedUrl =
     landed.url === undefined ? null : parseControllableUrl(landed.url);
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    landedUrl !== null &&
+    isIdentityProviderUrl(landedUrl.href)
+  ) {
+    return needsMember();
+  }
   if (landedUrl === null || landedUrl.origin !== requested.origin) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.redirected,
       `The page redirected away from ${requested.origin} to ${landedUrl?.origin ?? "an unsupported address"} and was not read. Use snapshot to read it after approval.`,
     );
   }
+  // The tab now shows the page chat opened, whatever the user had navigated
+  // it to before. Its own commit was a plain link, which never counts as
+  // the user's, so this runs after it and a later user commit still counts.
+  await reclaimControlledTab(opened.tabId);
   return await readSnapshot({
     controllerId,
+    signIn,
     tabId: opened.tabId,
-    textOffset: 0,
   });
 };
 
 const runGoBack = async (
   tabId: number,
   state: ControlledTabState,
-  { budget, controllerId, progress, signal }: CommandRun,
+  run: CommandRun,
 ): Promise<BrowserControlResult> => {
+  const { budget, progress, signal } = run;
   const navigation = createTabNavigationObserver(tabId);
   try {
     const overBudget = await budget.charge();
@@ -1754,18 +1487,206 @@ const runGoBack = async (
     }
     progress.dispatched = true;
     await navigateBack(tabId);
-    return await readOutcome(navigation, controllerId, tabId, signal);
+    return await readOutcome(navigation, tabId, run);
   } finally {
     navigation.dispose();
   }
 };
 
-const runElementAction = async (
-  command: BrowserControlElementCommand,
-  { state, tab, tabId }: ControlledTab & { tabId: number },
-  documentId: string | null,
-  { budget, controllerId, progress, signal }: CommandRun,
+/** What the user had in front before a tab was shown, to put back. */
+type Foreground = {
+  /** The window that had focus; null when none did. */
+  focusedWindowId: number | null;
+  /** The tab that was active in the shown tab's window. */
+  tabId: number | null;
+};
+
+/**
+ * Makes the tab active in its window and focuses that window, after noting
+ * what was in front. Any failure, reading or showing, fails the whole step.
+ */
+const showTab = async (tabId: number, windowId: number) =>
+  await Result.tryPromise(async (): Promise<Foreground> => {
+    const [active, focused] = await Promise.all([
+      chrome.tabs.query({ active: true, windowId }),
+      chrome.windows.getLastFocused(),
+    ]);
+    await chrome.tabs.update(tabId, { active: true });
+    await chrome.windows.update(windowId, { focused: true });
+    return {
+      focusedWindowId: focused.focused ? (focused.id ?? null) : null,
+      tabId: active.at(0)?.id ?? null,
+    };
+  });
+
+/** Puts back the tab and window focus `showTab` found. */
+const restoreForeground = async ({ focusedWindowId, tabId }: Foreground) =>
+  await Result.tryPromise(async () => {
+    if (tabId !== null) {
+      await chrome.tabs.update(tabId, { active: true });
+    }
+    if (focusedWindowId !== null) {
+      await chrome.windows.update(focusedWindowId, { focused: true });
+    }
+  });
+
+/** What makes a tab chat's to switch to: who opened it, never a listing. */
+const NOT_A_CHAT_TAB =
+  "That tab is not one of chat's tabs. Chat may switch only to a tab it controlled before, or one a page in its tabs opened, that the user has not navigated themselves since. Open the page instead.";
+
+/**
+ * Hands control to another of chat's tabs: one chat controlled before, or
+ * one a page in chat's tabs opened, unless the user navigated it since. A
+ * stella tab, a tab of the user's, one only confined and a tab of unknown
+ * owner are refused. The tab must still be on the origin the
+ * user approved, both before control moves and in the page then read.
+ */
+const runSwitchTab = async (
+  command: Extract<
+    BrowserControlCommand,
+    { action: typeof BROWSER_CONTROL_ACTION.switchTab }
+  >,
+  { budget, controllerId, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
+  const { tabId } = command;
+  const [owner, stellaTabs] = await Promise.all([
+    readTabOwner(tabId),
+    readStellaTabs(),
+  ]);
+  if ((owner !== "controlled" && owner !== "chat") || stellaTabs.has(tabId)) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      NOT_A_CHAT_TAB,
+    );
+  }
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (tab === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabClosed,
+      "That tab was closed. Switch to another of chat's tabs or open the page.",
+    );
+  }
+  const approved = parseControllableUrl(command.url);
+  const current = tab.url === undefined ? null : parseControllableUrl(tab.url);
+  if (approved === null || current === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+      UNSUPPORTED_PAGE_MESSAGE,
+    );
+  }
+  const leftApprovedOrigin = (): BrowserControlResult =>
+    browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      `That tab no longer shows ${approved.origin} and was not read. Take a snapshot for chat's tabs and their current addresses.`,
+    );
+  if (current.origin !== approved.origin) {
+    return leftApprovedOrigin();
+  }
+  const overBudget = await budget.charge();
+  if (overBudget !== null) {
+    return budgetExceeded(overBudget);
+  }
+  if (isStopped(signal)) {
+    await budget.refund();
+    return cancelled();
+  }
+  // The user sees the tab chat will operate, as with `open`: active in its
+  // window, and that window focused. It comes to the front before anything
+  // is committed, so a tab Chrome cannot show changes nothing.
+  const shown = await showTab(tabId, tab.windowId);
+  if (Result.isError(shown)) {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "Chrome could not bring that tab to the front, so control stayed where it was. Take a snapshot to see chat's tabs.",
+    );
+  }
+  if (isStopped(signal)) {
+    // Control never moved, so what the user saw before comes back too.
+    if (Result.isError(await restoreForeground(shown.value))) {
+      return outcomeUnknown(
+        "The tab was brought to the front, and Chrome could not put the previous one back; control stayed on the tab chat had.",
+      );
+    }
+    await budget.refund();
+    return cancelled();
+  }
+  // Containment moves first: it re-checks the tab is chat's in the same step,
+  // and nothing else needs undoing when it refuses. Should the worker stop
+  // before the second write, the stored controlled tab is still the old one,
+  // with the snapshot the web client last saw: it is confined and chat's,
+  // so the next command acts where chat expects, and nothing the user owns
+  // is reached.
+  const switched = await switchContainedTab(tabId);
+  if (switched.status === "refused") {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      NOT_A_CHAT_TAB,
+    );
+  }
+  const previous = await readControlledTabState();
+  if (previous?.controllerId !== controllerId || previous.tabId !== tabId) {
+    await writeControlledTabState({
+      // A tab the user handed over keeps the stricter checks that go with it.
+      adopted: switched.adopted,
+      controllerId,
+      settled: null,
+      snapshot: null,
+      tabId,
+    });
+  }
+  // Control has moved; the web client still knows the old tab, so a stop
+  // from here on asks it to read the page before anything else.
+  if (isStopped(signal)) {
+    return outcomeUnknown(STOPPED_AFTER_DISPATCH);
+  }
+  // Read only on the approved origin: a page that left it in the meantime
+  // refuses before anything is read, and nothing is stored.
+  return await readSnapshot({
+    controllerId,
+    requiredOrigin: { origin: approved.origin, refusal: leftApprovedOrigin() },
+    signIn,
+    tabId,
+  });
+};
+
+/**
+ * Whether any frame of the tab asks for a sign-in now. A desktop action
+ * checks the whole tab before it acts: a sign-in frame that appeared after
+ * the last read must stop the action, not only the read that follows it.
+ */
+const tabAsksForSignIn = async (tabId: number): Promise<boolean> => {
+  const results = await runPageOperation(
+    { allFrames: true, tabId },
+    {
+      ...readOperationBase(SIGN_IN_POLICY.handToMember, undefined),
+      facts: false,
+      idPrefix: "",
+      kind: "snapshot",
+      pageControls: 0,
+      purpose: SNAPSHOT_PURPOSE.signInCheck,
+      purposes: SNAPSHOT_PURPOSE,
+    },
+  );
+  return results.some(({ result }) => v.is(signInRefusalSchema, result));
+};
+
+type ElementActionArgs = {
+  command: BrowserControlElementCommand;
+  controlledTab: ControlledTab & { tabId: number };
+  /** The document the element's frame showed when the page was read. */
+  documentId: string | null;
+  run: CommandRun;
+};
+
+const runElementAction = async ({
+  command,
+  controlledTab: { state, tab, tabId },
+  documentId,
+  run,
+}: ElementActionArgs): Promise<BrowserControlResult> => {
+  const { budget, progress, signal, signIn } = run;
   if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
@@ -1783,6 +1704,12 @@ const runElementAction = async (
   if (!frame.ok) {
     return frame.error;
   }
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    (await tabAsksForSignIn(tabId))
+  ) {
+    return needsMember();
+  }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
@@ -1795,13 +1722,14 @@ const runElementAction = async (
       return cancelled();
     }
     progress.dispatched = true;
-    const outcome = await injectDomAction(
-      tabId,
-      documentId,
-      reference.path,
-      frame.origin,
+    const outcome = await injectDomAction({
       command,
-    );
+      documentId,
+      expectedOrigin: frame.origin,
+      path: reference.path,
+      signIn,
+      tabId,
+    });
     if (outcome.status === "refused") {
       // The page refused before acting, so the snapshot still describes it
       // and nothing was spent.
@@ -1814,7 +1742,7 @@ const runElementAction = async (
         "Chrome lost the page before the action reported back.",
       );
     }
-    return await readOutcome(navigation, controllerId, tabId, signal);
+    return await readOutcome(navigation, tabId, run);
   } finally {
     navigation.dispose();
   }
@@ -1823,10 +1751,23 @@ const runElementAction = async (
 const runBrowserCommand = async (
   controllerId: string,
   command: BrowserControlCommand,
-  { budget, observedTab, signal }: ExecuteBrowserCommandOptions,
+  {
+    budget,
+    observedTab,
+    signal,
+    signIn,
+    takeOver,
+  }: ExecuteBrowserCommandOptions,
   progress: CommandProgress,
 ): Promise<BrowserControlResult> => {
-  const run: CommandRun = { budget, controllerId, progress, signal };
+  const run = {
+    budget,
+    controllerId,
+    progress,
+    signal,
+    signIn,
+    takeOver,
+  };
   try {
     if (isStopped(signal)) {
       return cancelled();
@@ -1843,10 +1784,13 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.open) {
       return await runOpen(command, run);
     }
+    if (command.action === BROWSER_CONTROL_ACTION.switchTab) {
+      return await runSwitchTab(command, run);
+    }
     if (!controlledTab) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.noControlledTab,
-        "Open a page with stella before using this action.",
+        "No tab is under chat's control. Open a page, or switch to one of chat's tabs listed in the latest snapshot.",
       );
     }
     const tabId = controlledTab.tab.id;
@@ -1859,19 +1803,23 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.snapshot) {
       return await readSnapshot({
         controllerId,
+        ...(command.cursor === undefined ? {} : { cursor: command.cursor }),
+        signIn,
         tabId,
-        textOffset: command.textOffset ?? 0,
       });
+    }
+    if (command.action === BROWSER_CONTROL_ACTION.find) {
+      return await runFind(command, { signIn, tabId });
     }
     if (command.action === BROWSER_CONTROL_ACTION.goBack) {
       return await runGoBack(tabId, controlledTab.state, run);
     }
-    return await runElementAction(
+    return await runElementAction({
       command,
-      { ...controlledTab, tabId },
-      identity.documentId,
+      controlledTab: { ...controlledTab, tabId },
+      documentId: identity.documentId,
       run,
-    );
+    });
   } catch {
     if (progress.dispatched) {
       return outcomeUnknown(

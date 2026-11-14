@@ -384,3 +384,25 @@ test(
   },
   SETTLE_BUDGET_MS,
 );
+
+describe("public-read continuation during a Valkey outage", () => {
+  test("every store command reports unavailable rather than throwing", async () => {
+    const { createContinuationStore } =
+      await import("@/api/lib/legal-search/public-read-continuation-store");
+    const store = createContinuationStore();
+
+    const first = await settle(store.readFinished("outage-work"));
+    expect(first.status).toBe("ok");
+    if (first.status === "ok") {
+      expect(Result.isError(first.value)).toBe(true);
+    }
+
+    const second = await settle(
+      store.acquireLease("outage-work", "owner", 1000),
+    );
+    expect(second.status).toBe("ok");
+    if (second.status === "ok") {
+      expect(Result.isError(second.value)).toBe(true);
+    }
+  });
+});

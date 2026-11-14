@@ -53,25 +53,32 @@ export const ChatNotificationsCard = () => {
         </FrameDescription>
       </FrameHeader>
       <FramePanel>
-        <div className="flex flex-col gap-2 p-4">
-          <Field className="min-h-11 flex-row items-center gap-2">
-            <Switch
-              checked={enabled}
-              disabled={!supported}
-              id={id}
-              onCheckedChange={(next) => {
-                detached(handleChange(next), "chat-notifications-card.toggle");
-              }}
-            />
-            <FieldLabel htmlFor={id}>
-              {t("settings.account.chatNotificationsToggle")}
-            </FieldLabel>
+        {/* The description belongs to the field, so it is announced with
+            the switch; a browser without notifications explains why here. */}
+        <div className="p-4">
+          <Field className="gap-2">
+            <div className="flex min-h-11 flex-row items-center gap-2">
+              <Switch
+                checked={enabled}
+                disabled={!supported}
+                id={id}
+                onCheckedChange={(next) => {
+                  detached(
+                    handleChange(next),
+                    "chat-notifications-card.toggle",
+                  );
+                }}
+              />
+              <FieldLabel htmlFor={id}>
+                {t("settings.account.chatNotificationsToggle")}
+              </FieldLabel>
+            </div>
+            {!supported && (
+              <FieldDescription>
+                {t("settings.account.chatNotificationsUnsupported")}
+              </FieldDescription>
+            )}
           </Field>
-          {!supported && (
-            <FieldDescription>
-              {t("settings.account.chatNotificationsUnsupported")}
-            </FieldDescription>
-          )}
         </div>
       </FramePanel>
     </Frame>

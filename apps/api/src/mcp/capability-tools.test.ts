@@ -6,8 +6,8 @@ import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -56,6 +56,7 @@ import type { InternalToolStructuredError } from "@/api/mcp/tool-types";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -66,11 +67,6 @@ import {
   createSelectQueryMock,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
-
-beforeEach(() => {
-  consumeRateLimitMock.mockReset();
-  loadOrgSettingsMock.mockClear();
-});
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
@@ -124,31 +120,30 @@ const requiresVerificationGrant = (entry: (typeof capabilityCatalog)[number]) =>
 
 type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 
+const admittedClientCredential = await admittedOAuthCredentialForTest("client");
+
 /**
  * The tool's payload as a client reads it: capability executor's `{ result }`
  * envelope is unwrapped, as the CLI and the MCP apps do.
  */
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
-const parseToolPayload = asTestRaw<<T = unknown>(result: ToolCallResult) => T>(
-  (result: ToolCallResult) => {
-    const item = result.content.at(0);
-    if (!item || item.type !== "text") {
-      throw new Error("Expected a text MCP response");
-    }
-    const parsed: unknown = JSON.parse(item.text);
-    const envelope = result.structuredContent;
-    const isCapabilityEnvelope =
-      isRecord(envelope) &&
-      Object.keys(envelope).length === 1 &&
-      Object.hasOwn(envelope, "result");
-    return isCapabilityEnvelope &&
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "result" in parsed
-      ? parsed.result
-      : parsed;
-  },
-);
+const parseToolPayload = (result: ToolCallResult) => {
+  const item = result.content.at(0);
+  if (!item || item.type !== "text") {
+    throw new Error("Expected a text MCP response");
+  }
+  const parsed: unknown = JSON.parse(item.text);
+  const envelope = result.structuredContent;
+  const isCapabilityEnvelope =
+    isRecord(envelope) &&
+    Object.keys(envelope).length === 1 &&
+    Object.hasOwn(envelope, "result");
+  return isCapabilityEnvelope &&
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "result" in parsed
+    ? parsed.result
+    : parsed;
+};
 
 type ErrorEnvelope = Omit<InternalToolStructuredError, "type">;
 
@@ -330,6 +325,8 @@ const callCapability = async (args: Record<string, unknown>) =>
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
   consumeRateLimitMock.mockReset();
@@ -346,6 +343,10 @@ describe("list verification access grants across MCP tools", () => {
   const resourceId = "a2222222-2222-4222-8222-222222222222";
   const params = { matterId };
   const inputs = {
+    "lists.fact-extractions.create": {
+      params,
+      body: { listId: resourceId, entityIds: [resourceId] },
+    },
     "lists.verifications.create": {
       params,
       body: {
@@ -359,6 +360,19 @@ describe("list verification access grants across MCP tools", () => {
       query: { entityId: resourceId, fileFieldId: resourceId },
     },
     "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.graph.get": {
+      params,
+      query: { listId: resourceId },
+    },
+    "lists.graph.nodes.list": { params, query: { text: "delivery" } },
+    "lists.graph.neighbours.list": {
+      params,
+      query: { nodeKind: "fact", nodeId: resourceId },
+    },
+    "lists.graph.paths.list": {
+      params,
+      query: { nodeKind: "claim", nodeId: resourceId, depth: 2 },
+    },
     "lists.verifications.latest.list": {
       params,
       body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
@@ -374,6 +388,25 @@ describe("list verification access grants across MCP tools", () => {
     "lists.verifications.claim-reviews.bulk.create": {
       params,
       body: { runId: resourceId, claimIds: [resourceId] },
+    },
+    "lists.verifications.claim-reviews.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
+    "lists.verifications.claim-rechecks.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claimId: resourceId,
+        requestKey: "synthetic-recheck",
+      },
+    },
+    "lists.verifications.claim-rechecks.bulk.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claims: [{ claimId: resourceId, requestKey: "synthetic-recheck" }],
+      },
     },
     "lists.verifications.claim-comments.create": {
       params,
@@ -415,6 +448,18 @@ describe("list verification access grants across MCP tools", () => {
     "lists.sample-case.create": {
       params,
       body: { filePropertyName: "Documents" },
+    },
+    "lists.source-documents.list": {
+      params,
+      body: { listId: resourceId, documentEntityIds: [resourceId] },
+    },
+    "lists.source-documents.update": {
+      params,
+      body: {
+        listId: resourceId,
+        documentEntityId: resourceId,
+        sourceKind: "testimony",
+      },
     },
   } as const;
   // Irreversible capabilities only run, or validate, once the human confirmed.
@@ -540,6 +585,18 @@ describe("list verification access grants across MCP tools", () => {
           },
         },
       },
+      // The review history names its run's reviewers; none here.
+      selectDistinct: () => {
+        resourceLookups += 1;
+        const query: unknown[] = [];
+        return Object.assign(query, {
+          from: () => query,
+          innerJoin: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: () => query,
+        });
+      },
       selectDistinctOn: () => {
         resourceLookups += 1;
         const query: unknown[] = [];
@@ -555,9 +612,16 @@ describe("list verification access grants across MCP tools", () => {
         resourceLookups += 1;
         return aggregateExecutionRows(statement, false);
       },
-      // Writes land nowhere; the only insert here is a history append.
+      // Writes land nowhere: a history append, and a document's source kind
+      // upserted on its list, which counts as the write it is.
       insert: () => ({
-        values: () => ({ onConflictDoNothing: async () => [] }),
+        values: () => ({
+          onConflictDoNothing: async () => [],
+          onConflictDoUpdate: async () => {
+            mutations += 1;
+            return [];
+          },
+        }),
       }),
       // A reader comment is written through its own guarded predicate; no
       // stored comment has the synthetic id, so the write reaches no row.
@@ -678,9 +742,9 @@ describe("list verification access grants across MCP tools", () => {
         args: { domain, limit: MAX_LIST_LIMIT },
       });
       listed.push(
-        ...parseToolPayload<{ items: { id: string }[] }>(result).items.map(
-          ({ id }) => id,
-        ),
+        ...asTestRaw<{ items: { id: string }[] }>(
+          parseToolPayload(result),
+        ).items.map(({ id }) => id),
       );
     }
     for (const capability of Object.keys(inputs)) {
@@ -824,7 +888,7 @@ describe("list verification access grants across MCP tools", () => {
         args: { capability: "views.list", input: { params: { matterId } } },
       });
       expect(result.isError).not.toBe(true);
-      const payload = parseToolPayload<unknown[]>(result);
+      const payload = asTestRaw<unknown[]>(parseToolPayload(result));
       expect(payload).toEqual(
         caller.userId === undefined
           ? [
@@ -851,7 +915,7 @@ describe("list verification access grants across MCP tools", () => {
       args: { capability: "views.list", input: { params: { matterId } } },
     });
     expect(denied.isError).not.toBe(true);
-    expect(parseToolPayload<unknown[]>(denied)).toEqual([
+    expect(asTestRaw<unknown[]>(parseToolPayload(denied))).toEqual([
       { id: view.id, eligibility: "unavailable" },
     ]);
   });
@@ -889,9 +953,9 @@ describe("list verification access grants across MCP tools", () => {
         args: { domain, limit: MAX_LIST_LIMIT },
       });
       listed.push(
-        ...parseToolPayload<{ items: { id: string }[] }>(result).items.map(
-          ({ id }) => id,
-        ),
+        ...asTestRaw<{ items: { id: string }[] }>(
+          parseToolPayload(result),
+        ).items.map(({ id }) => id),
       );
     }
     for (const [capability, input] of Object.entries(inputs)) {
@@ -913,7 +977,9 @@ describe("list verification access grants across MCP tools", () => {
         },
       });
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability });
     }
     expect(fixture.resourceLookups()).toBeGreaterThan(0);
@@ -937,8 +1003,8 @@ describe("list verification access grants across MCP tools", () => {
         context: fixture.context,
         args: { domain: "lists", limit: MAX_LIST_LIMIT },
       });
-      const ids = parseToolPayload<{ items: { id: string }[] }>(
-        listed,
+      const ids = asTestRaw<{ items: { id: string }[] }>(
+        parseToolPayload(listed),
       ).items.map(({ id }) => id);
       for (const [capability, input] of Object.entries(inputs)) {
         expect(ids).not.toContain(capability);
@@ -982,8 +1048,20 @@ describe("list verification access grants across MCP tools", () => {
       });
       if (capability === "lists.items.sources.verification.update") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload<{ id: string }>(result)).toEqual({
+        expect(asTestRaw<{ id: string }>(parseToolPayload(result))).toEqual({
           id: resourceId,
+        });
+        expect(fixture.mutations()).toBe(1);
+        continue;
+      }
+      // The fixture holds the list and document every id probe asks for,
+      // and no classified document, so the document reads as a record.
+      if (capability === "lists.source-documents.update") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          listId: resourceId,
+          documentEntityId: resourceId,
+          sourceKind: "testimony",
         });
         expect(fixture.mutations()).toBe(1);
         continue;
@@ -992,16 +1070,42 @@ describe("list verification access grants across MCP tools", () => {
       expect(fixture.mutations()).toBe(0);
       if (
         capability === "lists.verifications.list" ||
-        capability === "lists.verifications.claim-comments.list"
+        capability === "lists.verifications.claim-comments.list" ||
+        capability === "lists.verifications.claim-reviews.list"
       ) {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload<{ items: unknown[] }>(result)).toMatchObject({
+        expect(
+          asTestRaw<{ items: unknown[] }>(parseToolPayload(result)),
+        ).toMatchObject({
           items: [],
+        });
+      } else if (capability === "lists.source-documents.list") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          documents: [{ documentEntityId: resourceId, sourceKind: "document" }],
+        });
+      } else if (capability === "lists.graph.nodes.list") {
+        // Nothing in the fixture's matter matches.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          nodes: [],
+          nextCursor: null,
         });
       } else if (capability === "lists.verifications.latest.list") {
         expect(result.isError).not.toBe(true);
-        expect(parseToolPayload<{ runs: unknown[] }>(result)).toEqual({
+        expect(
+          asTestRaw<{ runs: unknown[] }>(parseToolPayload(result)),
+        ).toEqual({
           runs: [],
+        });
+      } else if (capability === "lists.verifications.graph.get") {
+        // The fixture's list holds nothing verified yet.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          listId: resourceId,
+          statements: [],
+          claims: [],
+          nextCursor: null,
         });
       } else {
         expect(errorEnvelope(result).code).toBe("not_found");
@@ -1016,7 +1120,7 @@ describe("account export capability authority", () => {
   const entries = capabilityCatalog.filter((entry) =>
     entry.id.startsWith("account-exports."),
   );
-  const oauthCredential = { type: "oauth_client", clientId: "client" } as const;
+  const oauthCredential = admittedClientCredential;
 
   const listedAccountIds = async (context: AuthorizedMcpRequestContext) => {
     const result = await handleMcpToolCall({
@@ -1025,9 +1129,9 @@ describe("account export capability authority", () => {
       args: { domain: "account-exports", limit: 50 },
       context,
     });
-    return parseToolPayload<{ items: { id: string }[] }>(result).items.map(
-      ({ id }) => id,
-    );
+    return asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    ).items.map(({ id }) => id);
   };
 
   test("catalog binds session capabilities to explicit account grants", () => {
@@ -1121,9 +1225,10 @@ describe("account export capability authority", () => {
         },
         context,
       });
-      expect(parseToolPayload<{ valid: boolean }>(result).valid, entry.id).toBe(
-        true,
-      );
+      expect(
+        asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid,
+        entry.id,
+      ).toBe(true);
     }
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
     expect(consumeRateLimitMock).not.toHaveBeenCalled();
@@ -1365,9 +1470,9 @@ describe("documents.compare capability contract", () => {
       domain: "documents",
       limit: 50,
     });
-    const listedPayload = parseToolPayload<{
+    const listedPayload = asTestRaw<{
       items: { id: string; scope: string; access: string }[];
-    }>(listed);
+    }>(parseToolPayload(listed));
     expect(listedPayload.items).toContainEqual(
       expect.objectContaining({
         id: "documents.compare",
@@ -1379,7 +1484,7 @@ describe("documents.compare capability contract", () => {
     const described = await call("describe_capability", {
       capability: "documents.compare",
     });
-    const describedPayload = parseToolPayload<{
+    const describedPayload = asTestRaw<{
       id: string;
       scope: string;
       handlerKind: string;
@@ -1392,7 +1497,7 @@ describe("documents.compare capability contract", () => {
           };
         };
       };
-    }>(described);
+    }>(parseToolPayload(described));
     // The endpoint now backs the curated compare_documents tool. It stays in
     // the catalog and stays generically invocable, the way every other
     // tool-backed capability does; the disposition is what tells an agent that
@@ -1459,7 +1564,9 @@ describe("documents.compare capability contract", () => {
     ]);
     for (const result of results) {
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability: "documents.compare" });
     }
   });
@@ -1524,7 +1631,7 @@ describe("documents.compare capability contract", () => {
 describe("list_capabilities", () => {
   test("returns id/summary/scope items and paginates by cursor", async () => {
     const first = await call("list_capabilities", { limit: 5 });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       items: {
         id: string;
         summary: string;
@@ -1536,7 +1643,7 @@ describe("list_capabilities", () => {
       }[];
       nextCursor: string | null;
       limit: number;
-    }>(first);
+    }>(parseToolPayload(first));
     expect(payload.items).toHaveLength(5);
     expect(payload.limit).toBe(5);
     expect(payload.nextCursor).not.toBeNull();
@@ -1557,7 +1664,9 @@ describe("list_capabilities", () => {
       limit: 5,
       cursor: payload.nextCursor,
     });
-    const secondPayload = parseToolPayload<{ items: { id: string }[] }>(second);
+    const secondPayload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(second),
+    );
     // Keyset by id: page two starts strictly after page one's last id.
     const lastOfFirst = payload.items.at(-1)?.id ?? "";
     expect(
@@ -1571,7 +1680,9 @@ describe("list_capabilities", () => {
       domain: "time-entries",
       limit: 50,
     });
-    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
     expect(payload.items.length).toBeGreaterThan(0);
     for (const item of payload.items) {
       expect(item.id.startsWith("time-entries.")).toBe(true);
@@ -1583,9 +1694,9 @@ describe("list_capabilities", () => {
       access: "write",
       limit: 50,
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       items: { id: string; summary: string }[];
-    }>(result);
+    }>(parseToolPayload(result));
     const ids = new Set(payload.items.map((i) => i.id));
     const catalogById = new Map(capabilityCatalog.map((e) => [e.id, e]));
     for (const id of ids) {
@@ -1596,8 +1707,8 @@ describe("list_capabilities", () => {
   test.each(["", " ", "  ", "\t\n", "\u00a0\u2003"])(
     "blank query %j preserves id-order pages and cursor binding",
     async (query) => {
-      const first = parseToolPayload<{ nextCursor: string | null }>(
-        await call("list_capabilities", { limit: 1 }),
+      const first = asTestRaw<{ nextCursor: string | null }>(
+        parseToolPayload(await call("list_capabilities", { limit: 1 })),
       );
       const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
       for (const args of [{ limit: 1 }, { limit: 1, cursor }]) {
@@ -1609,8 +1720,10 @@ describe("list_capabilities", () => {
   );
 
   test("surrounding query whitespace preserves relevance cursor binding", async () => {
-    const first = parseToolPayload<{ nextCursor: string | null }>(
-      await call("list_capabilities", { query: "time entries", limit: 1 }),
+    const first = asTestRaw<{ nextCursor: string | null }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 1 }),
+      ),
     );
     const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
     expect(
@@ -1625,7 +1738,9 @@ describe("list_capabilities", () => {
       query: "suggestion",
       limit: 20,
     });
-    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
     const ids = payload.items.map(({ id }) => id);
     const idMatches = ids.filter((id) => id.includes("suggestion"));
 
@@ -1643,22 +1758,29 @@ describe("list_capabilities", () => {
   });
 
   test("pages a query in relevance order without repeats", async () => {
-    const all = parseToolPayload<{ items: { id: string }[] }>(
-      await call("list_capabilities", { query: "time entries", limit: 100 }),
+    const all = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 100 }),
+      ),
     ).items.map(({ id }) => id);
     expect(all.length).toBeGreaterThan(3);
 
+    type CapabilityPage = {
+      items: { id: string }[];
+      nextCursor: string | null;
+    };
     const paged: string[] = [];
     let cursor: string | null = null;
     do {
-      const page: { items: { id: string }[]; nextCursor: string | null } =
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
         parseToolPayload(
           await call("list_capabilities", {
             query: "time entries",
             limit: 2,
             ...(cursor === null ? {} : { cursor }),
           }),
-        );
+        ),
+      );
       paged.push(...page.items.map(({ id }) => id));
       cursor = page.nextCursor;
     } while (cursor !== null);
@@ -1674,10 +1796,14 @@ describe("list_capabilities", () => {
   });
 
   test("a cursor resumes only the query that issued it", async () => {
-    const first: { items: { id: string }[]; nextCursor: string | null } =
+    const first = asTestRaw<{
+      items: { id: string }[];
+      nextCursor: string | null;
+    }>(
       parseToolPayload(
         await call("list_capabilities", { query: "time entries", limit: 1 }),
-      );
+      ),
+    );
     const issued = first.nextCursor ?? expect.unreachable("Need a second page");
     const sameId = first.items[0]?.id ?? expect.unreachable("Need an item");
 
@@ -1699,17 +1825,21 @@ describe("list_capabilities", () => {
   });
 
   test("without a query a cursor for a hidden entry resumes after its id", async () => {
-    const first = parseToolPayload<{ items: { id: string }[] }>(
-      await call("list_capabilities", { domain: "time-entries", limit: 50 }),
+    const first = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", { domain: "time-entries", limit: 50 }),
+      ),
     ).items.map(({ id }) => id);
     const anchor = first[1] ?? expect.unreachable("Need two time-entries");
-    const resumed = parseToolPayload<{ items: { id: string }[] }>(
-      await call("list_capabilities", {
-        domain: "time-entries",
-        limit: 50,
-        // A cursor id that sorts just after the anchor but names no entry.
-        cursor: encodePaginationCursor([`${anchor}~`]),
-      }),
+    const resumed = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", {
+          domain: "time-entries",
+          limit: 50,
+          // A cursor id that sorts just after the anchor but names no entry.
+          cursor: encodePaginationCursor([`${anchor}~`]),
+        }),
+      ),
     ).items.map(({ id }) => id);
     expect(resumed).toEqual(first.filter((id) => id > `${anchor}~`));
   });
@@ -1722,13 +1852,13 @@ describe("describe_capability", () => {
     const result = await call("describe_capability", {
       capability: "time-entries.create",
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       id: string;
       access: string;
       handlerKind: string;
       scope: string;
       inputSchema: { body?: unknown };
-    }>(result);
+    }>(parseToolPayload(result));
     expect(payload.id).toBe("time-entries.create");
     expect(payload.access).toBe("write");
     expect(payload.handlerKind).toBe("workspace");
@@ -1743,8 +1873,8 @@ describe("describe_capability", () => {
     const result = await call("describe_capability", {
       capability: "views.create",
     });
-    const payload = parseToolPayload<{ inputSchema: { body?: unknown } }>(
-      result,
+    const payload = asTestRaw<{ inputSchema: { body?: unknown } }>(
+      parseToolPayload(result),
     );
     expect(payload.inputSchema.body).toBeDefined();
   });
@@ -1761,7 +1891,7 @@ describe("describe_capability", () => {
     const baseContext = createContext();
     const context = {
       ...baseContext,
-      credential: { type: "oauth_client", clientId: "catalog-schema-probe" },
+      credential: await admittedOAuthCredentialForTest("catalog-schema-probe"),
       grantedScopes: [
         ...baseContext.grantedScopes,
         ...capabilityCatalog.flatMap((entry) =>
@@ -1774,13 +1904,15 @@ describe("describe_capability", () => {
       if (entry.inputSchema === undefined) {
         continue;
       }
-      const described = parseToolPayload<{ inputSchema?: unknown }>(
-        await handleMcpToolCall({
-          mode: "advanced",
-          toolName: "describe_capability",
-          args: { capability: entry.id },
-          context,
-        }),
+      const described = asTestRaw<{ inputSchema?: unknown }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            mode: "advanced",
+            toolName: "describe_capability",
+            args: { capability: entry.id },
+            context,
+          }),
+        ),
       );
       if (described.inputSchema === undefined) {
         if (!("featureAccess" in entry) || entry.featureAccess !== "required") {
@@ -1902,7 +2034,9 @@ describe("capability executor gates", () => {
     });
 
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "uploads.create",
@@ -2014,19 +2148,21 @@ describe("capability executor gates", () => {
       const listed: CapabilityPage["items"] = [];
       let cursor: string | null = null;
       do {
-        const page: CapabilityPage = parseToolPayload<CapabilityPage>(
-          await handleMcpToolCall({
-            mode: "advanced",
-            args: {
-              limit: MAX_LIST_LIMIT,
-              ...(cursor === null ? {} : { cursor }),
-            },
-            context: createContext({
-              grantedScopes: MCP_OAUTH_SCOPES,
-              toolConfirmation: TOOL_CONFIRMATION.unavailable,
+        const page: CapabilityPage = asTestRaw<CapabilityPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              mode: "advanced",
+              args: {
+                limit: MAX_LIST_LIMIT,
+                ...(cursor === null ? {} : { cursor }),
+              },
+              context: createContext({
+                grantedScopes: MCP_OAUTH_SCOPES,
+                toolConfirmation: TOOL_CONFIRMATION.unavailable,
+              }),
+              toolName: "list_capabilities",
             }),
-            toolName: "list_capabilities",
-          }),
+          ),
         );
         listed.push(...page.items);
         cursor = page.nextCursor;
@@ -2306,7 +2442,9 @@ describe("capability executor workspace resolution", () => {
       }),
     });
 
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
     expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
   });
 });
@@ -2553,7 +2691,7 @@ describe("capability executor execution", () => {
       },
       context: createContext(),
     });
-    const payload = parseToolPayload<string>(result);
+    const payload = asTestRaw<string>(parseToolPayload(result));
     expect(typeof payload).toBe("string");
     expect(payload).toContain("Date,");
     expect(loadOrgSettingsMock).toHaveBeenCalled();
@@ -2586,7 +2724,7 @@ describe("capability executor execution", () => {
       context: createContext({ safeDb, scopedDb }),
     });
     expect(
-      parseToolPayload<{ id: string; name: string }>(result),
+      asTestRaw<{ id: string; name: string }>(parseToolPayload(result)),
     ).toMatchObject({
       id: "cc_1",
       name: "Test Category",
@@ -2715,7 +2853,9 @@ describe("capability executor upload purpose gate", () => {
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
     });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("a document upload needs the documents consent, not the domain scope alone", async () => {
@@ -2733,10 +2873,52 @@ describe("capability executor upload purpose gate", () => {
     expect(refused.code).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
-      parseToolPayload<{ valid: boolean }>(
-        await invoke(["stella:matters_write", "stella:documents_write"]),
+      asTestRaw<{ valid: boolean }>(
+        parseToolPayload(
+          await invoke(["stella:matters_write", "stella:documents_write"]),
+        ),
       ).valid,
     ).toBe(true);
+  });
+
+  // The executor refuses an uncovered purpose before dispatch; the handler
+  // checks the same consent against the scopes the MCP session carries.
+  test("the upload handler holds an MCP call to its purpose's consent too", async () => {
+    const reserved: unknown[] = [];
+    const reservationDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+      async (run: (tx: unknown) => unknown) =>
+        await run({
+          insert: () => ({
+            values: async (row: unknown) => {
+              reserved.push(row);
+            },
+          }),
+        }),
+    );
+    const endpoint = await loadCapabilityEndpoint("uploads.create");
+    const invoke = async (grantedScopes: string[]) =>
+      await endpoint?.handler(
+        await capabilityHandlerContext({
+          capabilityId: "uploads.create",
+          context: createContext({
+            grantedScopes,
+            safeDb: toSafeDbMock(reservationDb),
+          }),
+          input: { body: skillPackBody, params: {}, query: {} },
+          request: new Request("http://localhost/mcp", { method: "POST" }),
+          workspaceId: toSafeId<"workspace">("ws_1"),
+        }),
+      );
+
+    expect(await invoke(["stella:matters_write"])).toMatchObject({
+      code: 403,
+      response: { message: "This upload needs the stella:skills scope" },
+    });
+    expect(reserved).toEqual([]);
+    expect(
+      await invoke(["stella:matters_write", "stella:skills"]),
+    ).toMatchObject({ uploadId: expect.any(String) });
+    expect(reserved).toMatchObject([{ purpose: "agent_skill" }]);
   });
 
   test("finalize takes the purpose from the stored upload, not from the caller", async () => {
@@ -2778,8 +2960,10 @@ describe("capability executor upload purpose gate", () => {
     expect(refused.code).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
-      parseToolPayload<{ valid: boolean }>(
-        await invoke(["stella:matters_write", "stella:documents_write"]),
+      asTestRaw<{ valid: boolean }>(
+        parseToolPayload(
+          await invoke(["stella:matters_write", "stella:documents_write"]),
+        ),
       ).valid,
     ).toBe(true);
   });
@@ -2834,7 +3018,9 @@ describe("capability executor upload purpose gate", () => {
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
     });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("finalize spends the stored purpose's permission", async () => {
@@ -2981,7 +3167,9 @@ describe("capability executor validate_only permission preflight", () => {
       context: createContext({ memberRole: "owner" }),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({ valid: true, capability: "case-law.ingestion.get" });
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -3113,7 +3301,9 @@ describe("capability executor archived-workspace gate (fix-4)", () => {
       context: archivedCtx(),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "matters.unarchive",
@@ -3169,7 +3359,9 @@ describe("capability executor validate_only ordering (fix-5)", () => {
       context: createContext(),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "time-entries.csv.export",
@@ -3268,7 +3460,7 @@ describe("capability executor file-response gate (fix-6)", () => {
   });
 
   test("verification limit refusals preserve codes, recovery metadata and receipts", () => {
-    for (const code of Object.values(VERIFICATION_RUN_CAP_CODES)) {
+    for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
       for (const retryable of [true, false]) {
         const refusal = {
           code,
@@ -3401,7 +3593,9 @@ describe("capability executor file-input gate", () => {
     });
     // Reached validation: the input is accepted, not refused by a transport
     // gate. The old boolean returned `feature_disabled` here.
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("the withheld file field is refused, not silently dropped", async () => {
@@ -3429,9 +3623,9 @@ describe("capability executor file-input gate", () => {
       capability: "entities.upload",
     });
     expect(
-      parseToolPayload<{
+      asTestRaw<{
         transport: { type: string; invocable: boolean; fileField: string };
-      }>(flagged).transport,
+      }>(parseToolPayload(flagged)).transport,
     ).toMatchObject({
       type: "file-input",
       invocable: false,
@@ -3442,13 +3636,13 @@ describe("capability executor file-input gate", () => {
       capability: "templates.prefill",
     });
     expect(
-      parseToolPayload<{
+      asTestRaw<{
         transport: {
           invocable: boolean;
           fileField: string;
           fileFieldRequired: boolean;
         };
-      }>(fileless).transport,
+      }>(parseToolPayload(fileless)).transport,
     ).toMatchObject({
       invocable: true,
       fileField: "file",
@@ -3459,8 +3653,9 @@ describe("capability executor file-input gate", () => {
       capability: "time-entries.create",
     });
     expect(
-      parseToolPayload<{ transport: { type: string; fileField: null } }>(plain)
-        .transport,
+      asTestRaw<{ transport: { type: string; fileField: null } }>(
+        parseToolPayload(plain),
+      ).transport,
     ).toMatchObject({ type: "json", fileField: null });
   });
 
@@ -3579,7 +3774,7 @@ describe("capability executor argument shape validation", () => {
   test("sibling meta-tools normalize declared numbers but not ordinary strings", async () => {
     // list_capabilities shares the declared numeric normalization boundary.
     const list = await call("list_capabilities", { limit: "5" });
-    expect(parseToolPayload<{ limit: number }>(list).limit).toBe(5);
+    expect(asTestRaw<{ limit: number }>(parseToolPayload(list)).limit).toBe(5);
     // Ordinary strings remain untouched: a numeric capability id is invalid.
     const described = await call("describe_capability", { capability: 42 });
     expect(errorEnvelope(described).code).toBe("validation_error");
@@ -3655,9 +3850,9 @@ describe("capability executor enforces the advertised input schema", () => {
     const described = await call("describe_capability", {
       capability: CAPABILITY,
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       inputSchema: { query?: { properties?: Record<string, unknown> } };
-    }>(described);
+    }>(parseToolPayload(described));
     const limit = payload.inputSchema.query?.properties?.["limit"];
     if (typeof limit !== "object" || limit === null) {
       throw new Error("Expected contacts.list to advertise query.limit");
@@ -3711,7 +3906,9 @@ describe("capability executor enforces the advertised input schema", () => {
     );
     for (const result of results) {
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability: CAPABILITY });
     }
   });
@@ -3757,7 +3954,9 @@ describe("capability executor input normalization", () => {
       context: createContext(),
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "work-obligations.queues.list",
@@ -3796,7 +3995,7 @@ describe("capability executor input normalization", () => {
       },
       context: createContext(),
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(asTestRaw<string>(parseToolPayload(result))).toContain("Date,");
   });
 });
 
@@ -3845,7 +4044,9 @@ describe("capability executor deployment feature gate", () => {
       domain: "time-entries",
       limit: 50,
     });
-    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
     expect(payload.items).toHaveLength(0);
   });
 
@@ -3857,7 +4058,7 @@ describe("capability executor deployment feature gate", () => {
       },
       context: createContext(),
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(asTestRaw<string>(parseToolPayload(result))).toContain("Date,");
   });
 
   test("discovery omits deployment-disabled and ungranted verification capabilities", async () => {
@@ -3870,11 +4071,13 @@ describe("capability executor deployment feature gate", () => {
     };
     let cursor: string | null = null;
     do {
-      const page: CapabilityPage = parseToolPayload(
-        await call("list_capabilities", {
-          limit: 50,
-          ...(cursor === null ? {} : { cursor }),
-        }),
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
+        parseToolPayload(
+          await call("list_capabilities", {
+            limit: 50,
+            ...(cursor === null ? {} : { cursor }),
+          }),
+        ),
       );
       for (const item of page.items) {
         listed.add(item.id);
@@ -3918,7 +4121,9 @@ describe("capability executor deployment feature gate", () => {
     const result = await call("describe_capability", {
       capability: "time-entries.csv.export",
     });
-    const payload = parseToolPayload<{ feature: string | null }>(result);
+    const payload = asTestRaw<{ feature: string | null }>(
+      parseToolPayload(result),
+    );
     expect(payload.feature).toBe("FEATURE_TIME_BILLING");
   });
 });
@@ -4034,8 +4239,8 @@ describe("feature access discovery guard: real capability catalog", () => {
         args: { limit: 50 },
         context,
       });
-      const listedIds = parseToolPayload<{ items: { id: string }[] }>(
-        list,
+      const listedIds = asTestRaw<{ items: { id: string }[] }>(
+        parseToolPayload(list),
       ).items.map((item) => item.id);
       for (const { id, featureAccess } of capabilityCatalog) {
         if (featureAccess === "conditional") {
@@ -4074,7 +4279,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       context,
     });
     expect(
-      parseToolPayload<{ items: unknown[] }>(list).items.length,
+      asTestRaw<{ items: unknown[] }>(parseToolPayload(list)).items.length,
     ).toBeGreaterThan(0);
     const described = await handleMcpToolCall({
       mode: "advanced",
@@ -4082,7 +4287,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       args: { capability: "time-entries.create" },
       context,
     });
-    expect(parseToolPayload<{ id: string }>(described).id).toBe(
+    expect(asTestRaw<{ id: string }>(parseToolPayload(described)).id).toBe(
       "time-entries.create",
     );
   });
@@ -4191,7 +4396,9 @@ test.each(["default-deny", "granted", "colleague"] as const)(
           expect(result.isError).not.toBe(true);
           if (validate_only) {
             expect(
-              parseToolPayload<{ valid: boolean; capability: string }>(result),
+              asTestRaw<{ valid: boolean; capability: string }>(
+                parseToolPayload(result),
+              ),
             ).toEqual({
               valid: true,
               capability: "time-entries.csv.export",
@@ -4285,8 +4492,8 @@ for (const grants of [
       args: { domain: "lists", limit: MAX_LIST_LIMIT },
       context,
     });
-    const listed = parseToolPayload<{ items: { id: string }[] }>(
-      list,
+    const listed = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(list),
     ).items.map((item) => item.id);
     for (const entry of entries) {
       expect(entry.featureAccess).toBe("required");
@@ -4303,7 +4510,9 @@ for (const grants of [
         context,
       });
       if (enabled) {
-        expect(parseToolPayload<{ id: string }>(schema).id).toBe(entry.id);
+        expect(asTestRaw<{ id: string }>(parseToolPayload(schema)).id).toBe(
+          entry.id,
+        );
         continue;
       }
       // A hidden capability answers exactly like an unknown id, and its hint
@@ -4339,9 +4548,10 @@ for (const grants of [
 }
 
 describe("capability executor access isolation", () => {
+  const credential = admittedClientCredential;
   const enabledContext = () => {
     const context = createContext({
-      credential: { type: "oauth_client", clientId: "client" },
+      credential,
       grantedScopes: [...MCP_OAUTH_SCOPES],
     });
     const grants = Object.fromEntries(
@@ -4470,11 +4680,11 @@ describe("personal search history capabilities", () => {
       "search-history.clear",
     ]) {
       const result = await call("describe_capability", { capability });
-      const payload = parseToolPayload<{
+      const payload = asTestRaw<{
         id: string;
         handlerKind: string;
         inputSchema: unknown;
-      }>(result);
+      }>(parseToolPayload(result));
       expect(payload.id).toBe(capability);
       expect(payload.handlerKind).toBe("root");
       if (capability === "search-history.list") {
@@ -4507,15 +4717,25 @@ describe("personal search history capabilities", () => {
   });
 
   test("lists own history without a kind filter when kind is omitted", async () => {
-    const queries: string[] = [];
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const database = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          where: (condition: SQL) => {
-            queries.push(new PgDialect().sqlToQuery(condition).sql);
-            return { orderBy: () => ({ limit: async () => [] }) };
-          },
-        }),
+      select: (projection: SelectedFields) => ({
+        from: (table: PgTable) => {
+          const query = new QueryBuilder().select(projection).from(table);
+          return {
+            where: (condition: SQL) => {
+              const scopedQuery = query.where(condition);
+              return Object.assign(scopedQuery, {
+                orderBy: () => ({
+                  limit: async () => {
+                    queries.push(scopedQuery.toSQL());
+                    return [];
+                  },
+                }),
+              });
+            },
+          };
+        },
       }),
     });
     const result = await handleCapabilityCall({
@@ -4532,9 +4752,10 @@ describe("personal search history capabilities", () => {
       scope: { organizationId: "org_1", userId: "user_1" },
     });
     expect(queries).toHaveLength(1);
-    expect(queries.at(0)).not.toContain('"kind"');
-    expect(queries.at(0)).toContain('"organization_id"');
-    expect(queries.at(0)).toContain('"user_id"');
+    expect(queries.at(0)?.sql).not.toMatch(/"kind"\s*=\s*\$/u);
+    expect(queries.at(0)?.sql).toContain('"organization_id"');
+    expect(queries.at(0)?.sql).toContain('"user_id"');
+    expect(queries.at(0)?.params).toEqual(["org_1", "user_1"]);
   });
 
   test("deletes and clears own history through the shared handlers", async () => {
@@ -4641,7 +4862,13 @@ describe("personal search history capabilities", () => {
           return {
             where: () => ({
               returning: async () => [
-                { id: entryId, kind: "search", lookupKey },
+                {
+                  id: entryId,
+                  kind: "search",
+                  lookupKey,
+                  baseLookupKey: null,
+                  country: "CZE",
+                },
               ],
             }),
           };

@@ -1,3 +1,5 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import {
   CORPUS_FAMILIES,
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
@@ -12,6 +14,7 @@ import {
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionErasureIsPending,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionIsBlocked,
@@ -20,6 +23,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 import {
+  caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   p,
   publicLawReaderPolicies,
@@ -358,6 +362,48 @@ export const corpusIndexProjectionIntents = p.pgTable(
 );
 
 /** PostgreSQL-authoritative desired and applied state for one generation. */
+const corpusIndexProjectionWorkShape = ({
+  workStatus,
+  retryNotBefore,
+  failureAttempts,
+  lastFailureKind,
+  lastFailureMessage,
+}: Record<
+  | "workStatus"
+  | "retryNotBefore"
+  | "failureAttempts"
+  | "lastFailureKind"
+  | "lastFailureMessage",
+  SQLWrapper
+>) => sql`CASE ${workStatus}
+        WHEN 'eligible' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} = 0
+          AND ${lastFailureKind} IS NULL
+          AND ${lastFailureMessage} IS NULL
+        WHEN 'retry_scheduled' THEN
+          ${retryNotBefore} IS NOT NULL
+          AND (
+            (${failureAttempts} = 0
+              AND ${lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS)})
+              AND ${lastFailureMessage} IS NOT NULL)
+            OR (${failureAttempts} > 0
+              AND ${lastFailureKind} IS NOT NULL
+              AND ${lastFailureMessage} IS NOT NULL)
+          )
+        WHEN 'repair_scheduled' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} = 0
+          AND ${lastFailureKind} IS NULL
+          AND ${lastFailureMessage} IS NULL
+        WHEN 'blocked' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} > 0
+          AND ${lastFailureKind} IS NOT NULL
+          AND ${lastFailureMessage} IS NOT NULL
+        ELSE false
+      END`;
+
 export const corpusIndexProjectionStates = p.pgTable(
   "corpus_index_projection_states",
   {
@@ -397,6 +443,15 @@ export const corpusIndexProjectionStates = p.pgTable(
     appliedRevision: p
       .uuid("applied_revision")
       .$type<SafeId<"corpusIndexProjectionIntent">>(),
+    /**
+     * Whether the applied revision has settled, so the index no longer holds
+     * it and a replacement may be appended. Database triggers keep this equal
+     * to the revision's status, so no writer can leave it behind.
+     */
+    appliedRevisionSettled: p
+      .boolean("applied_revision_settled")
+      .default(false)
+      .notNull(),
     appliedFingerprint: p.varchar("applied_fingerprint", { length: 64 }),
     appliedIndexId: p.varchar("applied_index_id", { length: 64 }),
     appliedAt: timestamptz("applied_at"),
@@ -467,6 +522,20 @@ export const corpusIndexProjectionStates = p.pgTable(
         t.entityId,
       )
       .where(corpusIndexProjectionNeedsWork(t)),
+    // The append claim's walk. A replacement waiting on its old revision is
+    // left out, so the walk never crosses that backlog however long it grows.
+    p
+      .index("corpus_index_projection_states_append_route_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.desiredIndexId,
+        sql`coalesce(${t.retryNotBefore}, ${t.updatedAt})`,
+        t.entityId,
+      )
+      .where(
+        sql`${corpusIndexProjectionNeedsWork(t)} AND ${corpusIndexProjectionAppendIsUnblocked(t)}`,
+      ),
     p
       .index("corpus_index_projection_states_replacement_route_idx")
       .on(t.family, t.generation, t.desiredIndexId, t.updatedAt, t.entityId)
@@ -525,34 +594,7 @@ export const corpusIndexProjectionStates = p.pgTable(
     ),
     p.check(
       "corpus_index_projection_states_work_shape",
-      sql`CASE ${t.workStatus}
-        WHEN 'eligible' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} = 0
-          AND ${t.lastFailureKind} IS NULL
-          AND ${t.lastFailureMessage} IS NULL
-        WHEN 'retry_scheduled' THEN
-          ${t.retryNotBefore} IS NOT NULL
-          AND (
-            (${t.failureAttempts} = 0
-              AND ${t.lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS)})
-              AND ${t.lastFailureMessage} IS NOT NULL)
-            OR (${t.failureAttempts} > 0
-              AND ${t.lastFailureKind} IS NOT NULL
-              AND ${t.lastFailureMessage} IS NOT NULL)
-          )
-        WHEN 'repair_scheduled' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} = 0
-          AND ${t.lastFailureKind} IS NULL
-          AND ${t.lastFailureMessage} IS NULL
-        WHEN 'blocked' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} > 0
-          AND ${t.lastFailureKind} IS NOT NULL
-          AND ${t.lastFailureMessage} IS NOT NULL
-        ELSE false
-      END`,
+      corpusIndexProjectionWorkShape(t),
     ),
     p.check(
       "corpus_index_projection_states_epoch_order",
@@ -606,5 +648,49 @@ export const corpusIndexProjectionStates = p.pgTable(
     // decision, so the reader role sees it under the same column grants as
     // every other public-law relation.
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * Case-law decisions whose ranking signals may have moved since their
+ * projection was derived: an authority write that moved the decision's bucket,
+ * or a publication or group-key change in its language group. Written only by
+ * the owner's triggers on `case_law_decisions`, so every writer of those
+ * columns is covered, the citation-authority sweeps included; drained by the
+ * projection append cycle (`case-law-ranking-signal-drain.ts`), which
+ * reconciles each decision's desired state and deletes the row it drained.
+ *
+ * One row per decision. A change while the row waits bumps `change_count`
+ * and releases any claim, so a drain that read an older count leaves the row
+ * for the next one. No foreign key: a decision deleted since is dropped by the
+ * drain, and the trigger never waits on a lock the decision row holds.
+ */
+export const caseLawRankingSignalChanges = p.pgTable(
+  "case_law_ranking_signal_changes",
+  {
+    decisionId: p.uuid("decision_id").primaryKey(),
+    changeCount: p
+      .bigint("change_count", { mode: "bigint" })
+      .notNull()
+      .default(sql`1`),
+    enqueuedAt: timestamptz("enqueued_at").defaultNow().notNull(),
+    /** A drain's lease on the row; null while no drain holds it. */
+    claimedUntil: timestamptz("claimed_until"),
+  },
+  (t) => [
+    p
+      .index("case_law_ranking_signal_changes_enqueued_idx")
+      .on(t.enqueuedAt, t.decisionId),
+    p.check(
+      "case_law_ranking_signal_changes_count_positive",
+      sql`${t.changeCount} > 0`,
+    ),
+    p.pgPolicy("case_law_ranking_signal_changes_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );

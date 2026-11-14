@@ -17,6 +17,7 @@ import { ORGANIZATION_SLUG_RATE_LIMIT } from "@/api/lib/rate-limit/organization-
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 // timeout: real email-code sign-ins and organization writes use migrated Postgres.
@@ -31,7 +32,7 @@ const slugAnswer = v.object({ slug: v.string() });
 afterAll(async () => {
   await server.stop();
   for (const id of organizationIds) {
-    await rootDb.delete(organization).where(eq(organization.id, id));
+    await deleteOrganizationsForTest(rootDb, [id]);
   }
 });
 

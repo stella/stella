@@ -9,7 +9,8 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { documentAstSchema, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import appealLines from "@/api/lib/legal-search/parsers/fixtures/sk-courts-appeal-lines.json";
@@ -17,8 +18,11 @@ import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   buildSkDecisionPdfBlocks,
   isUnreadablePdfError,
-  parseSkDecisionPdf,
+  parseSkDecisionPdf as uncheckedParseSkDecisionPdf,
 } from "@/api/lib/legal-search/parsers/sk-courts";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 
@@ -420,7 +424,7 @@ describe("PDF byte fixture text retention", () => {
   test("keeps numeric content through extraction at either page boundary", async () => {
     for (const texts of [["1234", "Body"], ["Body", "1234"], ["1"]]) {
       const { fulltext } = await parseLines(texts);
-      expect(fulltext).toBe(texts.join(" "));
+      expect(fulltext.replaceAll(/\s+/gu, " ")).toBe(texts.join(" "));
     }
   });
 
@@ -525,12 +529,18 @@ test("a title set over two lines, and a repeated section marker, keep identities
         (block) => block.type === "heading" && block.role === "decision-title",
       )
       .map((block) => block.plainText),
-  ).toEqual(["ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY"]);
+  ).toEqual(["ROZSUDOK"]);
+  // The formula is set in the title's type over its two lines, and is the
+  // court's opening words, not its title.
   expect(
     documentAst.blocks
       .filter((block) => block.type === "paragraph")
       .map((block) => block.plainText),
-  ).toEqual(["Súd žalobu zamieta.", "Náhradu nepriznáva."]);
+  ).toEqual([
+    "V MENE SLOVENSKEJ REPUBLIKY",
+    "Súd žalobu zamieta.",
+    "Náhradu nepriznáva.",
+  ]);
 });
 
 describe("reader-compatible Slovak heading identities", () => {
@@ -566,8 +576,13 @@ describe("reader-compatible Slovak heading identities", () => {
     };
   };
 
-  test("consecutive bold title lines form one reader heading", () => {
-    const ast = build(["ROZSUDOK V MENE", "SLOVENSKEJ REPUBLIKY", "rozhodol:"]);
+  test("consecutive bold title lines form one reader heading, the formula apart", () => {
+    const ast = build([
+      "TRESTNÝ",
+      "ROZKAZ V MENE",
+      "SLOVENSKEJ REPUBLIKY",
+      "rozhodol:",
+    ]);
     expect(
       ast.blocks.filter(
         (block) => block.type === "heading" && block.role === "decision-title",
@@ -576,10 +591,53 @@ describe("reader-compatible Slovak heading identities", () => {
       {
         type: "heading",
         anchorId: "h-title",
-        plainText: "ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY",
+        plainText: "TRESTNÝ ROZKAZ",
       },
     ]);
+    expect(ast.blocks[1]).toMatchObject({
+      type: "paragraph",
+      role: "opening-formula",
+      plainText: "V MENE SLOVENSKEJ REPUBLIKY",
+    });
     expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
+  });
+
+  test("the formula keeps the formatting it was printed in when read off the title", () => {
+    const blocks = buildSkDecisionPdfBlocks({
+      lines: [
+        { text: "ROZSUDOK V MENE", bold: true },
+        { text: "SLOVENSKEJ REPUBLIKY", bold: false },
+        { text: "rozhodol:", bold: true },
+      ].map(({ text, bold }) => ({
+        text,
+        segments: [bold ? { text, bold: true as const } : { text }],
+        bold,
+        fontSize: text === text.toUpperCase() ? 20 : 10,
+        pageIndex: 0,
+      })),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    const [title, formula] = blocks;
+    expect(title).toMatchObject({
+      type: "heading",
+      role: "decision-title",
+      plainText: "ROZSUDOK",
+    });
+    expect(formula).toMatchObject({
+      type: "paragraph",
+      role: "opening-formula",
+      plainText: "V MENE SLOVENSKEJ REPUBLIKY",
+    });
+    const boldTexts = (inlines: readonly Inline[]): string[] =>
+      inlines.flatMap((inline) =>
+        inline.type === "bold" ? [plainTextOf(inline.children)] : [],
+      );
+    expect(title?.type === "heading" ? boldTexts(title.inlines) : []).toEqual([
+      "ROZSUDOK",
+    ]);
+    expect(
+      formula?.type === "paragraph" ? boldTexts(formula.inlines) : [],
+    ).toEqual(["V MENE"]);
   });
 
   test("repeated fixed section anchors remain unique for the reader", () => {
@@ -605,13 +663,13 @@ describe("reader-compatible Slovak heading identities", () => {
         .map((block) => block.anchorId),
     ).toEqual([
       "h-title",
-      "h-title-3",
+      "h-title-2",
       "h-holding",
-      "h-holding-6",
+      "h-holding-2",
       "h-reasoning",
-      "h-reasoning-9",
+      "h-reasoning-2",
       "h-instruction",
-      "h-instruction-12",
+      "h-instruction-2",
     ]);
     expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
   });
@@ -673,13 +731,22 @@ describe("paragraphs across the PDF's line wraps", () => {
 
   const blocksOf = (lines: readonly Line[]) =>
     buildSkDecisionPdfBlocks({
-      lines: lines.map(({ text, bold: isBold = false, fontSize = 10 }) => ({
-        text,
-        segments: [isBold ? { text, bold: true } : { text }],
-        bold: isBold,
-        fontSize,
-        pageIndex: 0,
-      })),
+      lines: lines.map(
+        ({ text, bold: isBold = false, fontSize = 10 }, index) => ({
+          text,
+          segments: [isBold ? { text, bold: true } : { text }],
+          bold: isBold,
+          fontSize,
+          pageIndex: 0,
+          layout: {
+            x: 70,
+            y: 700 - index * 14,
+            height: 10,
+            width: text.length * 5,
+            pageIndex: 0,
+          },
+        }),
+      ),
       metadata: {
         court: "Okresný súd Mesto",
         caseNumber: "1Er/1/2003",
@@ -713,11 +780,11 @@ describe("paragraphs across the PDF's line wraps", () => {
   test("numbered points, the closing formula and the signature stay apart", () => {
     const texts = blocksOf(RESOLUTION).map((block) => block.plainText);
     expect(texts.slice(-8)).toEqual([
-      "o d ô v o d n e n i e :",
+      "odôvodnenie:",
       "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22. 10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
       "2. Povinný podal návrh na zastavenie exekúcie, ktorý odôvodnil tým, že jeho pohľadávka zanikla zaplatením ešte pred začatím exekúcie, čo preukázal v bode 22.",
       "3. Súd návrhu vyhovel, lebo pohľadávka bola zaplatená, a exekúciu zastavil.",
-      "P o u č e n i e :",
+      "Poučenie:",
       "Proti tomuto uzneseniu je prípustné odvolanie do pätnástich dní odo dňa jeho doručenia na súd, ktorý rozhodnutie vydal.",
       "V Meste dňa 1. februára 2004",
       "JUDr. Ivana Vzorová sudkyňa",
@@ -839,5 +906,249 @@ describe("paragraphs across the PDF's line wraps", () => {
     expect(texts.at(-1)).toBe(
       "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22. 2. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
     );
+  });
+});
+
+describe("unnumbered PDF paragraph boundaries", () => {
+  test.each([
+    {
+      signal: "short final line before a capitalised sentence",
+      first: "The first paragraph ends.",
+      next: "Another paragraph starts with the evidence that the court considered.",
+      x: 70,
+      y: 686,
+    },
+    {
+      signal: "short final line without terminal punctuation",
+      first: "The first paragraph ends here",
+      next: "Another paragraph starts with the evidence that the court considered.",
+      x: 70,
+      y: 686,
+    },
+    {
+      signal: "indent after a short final line",
+      first: "The first paragraph ends here",
+      next: "another paragraph starts here and explains the decision of the court",
+      x: 90,
+      y: 686,
+    },
+    {
+      signal: "vertical gap",
+      first: "The first paragraph ends here",
+      next: "another paragraph starts here",
+      x: 70,
+      y: 670,
+    },
+  ])(
+    "preserves two paragraphs separated by $signal",
+    async ({ first, next, x, y }) => {
+      const pdf = PDF.create();
+      const page = pdf.addPage({ size: "letter" });
+      page.drawText(first, { x: 70, y: 700, size: 10 });
+      page.drawText(next, { x, y, size: 10 });
+      const { documentAst } = await parseSkDecisionPdf({
+        pdfBytes: await pdf.save(),
+        caseNumber: "1/2026",
+        court: "Court",
+        ecli: undefined,
+        decisionDate: undefined,
+        decisionType: undefined,
+      });
+      expect(
+        documentAst.blocks
+          .filter((block) => block.type === "paragraph")
+          .map((block) => block.plainText),
+      ).toEqual([first, next]);
+    },
+  );
+
+  test.each([
+    {
+      followingX: 90,
+      followingBodyX: 70,
+      marker: "",
+      opening: "The",
+      tail: ["and explains how the court assessed the amounts claimed."],
+    },
+    {
+      followingX: 110,
+      followingBodyX: 70,
+      marker: "",
+      opening: "The",
+      tail: ["and explains how the court assessed the amounts claimed."],
+    },
+    {
+      followingX: 70,
+      followingBodyX: 100,
+      marker: "2. ",
+      opening: "The",
+      tail: [
+        "and the costs",
+        "claimed by the parties in their written submissions.",
+      ],
+    },
+    {
+      followingX: 70,
+      followingBodyX: 70,
+      marker: "",
+      opening: "the",
+      tail: ["and explains how the court assessed the amounts claimed."],
+    },
+  ])(
+    "hanging continuation lines stay together before the next paragraph at $followingX",
+    async ({ followingX, followingBodyX, marker, opening, tail }) => {
+      const first = [
+        "1. The court considered the application and examined all the evidence",
+        "before reaching its conclusion and explaining the applicable rules",
+        "to the parties before it made its final decision on the application.",
+        "The court dismissed the claim.",
+      ];
+      const following = [
+        `${marker}${opening} following paragraph addresses the costs of these proceedings`,
+        ...tail,
+      ];
+      const pdf = PDF.create();
+      const page = pdf.addPage({ size: "letter" });
+      for (const [index, text] of first.entries()) {
+        page.drawText(text, {
+          x: index === 0 ? 70 : 90,
+          y: 700 - index * 14,
+          size: 10,
+        });
+      }
+      for (const [index, text] of following.entries()) {
+        page.drawText(text, {
+          x: index === 0 ? followingX : followingBodyX,
+          y: 644 - index * 14,
+          size: 10,
+        });
+      }
+      const { documentAst } = await parseSkDecisionPdf({
+        pdfBytes: await pdf.save(),
+        caseNumber: "1/2026",
+        court: "Court",
+        ecli: undefined,
+        decisionDate: undefined,
+        decisionType: undefined,
+      });
+      expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+        first.join(" "),
+        following.join(" "),
+      ]);
+    },
+  );
+
+  test.each([{ pitch: 14 }, { pitch: 18 }])(
+    "sentences at a full printed line boundary stay in one paragraph (pitch $pitch)",
+    async ({ pitch }) => {
+      const pdf = PDF.create();
+      const page = pdf.addPage({ size: "letter" });
+      const first = "The court considered the application.";
+      const next = "The court rejected the application.";
+      page.drawText(first, { x: 70, y: 700, size: 10 });
+      page.drawText(next, { x: 70, y: 700 - pitch, size: 10 });
+      const { documentAst } = await parseSkDecisionPdf({
+        pdfBytes: await pdf.save(),
+        caseNumber: "1/2026",
+        court: "Court",
+        ecli: undefined,
+        decisionDate: undefined,
+        decisionType: undefined,
+      });
+      expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+        `${first} ${next}`,
+      ]);
+    },
+  );
+
+  // Paragraph gaps derive from font metrics, so a wide pitch stays ordinary
+  // leading only below the font-metric gap, however often it repeats.
+  test("an established wide line pitch keeps a multi-sentence paragraph together", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    const text = "The court considered the application.";
+    for (const y of [700, 682, 664]) {
+      page.drawText(text, { x: 70, y, size: 10 });
+    }
+    const { documentAst } = await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      court: "Court",
+      ecli: undefined,
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      `${text} ${text} ${text}`,
+    ]);
+  });
+
+  test("a paragraph gap is measured against the page's ordinary line pitch", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    const first = "The court considered the application";
+    const second = "and reviewed the evidence presented";
+    const next = "another paragraph explains the decision";
+    page.drawText(first, { x: 70, y: 700, size: 10 });
+    page.drawText(second, { x: 70, y: 686, size: 10 });
+    page.drawText(next, { x: 70, y: 666, size: 10 });
+    const { documentAst } = await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      court: "Court",
+      ecli: undefined,
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      `${first} ${second}`,
+      next,
+    ]);
+  });
+
+  test("keeps a name after its academic title and a bold continuation inside the paragraph", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("The application was filed by JUDr.", {
+      x: 70,
+      y: 700,
+      size: 10,
+    });
+    page.drawText("Adam Example and the court", { x: 70, y: 686, size: 10 });
+    page.drawText("granted it.", {
+      x: 70,
+      y: 672,
+      size: 10,
+      font: StandardFonts.HelveticaBold,
+    });
+    const { documentAst } = await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      court: "Court",
+      ecli: undefined,
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "The application was filed by JUDr. Adam Example and the court granted it.",
+    ]);
+  });
+
+  test("joins lines inside one paragraph from their PDF geometry", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("The court considered the", { x: 70, y: 700, size: 10 });
+    page.drawText("application before it.", { x: 70, y: 686, size: 10 });
+    const { documentAst } = await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      court: "Court",
+      ecli: undefined,
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "The court considered the application before it.",
+    ]);
   });
 });

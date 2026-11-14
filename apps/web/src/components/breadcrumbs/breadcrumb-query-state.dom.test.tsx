@@ -3,11 +3,11 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import type { ChatThreadFetched } from "@/features/chat/queries";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;
@@ -112,6 +112,8 @@ const seedPersistedThread = (client: InstanceType<typeof QueryClient>) => {
 const utcTimeZone =
   parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const organizationSettings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: [],
   deploymentFeatures: { legalLists: true },
   capabilities: {},
@@ -123,6 +125,7 @@ const organizationSettings = {
   promptCachingEnabled: true,
   managedAIResidency: "eu",
   memoryExtractionEnabled: false,
+  localRunMaxApprovalMode: "full_auto",
   timeMinimumUnitMinutes: 1,
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,

@@ -266,3 +266,76 @@ test.each([
     expect(phaseRecord?.toolName).toBe(toolCallRecord?.attributes?.["tool"]);
   },
 );
+
+describe("MCP tool refusal logs", () => {
+  const completedRecord = async (callResult: CallToolResult) => {
+    const logRecords: LogRecord[] = [];
+    setLogSinkForTesting((record) => {
+      logRecords.push(record);
+    });
+    await observeMcpToolCall({
+      context: customerContext(),
+      mode: "default",
+      toolName: "search_case_law",
+      run: async () => callResult,
+    });
+    return logRecords.find(
+      ({ message }) => message === "mcp.tool_call.completed",
+    )?.attributes;
+  };
+
+  test("a refusal names its code and the declared arguments it refused, never a value", async () => {
+    const marker = "PRIVATE_QUERY_MARKER_51c3";
+    const attributes = await completedRecord({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: {
+              code: "validation_error",
+              message: `Invalid query ${marker}`,
+              issues: [
+                { path: "queries.0", message: marker },
+                { path: "queries.1", message: marker },
+                { path: "courts.2", message: marker },
+                { path: marker, message: "Unknown key" },
+                { path: "", message: marker },
+              ],
+            },
+          }),
+        },
+      ],
+      isError: true,
+    });
+    expect(attributes).toMatchObject({
+      outcome: "tool_error",
+      "error.code": "validation_error",
+      refused_fields: "queries,courts",
+    });
+    expect(JSON.stringify(attributes)).not.toContain(marker);
+  });
+
+  test("a refusal without input issues names only its code", async () => {
+    const attributes = await completedRecord(envelope("not_found"));
+    expect(attributes).toMatchObject({ "error.code": "not_found" });
+    expect(attributes).not.toHaveProperty("refused_fields");
+  });
+
+  test("a failure in plain text is logged as having no known code", async () => {
+    const attributes = await completedRecord({
+      content: [{ type: "text", text: "Forbidden" }],
+      isError: true,
+    });
+    expect(attributes).toMatchObject({
+      outcome: "tool_error",
+      "error.code": "unknown",
+    });
+    expect(JSON.stringify(attributes)).not.toContain("Forbidden");
+  });
+
+  test("a successful call carries no refusal", async () => {
+    const attributes = await completedRecord(result());
+    expect(attributes).toMatchObject({ outcome: "ok" });
+    expect(attributes).not.toHaveProperty(["error.code"]);
+  });
+});

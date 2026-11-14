@@ -5,9 +5,9 @@ import { panic } from "better-result";
 
 import { Button } from "@stll/ui/button";
 import { HorizontalScroller } from "@stll/ui/horizontal-scroller";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { usePrefersReducedMotion } from "@stll/ui/use-prefers-reduced-motion";
 import { cn } from "@stll/ui/utils";
-
-import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 type SuggestedAction = {
   id: string;
@@ -220,22 +220,25 @@ const SuggestedActionChip = ({
       >
         {action.icon}
         <span className="min-w-0 overflow-hidden" ref={clipRef}>
-          <span
+          {/* The slide is the hint: it shows the whole label, and the chip's
+              tooltip does so under reduced motion. While it slides, the
+              label takes its whole width and the box around it clips it. */}
+          <TruncatedText
             className={cn(
               "block whitespace-nowrap ease-in-out",
-              reveal.type === "rest"
-                ? "truncate"
-                : "w-max transition-transform",
+              reveal.type !== "rest" && "w-max max-w-none transition-transform",
             )}
             data-reveal={reveal.type}
             dir="auto"
+            hint={false}
+            lines={reveal.type === "rest" ? 1 : "none"}
             onTransitionCancel={settle}
             onTransitionEnd={settle}
             ref={labelRef}
             style={labelRevealStyle(reveal)}
           >
             {action.label}
-          </span>
+          </TruncatedText>
         </span>
       </Button>
     </SuggestedActionSurface>

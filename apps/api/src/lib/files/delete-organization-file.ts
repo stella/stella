@@ -11,10 +11,10 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openOrganizationFileDeletionDb } from "@/api/lib/files/organization-file-deletion-db";
 import type { OrganizationFileDeletionDb } from "@/api/lib/files/organization-file-deletion-db";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
-import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import { requireNoHoldAcross } from "@/api/lib/legal-holds/holds";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { requireNoHoldAcross } from "@/api/lib/workspaces/legal-holds/holds";
 
 type DeleteOrganizationFileOptions = {
   fileUsageDb?: OrganizationFileDeletionDb;
@@ -43,42 +43,19 @@ export const deleteOrganizationFilesWithSignal = async (
 ): Promise<Result<void, OrganizationFileUsageError | LegalHoldActiveError>> => {
   const uniqueKeys = [...new Set(keys)];
   const failures: unknown[] = [];
-  const { removeOrganizationFilesBytes } =
-    await import("@/api/lib/files/organization-file-usage");
   for (const chunk of chunkItems(uniqueKeys, DELETE_CONCURRENCY)) {
-    const deletedKeys: string[] = [];
-    const chunkSignal = AbortSignal.any([
-      signal,
-      AbortSignal.timeout(DELETE_CHUNK_TIMEOUT_MS),
-    ]);
-    // db-await-in-loop: one fenced transaction per storage chunk of DELETE_CONCURRENCY keys; the hold fence stays held only while that chunk's storage deletes settle.
-    const checked = await deleteUnheldObjectChunk({
+    const settled = await deleteUnheldChunkAndRemoveUsage({
       keys: chunk,
-      signal: chunkSignal,
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(DELETE_CHUNK_TIMEOUT_MS),
+      ]),
       fileUsageDb,
     });
-    if (checked.isErr()) {
-      return Result.err(checked.error);
+    if (settled.isErr()) {
+      return Result.err(settled.error);
     }
-    const results = checked.value;
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        deletedKeys.push(result.value);
-      }
-    }
-    // db-await-in-loop: usage removal follows each chunk's settled storage deletes, so a later chunk's failure cannot leave earlier deleted bytes counted.
-    const removed = await removeOrganizationFilesBytes(
-      deletedKeys,
-      fileUsageDb,
-    );
-    if (Result.isError(removed)) {
-      return Result.err(removed.error);
-    }
-    for (const result of results) {
-      if (result.status === "rejected") {
-        failures.push(result.reason);
-      }
-    }
+    failures.push(...settled.value.failures);
   }
   if (failures.length > 0) {
     return Result.err(
@@ -149,6 +126,42 @@ export const deleteOrganizationFileWithSignal = async (
     );
   }
   return Result.ok();
+};
+
+/**
+ * One storage chunk: delete its unheld objects under the legal-hold fence,
+ * then remove the usage of the keys whose deletes settled, so a later chunk's
+ * failure cannot leave earlier deleted bytes counted.
+ */
+const deleteUnheldChunkAndRemoveUsage = async (
+  options: DeleteUnheldObjectChunkOptions,
+): Promise<
+  Result<
+    { failures: unknown[] },
+    OrganizationFileUsageError | LegalHoldActiveError
+  >
+> => {
+  const checked = await deleteUnheldObjectChunk(options);
+  if (checked.isErr()) {
+    return Result.err(checked.error);
+  }
+  const deletedKeys = checked.value.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+  const { removeOrganizationFilesBytes } =
+    await import("@/api/lib/files/organization-file-usage");
+  const removed = await removeOrganizationFilesBytes(
+    deletedKeys,
+    options.fileUsageDb,
+  );
+  if (Result.isError(removed)) {
+    return Result.err(removed.error);
+  }
+  return Result.ok({
+    failures: checked.value.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    ),
+  });
 };
 
 type DeleteUnheldObjectChunkOptions = {

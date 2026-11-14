@@ -1,16 +1,16 @@
 import { Panic, Result, UnhandledException } from "better-result";
 
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
-import { DocxArchiveError } from "@stll/docx-utils";
 
+import { DocxArchiveError } from "@/api/lib/docx-archive";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 /** How far a typed status is followed through transport wrappers. */
 export const MAX_TRANSPORT_WRAPPER_DEPTH = 3;

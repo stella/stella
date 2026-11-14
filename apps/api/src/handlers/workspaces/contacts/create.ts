@@ -8,7 +8,7 @@ import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-conta
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
 import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -17,12 +17,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { lockLegalHoldOrganization } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { lockLegalHoldOrganization } from "@/api/lib/workspaces/legal-holds/holds";
 
 const createWorkspaceContactBodySchema = v.object({
   contactId: resourceIdSchema("contact", {
@@ -210,15 +210,19 @@ export const createWorkspaceContactHandler = async function* ({
     );
   }
 
-  dependencies
-    .flushWorkspaceSearchRepairs([workspaceId])
-    .catch(
-      createErrorCapture(
-        handlerErrorContext(
-          "createWorkspaceContactHandler.dependencies_flushWorkspaceSearchRepairs",
+  detached(
+    async () =>
+      dependencies
+        .flushWorkspaceSearchRepairs([workspaceId])
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createWorkspaceContactHandler.dependencies_flushWorkspaceSearchRepairs",
+            ),
+          ),
         ),
-      ),
-    );
+    "contacts-create.flush-workspace-search-repairs",
+  );
 
   const created = txResult.value.created;
   if (!created) {

@@ -71,6 +71,7 @@ const applyRenderTick = (
   state: SendQueueState,
   isGenerating: boolean,
   status: ChatClientState,
+  awaitingMember = false,
 ) => {
   const synced = reduceSendQueue(state, {
     type: "generation-status-synced",
@@ -80,8 +81,53 @@ const applyRenderTick = (
     type: "turn-boundary-checked",
     isGenerating,
     status,
+    awaitingMember,
   });
 };
+
+describe("a turn that waits on the member", () => {
+  /** A turn runs, a prompt is queued, then the turn pauses on the member. */
+  const pausedWithQueued = () => {
+    let state = createInitialSendQueueState(CONVERSATION_ID);
+    state = applyRenderTick(state, true, "streaming").state;
+    state = reduceSendQueue(state, {
+      type: "message-enqueued",
+      entry: makeEntry("follow-up"),
+    }).state;
+    const paused = applyRenderTick(state, false, "ready", true);
+    return paused;
+  };
+
+  test("a pause for an approval or question does not send what was queued", () => {
+    const paused = pausedWithQueued();
+    expect(paused.dispatchedEntry).toBeNull();
+    expect(paused.state.queue.map(({ id }) => id)).toEqual(["follow-up"]);
+    // Further renders while the card waits keep holding it.
+    const still = applyRenderTick(paused.state, false, "ready", true);
+    expect(still.dispatchedEntry).toBeNull();
+  });
+
+  test("the queue drains once the member answered and that turn ended", () => {
+    const paused = pausedWithQueued();
+    // The answer resumes the turn; the card is gone while it runs.
+    const resumed = applyRenderTick(paused.state, true, "streaming");
+    expect(resumed.dispatchedEntry).toBeNull();
+    const ended = applyRenderTick(resumed.state, false, "ready");
+    expect(ended.dispatchedEntry?.id).toBe("follow-up");
+  });
+
+  test("the queue drains once the wait ends without a turn, as after a stop", () => {
+    const paused = pausedWithQueued();
+    const stopped = applyRenderTick(paused.state, false, "ready", false);
+    expect(stopped.dispatchedEntry?.id).toBe("follow-up");
+  });
+
+  test("a wait that ends in an error still holds the queue", () => {
+    const paused = pausedWithQueued();
+    const failed = applyRenderTick(paused.state, false, "error", false);
+    expect(failed.dispatchedEntry).toBeNull();
+  });
+});
 
 describe("reduceSendQueue", () => {
   test("idle state: dispatching the oldest message on an empty queue is a no-op", () => {
@@ -151,6 +197,7 @@ describe("reduceSendQueue", () => {
         type: "turn-boundary-checked",
         isGenerating: false,
         status,
+        awaitingMember: false,
       });
 
       expect(result.dispatchedEntry).toBeNull();
@@ -206,6 +253,7 @@ describe("reduceSendQueue", () => {
       conversationId: CONVERSATION_ID,
       drainHeld: true,
       editSessionIds: ["edited"],
+      heldForMember: true,
       isGenerating: true,
       queue: [makeEntry("a"), makeEntry("b")],
       wasGenerating: true,
@@ -220,6 +268,7 @@ describe("reduceSendQueue", () => {
       conversationId: "conversation-2",
       drainHeld: false,
       editSessionIds: [],
+      heldForMember: false,
       isGenerating: false,
       queue: [],
       wasGenerating: false,
@@ -243,6 +292,7 @@ describe("reduceSendQueue", () => {
       type: "turn-boundary-checked",
       isGenerating: false,
       status: "ready",
+      awaitingMember: false,
     });
 
     expect(first.dispatchedEntry).toEqual(entry);

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   type ActivitySignal,
@@ -82,7 +82,8 @@ const signalAt = (
 
 describe("clusterActivitySignals", () => {
   test("INVARIANT: clusters are ordered, disjoint, and separated by more than the merge gap", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: clusters are ordered, disjoint, and separated by more than the merge gap",
       fc.property(signalsArbitrary, optionsArbitrary, (signals, options) => {
         const clusters = clusterActivitySignals({
           date: DATE,
@@ -103,12 +104,13 @@ describe("clusterActivitySignals", () => {
           );
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("INVARIANT: every signal lands in exactly one cluster and durations cover the span plus the tail", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: every signal lands in exactly one cluster and durations cover the span plus the tail",
       fc.property(signalsArbitrary, optionsArbitrary, (signals, options) => {
         const clusters = clusterActivitySignals({
           date: DATE,
@@ -136,12 +138,13 @@ describe("clusterActivitySignals", () => {
           expect(messageCount).toBeLessThanOrEqual(cluster.signalCount);
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("INVARIANT: fingerprints are unique per day and independent of input order", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: fingerprints are unique per day and independent of input order",
       fc.property(signalsArbitrary, optionsArbitrary, (signals, options) => {
         const forward = clusterActivitySignals({
           date: DATE,
@@ -160,12 +163,13 @@ describe("clusterActivitySignals", () => {
           new Set(forward.map((cluster) => cluster.fingerprint)).size,
         ).toBe(forward.length);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("INVARIANT: a later signal that extends a cluster keeps its fingerprint", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: a later signal that extends a cluster keeps its fingerprint",
       fc.property(
         signalsArbitrary.filter((signals) => signals.length > 0),
         optionsArbitrary,
@@ -209,7 +213,7 @@ describe("clusterActivitySignals", () => {
           expect(survivingFingerprints.size).toBe(after.length);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 

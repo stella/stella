@@ -1,0 +1,5 @@
+{
+  "add-column": "A nullable column without a default rewrites nothing; ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout and 5s statement_timeout.",
+  "create-index": "The index is built on desktop_runner_runs, which holds a handful of rows at most (invitation-only runner sockets, pruned ended runs), so the SHARE lock lasts only that short build within the 5s statement_timeout.",
+  "add-foreign-key": "Validation scans only desktop_runner_runs, which holds a handful of rows at most; chat_turns takes a brief SHARE ROW EXCLUSIVE lock bounded by the 1s lock_timeout and 5s statement_timeout."
+}

@@ -1,9 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import {
   consumePlaybookSaveToolCalls,
   type PlaybookSaveMessage,
+  type PlaybookSaveTarget,
 } from "@/components/chat/chat-ui-tools";
+import type { PlaybookDraftViewPayload } from "@/lib/knowledge/playbook-draft-view";
 
 type ReconcilePlaybookSaveToolCallsOptions = {
   handledToolCallIds: Set<string>;
@@ -19,10 +22,10 @@ type ReconcilePlaybookSaveToolCallsOptions = {
 };
 
 type PlaybookSaveReconciliation = {
-  playbookId: string | null;
+  /** Null when no newly handled save is the thread's latest. */
+  target: PlaybookSaveTarget | null;
   /** Settles when the playbook queries have refetched. */
   refetched: Promise<void>;
-  source: "history" | "live";
 };
 
 /**
@@ -64,8 +67,14 @@ export const reconcilePlaybookSaveToolCalls = ({
       playbookKeys.isDetail(query.queryKey) && !query.isActive(),
   });
   return {
-    playbookId: consumed.playbookId,
-    source,
+    // Every save in a transcript loaded as history is historical.
+    target:
+      consumed.target === null
+        ? null
+        : {
+            playbookId: consumed.target.playbookId,
+            source: source === "history" ? "history" : consumed.target.source,
+          },
     refetched: queryClient.invalidateQueries({
       queryKey: playbookKeys.all(organizationId),
     }),
@@ -80,43 +89,80 @@ export const reconcilePlaybookSaveToolCalls = ({
  */
 export type PlaybookPaneMode = "auto-open" | "on-request";
 
+/** What the thread's pane shows when a save arrives. */
+export type PlaybookPaneState =
+  | { type: "closed" }
+  | { type: "pending" }
+  | { type: "playbook"; playbookId: string };
+
+/** The pane state behind a thread tab's payload; null when no pane is open. */
+export const playbookPaneState = (
+  payload: PlaybookDraftViewPayload | null,
+): PlaybookPaneState => {
+  if (payload === null) {
+    return { type: "closed" };
+  }
+  switch (payload.type) {
+    case "pending":
+      return { type: "pending" };
+    case "playbook":
+      return { type: "playbook", playbookId: payload.playbookId };
+    default:
+      payload satisfies never;
+      return panic("Unhandled playbook pane payload");
+  }
+};
+
 type PlaybookPaneReactionArgs = {
   mode: PlaybookPaneMode;
   /** Below `md` the inspector is a sheet over the whole chat. */
   isMobile: boolean;
   /** This thread's pane was already shown once while the session was mounted. */
   openedThisSession: boolean;
-  /** The playbook the thread's pane shows; null while the pane is closed. */
-  shownPlaybookId: string | null;
-  savedPlaybookId: string;
+  pane: PlaybookPaneState;
+  saved: PlaybookSaveTarget;
 };
 
 /**
- * What a newly saved playbook does to the thread's pane. An open pane on
- * another playbook moves to the saved one without taking focus; one already
- * showing it is left as it is. A closed pane opens once per thread while the
- * session is mounted, and never again after the user closed it. Historical
- * saves reconcile caches without moving or opening the pane.
+ * What a newly saved playbook does to the thread's pane. A pending pane
+ * always becomes the saved playbook, on any surface and from any save, so it
+ * cannot stay pending beside a thread that has a playbook. Otherwise a
+ * historical save reconciles caches without moving or opening the pane. An
+ * open pane on another playbook moves to the saved one without taking focus;
+ * one already showing it is left as it is. A closed pane opens once per
+ * thread while the session is mounted, and never again after the user closed
+ * it.
  */
 export const playbookPaneReaction = ({
   mode,
   isMobile,
   openedThisSession,
-  shownPlaybookId,
-  savedPlaybookId,
+  pane,
+  saved,
 }: PlaybookPaneReactionArgs): "update" | "open" | "none" => {
-  if (shownPlaybookId !== null) {
-    return shownPlaybookId === savedPlaybookId ? "none" : "update";
+  if (pane.type === "pending") {
+    return "update";
   }
-  return mode === "auto-open" && !isMobile && !openedThisSession
-    ? "open"
-    : "none";
+  if (saved.source === "history") {
+    return "none";
+  }
+  switch (pane.type) {
+    case "playbook":
+      return pane.playbookId === saved.playbookId ? "none" : "update";
+    case "closed":
+      return mode === "auto-open" && !isMobile && !openedThisSession
+        ? "open"
+        : "none";
+    default:
+      pane satisfies never;
+      return panic("Unhandled playbook pane state");
+  }
 };
 
 type FollowReconciledPlaybookSaveOptions = {
   reconciliation: PlaybookSaveReconciliation;
   isCurrent: () => boolean;
-  follow: (playbookId: string) => void;
+  follow: (saved: PlaybookSaveTarget) => void;
 };
 
 /** Refetch completion cannot move a pane after its runtime or save changed. */
@@ -126,12 +172,8 @@ export const followReconciledPlaybookSave = async ({
   follow,
 }: FollowReconciledPlaybookSaveOptions): Promise<void> => {
   await reconciliation.refetched;
-  if (
-    reconciliation.source === "history" ||
-    reconciliation.playbookId === null ||
-    !isCurrent()
-  ) {
+  if (reconciliation.target === null || !isCurrent()) {
     return;
   }
-  follow(reconciliation.playbookId);
+  follow(reconciliation.target);
 };

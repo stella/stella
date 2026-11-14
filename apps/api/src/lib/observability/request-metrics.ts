@@ -2,6 +2,10 @@ import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
+import type {
+  CaseLawResearchAnswerFailureReason,
+  CaseLawResearchAnswerState,
+} from "@stll/api-contract";
 import type { SanctionsSource } from "@stll/sanctions";
 
 import type { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
@@ -205,6 +209,33 @@ export const emitVerificationRunFailureMetric = (
       errorCode satisfies never;
       panic("Unknown verification failure code");
   }
+};
+
+export const CASE_LAW_RESEARCH_CELLS_EVENT = "case_law.research_answer.cells";
+
+/**
+ * Research cells one write settled, one line per outcome, counted only where
+ * the write landed. `decision_unavailable` and `no_text` on a decision the
+ * search just served mean the read path is broken, not that a model refused:
+ * the API log's metric filter counts them against all settled cells, so a
+ * read that starts failing every cell alarms within the hour instead of
+ * waiting for someone to notice empty columns.
+ */
+export const emitCaseLawResearchCellsMetric = ({
+  state,
+  failureReason,
+  cells,
+}: {
+  state: Exclude<CaseLawResearchAnswerState, "pending">;
+  failureReason: CaseLawResearchAnswerFailureReason | null;
+  cells: number;
+}): void => {
+  writeMetricLine({
+    event: CASE_LAW_RESEARCH_CELLS_EVENT,
+    state,
+    failureReason: failureReason ?? "none",
+    CaseLawResearchAnswerCells: cells,
+  });
 };
 
 export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
@@ -549,6 +580,34 @@ export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
       metric satisfies never;
       panic("Unhandled chat run log metric");
   }
+};
+
+const LOCAL_RUN_STEP_CONTENT_METRIC = {
+  storedBytes: "LocalRunStepContentStoredBytes",
+  budgetReached: "LocalRunStepContentBudgetReached",
+  tooLarge: "LocalRunStepContentTooLarge",
+  refused: "LocalRunStepContentRefused",
+} as const;
+
+type LocalRunStepContentMetric = {
+  /** How the step's content settled; `refused` for a write to a settled step. */
+  state: "stored" | "too_large" | "run_budget_reached" | "refused";
+  /** Bytes this write stored. */
+  storedBytes: number;
+};
+
+/** One write of a local run's step content, by how it settled or that it was refused. */
+export const emitLocalRunStepContentMetric = ({
+  state,
+  storedBytes,
+}: LocalRunStepContentMetric): void => {
+  writeMetricLine({
+    [LOCAL_RUN_STEP_CONTENT_METRIC.storedBytes]: storedBytes,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.budgetReached]:
+      state === "run_budget_reached" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.tooLarge]: state === "too_large" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.refused]: state === "refused" ? 1 : 0,
+  });
 };
 
 const PROMPT_CACHE_METRIC = {

@@ -21,6 +21,7 @@ import {
 } from "../helpers/docked-chat-history";
 import { installDockedLegalFixtures } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
+import { apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
 const { decision } = decisionParagraphRangePayloads;
@@ -41,6 +42,12 @@ const idPath = createCaseLawDecisionPath(
   createCaseLawDecisionRouteParams({ ...routeInput, slug: null }),
 );
 
+/** A decision read, typed by the route the reader asked: by id or by slug. */
+const decisionRead = (url: string, value: typeof decision) =>
+  new URL(url).pathname.includes("/by-slug/")
+    ? apiJson("v1/case/decisions/by-slug/:slug", "get", value)
+    : apiJson("v1/case/decisions/:decisionId", "get", value);
+
 const installParagraphFixture = async (page: Page) => {
   await installDockedLegalFixtures(page);
   await page.route(
@@ -53,7 +60,7 @@ const installParagraphFixture = async (page: Page) => {
         await route.fallback();
         return;
       }
-      await route.fulfill({ json: decision });
+      await respond(route, decisionRead(route.request().url(), decision));
     },
   );
 };
@@ -83,26 +90,30 @@ test.describe("reader chat decision citations", () => {
         url.origin === E2E_API_ORIGIN &&
         url.pathname === `/v1/chat/decision-threads/${decision.id}`,
       async (route) => {
-        await route.fulfill({
-          json: { threadId: dockedChatFileThreadPage.threadId },
-        });
+        await respond(
+          route,
+          apiJson("v1/chat/decision-threads/:decisionId", "get", {
+            threadId: dockedChatFileThreadPage.threadId,
+          }),
+        );
       },
     );
     await page.route("**/v1/chat/threads/*/messages*", async (route) => {
-      await route.fulfill({
-        json: {
+      await respond(
+        route,
+        apiJson("v1/chat/threads/:threadId/messages", "get", {
           ...dockedChatMessagePage,
           messages: dockedChatMessagePage.messages.map((message) => ({
             ...message,
             parts: [
               {
-                type: "text",
+                type: "text" as const,
                 content: `[Same decision passage](${citation(decision.id)}) and [Different decision passage](${citation(otherDecision.id)}).`,
               },
             ],
           })),
-        } satisfies typeof dockedChatMessagePage,
-      });
+        }),
+      );
     });
     await page.route(
       (url) =>
@@ -110,7 +121,10 @@ test.describe("reader chat decision citations", () => {
         (url.pathname === `/v1/case/decisions/${otherDecision.id}` ||
           url.pathname === `/v1/case/decisions/by-slug/${otherDecision.slug}`),
       async (route) => {
-        await route.fulfill({ json: otherDecision });
+        await respond(
+          route,
+          decisionRead(route.request().url(), otherDecision),
+        );
       },
     );
     await openMemberDecision(page, {
@@ -175,7 +189,9 @@ test.describe("reader chat decision citations", () => {
         }),
       );
       await expect(action).toHaveAttribute("href", `${targetPath}#p-28`);
-      await action.click();
+      await popup
+        .getByRole("button", { name: "Open in side panel", exact: true })
+        .click();
     };
     const expectLandingMarker = async (target: Locator) => {
       await expect(target).toBeInViewport();
@@ -394,9 +410,14 @@ test.describe("court paragraph deep links", () => {
         url.origin === E2E_API_ORIGIN &&
         url.pathname === `/v1/case/decisions/by-slug/${decision.slug}`,
       async (route) => {
-        await route.fulfill({
-          json: decisionParagraphRangePayloads.unavailable,
-        });
+        await respond(
+          route,
+          apiJson(
+            "v1/case/decisions/by-slug/:slug",
+            "get",
+            decisionParagraphRangePayloads.unavailable,
+          ),
+        );
       },
     );
     await openVisitorDecision(page, {

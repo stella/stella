@@ -11,16 +11,18 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import {
+  GLOBAL_SEARCH_CHAT_COVERAGE,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
 } from "@stll/api-contract/search";
+import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import type { PublicLawData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, {
@@ -129,8 +131,11 @@ const citationResponse = {
 } satisfies PublicLawData<typeof api.case.decisions.search.post>;
 
 const searchRequestBodies: unknown[] = [];
+const caseLawSectionRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
 let searchResponseGate: Promise<void> | null = null;
+let searchChatCoverage: GlobalSearchChatCoverage =
+  GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE;
 let citationHits = citationResponse.hits;
 const supplementalResource = resourceRef({
   type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -169,13 +174,18 @@ globalThis.fetch = Object.assign(
         nextCursor: null,
       } satisfies PublicLawData<typeof api.law.statutes.get>);
     }
+    if (url.pathname.endsWith("/search/case-law")) {
+      caseLawSectionRequestBodies.push(await request.json());
+      return Response.json({ hits: [supplementalHit], nextCursor: null });
+    }
     if (url.pathname.endsWith("/search")) {
       const body = await request.json();
       searchRequestBodies.push(body);
       await searchResponseGate;
       return Response.json({
-        hits: body.types?.includes("case-law") ? [supplementalHit] : searchHits,
+        hits: searchHits,
         nextCursor: null,
+        chatCoverage: searchChatCoverage,
         totalCount: 1,
         facets: { editor: [], mimeType: [], type: [], workspace: [] },
         previewLocatorCandidates: [],
@@ -224,8 +234,10 @@ afterEach(() => {
   }
   clients.length = 0;
   searchRequestBodies.length = 0;
+  caseLawSectionRequestBodies.length = 0;
   searchHits = [hit];
   searchResponseGate = null;
+  searchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE;
   citationHits = citationResponse.hits;
   assignUserStorage(undefined);
 });
@@ -447,8 +459,12 @@ test.each([
     expect(searchRequestBodies).toContainEqual(
       expect.objectContaining({ query: `"${citation}"` }),
     );
-    expect(searchRequestBodies).toContainEqual(
-      expect.objectContaining({ query: citation, types: ["case-law"] }),
+    // Case law is asked of the corpus search engine, never the matter search.
+    expect(caseLawSectionRequestBodies).toContainEqual(
+      expect.objectContaining({ query: citation }),
+    );
+    expect(searchRequestBodies).not.toContainEqual(
+      expect.objectContaining({ types: ["case-law"] }),
     );
     expect(
       testing.screen
@@ -458,7 +474,7 @@ test.each([
   },
 );
 
-test("Case law scope searches only case law and drops matter recents and actions", async () => {
+test("Case law scope asks only the case-law search and drops matter recents and actions", async () => {
   await mount();
   await testing.act(async () => {
     testing.fireEvent.click(
@@ -480,7 +496,13 @@ test("Case law scope searches only case law and drops matter recents and actions
   expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
 
   await typeQuery(supplementalHit.title);
-  expect(searchRequestBodies.at(-1)).toMatchObject({ types: ["case-law"] });
+  expect(caseLawSectionRequestBodies.at(-1)).toMatchObject({
+    query: "engagement",
+  });
+  expect(searchRequestBodies).toEqual([]);
+  expect(
+    await testing.screen.findByRole("button", { name: supplementalHit.title }),
+  ).toBeTruthy();
 });
 
 test.each([
@@ -546,6 +568,47 @@ test("a folder result reveals the folder in the tree on screen, not the first tr
       search: appRouter.state.location.search,
     }).toEqual(EXPECTED_OTHER_TREE_REVEAL),
   );
+});
+
+test("partial chat coverage keeps every result and names what was not searched", async () => {
+  searchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL;
+  await mount();
+  await typeQuery();
+  await testing.waitFor(() =>
+    expect(
+      testing.screen.getByText(messages.search.chatCoveragePartial, {
+        exact: false,
+      }),
+    ).toBeTruthy(),
+  );
+  expect(testing.screen.getAllByText(hit.title).length).toBeGreaterThan(0);
+});
+
+test("a partial search with no results still says what was not searched", async () => {
+  searchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL;
+  searchHits = [];
+  await mount();
+  const input = testing.screen.getByRole("combobox", {
+    name: messages.common.search,
+  });
+  testing.fireEvent.input(input, { target: { value: "engagement" } });
+  await testing.waitFor(() =>
+    expect(
+      testing.screen.getByText(messages.search.chatCoveragePartial, {
+        exact: false,
+      }),
+    ).toBeTruthy(),
+  );
+});
+
+test("complete chat coverage adds no note to the result count", async () => {
+  await mount();
+  await typeQuery();
+  expect(
+    testing.screen.queryByText(messages.search.chatCoveragePartial, {
+      exact: false,
+    }),
+  ).toBeNull();
 });
 
 test("a bare docket shows the sheet identifier of every matching decision", async () => {

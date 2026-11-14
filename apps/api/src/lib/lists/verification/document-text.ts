@@ -10,10 +10,13 @@
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { readPdfPageTexts } from "@/api/lib/files/pdf-page-text";
+import type { PdfLineBox } from "@/api/lib/files/pdf-page-text";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { DOCUMENT_BYTES_ADMISSION } from "@/api/lib/load/document-bytes-admission";
 import { readS3ObjectBounded } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -22,11 +25,24 @@ type VerificationBlockSource =
   | { type: "docx-block"; blockId: string }
   | { type: "pdf-page"; pageNumber: number };
 
+/**
+ * What the reader saw of a block's shape, which paragraph scoping reads
+ * (`paragraph-scope.ts`): a DOCX paragraph's shown label (Word's automatic
+ * `82.` is not in its text) and whether it is a heading, or a PDF page's line
+ * boxes, one per line of its text. Never sent to the model, never stored.
+ */
+type VerificationBlockStructure =
+  | { type: "docx-paragraph"; label: string | null; heading: boolean }
+  | { type: "pdf-lines"; boxes: readonly PdfLineBox[] | null };
+
 export type VerificationBlock = {
   /** The id the model cites: the Folio block id, or `P<page>` for a PDF. */
   id: string;
   text: string;
   source: VerificationBlockSource;
+  /** Absent on a block built from plain text: it reads as unlabelled
+   *  prose, and a PDF page's lines as lines without geometry. */
+  structure?: VerificationBlockStructure;
 };
 
 type VerificationFile = {
@@ -34,6 +50,8 @@ type VerificationFile = {
   mimeType: string;
   /** The converted PDF of a non-PDF upload; used when the upload is not DOCX. */
   pdfFileId: string | null;
+  /** The stored upload's size, which the read holds in memory several times. */
+  sizeBytes: number;
 };
 
 type ReadVerificationDocumentArgs = {
@@ -41,20 +59,34 @@ type ReadVerificationDocumentArgs = {
   workspaceId: SafeId<"workspace">;
   file: VerificationFile;
   signal: AbortSignal;
+  /** How long to wait for the process's document byte budget: a request
+   *  answers retryably soon, a background run can wait out its own timeout. */
+  admissionWaitMs: number;
 };
 
 export type VerificationDocument =
   | { type: "read"; blocks: VerificationBlock[] }
   | { type: "unsupported-format" }
-  | { type: "no-text" };
+  | { type: "no-text" }
+  /** The process held as many document bytes as it can for the whole wait;
+   *  the same read succeeds once other work finishes. */
+  | { type: "busy" };
 
 const pdfPageId = (pageNumber: number): string => `P${String(pageNumber)}`;
 
-const readPdfBlocks = async (
+/** The id of the block a stored source names: what a run's scope edges
+ *  point at. */
+export const verificationBlockId = (source: VerificationBlockSource): string =>
+  source.type === "docx-block" ? source.blockId : pdfPageId(source.pageNumber);
+
+/** A PDF's blocks: one per page with text, in page order. */
+export const pdfVerificationBlocks = async (
   bytes: Uint8Array,
 ): Promise<VerificationBlock[]> => {
   const blocks: VerificationBlock[] = [];
-  for (const { pageNumber, text } of await readPdfPageTexts({ bytes })) {
+  for (const { pageNumber, text, lineBoxes } of await readPdfPageTexts({
+    bytes,
+  })) {
     if (text.trim().length === 0) {
       continue;
     }
@@ -62,12 +94,53 @@ const readPdfBlocks = async (
       id: pdfPageId(pageNumber),
       text,
       source: { type: "pdf-page", pageNumber },
+      structure: { type: "pdf-lines", boxes: lineBoxes },
     });
   }
   return blocks;
 };
 
-export const readVerificationDocument = async ({
+/** A DOCX's blocks as Folio reads them: one per paragraph with text. */
+export const docxVerificationBlocks = async (
+  file: ScannedFile,
+): Promise<VerificationBlock[]> =>
+  (await openScannedDocxReviewer(file))
+    .getContent()
+    .filter((block) => block.text.trim().length > 0)
+    .map((block): VerificationBlock => ({
+      id: block.id,
+      text: block.text,
+      source: { type: "docx-block", blockId: block.id },
+      structure: {
+        type: "docx-paragraph",
+        label: block.displayLabel ?? null,
+        heading: block.headingLevel !== undefined,
+      },
+    }));
+
+/**
+ * Reads the document under the process's document byte budget: parsing holds
+ * the whole file several times over, and runs, scope checks and upload
+ * finalization may all be reading large documents at once.
+ */
+export const readVerificationDocument = async (
+  args: ReadVerificationDocumentArgs,
+): Promise<VerificationDocument> => {
+  const release = await DOCUMENT_BYTES_ADMISSION.acquire(
+    args.file.sizeBytes,
+    args.admissionWaitMs,
+  );
+  if (release === null) {
+    return { type: "busy" };
+  }
+  try {
+    return await readAdmittedDocument(args);
+  } finally {
+    release();
+  }
+};
+
+const readAdmittedDocument = async ({
   organizationId,
   workspaceId,
   file,
@@ -80,17 +153,16 @@ export const readVerificationDocument = async ({
       fileId: file.fileId,
       mimeType: DOCX_MIME_TYPE,
     });
-    const reviewer = await openScannedDocxReviewer(
-      await readStoredFile({ key, mimeType: DOCX_MIME_TYPE }),
+    // Bounded and cancellable like the PDF read below, so a stalled read
+    // ends at the caller's deadline.
+    const blocks = await docxVerificationBlocks(
+      await readStoredFile({
+        key,
+        mimeType: DOCX_MIME_TYPE,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal,
+      }),
     );
-    const blocks = reviewer
-      .getContent()
-      .filter((block) => block.text.trim().length > 0)
-      .map((block): VerificationBlock => ({
-        id: block.id,
-        text: block.text,
-        source: { type: "docx-block", blockId: block.id },
-      }));
     return blocks.length === 0 ? { type: "no-text" } : { type: "read", blocks };
   }
 
@@ -107,7 +179,7 @@ export const readVerificationDocument = async ({
   });
   // A rendition is never larger than an upload may be; a bigger object is
   // refused before its body is read.
-  const blocks = await readPdfBlocks(
+  const blocks = await pdfVerificationBlocks(
     await readS3ObjectBounded({
       bucket: envBase.S3_BUCKET,
       key,

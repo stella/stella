@@ -119,6 +119,15 @@ export type SendQueueState = {
   /** A turn ended ready while an edit held the queue: the drain it would
    *  have started runs once the last edit closes. */
   readonly drainHeld: boolean;
+  /**
+   * The turn stopped to wait on the member (an approval, a question) when
+   * its request ended. Nothing queued is sent then: a queued prompt would
+   * start a new turn, and the server would cancel the one waiting on the
+   * member before they saw what it asked. The queue drains once the member
+   * answers and that turn ends, or once the wait is over without a turn
+   * (stopped, or answered elsewhere).
+   */
+  readonly heldForMember: boolean;
 };
 
 export const createInitialSendQueueState = (
@@ -127,6 +136,7 @@ export const createInitialSendQueueState = (
   conversationId,
   drainHeld: false,
   editSessionIds: [],
+  heldForMember: false,
   isGenerating: false,
   queue: [],
   wasGenerating: false,
@@ -179,6 +189,8 @@ export type SendQueueEvent =
       type: "turn-boundary-checked";
       isGenerating: boolean;
       status: ChatClientState;
+      /** The latest turn waits on the member: an approval or a question. */
+      awaitingMember: boolean;
     }
   | { type: "conversation-switched"; conversationId: string }
   | { type: "message-edit-opened"; sessionId: string }
@@ -307,21 +319,39 @@ export const reduceSendQueue = (
 
     case "turn-boundary-checked": {
       const finishedTurn = state.wasGenerating && !event.isGenerating;
+      // A turn running again (the member answered) ends with its own drain.
+      const heldForMember = event.isGenerating
+        ? false
+        : state.heldForMember || (finishedTurn && event.awaitingMember);
       const next: SendQueueState = {
         ...state,
+        heldForMember,
         wasGenerating: event.isGenerating,
       };
+      if (heldForMember && event.awaitingMember) {
+        return { state: next, dispatchedEntry: null };
+      }
+      // The wait ended without a turn (stopped, or answered and settled
+      // elsewhere): the drain the pause held back runs now.
+      const waitEnded = heldForMember && !event.awaitingMember;
       // Hold the queue if the turn ended in error: firing every queued
       // message into a failing provider just burns quota and spams the
       // user with repeats of the same error. The next manual send (or a
       // successful regenerate) lifts the gate.
-      if (!finishedTurn || !canDrainQueueAfterTurn(event.status)) {
-        return { state: next, dispatchedEntry: null };
+      const released: SendQueueState = { ...next, heldForMember: false };
+      if (
+        !(finishedTurn || waitEnded) ||
+        !canDrainQueueAfterTurn(event.status)
+      ) {
+        return { state: released, dispatchedEntry: null };
       }
-      if (isHeldForMessageEdit(next)) {
-        return { state: { ...next, drainHeld: true }, dispatchedEntry: null };
+      if (isHeldForMessageEdit(released)) {
+        return {
+          state: { ...released, drainHeld: true },
+          dispatchedEntry: null,
+        };
       }
-      return startOldestDispatch(next);
+      return startOldestDispatch(released);
     }
 
     case "conversation-switched": {

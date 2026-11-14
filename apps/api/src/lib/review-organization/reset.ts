@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -30,6 +31,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
@@ -38,11 +40,6 @@ import {
 } from "@/api/lib/email/normalized-email";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
-import {
-  lockOrganizationForWholeOrganizationWork,
-  organizationHasActiveHold,
-  settleOrganizationHoldRead,
-} from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -69,8 +66,14 @@ import {
 } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import type { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
+import {
+  lockOrganizationForWholeOrganizationWork,
+  organizationHasActiveHold,
+  settleOrganizationHoldRead,
+} from "@/api/lib/workspaces/legal-holds/holds";
 
 export const REVIEW_RESET_REFUSAL = {
   unconfigured: "unconfigured",
@@ -241,8 +244,12 @@ export type ReviewResetReport = {
 };
 
 export type ReviewResetDependencies = {
+  flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
   seed?: ReviewSeedDependencies | undefined;
-  workspaceDeletion?: Omit<WorkspaceDeletionDependencies, "database">;
+  workspaceDeletion?: Omit<
+    WorkspaceDeletionDependencies,
+    "database" | "flushWorkspaceSearchRepairs"
+  >;
   /** Test seam: runs after the target is proved, before the first delete. */
   afterTargetResolved?: (() => Promise<void>) | undefined;
   /** Test seam: runs after the per-row deletes, before the sweep transaction. */
@@ -357,7 +364,7 @@ export type ReviewResetOptions = {
   /** The scheduler run, stamped on every audit row the reset writes. */
   runId: string;
   signal: AbortSignal;
-  dependencies?: ReviewResetDependencies | undefined;
+  dependencies: ReviewResetDependencies;
 };
 
 const failureReason = (error: unknown): string =>
@@ -468,7 +475,7 @@ const deleteMatters = async (scope: ResetScope) => {
     LIMITS.workspacesCount,
   );
   return await deleteEach(scope, "matters", rows, async (matter) => {
-    if (matter.status === "archived") {
+    if (matter.status === WORKSPACE_STATUS.archived) {
       const unarchived = await Result.gen(() =>
         unarchiveWorkspaceHandler({
           safeDb: scope.safeDb,
@@ -496,6 +503,8 @@ const deleteMatters = async (scope: ResetScope) => {
               return await callback(tx);
             }),
         },
+        flushWorkspaceSearchRepairs:
+          scope.dependencies.flushWorkspaceSearchRepairs,
       },
     );
     return Result.isOk(outcome) && outcome.value.status !== "deleted"
@@ -506,13 +515,19 @@ const deleteMatters = async (scope: ResetScope) => {
 
 const deleteContacts = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await readBounded(
-    scope.db
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(eq(contacts.organizationId, organizationId))
-      .orderBy(asc(contacts.id)),
-    LIMITS.contactsCount,
+  // The owner connection reads contacts inside their organization only.
+  const rows = await withOwnerOrganizationScope(
+    scope.db,
+    organizationId,
+    async (tx) =>
+      await readBounded(
+        tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.organizationId, organizationId))
+          .orderBy(asc(contacts.id)),
+        LIMITS.contactsCount,
+      ),
   );
   return await deleteEach(
     scope,
@@ -525,6 +540,8 @@ const deleteContacts = async (scope: ResetScope) => {
           organizationId,
           contactId: contact.id,
           recordAuditEvent: scope.recorderFor(null),
+          flushWorkspaceSearchRepairs:
+            scope.dependencies.flushWorkspaceSearchRepairs,
         }),
       ),
   );
@@ -716,7 +733,7 @@ export const resetReviewOrganization = async ({
   rlsDatabase,
   runId,
   signal,
-  dependencies = {},
+  dependencies,
 }: ReviewResetOptions): Promise<
   Result<ReviewResetReport, ReviewResetRefusedError>
 > => {

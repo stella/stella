@@ -14,6 +14,7 @@ import {
   fields,
   legalHolds,
 } from "@/api/db/schema";
+import { advisoryExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =
@@ -265,7 +266,10 @@ const executeWithLegalHoldFence = async (
     !("execute" in tx) ||
     typeof tx.execute !== "function"
   ) {
-    return [];
+    // Advisory fences such as the contact capacity lock read no fixture
+    // data, so every handler that takes one acquires it here. Other
+    // statements stay unanswered unless the test supplies `execute`.
+    return advisoryExecutionRows(statement);
   }
   const result: unknown = await Reflect.apply(tx.execute, tx, [statement]);
   return result;

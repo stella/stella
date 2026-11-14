@@ -16,18 +16,22 @@ import type {
 } from "@/api/lib/feature-access/policy";
 import {
   AI_MEMORY_FEATURE_ID,
+  CONFLICT_CHECK_FEATURE_ID,
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
+import { SOURCE_KIND_SET_OPERATION } from "@/api/lib/lists/source-kind";
 
 export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_THREAD
   | typeof AUDIT_RESOURCE_TYPE.CHAT_MESSAGE
   | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE
   | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION
-  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT;
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL;
 
 export type NonChatAuditResourceType = Exclude<
   AuditResourceType,
@@ -38,8 +42,11 @@ export type NonChatAuditResourceType = Exclude<
 const CHAT_THREAD_SETTING_FIELDS = [
   "chatModel",
   "chatReasoningEffort",
+  "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
+  "limitReminder",
+  "pinState",
   "titleChanged",
   "titleSource",
   "webSearchEnabled",
@@ -67,9 +74,12 @@ const CHAT_CHANGE_FIELDS = {
     CHAT_MESSAGE_CHANGE_FIELDS,
   ),
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: new Set<string>(),
-  // Tool executions and grants describe themselves in `metadata` only.
+  // Tool executions, grants and folder approvals describe themselves in
+  // `metadata` only.
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: new Set<string>(),
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: new Set<string>(),
 } as const satisfies Record<ChatAuditResourceType, ReadonlySet<string>>;
 
 type AuditDiff = { old: unknown; new: unknown };
@@ -92,6 +102,8 @@ export type ChatAuditChanges = {
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: Record<string, never>;
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: Record<string, never>;
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: Record<string, never>;
 };
 
 const isChatResourceType = (
@@ -241,10 +253,16 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.CHAT_THREAD]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE_CATEGORY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE_VARIANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CONFLICT_CHECK]: {
+    default: { type: "caller-feature", featureId: CONFLICT_CHECK_FEATURE_ID },
+    operations: {},
+  },
   [AUDIT_RESOURCE_TYPE.CONTACT]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CORRESPONDENCE]: UNGATED_AUDIT_DETAILS,
@@ -291,11 +309,17 @@ export const AUDIT_DETAIL_POLICY = {
     operations: {
       sample_case_loaded: VERIFICATION_AUDIT_DETAILS,
       sample_case_released: VERIFICATION_AUDIT_DETAILS,
+      verification_chronology_exported: VERIFICATION_AUDIT_DETAILS,
+      [SOURCE_KIND_SET_OPERATION]: VERIFICATION_AUDIT_DETAILS,
     },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
-    operations: {},
+    operations: {
+      fact_extraction_started: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_completed: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_failed: VERIFICATION_AUDIT_DETAILS,
+    },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
@@ -325,6 +349,7 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.PROPERTY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.RATE_ENTRY]: TIME_BILLING_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.REPORT_EXPORT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.DATA_EXPORT]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.RATE_TABLE]: TIME_BILLING_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.SAVED_SEARCH]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.SEARCH_HISTORY]: UNGATED_AUDIT_DETAILS,
@@ -333,6 +358,7 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.VAT_RATE]: TIME_BILLING_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.NUMBER_SERIES]: TIME_BILLING_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.STATUTE_ANNOTATION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.LEGISLATION_MATTER_LINK]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.STYLE_SET]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.TEMPLATE]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.TEMPLATE_LOOKUP_FORMAT]: UNGATED_AUDIT_DETAILS,

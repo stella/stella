@@ -22,7 +22,8 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
-import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
+import { GLOBAL_SEARCH_CHAT_COVERAGE } from "@stll/api-contract/search";
+import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -67,7 +68,10 @@ import {
   type SavedSearchCriteria,
   toSearchFilters,
 } from "@/components/saved-searches.logic";
-import { SearchCaseLawGroup } from "@/components/search-case-law-group";
+import {
+  SearchCaseLawGroup,
+  SearchCaseLawResults,
+} from "@/components/search-case-law-group";
 import {
   citationCommandHits,
   citationCommandRoute,
@@ -99,7 +103,6 @@ import {
 } from "@/components/search-dialog-results";
 import {
   canUseAskAIShortcut,
-  caseLawFacetCountMessage,
   createDialogCloseActionQueue,
   getCaseLawHitRoute,
   getChatHitRoute,
@@ -167,7 +170,8 @@ import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -341,7 +345,6 @@ type SearchResultsStatus =
   | { type: "hidden" }
   | { type: "unavailable" }
   | { type: "error" }
-  | { type: "refine" }
   | { type: "loading" }
   | { query: string | null; type: "empty" }
   | { type: "results" };
@@ -379,19 +382,23 @@ const getSearchScopeVisibility = ({
   const registryVisible = scope === "registries" && open && mode === "browse";
   // Recents and actions belong to matters; external scopes skip them.
   const matterScope = scope === "all" || scope === "matters";
+  // External scopes are answered by their own searches, not the matter list.
+  const externalScope = scope === "registries" || scope === "case-law";
+  const caseLawScope = scope === "case-law" && open && mode === "browse";
+  const hasTypedQuery = query.trim().length > 0;
   return {
     activeSearch:
       hasSearchCriteria &&
       !hasUnavailableSelectedType &&
       activeTypeCount > 0 &&
-      scope !== "registries",
-    visibleSearch:
-      hasVisibleSearch && activeTypeCount > 0 && scope !== "registries",
+      !externalScope,
+    visibleSearch: hasVisibleSearch && activeTypeCount > 0 && !externalScope,
     companyQuery: registryVisible || registryGroupActive ? companyQuery : null,
     registryVisible,
     companySearchVisible: registryVisible || registryGroupActive,
     recents: !hasVisibleSearch && matterScope,
-    caseLawPrompt: !hasVisibleSearch && scope === "case-law",
+    caseLawPrompt: caseLawScope && !hasTypedQuery,
+    caseLawResults: caseLawScope && hasTypedQuery,
     showPrompt: query.length === 0 && mode === "browse",
     placeholder: mode === "pick" ? undefined : "",
     // Actions belong to the blank screen and never sit above results.
@@ -415,8 +422,38 @@ type SupplementalPreview =
 const registryExpansionPreview = (expanded: boolean): SupplementalPreview =>
   expanded ? { type: "registry" } : { type: "internal" };
 
-const responsiveFacetVisibility = (showPreview: boolean) =>
-  showPreview ? "xl:block" : "sm:block";
+/** Matter filters do not apply to the Case law scope's corpus search. */
+const responsiveFacetVisibility = (
+  showPreview: boolean,
+  scope: SearchScope,
+) => {
+  if (scope === "case-law") {
+    return undefined;
+  }
+  return showPreview ? "xl:block" : "sm:block";
+};
+
+/** The Case law scope: a prompt until a query is typed, then its section. */
+const SearchCaseLawScope = ({
+  prompt,
+  results,
+  ...props
+}: ComponentProps<typeof SearchCaseLawResults> & {
+  prompt: boolean;
+  results: boolean;
+}) => {
+  const t = useTranslations();
+  if (prompt) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 py-8">
+        <p className="text-muted-foreground text-sm">
+          {t("search.caseLawEmptyState")}
+        </p>
+      </div>
+    );
+  }
+  return results ? <SearchCaseLawResults {...props} /> : null;
+};
 
 const resolveSupplementalPreview = ({
   searchScope,
@@ -443,8 +480,7 @@ const resolveSupplementalPreview = ({
       ? companyHit
       : null,
   displayedHit:
-    showLazySearchGroups &&
-    caseLawExpanded &&
+    (searchScope === "case-law" || (showLazySearchGroups && caseLawExpanded)) &&
     supplementalPreview.type === "case-law" &&
     supplementalPreview.query === query
       ? supplementalPreview.hit
@@ -540,7 +576,6 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError,
   isLoading,
   searchQuery,
-  searchError,
 }: {
   hasActiveSearch: boolean;
   hasQuery: boolean;
@@ -550,7 +585,6 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError: boolean;
   isLoading: boolean;
   searchQuery: string;
-  searchError: unknown;
 }): SearchResultsStatus => {
   if (!hasVisibleSearch) {
     return { type: "hidden" };
@@ -559,12 +593,6 @@ const resolveSearchResultsStatus = ({
     return { type: "unavailable" };
   }
   if (hasActiveSearch && isBlockingSearchError) {
-    if (
-      APIError.is(searchError) &&
-      searchError.code === GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE
-    ) {
-      return { type: "refine" };
-    }
     return { type: "error" };
   }
   if (
@@ -685,6 +713,16 @@ const resolveCitationSearchDisplay = ({
     isLoading: isLoading || hasStaleHits,
   };
 };
+
+/** `shown` gates the pages the same way the first page's counts are gated. */
+const isChatCoveragePartial = (
+  shown: boolean,
+  data: { pages: { chatCoverage: GlobalSearchChatCoverage }[] } | undefined,
+) =>
+  shown &&
+  data?.pages.some(
+    ({ chatCoverage }) => chatCoverage === GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL,
+  ) === true;
 
 export const SearchDialog = ({
   open,
@@ -1020,6 +1058,10 @@ export const SearchDialog = ({
   const editorBuckets = facets ? facets.editor : EMPTY_FACET_BUCKETS;
   const workspaceBuckets = facets ? facets.workspace : EMPTY_FACET_BUCKETS;
   const totalCount = firstPage?.totalCount ?? 0;
+  const chatCoveragePartial = isChatCoveragePartial(
+    firstPage !== undefined,
+    data,
+  );
   const filterTypesKey = filters.types.join("|");
   const filterKindsKey = filters.kinds.join("|");
   const filterMimeTypesKey = filters.mimeTypes.join("|");
@@ -1197,19 +1239,24 @@ export const SearchDialog = ({
         scope: "global",
         threadId: createChatThreadId(),
       };
-      await startNewThreadCommandHandoff({
-        activeOrganizationId: searchRecentsScope.organizationId,
-        context: {
-          allowMissingThread: true,
-          getUserContext,
-          getContextMatterIds: () => [],
-          getSendMode: () => getChatSendMode(threadRef),
-        },
-        files: [],
-        html: toAskAIMessageHtml(queryText),
-        queryClient,
-        threadRef,
-      });
+      readQueryResult(
+        await startNewThreadCommandHandoff({
+          activeOrganizationId: searchRecentsScope.organizationId,
+          context: {
+            allowMissingThread: true,
+            getUserContext,
+            getContextMatterIds: () => [],
+            // No composer here offers a Run on choice; the question runs on
+            // stella.
+            getRunTarget: undefined,
+            getSendMode: () => getChatSendMode(threadRef),
+          },
+          files: [],
+          html: toAskAIMessageHtml(queryText),
+          queryClient,
+          threadRef,
+        }),
+      );
       return threadRef.threadId;
     },
     onError: (error) => {
@@ -1709,6 +1756,15 @@ export const SearchDialog = ({
     !isBlockingSearchError &&
     hasResults;
   const commandHits = [...citationHits, ...(shouldShowResults ? allHits : [])];
+  const caseLawResultsProps = {
+    debouncedQuery,
+    organizationId: searchRecentsScope.organizationId,
+    userId: searchRecentsScope.userId,
+    selectedHitId: supplementalDisplay.caseLawSelectedHitId,
+    onPreview: (hit: GlobalSearchHit) =>
+      setSupplementalPreview({ type: "case-law", query, hit }),
+    onOpen: openSearchResult,
+  };
   const resultsStatus = resolveSearchResultsStatus({
     hasActiveSearch,
     hasQuery,
@@ -1718,7 +1774,6 @@ export const SearchDialog = ({
     isBlockingSearchError,
     isLoading: isLoadingSearchResults,
     searchQuery,
-    searchError,
   });
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
@@ -2117,11 +2172,11 @@ export const SearchDialog = ({
                 ref={contentAreaRef}
                 style={columnsStyle}
               >
-                {/* Matter filters do not apply to external registry searches. */}
+                {/* Matter filters do not apply to external registry or case-law searches. */}
                 <div
                   className={cn(
                     "hidden min-h-0 w-[var(--search-facets-w,14rem)] shrink-0 border-e group-data-[registry-search=true]/search-content:hidden",
-                    responsiveFacetVisibility(showPreview),
+                    responsiveFacetVisibility(showPreview, searchScope),
                   )}
                 >
                   <ScrollArea axis="vertical">
@@ -2143,7 +2198,7 @@ export const SearchDialog = ({
                 <SearchColumnResizeHandle
                   className={cn(
                     "hidden group-data-[registry-search=true]/search-content:hidden",
-                    responsiveFacetVisibility(showPreview),
+                    responsiveFacetVisibility(showPreview, searchScope),
                   )}
                   label={t("search.resizeFilters")}
                   max={SEARCH_FACETS_MAX_WIDTH}
@@ -2187,13 +2242,12 @@ export const SearchDialog = ({
                           />
                         </ScrollArea>
                       </div>
-                      {scopeVisibility.caseLawPrompt && (
-                        <div className="flex flex-1 items-center justify-center px-4 py-8">
-                          <p className="text-muted-foreground text-sm">
-                            {t("search.caseLawEmptyState")}
-                          </p>
-                        </div>
-                      )}
+                      <SearchCaseLawScope
+                        {...caseLawResultsProps}
+                        prompt={scopeVisibility.caseLawPrompt}
+                        query={query}
+                        results={scopeVisibility.caseLawResults}
+                      />
                       {scopeVisibility.actions &&
                         resolvedActions.length > 0 && (
                           <MenuSection title={t("common.actions")}>
@@ -2221,6 +2275,7 @@ export const SearchDialog = ({
                         }}
                       />
                       <SearchResultsContent
+                        chatCoveragePartial={chatCoveragePartial}
                         onRetry={() => {
                           detached(
                             refetchSearch(),
@@ -2257,6 +2312,7 @@ export const SearchDialog = ({
                             summarizeMutation: summarizeSearchMutation,
                             visible: showSearchSummary,
                           }}
+                          chatCoveragePartial={chatCoveragePartial}
                           totalCount={totalCount}
                           virtual={{
                             items: virtualHits,
@@ -2291,6 +2347,8 @@ export const SearchDialog = ({
                       }
                       caseLawEnabled={registryResultsPane.caseLawEnabled}
                       caseLawProps={{
+                        ...caseLawResultsProps,
+                        query,
                         expanded: caseLawExpanded,
                         onExpandedChange: (expanded) => {
                           setCaseLawExpansion({
@@ -2298,26 +2356,6 @@ export const SearchDialog = ({
                             expanded,
                           });
                           setSupplementalPreview({ type: "internal" });
-                        },
-                        query,
-                        debouncedQuery,
-                        organizationId: searchRecentsScope.organizationId,
-                        userId: searchRecentsScope.userId,
-                        selectedHitId: supplementalDisplay.caseLawSelectedHitId,
-                        onPreview: (hit) =>
-                          setSupplementalPreview({
-                            type: "case-law",
-                            query,
-                            hit,
-                          }),
-                        onOpen: openSearchResult,
-                        searchFilters: {
-                          workspaceIds: filters.workspaceIds,
-                          kinds: filters.kinds,
-                          editedByUserIds: filters.editedByUserIds,
-                          mimeTypes: filters.mimeTypes,
-                          updatedFrom,
-                          updatedTo,
                         },
                       }}
                     />
@@ -2414,27 +2452,19 @@ const SearchFacetsBody = ({
       if (!isSearchKindOption(bucket.value)) {
         return [];
       }
-      if (!isAvailableSearchKind(bucket.value, publicLawEnabled)) {
+      // Case law has its own section, answered by the corpus search engine;
+      // the matter search never counts it.
+      if (
+        bucket.value === "case-law" ||
+        !isAvailableSearchKind(bucket.value, publicLawEnabled)
+      ) {
         return [];
       }
-      // Case law stays out of the main list until its group opens, so a
-      // bare number beside a few matter rows reads as a miscount.
-      const caseLawCount =
-        bucket.value === "case-law"
-          ? caseLawFacetCountMessage(bucket.count)
-          : null;
       return [
         {
           value: bucket.value,
           count: bucket.count,
           label: t(KIND_TRANSLATION_KEYS[bucket.value]),
-          ...(caseLawCount
-            ? {
-                countLabel: t(caseLawCount.key, {
-                  count: caseLawCount.count,
-                }),
-              }
-            : {}),
         },
       ];
     }),
@@ -2657,7 +2687,7 @@ const SearchDialogFooter = ({
         <SearchFooterHint translationKey="search.hintNavigate" />
         {mode === "pick" ? (
           <span className="hidden items-center gap-1 sm:inline-flex">
-            <kbd className="border-border bg-muted text-3xs rounded border px-1 py-0.5 leading-none">
+            <kbd className="border-border bg-muted text-3xs rounded-sm border px-1 py-0.5 leading-none">
               ↵
             </kbd>
             {PICK_HINT_LABEL}
@@ -2761,10 +2791,12 @@ const SearchRecentsScreen = ({
 };
 
 const SearchResultsContent = ({
+  chatCoveragePartial,
   children,
   onRetry,
   status,
 }: {
+  chatCoveragePartial: boolean;
   children: ReactElement;
   onRetry: () => void;
   status: SearchResultsStatus;
@@ -2778,14 +2810,6 @@ const SearchResultsContent = ({
         <div className="flex h-full items-center justify-center px-4 py-8">
           <p className="text-muted-foreground text-sm">
             {t("common.comingSoon")}
-          </p>
-        </div>
-      );
-    case "refine":
-      return (
-        <div className="flex h-full items-center justify-center px-4 py-8">
-          <p className="text-muted-foreground text-sm">
-            {t("caseLaw.pagination.refineForMore")}
           </p>
         </div>
       );
@@ -2818,6 +2842,7 @@ const SearchResultsContent = ({
             {status.query === null
               ? t("common.noResults")
               : t("search.noResults", { query: status.query })}
+            {chatCoveragePartial ? ` ${t("search.chatCoveragePartial")}` : null}
           </p>
         </div>
       );
@@ -2851,6 +2876,7 @@ type SearchHitResultsProps = {
     >["summarizeMutation"];
     visible: boolean;
   };
+  chatCoveragePartial: boolean;
   totalCount: number;
   virtual: {
     items: VirtualItem[];
@@ -2861,6 +2887,7 @@ type SearchHitResultsProps = {
 };
 
 const SearchHitResults = ({
+  chatCoveragePartial,
   measureContainer,
   hits,
   indexOffset,
@@ -2875,6 +2902,7 @@ const SearchHitResults = ({
     <div className="px-2 py-2">
       <p className="text-muted-foreground px-2 pb-2 text-xs">
         {t("search.resultCount", { count: totalCount })}
+        {chatCoveragePartial ? ` · ${t("search.chatCoveragePartial")}` : null}
       </p>
       {summary.visible && (
         <SearchSummaryItem

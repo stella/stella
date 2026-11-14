@@ -18,10 +18,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import { requireNoHold } from "@/api/lib/legal-holds/holds";
-import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 type UploadMessageFilesWithRollbackProps = {
   message: PersistableChatMessage;

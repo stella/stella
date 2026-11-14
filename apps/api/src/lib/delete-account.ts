@@ -17,11 +17,13 @@ import {
   deleteChatThreadsAndFileLinks,
   deleteConnectedCredentialsAndOAuthState,
   deleteDesktopEditSessionsAndHandoffs,
+  deleteDesktopRunners,
   deleteFileComparisonUploads,
   deletePdfSigningSessions,
   deletePendingUploads,
   deletePersonalAiMemories,
   deletePersonalBillingRates,
+  deletePersonalRecords,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
   deletePushDevices,
   deleteSearchHistory,
@@ -33,7 +35,7 @@ import {
   revokeOAuthTokensAndGrants,
   selectActiveTaskAssignments,
 } from "@/api/lib/account-deletion-steps";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { runConfirmedTransaction } from "@/api/lib/confirmation-otp";
 import {
@@ -43,11 +45,12 @@ import {
 } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { heldMatterIdsForAccount } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboarding";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
+import { heldMatterIdsForAccount } from "@/api/lib/workspaces/legal-holds/holds";
 
 export { ACCOUNT_DELETION_ERROR_CODE };
 
@@ -278,6 +281,7 @@ export const verifyAndDeleteUser = async (
       const deletionRequestId = createSafeId<"accountDeletionRequest">();
       const s3KeysToDelete: string[] = [];
       let retainedWorkspaceIds: SafeId<"workspace">[] = [];
+      const memberOfOrganizationIds: SafeId<"organization">[] = [];
 
       // The code is consumed inside the deletion transaction, after every
       // lock the deletion needs. A busy matter refuses before the code is
@@ -310,6 +314,7 @@ export const verifyAndDeleteUser = async (
         afterConsume: async (tx) => {
           const { organizationIds, workspaceIds } =
             await collectUserOrganizationAndWorkspaceIds(tx, currentUserId);
+          memberOfOrganizationIds.push(...organizationIds);
 
           // The user row is retained for historical attribution in collaborative
           // records. Account deletion revokes access and clears private profile
@@ -383,6 +388,8 @@ export const verifyAndDeleteUser = async (
           await deletePersonalBillingRates(tx, currentUserId);
           await deleteSearchHistory(tx, currentUserId);
           await deletePushDevices(tx, currentUserId);
+          await deleteDesktopRunners(tx, currentUserId);
+          await deletePersonalRecords(tx, currentUserId);
 
           await recordAccountDeletionRequest({
             tx,
@@ -401,6 +408,11 @@ export const verifyAndDeleteUser = async (
       });
       if (Result.isError(deletion)) {
         throw deletion.error;
+      }
+
+      // The deletion cleared the account's attorney assignments on contacts.
+      for (const organizationId of memberOfOrganizationIds) {
+        announceContactSetChanged(organizationId);
       }
 
       if (s3KeysToDelete.length > 0) {
@@ -434,20 +446,24 @@ const enqueueStorageCleanupOrLog = async (
       deletionRequestId,
     });
 
-    processAccountDeletionCleanupRequest(
-      deletionRequestId,
-      createAccountDeletionCleanupRequestDeps(rootDb),
-    ).catch((cleanupError: unknown) => {
-      captureError(
-        cleanupError,
-        handlerErrorContext("lib.enqueueStorageCleanupOrLog.cleanupError", {
+    detached(
+      async () =>
+        processAccountDeletionCleanupRequest(
           deletionRequestId,
+          createAccountDeletionCleanupRequestDeps(rootDb),
+        ).catch((cleanupError: unknown) => {
+          captureError(
+            cleanupError,
+            handlerErrorContext("lib.enqueueStorageCleanupOrLog.cleanupError", {
+              deletionRequestId,
+            }),
+          );
+          logger.error("account_deletion_cleanup.inline_failed", {
+            "error.type": errorTag(cleanupError),
+            deletionRequestId,
+          });
         }),
-      );
-      logger.error("account_deletion_cleanup.inline_failed", {
-        "error.type": errorTag(cleanupError),
-        deletionRequestId,
-      });
-    });
+      "delete-account.process-account-deletion-cleanup-request",
+    );
   }
 };

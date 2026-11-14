@@ -156,7 +156,7 @@ for (const theme of ["light", "dark"]) {
         scrollbars.evaluateAll((elements) =>
           elements.map((element) => {
             if (!(element instanceof HTMLElement)) {
-              throw new Error("Expected an HTML scroll container");
+              throw new TypeError("Expected an HTML scroll container");
             }
             const style = getComputedStyle(element);
             const track = getComputedStyle(

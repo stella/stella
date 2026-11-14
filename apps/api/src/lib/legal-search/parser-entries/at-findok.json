@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "AT_FINDOK",
   "key": "at-findok",
-  "parserVersion": 12,
+  "parserVersion": 14,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Keep the line breaks of Findok paragraphs, emphasis, superscripts and links as inlines, so sentences either side of a break stay apart."
+    "reason": "Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own."
   }
 }

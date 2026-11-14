@@ -2,11 +2,17 @@ import type { ReadBudget } from "../read-budget-definition";
 
 export default {
   surface: "scheduled-job",
-  pages: 150,
+  reads: { pages: 150 },
+  writes: {
+    pagesPerWrittenRow: 30,
+    ceilingPagesPerRun: 150,
+    reason:
+      "The measured refresh writes its bounded summary and audit rows within the existing 150-page run envelope.",
+  },
   reason:
     "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
   overBudget: {
     reason:
-      "Source ranking reads every court bucket before the top-N cut; per-source top-N court buckets materialized at facet refresh bring it under.",
+      "Coverage ranks every maintained source/court bucket before its top-N cut. At 6,000 courts the canonical population table remains above 150 pages despite zero decision-corpus reads; a bounded top-N court projection maintained by the population owner is the follow-up.",
   },
 } as const satisfies ReadBudget;

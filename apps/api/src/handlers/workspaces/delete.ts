@@ -6,13 +6,13 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import {
   WorkspaceBillingHistoryError,
   WorkspaceStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
+import { executeAuthorizedWorkspaceDeletionWithRoot } from "@/api/lib/workspace-deletion";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const config = {
   contract: "patch",
@@ -39,7 +39,7 @@ export type DeleteWorkspaceHandlerProps = {
 export const deleteWorkspaceHandler = async function* (
   props: DeleteWorkspaceHandlerProps,
 ) {
-  const outcome = await executeAuthorizedWorkspaceDeletion(props);
+  const outcome = await executeAuthorizedWorkspaceDeletionWithRoot(props);
   if (Result.isError(outcome)) {
     if (LegalHoldActiveError.is(outcome.error)) {
       return Result.err(legalHoldRefusal(outcome.error));

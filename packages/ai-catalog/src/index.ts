@@ -185,6 +185,7 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
  */
 const GPT_61_MODEL_IDS = {
   sol: { openai: "gpt-6.1-sol", openrouter: "openai/gpt-6.1-sol" },
+  terra: { openai: "gpt-6.1-terra", openrouter: "openai/gpt-6.1-terra" },
 } as const;
 const GPT_61_OPENAI_MODEL_IDS = Object.values(GPT_61_MODEL_IDS).map(
   ({ openai }) => openai,
@@ -299,6 +300,7 @@ export const BYOK_DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-4-carbon",
     "gemini-4-argon",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
@@ -311,6 +313,7 @@ export const BYOK_MODEL_OPTIONS = {
   anthropic: [
     "claude-sonnet-5-5",
     "claude-sonnet-5",
+    "claude-fable-5-2",
     "claude-fable-5-1",
     "claude-fable-5",
     "claude-opus-5-5",
@@ -336,6 +339,7 @@ export const BYOK_MODEL_OPTIONS = {
     ...GPT_61_OPENROUTER_MODEL_IDS,
     ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
+    "google/gemini-4-carbon",
     "google/gemini-4-argon",
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
@@ -424,6 +428,10 @@ export const RECOMMENDED_CHAT_MODELS = [
  * creator's icon while their routing provider remains available separately.
  */
 export const MODEL_DISPLAY_METADATA = {
+  "gemini-4-carbon": {
+    displayName: "Gemini 4 Carbon",
+    iconProvider: "google",
+  },
   "gemini-4-argon": {
     displayName: "Gemini 4 Argon",
     iconProvider: "google",
@@ -469,14 +477,19 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "anthropic",
     supersededBy: "claude-sonnet-5-5",
   },
+  "claude-fable-5-2": {
+    displayName: "Claude Fable 5.2",
+    iconProvider: "anthropic",
+  },
   "claude-fable-5-1": {
     displayName: "Claude Fable 5.1",
     iconProvider: "anthropic",
+    supersededBy: "claude-fable-5-2",
   },
   "claude-fable-5": {
     displayName: "Claude Fable 5",
     iconProvider: "anthropic",
-    supersededBy: "claude-fable-5-1",
+    supersededBy: "claude-fable-5-2",
   },
   "claude-opus-5-5": {
     displayName: "Claude Opus 5.5",
@@ -520,6 +533,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-6.1 Sol",
     iconProvider: "openai",
   },
+  [GPT_61_MODEL_IDS.terra.openai]: {
+    displayName: "GPT-6.1 Terra",
+    iconProvider: "openai",
+  },
   [GPT_6_MODEL_IDS.astra.openai]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
@@ -543,6 +560,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.terra.openai]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.terra.openai,
   },
   [GPT_56_MODEL_IDS.luna.openai]: {
     displayName: "GPT-5.6 Luna",
@@ -572,6 +590,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-6.1 Sol",
     iconProvider: "openai",
   },
+  [GPT_61_MODEL_IDS.terra.openrouter]: {
+    displayName: "GPT-6.1 Terra",
+    iconProvider: "openai",
+  },
   [GPT_6_MODEL_IDS.astra.openrouter]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
@@ -598,6 +620,11 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.terra.openrouter]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.terra.openrouter,
+  },
+  "google/gemini-4-carbon": {
+    displayName: "Gemini 4 Carbon",
+    iconProvider: "google",
   },
   "google/gemini-4-argon": {
     displayName: "Gemini 4 Argon",
@@ -1031,6 +1058,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "anthropic/claude-haiku-5.5": "supported",
   "us.anthropic.claude-haiku-5-5": "supported",
   "claude-haiku-5-5": "supported",
+  "gemini-4-carbon": "supported",
   "gemini-4-argon": "supported",
   "gemini-3.8-flash": "supported",
   "gemini-3.7-flash": "supported",
@@ -1040,12 +1068,14 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gemini-3.5-flash": "supported",
   "gemini-3.1-flash-lite": "supported",
   "openai/gpt-6.1-sol": "supported",
+  "openai/gpt-6.1-terra": "supported",
   "openai/gpt-6-astra": "supported",
   "openai/gpt-6-sol": "supported",
   "openai/gpt-6-luna": "supported",
   "openai/gpt-5.6-sol": "supported",
   "openai/gpt-5.6-terra": "supported",
   "openai/gpt-5.6-luna": "supported",
+  "google/gemini-4-carbon": "supported",
   "google/gemini-4-argon": "supported",
   "google/gemini-3.8-flash": "supported",
   "google/gemini-3.7-flash": "supported",
@@ -1062,6 +1092,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "openai/gpt-5.5": "supported",
   "openai/gpt-5.4-mini": "supported",
   "gpt-6.1-sol": "supported",
+  "gpt-6.1-terra": "supported",
   "gpt-6-astra": "supported",
   "gpt-6-sol": "supported",
   "gpt-6-luna": "supported",
@@ -1075,6 +1106,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gpt-5.2": "supported",
   "claude-sonnet-5-5": "supported",
   "claude-sonnet-5": "supported",
+  "claude-fable-5-2": "supported",
   "claude-fable-5-1": "supported",
   "claude-fable-5": "supported",
   "claude-opus-5-5": "supported",
@@ -1269,6 +1301,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gemini-3.6-flash": 1_048_576,
   "gemini-3.7-flash": 1_048_576,
   "gemini-3.8-flash": 1_048_576,
+  "gemini-4-carbon": 1_048_576,
   "gemini-4-argon": 1_048_576,
   "gemini-3.1-pro-preview": 1_048_576,
   // OpenAI: GPT-4o family 128K; GPT-5 varies by generation.
@@ -1280,6 +1313,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
   "gpt-6.1-sol": 922_000,
+  "gpt-6.1-terra": 922_000,
   "gpt-6-astra": 922_000,
   "gpt-6-sol": 922_000,
   "gpt-6-luna": 922_000,
@@ -1287,7 +1321,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.6-luna": 922_000,
   "gpt-5.6-terra": 922_000,
   // Anthropic Claude: 200K through Claude 4; Sonnet 5, Sonnet 5.5, Opus 5,
-  // Opus 5.5, and Fable 5.1 expose 1M.
+  // Opus 5.5, Fable 5.1, and Fable 5.2 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
   "claude-sonnet-5": 1_000_000,
@@ -1299,6 +1333,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-5-5": 1_000_000,
   "claude-fable-5": 200_000,
   "claude-fable-5-1": 1_000_000,
+  "claude-fable-5-2": 1_000_000,
   // Mistral: 128K across the offered text/vision models; Large 4 is 512K.
   "mistral-small-latest": 128_000,
   "mistral-large-4": 524_288,
@@ -1307,6 +1342,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "mistral-medium-3-5": 128_000,
   "magistral-small-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-4-carbon": 1_048_576,
   "google/gemini-4-argon": 1_048_576,
   "google/gemini-3.8-flash": 1_048_576,
   "google/gemini-3.7-flash": 1_048_576,
@@ -1321,6 +1357,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
   "openai/gpt-6.1-sol": 922_000,
+  "openai/gpt-6.1-terra": 922_000,
   "openai/gpt-6-astra": 922_000,
   "openai/gpt-6-sol": 922_000,
   "openai/gpt-6-luna": 922_000,

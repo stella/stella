@@ -15,7 +15,7 @@ describe("citation probe candidates", () => {
   });
 
   test("an authority file number joined by non-breaking hyphens is benign", () => {
-    const nb = "\u2011";
+    const nb = String.fromCodePoint(0x20_11);
     expect(
       residual(`č. j. ABCD${nb}123456${nb}12/XY${nb}2020${nb}1234AB`),
     ).toBe(false);
@@ -87,5 +87,25 @@ describe("citation probe candidates", () => {
     expect(residual("sp. zn.XV/2 Gn 45/09")).toBe(false);
     expect(residual("sp. zn. VI/2 Pz 123/07-5")).toBe(true);
     expect(residual("sp. zn. 2 Tdo 123/2007")).toBe(true);
+  });
+
+  test("a Czech anonymization label is benign, a numbered docket is not", () => {
+    expect(residual("č. j. číslo jednací ze dne 1. 2. 2020")).toBe(false);
+    expect(residual("č. j. číslo uvedený v bodě 3.2 rozsudku")).toBe(false);
+    expect(residual("č.j. č. účtu ze dne 3. 4. 2019")).toBe(false);
+    expect(residual("č. j. číslo")).toBe(false);
+    expect(residual("č. j. Číslo jednací ze dne 1. 2. 2020")).toBe(false);
+    expect(residual("č. j. číslo jednací 12 C 345/2020")).toBe(true);
+    expect(residual("č. j. číslo 12 C 345/2020")).toBe(true);
+    expect(residual("č. j. 12 C 345/2020-67")).toBe(true);
+  });
+
+  test("a multi-segment authority file after sp. zn. is benign, a docket is not", () => {
+    expect(residual("sp. zn. IV/12/345/2000/AB zo dňa")).toBe(false);
+    expect(residual("sp. zn. 123/4567/12345/01/Ab-C/12")).toBe(false);
+    expect(residual("sp. zn.: IV/12/345/2000/AB")).toBe(false);
+    expect(residual("sp. zn. 8 C/18/2008")).toBe(true);
+    expect(residual("sp. zn. 36Co/52/53/2023")).toBe(true);
+    expect(residual("sp. zn. 5Sžf/14/2010")).toBe(true);
   });
 });

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
@@ -13,7 +15,11 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -23,7 +29,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   lockWorkspaceLifecycle,
   withAggregateEntityBatch,
-  withAggregateLock,
+  withAggregateFolioCollabRoomBatch,
   withAggregateParentBatch,
 } from "@/api/lib/db/aggregate-lock";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
@@ -39,12 +45,6 @@ import {
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
-import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import {
-  lockLegalHoldOrganization,
-  requireNoHold,
-} from "@/api/lib/legal-holds/holds";
-import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -54,6 +54,12 @@ import {
 } from "@/api/lib/ocr-derivative-pages";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import {
+  lockLegalHoldOrganization,
+  requireNoHold,
+} from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
 
@@ -134,7 +140,7 @@ export const deleteEntitiesHandler = async function* ({
         .from(workspaces)
         .where(eq(workspaces.id, workspaceId))
         .limit(1);
-      if (workspaceRows.at(0)?.status !== "active") {
+      if (!workspaceAcceptsWrites(workspaceRows.at(0)?.status)) {
         return {
           status: "rejected" as const,
           error: new HandlerError({
@@ -148,13 +154,7 @@ export const deleteEntitiesHandler = async function* ({
       // its entity. Follow that order so the cleanup request captures the last
       // committed snapshot pointer without introducing an inverse lock edge.
       const collabRoomCandidates = await tx
-        .select({
-          docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
-          docxCheckpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
-          id: folioCollabRooms.id,
-          yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-          yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-        })
+        .select({ id: folioCollabRooms.id })
         .from(folioCollabRooms)
         .where(
           and(
@@ -164,36 +164,11 @@ export const deleteEntitiesHandler = async function* ({
         )
         .orderBy(asc(folioCollabRooms.id))
         .limit(Math.max(1, deletionEntityIds.length * LIMITS.propertiesCount));
-      for (const room of collabRoomCandidates) {
-        // db-await-in-loop: aggregate room locks acquire in primary-key order.
-        await withAggregateLock({
-          aggregate: "folioCollabRoom",
-          id: { id: room.id, workspaceId },
-          mode: "update",
-          tx,
-        });
-      }
-      const collabRooms =
-        collabRoomCandidates.length === 0
-          ? []
-          : await tx
-              .select({
-                docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
-                docxCheckpointUpdatedAt:
-                  folioCollabRooms.docxCheckpointUpdatedAt,
-                id: folioCollabRooms.id,
-                yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-                yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-              })
-              .from(folioCollabRooms)
-              .where(
-                inArray(
-                  folioCollabRooms.id,
-                  collabRoomCandidates.map(({ id }) => id),
-                ),
-              )
-              .orderBy(asc(folioCollabRooms.id))
-              .limit(collabRoomCandidates.length);
+      const collabRooms = await withAggregateFolioCollabRoomBatch({
+        tx,
+        ids: collabRoomCandidates.map(({ id }) => ({ id, workspaceId })),
+        mode: "update",
+      });
 
       // OCR dispatch takes this same entity fence before changing a run to
       // `running`. The committed entity deletion is the durable withdrawal
@@ -413,13 +388,17 @@ export const deleteEntitiesHandler = async function* ({
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchMaintenance();
   for (const entity of deletedEntities) {
-    provider
-      .removeEntity({ entityId: entity.id, workspaceId })
-      .catch(
-        createErrorCapture(
-          handlerErrorContext("deleteEntitiesHandler.rejection"),
-        ),
-      );
+    detached(
+      async () =>
+        provider
+          .removeEntity({ entityId: entity.id, workspaceId })
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("deleteEntitiesHandler.rejection"),
+            ),
+          ),
+      "entities-delete.remove-entity",
+    );
   }
 
   return Result.ok({});

@@ -37,7 +37,6 @@ import {
   type CheckedFileWrite,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
-import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
@@ -47,6 +46,7 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
 
 import { buildChatThumbnailQuery } from "./backfill-image-thumbnails.helpers";
 

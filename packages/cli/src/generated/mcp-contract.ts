@@ -5,6 +5,7 @@ export const MCP_CAPABILITY_EXECUTORS = {
   write: "write_capability",
 } as const;
 export const MCP_HTTP_PATH = "/mcp/advanced" as const;
+export const MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version" as const;
 export const MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource/mcp/advanced" as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = 71;
@@ -67,8 +68,8 @@ export const MCP_ERROR_CODES = [
   "action_admission_org_state_unreadable",
   "action_admission_lease_lost",
   "action_feature_disabled",
-  "verification_active_limit_reached",
-  "verification_daily_limit_reached",
+  "run_active_limit_reached",
+  "run_daily_limit_reached",
   "validation_error",
   "result_too_large",
   "missing_scope",
@@ -83,17 +84,19 @@ export const MCP_ERROR_CODES = [
   "upstream_unavailable",
   "public_read_timeout",
   "search_index_unavailable",
+  "continuation_expired",
+  "public_read_unfinished",
   "unknown_tool",
   "internal_error",
 ] as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
 export const LEGAL_HOLD_ACTIVE = "legal_hold_active" as const;
-export const VERIFICATION_RUN_CAP_CODES = {
-  active: "verification_active_limit_reached",
-  daily: "verification_daily_limit_reached",
+export const MODEL_RUN_CAP_CODES = {
+  active: "run_active_limit_reached",
+  daily: "run_daily_limit_reached",
 } as const;
-export type VerificationRunCapCode =
-  (typeof VERIFICATION_RUN_CAP_CODES)[keyof typeof VERIFICATION_RUN_CAP_CODES];
+export type ModelRunCapCode =
+  (typeof MODEL_RUN_CAP_CODES)[keyof typeof MODEL_RUN_CAP_CODES];
 export const ACTION_ADMISSION_REFUSALS = {
   action_period_exhausted: {
     status: 403,

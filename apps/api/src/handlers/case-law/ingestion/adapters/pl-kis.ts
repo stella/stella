@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -88,8 +89,8 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -114,6 +115,7 @@ import type {
   StoredRawReparseValue,
   SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
+import { AST_STRUCTURE_DEGRADED } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
@@ -136,6 +138,9 @@ const PL_KIS_HOST_POLICY = {
 } as const;
 
 const LANGUAGE = "pl";
+
+/** The code a document read as one undivided part is reported under. */
+export const PL_KIS_UNDIVIDED_DOCUMENT = "UNDIVIDED_DOCUMENT";
 
 const MIN_REQUEST_INTERVAL_MS = publisherRequestIntervalMs(ADAPTER_KEYS.PL_KIS);
 
@@ -929,6 +934,8 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlKisPublisherRecord = Readonly<Record<PlKisSourceField, unknown>>;
+
 const PL_KIS_SOURCE_FIELDS = {
   ID_INFORMACJI: { disposition: "stored", target: { type: "identity" } },
   KATEGORIA_INFORMACJI: {
@@ -966,23 +973,23 @@ const PL_KIS_SOURCE_FIELDS = {
   DATA_REJESTRACJI: metadataField("registeredAt"),
   KOMENTARZE_BIP: metadataField("bipComments"),
   KOM_BIP_OPIS: metadataField("bipCommentNote"),
-  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: excludedSourceField(
+  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: legacyExcludedSourceField(
     "which of the service's editor groups may see a part of the document; it says nothing about the document",
   ),
   WYNIK_ANALIZY: metadataField("analysisResultId"),
-  [`${TOP_PREFIX}id`]: excludedSourceField(
+  [`${TOP_PREFIX}id`]: legacyExcludedSourceField(
     "the same id ID_INFORMACJI states, which keys the row",
   ),
   [`${TOP_PREFIX}versionId`]: metadataField("versionId"),
-  [`${TOP_PREFIX}nazwa`]: excludedSourceField(
+  [`${TOP_PREFIX}nazwa`]: legacyExcludedSourceField(
     "the category's name, which KATEGORIA_INFORMACJI states",
   ),
   [`${TOP_PREFIX}szablonId`]: metadataField("templateId"),
   [`${TOP_PREFIX}wersjaSzablonuId`]: metadataField("templateVersionId"),
-  [`${TOP_PREFIX}informacjaTytulDto`]: excludedSourceField(
+  [`${TOP_PREFIX}informacjaTytulDto`]: legacyExcludedSourceField(
     "an empty list on every document observed; the title is TEZA",
   ),
-} as const satisfies Record<PlKisSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof PlKisPublisherRecord, SourceFieldDisposition>;
 
 const KNOWN_FIELDS: ReadonlySet<string> = new Set(SOURCE_FIELDS);
 
@@ -1258,6 +1265,20 @@ export const assemblePlKisDecision = async ({
     statutes: provisions.map(({ raw }) => raw),
   };
   const parsed = await readDocument(parseInput, html, pdfBytes);
+  if (parsed?.output.structure.type === "undivided") {
+    // The text is all there, but the reading told none of its parts apart:
+    // the shape a layout it does not know leaves, whatever the category.
+    logger.warn(AST_STRUCTURE_DEGRADED, {
+      parser: ADAPTER_KEYS.PL_KIS,
+      caseNumber,
+      language: LANGUAGE,
+      url: sourceUrl ?? "",
+      codes: PL_KIS_UNDIVIDED_DOCUMENT,
+      role: parsed.output.structure.role ?? "none",
+      category: categoryId ?? categoryLabels[0] ?? "not stated",
+      from: parsed.from,
+    });
+  }
   const documentAst: DocumentAst | EmptyAst =
     parsed?.output.documentAst ?? EMPTY_AST;
 

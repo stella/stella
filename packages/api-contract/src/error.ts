@@ -13,6 +13,7 @@ export const API_VALIDATION_CONSTRAINTS = [
   "required",
   "maxLength",
   "minLength",
+  "maxBytes",
   "invalid",
 ] as const;
 
@@ -23,7 +24,7 @@ export type ApiValidationIssue = {
   /** Dotted path inside the request part, e.g. `name` or `items.0.title`. */
   field: string;
   constraint: ApiValidationConstraint;
-  /** The bound a length constraint was checked against. */
+  /** The bound a length or byte-size constraint was checked against. */
   limit?: number | undefined;
 };
 
@@ -70,9 +71,36 @@ export const MEMBER_REMOVAL_BUSY_CODE = "member_removal_busy" as const;
 export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
   "chat_continuation_rejected" as const;
 
+/** A chat user message with nothing a model can read: no text and no attachment. */
+export const CHAT_MESSAGE_EMPTY_ERROR_CODE = "chat_message_empty" as const;
+
+/**
+ * Why a chat turn was refused before its stream began, for a reason the person
+ * can act on: change the model, the open file or the attachment.
+ */
+export const CHAT_INPUT_REFUSAL_CODE = {
+  activeFileNoText: "chat_active_file_no_text",
+  activeFileTooLarge: "chat_active_file_too_large",
+  agentRunsDisabled: "chat_agent_runs_disabled",
+  attachmentNoText: "chat_attachment_no_text",
+  attachmentUnsupported: "chat_attachment_unsupported",
+  documentUnsupported: "chat_document_unsupported",
+  imageInvalid: "bedrock_image_invalid",
+  imageUnsupported: "image_input_unsupported",
+  toolsUnsupported: "chat_tools_unsupported",
+} as const;
+
+export type ChatInputRefusalCode =
+  (typeof CHAT_INPUT_REFUSAL_CODE)[keyof typeof CHAT_INPUT_REFUSAL_CODE];
+
 /** A chat request whose turn has no execution it may continue: the turn was
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
+
+/** No chat thread of the caller under that id in the requested scope: another
+ *  person's, deleted, or a matter thread asked for without its matter. */
+export const CHAT_THREAD_NOT_FOUND_ERROR_CODE =
+  "chat_thread_not_found" as const;
 
 /**
  * Why the server refused to edit a user message and drop the turns after it.
@@ -103,6 +131,13 @@ export type ChatMessageEditErrorCode =
  * model. Shared so every client can explain it instead of a generic failure.
  */
 export const ENCRYPTED_CONTENT_ERROR_CODE = "encrypted_content" as const;
+
+/**
+ * A stored file has nothing to show: no viewer renders its type and no PDF
+ * rendition exists. The file itself is fine and still downloads, so a client
+ * offers the download instead of a retry.
+ */
+export const PREVIEW_UNAVAILABLE_ERROR_CODE = "preview_unavailable" as const;
 
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;
@@ -139,6 +174,7 @@ export type ApiFileSecurityRejectionDetails = Omit<
  * and the client that branches on it cannot drift apart.
  */
 export const API_VERSION_CONFLICT_ERROR_CODE = "version_conflict" as const;
+export const DOCUMENT_TOO_LARGE_ERROR_CODE = "document_too_large" as const;
 
 /** A document already holds `DOCX_SUGGESTIONS_PENDING_MAX` pending suggestions. */
 export const DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE =

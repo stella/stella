@@ -1,9 +1,9 @@
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useTransition } from "react";
 
 import { Result } from "better-result";
 import { ActivityIndicator } from "react-native";
 
-import { useRevision } from "@/components/changes";
+import { useRevisedLoad } from "@/components/changes";
 import { LoadedTasks } from "@/components/loaded-tasks";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -16,10 +16,9 @@ import { useAppColors } from "@/theme";
  * The signed-in person's open tasks, loaded once, again on every pull to
  * refresh, and afresh after a task is added from the header's "+".
  */
-export const TasksList = ({ source }: { source: AccessTokenSource }) => {
-  const revision = useRevision("tasks");
-  return <TasksLoader key={revision} source={source} />;
-};
+export const TasksList = ({ source }: { source: AccessTokenSource }) => (
+  <TasksLoader source={source} />
+);
 
 const TasksLoader = ({ source }: { source: AccessTokenSource }) => {
   const colors = useAppColors();
@@ -33,7 +32,7 @@ const TasksLoader = ({ source }: { source: AccessTokenSource }) => {
     }
     return { loadedAt: epochMilliseconds(), result };
   };
-  const [load, setLoad] = useState(loadTasks);
+  const [load, setLoad] = useRevisedLoad(loadTasks, ["tasks"]);
   const [refreshing, startRefresh] = useTransition();
   const reload = () => {
     startRefresh(() => {
@@ -45,7 +44,12 @@ const TasksLoader = ({ source }: { source: AccessTokenSource }) => {
     <Suspense
       fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
     >
-      <LoadedTasks load={load} onReload={reload} refreshing={refreshing} />
+      <LoadedTasks
+        load={load}
+        onReload={reload}
+        refreshing={refreshing}
+        source={source}
+      />
     </Suspense>
   );
 };

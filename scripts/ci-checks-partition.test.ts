@@ -31,6 +31,7 @@ import {
   DELEGATED_CHECKS_ENV,
   UNCHANGED_CHECKS_ENV,
 } from "./generated-files-guard";
+import { stepConditionCovers } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -58,6 +59,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // The pool supplies this to every child; it does not alter a
+                // check's command or classification.
+                "CI_COMPARISON_BASE",
                 // Matrix metadata selects a disjoint slice of the same pool;
                 // it does not change the check represented by this step.
                 "CI_CHECK_POOL_PARTITION",
@@ -339,12 +343,9 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
           return true;
         }
         const glob = new Bun.Glob(path);
-        for (const file of tracked) {
-          if (file.startsWith(`${path}/`) || glob.match(file)) {
-            return true;
-          }
-        }
-        return false;
+        return [...tracked].some(
+          (file) => file.startsWith(`${path}/`) || glob.match(file),
+        );
       });
       if (kept.length === lines.length) {
         return command;
@@ -466,6 +467,7 @@ const preparationSteps = new Set([
   "Generate web compiler sources",
   "Download generated sources",
   "Restore generated sources",
+  "Configure flaky-test quarantine",
 ]);
 const prerequisites = new Set([...setupPrerequisites, ...preparationSteps]);
 const partitions = partitionIds.map((id) => v.parse(headJobSchema, jobs[id]));
@@ -501,6 +503,7 @@ const CONTINUATION_PREFIXES = {
   checkout: `\${{ !cancelled() && steps.checkout.outcome == 'success'`,
   install: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'`,
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
+  checkoutInstallPackages: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
   "Changeset present for published package changes": "policy",
@@ -637,6 +640,28 @@ const withPrDepthCheckoutRef = (step: Step): Step => {
   }
   return { ...step, with: { ...inputs, ref: PR_DEPTH_CHECKOUT_REF } };
 };
+// A blobless checkout moved to the shared action that retries it: the same
+// inputs, with the filter now owned by the action. Any other change to the
+// checkout stays significant.
+const withSharedPartialCloneCheckout = (step: Step): Step => {
+  if (usesOf(step) !== "actions/checkout@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  if (inputs?.["filter"] !== "blob:none") {
+    return step;
+  }
+  return {
+    ...step,
+    uses: "stella/.github/actions/partial-clone-checkout@<pinned>",
+    with: Object.fromEntries(
+      Object.entries(inputs).filter(([key]) => key !== "filter"),
+    ),
+  };
+};
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
   "./.github/actions/ci-install",
@@ -764,7 +789,7 @@ const withoutPreparedGeneration = (step: Step): Step => {
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
-  "Instruction references",
+  "Instruction policy",
 ]);
 // Documentation checks retain all prerequisites while widening beyond package scope.
 const documentationScope = (step: Step): Step => {
@@ -934,6 +959,20 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)
     .map(withoutStepId)
+    // The generated-files contract owns this derived-output inventory. Keep
+    // partition migration checks focused on the guard around that inventory.
+    .map((step) =>
+      step.name === "MCP app derived outputs guard" &&
+      typeof step["run"] === "string"
+        ? {
+            ...step,
+            run: step["run"].replace(
+              /outputs=\(\n[\s\S]*?\n\s*\)/u,
+              "outputs=(\n    <generated-output-inventory>\n  )",
+            ),
+          }
+        : step,
+    )
     .map((step) =>
       typeof step["run"] === "string"
         ? { ...step, run: normalizeGuardPathLines(step["run"], trackedFiles) }
@@ -1172,8 +1211,39 @@ const stepFieldsSchema = v.looseObject({
 });
 const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
-const baseSteps = legSteps(baseline, baselineIds).map((step) => {
+// Brings each recorded baseline step up to the current workflow shape.
+const currentBaselineStep = (step: ReturnType<typeof legSteps>[number]) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Test remaining repository scripts" &&
+    isDeepStrictEqual(fields.env, {
+      BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+    })
+  ) {
+    const migrated = { ...step };
+    delete migrated["env"];
+    return migrated;
+  }
+  if (
+    step.name === "Bridge-version guard" &&
+    fields.if?.includes("github.event_name == 'pull_request'") &&
+    (!v.is(v.record(v.string(), v.unknown()), fields.env) ||
+      fields.env["BRIDGE_BASE_SHA"] === undefined)
+  ) {
+    const env = v.is(v.record(v.string(), v.unknown()), fields.env)
+      ? fields.env
+      : {};
+    // The event gate moved to the root-check plan, which selects the guard
+    // only for pull requests and merge groups.
+    const { if: _eventGate, ...unconditional } = step;
+    return {
+      ...unconditional,
+      env: {
+        ...env,
+        BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+      },
+    };
+  }
   if (step.name === "MCP app derived outputs guard") {
     let run = v.parse(v.string(), fields.run);
     if (run.includes("bun scripts/check-mcp-app-outputs.ts\n")) {
@@ -1225,8 +1295,20 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     return { ...step, run };
   }
   if (step.name === "CLI sharded registry and derived runtime guard") {
-    const run = v.parse(v.string(), fields.run);
     const continuation = " \\";
+    // The generated chat tool names joined the guard after the policy file.
+    const policy = "  packages/api-contract/src/mcp-chat-tool-policy.gen.ts";
+    const toolNames = "  packages/api-contract/src/mcp-tool-names.gen.ts";
+    const listed = v.parse(v.string(), fields.run);
+    const run = listed.includes(toolNames)
+      ? listed
+      : listed.replace(
+          `${policy}\n`,
+          () => `${policy}${continuation}\n${toolNames}\n`,
+        );
+    if (run !== listed) {
+      Object.assign(step, { run });
+    }
     const anchor = `  packages/cli/src/generated/registry-snapshot.json${continuation}`;
     const additions = CI_GENERATED_OUTPUTS.cliRegistry
       .filter((output) => !run.includes(`  ${output}${continuation}`))
@@ -1378,7 +1460,8 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
   });
   return Object.assign(step, { run: "bun run check:docs-sources" });
-});
+};
+const baseSteps = legSteps(baseline, baselineIds).map(currentBaselineStep);
 
 test("CI legs normalize only the complete canonical cancellation tail and its permission", () => {
   const guard = { name: "Guard", run: "bun check" };
@@ -1618,6 +1701,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const originalSetup = setupSteps(originalSteps)
       .map(withTaskResultCacheSetup)
       .map(withPrDepthCheckoutRef)
+      .map(withSharedPartialCloneCheckout)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (
@@ -2423,6 +2507,9 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
     if (step.name === "Checkout") {
       continue;
     }
+    if (step.name === "Configure flaky-test quarantine") {
+      continue;
+    }
     if (leg === "ci-checks-rest" && preInstallGuards.has(step.name)) {
       expect(index, preInstallGuards.get(step.name)).toBeLessThan(installIndex);
       expect(step["id"]).toBe(stepIds[step.name]);
@@ -2447,7 +2534,20 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
           ? CONTINUATION_PREFIXES.installPackages
           : CONTINUATION_PREFIXES.install;
     }
-    expect(condition.startsWith(prefix), step.name).toBe(true);
+    const stableStepIds = new Set(
+      steps.slice(0, index).flatMap((earlier) => {
+        const id = earlier["id"];
+        return typeof id === "string" ? [id.toLowerCase()] : [];
+      }),
+    );
+    expect(
+      stepConditionCovers({
+        earlier: `${prefix} }}`,
+        later: condition,
+        stableStepIds,
+      }),
+      step.name,
+    ).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
       const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";

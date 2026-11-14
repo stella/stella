@@ -46,11 +46,17 @@ type CardGeometry = {
 const readGeometry = async (page: Page): Promise<CardGeometry> => {
   await waitForStableGeometry(page, page.locator(CARD));
   return await page.evaluate(
-    ({ bodySelector, barSelector }) => {
+    ({ cardSelector, bodySelector, barSelector }) => {
+      // Align the card's page with the top of the viewport in the same task
+      // that measures it, after fonts and layout have settled.
+      document
+        .querySelector(cardSelector)
+        ?.closest("main")
+        ?.scrollIntoView({ block: "start" });
       const body = document.querySelector(bodySelector);
       const bar = document.querySelector(barSelector);
       if (!(body instanceof HTMLElement) || !(bar instanceof HTMLElement)) {
-        throw new Error("consent card is missing its body or decision bar");
+        throw new TypeError("consent card is missing its body or decision bar");
       }
       const barBox = bar.getBoundingClientRect();
       return {
@@ -70,7 +76,7 @@ const readGeometry = async (page: Page): Promise<CardGeometry> => {
         windowHeight: window.innerHeight,
       };
     },
-    { bodySelector: BODY, barSelector: BAR },
+    { cardSelector: CARD, bodySelector: BODY, barSelector: BAR },
   );
 };
 
@@ -91,8 +97,8 @@ for (const [name, viewport] of Object.entries(VIEWPORTS)) {
       await card.evaluate((element) => {
         element.closest("main")?.scrollIntoView({ block: "start" });
       });
-      await page.locator(`${PERMISSIONS} > summary`).click();
-      await expect(page.locator(PERMISSIONS)).toHaveAttribute("open", "");
+      await page.locator(`${PERMISSIONS} button[aria-expanded]`).click();
+      await expect(page.locator(PERMISSIONS)).toHaveAttribute("data-open", "");
 
       const geometry = await readGeometry(page);
       expect(

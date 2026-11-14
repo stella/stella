@@ -1,14 +1,14 @@
 import { panic } from "better-result";
 
-import type { AiDisclosureContext } from "@stll/api-contract/ai-disclosure";
-import { comparableHeadingTitle } from "@stll/legal-ast/source-contents";
+import type { ReaderAiDisclosureContext } from "@stll/api-contract/ai-disclosure";
+import { headingTitlesNameSamePart } from "@stll/legal-ast/source-contents";
 
 import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
 import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
 
 /** Sections a model wrote over the document, each keyed by the block it starts at. */
 export type ReaderAnalysisOutline = {
-  disclosure: AiDisclosureContext;
+  disclosure: ReaderAiDisclosureContext;
   sections: ReaderBreadcrumbModel;
 };
 
@@ -18,7 +18,7 @@ export type ReaderContentsRow =
       type: "analysis";
       anchorId: string;
       title: string;
-      disclosure: AiDisclosureContext;
+      disclosure: ReaderAiDisclosureContext;
     }
   | {
       type: "headingWithAnalysis";
@@ -26,7 +26,7 @@ export type ReaderContentsRow =
       /** The document's own heading; the model's title never replaces it. */
       title: string;
       analysisTitle: string;
-      disclosure: AiDisclosureContext;
+      disclosure: ReaderAiDisclosureContext;
     };
 
 /** The breadcrumb trail, and whether the document or a model titled it. */
@@ -35,7 +35,7 @@ export type ReaderTrail =
   | {
       type: "analysis";
       segments: readonly ReaderBreadcrumbSegment[];
-      disclosure: AiDisclosureContext;
+      disclosure: ReaderAiDisclosureContext;
     };
 
 export type ReaderContents = {
@@ -59,7 +59,7 @@ type ReaderContentsOptions = {
   analysis: ReaderAnalysisOutline | undefined;
 };
 
-type PlacedSection = { title: string; disclosure: AiDisclosureContext };
+type PlacedSection = { title: string; disclosure: ReaderAiDisclosureContext };
 
 /**
  * The document heading a model's section belongs to, when it has one.
@@ -88,11 +88,10 @@ const sectionHeadingAnchor = ({
   if (headingAnchors.has(anchorId)) {
     return anchorId;
   }
-  const comparable = comparableHeadingTitle(title);
   const at = position.get(anchorId);
   if (at === undefined) {
-    return headings.find(
-      (heading) => comparableHeadingTitle(heading.title) === comparable,
+    return headings.find((heading) =>
+      headingTitlesNameSamePart(heading.title, title),
     )?.anchorId;
   }
   // Headings are in reading order: the one enclosing the section's block and
@@ -104,8 +103,7 @@ const sectionHeadingAnchor = ({
   const next = after === -1 ? undefined : headings.at(after);
   return [after === 0 ? undefined : enclosing, next].find(
     (heading) =>
-      heading !== undefined &&
-      comparableHeadingTitle(heading.title) === comparable,
+      heading !== undefined && headingTitlesNameSamePart(heading.title, title),
   )?.anchorId;
 };
 
@@ -147,7 +145,8 @@ const placedSections = ({
 /**
  * One outline in reading order: the document's headings, always and as
  * written, with the model's sections placed among them by anchor. A section
- * that starts at a heading shares that heading's row.
+ * that starts at a heading shares that heading's row. One titled as that
+ * heading has nothing to add to it, so the row is the heading alone.
  */
 export const readerContents = ({
   anchorOrder,
@@ -165,7 +164,8 @@ export const readerContents = ({
   const rows = headings.headings.map(
     ({ anchorId, title }): ReaderContentsRow => {
       const section = sections.get(anchorId);
-      return section === undefined
+      return section === undefined ||
+        headingTitlesNameSamePart(title, section.title)
         ? { type: "heading", anchorId, title }
         : {
             type: "headingWithAnalysis",

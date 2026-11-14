@@ -24,29 +24,19 @@ import {
   type DatePickerMode,
   DEFAULT_PICKER_TIME,
   formatDateTimeValue,
-  getHourOptions,
-  getMinuteOptions,
-  getTimeFieldNames,
   joinPickerTime,
   localDateFromTimestamp,
   millisecondsUntilNextLocalDate,
   parseDateTimeValue,
   type PickerClock,
-  type PickerTimeOption,
   resolveCalendarViewMonth,
   shiftCalendarDate,
-  splitPickerTime,
 } from "./date-picker-popover.logic";
 import { DirectionalIcon } from "./directional-icon";
 import { Input } from "./input";
 import { Popover, PopoverPopup, PopoverTrigger } from "./popover";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "./select";
+import { TimeField } from "./time-field";
+import { TruncatedText } from "./truncated-text";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities
@@ -870,12 +860,12 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
         }
       >
         {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
-        <span
-          className="min-w-0 flex-1 truncate text-start"
+        <TruncatedText
+          className="flex-1 text-start"
           id={labelledBy ? displayValueId : undefined}
         >
           {displayLabel}
-        </span>
+        </TruncatedText>
         {isOverdue && overdueLabel && (
           <span className="text-destructive text-xs">{overdueLabel}</span>
         )}
@@ -1028,6 +1018,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
 
           {selection.mode === DATE_PICKER_MODE.dateTime && (
             <TimeField
+              className="mt-1 border-t pt-1"
               disabled={value === ""}
               label={labels.time}
               locale={locale}
@@ -1164,96 +1155,6 @@ const PickerHeader = ({
     </div>
   );
 };
-
-// -- Time row (date-time mode) --
-
-/**
- * Hour and minute selects in the locale's own clock and numerals. Inert
- * until a day is picked, since a time alone is not a value.
- */
-const TimeField = ({
-  disabled,
-  label,
-  locale,
-  onChange,
-  time,
-}: {
-  disabled: boolean;
-  label: string;
-  locale: string;
-  onChange: (clock: PickerClock) => void;
-  time: string | null;
-}) => {
-  const labelId = useId();
-  const hourOptions = useMemo(() => getHourOptions(locale), [locale]);
-  const minuteOptions = useMemo(() => getMinuteOptions(locale), [locale]);
-  const fieldNames = useMemo(() => getTimeFieldNames(locale), [locale]);
-  const clock = time === null ? null : splitPickerTime(time);
-
-  return (
-    <div
-      aria-labelledby={labelId}
-      className="mt-1 flex items-center gap-1.5 border-t pt-1"
-      role="group"
-    >
-      <span className="text-foreground-label shrink-0 text-xs" id={labelId}>
-        {label}
-      </span>
-      <TimePartSelect
-        disabled={disabled}
-        label={fieldNames.hour}
-        onChange={(hour) => onChange({ hour, minute: clock?.minute ?? 0 })}
-        options={hourOptions}
-        value={clock?.hour ?? null}
-      />
-      <span aria-hidden="true" className="text-muted-foreground text-xs">
-        :
-      </span>
-      <TimePartSelect
-        disabled={disabled}
-        label={fieldNames.minute}
-        onChange={(minute) => onChange({ hour: clock?.hour ?? 0, minute })}
-        options={minuteOptions}
-        value={clock?.minute ?? null}
-      />
-    </div>
-  );
-};
-
-const TimePartSelect = ({
-  disabled,
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  disabled: boolean;
-  label: string;
-  onChange: (value: number) => void;
-  options: PickerTimeOption[];
-  value: number | null;
-}) => (
-  <Select
-    disabled={disabled}
-    onValueChange={(next) => {
-      if (typeof next === "number") {
-        onChange(next);
-      }
-    }}
-    value={value}
-  >
-    <SelectTrigger aria-label={label} className="min-w-0 flex-1" size="sm">
-      <SelectValue placeholder={"\u2014"} />
-    </SelectTrigger>
-    <SelectPopup>
-      {options.map((option) => (
-        <SelectItem key={option.value} value={option.value}>
-          {option.label}
-        </SelectItem>
-      ))}
-    </SelectPopup>
-  </Select>
-);
 
 // -- Month picker grid (4×3) --
 

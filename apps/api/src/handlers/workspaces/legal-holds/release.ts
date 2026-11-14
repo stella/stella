@@ -4,8 +4,8 @@ import * as v from "valibot";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { releaseLegalHold } from "@/api/lib/legal-holds/lifecycle";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
+import { releaseLegalHold } from "@/api/lib/workspaces/legal-holds/lifecycle";
 
 const releaseMatterLegalHold = createSafeHandler(
   {

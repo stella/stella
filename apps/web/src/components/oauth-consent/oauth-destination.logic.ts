@@ -12,18 +12,24 @@ const isLoopbackHost = (host: string): boolean => {
   );
 };
 
+export const isLoopbackRedirectUri = (redirectUri: string): boolean => {
+  const url = URL.parse(redirectUri);
+  return Boolean(
+    url &&
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    !url.username &&
+    !url.password &&
+    isLoopbackHost(url.host),
+  );
+};
+
 /** Prefer the requested redirect; a client may register both local and hosted destinations. */
 export const classifyOAuthDestination = (
   info: OAuthConsentInfo,
   redirectUri: string | null,
 ): "loopback" | "hosted" => {
   if (redirectUri !== null) {
-    const url = URL.parse(redirectUri);
-    return url &&
-      (url.protocol === "http:" || url.protocol === "https:") &&
-      isLoopbackHost(url.host)
-      ? "loopback"
-      : "hosted";
+    return isLoopbackRedirectUri(redirectUri) ? "loopback" : "hosted";
   }
   return info.redirectTargets.length > 0 &&
     info.redirectTargets.every(isLoopbackHost)

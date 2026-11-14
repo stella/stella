@@ -333,6 +333,7 @@
     "Queue authority": ["**"],
     "Design token docs": [
       "packages/ui/src/styles/theme.css",
+      "packages/brand/src/palette.ts",
       "DESIGN.md",
       "scripts/**",
       "bunfig.toml"
@@ -451,6 +452,7 @@
       "scripts/promoted-release-policy.ts",
       "scripts/changeset-entry.ts",
       ".github/workflows/journey-canary.yml",
+      ".github/workflows/case-law-search-probe.yml",
       ".github/workflows/scheduled-run-alerts.yml",
       ".github/workflows/publish-npm.yml"
     ],
@@ -466,6 +468,7 @@
       "@stll/portable-path",
       "apps/api/src/db-components.ts",
       "apps/api/src/deploy-env-contract.ts",
+      "apps/api/src/bullmq-queue-hosts.ts",
       "scripts/**",
       ".github/workflows/**",
       ".github/actions/setup-playwright/**",
@@ -517,6 +520,7 @@
     "Test promoted release resolution": [
       "@stll/collation",
       "scripts/resolve-promoted-release*",
+      "scripts/offline-check-startup.ts",
       "scripts/promoted-release-policy.ts",
       "scripts/offline-network-preload.ts",
       "apps/landing/src/data/changelog-release-dates.json",
@@ -604,8 +608,26 @@
       ".changeset/**",
       ".github/workflows/autofix.yml"
     ],
-    "Test type-aware autofix": [".github/workflows/autofix.yml", "scripts/**"],
+    "Test type-aware autofix": [
+      ".github/workflows/autofix.yml",
+      "packages/scripts/src/syntax-tree.ts",
+      "scripts/**"
+    ],
     "Test local workflow verification": [".github/workflows/**", "scripts/**"],
+    "Run fork contributor commands": [
+      ".github/workflows/autofix.yml",
+      ".gitmodules",
+      "bun.lock",
+      "package.json",
+      "scripts/autofix-*",
+      "scripts/canonical-base.sh",
+      "scripts/check-tauri-package-alignment.ts",
+      "scripts/fix-tauri-package-alignment.ts",
+      "scripts/fork-contributor-commands.sh",
+      "scripts/generated-conflicts*.ts",
+      "scripts/verify*",
+      "scripts/workflow-steps.ts"
+    ],
     "Typecheck cache contract": [
       ".github/workflows/ci.yml",
       "turbo.json",
@@ -646,7 +668,8 @@
       ".changeset/**",
       ".github/workflows/**",
       "scripts/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "apps/web/e2e/marketing/captures.ts"
     ],
     "Test CLI contract changeset guard": [".changeset/**", "scripts/**"],
     "Test package scaffolder": ["scripts/**"],
@@ -749,6 +772,14 @@
     ],
     "Test write contract inventories": ["**"],
     "Office fixture metadata": ["**"],
+    "Tailwind sources cover class-shipping dependencies": [
+      "apps/**/*.css",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "bun.lock",
+      "scripts/check-tailwind-sources.ts",
+      "scripts/check-tailwind-sources.test.ts"
+    ],
     "Bridge-version guard": [
       "apps/desktop/src-tauri/src/**",
       "apps/desktop/src/shared/rpc.ts",
@@ -759,6 +790,7 @@
     "Test depth repository scripts": ["**"]
   },
   "ci-checks-policy": {
+    "Published package API reports": ["**"],
     "Resolve static check receipts": ["**"],
     "Run policy checks": ["**"],
     "Record static check receipts": ["**"],
@@ -778,6 +810,11 @@
     "Processed-field backlog guard": ["@stll/api"],
     "GitHub API command ownership": ["**"],
     "Tracked file sizes": ["**"],
+    "CI job names": [
+      ".github/workflows/ci.yml",
+      "scripts/check-ci-job-names.test.ts",
+      "scripts/check-ci-job-names.ts"
+    ],
     "CI network step retries and timeouts": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
@@ -790,7 +827,7 @@
     "Guard rollout scope tests": ["**"],
     "Dated waiver lifecycle guards": ["**"],
     "Documentation source policy rule": ["**"],
-    "Instruction references": ["**"],
+    "Instruction policy": ["**"],
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
     "Knip dead-export check (packages/cli)": ["**"],

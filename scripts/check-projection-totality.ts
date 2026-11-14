@@ -20,7 +20,7 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { unregisteredDecisionCopyStores } from "../apps/api/src/lib/case-law/withdrawn-copy-registry.ts";
+import { unregisteredDecisionCopyStores } from "../apps/api/src/lib/case-law/withdrawn-copy-registry-census.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE_ROOT = path.join(REPO_ROOT, "apps/api/src");

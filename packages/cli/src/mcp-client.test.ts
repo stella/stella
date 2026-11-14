@@ -47,6 +47,7 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
           new Response(toolsListBody, {
             headers: {
               "Content-Type": "application/json",
+              "x-stella-api-contract-version": "3",
               "x-stella-scopes": "stella:read stella:search",
               "x-stella-scope-omitted-tools": "save_filled_template",
               "x-stella-feature-omitted-tools":
@@ -67,6 +68,7 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
+        expect(result.value.apiProtocol).toBe("3");
         expect(result.value.grantedScopes).toEqual([
           "stella:read",
           "stella:search",

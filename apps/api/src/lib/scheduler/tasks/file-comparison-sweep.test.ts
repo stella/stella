@@ -39,6 +39,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -243,12 +244,12 @@ describe("comparison sweep replay and runner capture", () => {
         task: SWEEP_FILE_COMPARISON_UPLOADS_TASK,
         schedule: { type: "interval", everyMs: 300_000 },
         nextRunAt: new Date(),
-        lockedBy: "test-lease",
+        ...heldSchedulerLease("test-lease"),
         payload: { cursor: null },
       })
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { lockedBy: "test-lease" },
+        set: heldSchedulerLease("test-lease"),
       });
   });
   afterEach(async () => {

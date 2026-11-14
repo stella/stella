@@ -4,7 +4,7 @@ export default {
   id: "legal-holds",
   capability: "Legal-hold placement, release, and deletion refusal",
   owner: [
-    "apps/api/src/lib/legal-holds/",
+    "apps/api/src/lib/workspaces/legal-holds/",
     "apps/api/src/db/schema/legal-holds.ts",
   ],
   summary:

@@ -126,6 +126,8 @@ requires (request it at `stella auth login --scopes`).
 | document | `stella document save` | documents_write | destructive (needs `--yes` off a TTY) |
 | feedback | `stella feedback prepare` | feedback |  |
 | feedback | `stella feedback submit` | feedback |  |
+| guidance | `stella guidance read` | read | paginated |
+| guidance | `stella guidance search` | search | paginated |
 | invoice | `stella invoice list` | read | paginated |
 | legislation | `stella legislation boe-search` | read | paginated |
 | legislation | `stella legislation history` | read | paginated |
@@ -133,11 +135,11 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation read` | read | paginated; windowed text |
 | legislation | `stella legislation resolve` | law_read |  |
 | legislation | `stella legislation search` | search | paginated |
-| matter | `stella matter add-member` | admin_write |  |
+| matter | `stella matter add-member` | matters_write |  |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
-| matter | `stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
+| matter | `stella matter remove-member` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization create` | organization_create |  |
 | organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
@@ -185,7 +187,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: change
   - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
-  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --performer (people|automations), --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
@@ -201,7 +203,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
-  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified)
+  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified), --detail (full|compact), --passage-query
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law open`
@@ -209,13 +211,13 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --paragraphs
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
-  - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
+  - optional: --max-chars, --page, --full, --text-version, --preferred-language, --query, --resume-after, --section (court_reasoning), --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+  - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --continuation-token, --court, --courts, --category, --docket-registers, --senate, --provision, --has-legal-sentence, --language, --preferred-language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -250,10 +252,10 @@ are omitted here. Input union keys are required unless marked `?`.
   - source: type="versions": document_id:string, base_version_id:string, target_version_ids:string[]; type="previous": document_id:string, target_version_id:string; type="uploads": base_upload_id:string, target_upload_id:string. Example: `--input '{"source":{"type":"versions","document_id":"00000000-0000-4000-8000-000000000000","base_version_id":"00000000-0000-4000-8000-000000000000","target_version_ids":["00000000-0000-4000-8000-000000000000"]}}'`
 - `stella document comparison prepare`
   - `--base.name` — File name to show the user, including the .docx suffix. (string)
-  - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--base.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--base.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
   - `--target.name` — File name to show the user, including the .docx suffix. (string)
-  - `--target.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--target.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--target.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
 - `stella document comparison prepare-from-links`
   - `--base.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
@@ -268,7 +270,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
   - via `--input` only: content
-  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
+  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer|null, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`
   - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
@@ -292,6 +294,11 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--what-happened` — What stella actually did. (string)
   - `--approval-token` — From prepare_feedback; covers only that report. (string)
   - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
+- `stella guidance read`
+  - `--document-id` — Guidance document id, as search_guidance returns it in documentId (string)
+- `stella guidance search`
+  - `--query` — Words to find in the guidance title or text (string)
+  - optional: --authority, --jurisdiction, --kind (methodology|recommendation|opinion|faq|guideline|position|statement|inspection_report|annual_report|other), --date-from, --date-to
 - `stella invoice list`
   - optional: --matter-id, --invoice-id
 - `stella legislation boe-search`
@@ -306,14 +313,14 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --language, --as-of
 - `stella legislation resolve`
   - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--section` — Section number, with optional §, e.g. 1729 or § 5a. (string)
+  - `--section` — Section or article, e.g. 1729, § 5a or čl. 38. (string)
   - optional: --as-of
   - via `--input` only: source
   - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
   - `--query` — Search query (string)
   - `--country` — Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of
+  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of, --continuation-token
 - `stella matter add-member`
   - `--matter-id` — Matter ID (string)
   - `--user-id` — Existing organization member ID (string)
@@ -417,8 +424,8 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 451
-capability commands from the server's capability catalog: every safe handler
+Beyond the curated commands above, the CLI generates capability commands
+from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
@@ -441,7 +448,7 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `contacts`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `conflict-checks`, `contacts`, `data-exports`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search`, `search-history`, `seller-profiles`, `sharepoint`, `signals`, `skills`, `soft-law`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.

@@ -223,3 +223,18 @@ usage_provider_webhook_events.result         text         not null          usag
 usage_provider_webhook_events.error_message  text         null              usage.ts:1120
 usage_provider_webhook_events.replay_audit   jsonb        null              usage.ts:1122  Ordered replay attempts survive redaction; ignored attempts remain eligible.
 ```
+
+## hosted_customer_erasures · `hostedCustomerErasures` · usage.ts:1176 · rls
+
+Reference-free provider deletion intents which survive the organization cascade.
+
+```text
+hosted_customer_erasures.id                     uuid         pk,default,not null  usage.ts:1179
+hosted_customer_erasures.external_customer_ref  text         unique,not null      usage.ts:1180
+hosted_customer_erasures.status                 text         default,not null     usage.ts:1181
+hosted_customer_erasures.attempts               integer      default,not null     usage.ts:1185
+hosted_customer_erasures.next_attempt_at        timestamptz  default,not null     usage.ts:1186
+hosted_customer_erasures.last_error_code        varchar      null                 usage.ts:1187
+hosted_customer_erasures.created_at             timestamptz  default,not null     usage.ts:1188
+hosted_customer_erasures.updated_at             timestamptz  default,not null     usage.ts:1189
+```

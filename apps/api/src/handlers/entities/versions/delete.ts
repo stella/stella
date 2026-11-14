@@ -15,7 +15,11 @@ import {
   pdfSigningSessions,
   searchDocuments,
 } from "@/api/db/schema";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -24,8 +28,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { requireNoHold } from "@/api/lib/legal-holds/holds";
-import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -35,6 +37,8 @@ import {
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const paramsSchema = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -470,12 +474,16 @@ export const deleteEntityVersionHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([params.entityId]).catch(
-    createErrorCapture(
-      handlerErrorContext(
-        "deleteEntityVersionHandler.flushEntitySearchRepairs",
+  detached(
+    async () =>
+      flushEntitySearchRepairs([params.entityId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteEntityVersionHandler.flushEntitySearchRepairs",
+          ),
+        ),
       ),
-    ),
+    "versions-delete.flush-entity-search-repairs",
   );
 
   const promotedVersionId = txOutcome.promotedVersionId;

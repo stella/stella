@@ -19,6 +19,7 @@ import type {
   ConnectConnectorDecision,
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
@@ -41,6 +42,7 @@ import type {
   AskUserOutput,
   ChatUITools,
   PersistedChatMessage,
+  PlaybookSaveTarget,
 } from "@/components/chat/chat-ui-tools";
 import {
   consumePlaybookSaveToolCalls,
@@ -50,6 +52,7 @@ import {
   isChatClientRequestActive,
   isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
+  openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -65,7 +68,6 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDownloadFileName,
   buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
   type CreateDocumentDraft,
@@ -103,7 +105,10 @@ import {
   sendThreadChatMessage,
   sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
-import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
+import {
+  resendLatestChatMessage,
+  showStoredChatThread,
+} from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -127,6 +132,7 @@ import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-ch
 import {
   followReconciledPlaybookSave,
   playbookPaneReaction,
+  playbookPaneState,
   reconcilePlaybookSaveToolCalls,
 } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
@@ -245,7 +251,7 @@ type OpenCreateDocumentDraftOptions = {
 };
 
 type FollowPlaybookSaveOptions = {
-  playbookId: string;
+  saved: PlaybookSaveTarget;
   /** The thread pane that was current when the save was reconciled. */
   paneTabId: string;
 };
@@ -385,6 +391,9 @@ export const useChatSession = ({
     status,
     stop: stopState,
     turnAbandoned,
+    computerWait,
+    turnSentAt,
+    turnsStarted,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
@@ -901,7 +910,8 @@ export const useChatSession = ({
         return;
       }
 
-      await chat.reload(
+      await resendLatestChatMessage(
+        chat,
         sendMode === undefined ? undefined : { body: { sendMode } },
       );
     },
@@ -1311,23 +1321,25 @@ export const useChatSession = ({
    * save that finishes after the page moved to another thread is dropped.
    */
   const followPlaybookSave = useLatestCallback(
-    ({ playbookId, paneTabId }: FollowPlaybookSaveOptions) => {
+    ({ saved, paneTabId }: FollowPlaybookSaveOptions) => {
       if (paneTabId !== playbookPaneTabId) {
         return;
       }
+      const { playbookId } = saved;
       const inspector = useInspectorTabsStore.getState();
       const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
       const reaction = playbookPaneReaction({
         mode: playbookPane,
         isMobile,
         openedThisSession: openedPlaybookPaneIdsRef.current.has(paneTabId),
-        shownPlaybookId:
+        pane: playbookPaneState(
           tab?.type === "view" &&
-          tab.viewType === PLAYBOOK_DRAFT_VIEW &&
-          isPlaybookDraftViewPayload(tab.payload)
-            ? tab.payload.playbookId
+            tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+            isPlaybookDraftViewPayload(tab.payload)
+            ? tab.payload
             : null,
-        savedPlaybookId: playbookId,
+        ),
+        saved,
       });
       switch (reaction) {
         case "none":
@@ -1373,7 +1385,7 @@ export const useChatSession = ({
       return;
     }
     const paneTabId = playbookPaneTabId;
-    if (reconciliation.playbookId !== null) {
+    if (reconciliation.target?.source === "live") {
       playbookSaveSequenceRef.current += 1;
     }
     const sequence = playbookSaveSequenceRef.current;
@@ -1384,7 +1396,7 @@ export const useChatSession = ({
         isCurrent: () =>
           seededChatRef.current === requestedChat &&
           playbookSaveSequenceRef.current === sequence,
-        follow: (playbookId) => followPlaybookSave({ playbookId, paneTabId }),
+        follow: (saved) => followPlaybookSave({ saved, paneTabId }),
       }),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
@@ -1726,6 +1738,12 @@ export const useChatSession = ({
   // ended: TanStack can report a turn ready while it still loads, and a send
   // then would be refused as busy with no later turn end to retry it on.
   const queueTurnRunning = isGenerating || clientLoading;
+  // A turn paused on the member holds the queue until the wait is over.
+  const turnAwaitsMember =
+    openMemberWaitKeys({
+      localRunQuestion: snapshot.localRunQuestion,
+      messages,
+    }).length > 0;
   useExternalSyncEffect(() => {
     applySendQueueEvent({
       type: "generation-status-synced",
@@ -1800,6 +1818,7 @@ export const useChatSession = ({
       type: "turn-boundary-checked",
       isGenerating: queueTurnRunning,
       status,
+      awaitingMember: turnAwaitsMember,
     });
     if (!dispatched) {
       return;
@@ -1823,6 +1842,7 @@ export const useChatSession = ({
     // matching the original effect's re-run cadence 1:1.
     queuedMessages,
     status,
+    turnAwaitsMember,
   ]);
 
   return {
@@ -1844,7 +1864,12 @@ export const useChatSession = ({
     stop,
     leave,
     isGenerating,
+    /** A stop was asked for and the turn has not ended yet. */
+    stopPending: stopState.status === "pending",
     turnAbandoned,
+    computerWait,
+    turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
@@ -1871,5 +1896,7 @@ export const useChatSession = ({
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
+    localRunQuestion: snapshot.localRunQuestion,
+    answerLocalRunQuestion: chat.answerLocalRunQuestion,
   };
 };

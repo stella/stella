@@ -1,12 +1,19 @@
 import type { Page, Request, Response, Route } from "@playwright/test";
 import { panic } from "better-result";
 
+import { toSafeId } from "@stll/api-contract/safe-id";
+
 import { apiStatus, apiUploadDocx } from "../helpers/api";
+import { apiJson, respond } from "../helpers/route-mock";
 import {
   isNon2xxStatus,
   networkRequestLabel,
 } from "../helpers/scenario-diagnostics";
 import { expect, test } from "../helpers/test";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -64,7 +71,7 @@ const buildMultiPagePdf = (): Buffer => {
 };
 
 const currentDesktop = {
-  type: "current",
+  type: "current" as const,
   desktop: {
     version: "1.0.0",
     protocol: 1,
@@ -83,13 +90,16 @@ const holdHandoffs = async (page: Page) => {
 };
 
 const releaseHandoff = async (route: Route) => {
-  await route.fulfill({
-    json: {
+  await respond(
+    route,
+    apiJson("v1/entities/:workspaceId/pdf-signing-handoffs", "post", {
       deepLinkUrl: "stella://pdf-sign/open?handoff=e2e",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      sessionId: "90123344-5566-7788-9900-aabbccddeeff",
-    },
-  });
+      sessionId: toSafeId<"pdfSigningSession">(
+        "90123344-5566-7788-9900-aabbccddeeff",
+      ),
+    }),
+  );
 };
 
 const viewerSignControl = (page: Page) =>
@@ -163,13 +173,16 @@ test.describe("PDF save and sign on the document route", () => {
     const { cookies } = await request.storageState();
     await page.context().addCookies(cookies);
     await page.route("**/v1/desktop/presence", async (route) => {
-      await route.fulfill({ json: currentDesktop });
+      await respond(
+        route,
+        apiJson("v1/desktop/presence", "get", currentDesktop),
+      );
     });
     await expect
       .poll(
         async () =>
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        { timeout: 10_000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
       )
       .toBe(200);
     await page.goto(
@@ -177,10 +190,10 @@ test.describe("PDF save and sign on the document route", () => {
       { waitUntil: "domcontentloaded" },
     );
     await expect(page.locator("[data-text-layer]").first()).toBeVisible({
-      timeout: 45_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
     });
     await expect(viewerSignControl(page)).toBeVisible({
-      timeout: 45_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
     });
     return { originalFieldId: uploaded.fieldId };
   };
@@ -249,7 +262,7 @@ test.describe("PDF save and sign on the document route", () => {
     await expect(page).not.toHaveURL(
       new RegExp(`field=${originalFieldId}(?:&|$)`, "u"),
     );
-    await page.getByRole("button", { name: "Version history" }).click();
+    await page.getByRole("tab", { name: "Version history" }).click();
     await expect(
       page.getByRole("button", { name: /v2\s+Current/u }),
     ).toBeVisible();
@@ -273,7 +286,7 @@ test.describe("PDF save and sign on the document route", () => {
     await placeAndConfirm(page);
     await expect.poll(() => handoffs.routes.length).toBe(1);
 
-    await page.getByRole("button", { name: "Version history" }).click();
+    await page.getByRole("tab", { name: "Version history" }).click();
     await page.getByRole("button", { name: "v1" }).click();
     await expect(page).toHaveURL(
       new RegExp(`field=${originalFieldId}(?:&|$)`, "u"),

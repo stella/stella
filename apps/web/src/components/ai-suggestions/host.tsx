@@ -50,6 +50,7 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
@@ -196,6 +197,8 @@ type PromptBarProps = {
    * floating control on top of the bar.
    */
   onStop?: () => void;
+  /** See `ChatComposerActionButton`'s `stopping`. */
+  stopping?: boolean;
   /**
    * Offered after a user-initiated stop: while provided AND the
    * composer is empty, the send arrow becomes a retry button that
@@ -275,8 +278,12 @@ type PromptBarProps = {
    * Only meaningful together with `attachmentsEnabled` (the (+) menu
    * renders inside that block). The Skills/Context submenus are wired to
    * this bar's own editor, so their props omit `editor` (supplied here).
+   *
+   * `models` is required: a bar that starts or continues a thread states its
+   * model menu (with where its turns run), or `null` when the surface pins
+   * the model, so none can drop the Run on choice by leaving a prop out.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * The (+) menu's leading "New chat" row: the same action the dock's
    * new-chat button carries. `null` hides the row (nothing to leave yet).
@@ -537,6 +544,7 @@ export const PromptBar = (props: PromptBarProps) => {
     presets,
     threadHasMessages = false,
     onStop,
+    stopping = false,
     onRetry,
     editorController,
     emptyPlaceholder,
@@ -914,7 +922,7 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">{t("chat.thinking")}</span>
+            <TruncatedText>{t("chat.thinking")}</TruncatedText>
           </div>
         )}
         {isEmpty && !busy && isSendBlocked && (
@@ -929,11 +937,11 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">
+            <TruncatedText>
               {sendDisabledReason === "editor-loading"
                 ? t("chat.editorLoading")
                 : t("folio.savingDocument")}
-            </span>
+            </TruncatedText>
           </div>
         )}
         {isEmpty &&
@@ -982,6 +990,7 @@ export const PromptBar = (props: PromptBarProps) => {
                   detached(submitDraft(), "ai-suggestions-host.submit-draft");
                 }}
                 onStop={onStop}
+                stopping={stopping}
               />
             </ComposerControlSlot>
           }
@@ -1111,46 +1120,48 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >
-      <button
-        type="button"
-        className="text-muted-foreground text-2xs flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-start"
-        onClick={() => onFocus(suggestion.id)}
+      <Button
         aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
+        className="flex w-full"
+        onClick={() => onFocus(suggestion.id)}
+        variant="plain"
       >
-        {display ? (
-          <SuggestionDisplayBadges display={display} />
-        ) : (
-          <>
-            <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                SEVERITY_DOT_CLASS[suggestion.severity],
-              )}
-              aria-hidden="true"
-            />
-            <span className="text-foreground font-medium">
-              {suggestion.topic}
+        <span className="text-muted-foreground text-2xs flex min-w-0 flex-1 items-center gap-1.5">
+          {display ? (
+            <SuggestionDisplayBadges display={display} />
+          ) : (
+            <>
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  SEVERITY_DOT_CLASS[suggestion.severity],
+                )}
+                aria-hidden="true"
+              />
+              <span className="text-foreground font-medium">
+                {suggestion.topic}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
+            </>
+          )}
+          {suggestion.status === "stale" && (
+            <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("common.stale")}
             </span>
-            <span aria-hidden="true">·</span>
-            <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
-          </>
-        )}
-        {suggestion.status === "stale" && (
-          <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("common.stale")}
-          </span>
-        )}
-        {suggestion.status === "accepted" && (
-          <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.accepted")}
-          </span>
-        )}
-        {suggestion.status === "rejected" && (
-          <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.rejected")}
-          </span>
-        )}
-      </button>
+          )}
+          {suggestion.status === "accepted" && (
+            <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.accepted")}
+            </span>
+          )}
+          {suggestion.status === "rejected" && (
+            <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.rejected")}
+            </span>
+          )}
+        </span>
+      </Button>
 
       {display ? (
         <>
@@ -1289,7 +1300,7 @@ const ValueKindChip = ({ valueKind }: { valueKind: string }) => {
   return (
     <span className="text-foreground inline-flex min-w-0 items-center gap-1 font-medium">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };

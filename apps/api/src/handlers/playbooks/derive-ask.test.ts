@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import type {
   Response as OpenAIResponse,
   ResponseStreamEvent,
@@ -11,6 +11,8 @@ import { createTestState } from "@stll/test-state";
 import { env } from "@/api/env";
 import {
   computeRulesHash,
+  DERIVE_CLAUSE_ASK_SYSTEM_PROMPT,
+  DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT,
   deriveAutoAsks,
 } from "@/api/handlers/playbooks/derive-ask";
 import type {
@@ -29,6 +31,9 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -60,6 +65,42 @@ const container = (position: TierStandardPosition): PlaybookPositions => ({
   version: 3,
   items: [position],
 });
+
+const presenceCheck = {
+  kind: "presence",
+  expectation: "required",
+} as const satisfies TierStandardPosition["check"];
+
+const constraintCheck = {
+  kind: "constraint",
+  condition: {
+    type: "group",
+    combinator: "and",
+    children: [
+      {
+        type: "compare",
+        left: {
+          type: "property",
+          propertyId: "11111111-1111-4111-8111-111111111111",
+        },
+        op: "lte",
+        right: { type: "literal", value: 30 },
+      },
+    ],
+  },
+} as const satisfies TierStandardPosition["check"];
+
+const unexpectedCall = async (): Promise<never> =>
+  await Promise.reject(new Error("generator must not be called"));
+
+const answeringClause =
+  (question: string): DeriveAskGenerate =>
+  async () => ({ question, contentType: "text" });
+
+const storedAsk = (result: PlaybookPositions) => {
+  const [item] = result.items;
+  return item?.mode === "graded" ? item.ask : null;
+};
 
 const deps = {
   admitModelAction: testModelActionAdmitter(toSafeId<"organization">("org_1")),
@@ -96,6 +137,107 @@ describe("computeRulesHash — stability", () => {
       check: { kind: "presence", expectation: "required" },
     });
     expect(computeRulesHash(withCheck)).not.toBe(computeRulesHash(graded()));
+  });
+});
+
+describe("deriveAutoAsks — the check decides the shape", () => {
+  test.each([
+    ["no check", undefined],
+    ["a presence check", presenceCheck],
+  ])("%s stores a text ask from the clause prompt", async (_label, check) => {
+    const systems: string[] = [];
+    const position = graded(check === undefined ? {} : { check });
+
+    const result = await deriveAutoAsks(container(position), {
+      ...deps,
+      // The check decides the type, so a model that picks `int` cannot narrow it.
+      generate: async ({ system }) => {
+        systems.push(system);
+        return {
+          question: "What does the contract say about the law?",
+          contentType: "int",
+        };
+      },
+    });
+
+    expect(systems).toEqual([DERIVE_CLAUSE_ASK_SYSTEM_PROMPT]);
+    expect(storedAsk(result)).toEqual({
+      mode: "auto",
+      derived: {
+        question: "What does the contract say about the law?",
+        content: textContent,
+        rulesHash: computeRulesHash(position),
+      },
+    });
+  });
+
+  test.each(["int", "date", "text"] as const)(
+    "a constraint check stores the %s type the generator chose, from the constraint prompt",
+    async (contentType) => {
+      const systems: string[] = [];
+      const position = graded({ check: constraintCheck });
+
+      const result = await deriveAutoAsks(container(position), {
+        ...deps,
+        generate: async ({ system }) => {
+          systems.push(system);
+          return { question: "How many days?", contentType };
+        },
+      });
+
+      expect(systems).toEqual([DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT]);
+      expect(storedAsk(result)).toEqual({
+        mode: "auto",
+        derived: {
+          question: "How many days?",
+          content: { version: 1, type: contentType },
+          rulesHash: computeRulesHash(position),
+        },
+      });
+    },
+  );
+
+  test("the two prompts differ, and only the clause prompt forbids a single value", () => {
+    expect(DERIVE_CLAUSE_ASK_SYSTEM_PROMPT).toContain(
+      "every term the rules cover",
+    );
+    expect(DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT).not.toContain(
+      "every term the rules cover",
+    );
+  });
+
+  test("a stored ask is replaced only when a grading input changes", async () => {
+    const position = graded();
+    const narrow = graded({
+      ask: {
+        mode: "auto",
+        derived: {
+          question: "How many days of notice?",
+          content: { version: 1, type: "int" },
+          rulesHash: computeRulesHash(position),
+        },
+      },
+    });
+
+    const unchanged = await deriveAutoAsks(container(narrow), {
+      ...deps,
+      generate: unexpectedCall,
+    });
+    expect(storedAsk(unchanged)).toEqual(narrow.ask);
+
+    const edited = { ...narrow, issue: "Governing law and forum" };
+    const rederived = await deriveAutoAsks(container(edited), {
+      ...deps,
+      generate: answeringClause("What does the contract say?"),
+    });
+    expect(storedAsk(rederived)).toEqual({
+      mode: "auto",
+      derived: {
+        question: "What does the contract say?",
+        content: textContent,
+        rulesHash: computeRulesHash(edited),
+      },
+    });
   });
 });
 
@@ -173,34 +315,51 @@ describe("deriveAutoAsks — save resilience", () => {
         response: providerResponse,
       },
     ] satisfies ResponseStreamEvent[];
-    const requests: string[] = [];
+    const requests: { model: string; outputProperties: string[] }[] = [];
     const analytics = installRecordingAnalytics();
     const logs = installRecordingLogger();
-    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (
-          input: Parameters<typeof globalThis.fetch>[0],
-          init?: RequestInit,
-        ) => {
-          const request = effectiveRequest(input, init);
-          expect(new URL(request.url).pathname).toBe("/v1/responses");
-          const body = v.parse(
-            v.object({ model: v.string(), stream: v.literal(true) }),
-            await request.json(),
-          );
-          requests.push(body.model);
-          return new Response(
-            providerEvents
-              .map((event) => `data: ${JSON.stringify(event)}\n\n`)
-              .join(""),
-            {
-              headers: { "content-type": "text/event-stream" },
-            },
-          );
-        },
-        { preconnect: globalThis.fetch.preconnect },
+    const fetchSpy = Object.assign(
+      mock(
+        Object.assign(
+          async (
+            input: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ) => {
+            const request = effectiveRequest(input, init);
+            expect(new URL(request.url).pathname).toBe("/v1/responses");
+            const body = v.parse(
+              v.object({
+                model: v.string(),
+                stream: v.literal(true),
+                text: v.object({
+                  format: v.object({
+                    schema: v.object({
+                      properties: v.record(v.string(), v.unknown()),
+                    }),
+                  }),
+                }),
+              }),
+              await request.json(),
+            );
+            requests.push({
+              model: body.model,
+              outputProperties: Object.keys(body.text.format.schema.properties),
+            });
+            return new Response(
+              providerEvents
+                .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+                .join(""),
+              {
+                headers: { "content-type": "text/event-stream" },
+              },
+            );
+          },
+          { preconnect: globalThis.fetch.preconnect },
+        ),
       ),
+      { preconnect: globalThis.fetch.preconnect },
     );
+    testFetchState.set(fetchSpy);
     clearByokAdapterCache();
     try {
       const position = graded();
@@ -209,7 +368,9 @@ describe("deriveAutoAsks — save resilience", () => {
         orgAIConfig,
       });
 
-      expect(requests).toEqual([pdfModelId]);
+      expect(requests).toEqual([
+        { model: pdfModelId, outputProperties: ["question", "contentType"] },
+      ]);
       expect(analytics.exceptions()).toEqual([]);
       expect(result.items.at(0)).toEqual({
         ...position,
@@ -223,7 +384,7 @@ describe("deriveAutoAsks — save resilience", () => {
         },
       });
     } finally {
-      fetchSpy.mockRestore();
+      testFetchState.restore();
       clearByokAdapterCache();
       logs.restore();
       analytics.restore();
@@ -231,10 +392,7 @@ describe("deriveAutoAsks — save resilience", () => {
   });
 
   test("a successful derivation stores the derived ask with its rulesHash", async () => {
-    const generate: DeriveAskGenerate = async () => ({
-      question: "What law governs the agreement?",
-      contentType: "text",
-    });
+    const generate = answeringClause("What law governs the agreement?");
 
     const position = graded();
     const result = await deriveAutoAsks(container(position), {

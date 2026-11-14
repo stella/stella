@@ -31,6 +31,10 @@ export const USER_SESSION_CREDENTIAL_ISSUERS = {
   agentRun: { disposition: "refused", owner: "mcp/agent-run-token" },
   agentDelegation: { disposition: "refused", owner: "agent-auth" },
   realtime: { disposition: "refused", owner: "sse" },
+  timerActivity: {
+    disposition: "refused",
+    owner: "push/timer-activity-devices",
+  },
 } as const satisfies Record<
   string,
   (

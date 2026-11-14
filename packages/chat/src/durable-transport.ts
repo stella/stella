@@ -110,7 +110,7 @@ const terminalChatResponse = ({
   onTranscript();
   onReconnectChange(false);
   return new Response(
-    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts === undefined ? {} : { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } }) })}\n\n`,
+    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts !== undefined ? { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } } : {}) })}\n\n`,
     { headers: { "Content-Type": "text/event-stream" } },
   );
 };
@@ -328,6 +328,11 @@ export const createDurableChatTransport = <TMessages extends UIMessage[]>({
           return response;
         });
         if (Result.isOk(result) && result.value !== undefined) {
+          // The outage is over once the server answered for the run. The
+          // window bounds one outage, so a later drop gets its own, however
+          // long the turn stays silent in between; the backoff keeps growing
+          // until an event arrives, which bounds a stream that only flaps.
+          reconnectStartedAt = undefined;
           return result.value;
         }
         if (

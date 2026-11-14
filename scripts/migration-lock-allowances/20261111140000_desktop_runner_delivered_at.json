@@ -1,0 +1,4 @@
+{
+  "add-column": "Two nullable columns without defaults on desktop_runner_runs, catalog-only changes that rewrite no rows, under 1s lock_timeout and 10s statement_timeout.",
+  "add-constraint": "The lost-reason check on desktop_runner_runs and the widened connection check on desktop_runners validate tables of a handful of rows per member (invitation-only runner sockets, pruned ended runs) within the 10s statement_timeout; every existing row holds a NULL lost reason and an already-allowed connection, and ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout."
+}

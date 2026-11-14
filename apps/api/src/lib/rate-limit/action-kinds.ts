@@ -41,7 +41,9 @@ const MODEL_BACKGROUND = {
 } as const satisfies ActionKindDefinition;
 
 export const ACTION_KINDS = {
+  "billing.activity-drafts": MODEL_ACTION,
   "dictation.transcribe": MODEL_ACTION,
+  "dictation.cleanup": MODEL_ACTION,
   "chat.send": MODEL_ACTION,
   "chat.generate-thread-title": MODEL_ACTION,
   "chat.improve-prompt": MODEL_ACTION,
@@ -63,15 +65,18 @@ export const ACTION_KINDS = {
   "templates.fill": MODEL_ACTION,
   "skills.rewrite-resource": MODEL_ACTION,
   "skills.generate-draft": MODEL_ACTION,
+  "skills.draft-from-chat": MODEL_ACTION,
   "skills.propose-from-comments": MODEL_ACTION,
   "time-entries.polish-narrative": MODEL_ACTION,
-  "desktop-time-entries.narrative": MODEL_ACTION,
   "entities.suggest-placements": MODEL_ACTION,
   "versions.summarize": MODEL_ACTION,
   "properties.suggest-prompt": MODEL_ACTION,
   "properties.preview": MODEL_ACTION,
   "search.refine": MODEL_ACTION,
   "search.summarize": MODEL_ACTION,
+  "email.summarize": MODEL_ACTION,
+  "email.draft-reply": MODEL_ACTION,
+  "email.ask": MODEL_ACTION,
   "playbooks.derive-ask": MODEL_ACTION,
   "case-law.analysis": MODEL_ACTION,
   "case-law.search-refine": MODEL_ACTION,
@@ -90,6 +95,9 @@ export const ACTION_KINDS = {
   "bilingual.background": MODEL_BACKGROUND,
   "list-verification.start": MODEL_ACTION,
   "list-verification.background": MODEL_BACKGROUND,
+  "list-verification.recheck": MODEL_ACTION,
+  "list-fact-extraction.start": MODEL_ACTION,
+  "list-fact-extraction.background": MODEL_BACKGROUND,
   "report-export.start": MODEL_ACTION,
   "report-export.background": MODEL_BACKGROUND,
   "mcp.services/call": {
@@ -132,6 +140,7 @@ export const ACTION_KIND_COUNTED_BY = {
   "document-translation.background": "document-translation.start",
   "bilingual.background": "bilingual.start",
   "list-verification.background": "list-verification.start",
+  "list-fact-extraction.background": "list-fact-extraction.start",
   "report-export.background": "report-export.start",
 } as const satisfies Record<ConcurrencyOnlyActionKind, PeriodActionKind>;
 

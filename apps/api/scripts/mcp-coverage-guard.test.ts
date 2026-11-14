@@ -3,14 +3,85 @@ import { describe, expect, test } from "bun:test";
 import { isRecord } from "./lib/enumerate-safe-handlers";
 import {
   classifyCoverage,
-  computeBaselineDiff,
   enumerateModuleEndpoints,
   findHiddenEndpointMismatches,
+  findPendingEndpoints,
+  findRealtimeMismatches,
   findStaleAllowlistEntries,
   isEndpointModule,
   parseExposure,
   toEndpointIdentifier,
 } from "./mcp-coverage-guard";
+
+describe("findRealtimeMismatches", () => {
+  const entitySet = { scope: "workspace", resourceTypes: "entity" };
+  const route = (
+    id: string,
+    by: string,
+    config: Record<string, unknown>,
+  ): Parameters<typeof findRealtimeMismatches>[0]["endpoints"][number] => ({
+    id,
+    exposure: { type: "covered", by },
+    config,
+  });
+
+  test("accepts a tool that announces what its routes declare", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [route("rename", "save_document", { realtime: entitySet })],
+        toolRealtime: { save_document: [entitySet] },
+      }),
+    ).toEqual([]);
+  });
+
+  test("flags a write route whose tool announces nothing", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [route("rename", "save_document", { realtime: entitySet })],
+        toolRealtime: { save_document: [] },
+      }),
+    ).toEqual(["rename: save_document does not announce workspace:entity"]);
+  });
+
+  test("flags a tool announcing what no route declares", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [],
+        toolRealtime: { save_document: [entitySet] },
+      }),
+    ).toEqual(["save_document: no route declares workspace:entity"]);
+  });
+
+  test("reads a route's every resource type, and skips read routes", () => {
+    const multi = {
+      scope: "workspace",
+      resourceTypes: ["entity", "field"],
+    };
+    expect(
+      findRealtimeMismatches({
+        endpoints: [
+          route("placement", "save_task", { realtime: multi }),
+          route("list", "save_task", {
+            access: "read",
+            realtime: { scope: "workspace", resourceTypes: "contact" },
+          }),
+        ],
+        toolRealtime: { save_task: [entitySet] },
+      }),
+    ).toEqual(["placement: save_task does not announce workspace:field"]);
+  });
+
+  test("treats an explicit no-announcement as nothing to announce", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [
+          route("a", "t", { realtime: { scope: "none", reason: "x" } }),
+        ],
+        toolRealtime: { t: [{ scope: "none" }] },
+      }),
+    ).toEqual([]);
+  });
+});
 
 describe("toEndpointIdentifier", () => {
   test("is the repo-relative path, stable regardless of root trailing slash", () => {
@@ -121,41 +192,23 @@ describe("parseExposure", () => {
   });
 });
 
-describe("computeBaselineDiff (ratchet)", () => {
-  test("flags a newly-added pending endpoint absent from the baseline", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["a", "b"],
-      baseline: ["a"],
-    });
-    expect(diff.newPending).toEqual(["b"]);
-    expect(diff.stalePending).toEqual([]);
+describe("findPendingEndpoints", () => {
+  test("flags every pending endpoint, sorted", () => {
+    expect(
+      findPendingEndpoints([
+        { id: "b", exposure: { type: "pending" } },
+        { id: "closed", exposure: { type: "internal", reason: "webhook" } },
+        { id: "a", exposure: { type: "pending" } },
+      ]),
+    ).toEqual(["a", "b"]);
   });
 
-  test("flags every pending endpoint once the baseline is empty", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["new-gap"],
-      baseline: [],
-    });
-    expect(diff.newPending).toEqual(["new-gap"]);
-    expect(diff.stalePending).toEqual([]);
-  });
-
-  test("flags a stale baseline entry that is no longer pending", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["a"],
-      baseline: ["a", "closed-gap"],
-    });
-    expect(diff.newPending).toEqual([]);
-    expect(diff.stalePending).toEqual(["closed-gap"]);
-  });
-
-  test("clean when current pending exactly equals the baseline", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["b", "a"],
-      baseline: ["a", "b"],
-    });
-    expect(diff.newPending).toEqual([]);
-    expect(diff.stalePending).toEqual([]);
+  test("is clean when no endpoint is pending", () => {
+    expect(
+      findPendingEndpoints([
+        { id: "a", exposure: { type: "tool", name: "read_document" } },
+      ]),
+    ).toEqual([]);
   });
 });
 

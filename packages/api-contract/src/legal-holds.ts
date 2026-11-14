@@ -1,5 +1,12 @@
 export const LEGAL_HOLD_ACTIVE = "legal_hold_active";
 
+/** Refusals of placing or releasing a hold, for clients and agents to branch on. */
+export const LEGAL_HOLD_ERROR_CODE = {
+  targetNotFound: "legal_hold_target_not_found",
+  reasonRequired: "legal_hold_reason_required",
+  holdNotFound: "legal_hold_not_found",
+} as const;
+
 export const LEGAL_HOLD_ACTIVE_HINT =
   "Ask an authorized owner or administrator to review the active legal holds. Release each hold only with explicit human approval using matters.legal-holds.release or entities.legal-holds.release, then retry deletion. Do not release a hold automatically.";
 

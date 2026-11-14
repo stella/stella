@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { observeRegistryRequest } from "@stll/business-registries/shared/request-observer";
 
 import {
   countDroppedIdentityCandidates,
@@ -10,7 +12,10 @@ import {
   DECISION_QUERY_CLASS,
   decisionQueryClass,
   reportCaseLawSearchCompleted,
+  runTracedCaseLawSearch,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
+import { HttpStatusResponse } from "@/api/http/status";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -93,6 +98,90 @@ describe("the completed-search record", () => {
     scanAndFacetsMs: 97.1,
     totalMs: 130.2,
   };
+
+  describe("a search that does not complete", () => {
+    const traced = async (
+      run: Parameters<typeof runTracedCaseLawSearch<unknown>>[0]["run"],
+    ) =>
+      await Result.tryPromise({
+        try: async () =>
+          await runTracedCaseLawSearch<unknown>({
+            country: "CZE",
+            observer: "unobserved",
+            run,
+          }),
+        catch: (cause) => cause,
+      });
+
+    test("names the phase and the read it was stuck in when it rejects", async () => {
+      const cause = new Error("over budget");
+      const outcome = await traced(async (trace, observer) => {
+        observeRegistryRequest(observer);
+        observeRegistryRequest(observer);
+        trace.queryClass = "term";
+        trace.phase = "scan_and_facets";
+        await trace.dbTimer.time("candidates", async () => {
+          throw cause;
+        });
+        return "unreached";
+      });
+
+      expect(Result.isError(outcome) && outcome.error).toBe(cause);
+      expect(recording.records).toHaveLength(1);
+      const record = recording.records.at(0);
+      expect(record?.severityText).toBe("WARN");
+      expect(record?.message).toBe("case_law.search.incomplete");
+      expect(record?.attributes).toMatchObject({
+        outcome: "failed",
+        phase: "scan_and_facets",
+        queryClass: "term",
+        country: "CZE",
+        dbUnfinishedReads: "candidates",
+        engineRequests: 2,
+        scanSettled: false,
+        dbReads: 0,
+      });
+    });
+
+    test("counts an answer that says the budget ran out", async () => {
+      await traced(
+        async () =>
+          new HttpStatusResponse(503, {
+            code: PUBLIC_READ_TIMEOUT_CODE,
+            message: "Public read timed out. Please try again.",
+          }),
+      );
+
+      expect(recording.records.at(0)?.attributes).toMatchObject({
+        outcome: "timed_out",
+        phase: "serving_target",
+      });
+    });
+
+    test("stays silent for a search with an answer or one already reported", async () => {
+      await traced(async () => "answer");
+      await traced(async (trace) => {
+        trace.reported = true;
+        throw new Error("after its record");
+      });
+
+      expect(recording.records).toEqual([]);
+    });
+
+    test("forwards each engine request to the caller's observer", async () => {
+      const onRequest = mock(() => undefined);
+      await runTracedCaseLawSearch<string>({
+        country: undefined,
+        observer: { onRequest, onError: () => undefined },
+        run: async (_trace, observer) => {
+          observeRegistryRequest(observer);
+          return "answer";
+        },
+      });
+
+      expect(onRequest).toHaveBeenCalledTimes(1);
+    });
+  });
 
   const emit = (event: Parameters<typeof reportCaseLawSearchCompleted>[0]) => {
     reportCaseLawSearchCompleted(event);

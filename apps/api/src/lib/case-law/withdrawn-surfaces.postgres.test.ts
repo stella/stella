@@ -3,9 +3,10 @@ import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
+import { GLOBAL_SEARCH_CHAT_COVERAGE } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -69,6 +70,7 @@ import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { listReaderAnnotationsHandler } from "@/api/lib/legal-search/reader-annotations/list";
+import { LIMITS } from "@/api/lib/limits";
 import {
   openRequestContext,
   runWithRequestIdScope,
@@ -88,6 +90,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -215,6 +218,8 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         startOffset: 0,
         endOffset: secret.length,
         quote: secret,
+        quotePrefix: secret.slice(0, 32),
+        quoteSuffix: secret.slice(-32),
         body: own,
       });
       await tx.insert(legalReaderAnswers).values({
@@ -425,7 +430,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       .delete(caseLawDecisions)
       .where(inArray(caseLawDecisions.id, seededDecisionIds));
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   });
 
@@ -470,6 +475,17 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           expect(JSON.stringify(output)).not.toContain(secret);
         }
         expect(JSON.stringify([annotations, answers, links])).toContain(own);
+        expect(annotations.items).toMatchObject([
+          {
+            quote: marker,
+            quotePrefix: marker,
+            quoteSuffix: marker,
+            body: own,
+            blockAnchorId: "p1",
+            startOffset: 0,
+            endOffset: secret.length,
+          },
+        ]);
         expect(research.at(0)).toMatchObject({
           state: "withdrawn",
           answer: null,
@@ -548,6 +564,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
                 const editable = (
                   await safeDb(async (tx) => {
                     const loaded = await readEditableMessageOnTx({
+                      admitted: "active",
                       tx,
                       threadId,
                       messageId,
@@ -613,12 +630,10 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           normalizePersistedChatMessageContent(message.content).parts,
         );
         expect(markdown).toBe(marker);
-        const docx = await JSZip.loadAsync(
+        const docx = await ZipArchive.read(
           await createChatExportDocx(markdownToStellaDocument(markdown)),
         );
-        const documentXml = await docx
-          .file("word/document.xml")
-          ?.async("string");
+        const documentXml = await docx.entry("word/document.xml")?.text();
         expect(documentXml).toContain(marker);
         expect(documentXml).not.toContain(secret);
         expect(source?.title).toBe(marker);
@@ -662,6 +677,21 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           expect(JSON.stringify(rows)).toContain(marker);
           expect(JSON.stringify(rows)).toContain(own);
           expect(JSON.stringify(rows)).not.toContain(secret);
+          if (table === "legal_reader_annotations") {
+            expect(rows).toMatchObject([
+              {
+                data: {
+                  quote: marker,
+                  quotePrefix: marker,
+                  quoteSuffix: marker,
+                  body: own,
+                  blockAnchorId: "p1",
+                  startOffset: 0,
+                  endOffset: secret.length,
+                },
+              },
+            ]);
+          }
         }
         const stored = await scopedDb((tx) =>
           tx
@@ -682,18 +712,23 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           accessibleWorkspaceIds: [workspaceId],
           selectedWorkspaceIds: [],
           types: ["chat" as const],
+          grantedScopes: undefined,
           editedByUserIds: [],
           mimeTypes: [],
           limit: 10,
         };
         const hidden = await request(async () =>
-          searchGlobal({ ...query, query: "Dvořákové" }, { scopedDb }),
+          searchGlobal({ ...query, query: "Dvořákové" }, { scopedDb }).then(
+            (result) => result.unwrap(),
+          ),
         );
         expect(hidden.hits).toEqual([]);
         expect(hidden.totalCount).toBe(1);
         expect(hidden.facets.type).toContainEqual({ value: "chat", count: 1 });
         const authored = await request(async () =>
-          searchGlobal({ ...query, query: "question" }, { scopedDb }),
+          searchGlobal({ ...query, query: "question" }, { scopedDb }).then(
+            (result) => result.unwrap(),
+          ),
         );
         expect(authored.hits).toHaveLength(1);
         expect(authored.hits.at(0)?.title).toBe(marker);
@@ -709,7 +744,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
               query: "Dvořákové",
             },
             scopedDb,
-          ),
+          ).then((read) => read.unwrap()),
         );
         expect(JSON.stringify(preview)).toContain(marker);
         expect(JSON.stringify(preview)).not.toContain(secret);
@@ -884,8 +919,8 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       await upsertChatThreadSearchDocument(generatedId, tx);
     });
     const searchPage = async (cursor?: string) =>
-      await request(
-        async () =>
+      await request(async () =>
+        (
           await searchGlobal(
             {
               organizationId,
@@ -893,6 +928,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
               accessibleWorkspaceIds: [workspaceId],
               selectedWorkspaceIds: [],
               types: ["chat"],
+              grantedScopes: undefined,
               editedByUserIds: [],
               mimeTypes: [],
               query,
@@ -900,7 +936,8 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
               ...(cursor === undefined ? {} : { cursor }),
             },
             { scopedDb },
-          ),
+          )
+        ).unwrap(),
       );
     const first = await searchPage();
     expect(first.hits.map(({ id }) => id)).toEqual([`chat:${authoredId}`]);
@@ -973,13 +1010,14 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             accessibleWorkspaceIds: [workspaceId],
             selectedWorkspaceIds: [],
             types: ["chat"],
+            grantedScopes: undefined,
             editedByUserIds: [],
             mimeTypes: [],
             query,
             limit: 10,
           },
           { scopedDb },
-        ),
+        ).then((read) => read.unwrap()),
       );
       expect(result.hits.some((hit) => hit.id === `chat:${id}`)).toBe(matches);
     },
@@ -1018,7 +1056,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             query: "titleprobe",
           },
           scopedDb,
-        ),
+        ).then((read) => read.unwrap()),
       );
       expect(preview).toEqual({
         type: "plain-text",
@@ -1105,13 +1143,14 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             accessibleWorkspaceIds: [workspaceId],
             selectedWorkspaceIds: [],
             types: ["chat"],
+            grantedScopes: undefined,
             editedByUserIds: [],
             mimeTypes: [],
             query,
             limit: 10,
           },
           { scopedDb },
-        ),
+        ).then((read) => read.unwrap()),
       );
       expect(result.hits.some((hit) => hit.id === `chat:${id}`)).toBe(matches);
     },
@@ -1183,18 +1222,100 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             accessibleWorkspaceIds: [workspaceId],
             selectedWorkspaceIds: [],
             types: ["chat"],
+            grantedScopes: undefined,
             editedByUserIds: [],
             mimeTypes: [],
             query,
             limit: 10,
           },
           { scopedDb },
-        ),
+        ).then((read) => read.unwrap()),
       );
       expect(result.hits.map((hit) => hit.id)).toEqual([`chat:${id}`]);
       expect(result.hits.at(0)?.title).toBe(title);
     },
   );
+
+  test("a thread past the source limit ranks on its admitted prefix beside shorter threads", async () => {
+    const query = "admittedprefixquartz";
+    const tailOnly = "unreadtailquartz";
+    const longId = createSafeId<"chatThread">();
+    const shortId = createSafeId<"chatThread">();
+    seededThreads.push(longId, shortId);
+    const textMessage = ({
+      thread,
+      text,
+      minute,
+    }: {
+      thread: typeof longId;
+      text: string;
+      minute: number;
+    }) => ({
+      id: createSafeId<"chatMessage">(),
+      threadId: thread,
+      userId,
+      workspaceId,
+      role: "user" as const,
+      createdAt: new Date(Date.UTC(2026, 9, 18, 10, minute)),
+      content: proveTextOnlyPersistedChatMessageContent({
+        version: 3,
+        data: [{ type: "text", content: text }],
+      }),
+    });
+    await scopedDb(async (tx) => {
+      await tx.insert(chatThreads).values(
+        [longId, shortId].map((id) => ({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title: "Long thread fixture",
+          titleSource: "user" as const,
+        })),
+      );
+      await tx.insert(chatMessages).values([
+        textMessage({ thread: longId, text: query, minute: 0 }),
+        textMessage({
+          thread: longId,
+          text: "filler ".repeat(LIMITS.searchChatCandidateSourceBytesMax / 6),
+          minute: 1,
+        }),
+        textMessage({ thread: longId, text: tailOnly, minute: 2 }),
+        textMessage({ thread: shortId, text: query, minute: 0 }),
+      ]);
+      await upsertChatThreadSearchDocument(longId, tx);
+      await upsertChatThreadSearchDocument(shortId, tx);
+    });
+    const search = async (text: string) =>
+      (
+        await request(async () =>
+          searchGlobal(
+            {
+              organizationId,
+              userId,
+              accessibleWorkspaceIds: [workspaceId],
+              selectedWorkspaceIds: [],
+              types: ["chat"],
+              editedByUserIds: [],
+              mimeTypes: [],
+              query: text,
+              limit: 10,
+              grantedScopes: undefined,
+            },
+            { scopedDb },
+          ),
+        )
+      ).unwrap();
+
+    const found = await search(query);
+    expect(found.hits.map(({ id }) => id).toSorted()).toEqual(
+      [`chat:${longId}`, `chat:${shortId}`].toSorted(),
+    );
+    expect(found.chatCoverage).toBe(GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL);
+
+    const unread = await search(tailOnly);
+    expect(unread.hits).toEqual([]);
+  });
 
   test("filter-only chat browse pages directly beyond the text candidate ceiling", async () => {
     const updatedAt = new Date("2026-10-22T10:00:00Z");
@@ -1234,23 +1355,26 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         async () =>
           await runWithQueryCounter(
             async (counter) => {
-              const response = await searchGlobal(
-                {
-                  organizationId,
-                  userId,
-                  accessibleWorkspaceIds: [workspaceId],
-                  selectedWorkspaceIds: [],
-                  types: ["chat"],
-                  editedByUserIds: [],
-                  mimeTypes: [],
-                  query: "",
-                  updatedFrom: "2026-10-22T00:00:00Z",
-                  updatedTo: "2026-10-23T00:00:00Z",
-                  limit: 17,
-                  ...(pageCursor === undefined ? {} : { cursor: pageCursor }),
-                },
-                { scopedDb },
-              );
+              const response = (
+                await searchGlobal(
+                  {
+                    organizationId,
+                    userId,
+                    accessibleWorkspaceIds: [workspaceId],
+                    selectedWorkspaceIds: [],
+                    types: ["chat"],
+                    grantedScopes: undefined,
+                    editedByUserIds: [],
+                    mimeTypes: [],
+                    query: "",
+                    updatedFrom: "2026-10-22T00:00:00Z",
+                    updatedTo: "2026-10-23T00:00:00Z",
+                    limit: 17,
+                    ...(pageCursor === undefined ? {} : { cursor: pageCursor }),
+                  },
+                  { scopedDb },
+                )
+              ).unwrap();
               const pageReads = [...counter.fingerprints]
                 .filter(([key]) => key.includes("t.title_source"))
                 .reduce((total, [, count]) => total + count, 0);
@@ -1399,6 +1523,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           accessibleWorkspaceIds: [workspaceId],
           selectedWorkspaceIds: [],
           types: ["chat"],
+          grantedScopes: undefined,
           editedByUserIds: [],
           mimeTypes: [],
           limit: 17,
@@ -1406,7 +1531,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           ...(cursor === undefined ? {} : { cursor }),
         } satisfies Parameters<typeof searchGlobal>[0];
         const result = await request(async () =>
-          searchGlobal(pageQuery, { scopedDb }),
+          searchGlobal(pageQuery, { scopedDb }).then((read) => read.unwrap()),
         );
         if (page === 0) {
           expect(result.totalCount).toBe(rows.length);

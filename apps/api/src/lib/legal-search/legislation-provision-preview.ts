@@ -1,3 +1,4 @@
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
@@ -10,6 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 /** What a preview needs about the consolidation it was read from. */
 type PreviewVersionRow = {
+  country: string;
   id: SafeId<"legislationDocument">;
   language: string;
 };
@@ -55,9 +57,13 @@ export const buildProvisionPreview = ({
   anchor,
   citedAnchor,
 }: ProvisionPreviewInput) => {
-  const cited = provisionPreviewBlocks(blocks, anchor, citedAnchor);
-  const chain = provisionHeadingChain(blocks, anchor);
-  const own = resolveDocumentHeadingAnchor(blocks, anchor);
+  const statute = { blocks, scheme: statuteAnchorSchemeFor(version.country) };
+  const cited = provisionPreviewBlocks(statute, {
+    provisionAnchorId: anchor,
+    citedAnchorId: citedAnchor,
+  });
+  const chain = provisionHeadingChain(statute, anchor);
+  const own = resolveDocumentHeadingAnchor(statute, anchor);
 
   return {
     documentId: version.id,

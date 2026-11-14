@@ -9,7 +9,13 @@ import { expect, request as apiRequestFactory, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import * as v from "valibot";
 
+import {
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+  ownerStorageKey,
+} from "@stll/api-contract/browser-storage";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
@@ -20,6 +26,7 @@ import {
 import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -29,6 +36,11 @@ import {
   registerDeferredE2eCleanup,
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { findEscapedText } from "../helpers/escaped-text";
+import {
+  assertRouteLayoutShift,
+  observeLayoutShift,
+} from "../helpers/layout-shift";
 import {
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
@@ -37,6 +49,7 @@ import {
   type RouteNetworkMetrics,
   summarizeCapture,
 } from "../helpers/network";
+import { deleteTestOrganization } from "../helpers/organization";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
@@ -52,6 +65,7 @@ import {
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -134,11 +148,18 @@ const timeBillingRedirectDestination = ({
   if (template.startsWith("/workspaces/")) {
     return `/workspaces/${workspace.id}/${workspace.viewId}`;
   }
+  if (template.startsWith("/settings/organization/")) {
+    return "/settings/organization/members";
+  }
   if (template.startsWith("/admin/")) {
     return "/admin/members";
   }
-  // My week and its approval queue leave for the matters list.
-  if (template === "/time" || template === "/time_/approvals") {
+  // My week, its approval queue and the team report leave for the matters list.
+  if (
+    template === "/time" ||
+    template === "/time_/approvals" ||
+    template === "/time_/report"
+  ) {
     return "/workspaces";
   }
   throw new Error(`No unenrolled redirect expectation for ${template}`);
@@ -258,6 +279,44 @@ const declareRouteSmokeGroup = ({
       declareRouteTest(def);
     }
 
+    if (defs.some((def) => def.template === "/knowledge")) {
+      test("/knowledge with a restored inspector", async () => {
+        const response = await apiRequest.get(
+          `${E2E_API_ORIGIN}/api/auth/get-session`,
+        );
+        expect(response.ok()).toBe(true);
+        const session = v.parse(
+          v.object({
+            user: v.object({ id: v.string() }),
+            session: v.object({ activeOrganizationId: v.string() }),
+          }),
+          await response.json(),
+        );
+        await measureRouteTarget({
+          browser: browserForPages,
+          route: {
+            template: "/knowledge (restored inspector)",
+            path: "/knowledge",
+          },
+          restoredInspector: {
+            userId: session.user.id,
+            organizationId: session.session.activeOrganizationId,
+          },
+        });
+      });
+      test("/tools layout", async () => {
+        const response = await apiRequest.get(
+          `${process.env["E2E_WEB_URL"] ?? "http://localhost:3000"}/tools`,
+        );
+        test.skip(response.status() === 404, "Legacy Tools route is disabled");
+        expect(response.ok()).toBe(true);
+        await measureRouteTarget({
+          browser: browserForPages,
+          route: { template: "/tools", path: "/tools" },
+        });
+      });
+    }
+
     if (checkUnenrolledRoutes) {
       test("unenrolled callers leave every time-billing route before its loader", async () => {
         test.setTimeout(180_000);
@@ -354,6 +413,7 @@ const declareRouteSmokeGroup = ({
                 isolatedBrowser,
                 storageState,
               );
+              const csp = await installContentSecurityPolicyCollector(page);
               const browserErrors = createBrowserErrorCollector({
                 tolerateColdMountWarning: true,
               });
@@ -365,6 +425,7 @@ const declareRouteSmokeGroup = ({
                   expectation: { kind: "redirectsTo", to: destination },
                 } as const satisfies SmokeRoute;
                 await renderSmokeRoute({ page, route });
+                await csp.assertClean();
                 assertFinalDestination(page, route);
                 await assertNoRouteBoundary(page, template);
                 browserErrors.assertEmpty(
@@ -384,11 +445,10 @@ const declareRouteSmokeGroup = ({
           } finally {
             try {
               if (negativeOrganizationId !== null) {
-                const deleted = await negativeRequest.post(
-                  `${E2E_API_ORIGIN}/api/auth/organization/delete`,
-                  { data: { organizationId: negativeOrganizationId } },
+                await deleteTestOrganization(
+                  negativeRequest,
+                  negativeOrganizationId,
                 );
-                expect(deleted.ok(), await deleted.text()).toBe(true);
               }
             } finally {
               await negativeRequest.dispose();
@@ -451,17 +511,17 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
 }
 
 const createContact = async (request: APIRequestContext): Promise<string> => {
-  const contactId = randomUUID();
+  const contact = v.parse(
+    v.object({ id: v.string() }),
+    await apiPut(request, "/contacts", {
+      type: "person",
+      displayName: `Route Smoke ${randomUUID().slice(0, 8)}`,
+      firstName: "Route",
+      lastName: "Smoke",
+    }),
+  );
 
-  await apiPut(request, "/contacts", {
-    id: contactId,
-    type: "person",
-    displayName: `Route Smoke ${contactId.slice(0, 8)}`,
-    firstName: "Route",
-    lastName: "Smoke",
-  });
-
-  return contactId;
+  return contact.id;
 };
 
 const smokeRoute = async ({
@@ -515,11 +575,14 @@ const smokeRouteTarget = async ({
 const measureRouteTarget = async ({
   browser,
   route,
+  restoredInspector,
 }: {
   browser: Browser;
   route: SmokeRoute;
+  restoredInspector?: { userId: string; organizationId: string };
 }): Promise<RouteNetworkMetrics> => {
   const { context, page } = await openCleanPage(browser);
+  const csp = await installContentSecurityPolicyCollector(page);
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
@@ -528,6 +591,58 @@ const measureRouteTarget = async ({
   let detachNetwork: (() => Promise<void>) | undefined;
 
   try {
+    await observeLayoutShift(page);
+    if (restoredInspector !== undefined) {
+      const { userId, organizationId } = restoredInspector;
+      await page.addInitScript(
+        ({
+          stateKey,
+          minimizedKey,
+          stateVersion,
+          minimizedVersion,
+          restoredTab,
+        }) => {
+          localStorage.setItem(
+            stateKey,
+            JSON.stringify({
+              version: stateVersion,
+              value: {
+                tabs: [restoredTab],
+                groups: [],
+                groupAssignments: {},
+                activeId: restoredTab.id,
+                collapsedGroupIds: [],
+              },
+            }),
+          );
+          localStorage.setItem(
+            minimizedKey,
+            JSON.stringify({ version: minimizedVersion, value: false }),
+          );
+        },
+        {
+          stateKey: ownerStorageKey(
+            inspectorStorageBaseKey(INSPECTOR_STORAGE.state, organizationId),
+            { kind: "user", userId },
+          ),
+          minimizedKey: ownerStorageKey(
+            inspectorStorageBaseKey(
+              INSPECTOR_STORAGE.minimized,
+              organizationId,
+            ),
+            { kind: "user", userId },
+          ),
+          stateVersion: INSPECTOR_STORAGE.state.version,
+          minimizedVersion: INSPECTOR_STORAGE.minimized.version,
+          restoredTab: {
+            type: "chat",
+            id: randomUUID(),
+            label: "Route smoke",
+            contextMatterIds: [],
+          },
+        },
+      );
+    }
     detachNetwork = await network.trackPage(page);
     await network.measureRounds(page);
     await renderSmokeRoute({ page, route });
@@ -538,6 +653,12 @@ const measureRouteTarget = async ({
       timeoutMs: Math.max(route.settleMs ?? DEFAULT_SETTLE_MS, 10_000),
     });
     network.finishRounds();
+    if (restoredInspector !== undefined) {
+      await expect(
+        page.locator('[data-slot="inspector-dock"][data-state="expanded"]'),
+      ).toBeVisible();
+    }
+    await assertRouteLayoutShift(page, route.template);
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);
@@ -545,12 +666,18 @@ const measureRouteTarget = async ({
     // with its own top border on that line doubles it into a 2px rule.
     expect(
       await findChromeDividerProblems(page),
-      `${route.template} must show exactly one divider under the app chrome`,
+      `${route.template} must show exactly one divider under the app chrome: the chrome owns it, so a page root or a nested layout's first pane draws no top border (border-t, border-y, border) on that line`,
+    ).toEqual([]);
+    expect(
+      await findEscapedText(page),
+      `${route.template} must keep every text inside its box`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
-    // Captured after the route shell and tracked API work are ready, so the
-    // manifest reflects the fully-rendered route.
-    return summarizeCapture(await network.capture());
+    // Capture at the settled route boundary; awaiting the document's CSP
+    // check must not extend the network measurement into background work.
+    const capture = await network.capture();
+    await csp.assertClean();
+    return summarizeCapture(capture);
   } finally {
     try {
       await detachNetwork?.();
@@ -572,12 +699,14 @@ const assertRedirectRoute = async ({
 }) => {
   const { context, page } = await openCleanPage(browser);
   const redirectRoute = { ...route, expectation };
+  const csp = await installContentSecurityPolicyCollector(page);
 
   try {
     await gotoSmokeRoute(page, redirectRoute);
     await expect(page, redirectRoute.template).not.toHaveURL(/\/auth(?:\/|$)/u);
     await waitForRedirectDestination(page, redirectRoute);
     assertFinalDestination(page, redirectRoute);
+    await csp.assertClean();
   } finally {
     await context.close();
   }
@@ -651,7 +780,7 @@ const renderSmokeRoute = async ({
   // Cold-compiled route chunks can take longer than the default 10s expect
   // timeout to paint <main> on a fresh CI runner.
   await expect(page.locator("main").first(), route.template).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 };
 
@@ -716,7 +845,7 @@ const waitForRedirectDestination = async (page: Page, route: SmokeRoute) => {
 
   await expect(page, `${route.template} reached redirect target`).toHaveURL(
     (actual) => comparableHref(actual, expected.assertSearch) === expected.href,
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
 };
 

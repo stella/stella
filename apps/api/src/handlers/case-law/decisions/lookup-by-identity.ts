@@ -25,7 +25,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
@@ -63,6 +63,7 @@ import {
   authenticLanguageTag,
   preferredLanguageVersionsFirst,
 } from "@/api/lib/case-law/decision-language";
+import { derivedAiCaseLawSourceFor } from "@/api/lib/case-law/derived-ai-source";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
@@ -262,10 +263,12 @@ const identifierRowDecisionIds = ({
 
 /**
  * The decision's own column a kind of reference is also held in, or null for
- * a kind held only in the identifier rows. ECLIs are published in one case but
- * cited in another, and the column stores the published spelling. The
- * docket's identity is its citation key, which `bareCitationKey` already
- * normalizes: the same function that writes the column.
+ * a kind held only in the identifier rows. An ECLI's letter case carries no
+ * identity (`Pl.US` and `PL.US` name one decision) while the column keeps the
+ * published spelling, so it is compared folded, by
+ * `case_law_decisions_ecli_upper_idx`. The docket's identity is its citation
+ * key, which `bareCitationKey` already normalizes: the same function that
+ * writes the column.
  */
 const ownColumnCondition = (locator: DecisionIdentityLocator) => {
   switch (locator.kind) {
@@ -275,10 +278,13 @@ const ownColumnCondition = (locator: DecisionIdentityLocator) => {
         docketFamilyCitationKeys(locator),
       );
     case "ecli":
-      return inArray(publishedCaseLawDecisions.ecli, [
-        locator.value,
-        locator.value.toUpperCase(),
-      ]);
+      return and(
+        isNotNull(publishedCaseLawDecisions.ecli),
+        eq(
+          sql`upper(${publishedCaseLawDecisions.ecli})`,
+          locator.value.toUpperCase(),
+        ),
+      );
     case "neutral":
     case "reporter":
       return null;
@@ -290,51 +296,24 @@ const ownColumnCondition = (locator: DecisionIdentityLocator) => {
 };
 
 /**
- * Whether this connection may read the case-file key. The column's grant
- * lands a release after the column itself, so a reader that does not hold it
- * yet still serves, reading the file by its spellings alone. Checked on this
- * transaction, so the grant takes effect without a restart.
- */
-const canReadDocketFamilyKey = async (
-  tx: Pick<CaseLawPublicReadTransaction, "select">,
-): Promise<boolean> => {
-  const [permission] = await tx
-    .select({
-      available: sql<boolean>`has_column_privilege(current_user, 'public.case_law_decisions', 'docket_family_key', 'SELECT')`,
-    })
-    .from(sql`(SELECT 1) AS reader_permission_probe`);
-  return (permission ?? panic("Reader privilege query returned no result"))
-    .available;
-};
-
-/**
  * The case-file key a reference reads its file by, or null when it reads none.
  *
  * Only a bare docket: a sheet or part names one decision, which its stored
  * spellings reach directly, while the whole file can outgrow the candidates a
  * read keeps and push the named decision out before the selector is applied.
  */
-export const docketFamilyKeyToRead = async ({
+export const docketFamilyKeyToRead = ({
   country,
   locator,
-  tx,
 }: {
   country: string | undefined;
   locator: DecisionIdentityLocator;
-  tx: Pick<CaseLawPublicReadTransaction, "select">;
-}): Promise<string | null> => {
-  if (
-    locator.kind !== "docket" ||
-    locator.selector.kind !== "none" ||
-    country === undefined
-  ) {
-    return null;
-  }
-  const familyKey = docketFamilyKeyOf(locator.family, country);
-  return familyKey !== null && (await canReadDocketFamilyKey(tx))
-    ? familyKey
-    : null;
-};
+}): string | null =>
+  locator.kind !== "docket" ||
+  locator.selector.kind !== "none" ||
+  country === undefined
+    ? null
+    : docketFamilyKeyOf(locator.family, country);
 
 /**
  * The ids of the decisions a reference names: the identifier rows of the
@@ -503,7 +482,7 @@ export const lookupDecisionsByIdentity = async ({
   locator,
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
-    const familyKey = await docketFamilyKeyToRead({ country, locator, tx });
+    const familyKey = docketFamilyKeyToRead({ country, locator });
     const decisions = await tx
       .select({
         caseNumber: publishedCaseLawDecisions.caseNumber,
@@ -513,9 +492,13 @@ export const lookupDecisionsByIdentity = async ({
         courtId: publishedCaseLawDecisions.courtId,
         decisionDate: publishedCaseLawDecisions.decisionDate,
         decisionType: publishedCaseLawDecisions.decisionType,
+        // The publisher's classification text goes to the model, so a
+        // source that allows showing its text but not AI use returns none.
         subjectSummary: sql<
           string | null
-        >`left(split_part(${publisherSummaryMetadataSql(publishedCaseLawDecisions.metadata)}, E'\\n', 1), ${LIMITS.caseLawLookupSubjectMaxChars})`,
+        >`CASE WHEN ${derivedAiCaseLawSourceFor(
+          caseLawSources.descriptor,
+        )} THEN left(split_part(${publisherSummaryMetadataSql(publishedCaseLawDecisions.metadata)}, E'\\n', 1), ${LIMITS.caseLawLookupSubjectMaxChars}) END`,
         ecli: publishedCaseLawDecisions.ecli,
         id: publishedCaseLawDecisions.id,
         language: publishedCaseLawDecisions.language,

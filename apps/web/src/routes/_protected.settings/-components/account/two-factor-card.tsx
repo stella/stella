@@ -33,7 +33,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { linkedAccountsOptions } from "@/lib/account/queries";
@@ -299,7 +299,7 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
         ))}
       </div>
       <div className="flex gap-2">
-        <CopyActionButton
+        <CopyControl
           label={t("settings.account.twoFactor.copyAllCodes")}
           size="sm"
           text={codes.join("\n")}
@@ -540,7 +540,7 @@ const EnableTwoFactorDialog = ({
                   <span className="text-muted-foreground text-xs">
                     {t("settings.account.twoFactor.manualSetupKey")}
                   </span>
-                  <code className="bg-muted rounded px-2 py-1 font-mono text-sm">
+                  <code className="bg-muted rounded-sm px-2 py-1 font-mono text-sm">
                     {secret}
                   </code>
                 </div>

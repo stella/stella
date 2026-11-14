@@ -121,19 +121,21 @@ const BABEL_TOOLCHAINS = [
 // use `tsrs`; tools not yet ported import TypeScript 6 through the
 // `typescript6` alias, and Astro's checker, which supports only TypeScript 5
 // and 6, gets its own pinned copy.
-const TYPESCRIPT_TOOLCHAIN = {
-  oxlint: "1.87.0",
-  oxlintConfig: "1.7.0",
-  tsgolint: "7.0.2003",
-  tsrs: "0.18.0-ts7.1.0-dev.20260929",
-  typescript6Api: "npm:typescript@6.0.3",
-  typescript6Astro: "6.0.3",
-} as const;
-// Workspaces whose own scripts import the TypeScript 6 compiler API; each
-// declares it so a filtered install links it.
-const TYPESCRIPT6_API_PACKAGE_PATHS: ReadonlySet<string> = new Set([
-  "apps/api/package.json",
-]);
+/**
+ * The toolchain's versions live in the root package.json alone, so an update
+ * edits one manifest. Hygiene holds each to an exact pin and to the oldest
+ * major the repository is written against: oxlint.config.ts imports the API
+ * of major 4 of the shared Oxlint config, and major 7 of oxlint-tsgolint is
+ * the Go port that replaced the deprecated 0.x line.
+ */
+const TYPESCRIPT_TOOLCHAIN_PINS = [
+  { field: "devDependencies", dependency: "@stll/oxlint-config", major: 4 },
+  { field: "devDependencies", dependency: "oxlint-tsgolint", major: 7 },
+  { field: "catalog", dependency: "oxlint", major: 1 },
+] as const;
+// tsrs serves the TypeScript 7 compiler API, so its build names TypeScript 7.
+const TSRS_TYPESCRIPT7_PATTERN = /-ts7\.\d+\.\d+/u;
+const TYPESCRIPT6_ALIAS_PATTERN = /^npm:typescript@(?<version>6\.\d+\.\d+)$/u;
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
     dependency: "typescript",
@@ -145,11 +147,13 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    specifier: "^0.9.11",
+    specifier: "^0.9.12",
   },
+  // Only root scripts still import the TypeScript 6 compiler API; every
+  // workspace reads syntax with oxc and programs with tsrs.
   compilerApi: {
     dependency: "typescript6",
-    packagePath: "apps/api/package.json",
+    packagePath: "package.json",
     specifier: "catalog:",
   },
 } as const;
@@ -353,9 +357,16 @@ const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
     });
   });
 
+/** The compiler under its own key, or aliased to any name as `npm:typescript@6`. */
+const declaresTypescript6Compiler = (packageJsonPath: string): boolean =>
+  readDependencySpecifier(packageJsonPath, "typescript6") !== null ||
+  readDependencySpecifier(packageJsonPath, (specifier) =>
+    /^npm:typescript@[~^]?6(?:\.|$)/u.test(specifier),
+  ) !== null;
+
 const readDependencySpecifier = (
   packageJsonPath: string,
-  dependencyName: string,
+  dependency: string | ((specifier: string) => boolean),
 ): string | null => {
   let packageJson: unknown;
   try {
@@ -374,7 +385,12 @@ const readDependencySpecifier = (
       continue;
     }
 
-    const specifier = dependencies[dependencyName];
+    const specifier =
+      typeof dependency === "string"
+        ? dependencies[dependency]
+        : Object.values(dependencies).find(
+            (value) => typeof value === "string" && dependency(value),
+          );
     if (typeof specifier === "string") {
       return specifier;
     }
@@ -521,71 +537,84 @@ const validateInstalledCatalogVersions = (
   return issues;
 };
 
-const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
-  const issues: WorkspaceIssue[] = [];
-  const rootPackagePath = path.resolve(rootDir, "package.json");
-  const rootPackage = readPackageJson(rootPackagePath);
-  const expectedRootValues = [
-    {
-      dependency: "@stll/oxlint-config",
-      field: "devDependencies",
-      specifier: TYPESCRIPT_TOOLCHAIN.oxlintConfig,
-    },
-    {
-      dependency: "typescript6",
-      field: "devDependencies",
-      specifier: "catalog:",
-    },
-    {
-      dependency: "oxlint-tsgolint",
-      field: "devDependencies",
-      specifier: TYPESCRIPT_TOOLCHAIN.tsgolint,
-    },
-    {
-      dependency: "tsrs",
-      field: "devDependencies",
-      specifier: "catalog:",
-    },
-    {
-      dependency: "oxlint",
-      field: "catalog",
-      specifier: TYPESCRIPT_TOOLCHAIN.oxlint,
-    },
-    {
-      dependency: "tsrs",
-      field: "catalog",
-      specifier: TYPESCRIPT_TOOLCHAIN.tsrs,
-    },
-    {
-      dependency: "typescript6",
-      field: "catalog",
-      specifier: TYPESCRIPT_TOOLCHAIN.typescript6Api,
-    },
-  ] as const;
-
-  for (const { dependency, field, specifier } of expectedRootValues) {
-    const actual = readStringProperty(rootPackage, field, dependency);
-    if (actual === specifier) {
-      continue;
+/** Messages for root toolchain pins that leave the policy above. */
+const rootToolchainIssues = (
+  rootPackage: ReturnType<typeof readPackageJson>,
+): string[] => {
+  const messages: string[] = [];
+  const report = (message: string) => messages.push(message);
+  for (const dependency of ["typescript6", "tsrs"] as const) {
+    const actual = readStringProperty(
+      rootPackage,
+      "devDependencies",
+      dependency,
+    );
+    if (actual !== "catalog:") {
+      report(
+        `devDependencies.${dependency} must be catalog:; found ${actual ?? "missing"}`,
+      );
     }
-
-    issues.push({
-      message: `${field}.${dependency} must be ${specifier}; found ${actual ?? "missing"}`,
-      path: "package.json",
-    });
   }
 
+  for (const { field, dependency, major } of TYPESCRIPT_TOOLCHAIN_PINS) {
+    const actual = readStringProperty(rootPackage, field, dependency);
+    if (
+      actual === null ||
+      !EXACT_PACKAGE_VERSION_PATTERN.test(actual) ||
+      Number(actual.split(".")[0]) < major
+    ) {
+      report(
+        `${field}.${dependency} must be an exact version of major ${major} or later; found ${actual ?? "missing"}`,
+      );
+    }
+  }
+
+  const tsrs = readStringProperty(rootPackage, "catalog", "tsrs");
+  if (
+    tsrs === null ||
+    !EXACT_PACKAGE_VERSION_PATTERN.test(tsrs) ||
+    !TSRS_TYPESCRIPT7_PATTERN.test(tsrs)
+  ) {
+    report(
+      `catalog.tsrs must be an exact tsrs build of TypeScript 7; found ${tsrs ?? "missing"}`,
+    );
+  }
+
+  const typescript6 = readStringProperty(rootPackage, "catalog", "typescript6");
+  const typescript6Version =
+    typescript6 === null
+      ? undefined
+      : TYPESCRIPT6_ALIAS_PATTERN.exec(typescript6)?.groups?.["version"];
+  if (typescript6Version === undefined) {
+    report(
+      `catalog.typescript6 must be npm:typescript@<exact 6.x version>; found ${typescript6 ?? "missing"}`,
+    );
+  }
+
+  // Astro's checker and the root scripts' compiler API are one TypeScript 6.
   const catalogs = rootPackage?.["catalogs"];
   const astroTypeScript = readStringProperty(
     isRecord(catalogs) ? catalogs : null,
     "ts6",
     "typescript",
   );
-  if (astroTypeScript !== TYPESCRIPT_TOOLCHAIN.typescript6Astro) {
-    issues.push({
-      message: `catalogs.ts6.typescript must be ${TYPESCRIPT_TOOLCHAIN.typescript6Astro}; found ${astroTypeScript ?? "missing"}`,
-      path: "package.json",
-    });
+  if (
+    typescript6Version !== undefined &&
+    astroTypeScript !== typescript6Version
+  ) {
+    report(
+      `catalogs.ts6.typescript must match catalog.typescript6 (${typescript6Version}); found ${astroTypeScript ?? "missing"}`,
+    );
+  }
+  return messages;
+};
+
+const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
+  const issues: WorkspaceIssue[] = [];
+  const rootPackagePath = path.resolve(rootDir, "package.json");
+  const rootPackage = readPackageJson(rootPackagePath);
+  for (const message of rootToolchainIssues(rootPackage)) {
+    issues.push({ message, path: "package.json" });
   }
 
   for (const exception of Object.values(TYPESCRIPT6_COMPATIBILITY)) {
@@ -677,13 +706,10 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
         });
       }
 
-      if (
-        readDependencySpecifier(packageJsonPath, "typescript6") !== null &&
-        !TYPESCRIPT6_API_PACKAGE_PATHS.has(relativePackagePath)
-      ) {
+      if (declaresTypescript6Compiler(packageJsonPath)) {
         issues.push({
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
           path: relativePackagePath,
         });
       }
@@ -953,6 +979,52 @@ const findBunCommandFiles = (rootDir: string) => [
   ),
 ];
 
+// scripts/lint.ts owns the linter binary, the configs and the shared flags,
+// so a change of linter is an edit to that one file. A package script names
+// only what it lints: `cd ../.. && bun scripts/lint.ts <paths>` for `lint`,
+// with `--fix` for `lint:fix`.
+const LINT_ENTRY_COMMAND = "bun scripts/lint.ts";
+// The linter as a command word: bare, through `bunx`/`bun --bun`, or by its
+// path under node_modules. `oxlint.config.ts`, `@stll/oxlint-config` and
+// `.oxlint-plugins` are not commands.
+const DIRECT_LINTER_PATTERN = /(?:^|[\s;&|(/])oxlint(?=$|[\s;&|)])/u;
+const LINT_SCRIPT_FORMS = [
+  { name: "lint", entry: LINT_ENTRY_COMMAND },
+  { name: "lint:fix", entry: `${LINT_ENTRY_COMMAND} --fix` },
+] as const;
+
+const validateLintScripts = (
+  packagePath: string,
+  packageJson: Record<string, unknown> | null,
+): WorkspaceIssue[] => {
+  const scripts = packageJson?.["scripts"];
+  if (!isRecord(scripts)) {
+    return [];
+  }
+  const issues: WorkspaceIssue[] = [];
+  for (const [name, command] of Object.entries(scripts)) {
+    if (typeof command === "string" && DIRECT_LINTER_PATTERN.test(command)) {
+      issues.push({
+        message: `scripts.${name} runs oxlint directly; lint through \`${LINT_ENTRY_COMMAND} <paths>\` from the repository root`,
+        path: packagePath,
+      });
+    }
+  }
+  if (packagePath === "package.json") {
+    return issues;
+  }
+  for (const { name, entry } of LINT_SCRIPT_FORMS) {
+    const command = readStringProperty(packageJson, "scripts", name);
+    if (command !== null && !command.includes(entry)) {
+      issues.push({
+        message: `scripts.${name} must lint through \`${entry} <paths>\`; found ${command}`,
+        path: packagePath,
+      });
+    }
+  }
+  return issues;
+};
+
 const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
   findBunCommandFiles(rootDir)
     .filter((filePath) => existsSync(filePath))
@@ -994,6 +1066,10 @@ export const validateWorkspaceRoot = async (
       ),
     ),
     ...validateDeniedCargoDependencies(rootDir),
+    ...validateLintScripts(
+      "package.json",
+      readPackageJson(path.resolve(rootDir, "package.json")),
+    ),
   ];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
@@ -1066,6 +1142,10 @@ export const validateWorkspaceRoot = async (
         ...validateInstalledCatalogVersions(
           rootDir,
           path.resolve(parentPath, entry.name),
+          `${relativePath}/package.json`,
+          readPackageJson(packageJsonPath),
+        ),
+        ...validateLintScripts(
           `${relativePath}/package.json`,
           readPackageJson(packageJsonPath),
         ),

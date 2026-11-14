@@ -3,9 +3,9 @@ import { useRef } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
+import { DECISION_ANCHOR_RESOLUTION } from "@stll/api-contract/case-law-anchor-redirects";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   applyDecisionParagraphLanding,
@@ -125,6 +125,20 @@ test("valid missing ranges hold the start instead of retaining a stale passage",
   release?.();
 });
 
+test("an anchor a reparse dropped holds the start instead of another passage", () => {
+  const { container } = fixture();
+  const scroll = mock(() => {});
+  container.scrollTo = scroll;
+  const release = applyDecisionParagraphLanding(container, {
+    type: "anchor-gone",
+  });
+  expect(scroll).toHaveBeenCalledWith({ top: 0, behavior: "instant" });
+  expect(
+    container.querySelectorAll<HTMLElement>("[data-reader-landing]").length,
+  ).toBe(0);
+  release?.();
+});
+
 test("a range landing lands again when something else scrolls the reader", () => {
   const { container, first } = fixture();
   const scroll = mock(() => {});
@@ -146,6 +160,7 @@ test("a range landing lands again when something else scrolls the reader", () =>
 for (const landing of [
   { type: "invalid" },
   { type: "text-unavailable" },
+  { type: "anchor-pending" },
 ] as const) {
   test(`${landing.type} leaves the normal reader untouched`, () => {
     const { container, first } = fixture();
@@ -210,6 +225,9 @@ const LandingHarness = ({
     containerRef,
     documentAst,
     fragment,
+    fragmentAnchor: fragment.startsWith("par=")
+      ? undefined
+      : { type: DECISION_ANCHOR_RESOLUTION.CURRENT, anchorId: fragment },
     sessionId,
   });
   return (
