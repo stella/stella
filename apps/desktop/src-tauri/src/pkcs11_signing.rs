@@ -60,7 +60,7 @@ pub struct TokenSource {
   pub pin_retries: PinRetries,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TokenIdentity {
   pub identity: SigningIdentity,
   pub source: TokenSource,

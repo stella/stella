@@ -325,47 +325,51 @@ fn sign_with_module(
   }
 }
 
-/// The token holding the certificate, looking first in `listed_slot`, the
-/// slot that listed it: a copy of the certificate on an earlier token,
-/// without its key, must not stand in for the token the user chose. The
-/// other slots are still searched, as a module may number its slots anew
-/// each time it loads.
+/// The one slot a signature may use: the one that listed the certificate.
+/// A copy of the certificate on another token, without its key, must not
+/// stand in for the token the user chose.
+fn chosen_slot<S>(slots: Vec<S>, id: impl Fn(&S) -> u64, chosen: u64) -> Option<S> {
+  slots.into_iter().find(|slot| id(slot) == chosen)
+}
+
+/// The token holding the certificate, looked for only in `listed_slot`, the
+/// slot that listed it.
 fn locate(
   pkcs11: &Pkcs11,
   listed_slot: u64,
   certificate_sha256: &[u8],
 ) -> Result<Option<Located>, Error> {
-  let mut slots = pkcs11.get_slots_with_token()?;
-  slots.sort_by_key(|slot| slot.id() != listed_slot);
-  for slot in slots {
-    let Ok(session) = pkcs11.open_ro_session(slot) else {
-      continue;
-    };
-    let Ok(certificates) =
-      session.find_objects(&[Attribute::Class(ObjectClass::CERTIFICATE)])
+  let Some(slot) = chosen_slot(pkcs11.get_slots_with_token()?, Slot::id, listed_slot)
+  else {
+    return Ok(None);
+  };
+  let Ok(session) = pkcs11.open_ro_session(slot) else {
+    return Ok(None);
+  };
+  let Ok(certificates) =
+    session.find_objects(&[Attribute::Class(ObjectClass::CERTIFICATE)])
+  else {
+    return Ok(None);
+  };
+  for handle in certificates {
+    let Ok(attributes) =
+      session.get_attributes(handle, &[AttributeType::Value, AttributeType::Id])
     else {
       continue;
     };
-    for handle in certificates {
-      let Ok(attributes) =
-        session.get_attributes(handle, &[AttributeType::Value, AttributeType::Id])
-      else {
-        continue;
-      };
-      let mut matches = false;
-      let mut id = Vec::new();
-      for attribute in attributes {
-        match attribute {
-          Attribute::Value(der) => {
-            matches = Sha256::digest(&der).as_slice() == certificate_sha256;
-          }
-          Attribute::Id(value) => id = value,
-          _ => {}
+    let mut matches = false;
+    let mut id = Vec::new();
+    for attribute in attributes {
+      match attribute {
+        Attribute::Value(der) => {
+          matches = Sha256::digest(&der).as_slice() == certificate_sha256;
         }
+        Attribute::Id(value) => id = value,
+        _ => {}
       }
-      if matches && !id.is_empty() {
-        return Ok(Some(Located { slot, session, id }));
-      }
+    }
+    if matches && !id.is_empty() {
+      return Ok(Some(Located { slot, session, id }));
     }
   }
   Ok(None)
@@ -423,6 +427,15 @@ mod tests {
     assert_eq!(certificate_key(&[1], &keys, false), CertificateKey::Paired);
     assert_eq!(certificate_key(&[3], &keys, false), CertificateKey::Absent);
     assert_eq!(certificate_key(&[], &keys, false), CertificateKey::Absent);
+  }
+
+  #[test]
+  fn a_signature_looks_only_in_the_slot_that_listed_the_certificate() {
+    let slots: Vec<u64> = vec![0, 3, 7];
+
+    assert_eq!(chosen_slot(slots.clone(), |slot| *slot, 3), Some(3));
+    // The slot is gone: no other token stands in for it.
+    assert_eq!(chosen_slot(slots, |slot| *slot, 5), None);
   }
 
   #[test]

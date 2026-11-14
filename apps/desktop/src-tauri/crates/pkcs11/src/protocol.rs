@@ -40,9 +40,9 @@ pub enum Request {
 #[serde(rename_all = "camelCase")]
 pub struct SignRequest {
   pub module: PathBuf,
-  /// The slot of the token that listed the certificate. It is searched
-  /// first, so a copy of the certificate on another token (one without its
-  /// key) cannot stand in for it.
+  /// The slot of the token that listed the certificate, the only one the
+  /// helper looks in: a copy of the certificate on another token (one
+  /// without its key) cannot stand in for it.
   pub slot: u64,
   pub certificate_sha256: String,
   pub digest_hex: String,

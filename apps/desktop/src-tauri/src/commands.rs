@@ -305,6 +305,32 @@ pub fn pdf_sign_open_driver_download(
     ))
 }
 
+/// The PDF signing dialog re-reads the certificates it offers while it waits
+/// for a choice, so a smart card inserted or removed meanwhile shows up.
+/// Listing reads certificates only and never prompts.
+#[tauri::command]
+pub async fn pdf_sign_identities(
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::DialogListing, String> {
+  if window.label() != crate::pdf_signing::DIALOG_LABEL {
+    return Err("Only the PDF signing dialog lists signing certificates".into());
+  }
+  Ok(crate::pdf_signing::dialog_listing().await)
+}
+
+/// The PDF signing dialog's Rescan button: the smart cards are scanned
+/// again, which starts the PKCS #11 helper. The dialog's own refresh never
+/// does; it re-reads only the platform store.
+#[tauri::command]
+pub async fn pdf_sign_rescan_cards(
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::DialogListing, String> {
+  if window.label() != crate::pdf_signing::DIALOG_LABEL {
+    return Err("Only the PDF signing dialog scans for smart cards".into());
+  }
+  Ok(crate::pdf_signing::rescan_dialog_listing().await)
+}
+
 #[tauri::command]
 pub async fn respond_to_takeover(
   session_id: String,

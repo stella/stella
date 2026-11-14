@@ -17,7 +17,7 @@ pub struct TypeTextFailed;
 pub fn send(strokes: &[Stroke]) -> Result<(), TypeTextFailed> {
   for stroke in strokes {
     match stroke {
-      Stroke::Text(text) => type_text(text)?,
+      Stroke::Text(text) => type_text(text.as_str())?,
       Stroke::Key(key) => press(*key, false, false)?,
       Stroke::Shift(key) => press(*key, false, true)?,
       Stroke::Command(key) => press(*key, true, false)?,

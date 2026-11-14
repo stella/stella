@@ -139,6 +139,7 @@
     "pdfSignPinLow": "A wrong PIN was entered before. Check the PIN carefully.",
     "pdfSignPinPad": "Enter the PIN on the card reader to sign {documentName}.",
     "pdfSignPinPrompt": "Enter the PIN of your card or token to sign {documentName}.",
+    "pdfSignRescanCards": "Rescan cards",
     "pdfSignRetry": "Try again",
     "pdfSignServer": "Requested by",
     "pdfSignSign": "Sign",
@@ -245,6 +246,8 @@
     "permissionNotificationsDescription": "Tells you when a document is ready or a sync needs attention.",
     "permissionAccessibility": "Accessibility",
     "permissionAccessibilityDescription": "Lets the activity timeline record window titles.",
+    "permissionMicrophone": "Microphone",
+    "permissionMicrophoneDescription": "Lets dictation hear you while you hold its shortcut.",
     "permissionAllowed": "Allowed",
     "permissionAllow": "Allow",
     "permissionOpenSettings": "Open settings",
@@ -307,6 +310,7 @@
     "errorReadHistory": "Clipboard history could not be loaded.",
     "errorUpdateHistory": "Clipboard history could not be updated.",
     "formattedText": "Formatted text",
+    "dictation": "Dictation",
     "image": "Image",
     "imageCleanupPending": "Some deleted image data could not be removed. Cleanup will retry automatically.",
     "imageDimensions": "{width} × {height} px",
@@ -595,9 +599,32 @@
   "dictation": {
     "title": "Dictation",
     "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored. With AI cleanup on, the transcribed text, not the audio, is sent through stella to your organization’s AI provider to fix mistakes and formatting, and stella does not store it.",
+    "descriptionCloud": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed by stella AI and is not stored by stella.",
     "cleanup": {
       "title": "Clean up with AI",
-      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it."
+      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it.",
+      "descriptionCloud": "With cleanup on, stella AI also fixes recognition mistakes in the transcribed text and applies spoken punctuation and formatting, such as “new line” or “bold”. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it."
+    },
+    "context": {
+      "windowTitle": {
+        "title": "Share the window title with AI cleanup",
+        "description": "Cleanup also gets the title of the window you dictate into, so it can tell a contract from an internal memo. Window titles can contain client or matter names. The title is sent through stella to your organization’s AI provider, and stella does not store it."
+      },
+      "textBeforeCursor": {
+        "title": "Share text before the cursor with AI cleanup",
+        "description": "Cleanup also gets up to {limit, number} characters before the cursor, so the dictation fits the text you are writing. This sends part of the document you are in through stella to your organization’s AI provider, and stella does not store it."
+      }
+    },
+    "keptInHistory": "Each dictation is also kept in clipboard history on this computer.",
+    "destination": {
+      "title": "Transcribe with",
+      "local": "This computer",
+      "cloud": "stella AI",
+      "cloudDescription": "Audio leaves this computer: it is sent to stella and, through stella’s AI provider, to the provider of the selected model for transcription. stella does not store it.",
+      "unavailableRegion": "stella AI does not offer transcription in your organization’s region yet.",
+      "unavailableProvider": "Your organization’s AI provider does not offer transcription.",
+      "unavailable": "stella AI transcription is unavailable right now.",
+      "model": "Transcription model"
     },
     "language": {
       "title": "Dictation language",
@@ -619,8 +646,10 @@
       "transcription": "Transcription failed. Try again.",
       "focusChanged": "You switched to another app before the text was ready, so nothing was typed. Try again.",
       "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
-      "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again."
-    }
+      "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again.",
+      "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
+    },
+    "failureKeptInHistory": "The text is in clipboard history."
   },
   "shortcut": {
     "title": "Clipboard shortcut",
@@ -737,6 +766,18 @@
     "introduceActivityTitle": "New: activity timeline",
     "introduceActivityBody": "Activity is now available for your account. Nothing is recorded until you start it in the activity window.",
     "openActivity": "Open activity",
+    "dictationModel": "The speech model ({size} MB) is downloaded once and runs on this computer.",
+    "dictationTurnOn": "Turn on and download",
+    "dictationDownloadContinues": "You can continue. The download goes on in the background.",
+    "dictationReady": "Dictation is on and ready.",
+    "dictationTryLabel": "Dictate here",
+    "dictationTryPlaceholder": "Click here, hold {shortcut} and say a sentence.",
+    "dictationListening": "Listening…",
+    "dictationTranscribing": "Writing down what you said…",
+    "dictationMicrophone": "Lets stella hear you while you hold the shortcut.",
+    "dictationAccessibility": "Lets stella type what you said into the app you are using.",
+    "dictationFailed": "stella desktop could not turn on dictation. Try again.",
+    "introduceDictationTitle": "New: dictation",
     "guideWaiting": "Turn on stella desktop in the list above to allow Accessibility.",
     "guideAllowed": "stella desktop is allowed",
     "never": {

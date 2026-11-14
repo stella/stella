@@ -311,6 +311,7 @@
       <div class="notices" hidden id="notices"></div>
       <p class="status" hidden id="status"></p>
       <div class="actions">
+        <button class="cancel" hidden id="rescanBtn"></button>
         <button class="cancel" id="cancelBtn"></button>
         <button class="sign" hidden id="signBtn"></button>
       </div>
@@ -330,10 +331,15 @@
       // this page.
       const params = new URLSearchParams(window.location.hash.slice(1));
       const strings = JSON.parse(params.get("strings") || "{}");
-      const state = JSON.parse(params.get("state") || '"unsupportedPlatform"');
-      const identities = JSON.parse(params.get("identities") || "[]");
-      // Installed smart card drivers the user has to act on first.
-      const driverNotices = JSON.parse(params.get("driverNotices") || "[]");
+      // The picker as Rust last listed it. While the user chooses, the
+      // store is re-read every few seconds; the smart cards are scanned
+      // again only with the Rescan button, as a scan starts their drivers.
+      let listing = {
+        identities: JSON.parse(params.get("identities") || "[]"),
+        state: JSON.parse(params.get("state") || '"unsupportedPlatform"'),
+        stateMessageKey: params.get("stateMessage"),
+        driverNotices: JSON.parse(params.get("driverNotices") || "[]"),
+      };
       // Where the platform keeps signing keys: a sentence that names the
       // keychain has a `CertificateStore` variant, read where the store is not
       // a keychain, so the wording names it the way the user's system does.
@@ -448,7 +454,7 @@
         return parts.join(" · ");
       };
       const selectedIdentity = () =>
-        identities.find(
+        listing.identities.find(
           (identity) => identity.id === element("identities").value,
         );
       const documentName = params.get("documentName") || "";
@@ -499,6 +505,9 @@
         );
         showPinWarning(token.pinRetries);
       };
+      // A typed PIN belongs to the certificate it was typed for: it is
+      // cleared when the choice changes, not when a re-listing keeps it.
+      let shownIdentityId = null;
       const showIdentityDetails = () => {
         const selected = selectedIdentity();
         setText("identityDetails", selected ? describeIdentity(selected) : "");
@@ -508,7 +517,11 @@
             ? strings.pdfSignSubtitleToken
             : wording("pdfSignSubtitle"),
         );
-        element("pin").value = "";
+        const selectedId = selected ? selected.id : null;
+        if (selectedId !== shownIdentityId) {
+          element("pin").value = "";
+          shownIdentityId = selectedId;
+        }
         showTokenPanel(selected);
         updateSignEnabled();
       };
@@ -523,7 +536,8 @@
             })
           : Promise.resolve(null);
       const showDriverNotices = () => {
-        for (const notice of driverNotices) {
+        element("notices").replaceChildren();
+        for (const notice of listing.driverNotices) {
           const row = document.createElement("div");
           row.className = "notice";
           const text = document.createElement("p");
@@ -546,35 +560,138 @@
           row.append(text, download);
           element("notices").append(row);
         }
-        element("notices").hidden = driverNotices.length === 0;
+        element("notices").hidden = listing.driverNotices.length === 0;
       };
 
-      if (state === "ready") {
-        setText("subtitle", wording("pdfSignSubtitle"));
-        for (const identity of identities) {
-          const option = document.createElement("option");
-          option.value = identity.id;
-          option.textContent = identity.label;
-          element("identities").append(option);
-        }
-        element("identities").addEventListener("change", showIdentityDetails);
-        element("pin").addEventListener("input", updateSignEnabled);
-        element("picker").hidden = false;
-        element("signBtn").hidden = false;
-        showIdentityDetails();
-        showDriverNotices();
-      } else if (state === "noIdentities") {
-        showStatus(wording("pdfSignNoIdentities"), "error");
-        showDriverNotices();
-      } else if (state === "keychainUnavailable") {
-        showStatus(
-          wording(params.get("stateMessage")) || strings[GENERIC_ERROR_KEY],
-          "error",
+      element("identities").addEventListener("change", showIdentityDetails);
+      element("pin").addEventListener("input", updateSignEnabled);
+
+      // A re-listing keeps the user's choice when that certificate is still
+      // there.
+      const renderListing = () => {
+        const ready = listing.state === "ready";
+        const select = element("identities");
+        const chosen = select.value;
+        select.replaceChildren(
+          ...listing.identities.map((identity) => {
+            const option = document.createElement("option");
+            option.value = identity.id;
+            option.textContent = identity.label;
+            return option;
+          }),
         );
+        if (listing.identities.some((identity) => identity.id === chosen)) {
+          select.value = chosen;
+        }
+        element("picker").hidden = !ready;
+        element("signBtn").hidden = !ready;
+        if (ready) {
+          element("status").hidden = true;
+          showIdentityDetails();
+        } else {
+          setText("subtitle", "");
+          element("tokenPanel").hidden = true;
+          if (listing.state === "noIdentities") {
+            showStatus(wording("pdfSignNoIdentities"), "error");
+          } else if (listing.state === "keychainUnavailable") {
+            showStatus(
+              wording(listing.stateMessageKey) || strings[GENERIC_ERROR_KEY],
+              "error",
+            );
+          } else {
+            showStatus(strings.pdfSignUnsupported, "error");
+          }
+        }
         showDriverNotices();
-      } else {
-        showStatus(strings.pdfSignUnsupported, "error");
-      }
+      };
+      renderListing();
+
+      // Until the user signs or cancels, the dialog re-reads the store on
+      // focus and every few seconds, so a certificate added or removed there
+      // updates the picker. That refresh never starts the smart card
+      // drivers; Rescan does. Listing reads certificates and never prompts.
+      const RELIST_INTERVAL_MS = 3000;
+      const RELISTED_STATES = ["ready", "noIdentities"];
+      let choosing = listing.state !== "unsupportedPlatform";
+      element("rescanBtn").hidden = !choosing;
+      // Re-rendering only on a change keeps an open dropdown from closing
+      // under the pointer every few seconds.
+      const listingKey = ({
+        identities,
+        state,
+        stateMessageKey,
+        driverNotices,
+      }) =>
+        JSON.stringify([
+          state,
+          stateMessageKey || null,
+          identities,
+          driverNotices || [],
+        ]);
+      // The listing in flight, if any. A refresh that finds one skips its
+      // turn; a rescan the user asked for waits for it and then runs.
+      let relisting = null;
+      // `read` asks Rust for the listing: the store's refresh, or a rescan.
+      const relist = async (read, { wait = false } = {}) => {
+        if (!choosing || !window.__TAURI_INTERNALS__) {
+          return;
+        }
+        if (relisting) {
+          if (!wait) {
+            return;
+          }
+          await relisting;
+          return relist(read, { wait });
+        }
+        let release = () => undefined;
+        relisting = new Promise((resolve) => {
+          release = resolve;
+        });
+        try {
+          const next = await read();
+          if (
+            choosing &&
+            next &&
+            Array.isArray(next.identities) &&
+            listingKey(next) !== listingKey(listing)
+          ) {
+            listing = {
+              identities: next.identities,
+              state: next.state,
+              stateMessageKey: next.stateMessageKey,
+              driverNotices: Array.isArray(next.driverNotices)
+                ? next.driverNotices
+                : [],
+            };
+            renderListing();
+          }
+        } catch {
+          // The picker keeps what it last listed; signing re-reads the store
+          // and reports a certificate that is gone.
+        } finally {
+          relisting = null;
+          release();
+        }
+      };
+      const refreshStore = () =>
+        window.__TAURI_INTERNALS__.invoke("pdf_sign_identities");
+      const rescanCards = () =>
+        window.__TAURI_INTERNALS__.invoke("pdf_sign_rescan_cards");
+      window.addEventListener("focus", () => {
+        void relist(refreshStore);
+      });
+      setInterval(() => {
+        if (RELISTED_STATES.includes(listing.state)) {
+          void relist(refreshStore);
+        }
+      }, RELIST_INTERVAL_MS);
+      setText("rescanBtn", strings.pdfSignRescanCards);
+      element("rescanBtn").addEventListener("click", () => {
+        element("rescanBtn").disabled = true;
+        void relist(rescanCards, { wait: true }).finally(() => {
+          element("rescanBtn").disabled = false;
+        });
+      });
 
       const respond = (body) =>
         window.__TAURI_INTERNALS__
@@ -680,6 +797,8 @@
       };
 
       element("signBtn").addEventListener("click", () => {
+        choosing = false;
+        element("rescanBtn").hidden = true;
         clearTimeout(retryExpiry);
         element("signBtn").disabled = true;
         element("cancelBtn").disabled = true;
@@ -702,6 +821,8 @@
       });
 
       element("cancelBtn").addEventListener("click", () => {
+        choosing = false;
+        element("rescanBtn").hidden = true;
         element("cancelBtn").disabled = true;
         element("signBtn").disabled = true;
         respond({ action: "cancel" });
