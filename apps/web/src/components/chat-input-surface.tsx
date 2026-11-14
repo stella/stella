@@ -41,6 +41,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { keepKeyPressLocal } from "@/lib/hotkeys";
 import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
@@ -267,9 +268,7 @@ export const ChatInputSurface = ({
                     ]
                   : ["relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS],
               )}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-              }}
+              onKeyDown={keepKeyPressLocal}
               role="presentation"
             >
               <ReferenceRenderScope
