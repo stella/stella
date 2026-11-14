@@ -174,6 +174,39 @@ describe("temperature emission policy", () => {
     }
   });
 
+  test("omits sampling parameters for OpenAI models from the GPT-5.5 cutoff on", () => {
+    expect(
+      resolveTemperaturePolicy({
+        modelId: "gpt-5.4",
+        provider: "openai",
+        releaseDate: "2026-03-05",
+        upstreamSupportsTemperature: true,
+      }),
+    ).toBe("emit");
+    for (const candidate of [
+      { modelId: "gpt-5.5", provider: "openai" as const },
+      { modelId: "gpt-6-luna", provider: "openai" as const },
+      { modelId: "openai/gpt-6-luna", provider: "openrouter" as const },
+    ]) {
+      expect(
+        resolveTemperaturePolicy({
+          ...candidate,
+          releaseDate: "2026-04-23",
+          upstreamSupportsTemperature: true,
+        }),
+        `${candidate.provider}/${candidate.modelId}`,
+      ).toBe("omit");
+    }
+    expect(() =>
+      resolveTemperaturePolicy({
+        modelId: "gpt-future",
+        provider: "openai",
+        releaseDate: null,
+        upstreamSupportsTemperature: true,
+      }),
+    ).toThrow("lacks a valid release_date");
+  });
+
   test("requires a release date before emitting temperature for Google models", () => {
     expect(() =>
       resolveTemperaturePolicy({
