@@ -45,6 +45,20 @@ test("choosing where a new chat runs and typing its message stay within the comm
   };
 
   await openNewChat(page);
+  // For comparison: a menu of the same composer that reads nothing about
+  // the member's computers.
+  const openAndClose = async (name: string) => {
+    await page.getByRole("button", { name }).click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  };
+  await measure("open and close the attachments menu", async () => {
+    await openAndClose("Open attachments and tools menu");
+  });
+  await measure("open and close the cloud where menu", async () => {
+    await openAndClose("Runs on: Cloud");
+  });
   await measure("choose the agent and its model", async () => {
     await chooseRunOn(page, {
       place: "computer",
@@ -76,5 +90,5 @@ test("choosing where a new chat runs and typing its message stay within the comm
   }
   // The numbers go to the run's output as well as its report.
   process.stdout.write(`composer commits: ${JSON.stringify(measured)}\n`);
-  expect(measured).toHaveLength(5);
+  expect(measured).toHaveLength(7);
 });
