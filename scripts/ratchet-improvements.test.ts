@@ -84,3 +84,61 @@ test.each(broaderGuards)(
     expect(guard.count(source, { file, role: "head" })).toBe(expected);
   },
 );
+
+test("raw numeric coercions count non-literal conversions and ignore syntax noise", () => {
+  const guard =
+    RATCHET_METRICS.find(({ id }) => id === "raw-numeric-coercions") ??
+    panic("Missing raw numeric coercion metric");
+  if (guard.scope !== "file") {
+    panic("Expected a file metric for raw numeric coercions");
+  }
+  const file = "packages/example/src/coercions.ts";
+  expect(guard.growth).toBe("shrink-only");
+  expect(guard.perFile).toBe(true);
+  expect(guard.exclude(file)).toBe(false);
+  expect(
+    guard.count(
+      [
+        "Number(amount)",
+        "parseInt(text, 10)",
+        "parseFloat(decimal)",
+        "Number.parseInt(text, 10)",
+        "Number.parseFloat(decimal)",
+        'Number("12")',
+        "Number(12)",
+        "Number(((12)))",
+        "Number(12n)",
+        "Number(true)",
+        "Number(null)",
+        "Number(-12)",
+        "Number(+12n)",
+        "schema.Number(amount)",
+        "other.parseInt(text)",
+        "// Number(amount) and parseInt(text)",
+        'const example = "Number(amount)";',
+      ].join("\n"),
+      { file, role: "head" },
+    ),
+  ).toBe(5);
+
+  for (const excluded of [
+    "apps/web/src/coercions.test.ts",
+    "packages/example/src/coercions.gen.ts",
+    "packages/example/src/tests/coercions.ts",
+    "packages/example/src/scripts/coercions.ts",
+    "packages/example/src/evals/coercions.ts",
+    "packages/agent-input/src/numeric-token.ts",
+  ]) {
+    expect(guard.exclude(excluded)).toBe(true);
+  }
+
+  const baseline = { count: 0, files: {} };
+  const current = { count: 1, files: { [file]: 1 } };
+  expect(
+    assessMeasurements({
+      current: { [guard.id]: current },
+      baseline: { [guard.id]: baseline },
+      metrics: [guard],
+    }).allowed,
+  ).toBe(false);
+});

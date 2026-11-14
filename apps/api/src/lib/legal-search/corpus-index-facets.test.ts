@@ -9,6 +9,9 @@ import {
 import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const segmentSizeSchema = v.pipe(
   v.object({ terms: v.object({ segment_size: v.number() }) }),
@@ -92,13 +95,15 @@ beforeEach(() => {
       headers: { "content-type": "application/json" },
     });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 type TermsBucket = { key: string | number; count: number };
@@ -186,7 +191,7 @@ test("facets use only manifest-owned fields", async () => {
   // Every group a read may reach, and never an enrolled group's index that
   // is not attested.
   expect(requests.at(0)?.url).toContain(
-    "/case_law_v5_aut,case_law_v5_cs_sk,case_law_v5_eu,case_law_v5_hun*,case_law_v5_pol/search",
+    "/case_law_v5_aut,case_law_v5_bra*,case_law_v5_cs_sk,case_law_v5_eu,case_law_v5_gbr*,case_law_v5_hun*,case_law_v5_pol/search",
   );
   expect(requests.at(0)?.url).not.toContain("usa");
   expect(requests.at(0)?.body["query"]).toBe("is_opening:true");
@@ -336,7 +341,7 @@ test("scopes to one jurisdiction index, and to every reachable index without one
 
   expect(requests.at(0)?.url).toContain(`/${generation}_cs_sk/search`);
   expect(requests.at(1)?.url).toContain(
-    `/${["aut", "cs_sk", "eu", "hun*", "pol"].map((group) => `${generation}_${group}`).join(",")}/search`,
+    `/${["aut", "bra*", "cs_sk", "eu", "gbr*", "hun*", "pol"].map((group) => `${generation}_${group}`).join(",")}/search`,
   );
 });
 

@@ -68,7 +68,7 @@ export default createSafeRootHandler(
           excludeId: current.id,
         });
         if (Result.isError(overlap)) {
-          return overlap;
+          return Result.err(overlap.error);
         }
         const changedFields = Object.keys(updates);
         if (changedFields.length === 0) {

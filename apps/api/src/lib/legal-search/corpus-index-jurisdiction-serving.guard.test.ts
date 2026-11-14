@@ -51,15 +51,21 @@ test("the modules that resolve an index for a read are the pointer's and the dec
     "lib/legal-search/corpus-index-provider.ts",
   ]);
   // The serving generation of a family, read without the pointer: the store
-  // that applies the pointer, the operator tools, the freshness metrics, and
-  // legislation, which has no pointer.
+  // that applies the pointer, the operator tools, and legislation, which has
+  // no pointer.
   expect(modulesMatching(/\breadServingCorpusIndexGenerationTx\b/u)).toEqual([
     "handlers/legislation/search.ts",
     "lib/legal-search/case-law-serving-flip.ts",
     "lib/legal-search/corpus-index-generation-store.ts",
     "lib/legal-search/corpus-index-group-enrollment-store.ts",
-    "lib/observability/case-law-freshness-metrics.ts",
     "scripts/corpus-snippet-compare.ts",
+  ]);
+  // The generations readers are served from, pointer applied: the read path's
+  // store and what measures those readers' freshness.
+  expect(modulesMatching(/\breadServedCorpusIndexGenerationsTx\b/u)).toEqual([
+    "lib/legal-search/corpus-index-group-enrollment-store.ts",
+    "lib/observability/case-law-freshness-metrics.ts",
+    "lib/observability/corpus-index-split-census.ts",
   ]);
 });
 
@@ -127,10 +133,12 @@ test("the SQL acceptance of an indexed hit resolves its generation through the p
     expect(argument).toContain("COALESCE(pointer.");
   }
   // And the callers hand it the serving generation, never a route of their own.
-  expect(modulesMatching(/\bcurrentCaseLawCorpusProjection\(/u)).toEqual([
+  expect(modulesMatching(/\bservedCaseLawCorpusProjection\(/u)).toEqual([
     "handlers/case-law/decisions/search.ts",
-    "lib/case-law/research-answer-runner.ts",
     "lib/legal-search/corpus-index-provider.ts",
+  ]);
+  expect(modulesMatching(/\bcurrentCaseLawCorpusProjection\(/u)).toEqual([
+    "lib/case-law/research-answer-runner.ts",
   ]);
 });
 

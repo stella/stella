@@ -15,8 +15,8 @@ import {
 } from "@/api/lib/workflow/decisions/openai-decisions";
 import {
   choice,
-  noul,
   createSystemOneClient,
+  noul,
 } from "@/api/lib/workflow/decisions/system-one";
 import { failingDecisionGenerator } from "@/api/tests/helpers/decision-generator";
 import {
@@ -367,6 +367,26 @@ describe("OpenAI Decisions boundary", () => {
     }
   });
 
+  test("uses bounded backoff for a retry-after value with exponent notation", async () => {
+    const delays: number[] = [];
+    const client = createOpenAIDecisionsClient({
+      apiKey: "fixture-key",
+      fetcher: async () =>
+        new Response("limited", {
+          status: 429,
+          headers: { "retry-after": "2e0" },
+        }),
+      sleep: async (delay) => {
+        delays.push(delay);
+      },
+    });
+
+    const result = await client.ask({ state, questions });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(delays).toEqual([400, 800]);
+  });
+
   test("recovers after a 429 using exponential backoff", async () => {
     let attempts = 0;
     const delays: number[] = [];
@@ -637,33 +657,26 @@ test("accepts questions, options and UTF-8 body exactly at each local ceiling", 
 });
 
 test("expires the idle response read when the transport stops producing data", async () => {
-  let attemptSignal: AbortSignal | null | undefined;
+  let cancelled = false;
   const client = createOpenAIDecisionsClient({
     apiKey: "fixture",
     timeoutMs: 1, // timeout under test
-    fetcher: async (_url, init) => {
-      attemptSignal = init?.signal;
-      return new Response(
+    fetcher: async () =>
+      new Response(
         new ReadableStream({
           start(stream) {
             stream.enqueue(new TextEncoder().encode('{"model":'));
-            const signal = init?.signal;
-            if (!signal) {
-              throw new Error("Expected transport timeout signal");
-            }
-            signal.addEventListener(
-              "abort",
-              () => stream.error(signal.reason),
-              { once: true },
-            );
+          },
+          cancel() {
+            cancelled = true;
           },
         }),
-      );
-    },
+      ),
   });
   const asked = await client.ask({ state, questions });
-  expect(attemptSignal?.aborted).toBe(true);
   expect(Result.isError(asked)).toBe(true);
+  await Promise.resolve();
+  expect(cancelled).toBe(true);
 });
 
 test("accepts the response byte ceiling and cancels overflow before JSON parsing", async () => {

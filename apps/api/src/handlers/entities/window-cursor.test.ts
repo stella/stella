@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   decodeEntitiesWindowCursor,
-  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
-  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
   encodeEntitiesWindowCursor,
+  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
+  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 

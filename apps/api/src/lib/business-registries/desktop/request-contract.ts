@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   BUSINESS_REGISTRY_SLUGS,
@@ -6,7 +6,7 @@ import {
 } from "@stll/api-contract";
 
 import { DESKTOP_REGISTRY_KEY_PREFIX } from "@/api/lib/business-registries/desktop/config";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 export const DESKTOP_REGISTRY_ROUTE_PREFIX = "/desktop-registry";
 export const DESKTOP_REGISTRY_REQUEST_ROUTE = "/request";
@@ -20,58 +20,49 @@ export const DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE = {
   body: { message: "Reconnect desktop to your account" },
 } as const;
 
-const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);
+const registry = v.picklist(BUSINESS_REGISTRY_SLUGS);
 
 const desktopRegistryRequestIdentityHeaders = {
-  authorization: t.String({
-    pattern: `^${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}`,
-    maxLength: DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH,
-  }),
-  "user-agent": t.Literal(DESKTOP_REGISTRY_REQUEST_USER_AGENT),
+  authorization: v.pipe(
+    v.string(),
+    v.regex(
+      new RegExp(`^${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}`, "u"),
+    ),
+    v.maxLength(DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH),
+  ),
+  "user-agent": v.literal(DESKTOP_REGISTRY_REQUEST_USER_AGENT),
 };
 
-export const desktopRegistryRequestHeaders = t.Object(
-  {
-    ...desktopRegistryRequestIdentityHeaders,
-    "content-type": t.RegExp(/^application\/json(?:\s*;.*)?$/iu),
-  },
-  { additionalProperties: true },
-);
+export const desktopRegistryRequestHeaders = v.looseObject({
+  ...desktopRegistryRequestIdentityHeaders,
+  "content-type": v.pipe(
+    v.string(),
+    v.regex(/^application\/json(?:\s*;.*)?$/iu),
+  ),
+});
 
-export const desktopRegistryNativeRequestHeaders = t.Object(
-  {
-    ...desktopRegistryRequestIdentityHeaders,
-    "content-type": t.Literal(DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE),
-  },
-  { additionalProperties: true },
-);
+export const desktopRegistryNativeRequestHeaders = v.looseObject({
+  ...desktopRegistryRequestIdentityHeaders,
+  "content-type": v.literal(DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE),
+});
 
-export const desktopRegistryRequestBody = t.Union([
-  t.Object({ type: t.Literal("config") }, { additionalProperties: false }),
-  t.Object({ type: t.Literal("revoke") }, { additionalProperties: false }),
-  t.Object(
-    {
-      type: t.Literal("search"),
-      registry,
-      query: t.String({ minLength: 1, maxLength: 256 }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal("format"),
-      registry,
-      id: t.String({ minLength: 1, maxLength: 64 }),
-      formatId: t.Union([tSafeId("templateLookupFormat"), t.Null()]),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal("setDefaultFormat"),
-      registry,
-      formatId: t.Union([tSafeId("templateLookupFormat"), t.Null()]),
-    },
-    { additionalProperties: false },
-  ),
+export const desktopRegistryRequestBody = v.union([
+  v.strictObject({ type: v.literal("config") }),
+  v.strictObject({ type: v.literal("revoke") }),
+  v.strictObject({
+    type: v.literal("search"),
+    registry,
+    query: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  }),
+  v.strictObject({
+    type: v.literal("format"),
+    registry,
+    id: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+    formatId: v.union([resourceIdSchema("templateLookupFormat"), v.null()]),
+  }),
+  v.strictObject({
+    type: v.literal("setDefaultFormat"),
+    registry,
+    formatId: v.union([resourceIdSchema("templateLookupFormat"), v.null()]),
+  }),
 ]);

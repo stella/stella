@@ -19,24 +19,27 @@ import {
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import { BookmarkIcon, BookmarkPlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 const PAGE_SIZE = 25;
@@ -77,7 +80,7 @@ export const SavedTimeNarratives = ({
   const savedQuery = useInfiniteQuery({
     queryKey,
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["saved-time-narratives"].get({
           query: {
             limit: PAGE_SIZE,
@@ -92,16 +95,27 @@ export const SavedTimeNarratives = ({
   });
 
   const reportError = (error: Error) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "SavedTimeNarratives.reportError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "SavedTimeNarratives.reportError:failure",
+      },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
+  const submitIntent = useIdempotentSubmit();
   const create = useMutation({
     mutationFn: async (savedName: string) =>
-      unwrapEden(
-        await api["saved-time-narratives"].post({
-          name: savedName,
-          narrative,
-          narrativeLanguage,
+      unwrapApiResponse(
+        await submitIntent.run({
+          operation: "saved-time-narratives.create",
+          body: {
+            name: savedName,
+            narrative,
+            narrativeLanguage,
+          },
+          send: api["saved-time-narratives"].post,
         }),
       ),
     onSuccess: async () => {
@@ -112,7 +126,7 @@ export const SavedTimeNarratives = ({
   });
   const remove = useMutation({
     mutationFn: async (id: SavedNarrative["id"]) =>
-      unwrapEden(await api["saved-time-narratives"]({ id }).delete()),
+      unwrapApiResponse(await api["saved-time-narratives"]({ id }).delete()),
     onSuccess: async () => {
       setDeleting(null);
       await queryClient.invalidateQueries({ queryKey });
@@ -172,7 +186,7 @@ export const SavedTimeNarratives = ({
                   type="button"
                   variant="ghost"
                 >
-                  <bdi className="truncate">{item.name}</bdi>
+                  <TruncatedText render={<bdi />}>{item.name}</TruncatedText>
                 </Button>
                 <Button
                   aria-label={t("common.deleteConfirmDescription", {
@@ -237,16 +251,15 @@ export const SavedTimeNarratives = ({
         open={name !== null}
       >
         <DialogPopup>
-          <DialogFormState
+          <DialogHeader>
+            <DialogTitle>{t("billing.savedNarratives.save")}</DialogTitle>
+          </DialogHeader>
+          <Form
+            density="compact"
             dirty={name !== null && name !== ""}
             onDiscard={() => {
               setName(null);
             }}
-          />
-          <DialogHeader>
-            <DialogTitle>{t("billing.savedNarratives.save")}</DialogTitle>
-          </DialogHeader>
-          <form
             onSubmit={(event) => {
               event.preventDefault();
               const trimmedName = name?.trim();
@@ -255,10 +268,12 @@ export const SavedTimeNarratives = ({
               }
             }}
           >
-            <div className="px-6 pb-6">
-              <label className="sr-only" htmlFor="saved-narrative-name">
+            {/* The compact form's row gap and this inset together keep the
+                footer at its old distance from the field. */}
+            <div className="px-6 pb-4">
+              <Label className="sr-only" htmlFor="saved-narrative-name">
                 {t("common.name")}
-              </label>
+              </Label>
               <Input
                 autoFocus
                 id="saved-narrative-name"
@@ -283,7 +298,7 @@ export const SavedTimeNarratives = ({
                 {t("common.save")}
               </Button>
             </DialogFooter>
-          </form>
+          </Form>
         </DialogPopup>
       </Dialog>
 

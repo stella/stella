@@ -6,8 +6,8 @@
 import { Result } from "better-result";
 import {
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   statSync,

@@ -1,41 +1,40 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { InferDataFromTag } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
+import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
-import { stellaToast } from "@stll/ui/toast";
 
 import arabic from "@/i18n/langs/ar.json";
 import czech from "@/i18n/langs/cs.json";
 import english from "@/i18n/langs/en.json";
 import slovak from "@/i18n/langs/sk.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondRequest: (request: Request) => Promise<Response> = async () => {
   throw new TypeError("Unexpected source request");
 };
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      if (new URL(request.url).pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      return await respondRequest(request);
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { stellaToast } = await import("@stll/ui/toast");
 const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -67,6 +66,7 @@ const files = [
     fileName: "agreement.pdf",
     parentId: null,
     mimeType: PDF_MIME,
+    sizeBytes: 240_000,
   },
   {
     entityId: "019a0000-0000-7000-8000-000000000008",
@@ -75,9 +75,14 @@ const files = [
     fileName: "statement.docx",
     parentId: null,
     mimeType: DOCX_MIME,
+    sizeBytes: 36_000,
   },
 ];
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},
@@ -89,13 +94,13 @@ const settings = {
   promptCachingEnabled: true,
   managedAIResidency: "eu",
   memoryExtractionEnabled: false,
+  localRunMaxApprovalMode: "full_auto",
   timeMinimumUnitMinutes: 1,
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone:
-    parseTimeZoneId("UTC") ??
-    panic("UTC fixture must be a supported time zone"),
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 
@@ -272,6 +277,27 @@ const openForm = async (mounted: Awaited<ReturnType<typeof mountAction>>) => {
     }),
   );
 };
+/** One document is a single choice: type its name and pick the match. */
+const pickDocument = async (
+  mounted: Awaited<ReturnType<typeof mountAction>>,
+  query: string,
+  name: string,
+) => {
+  await typeInPicker(mounted, query);
+  fireEvent.click(await mounted.view.findByRole("option", { name }));
+};
+const typeInPicker = async (
+  mounted: Awaited<ReturnType<typeof mountAction>>,
+  value: string,
+) => {
+  const input = mounted.view.getByRole("combobox", {
+    name: mounted.messages.common.document,
+  });
+  await act(async () => {
+    input.focus();
+    fireEvent.input(input, { target: { value }, inputType: "insertText" });
+  });
+};
 const save = async (mounted: Awaited<ReturnType<typeof mountAction>>) => {
   await act(async () => {
     fireEvent.click(
@@ -279,7 +305,23 @@ const save = async (mounted: Awaited<ReturnType<typeof mountAction>>) => {
     );
   });
 };
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        return await respondRequest(request);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients.splice(0)) {
     client.clear();
@@ -304,7 +346,7 @@ for (const { locale, messages } of [
     answer();
     const mounted = await mountAction({ locale, messages, showSources: true });
     await openForm(mounted);
-    fireEvent.click(mounted.view.getByText("Signed agreement"));
+    await pickDocument(mounted, "Signed", "Signed agreement");
     fireEvent.change(mounted.view.getByLabelText(messages.lists.sources.page), {
       target: { value: "12" },
     });
@@ -315,6 +357,7 @@ for (const { locale, messages } of [
     await save(mounted);
     await waitFor(() => expect(mounted.created).toEqual([itemEntityId]));
     const post = requests.find((request) => request.method === "POST");
+    expect(post?.headers.get("Idempotency-Key")).toBeNull();
     expect(await post?.json()).toEqual({
       listId,
       itemEntityId,
@@ -349,7 +392,7 @@ for (const value of ["0", "-1", "1.5", "9007199254740992"]) {
     answer();
     const mounted = await mountAction();
     await openForm(mounted);
-    fireEvent.click(mounted.view.getByText("Signed agreement"));
+    await pickDocument(mounted, "Signed", "Signed agreement");
     fireEvent.change(mounted.view.getByLabelText(english.lists.sources.page), {
       target: { value },
     });
@@ -380,11 +423,8 @@ test("zero matter files keep the document picker and no-results message visible"
   answer();
   const mounted = await mountAction({ matterFiles: [] });
   await openForm(mounted);
-  expect(mounted.view.getByText(english.common.document)).toBeTruthy();
-  expect(
-    mounted.view.getByRole("searchbox", { name: english.common.search }),
-  ).toBeTruthy();
-  expect(mounted.view.getByText(english.common.noResults)).toBeTruthy();
+  await typeInPicker(mounted, "agreement");
+  expect(await mounted.view.findByText(english.common.noResults)).toBeTruthy();
   expect(mounted.view.queryByRole("checkbox")).toBeNull();
 });
 test("a document is required and the quote limit rejects excess input", async () => {
@@ -395,13 +435,19 @@ test("a document is required and the quote limit rejects excess input", async ()
   expect((await mounted.view.findByRole("alert")).textContent).toBe(
     english.lists.sources.documentRequired,
   );
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
-    target: { value: "x".repeat(10_001) },
+    target: { value: "x".repeat(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH + 1) },
   });
   await save(mounted);
   expect((await mounted.view.findByRole("alert")).textContent).toBe(
-    english.lists.sources.quoteTooLong.replace("{limit}", "10,000"),
+    english.lists.sources.quoteTooLong.replace("{limit}", () =>
+      // English digit grouping, as the form renders it in this locale.
+      String(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH).replace(
+        /\B(?=(?:\d{3})+$)/gu,
+        ",",
+      ),
+    ),
   );
   expect(requests).toHaveLength(0);
 });
@@ -409,7 +455,7 @@ test("correcting a page validation error allows saving without reopening the for
   answer();
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.page), {
     target: { value: "0" },
   });
@@ -429,18 +475,14 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
   answer();
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.page), {
     target: { value: "12" },
   });
-  fireEvent.change(
-    mounted.view.getByRole("searchbox", { name: english.common.search }),
-    { target: { value: "capek" } },
-  );
-  fireEvent.click(mounted.view.getByText("Čapek statement"));
+  await pickDocument(mounted, "capek", "Čapek statement");
   expect(mounted.view.queryByLabelText(english.lists.sources.page)).toBeNull();
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
-    target: { value: "x".repeat(10_000) },
+    target: { value: "x".repeat(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH) },
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
@@ -449,13 +491,13 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
     ?.json();
   expect(body.locator).toEqual({ type: "document" });
   expect(body.sourceEntityId).toBe(files.at(1)?.entityId);
-  expect(body.quote).toHaveLength(10_000);
+  expect(body.quote).toHaveLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH);
 });
 test("an optional page and quote can both be omitted", async () => {
   answer();
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
   const body = await requests
@@ -470,7 +512,7 @@ test("a server refusal preserves the draft, reports an error, and leaves sources
   spies.push(toast);
   const mounted = await mountAction();
   await openForm(mounted);
-  fireEvent.click(mounted.view.getByText("Signed agreement"));
+  await pickDocument(mounted, "Signed", "Signed agreement");
   fireEvent.change(mounted.view.getByLabelText(english.lists.sources.quote), {
     target: { value: "Keep this quote" },
   });

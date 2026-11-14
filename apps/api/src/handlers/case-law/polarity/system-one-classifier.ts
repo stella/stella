@@ -1,7 +1,7 @@
 import { decide } from "@/api/lib/workflow/decisions/decide";
 import type {
-  DecisionGenerator,
   Decision,
+  DecisionGenerator,
 } from "@/api/lib/workflow/decisions/decide";
 import { decisionConfidenceFloor } from "@/api/lib/workflow/decisions/decision-policy";
 import type {

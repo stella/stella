@@ -13,6 +13,8 @@
 
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 const ENTITLEMENT_CREATED_EVENT_TYPE = "entitlement.created";
 const ENTITLEMENT_UPDATED_EVENT_TYPE = "entitlement.updated";
 const ENTITLEMENT_ACTIVE_EVENT_TYPE = "entitlement.active";
@@ -80,8 +82,8 @@ const providerEntitlementSchema = v.object({
    * semantics. When present, dispatch uses it to reject stale
    * out-of-order retries (see `usage_entitlements.hosted_last_event_at`).
    */
-  occurred_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
-  created_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  occurred_at: v.optional(apiDateTimeSchema),
+  created_at: v.optional(apiDateTimeSchema),
 });
 
 // Suspension and closure snapshots can have a null end bound; dispatch uses
@@ -102,7 +104,7 @@ const providerUpdatedEntitlementSchema = v.union([
 ]);
 
 const providerAllocationSchema = v.object({
-  occurred_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  occurred_at: v.optional(apiDateTimeSchema),
   id: v.string(),
   account_ref: v.string(),
   policy_ref: v.string(),

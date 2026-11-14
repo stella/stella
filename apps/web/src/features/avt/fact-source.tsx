@@ -1,11 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 /**
  * Where an anchor fact comes from: its first source's document and page,
  * opening the document there.
  */
 
-import { useQuery } from "@tanstack/react-query";
-
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   SourceLocatorLabel,
@@ -15,7 +15,8 @@ import {
 import { evidenceSourceDocumentName } from "@/features/avt/fact-source.logic";
 import type { EvidenceFact } from "@/features/avt/types";
 import type { LegalListSourceLocator } from "@/lib/api-contract";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type FactSourceProps = {
@@ -35,13 +36,13 @@ export const FactSource = ({
   return (
     <Button
       className="min-w-0 justify-start"
-      size="xs"
+      size="inline"
       onClick={() => openSourceDocument(documentId, sourceLocatorPage(locator))}
       variant="link"
     >
-      <span className="truncate">
+      <TruncatedText>
         <SourceLocatorLabel documentName={documentName} locator={locator} />
-      </span>
+      </TruncatedText>
     </Button>
   );
 };
@@ -57,8 +58,8 @@ export const EvidenceFactSource = ({
   source,
 }: EvidenceFactSourceProps) => {
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  const filesView = queryView(filesQuery);
+  useQueryViewError(filesView, "EvidenceFactSource:query");
   const files =
     (filesView.type === "items" ? filesView.items : undefined) ?? [];
   if (source === undefined) {

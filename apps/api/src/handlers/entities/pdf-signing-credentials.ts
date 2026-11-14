@@ -1,30 +1,45 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import type { RawRouteInput } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   AuthorizedPdfSigningSession,
   PdfSigningSessionAuthorization,
 } from "@/api/lib/files/pdf-signing/sessions";
 import { authorizePdfSigningSession } from "@/api/lib/files/pdf-signing/sessions";
-import { validatePostAuth } from "@/api/lib/permissive-route-schema";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import { isRecord } from "@/api/lib/type-guards";
 
 const SESSION_TOKEN_LENGTH = 64;
 
+/** The session token a desktop-facing signing call carries in its body. */
+export const pdfSigningSessionTokenSchema = v.pipe(
+  v.string(),
+  v.minLength(SESSION_TOKEN_LENGTH),
+  v.maxLength(SESSION_TOKEN_LENGTH),
+);
+
+/** The path of a desktop-facing signing call. */
+export const pdfSigningSessionParamsSchema = v.object({
+  sessionId: resourceIdSchema("pdfSigningSession"),
+});
+
 /**
- * The credential every desktop-facing signing call carries. The session id
- * rides in the path and the token in the body; both are validated only after
- * the permissive route schema has let the request reach the handler.
+ * The credential every desktop-facing signing call carries: the session id
+ * rides in the path and the token in the body.
  */
-const credentialsSchema = t.Object({
-  sessionId: tSafeId("pdfSigningSession"),
-  sessionToken: t.String({
-    minLength: SESSION_TOKEN_LENGTH,
-    maxLength: SESSION_TOKEN_LENGTH,
-  }),
+const credentialsSchema = v.object({
+  ...pdfSigningSessionParamsSchema.entries,
+  sessionToken: pdfSigningSessionTokenSchema,
+});
+
+/** The credential fields of a raw, unvalidated signing request. */
+export const pdfSigningRawCredentials = ({ params, body }: RawRouteInput) => ({
+  sessionId: params["sessionId"],
+  sessionToken: isRecord(body) ? body["sessionToken"] : undefined,
 });
 
 const pdfSigningSessionNotFoundError = () =>
@@ -62,7 +77,7 @@ const openSessionOrError = (
   return Result.ok(authorized.value);
 };
 
-type FinalizeCredentials =
+export type FinalizeCredentials =
   | { kind: "open"; session: AuthorizedPdfSigningSession }
   | {
       kind: "finalized";
@@ -78,12 +93,12 @@ type FinalizeCredentials =
 export const authorizePdfSigningFinalizeCredentials = async (
   rawCredentials: unknown,
 ): Promise<Result<FinalizeCredentials, HandlerError<401 | 403 | 404>>> => {
-  const credentials = validatePostAuth(credentialsSchema, rawCredentials);
-  if (!credentials.ok) {
+  const credentials = v.safeParse(credentialsSchema, rawCredentials);
+  if (!credentials.success) {
     return Result.err(pdfSigningSessionNotFoundError());
   }
   const authorized = await authorizePdfSigningSession(
-    credentials.value,
+    credentials.output,
     tokenScopedDatabase,
   );
   if (authorized.status === "finalized") {
@@ -106,16 +121,23 @@ export const authorizePdfSigningFinalizeCredentials = async (
  * cannot distinguish "wrong shape" from "no such session" from "already
  * closed".
  */
-export const authorizePdfSigningCredentials = async (
+const authorizePdfSigningCredentials = async (
   rawCredentials: unknown,
 ): Promise<
   Result<AuthorizedPdfSigningSession, HandlerError<401 | 403 | 404>>
 > => {
-  const credentials = validatePostAuth(credentialsSchema, rawCredentials);
-  if (!credentials.ok) {
+  const credentials = v.safeParse(credentialsSchema, rawCredentials);
+  if (!credentials.success) {
     return Result.err(pdfSigningSessionNotFoundError());
   }
   return openSessionOrError(
-    await authorizePdfSigningSession(credentials.value, tokenScopedDatabase),
+    await authorizePdfSigningSession(credentials.output, tokenScopedDatabase),
   );
 };
+
+/** A desktop-facing signing call's caller: the open session its credential names. */
+export const verifyPdfSigningCaller = async (
+  raw: RawRouteInput,
+): Promise<
+  Result<AuthorizedPdfSigningSession, HandlerError<401 | 403 | 404>>
+> => await authorizePdfSigningCredentials(pdfSigningRawCredentials(raw));

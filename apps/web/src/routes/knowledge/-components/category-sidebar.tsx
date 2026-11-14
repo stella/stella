@@ -18,9 +18,9 @@ import { ContextMenu } from "@stll/ui/context-menu";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -33,12 +33,14 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { detached } from "@/lib/detached";
@@ -46,6 +48,8 @@ import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 
 // ── Types ────────────────────────────────────────────
 
@@ -68,7 +72,10 @@ type CategoryApiResponse<Data> = {
 };
 
 type CategoryApiOptions = {
-  create: (name: string) => Promise<CategoryApiResponse<CategoryEntity>>;
+  create: (
+    name: string,
+    request: IdempotentRequest,
+  ) => Promise<CategoryApiResponse<CategoryEntity>>;
   rename: (id: string, name: string) => Promise<CategoryApiResponse<unknown>>;
   remove: (id: string) => Promise<CategoryApiResponse<unknown>>;
   /** Toast title when a create or rename fails. */
@@ -86,6 +93,7 @@ export const useCategoryOps = ({
   saveFailedTitle,
   deleteFailedTitle,
 }: CategoryApiOptions): CategoryOps => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const reportFailure = (title: string, error: ToAPIErrorProps) => {
     notifyUserError(toAPIError(error), title, {
@@ -95,7 +103,11 @@ export const useCategoryOps = ({
 
   return {
     create: async (name) => {
-      const response = await create(name);
+      const response = await idempotentSubmit.run({
+        body: name,
+        operation: "category.create",
+        send: create,
+      });
       if (response.error) {
         reportFailure(saveFailedTitle, response.error);
         return null;
@@ -369,28 +381,36 @@ const CategoryMobileFilterButton = ({
   label,
   active,
   icon,
-  variant,
+  variant = "default",
 }: CategoryMobileFilterButtonProps) => {
-  const resolvedVariant = variant ?? "default";
+  // An inactive extra filter (a view, not a category) reads apart from the
+  // categories by a dashed outline, drawn over a borderless button.
+  const dashed = variant === "extra" && !active;
+  let buttonVariant: "default" | "ghost" | "outline" = "outline";
+  if (active) {
+    buttonVariant = "default";
+  } else if (dashed) {
+    buttonVariant = "ghost";
+  }
 
   return (
-    <button
+    <Button
       aria-pressed={active}
-      className={cn(
-        "border-input bg-popover text-foreground relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium pointer-coarse:after:absolute pointer-coarse:after:start-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:w-full pointer-coarse:after:-translate-y-1/2",
-        resolvedVariant === "extra" && "border-dashed",
-        active
-          ? "border-foreground bg-foreground text-background"
-          : "hover:bg-muted",
-      )}
+      className="shrink-0"
       onClick={onSelect}
-      type="button"
+      variant={buttonVariant}
     >
+      {dashed && (
+        <span
+          aria-hidden="true"
+          className="border-input pointer-events-none absolute inset-0 rounded-[inherit] border border-dashed"
+        />
+      )}
       {icon ?? null}
-      <span className="max-w-40 truncate" dir="auto">
+      <TruncatedText className="max-w-40" dir="auto">
         {label}
-      </span>
-    </button>
+      </TruncatedText>
+    </Button>
   );
 };
 
@@ -476,20 +496,31 @@ const CategoryNavButton = ({
   const drop = useCategoryDropTarget(dragAndDrop, targetCategoryId);
 
   return (
-    <button
+    <div
       className={cn(
-        "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
-        isSelected ? "bg-muted font-medium" : "hover:bg-muted/50",
+        "rounded-md",
+        isSelected && "bg-muted",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
-      onClick={onSelect}
       onDragLeave={drop.onDragLeave}
       onDragOver={drop.onDragOver}
       onDrop={drop.onDrop}
-      type="button"
     >
-      {label}
-    </button>
+      {/* The selected fill sits on the row, as for a category row below, so
+          "all" and a category read selected the same way. */}
+      <Button
+        aria-pressed={isSelected}
+        onClick={onSelect}
+        size="row"
+        variant="ghost"
+      >
+        <TruncatedText
+          className={cn(isSelected ? "font-medium" : "font-normal")}
+        >
+          {label}
+        </TruncatedText>
+      </Button>
+    </div>
   );
 };
 
@@ -539,24 +570,27 @@ const CategoryRow = ({
     <div
       className={cn(
         "group flex items-center rounded-md",
-        isSelected ? "bg-muted" : "hover:bg-muted/50",
+        isSelected && "bg-muted",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
       onDragLeave={drop.onDragLeave}
       onDragOver={drop.onDragOver}
       onDrop={drop.onDrop}
     >
-      <button
-        className={cn(
-          "min-w-0 flex-1 truncate px-3 py-1.5 text-start text-sm",
-          isSelected && "font-medium",
-        )}
+      <Button
+        aria-pressed={isSelected}
+        className="flex-1"
         dir="auto"
         onClick={onSelect}
-        type="button"
+        size="row"
+        variant="ghost"
       >
-        {category.name}
-      </button>
+        <TruncatedText
+          className={cn(isSelected ? "font-medium" : "font-normal")}
+        >
+          {category.name}
+        </TruncatedText>
+      </Button>
 
       <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
         {(permissions.canUpdate || permissions.canDelete) && (
@@ -564,7 +598,7 @@ const CategoryRow = ({
             <DropdownMenuTrigger
               render={
                 <Button
-                  className="invisible shrink-0 group-hover:visible"
+                  className="invisible shrink-0 group-hover:visible pointer-coarse:visible"
                   size="icon-xs"
                   variant="ghost"
                 />
@@ -734,9 +768,7 @@ const CategoryFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="category-name">
-            {labels.nameLabel}
-          </label>
+          <Label htmlFor="category-name">{labels.nameLabel}</Label>
           <Input
             id="category-name"
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}

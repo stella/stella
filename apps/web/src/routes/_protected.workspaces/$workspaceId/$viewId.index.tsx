@@ -5,6 +5,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { AVT_MODES } from "@/features/avt/avt-mode";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { loadCallerFeature } from "@/lib/organization/feature-access/access";
@@ -22,9 +23,9 @@ import {
   overviewOptions,
 } from "@/lib/workspaces/queries";
 import {
+  CORRESPONDENCE_PAGE_SIZE,
   correspondenceAddressOptions,
   correspondenceInfiniteOptions,
-  CORRESPONDENCE_PAGE_SIZE,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   filesystemEntitiesOptions,
@@ -36,6 +37,8 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
+import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
@@ -64,14 +67,17 @@ const isFilesystemView = (
 const isCalendarView = (view: WorkspaceView): view is CalendarWorkspaceView =>
   view.layout.type === "calendar";
 
-// `run` opens one verification in an AVT view.
-const searchSchema = v.object({
+// `run` opens one verification in an AVT view; `mode` shows the list as a
+// graph or a chronology instead of its review.
+const searchSchema = routeSearchSchema({
   run: optionalSearchStringSchema(),
+  mode: v.fallback(v.optional(v.picklist(AVT_MODES)), undefined),
 });
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/",
 )({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   component: RouteComponent,
   validateSearch: searchSchema,
   loader: async ({ context, params }) => {
@@ -185,7 +191,14 @@ export const Route = createFileRoute(
             queryClient,
             correspondenceAddressOptions(workspaceId),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "loader.correspondence:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId/",
+                },
+              });
             },
           ),
         ]);
@@ -201,6 +214,7 @@ function RouteComponent() {
     select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
   });
   const runId = Route.useSearch({ select: (search) => search.run });
+  const mode = Route.useSearch({ select: (search) => search.mode });
   const navigate = Route.useNavigate();
   const { data: activeView } = useSuspenseQuery({
     ...viewsOptions(workspaceId),
@@ -240,6 +254,10 @@ function RouteComponent() {
       return (
         <Suspense fallback={null}>
           <AvtRoute
+            mode={mode}
+            onModeChange={(next) => {
+              detached(navigate({ search: { mode: next } }), "avt-view.mode");
+            }}
             onRunChange={(run) => {
               detached(navigate({ search: { run } }), "avt-view.open-run");
             }}

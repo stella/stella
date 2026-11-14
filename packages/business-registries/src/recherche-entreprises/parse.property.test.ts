@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   expectNullableString,
@@ -9,8 +9,8 @@ import {
   expectRegistryResponse,
   forEachRegistryMutation,
   mutatedRegistryPayload,
-  registryMutation,
   nullableRegistryString,
+  registryMutation,
   registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupBySiren, lookupBySiret } from "./client.js";
@@ -22,8 +22,8 @@ import {
 } from "./parse.js";
 import type {
   RechercheEntreprisesCompany,
-  RechercheEntreprisesRawEtablissement,
   RechercheEntreprisesRawDirigeant,
+  RechercheEntreprisesRawEtablissement,
   RechercheEntreprisesRawUniteLegale,
 } from "./types.js";
 
@@ -87,7 +87,8 @@ const company = fc
   .map((raw) => raw satisfies RechercheEntreprisesRawUniteLegale);
 
 test("legal entities retain nested establishment identities and named directors", () => {
-  fc.assert(
+  assertProperty(
+    "legal entities retain nested establishment identities and named directors",
     fc.property(company, registryString, (raw, queriedSiret) => {
       const matchedSiret =
         raw.matching_etablissements.at(0)?.siret || queriedSiret;
@@ -156,7 +157,7 @@ test("legal entities retain nested establishment identities and named directors"
           : null,
       });
     }),
-    propertyConfig({ seed: propertySeed() }),
+    { seed: propertySeed() },
   );
 });
 
@@ -204,7 +205,8 @@ const expectTypedOutput = (output: RechercheEntreprisesCompany) => {
 };
 
 test("legal entity response mutations retain typed nested data or registry failures", async () => {
-  await fc.assert(
+  await assertProperty(
+    "legal entity response mutations retain typed nested data or registry failures",
     fc.asyncProperty(
       company,
       fc.nat(),
@@ -234,7 +236,7 @@ test("legal entity response mutations retain typed nested data or registry failu
         expectTypedOutput(output);
       },
     ),
-    propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+    { seed: propertySeed(), numRuns: 20 },
   );
 });
 

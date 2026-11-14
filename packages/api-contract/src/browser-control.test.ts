@@ -3,16 +3,25 @@ import { describe, expect, test } from "bun:test";
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
+  BROWSER_DOWNLOAD_STAGED_NAME_PATTERN,
+  BROWSER_DOWNLOAD_STAGING_FOLDER,
+  BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
+  browserDownloadStagedPath,
   formatElementReference,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
   parseBrowserControlResult,
-  parseBrowserExtensionResponse,
+  parseBrowserDesktopRequest,
+  parseBrowserDesktopResponse,
+  parseBrowserExtensionPeerVersion,
   parseBrowserExtensionRequest,
+  parseBrowserExtensionResponse,
   parseElementReference,
 } from "./browser-control";
 
@@ -20,15 +29,30 @@ const PAGE = {
   revision: "revision-1",
   url: "https://example.com/",
 } as const;
-const TARGET = { name: "Submit", ref: "e:0:0.12.3", role: "button" } as const;
+const ABSENT_TARGET_METADATA = {
+  type: BROWSER_CONTROL_TARGET_METADATA.absent,
+} as const;
+const TARGET = {
+  context: ABSENT_TARGET_METADATA,
+  href: ABSENT_TARGET_METADATA,
+  name: "Submit",
+  ref: "e:0:0.12.3",
+  role: "button",
+} as const;
 
 const COMMAND_EXAMPLES = {
   [BROWSER_CONTROL_ACTION.click]: {
     action: "click",
     page: PAGE,
     target: {
-      context: "Case 12 C 345/2024 Next",
-      href: "https://example.com/next",
+      context: {
+        type: BROWSER_CONTROL_TARGET_METADATA.present,
+        value: "Case 12 C 345/2024 Next",
+      },
+      href: {
+        type: BROWSER_CONTROL_TARGET_METADATA.present,
+        value: "https://example.com/next",
+      },
       name: "Next",
       ref: "e:0:1.s.0.2",
       role: "link",
@@ -37,7 +61,7 @@ const COMMAND_EXAMPLES = {
   [BROWSER_CONTROL_ACTION.fill]: {
     action: "fill",
     page: PAGE,
-    target: { name: "Search", ref: "e:1:2", role: "textbox" },
+    target: { ...TARGET, name: "Search", ref: "e:1:2", role: "textbox" },
     value: "search text",
   },
   [BROWSER_CONTROL_ACTION.goBack]: { action: "go-back" },
@@ -49,15 +73,20 @@ const COMMAND_EXAMPLES = {
     action: "press-key",
     key: "Enter",
     page: PAGE,
-    target: { name: "Search", ref: "e:2:0", role: "textbox" },
+    target: { ...TARGET, name: "Search", ref: "e:2:0", role: "textbox" },
   },
   [BROWSER_CONTROL_ACTION.select]: {
     action: "select",
     page: PAGE,
-    target: { name: "Court", ref: "e:0:3.1", role: "select" },
+    target: { ...TARGET, name: "Court", ref: "e:0:3.1", role: "select" },
     value: "option-1",
   },
   [BROWSER_CONTROL_ACTION.snapshot]: { action: "snapshot", textOffset: 48_000 },
+  [BROWSER_CONTROL_ACTION.switchTab]: {
+    action: "switch-tab",
+    tabId: 9,
+    url: "https://example.com/opened",
+  },
 } as const satisfies Record<
   BrowserControlCommand["action"],
   BrowserControlCommand
@@ -110,6 +139,35 @@ describe("browser control command contract", () => {
     expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES["go-back"])).toBe(false);
     expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES.open)).toBe(false);
     expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES.click)).toBe(false);
+    expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES["switch-tab"])).toBe(
+      false,
+    );
+  });
+
+  test("opens in a new tab only when asked with a boolean", () => {
+    const newTab = { action: "open", newTab: true, url: PAGE.url } as const;
+    expect(parseBrowserControlCommand(newTab)).toEqual(newTab);
+    expect(parseBrowserControlCommand({ ...newTab, newTab: "yes" })).toBeNull();
+  });
+
+  test("switches only to a named tab at a named address", () => {
+    expect(
+      parseBrowserControlCommand({ action: "switch-tab", tabId: 9 }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "switch-tab",
+        tabId: -1,
+        url: PAGE.url,
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "switch-tab",
+        tabId: 9,
+        url: "",
+      }),
+    ).toBeNull();
   });
 
   test("rejects extra fields, malformed references and out-of-range offsets", () => {
@@ -117,6 +175,26 @@ describe("browser control command contract", () => {
       parseBrowserControlCommand({
         action: "snapshot",
         javascript: "document.cookie",
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "click",
+        page: PAGE,
+        target: { name: "Submit", ref: "e:0:0.12.3", role: "button" },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "click",
+        page: PAGE,
+        target: {
+          ...TARGET,
+          href: {
+            type: BROWSER_CONTROL_TARGET_METADATA.absent,
+            value: "https://example.com/unapproved",
+          },
+        },
       }),
     ).toBeNull();
     expect(
@@ -149,15 +227,38 @@ describe("browser control result contract", () => {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       elements: [
         {
-          href: "https://example.com/next",
+          context: ABSENT_TARGET_METADATA,
+          href: {
+            type: BROWSER_CONTROL_TARGET_METADATA.present,
+            value: "https://example.com/next",
+          },
           name: "Next",
           ref: "e:0:0.1",
           role: "link",
         },
-        { name: "Search", ref: "e:1:0.2.s.1", role: "textbox", value: "" },
+        {
+          context: ABSENT_TARGET_METADATA,
+          href: ABSENT_TARGET_METADATA,
+          name: "Search",
+          ref: "e:1:0.2.s.1",
+          role: "textbox",
+          value: "",
+        },
       ],
       revision: "revision-1",
       tabId: 7,
+      tabs: [
+        {
+          active: true,
+          tabId: 7,
+          url: "https://example.com/",
+        },
+        {
+          active: false,
+          tabId: 9,
+          url: "https://example.com/opened",
+        },
+      ],
       text: "Page text",
       textOffset: 0,
       textTotalChars: 9,
@@ -183,6 +284,60 @@ describe("browser control result contract", () => {
     ).toBeNull();
   });
 
+  test("lists tabs by address only, never by title", () => {
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: {
+          ...success.snapshot,
+          tabs: [
+            {
+              active: false,
+              tabId: 9,
+              title: "Opened",
+              url: "https://example.com/opened",
+            },
+          ],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("lists no more tabs than chat may keep", () => {
+    const tab = {
+      active: false,
+      tabId: 9,
+      url: "https://example.com/opened",
+    };
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: {
+          ...success.snapshot,
+          tabs: Array.from(
+            { length: BROWSER_CONTROL_LIMITS.tabs + 1 },
+            (_, index) => ({ ...tab, tabId: index }),
+          ),
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: {
+          ...success.snapshot,
+          tabs: [
+            { ...tab, url: "x".repeat(BROWSER_CONTROL_LIMITS.urlChars + 1) },
+          ],
+        },
+      }),
+    ).toBeNull();
+    const { tabs: _tabs, ...untabbed } = success.snapshot;
+    expect(
+      parseBrowserControlResult({ ...success, snapshot: untabbed }),
+    ).toBeNull();
+  });
+
   test("rejects malformed element references inside extension responses", () => {
     expect(
       parseBrowserExtensionResponse({
@@ -192,7 +347,15 @@ describe("browser control result contract", () => {
           ...success,
           snapshot: {
             ...success.snapshot,
-            elements: [{ name: "Submit", ref: "e:not-a-path", role: "button" }],
+            elements: [
+              {
+                context: ABSENT_TARGET_METADATA,
+                href: ABSENT_TARGET_METADATA,
+                name: "Submit",
+                ref: "e:not-a-path",
+                role: "button",
+              },
+            ],
           },
         },
         source: "stella-browser-extension",
@@ -265,5 +428,159 @@ describe("browser control result contract", () => {
     expect(parseBrowserExtensionResponse(pong)).toEqual(pong);
     const { controlledTabId: _tabId, ...previousVersion } = pong;
     expect(parseBrowserExtensionResponse(previousVersion)).toBeNull();
+  });
+});
+
+describe("extension peer version", () => {
+  test("reads the version of an extension message from another protocol", () => {
+    const olderPong = {
+      allSitesGranted: true,
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      requestId: "extension-ready",
+      source: "stella-browser-extension",
+      type: "pong",
+    };
+    expect(parseBrowserExtensionResponse(olderPong)).toBeNull();
+    expect(parseBrowserExtensionPeerVersion(olderPong)).toBe(
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    );
+  });
+
+  test.each([
+    ["a stella page message", { protocolVersion: 3, source: "stella-web" }],
+    ["no version", { source: "stella-browser-extension" }],
+    [
+      "a fractional version",
+      { protocolVersion: 1.5, source: "stella-browser-extension" },
+    ],
+    ["not an object", "stella-browser-extension"],
+  ])("ignores %s", (_name, input) => {
+    expect(parseBrowserExtensionPeerVersion(input)).toBeNull();
+  });
+});
+
+describe("stella desktop transport", () => {
+  const command = {
+    command: { action: "snapshot" },
+    controllerId: "thread-1",
+    observedTab: null,
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    requestId: "request-1",
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+    toolCallId: "call-1",
+    turnId: "run-1",
+    type: "command",
+  } as const;
+
+  test("takes commands only from stella desktop, at this protocol", () => {
+    expect(parseBrowserDesktopRequest(command)).toEqual(command);
+    expect(
+      parseBrowserDesktopRequest({
+        ...command,
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserDesktopRequest({
+        ...command,
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      }),
+    ).toBeNull();
+  });
+
+  test("reads a hello at any protocol, so a mismatch can be named", () => {
+    for (const protocolVersion of [
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+    ]) {
+      expect(
+        parseBrowserDesktopRequest({
+          protocolVersion,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+          type: "hello",
+        }),
+      ).not.toBeNull();
+      expect(
+        parseBrowserDesktopResponse({
+          protocolVersion,
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "hello",
+        }),
+      ).not.toBeNull();
+    }
+  });
+
+  test("carries a sign-in refusal back as a result", () => {
+    const response = {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      requestId: "request-1",
+      result: {
+        code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+        message: "This page asks for a sign-in.",
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "error",
+      },
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "command-result",
+    } as const;
+    expect(parseBrowserDesktopResponse(response)).toEqual(response);
+  });
+
+  test("a download report says where Chrome saved the file, or why it was stopped", () => {
+    const saved = {
+      controllerId: "thread-1",
+      download: {
+        bytes: 2048,
+        mime: "application/pdf",
+        outcome: "saved",
+        path: `/Volumes/Work/Downloads/${browserDownloadStagedPath("1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed")}`,
+        sourceUrl: "https://example.com/file",
+        suggestedName: "Decision.pdf",
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "download",
+    } as const;
+    const stopped = {
+      ...saved,
+      download: {
+        outcome: "stopped",
+        reason: "not-pdf",
+        sourceUrl: "https://example.com/setup",
+        suggestedName: "setup.dmg",
+      },
+    } as const;
+    expect(parseBrowserDesktopResponse(saved)).toEqual(saved);
+    expect(parseBrowserDesktopResponse(stopped)).toEqual(stopped);
+    // A stopped download names no file, and a saved one always does.
+    expect(
+      parseBrowserDesktopResponse({
+        ...stopped,
+        download: { ...stopped.download, path: saved.download.path },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserDesktopResponse({
+        ...saved,
+        download: { ...saved.download, path: "" },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserDesktopResponse({
+        ...saved,
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.desktop,
+      }),
+    ).toBeNull();
+  });
+
+  test("a staged name is a fresh UUID with the PDF extension, nothing a page chose", () => {
+    const staged = browserDownloadStagedPath(crypto.randomUUID());
+    const [folder, name] = staged.split("/");
+    expect(folder).toBe(BROWSER_DOWNLOAD_STAGING_FOLDER);
+    expect(BROWSER_DOWNLOAD_STAGED_NAME_PATTERN.test(name ?? "")).toBe(true);
+    const pageNames = ["Decision.pdf", "../x.pdf", `${"a".repeat(36)}.pdf`];
+    for (const pageName of pageNames) {
+      expect(BROWSER_DOWNLOAD_STAGED_NAME_PATTERN.test(pageName)).toBe(false);
+    }
   });
 });

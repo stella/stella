@@ -130,6 +130,7 @@ describe("chat tool execution audit", () => {
       },
     });
     const granted = applyChatToolGrants({
+      answeredApprovalToolNames: new Set(),
       externalConnectors: [],
       grants: [
         {

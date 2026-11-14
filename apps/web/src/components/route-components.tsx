@@ -1,20 +1,20 @@
 import { lazy, Suspense, useRef, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import { CopyIcon, MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
+import { MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
+import { CopyControl } from "@/components/copy-control";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import {
   isNetworkError,
@@ -32,12 +32,11 @@ import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { reportErrorOnce } from "@/lib/analytics/reported-error";
+import { resolveCaughtRouteTemplate } from "@/lib/analytics/route-error-lifecycle";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
 
 // Lazy so the form stack is fetched only when someone reports the error.
 const FeedbackDialog = lazy(async () => {
@@ -117,6 +116,18 @@ export const DefaultErrorComponent = ({
   className,
 }: DefaultErrorComponentProps) => {
   const analytics = useAnalytics();
+  const routeTemplate = useRouterState({
+    select: ({ matches }) => resolveCaughtRouteTemplate(matches),
+  });
+  const router = useRouter();
+  // A loader's failure stays on its match until the loader runs again:
+  // resetting the boundary alone would only show the same error.
+  const loaderFailed = useRouterState({
+    select: ({ matches }) =>
+      matches.some(
+        (match) => match.status === "error" && match.error === error,
+      ),
+  });
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const isCancelledError = error instanceof CancelledError;
@@ -133,10 +144,22 @@ export const DefaultErrorComponent = ({
             query.state.status === "error",
         })
         .catch((refetchError: unknown) => {
-          analytics.captureError(refetchError);
+          analytics.captureError(refetchError, {
+            fingerprintKey:
+              "DefaultErrorComponent.retryErroredQueries:refetchError",
+            scope: { type: "request", method: "GET", routeTemplate },
+          });
         });
 
-      reset();
+      if (loaderFailed) {
+        // Running the failed loaders again replaces their matches, which
+        // resets this boundary with the outcome.
+        await router.invalidate({
+          filter: (match) => match.status === "error",
+        });
+      } else {
+        reset();
+      }
       // Don't reset networkRetryCount here. If the error
       // persists, the error boundary re-catches and the
       // counter keeps accumulating toward AUTO_RETRY_LIMIT.
@@ -159,7 +182,10 @@ export const DefaultErrorComponent = ({
 
     if (retriesAtLimit) {
       reportErrorOnce(error, (caughtError) => {
-        analytics.captureError(caughtError);
+        analytics.captureError(caughtError, {
+          fingerprintKey: "DefaultErrorComponent:failure",
+          scope: { type: "request", method: "GET", routeTemplate },
+        });
       });
     }
   }, [
@@ -169,27 +195,23 @@ export const DefaultErrorComponent = ({
     networkError,
     isCancelledError,
     retriesAtLimit,
+    routeTemplate,
   ]);
 
   const t = useTranslations();
 
-  // CancelledError is benign — React Query throws it when a
-  // suspense query unmounts during route transitions or when
-  // sidebar preloads race with the current route. Return early
-  // to avoid showing the error screen; the route will recover
-  // on the next render cycle.
-  if (isCancelledError) {
-    return null;
-  }
-
   if (actionAdmissionOutcome(error)) {
     return (
-      <ActionAdmissionOutcome
-        className={className}
-        disabled={isPending}
-        error={error}
-        onRetry={retryErroredQueries}
-      />
+      <div className={cn("flex flex-col items-center gap-3 p-6", className)}>
+        <ActionAdmissionOutcome
+          disabled={isPending}
+          error={error}
+          onRetry={retryErroredQueries}
+        />
+        <Button render={<Link from="/" to="/workspaces" />} variant="outline">
+          <MattersNavIcon /> {t("routeError.backToMatters")}
+        </Button>
+      </div>
     );
   }
 
@@ -205,11 +227,9 @@ export const DefaultErrorComponent = ({
     return (
       <StatusMessage
         actionButton={
-          retriesExhausted ? (
-            <Button disabled={isPending} onClick={retryErroredQueries}>
-              <RefreshCcwIcon /> {t("common.tryAgain")}
-            </Button>
-          ) : null
+          <Button disabled={isPending} onClick={retryErroredQueries}>
+            <RefreshCcwIcon /> {t("common.tryAgain")}
+          </Button>
         }
         className={className}
         description={
@@ -297,21 +317,7 @@ const UnexpectedRouteError = ({
       recovery: recovery.type,
       reference,
     });
-    recoverFromStaleDeploymentLoad(routeError);
   });
-
-  const handleCopyReference = async () => {
-    if (errorReference === null) {
-      return;
-    }
-    const copied = await copyToClipboard(errorReference);
-    if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
 
   const handleRecovery = () => {
     if (errorReference === null) {
@@ -344,8 +350,6 @@ const UnexpectedRouteError = ({
             var(--error-gradient-end)
           );
         }
-        :root { --error-gradient-end: #fbe9e4; }
-        .dark { --error-gradient-end: #261815; }
       `}</style>
       <section
         aria-labelledby="route-error-title"
@@ -412,21 +416,22 @@ const UnexpectedRouteError = ({
             <span className="text-muted-foreground text-xs">
               {t("routeError.reference")}
             </span>
-            <bdi className="text-foreground truncate font-mono text-sm">
+            <TruncatedText
+              className="text-foreground font-mono text-sm"
+              render={<bdi />}
+            >
               {visibleErrorReference}
-            </bdi>
+            </TruncatedText>
           </div>
-          <Button
-            aria-label={t("routeError.copyReference")}
+          <CopyControl
             disabled={errorReference === null}
-            onClick={() => {
-              detached(handleCopyReference(), "route-error.copy-reference");
-            }}
+            iconClassName="size-4"
+            iconOnly
+            label={t("routeError.copyReference")}
             size="icon"
+            text={errorReference ?? ""}
             variant="ghost"
-          >
-            <CopyIcon />
-          </Button>
+          />
         </div>
       </section>
     </div>
@@ -434,14 +439,25 @@ const UnexpectedRouteError = ({
 };
 
 const UnauthorizedError = () => {
-  const { mutate } = useSignOut();
+  const t = useTranslations();
+  const { mutate, isPending } = useSignOut();
   const signOut = useLatestCallback(mutate);
 
   useMountEffect(() => {
     signOut();
   });
 
-  return null;
+  return (
+    <StatusMessage
+      status="error"
+      title={t("errors.api.unauthorized")}
+      actionButton={
+        <Button disabled={isPending} onClick={() => signOut()}>
+          {t("auth.signIn")}
+        </Button>
+      }
+    />
+  );
 };
 
 export type StatusMessageProps = {
@@ -519,4 +535,19 @@ export const DefaultPendingComponent = ({
   </div>
 );
 
-export const DefaultNotFoundComponent = () => <Navigate to="/workspaces" />;
+export const DefaultNotFoundComponent = () => {
+  const t = useTranslations();
+
+  return (
+    <main className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <section className="flex max-w-md flex-col items-center gap-4 text-center">
+        <h1 className="text-foreground text-xl font-medium">
+          {t("errors.api.notFound")}
+        </h1>
+        <Button render={<Link to="/workspaces" />} variant="outline">
+          {t("auth.invitation.goToWorkspaces")}
+        </Button>
+      </section>
+    </main>
+  );
+};

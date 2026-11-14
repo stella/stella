@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { panic } from "better-result";
 
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type {
   CaptionLineKind,
   DecisionCaption,
@@ -16,7 +17,17 @@ import type {
   Inline,
   ParagraphBlock,
   ParagraphListDepth,
+  ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { getParagraphNumberPieceId } from "@stll/legal-ast/document-search-pieces";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
+import {
+  statuteListMarkerEnd,
+  withStatuteListDepth,
+} from "@stll/legal-ast/statute-list";
+import { Button } from "@stll/ui/button";
+import { CheckIcon } from "@stll/ui/icons";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -26,9 +37,9 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { useDisplayElisionPolicy } from "./display-elision-policy";
-import { useReaderPresentation, useReaderMessages } from "./reader-adapters";
+import { useReaderMessages, useReaderPresentation } from "./reader-adapters";
 import type { ReaderMessageKey } from "./reader-adapters";
-import type { ReaderMark, ReaderMarkRange, SearchPiece } from "./reader-search";
+import type { ReaderMark, ReaderMarkRange } from "./reader-search";
 import { readerHref, useSourceLinkPolicy } from "./source-link-policy";
 import type { SourceLinkPolicy } from "./source-link-policy";
 import "./reader.css";
@@ -56,9 +67,18 @@ export const rangesForPiece = <Range extends ReaderMarkRange>(
 export type TextAnchor = {
   end: number;
   key: string;
-  render: (children: ReactNode) => ReactNode;
+  render: (
+    children: ReactNode,
+    segment: { isRangeStart: boolean },
+  ) => ReactNode;
   start: number;
 };
+
+/** A split range keeps one structural owner: the segment at its start. */
+export const textAnchorSegmentOwnsRange = (
+  anchor: Pick<TextAnchor, "start">,
+  segmentStart: number,
+): boolean => segmentStart === anchor.start;
 
 export const anchorsForPiece = (
   anchorsByPieceId: Record<string, TextAnchor[]> | undefined,
@@ -68,10 +88,24 @@ export const anchorsForPiece = (
 
 /**
  * Whether blocks are the document itself (they carry its DOM ids and its
- * in-document navigation) or an excerpt set inside another page, which must
- * not repeat those ids and has no targets for a fragment link to reach.
+ * in-document navigation), an excerpt set inside another page, which must
+ * not repeat those ids and has no targets for a fragment link to reach, or
+ * wording quoted inside another document's reader (a cited provision's
+ * card), which carries no block anchors at all: that reader's position,
+ * selection and margin logic walk `[data-anchor]` and would read a quoted
+ * block as one of its own.
  */
-export type AnchorPresentation = "document" | "embedded";
+export type AnchorPresentation = "document" | "embedded" | "quoted";
+
+/** Which anchor attributes a block carries under each presentation. */
+const ANCHOR_ATTRIBUTES = {
+  document: { dataAnchor: true, domId: true },
+  embedded: { dataAnchor: true, domId: false },
+  quoted: { dataAnchor: false, domId: false },
+} as const satisfies Record<
+  AnchorPresentation,
+  { dataAnchor: boolean; domId: boolean }
+>;
 
 type HighlightContext = {
   activeMatchIndex: number;
@@ -111,9 +145,6 @@ type SynchronousNode =
  * renderer walks.
  */
 export const inlinesToPlainText = plainTextOf;
-
-export const getParagraphNumberPieceId = (blockId: string): string =>
-  `paragraph-number:${blockId}`;
 
 type DiffMarkType = Exclude<ReaderMark["type"], "search">;
 
@@ -358,7 +389,9 @@ const renderTextSegment = ({
       }
       children.push(
         <Fragment key={`${anchor.key}-${String(anchorStart)}`}>
-          {anchor.render(highlight(anchorStart, anchorEnd))}
+          {anchor.render(highlight(anchorStart, anchorEnd), {
+            isRangeStart: textAnchorSegmentOwnsRange(anchor, anchorStart),
+          })}
         </Fragment>,
       );
       cursor = anchorEnd;
@@ -553,9 +586,13 @@ const renderInline = ({
   if (safeHref.startsWith("#")) {
     // An excerpt carries none of the ids a fragment points at, and the page
     // around it may carry the same id for something else: the reference
-    // keeps its words and loses the jump.
-    if (context.anchorPresentation === "embedded") {
-      return <Fragment key={key}>{children}</Fragment>;
+    // keeps its words and its superscript, and loses the jump.
+    if (!ANCHOR_ATTRIBUTES[context.anchorPresentation].domId) {
+      return (
+        <span className="reader-note-ref" key={key}>
+          {children}
+        </span>
+      );
     }
     return (
       <NoteRefLink key={key} targetId={safeHref.slice(1)}>
@@ -793,6 +830,7 @@ export const InlineContent = ({
 export const HighlightedText = ({
   activeMatchIndex,
   className,
+  "data-reader-chrome": readerChrome,
   pieceId,
   ranges,
   segmentStart = 0,
@@ -800,13 +838,14 @@ export const HighlightedText = ({
 }: {
   activeMatchIndex: number;
   className?: string | undefined;
+  "data-reader-chrome"?: "" | undefined;
   pieceId: string;
   ranges: ReaderMarkRange[];
   /** Offset of this slice within the complete search piece. */
   segmentStart?: number | undefined;
   text: string;
 }) => (
-  <span className={className}>
+  <span className={className} data-reader-chrome={readerChrome}>
     {renderHighlightedSlice({
       activeMatchIndex,
       elisions: shiftedElisions(text, segmentStart),
@@ -827,6 +866,15 @@ export const HighlightedText = ({
  * and heavier for exactly that reason.
  */
 export type ReaderVariant = "case-law" | "statute";
+
+/**
+ * The corpus a block renders in and, for a statute, the scheme its
+ * publisher's anchors state list nesting in. A statute surface names it,
+ * because the same anchor shape means different things to two publishers.
+ */
+type BlockRendererCorpus =
+  | { statuteAnchors?: never; variant: "case-law" }
+  | { statuteAnchors: StatuteAnchorScheme; variant: "statute" };
 
 /**
  * Class per variant and heading depth. Total over both, so neither a new
@@ -884,13 +932,16 @@ const PERMALINK_PLACEMENT_CLASS = {
   inline: "ms-1",
 } as const satisfies Record<PermalinkPlacement, string>;
 
+/** Running document text alignment (see `reader.css`). */
+export const READER_PROSE_CLASS = "reader-prose";
+
 /**
  * Reader chrome on a block (its permalink, a provision's actions) stays out
  * of the text until the reader points at or focuses the block. A device that
  * cannot hover shows it always, since there would be no way to reveal it.
  */
 export const READER_BLOCK_CHROME_REVEAL_CLASS =
-  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
 
 /**
  * A block's own address, as a link the reader can take with them.
@@ -909,32 +960,45 @@ const BlockPermalink = ({
 }) => {
   const messages = useReaderMessages();
 
-  const { copyPermalink } = useReaderPresentation();
-  if (copyPermalink === undefined) {
+  const { renderPermalinkCopy } = useReaderPresentation();
+  if (renderPermalinkCopy === undefined) {
     return null;
   }
 
-  return (
-    <a
-      aria-label={messages["common.copyLink"]}
-      className={cn(
-        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
-        READER_BLOCK_CHROME_REVEAL_CLASS,
-        PERMALINK_PLACEMENT_CLASS[placement],
-      )}
-      data-reader-chrome=""
-      href={`#${anchorId}`}
-      onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-          return;
-        }
-        event.preventDefault();
-        copyPermalink(anchorId);
-      }}
-    >
-      ¶
-    </a>
-  );
+  return renderPermalinkCopy({
+    anchorId,
+    render: ({ copied, copy }) => (
+      <a
+        aria-label={messages[copied ? "common.copied" : "common.copyLink"]}
+        className={cn(
+          "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
+          READER_BLOCK_CHROME_REVEAL_CLASS,
+          PERMALINK_PLACEMENT_CLASS[placement],
+        )}
+        data-reader-chrome=""
+        href={`#${anchorId}`}
+        onClick={(event) => {
+          if (
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          copy();
+        }}
+      >
+        {/* The mark turns into a check where the reader clicked; no toast. */}
+        {copied ? (
+          <CheckIcon aria-hidden="true" className="inline size-[0.8em]" />
+        ) : (
+          "¶"
+        )}
+      </a>
+    ),
+  });
 };
 
 const REGEXP_SPECIALS_RE = /[.*+?^${}()|[\]\\]/gu;
@@ -977,16 +1041,18 @@ const jumpToNoteReference = (anchorId: string) => {
 const NoteBackJump = ({ headAnchorId }: { headAnchorId: string }) => {
   const messages = useReaderMessages();
   return (
-    <button
-      aria-label={messages["common.back"]}
-      className="reader-note-back"
-      data-reader-chrome=""
-      onClick={() => jumpToNoteReference(headAnchorId)}
-      title={messages["common.back"]}
-      type="button"
-    >
-      {"\u21B5"}
-    </button>
+    // The span carries the reader's note type (size, colour, spacing and
+    // the hover underline); the plain button inherits it.
+    <span className="reader-note-back" data-reader-chrome="">
+      <Button
+        aria-label={messages["common.back"]}
+        onClick={() => jumpToNoteReference(headAnchorId)}
+        tooltip={messages["common.back"]}
+        variant="plain"
+      >
+        {"\u21B5"}
+      </Button>
+    </span>
   );
 };
 
@@ -1066,6 +1132,7 @@ export const BlockRenderer = ({
   noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
+  statuteAnchors,
   variant,
 }: {
   activeMatchIndex: number;
@@ -1105,14 +1172,14 @@ export const BlockRenderer = ({
    */
   noteHead?: boolean | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
-  variant: ReaderVariant;
-}) => {
+} & BlockRendererCorpus) => {
+  const attributes = ANCHOR_ATTRIBUTES[anchorPresentation];
   const documentAnchorProps = {
-    "data-anchor": block.anchorId,
+    "data-anchor": attributes.dataAnchor ? block.anchorId : undefined,
     "data-reader-landing": landing ? "" : undefined,
-    id: anchorPresentation === "document" ? block.anchorId : undefined,
+    id: attributes.domId ? block.anchorId : undefined,
   };
-  const isAddressable = anchorPresentation === "document";
+  const isAddressable = attributes.domId;
   const permalink = isAddressable ? (
     <BlockPermalink anchorId={block.anchorId} />
   ) : null;
@@ -1221,13 +1288,19 @@ export const BlockRenderer = ({
       activeMatchIndex,
       anchorPresentation,
       anchorsByPieceId,
-      block,
+      // A statute's list nesting lives in its anchors, so it is read here,
+      // where every statute surface draws its paragraphs.
+      block:
+        variant === "statute"
+          ? withStatuteListDepth(block, statuteAnchors)
+          : block,
       documentAnchorProps,
       isAddressable,
       noteBackJumpTo,
       noteHead,
       permalink,
       rangesByPieceId,
+      statuteAnchors: variant === "statute" ? statuteAnchors : null,
     });
   }
 
@@ -1274,7 +1347,7 @@ type RenderTextBlockOptions = {
   anchorPresentation: AnchorPresentation;
   anchorsByPieceId: Record<string, TextAnchor[]> | undefined;
   documentAnchorProps: {
-    "data-anchor": string;
+    "data-anchor": string | undefined;
     "data-reader-landing": string | undefined;
     id: string | undefined;
   };
@@ -1287,11 +1360,105 @@ type RenderTextBlockOptions = {
 
 type RenderParagraphOptions = RenderTextBlockOptions & {
   block: ParagraphBlock;
+  /** The statute's list scheme; null for a decision, whose items never hang. */
+  statuteAnchors: StatuteAnchorScheme | null;
 };
 
 /** The case number a decision prints at its head, set to the end edge. */
 const CASE_NUMBER_CLASS =
   "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]";
+
+/**
+ * The formula a court decides under and the state above it (`JMÉNEM
+ * REPUBLIKY`, `ČESKÁ REPUBLIKA`): centred with the title, a step below it
+ * and at reading size. It is the court's words, not a heading, so the
+ * outline never lists it. One class for the paragraph role and for the same
+ * line read out of a stored caption.
+ */
+const OPENING_FORMULA_CLASS =
+  "mb-5 text-center text-[calc(1rem*var(--reader-text-scale))] leading-snug font-semibold tracking-wider";
+
+/**
+ * Whether a paragraph of each role is running text, set as prose. Total over
+ * the roles, so a new role cannot reach the page without deciding it; a role
+ * that is not prose states its own alignment in `paragraphClassValues`.
+ */
+const PARAGRAPH_ROLE_IS_PROSE = {
+  "case-number": false,
+  "opening-formula": false,
+  intro: true,
+  history: true,
+  argumentation: true,
+  holding: true,
+  dissent: true,
+  closing: false,
+  signature: false,
+  quote: true,
+  parties: false,
+  "front-matter": false,
+  apparatus: true,
+  "publisher-note": true,
+  syllabus: true,
+  headnotes: true,
+  summary: true,
+  counsel: true,
+  panel: true,
+  unknown: true,
+} as const satisfies Record<ParagraphRole, boolean>;
+
+/**
+ * A statute list item's printed designator split off the words it opens, so
+ * the designator hangs in a gutter and the item's wrapped lines align with
+ * its words (`reader-list-hang` in reader.css). The split is drawn, not
+ * stored: the designator keeps its characters and its offsets in the piece,
+ * so search ranges and annotation offsets index the text as before.
+ *
+ * Only a designator wholly inside the leading plain text nodes, with no
+ * anchor (a citation link) reaching into it, is split; any other item keeps
+ * its indent with the designator running in its text.
+ */
+type HangingListMarker = { end: number; marker: string; rest: Inline[] };
+
+type HangingListMarkerOptions = {
+  anchors: readonly TextAnchor[];
+  block: ParagraphBlock;
+  statuteAnchors: StatuteAnchorScheme | null;
+};
+
+const hangingListMarker = ({
+  anchors,
+  block,
+  statuteAnchors,
+}: HangingListMarkerOptions): HangingListMarker | null => {
+  const end =
+    statuteAnchors === null
+      ? null
+      : statuteListMarkerEnd(block, statuteAnchors);
+  if (end === null || anchors.some((anchor) => anchor.start < end)) {
+    return null;
+  }
+  // A publisher may store the designator, its space and the words as
+  // separate text runs (Slov-Lex: `a)`, ` `, `spáchal …`); the designator is
+  // split off them as long as only plain text precedes its end.
+  let marker = "";
+  for (const [index, inline] of block.inlines.entries()) {
+    if (inline.type !== "text" || inline.anonymized === true) {
+      return null;
+    }
+    const needed = end - marker.length;
+    if (inline.text.length >= needed) {
+      const rest = inline.text.slice(needed);
+      const others = block.inlines.slice(index + 1);
+      return {
+        end,
+        marker: marker + inline.text.slice(0, needed),
+        rest: rest === "" ? others : [{ text: rest, type: "text" }, ...others],
+      };
+    }
+    marker += inline.text;
+  }
+  return null;
+};
 
 /** A paragraph's classes, for `cn`: shared by a block and a wrapped run. */
 const paragraphClassValues = (block: ParagraphBlock) => {
@@ -1300,23 +1467,13 @@ const paragraphClassValues = (block: ParagraphBlock) => {
   // them like level-3 headings instead of bleeding into the
   // body copy.
   const isRomanNumeralDivider = /^[IVX]+\.?$/u.test(block.plainText.trim());
-  // Non-body roles (case number, closing formula, signature)
-  // need their own alignment; every other paragraph — including
-  // intro, argumentation and unroled body text — defaults to
-  // justified reading layout.
-  const nonJustifiedRoles = new Set([
-    "case-number",
-    "closing",
-    "signature",
-    "parties",
-    "front-matter",
-  ]);
-  const shouldJustify =
+  const isProse =
     !isRomanNumeralDivider &&
-    (block.role === undefined || !nonJustifiedRoles.has(block.role));
+    (block.role === undefined || PARAGRAPH_ROLE_IS_PROSE[block.role]);
   return [
+    LEGAL_TEXT_CLASS_NAME,
     "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
-    shouldJustify && "reader-justify",
+    isProse && READER_PROSE_CLASS,
     block.role === "holding" && "font-[520]",
     // Indented, slightly condensed; never italicized or reflowed —
     // a reproduced passage must not be visually altered.
@@ -1332,6 +1489,7 @@ const paragraphClassValues = (block: ParagraphBlock) => {
     isRomanNumeralDivider &&
       "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
     block.role === "case-number" && CASE_NUMBER_CLASS,
+    block.role === "opening-formula" && OPENING_FORMULA_CLASS,
     block.role === "closing" && "mt-8 text-center",
     block.role === "signature" &&
       "reader-signature text-muted-foreground mt-1 text-end",
@@ -1355,15 +1513,22 @@ const renderParagraphBlock = ({
   noteHead,
   permalink,
   rangesByPieceId,
+  statuteAnchors,
 }: RenderParagraphOptions) => {
   const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
   const showNoteLabel =
     noteHead &&
     noteLabel !== null &&
     !footnoteTextCarriesLabel(noteLabel, block.plainText);
+  const anchors = anchorsForPiece(anchorsByPieceId, block.id);
+  const ranges = rangesForPiece(rangesByPieceId, block.id);
+  const listMarker = hangingListMarker({ anchors, block, statuteAnchors });
   return (
     <p
-      className={cn(paragraphClassValues(block))}
+      className={cn(
+        paragraphClassValues(block),
+        listMarker !== null && "reader-list-hang",
+      )}
       {...documentAnchorProps}
       data-note={block.note?.type}
     >
@@ -1375,14 +1540,14 @@ const renderParagraphBlock = ({
         </span>
       )}
       {showNoteLabel && isAddressable && (
-        <button
-          className="reader-note-label"
-          data-reader-chrome=""
-          onClick={() => jumpToNoteReference(block.anchorId)}
-          type="button"
-        >
-          {noteLabel}
-        </button>
+        <span className="reader-note-label" data-reader-chrome="">
+          <Button
+            onClick={() => jumpToNoteReference(block.anchorId)}
+            variant="plain"
+          >
+            {noteLabel}
+          </Button>
+        </span>
       )}
       {block.number !== undefined && (
         <HighlightedText
@@ -1397,13 +1562,23 @@ const renderParagraphBlock = ({
           text={String(block.number)}
         />
       )}
+      {listMarker !== null && (
+        <HighlightedText
+          activeMatchIndex={activeMatchIndex}
+          className="reader-list-marker"
+          pieceId={block.id}
+          ranges={ranges}
+          text={listMarker.marker}
+        />
+      )}
       <InlineContent
         activeMatchIndex={activeMatchIndex}
         anchorPresentation={anchorPresentation}
-        anchors={anchorsForPiece(anchorsByPieceId, block.id)}
-        inlines={block.inlines}
+        anchors={anchors}
+        initialOffset={listMarker?.end ?? 0}
+        inlines={listMarker?.rest ?? block.inlines}
         pieceId={block.id}
-        ranges={rangesForPiece(rangesByPieceId, block.id)}
+        ranges={ranges}
       />
       {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
         <NoteBackJump headAnchorId={noteBackJumpTo} />
@@ -1467,15 +1642,15 @@ export const WrappedParagraphRun = ({
 /**
  * How a caption line is drawn: as the reader draws the same line where a
  * parser stored it as a block of its own. The kind of decision is the
- * decision title; the court, the state and the formula are the centred
- * headings; the docket is the case-number line.
+ * decision title; the court is a centred heading; the state and the formula
+ * are the opening formula; the docket is the case-number line.
  */
 const CAPTION_LINE_PRESENTATION = {
   court: { className: HEADING_CLASS["case-law"][3], tag: "p" },
   "case-number": { className: CASE_NUMBER_CLASS, tag: "p" },
-  state: { className: HEADING_CLASS["case-law"][3], tag: "p" },
+  state: { className: OPENING_FORMULA_CLASS, tag: "p" },
   "decision-type": { className: HEADING_CLASS["case-law"][1], tag: "h1" },
-  formula: { className: HEADING_CLASS["case-law"][3], tag: "p" },
+  formula: { className: OPENING_FORMULA_CLASS, tag: "p" },
 } as const satisfies Record<
   CaptionLineKind,
   { className: string; tag: "h1" | "p" }
@@ -1588,14 +1763,14 @@ const renderTableBlock = ({
         </span>
       )}
       {showTableNoteLabel && isAddressable && (
-        <button
-          className="reader-note-label"
-          data-reader-chrome=""
-          onClick={() => jumpToNoteReference(block.anchorId)}
-          type="button"
-        >
-          {tableNoteLabel}
-        </button>
+        <span className="reader-note-label" data-reader-chrome="">
+          <Button
+            onClick={() => jumpToNoteReference(block.anchorId)}
+            variant="plain"
+          >
+            {tableNoteLabel}
+          </Button>
+        </span>
       )}
       <table
         className={cn(
@@ -1629,7 +1804,11 @@ const renderTableBlock = ({
                     // The table around it is a container: `selectionAnchorsFrom`
                     // takes the innermost anchored element, so the two never
                     // both claim the same selection.
-                    data-anchor={pieceId}
+                    data-anchor={
+                      ANCHOR_ATTRIBUTES[anchorPresentation].dataAnchor
+                        ? pieceId
+                        : undefined
+                    }
                     key={pieceId}
                     rowSpan={cell.rowSpan}
                   >
@@ -1655,15 +1834,6 @@ const renderTableBlock = ({
   );
 };
 
-export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
-  text.split(/\n{2,}/u).map((paragraph, index) => ({
-    id: `fulltext:${index}`,
-    anchorId: `fulltext:${index}`,
-    type: "paragraph",
-    plainText: paragraph,
-    inlines: [{ text: paragraph, type: "text" }],
-  }));
-
 export const FulltextFallback = ({
   activeMatchIndex,
   anchorsByPieceId,
@@ -1688,7 +1858,11 @@ export const FulltextFallback = ({
         return (
           <Fragment key={pieceId}>
             <p
-              className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
+              className={cn(
+                LEGAL_TEXT_CLASS_NAME,
+                READER_PROSE_CLASS,
+                "mb-[var(--reader-paragraph-gap)] last:mb-0",
+              )}
               data-anchor={pieceId}
               id={pieceId}
             >
@@ -1706,54 +1880,6 @@ export const FulltextFallback = ({
       })}
     </>
   );
-};
-
-/**
- * Search pieces for a block list, in render order. Table cells get one
- * piece each so a match scrolls to the cell, and a hanging paragraph
- * number gets its own piece: folding it into the paragraph's text would
- * shift every highlight offset in that paragraph.
- */
-export const buildDocumentAstSearchPieces = (
-  blocks: readonly Block[],
-): SearchPiece[] => {
-  const pieces: SearchPiece[] = [];
-
-  for (const block of blocks) {
-    // A figure's only text is its alt, which is chrome for a screen
-    // reader rather than the document's words: a find-bar hit on it
-    // would scroll to a picture with nothing highlighted in it.
-    if (block.type === "image") {
-      continue;
-    }
-
-    if (block.type === "table") {
-      for (const [rowIndex, row] of block.rows.entries()) {
-        for (const [columnIndex, cell] of row.entries()) {
-          pieces.push({
-            id: tableCellPieceId({
-              blockId: block.id,
-              rowIndex,
-              columnIndex,
-            }),
-            text: inlinesToPlainText(cell.inlines),
-          });
-        }
-      }
-      continue;
-    }
-
-    pieces.push({ id: block.id, text: inlinesToPlainText(block.inlines) });
-
-    if (block.type === "paragraph" && block.number !== undefined) {
-      pieces.push({
-        id: getParagraphNumberPieceId(block.id),
-        text: String(block.number),
-      });
-    }
-  }
-
-  return pieces;
 };
 
 const ReaderTooltip = ({

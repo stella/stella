@@ -188,6 +188,19 @@ const IDENTITY_LOOKUP_VERSIONS = [
   internationalSameNumber,
 ];
 
+const slovakActSeeds = [
+  { number: "343", year: "2015", collection: "Z. z." },
+  { number: "513", year: "1991", collection: "Zb." },
+  { number: "187", year: "2021", collection: "Z. z." },
+].map(({ number, year, collection }) => ({
+  number,
+  year,
+  collection,
+  id: createSafeId<"legislationDocument">(),
+  amendmentId: createSafeId<"legislationDocument">(),
+  eli: `https://www.slov-lex.sk/eli/sk/zz/${year}/${number}`,
+}));
+
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
 let legislationDb: LegislationReadDb;
@@ -254,6 +267,42 @@ beforeAll(
         contentHash: `identity-lookup-${String(index)}`,
       })),
     );
+    await db.insert(legislationDocuments).values(
+      slovakActSeeds.flatMap((seed, index) => [
+        {
+          id: seed.id,
+          sourceId,
+          eli: seed.eli,
+          // The identity pin must work even when the title and full text
+          // carry none of the query's tokens.
+          title: "Slovenský predpis",
+          country: "SVK",
+          language: "sk",
+          versionValidFrom: "2024-01-01",
+          contentHash: `slovak-act-${String(index)}`,
+        },
+        {
+          id: seed.amendmentId,
+          sourceId,
+          eli: `https://www.slov-lex.sk/eli/sk/zz/2024/${String(index + 90_001)}`,
+          title: `Novela zákona č. ${seed.number}/${seed.year} ${seed.collection}`,
+          country: "SVK",
+          language: "sk",
+          versionValidFrom: "2024-01-01",
+          contentHash: `slovak-amendment-${String(index)}`,
+        },
+      ]),
+    );
+    await db.insert(legislationSearchDocuments).values(
+      slovakActSeeds.map((seed) => ({
+        documentId: seed.amendmentId,
+        title: `Novela ${seed.number}/${seed.year} ${seed.collection}`,
+        searchableText: `Novela ${seed.number}/${seed.year} ${seed.collection}`,
+        language: "sk",
+        regconfig: "simple",
+        tsv: sql`to_tsvector('simple', ${`${seed.number}/${seed.year} ${seed.collection}`})`,
+      })),
+    );
     await db.insert(legislationDocuments).values({
       id: byteCapVersion.id,
       sourceId,
@@ -296,6 +345,7 @@ beforeAll(
             id: seed.id,
             country: "CZE",
             title: seed.title,
+            documentType: null,
           })),
         ),
     );
@@ -524,6 +574,56 @@ describe("acts the query names come first", () => {
     },
   );
 
+  test("an act's end is that of its last version, whatever that version is called", async () => {
+    const renamedEli = "https://example.test/eli/cz/sb/1999/987";
+    const renamed = [
+      {
+        id: createSafeId<"legislationDocument">(),
+        title: "987/1999 Sb., o dřívějším názvu",
+        versionValidFrom: "2000-01-01",
+        versionValidTo: "2010-01-01",
+      },
+      {
+        id: createSafeId<"legislationDocument">(),
+        title: "987/1999 Sb., o pozdějším názvu",
+        versionValidFrom: "2010-01-01",
+        versionValidTo: null,
+      },
+    ];
+    await db.insert(legislationDocuments).values(
+      renamed.map((row) => ({
+        ...row,
+        sourceId,
+        eli: renamedEli,
+        country: "CZE",
+        language: "cs",
+        contentHash: `renamed-${row.versionValidFrom}`,
+      })),
+    );
+    await db.transaction(
+      async (tx) =>
+        await syncLegislationWorkNamesTx(
+          asTestRaw(tx),
+          renamed.map(({ id, title }) => ({
+            id,
+            country: "CZE",
+            title,
+            documentType: null,
+          })),
+        ),
+    );
+
+    const named = await legislationDb(
+      async (tx) =>
+        await readNamedLegislationWorks(tx, {
+          query: "o dřívějším názvu",
+          country: "CZE",
+        }),
+    );
+
+    expect(named).toMatchObject([{ eli: renamedEli, validUntil: null }]);
+  });
+
   test("a name in the act's own title, corroborated by a citation, pins the act in force", async () => {
     const result = await rehydrate("Občanský zákoník", [
       [old1964, 0.9],
@@ -615,6 +715,58 @@ describe("the Postgres search path", () => {
         },
       ]),
   } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+
+  test.each(slovakActSeeds)(
+    "act $number/$year outranks amendments with and without a jurisdiction",
+    async (seed) => {
+      for (const jurisdiction of ["SVK", undefined]) {
+        for (const suffix of ["", ` ${seed.collection}`]) {
+          const response = await searchLegislationHandler(
+            {
+              query: `${seed.number}/${seed.year}${suffix}`,
+              ...(jurisdiction === undefined ? {} : { jurisdiction }),
+              limit: 10,
+            },
+            legislationDb,
+            "unobserved",
+            searchDependencies,
+          );
+          if (!("items" in response)) {
+            panic("the search refused an admitted act number");
+          }
+          expect(response.items.at(0)?.documentId).toBe(String(seed.id));
+        }
+      }
+    },
+  );
+
+  test("a Czech bare act number stays first in an unscoped search", async () => {
+    const response = await searchLegislationHandler(
+      { query: "89/2012", limit: 10 },
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in response)) {
+      panic("the search refused a Czech act number");
+    }
+    expect(response.items.at(0)?.documentId).toBe(String(codeCurrent.id));
+  });
+
+  test.each(slovakActSeeds)(
+    "an explicit collection from another era never pins $number/$year",
+    async (seed) => {
+      const suffix = seed.collection === "Zb." ? "Z. z." : "Zb.";
+      const named = await legislationDb(
+        async (tx) =>
+          await readNamedLegislationWorks(tx, {
+            query: `${seed.number}/${seed.year} ${suffix}`,
+            country: "SVK",
+          }),
+      );
+      expect(named).toEqual([]);
+    },
+  );
 
   test.each([
     ["OZ", STATUTE_ALIASES.cze.oz],

@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
 import {
-  getKanbanGroups,
   getKanbanGroupingPropertyId,
+  getKanbanGroups,
   isKanbanGroupingRenderable,
   resolveKanbanGroupOptions,
   selectKanbanRows,
@@ -20,8 +20,7 @@ export type KanbanBoardAxis =
 
 /** The optional horizontal swimlane dimension is intentionally explicit. */
 export type KanbanBoardLane =
-  | { type: "none" }
-  | { group: KanbanGroup; type: "group" };
+  { type: "none" } | { group: KanbanGroup; type: "group" };
 
 export type KanbanBoardCoordinate = {
   column: KanbanBoardColumn;

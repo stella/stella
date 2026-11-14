@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -14,6 +13,8 @@ import {
   lockSkillForAnchor,
 } from "@/api/lib/agent-skills/revisions";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -23,7 +24,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -37,25 +38,29 @@ const SUMMARY_MAX_CHARS = 600;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
 
-const fromCommentsParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const fromCommentsParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const fromCommentsBodySchema = t.Object({
-  commentIds: t.Optional(
-    t.Array(tSafeId("agentSkillComment"), {
-      minItems: 1,
-      maxItems: COMMENTS_MAX,
-      description:
+const fromCommentsBodySchema = v.object({
+  commentIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("agentSkillComment")),
+      v.minLength(1),
+      v.maxLength(COMMENTS_MAX),
+      v.description(
         "Comments to apply. Omit to apply every unresolved comment written against the skill's newest revision.",
-    }),
+      ),
+    ),
   ),
-  instructions: t.Optional(
-    t.String({
-      maxLength: INSTRUCTIONS_MAX_CHARS,
-      description:
+  instructions: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(INSTRUCTIONS_MAX_CHARS),
+      v.description(
         "Extra guidance for the revision, applied on top of the comments.",
-    }),
+      ),
+    ),
   ),
 });
 
@@ -133,6 +138,10 @@ const createProposalFromComments = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
@@ -264,6 +273,7 @@ const createProposalFromComments = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not apply the comments. Please try again.",
           cause,
         });
@@ -278,6 +288,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill was empty. Please try again.",
         }),
       );
@@ -286,6 +297,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill exceeds the maximum size.",
         }),
       );
@@ -299,6 +311,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message:
             "The revised skill dropped or altered its frontmatter. Please try again.",
         }),

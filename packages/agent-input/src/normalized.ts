@@ -27,8 +27,7 @@ export type NormalizedAsk = {
 };
 
 export type Normalized<TValue> =
-  | { ok: true; value: TValue; note?: string }
-  | NormalizedAsk;
+  { ok: true; value: TValue; note?: string } | NormalizedAsk;
 
 /** Wire values carry matter content and personal data, so an echo back to the
  *  model is bounded to the length of a spelling. */

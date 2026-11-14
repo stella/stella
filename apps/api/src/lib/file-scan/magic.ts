@@ -11,6 +11,11 @@
  * match so this check never blocks a format it cannot reason about.
  */
 
+import {
+  type ScanMediaType,
+  scanMediaType,
+} from "@/api/lib/file-scan/media-type";
+
 const startsWith = (
   buffer: Uint8Array,
   signature: readonly number[],
@@ -52,10 +57,15 @@ const MIME_MAGIC_MATCHERS: Record<string, (buffer: Uint8Array) => boolean> = {
     startsWith(buffer.subarray(8), WEBP_FORM_TYPE),
 };
 
-const normalizeDeclaredMimeType = (declaredMimeType: string): string => {
-  const [mediaType = ""] = declaredMimeType.split(";");
-  return mediaType.trim().toLowerCase();
-};
+const MAGIC_MATCHERS_BY_MEDIA_TYPE: ReadonlyMap<
+  ScanMediaType,
+  (buffer: Uint8Array) => boolean
+> = new Map(
+  Object.entries(MIME_MAGIC_MATCHERS).map(([mediaType, matcher]) => [
+    scanMediaType(mediaType),
+    matcher,
+  ]),
+);
 
 /**
  * Returns `false` only when `declaredMimeType` has a known magic-byte
@@ -66,8 +76,9 @@ export const declaredMimeMatchesMagic = (
   declaredMimeType: string,
   buffer: Uint8Array,
 ): boolean => {
-  const matcher =
-    MIME_MAGIC_MATCHERS[normalizeDeclaredMimeType(declaredMimeType)];
+  const matcher = MAGIC_MATCHERS_BY_MEDIA_TYPE.get(
+    scanMediaType(declaredMimeType),
+  );
   if (!matcher) {
     return true;
   }

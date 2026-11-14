@@ -1,7 +1,9 @@
+// parser-output-unchanged: registers URL defect fingerprint dimensions; URL validation and returned values are unchanged.
 // parser-output-unchanged: adds a typed constructor; existing callers are unaffected
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
 /**
@@ -30,7 +32,11 @@ export const METADATA_URL_DEFECT_REASONS = [
 export class MetadataUrlDefect extends TaggedError("MetadataUrlDefect")<{
   message: string;
   reason: (typeof METADATA_URL_DEFECT_REASONS)[number];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** Metadata transports already own decoding; preserve their scalar URL spelling. */
 export function toMetadataUrl(

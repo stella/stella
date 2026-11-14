@@ -6,24 +6,24 @@ import {
 } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
+  type CadenceStep,
+  type CadenceStreaks,
+  classifyCycleProductivity,
   CYCLE_CADENCE,
   CYCLE_OUTCOME,
   CYCLE_PRODUCTIVITY,
-  type CadenceStep,
-  type CadenceStreaks,
+  cycleMadeProgress,
   type CycleOutcome,
   type CycleResult,
+  cycleStopKind,
   INITIAL_CADENCE_STREAKS,
   INITIAL_STALL_ALERT,
   QUIET_THRESHOLD,
   type StallAlertState,
   type StallAlertStep,
-  UNPRODUCTIVE_THRESHOLD,
-  classifyCycleProductivity,
-  cycleMadeProgress,
-  cycleStopKind,
   stepCadence,
   stepStallAlert,
+  UNPRODUCTIVE_THRESHOLD,
   updateStalledAdapter,
 } from "./cycle-progress";
 import { ingestionHealthRecord } from "./ingestion-health";

@@ -1,7 +1,17 @@
 import type { PDF, PDFPage } from "@libpdf/core";
 
+import {
+  mergePdfTextBoxes,
+  readPdfPageGlyphText,
+} from "@stll/api-contract/pdf-mark-placement";
+import type {
+  PdfPageGlyphText,
+  PdfTextBox,
+} from "@stll/api-contract/pdf-mark-placement";
 import { findSearchMatchRanges } from "@stll/text-normalize";
 
+import { resolvePDFPageSource } from "@/lib/pdf/pdf-page-source";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 import {
@@ -10,12 +20,7 @@ import {
 } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
 
-export type PDFSearchBox = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+export type PDFSearchBox = PdfTextBox;
 
 type PDFSearchMatch = {
   pageIndex: number;
@@ -39,6 +44,7 @@ export type PDFSearchViewportBox = {
 type FindPDFSearchResultsOptions = {
   bytes: Uint8Array;
   password?: string | undefined;
+  pageSource: PDFPageSource;
   searchText: SearchTextQuery;
   signal: AbortSignal;
 };
@@ -48,93 +54,11 @@ type ViewerSearchPage = {
   pageIndex: number;
 };
 
-const MIN_SAME_LINE_OVERLAP_RATIO = 0.5;
-const MAX_INLINE_GAP_HEIGHT_RATIO = 0.75;
-
-const getVerticalOverlap = (first: PDFSearchBox, second: PDFSearchBox) =>
-  Math.max(
-    0,
-    Math.min(first.y + first.height, second.y + second.height) -
-      Math.max(first.y, second.y),
-  );
-
-const canMergePDFSearchBoxes = (
-  current: PDFSearchBox,
-  next: PDFSearchBox,
-): boolean => {
-  const minimumHeight = Math.min(current.height, next.height);
-  const verticalOverlap = getVerticalOverlap(current, next);
-  const horizontalGap = Math.max(
-    0,
-    next.x - (current.x + current.width),
-    current.x - (next.x + next.width),
-  );
-  const maximumInlineGap =
-    Math.max(current.height, next.height) * MAX_INLINE_GAP_HEIGHT_RATIO;
-
-  return (
-    minimumHeight > 0 &&
-    verticalOverlap / minimumHeight >= MIN_SAME_LINE_OVERLAP_RATIO &&
-    horizontalGap <= maximumInlineGap
-  );
-};
-
-export const mergePDFSearchBoxes = (
-  boxes: readonly PDFSearchBox[],
-): PDFSearchBox[] => {
-  const merged: PDFSearchBox[] = [];
-
-  for (const box of boxes) {
-    if (box.width <= 0 || box.height <= 0) {
-      continue;
-    }
-
-    const current = merged.at(-1);
-    if (!current || !canMergePDFSearchBoxes(current, box)) {
-      merged.push({ ...box });
-      continue;
-    }
-
-    const right = Math.max(current.x + current.width, box.x + box.width);
-    const top = Math.max(current.y + current.height, box.y + box.height);
-    current.x = Math.min(current.x, box.x);
-    current.y = Math.min(current.y, box.y);
-    current.width = right - current.x;
-    current.height = top - current.y;
-  }
-
-  return merged;
-};
-
-type PageText = ReturnType<PDFPage["extractText"]>;
-
-type PageSearchText = {
-  boxesByOffset: (PDFSearchBox | null)[];
-  text: string;
-};
-
-export const buildPageSearchText = (pageText: PageText): PageSearchText => {
-  const boxesByOffset: (PDFSearchBox | null)[] = [];
-  const textParts: string[] = [];
-
-  for (const [lineIndex, line] of pageText.lines.entries()) {
-    if (lineIndex > 0) {
-      textParts.push("\n");
-      boxesByOffset.push(null);
-    }
-
-    for (const span of line.spans) {
-      for (const character of span.chars) {
-        textParts.push(character.char);
-        for (const _codeUnit of character.char.split("")) {
-          boxesByOffset.push(character.bbox);
-        }
-      }
-    }
-  }
-
-  return { boxesByOffset, text: textParts.join("") };
-};
+/**
+ * A page's text as LibPDF extracts it, with the glyph box behind each UTF-16
+ * unit; see `readPdfPageGlyphText`.
+ */
+export type PageSearchText = PdfPageGlyphText;
 
 const getPDFSearchMatchKey = ({
   pageIndex,
@@ -169,7 +93,7 @@ const toPDFSearchMatch = ({
     .filter((box): box is PDFSearchBox => box !== null);
   return {
     pageIndex,
-    boxes: mergePDFSearchBoxes(boxes),
+    boxes: mergePdfTextBoxes(boxes),
     textEndOffset: end,
     textOffset: start,
   };
@@ -216,14 +140,23 @@ const findPageMatches = ({
     pageIndex,
   });
 
-const getViewerSearchPages = async (
-  pdf: PDF,
-  signal: AbortSignal,
-): Promise<ViewerSearchPage[]> => {
+type GetViewerSearchPagesOptions = {
+  pdf: PDF;
+  signal: AbortSignal;
+  pageSource: PDFPageSource;
+};
+
+const getViewerSearchPages = async ({
+  pdf,
+  signal,
+  pageSource,
+}: GetViewerSearchPagesOptions): Promise<ViewerSearchPage[]> => {
   const rootPages = pdf.getPages();
   const pdfAttachments: Uint8Array[] = [];
 
-  for (const [name, attachment] of pdf.getAttachments()) {
+  const attachmentEntries =
+    pageSource === "portfolio" ? pdf.getAttachments() : [];
+  for (const [name, attachment] of attachmentEntries) {
     signal.throwIfAborted();
     if (!attachment.filename.trim().toLowerCase().endsWith(".pdf")) {
       continue;
@@ -234,7 +167,13 @@ const getViewerSearchPages = async (
     }
   }
 
-  if (rootPages.length > 1 || pdfAttachments.length === 0) {
+  if (
+    resolvePDFPageSource({
+      pageSource,
+      documentPageCount: rootPages.length,
+      attachmentCount: pdfAttachments.length,
+    }) === "document"
+  ) {
     return rootPages.map((page, pageIndex) => ({ page, pageIndex }));
   }
 
@@ -262,6 +201,7 @@ const getViewerSearchPages = async (
 export const findPDFSearchResults = async ({
   bytes,
   password,
+  pageSource,
   searchText,
   signal,
 }: FindPDFSearchResultsOptions): Promise<PDFSearchResult | null> => {
@@ -274,7 +214,7 @@ export const findPDFSearchResults = async ({
   );
   signal.throwIfAborted();
 
-  const pages = await getViewerSearchPages(pdf, signal);
+  const pages = await getViewerSearchPages({ pdf, signal, pageSource });
   signal.throwIfAborted();
   const candidates = getSearchTextCandidates(searchText);
   const pageSearchTextCache = new WeakMap<PDFPage, PageSearchText>();
@@ -289,7 +229,7 @@ export const findPDFSearchResults = async ({
       }
       let pageSearchText = pageSearchTextCache.get(page);
       if (!pageSearchText) {
-        pageSearchText = buildPageSearchText(page.extractText());
+        pageSearchText = readPdfPageGlyphText(page.extractText());
         pageSearchTextCache.set(page, pageSearchText);
       }
       for (const match of findPageMatches({
@@ -393,4 +333,42 @@ export const toPDFSearchViewportBox = (
     width: Math.abs(end.x - start.x),
     height: Math.abs(end.y - start.y),
   };
+};
+
+/** One page's search text, by its 1-based number in the document. */
+export type NumberedPageSearchText = PageSearchText & { pageNumber: number };
+
+type ExtractPDFPageSearchTextsOptions = {
+  bytes: Uint8Array;
+  /** 1-based; a number past the last page is skipped. */
+  pageNumbers: readonly number[];
+  signal: AbortSignal;
+};
+
+/**
+ * The search text of the document's own pages, read the way the server reads
+ * a PDF for verification (`PDF.load(bytes)`, then each page's
+ * `extractText()`), so a server offset into page N's text indexes the same
+ * unit here. Embedded portfolio PDFs are not opened.
+ */
+export const extractPDFPageSearchTexts = async ({
+  bytes,
+  pageNumbers,
+  signal,
+}: ExtractPDFPageSearchTextsOptions): Promise<NumberedPageSearchText[]> => {
+  signal.throwIfAborted();
+  const { PDF } = await import("@libpdf/core");
+  const pdf = await PDF.load(bytes);
+  signal.throwIfAborted();
+  const pages = pdf.getPages();
+  const texts: NumberedPageSearchText[] = [];
+  for (const pageNumber of new Set(pageNumbers)) {
+    signal.throwIfAborted();
+    const page = pages.at(pageNumber - 1);
+    if (pageNumber < 1 || page === undefined) {
+      continue;
+    }
+    texts.push({ pageNumber, ...readPdfPageGlyphText(page.extractText()) });
+  }
+  return texts;
 };

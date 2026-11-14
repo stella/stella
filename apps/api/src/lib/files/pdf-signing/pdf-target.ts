@@ -82,7 +82,9 @@ export const readCurrentPdfSigningTarget = async ({
     with: {
       currentVersion: {
         columns: { id: true, versionNumber: true },
-        with: { fields: { columns: { content: true, propertyId: true } } },
+        with: {
+          fields: { columns: { id: true, content: true, propertyId: true } },
+        },
       },
     },
   });
@@ -100,6 +102,7 @@ export const readCurrentPdfSigningTarget = async ({
   }
 
   return {
+    fieldId: field.id,
     baseVersionId: currentVersion.id,
     baseVersionNumber: currentVersion.versionNumber,
     entityName: entity.name,

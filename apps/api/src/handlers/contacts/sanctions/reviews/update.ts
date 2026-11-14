@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { reviewSanctionsMatch } from "@/api/lib/lists/sanctions/monitoring-review";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
@@ -22,26 +22,30 @@ export default createSafeRootHandler(
       reason: "contact_directory",
       consumesServices: false,
     },
-    params: t.Object({ contactId: tSafeId("contact") }),
-    body: t.Object({
-      source: t.UnionEnum(sanctionsSourceIds()),
-      sourceEntryId: t.String({ minLength: 1, maxLength: 512 }),
-      disposition: t.UnionEnum(["dismissed", "confirmed"]),
-      reason: t.String({ minLength: 1, maxLength: 2000 }),
-      expectedContactFingerprint: t.String({
-        pattern: "^[0-9a-f]{64}$",
-        minLength: 64,
-        maxLength: 64,
-        description:
+    params: v.object({ contactId: resourceIdSchema("contact") }),
+    body: v.object({
+      source: v.picklist(sanctionsSourceIds()),
+      sourceEntryId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+      disposition: v.picklist(["dismissed", "confirmed"]),
+      reason: v.pipe(v.string(), v.minLength(1), v.maxLength(2000)),
+      expectedContactFingerprint: v.pipe(
+        v.string(),
+        v.regex(/^[0-9a-f]{64}$/u),
+        v.minLength(64),
+        v.maxLength(64),
+        v.description(
           "Copy expectedContactFingerprint from the current match reviewTarget",
-      }),
-      expectedEntryHash: t.String({
-        pattern: "^[0-9a-f]{64}$",
-        minLength: 64,
-        maxLength: 64,
-        description:
+        ),
+      ),
+      expectedEntryHash: v.pipe(
+        v.string(),
+        v.regex(/^[0-9a-f]{64}$/u),
+        v.minLength(64),
+        v.maxLength(64),
+        v.description(
           "Copy expectedEntryHash from the current match reviewTarget",
-      }),
+        ),
+      ),
     }),
   },
   async function* ({ safeDb, session, user, params, body, recordAuditEvent }) {

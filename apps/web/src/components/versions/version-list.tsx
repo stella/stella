@@ -17,15 +17,16 @@ import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
 } from "@stll/ui/review-diff-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -54,7 +55,7 @@ type VersionRowAuthor = {
 type VersionRowProps = {
   title: string;
   author: VersionRowAuthor | null;
-  /** ISO string (entity versions) or Date (Eden-deserialized). */
+  /** ISO string. */
   createdAt: string;
   isCurrent?: boolean;
   isViewing?: boolean;
@@ -69,6 +70,8 @@ type VersionRowProps = {
   onContextMenu?: (event: React.MouseEvent) => void;
   /** Diff vs the previous version; empty array means no changes. */
   loadDiff?: (() => Promise<VersionDiffSegment[]>) | null;
+  /** Label for the diff toggle where there is nothing earlier to compare. */
+  diffLabel?: string | undefined;
   /** AI change summary; null means the versions are identical. */
   summarize?: (() => Promise<string | null>) | null;
 };
@@ -92,6 +95,7 @@ export const VersionRow = ({
   onActivate,
   onContextMenu,
   loadDiff,
+  diffLabel,
   summarize,
 }: VersionRowProps) => {
   const t = useTranslations();
@@ -176,12 +180,14 @@ export const VersionRow = ({
           content={author?.name}
           render={
             <span
-              className="text-muted-foreground truncate text-xs"
+              className="text-muted-foreground min-w-0 text-xs"
               dir="auto"
             />
           }
         >
-          {author ? firstName(author.name) : ""}
+          <TruncatedText hint={false}>
+            {author ? firstName(author.name) : ""}
+          </TruncatedText>
         </Tooltip>
         <Tooltip
           content={formatFullTimestamp(createdAt)}
@@ -201,14 +207,18 @@ export const VersionRow = ({
   let headerElement: React.ReactNode;
   if (onActivate) {
     headerElement = (
-      <button
-        className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
-        type="button"
+      <Button
+        className="block w-full"
         onClick={onActivate}
         onContextMenu={onContextMenu}
+        variant="plain"
       >
-        {header}
-      </button>
+        <span
+          className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
+        >
+          {header}
+        </span>
+      </Button>
     );
   } else {
     headerElement = (
@@ -247,7 +257,7 @@ export const VersionRow = ({
               ) : (
                 <DirectionalIcon className="size-3" icon={ChevronRightIcon} />
               )}
-              {t("fileDetail.showDiff")}
+              {diffLabel ?? t("fileDetail.showDiff")}
             </Button>
           )}
           {summarize && (

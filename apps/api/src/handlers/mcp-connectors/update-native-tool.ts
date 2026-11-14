@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -10,13 +10,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { NATIVE_TOOL_SLUGS } from "@/api/lib/mcp-connectors/catalog-metadata";
 
-const routeParams = t.Object({
-  slug: t.String({ minLength: 1, maxLength: 64 }),
+const routeParams = v.object({
+  slug: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
 
-const requestBody = t.Object({
-  enabled: t.Boolean(),
-});
+const requestBody = v.object({ enabled: v.boolean() });
 
 const config = {
   contract: "patch",
@@ -41,24 +39,10 @@ const updateNativeTool = createSafeRootHandler(
     // single key; the ON CONFLICT branch merges over the row's
     // current value via JSONB concatenation under PG's row lock,
     // so concurrent toggles can't overwrite each other (no
-    // read-modify-write on the application side). Keep the legacy
-    // disabled_native_tools list in sync until the rollout-safe
-    // follow-up migration drops it.
+    // read-modify-write on the application side).
     const slug = params.slug;
     const overrideEntry = sql`jsonb_build_object(${slug}::text, ${body.enabled}::boolean)`;
     const updateExpr = sql`coalesce("organization_settings"."native_tool_overrides", '{}'::jsonb) || ${overrideEntry}`;
-    const legacyInsertValue = body.enabled
-      ? sql`'[]'::jsonb`
-      : sql`jsonb_build_array(${slug}::text)`;
-    const legacyUpdateExpr = body.enabled
-      ? sql`coalesce("organization_settings"."disabled_native_tools" - ${slug}::text, '[]'::jsonb)`
-      : sql`(
-          select coalesce(jsonb_agg(distinct value), '[]'::jsonb)
-          from jsonb_array_elements_text(
-            coalesce("organization_settings"."disabled_native_tools", '[]'::jsonb)
-            || jsonb_build_array(${slug}::text)
-          ) as value
-        )`;
 
     yield* Result.await(
       safeDb(async (tx) => {
@@ -67,13 +51,11 @@ const updateNativeTool = createSafeRootHandler(
           .values({
             organizationId: session.activeOrganizationId,
             nativeToolOverrides: overrideEntry,
-            disabledNativeTools: legacyInsertValue,
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
             set: {
               nativeToolOverrides: updateExpr,
-              disabledNativeTools: legacyUpdateExpr,
               updatedAt: new Date(),
             },
           })

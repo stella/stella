@@ -59,14 +59,14 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
+  type CaseLawScriptHandles,
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
-  type CaseLawScriptHandles,
 } from "@/api/lib/case-law/maintenance-lane";
 import { payloadCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import {
-  timestampCasToken,
   type TimestampCasToken,
+  timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import {
@@ -80,6 +80,7 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { corpusS3ObjectExists, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -367,7 +368,13 @@ const trimColumnRow = async ({
   } catch (error) {
     counts.failed += 1;
     counts.failedIds.push(row.id);
-    captureError(error, { decisionId: row.id, step: "corpusColumnTrim" });
+    captureError(
+      error,
+      handlerErrorContext("scripts.trimColumnRow", {
+        decisionId: row.id,
+        step: "corpusColumnTrim",
+      }),
+    );
   }
 };
 

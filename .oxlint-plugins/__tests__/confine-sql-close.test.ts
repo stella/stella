@@ -18,13 +18,24 @@ describe(RULE, () => {
       "const scopeOptions = { closeTimeout: 0 };",
       "const otherScope = { closeTimeout: budget };",
     ].join("\n");
-    for (const sourcePath of [
-      "apps/api/src/db/example.ts",
-      "apps/api/src/tests/example.test.ts",
-      "packages/db-load-gate/src/example.ts",
-    ]) {
-      expect(await lint(source, sourcePath)).toEqual([1, 2, 3, 4, 5]);
-    }
+    const results = await Promise.all(
+      [
+        "apps/api/src/db/example.ts",
+        "apps/api/src/tests/example.test.ts",
+        "packages/db-load-gate/src/example.ts",
+      ].map(async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(source, sourcePath),
+          expected: [1, 2, 3, 4, 5],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("rejects computed literal names, optional calls, casts and assignments", async () => {

@@ -16,8 +16,8 @@ import {
 import {
   buildCourtMapFromEntries,
   classifyCourtCode,
-  resolveCourtCodeAlias,
   resolveCourtCode as resolveCourtCodeFromMap,
+  resolveCourtCodeAlias,
 } from "./courts.js";
 import {
   InfoSoudAPIError,

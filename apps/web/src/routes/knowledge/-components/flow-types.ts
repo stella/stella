@@ -1,7 +1,7 @@
 import type { api } from "@/lib/api";
 
-// All Workflow (internal: "flow") shapes are inferred from the Eden API
-// surface so the editor's working state and save payload stay in lockstep
+// All Workflow (internal: "flow") shapes are inferred from the API client
+// so the editor's working state and save payload stay in lockstep
 // with the backend `flowDefinitionBodySchema` / `flow-types.ts`. Never
 // hand-redefine the step or trigger shape here.
 

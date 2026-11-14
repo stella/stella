@@ -5,6 +5,16 @@ edition = "2024"
 description = "stella desktop — managed Office file editing for stella"
 license = "Apache-2.0"
 
+[[example]]
+name = "local_file_creation_guard"
+required-features = ["local-file-guard-probe"]
+
+# The development stand-in computer `bun run agent:up -- --local-runner`
+# starts; the feature refuses a release build.
+[[example]]
+name = "runner_stand_in"
+required-features = ["dev-runner-stand-in"]
+
 [lib]
 name = "stella_desktop_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -25,6 +35,7 @@ filter_map_next = "warn"
 flat_map_option = "warn"
 implicit_clone = "warn"
 inefficient_to_string = "warn"
+let_underscore_must_use = "deny"
 manual_is_variant_and = "warn"
 manual_let_else = "warn"
 map_err_ignore = "deny"
@@ -82,6 +93,7 @@ tauri = { version = "2", features = [
 tauri-plugin-autostart = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
@@ -98,6 +110,7 @@ clipboard-rs = { version = "0.3.5", default-features = false, features = [
 ] }
 csscolorparser = "=0.9.0"
 dirs = "7"
+flate2 = "1"
 futures-util = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = [
@@ -110,6 +123,7 @@ image = { version = "0.25", default-features = false, features = [
   "webp",
 ] }
 keyring-core = "1"
+minisign-verify = "0.3"
 opener = "0.9"
 notify = "8"
 ring = "0.17"
@@ -119,17 +133,33 @@ reqwest = { version = "0.13", features = [
   "query",
   "stream",
 ] }
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+  "std",
+  "tls12",
+] }
+rustls-platform-verifier = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"
 sha2 = "0.11"
+tar = { version = "0.4", default-features = false }
 stella-desktop-signing-core = { path = "crates/signing-core", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
+# `__rustls-tls` takes the client configuration the runner builds with the
+# platform verifier, instead of a second root store.
+tokio-tungstenite = { version = "0.30", default-features = false, features = [
+  "connect",
+  "__rustls-tls",
+] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
 zip = { version = "9.0.0", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "=1.1.6", features = ["fs", "process"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1", features = [
@@ -155,6 +185,7 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
   "std",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSArray",
   "NSData",
   "NSGeometry",
   "NSString",
@@ -164,15 +195,39 @@ plist = "1.10"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1" }
 
+# The targets `build.rs` marks with `cfg(dictation)`.
+[target.'cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "windows"))'.dependencies]
+cpal = "0.18"
+transcribe-cpp = "=0.4.1"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5.4.1"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-windows-signing = { path = "crates/windows-signing", version = "0.0.1" }
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
-windows-registry = "0.6"
+windows-registry = "0.100"
 winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
+[features]
+allocation-tests = []
+dev-runner-stand-in = []
+local-file-guard-probe = []
+
 [dev-dependencies]
+dhat = "=0.3.3"
+tokio = { version = "1", features = ["test-util"] }
 tower = { version = "0.5", features = ["util"] }
 ts-rs = "12.0.1"
+
+[[test]]
+name = "allocation_clipboard"
+required-features = ["allocation-tests"]
+
+[[test]]
+name = "allocation_session_gate"
+required-features = ["allocation-tests"]
+
+[[test]]
+name = "allocation_session_upload"
+required-features = ["allocation-tests"]

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
@@ -13,12 +13,12 @@ import {
   avtViewAccessStatus,
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  rejectAvtLayout,
   avtLayoutErrorDetail,
+  rejectAvtLayout,
 } from "@/api/lib/lists/verification/view-layout";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -55,7 +55,7 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
+  params: workspaceParams({ viewId: resourceIdSchema("workspaceView") }),
   body: tUpdateViewBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

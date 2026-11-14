@@ -17,6 +17,65 @@ import {
  * in another. Each case states which signal is expected to decide it.
  */
 
+describe("a citation printed with its reporter entry is published authority", () => {
+  const doctrine =
+    "Extrémní rozpor je dán zejména tehdy, pokud hodnocení důkazů v napadeném rozhodnutí zcela absentuje";
+
+  test("a reported ruling stays precedent in a sentence about a contested decision", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "III. ÚS 359/05",
+        context: `${doctrine} [usnesení ze dne 23. 9. 2005 sp. zn. III. ÚS 359/05 (U 22/38 SbNU 579)].`,
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.REPORTER,
+    });
+  });
+
+  test("a Supreme Administrative Court report counts as well", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "6 As 1/2020",
+        context: `${doctrine} (rozsudek sp. zn. 6 As 1/2020, č. 4055/2020 Sb. NSS).`,
+      }).kind,
+    ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
+  test("the reporter entry of another citation in the sentence says nothing about this one", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "7 Tdo 346/2025",
+        context:
+          "Napadené usnesení sp. zn. 7 Tdo 346/2025 vychází z nálezu sp. zn. III. ÚS 84/94 (N 34/3 SbNU 257).",
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("a shorter docket does not read the entry of a longer one that ends the same", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "I. ÚS 359/05",
+        context: `${doctrine} [sp. zn. I. ÚS 359/05; sp. zn. III. ÚS 359/05 (U 22/38 SbNU 579)].`,
+      }).evidence,
+    ).toBe(CITATION_KIND_EVIDENCE.CONTEXT);
+  });
+
+  test("the publisher's account still outranks the reporter entry", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "III. ÚS 359/05",
+        citationKey: "iii.ús/359/05",
+        proceduralKeys: new Set(["iii.ús/359/05"]),
+        context: `sp. zn. III. ÚS 359/05 (U 22/38 SbNU 579)`,
+      }).evidence,
+    ).toBe(CITATION_KIND_EVIDENCE.PUBLISHER);
+  });
+});
+
 describe("context decides when it speaks", () => {
   test("an appeal recital is procedural even for a supreme-court registry", () => {
     expect(
@@ -719,4 +778,132 @@ describe("Hungarian registries and published designations", () => {
       });
     }
   });
+});
+
+describe("authority registry recognition is independent of citation prefixes", () => {
+  test("all supported Czech and Slovak prefixes expose the same registry", () => {
+    for (const prefix of [
+      "",
+      "sp. zn. ",
+      "sp.zn ",
+      "č. j. ",
+      "čj. ",
+      "č. k. ",
+      "sen. zn. ",
+    ]) {
+      for (const citationText of [
+        "21 As 123/2020",
+        "3 Cdo 12/2020",
+        "II. ÚS 12/2020",
+      ]) {
+        expect(
+          classifyCitationVerdict({
+            citationText: `${prefix}${citationText}`,
+            context: null,
+          }),
+        ).toEqual({
+          kind: CITATION_KIND.PRECEDENT,
+          evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+        });
+      }
+    }
+  });
+
+  test("insolvency review dockets are authority unless procedural evidence speaks", () => {
+    for (const citationText of [
+      "29 NSČR 12/2020",
+      "sen. zn. 31 NSČR 12/2020",
+    ]) {
+      expect(classifyCitationVerdict({ citationText, context: null })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+      expect(
+        classifyCitation({
+          citationText,
+          context: `Napadené usnesení ${citationText}.`,
+        }),
+      ).toBe(CITATION_KIND.PROCEDURAL);
+    }
+  });
+});
+
+describe("only the citing sentence supplies kind cues", () => {
+  test("procedural cues in adjacent sentences cannot demote an authority", () => {
+    for (const neighbour of [
+      "Napadený rozsudek byl zrušen.",
+      "Odvolání bylo odmítnuto.",
+    ]) {
+      const sentence = "Soud otázku vyřešil v rozsudku čj. 21 As 123/2020.";
+      for (const context of [
+        `${neighbour} ${sentence}`,
+        `${sentence} ${neighbour}`,
+      ]) {
+        expect(
+          classifyCitation({ citationText: "čj. 21 As 123/2020", context }),
+        ).toBe(CITATION_KIND.PRECEDENT);
+      }
+    }
+  });
+
+  test("precedent cues in adjacent sentences cannot promote procedural history", () => {
+    for (const context of [
+      "Judikatura byla přezkoumána. Řízení 12 Co 123/2020 skončilo.",
+      "Řízení 12 Co 123/2020 skončilo. Judikatura byla přezkoumána.",
+    ]) {
+      expect(
+        classifyCitation({ citationText: "12 Co 123/2020", context }),
+      ).toBe(CITATION_KIND.PROCEDURAL);
+    }
+  });
+
+  test("abbreviations and dates keep the invocation attached to the docket", () => {
+    for (const citationText of ["12 Co 123/2020", "II. ÚS 12/2020"]) {
+      expect(
+        classifyCitationVerdict({
+          citationText,
+          context: `Srov. rozhodnutí ze dne 1. 2. 2020, sp. zn. ${citationText}. Napadený rozsudek byl zrušen.`,
+        }),
+      ).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+      });
+    }
+  });
+
+  test("a citation the segmenter splits reads every sentence it spans", () => {
+    for (const [citationText, context] of [
+      ["sp. zn. 21 Cdo\n1234/2020", "Srov. sp. zn. 21 Cdo\n1234/2020 a dále."],
+      ["21 Cdo 1234/2020! a", "Srov. 21 Cdo 1234/2020! a dále."],
+    ] as const) {
+      expect(classifyCitationVerdict({ citationText, context })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+      });
+    }
+  });
+});
+
+test("whitespace around a citation does not reach into the sentence before", () => {
+  expect(
+    classifyCitation({
+      citationText: " 12 Co 123/2020",
+      context: "Judikatura byla přezkoumána. 12 Co 123/2020 skončilo.",
+    }),
+  ).toBe(CITATION_KIND.PROCEDURAL);
+});
+
+test("a statement about the case's own numbered proceedings stays procedural", () => {
+  for (const proceedings of [
+    "řízení vedeného pod",
+    "řízení vedeném pod",
+    "řízení vedené pod",
+  ]) {
+    expect(
+      classifyCitation({
+        citationText: "9 C 123/2020",
+        context: `Soud konstatoval, že účastník nebyl stranou ${proceedings} sp. zn. 9 C 123/2020.`,
+      }),
+    ).toBe(CITATION_KIND.PROCEDURAL);
+  }
 });

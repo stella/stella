@@ -7,7 +7,7 @@
  * connection, and is checked against the rows besides.
  */
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,

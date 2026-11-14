@@ -21,13 +21,28 @@ const analyze = (sources: Record<string, string>) =>
   });
 
 describe("content delivery declarations follow reachable runtime definitions", () => {
-  test("treats explicitly imported text assets as inert values", () => {
+  test.each([
+    ["runtime.js.txt", "text"],
+    ["invoice.typ", "file"],
+    ["sRGB-v2-micro.icc", "file"],
+    ["runtime.js", "file"],
+  ])(
+    "treats explicitly imported assets as inert values: %s (%s)",
+    (asset, type) => {
+      const result = analyze({
+        "/routes.ts": `import asset from "./${asset}" with { type: "${type}" }; export default createSafeHandler({}, () => new Response(asset));`,
+      });
+      expect(result.errors).toEqual([]);
+      expect(result.candidates).toEqual([]);
+    },
+  );
+
+  test("unsupported import loaders do not suppress unresolved runtime edges", () => {
     const result = analyze({
       "/routes.ts":
-        'import asset from "./runtime.js.txt" with { type: "text" }; export default createSafeHandler({}, () => new Response(asset));',
+        'import asset from "./missing" with { type: "unknown" }; export default createSafeHandler({}, () => new Response(asset));',
     });
-    expect(result.errors).toEqual([]);
-    expect(result.candidates).toEqual([]);
+    expect(result.errors).toContain("Cannot inspect /missing.ts");
   });
 
   test.each([
@@ -252,7 +267,6 @@ describe("content delivery declarations follow reachable runtime definitions", (
       discoveryFailures({
         files: [],
         endpoints: [],
-        routeFiles: [],
         importErrors: [{ id: "route.ts", message: "failed" }],
       }),
     ).toContain("Import failed route.ts: failed");
@@ -263,7 +277,6 @@ describe("content delivery declarations follow reachable runtime definitions", (
       discoveryFailures({
         endpoints: [],
         importErrors: [],
-        routeFiles: [],
         files: [
           {
             id: "route.ts",

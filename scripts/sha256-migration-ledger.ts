@@ -1,25 +1,22 @@
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import {
-  parseReasonedLedger,
-  runLedgerMembershipGuard,
-} from "./ledger-membership.ts";
+import { parseSource } from "../packages/scripts/src/syntax-tree";
+import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const LEDGER = "scripts/sha256-migration-ledger.json";
 const RULE = "no-raw-sha256";
 const outputSchema = v.object({
   diagnostics: v.array(v.object({ code: v.string(), filename: v.string() })),
 });
 
-export const sha256MigrationFiles = (root: string): string[] => {
+/** Tracked files where the rule reports raw SHA-256 outside its owners. */
+export const rawSha256Files = (root: string): string[] => {
   const temporary = mkdtempSync(path.join(tmpdir(), "sha256-migration-"));
   const config = path.join(temporary, "oxlint.config.ts");
   writeFileSync(
@@ -86,42 +83,55 @@ export const sha256MigrationFiles = (root: string): string[] => {
   ].toSorted();
 };
 
-export const migrationLedger = (files: readonly string[]) =>
-  files.map((id) => ({ id, reason: "migrates in a follow-up" }));
-
 export const parseOwnerLedger = (text: string, label: string): string[] => {
-  const source = ts.createSourceFile(label, text, ts.ScriptTarget.Latest, true);
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  // The owners ledger is TypeScript whatever its label is.
+  const { program } = parseSource(
+    /\.[cm]?ts$/u.test(label) ? label : `${label}.ts`,
+    text,
+  );
+  for (const topLevel of program.body) {
+    // `export const` wraps the declaration it exports.
+    const statement =
+      topLevel.type === "ExportNamedDeclaration"
+        ? topLevel.declaration
+        : topLevel;
+    if (statement?.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declarations) {
       if (
-        !ts.isIdentifier(declaration.name) ||
-        declaration.name.text !== "SHA256_OWNERS"
+        declaration.id.type !== "Identifier" ||
+        declaration.id.name !== "SHA256_OWNERS"
       ) {
         continue;
       }
-      let value = declaration.initializer;
+      let value = declaration.init;
       while (
         value &&
-        (ts.isAsExpression(value) || ts.isSatisfiesExpression(value))
+        (value.type === "TSAsExpression" ||
+          value.type === "TSSatisfiesExpression")
       ) {
         value = value.expression;
       }
-      if (!value || !ts.isObjectLiteralExpression(value)) {
+      if (value?.type !== "ObjectExpression") {
         panic(`${label}: owners must be a literal reasoned map`);
       }
       return value.properties.map((property) => {
         if (
-          !ts.isPropertyAssignment(property) ||
-          !ts.isStringLiteral(property.name) ||
-          !ts.isStringLiteral(property.initializer) ||
-          property.initializer.text.trim().length === 0
+          property.type !== "Property" ||
+          property.kind !== "init" ||
+          property.method ||
+          property.shorthand ||
+          property.computed ||
+          property.key.type !== "Literal" ||
+          typeof property.key.value !== "string" ||
+          property.value.type !== "Literal" ||
+          typeof property.value.value !== "string" ||
+          property.value.value.trim().length === 0
         ) {
           panic(`${label}: every owner needs a literal path and reason`);
         }
-        return property.name.text;
+        return property.key.value;
       });
     }
   }
@@ -130,44 +140,23 @@ export const parseOwnerLedger = (text: string, label: string): string[] => {
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  if (args.includes("--write")) {
-    writeFileSync(
-      path.join(ROOT, LEDGER),
-      `${JSON.stringify(migrationLedger(sha256MigrationFiles(ROOT)), null, 2)}\n`,
-    );
-  } else if (!args.includes("--self-test")) {
-    const actual = sha256MigrationFiles(ROOT);
-    const recorded = parseReasonedLedger(
-      readFileSync(path.join(ROOT, LEDGER), "utf-8"),
-      LEDGER,
-    ).toSorted();
-    if (JSON.stringify(actual) !== JSON.stringify(recorded)) {
-      const missing = actual.filter((id) => !recorded.includes(id));
-      const stale = recorded.filter((id) => !actual.includes(id));
+  if (!args.includes("--self-test")) {
+    const files = rawSha256Files(ROOT);
+    if (files.length > 0) {
       panic(
         [
-          "SHA-256 migration ledger must enumerate the current rule diagnostics; regenerate it after migrating files.",
-          `missing from the ledger: ${missing.join(", ") || "none"}`,
-          `no longer reported: ${stale.join(", ") || "none"}`,
+          "Raw SHA-256 outside the registered owners; route hashing through its runtime owner:",
+          ...files,
         ].join("\n"),
       );
     }
   }
-  const migrationStatus = runLedgerMembershipGuard({
-    ledgerRel: LEDGER,
-    repoRoot: ROOT,
-    parseLedger: parseReasonedLedger,
-    label: "SHA-256 migration",
-    remediation: "route new hashing through its runtime owner",
-    args: args.filter((arg) => arg !== "--write"),
-  });
-  const ownerStatus = runLedgerMembershipGuard({
+  process.exitCode = runLedgerMembershipGuard({
     ledgerRel: "scripts/sha256-owners.ts",
     repoRoot: ROOT,
     parseLedger: parseOwnerLedger,
     label: "SHA-256 owners",
     remediation: "reuse a registered owner",
-    args: args.filter((arg) => arg !== "--write"),
+    args,
   });
-  process.exitCode = Math.max(migrationStatus, ownerStatus);
 }

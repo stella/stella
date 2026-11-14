@@ -1,14 +1,14 @@
 import { TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 /**
  * Why a provider cursor cannot be continued. Named rather than flagged,
  * because every answer requires a fresh first page and only the reason tells
  * an operator whether decoding or a corpus-version change invalidated it.
  */
 export type InvalidLegalSearchCursorReason =
-  | "dictionary_mismatch"
-  | "target_mismatch"
-  | "undecodable";
+  "dictionary_mismatch" | "target_mismatch" | "undecodable";
 
 /**
  * A continuation page cannot be served for the cursor it was asked with.
@@ -20,7 +20,11 @@ export class InvalidLegalSearchCursorError extends TaggedError(
 )<{
   message: string;
   reason: InvalidLegalSearchCursorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /**
  * A legal-search provider could not complete an otherwise valid query.
@@ -35,5 +39,4 @@ export class LegalSearchUnavailableError extends TaggedError(
 }> {}
 
 export type LegalSearchError =
-  | InvalidLegalSearchCursorError
-  | LegalSearchUnavailableError;
+  InvalidLegalSearchCursorError | LegalSearchUnavailableError;

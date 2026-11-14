@@ -20,6 +20,8 @@ import {
   createPublicToolsHead,
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
+import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
 
@@ -31,7 +33,7 @@ const LazyMemberSkillEditorPage = lazy(async () => {
 
 // A bad `?install=` value degrades to "no install intent" rather than
 // throwing into the router's error boundary.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   install: v.fallback(v.optional(v.literal("1")), undefined),
 });
 
@@ -42,6 +44,19 @@ const searchSchema = v.object({
  * opens the skill editor.
  */
 export const Route = createFileRoute("/knowledge/tools_/$entry")({
+  staticData: {
+    presentation: routePresentation(
+      {
+        type: "knowledge-detail",
+        detail: "skill",
+      },
+      {
+        type: "label",
+        labelKey: "knowledge.sections.tools.title",
+        to: "/knowledge/tools",
+      },
+    ),
+  },
   validateSearch: searchSchema,
   loader: async ({ params }) => {
     const page = await resolveToolEntry(params.entry, {
@@ -113,7 +128,10 @@ function ToolEntryPage() {
         markdown={page.markdown}
         onClearInstallIntent={() => {
           navigate({ replace: true, search: {} }).catch((error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "ToolEntryPage:failure",
+              scope: { type: "handler", handlerId: "ToolEntryPage:failure" },
+            });
           });
         }}
       />

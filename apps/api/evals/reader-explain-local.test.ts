@@ -52,9 +52,7 @@ test("prompt runs own separate traces and the emitted tool preserves related dir
     spawnSync(
       process.execPath,
       [path.join(import.meta.dir, "reader-explain-local.ts"), ...args],
-      {
-        encoding: "utf-8",
-      },
+      { maxBuffer: 2 ** 30, encoding: "utf-8" },
     );
   const prompts = () => {
     const output = invoke(["prompts", capturePath]);
@@ -75,6 +73,7 @@ test("prompt runs own separate traces and the emitted tool preserves related dir
       expect(prompt.tracePath).toBe(previousPrompt.tracePath);
       const command = prompt.tool.command.slice(2);
       const output = spawnSync(process.execPath, command, {
+        maxBuffer: 2 ** 30,
         encoding: "utf-8",
       });
       expect(output.status, output.stderr).toBe(0);

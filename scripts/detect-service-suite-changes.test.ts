@@ -9,8 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { LOCAL_SEED_SCRIPTS } from "../apps/api/scripts/seed-local-scripts";
 import {
   corpusEngineScopeViolations,
+  devSeedDependencies,
   planServiceSuites,
   requiresServiceSuites,
   serviceSuiteDependencies,
@@ -20,6 +22,7 @@ import { GENERATORS } from "./generated-files";
 // The detector and the modules it imports, copied into fixture checkouts.
 const DETECTOR_SOURCES = Object.fromEntries(
   [
+    "../apps/api/scripts/seed-local-scripts.ts",
     "../packages/scripts/src/generated-files.ts",
     "ci-repository-cache.ts",
     "detect-service-suite-changes.ts",
@@ -28,6 +31,13 @@ const DETECTOR_SOURCES = Object.fromEntries(
   ].map((file) => [
     path.posix.normalize(`scripts/${file}`),
     readFileSync(new URL(file, import.meta.url), "utf-8"),
+  ]),
+);
+// Without its entry points the dev seed scope fails closed.
+const DEV_SEED_SOURCES = Object.fromEntries(
+  ["seed-local.ts", ...LOCAL_SEED_SCRIPTS].map((script) => [
+    `apps/api/scripts/${script}`,
+    "",
   ]),
 );
 
@@ -48,8 +58,38 @@ test("database, migrations, scheduler, backfills, suites, and harness changes re
     "docker/postgres/.dockerignore",
     "docker/postgres/init.sql",
     ".github/workflows/ci.yml",
+    "apps/api/.env.example",
   ]) {
     expect(requiresServiceSuites([file]), file).toBe(true);
+  }
+});
+
+test("the dev seed scope covers migrations, its fixtures and every file it imports, and selects the Postgres job", () => {
+  const graph = devSeedDependencies();
+  if (graph.status !== "complete") {
+    throw new TypeError(graph.message);
+  }
+  expect(graph.dependencies).toContain("apps/api/scripts/seed-dev.ts");
+  expect(graph.dependencies).toContain(
+    "apps/api/scripts/seed-marketing-case-law.ts",
+  );
+  for (const file of [
+    ...graph.dependencies,
+    "apps/api/drizzle/20991231235959_new/migration.sql",
+    "apps/api/scripts/__fixtures__/case-law/cz-ns.json.gz",
+    "apps/api/.env.example",
+  ]) {
+    const plan = planServiceSuites([file]);
+    expect(plan.devSeed, file).toBe(true);
+    expect(plan.postgres, file).toBe(true);
+  }
+  for (const file of [
+    "docs/guide.md",
+    "apps/web/src/page.tsx",
+    "apps/api/src/unused-new-handler.ts",
+    "apps/api/scripts/seed-email-viewer-demo.ts",
+  ]) {
+    expect(planServiceSuites([file]).devSeed, file).toBe(false);
   }
 });
 
@@ -104,6 +144,7 @@ test("a newly added transitive import is picked up without editing the detector"
   const root = mkdtempSync(path.join(tmpdir(), "service-suite-graph-"));
   const sources = {
     ...DETECTOR_SOURCES,
+    ...DEV_SEED_SOURCES,
     "apps/api/package.json": readFileSync(
       new URL("../apps/api/package.json", import.meta.url),
       "utf-8",
@@ -255,6 +296,9 @@ test("each suite follows its own import closure without planning unrelated sibli
     "apps/collab/src/server.test.ts": 'import "@stll/collaboration-only";',
     "packages/collaboration-only/package.json":
       '{"name":"@stll/collaboration-only"}',
+    ...DEV_SEED_SOURCES,
+    "apps/api/scripts/seed-dev.ts": 'import "@/api/seed-only";',
+    "apps/api/src/seed-only.ts": "",
   };
   try {
     for (const [file, source] of Object.entries(sources)) {
@@ -267,12 +311,14 @@ test("each suite follows its own import closure without planning unrelated sibli
       ["corpus", "apps/api/src/corpus-only.ts"],
       ["valkey", "apps/api/src/valkey-only.ts"],
       ["collab", "packages/collaboration-only/src/new.ts"],
+      ["devSeed", "apps/api/src/seed-only.ts"],
     ] as const) {
       expect(planServiceSuites([file], root), file).toEqual({
-        postgres: suite === "postgres",
+        postgres: suite === "postgres" || suite === "devSeed",
         corpus: suite === "corpus",
         valkey: suite === "valkey",
         collab: suite === "collab",
+        devSeed: suite === "devSeed",
       });
     }
   } finally {

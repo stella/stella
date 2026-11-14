@@ -1,8 +1,74 @@
 import { describe, expect, it } from "bun:test";
 
-import { normalizeUnicode } from "@stll/text-normalize";
+import { foldSearchMatchText, normalizeUnicode } from "@stll/text-normalize";
 
 import { buildSearchResults } from "./reader-search";
+
+/**
+ * A decision's own spelling against what a reader types into the find bar,
+ * with the words a list filter finds the same way. Each row's shown word folds
+ * to a different length or shape, so the mark has to be mapped back.
+ */
+const FIND_CASES = [
+  {
+    language: "cs",
+    text: "Rozsudek Dvořákové.",
+    typed: "dvorakove",
+    marked: ["Dvořákové"],
+  },
+  {
+    language: "de",
+    text: "Die Straße ist gesperrt.",
+    typed: "strasse",
+    marked: ["Straße"],
+  },
+  {
+    language: "de",
+    text: "Herr MÜLLER klagt.",
+    typed: "muller",
+    marked: ["MÜLLER"],
+  },
+  {
+    language: "fr",
+    text: "L'œuvre ﬁnale d'Élise.",
+    typed: "oeuvre finale elise",
+    marked: ["œuvre", "ﬁnale", "Élise"],
+  },
+  {
+    language: "ar",
+    text: "قال مُحَمَّد إن أحمد",
+    typed: "محمد احمد",
+    marked: ["مُحَمَّد", "أحمد"],
+  },
+  {
+    language: "tr",
+    text: "İSTANBUL ve Istanbul",
+    typed: "istanbul",
+    marked: ["İSTANBUL", "Istanbul"],
+  },
+] as const;
+
+describe("find in a decision, across languages", () => {
+  for (const { language, marked, text, typed } of FIND_CASES) {
+    it(`${language}: "${typed}" marks the decision's own spelling`, () => {
+      // Each fixture must fold to something else, or the mapping is untested.
+      for (const word of marked) {
+        expect(foldSearchMatchText(word)).not.toBe(word);
+      }
+      const result = buildSearchResults({
+        pieces: [{ id: "p1", text }],
+        query: typed,
+      });
+
+      expect(
+        result.rangesByPieceId["p1"]?.map(({ end, start }) =>
+          text.slice(start, end),
+        ),
+      ).toEqual([...marked]);
+      expect(result.matchCount).toBe(marked.length);
+    });
+  }
+});
 
 describe("buildSearchResults", () => {
   it("matches case-insensitively and ignores diacritics", () => {
@@ -17,10 +83,10 @@ describe("buildSearchResults", () => {
     ]);
   });
 
-  // The corpus almost never repeats the reader's phrase verbatim, so a
-  // multi-word query is its words: each one marked where the text uses it,
-  // apart and in the publisher's own spelling.
-  it("marks every word of the query, wherever it is used", () => {
+  // The corpus rarely repeats the reader's phrase verbatim, so a multi-word
+  // query the text never uses whole is its words: each one marked where the
+  // text uses it, apart and in the publisher's own spelling.
+  it("marks every word of a phrase the text never uses", () => {
     const text = "Náhrada škody a jiné újmy.";
     const result = buildSearchResults({
       pieces: [{ id: "p1", text }],
@@ -33,6 +99,69 @@ describe("buildSearchResults", () => {
         text.slice(range.start, range.end),
       ),
     ).toEqual(["Náhrada", "újmy"]);
+  });
+
+  // A docket typed into the find bar is the citation the reader is after; the
+  // same digits standing alone in an article number or a date are noise.
+  it("marks only the phrase where the text uses it", () => {
+    const pieces = [
+      { id: "p1", text: "práva na ochranu (čl. 7 odst. 1 a čl. 10 Listiny)." },
+      {
+        id: "p2",
+        text: "nález ze dne 12. 10. 1994. Jak uzavřel v rozsudku č. j. 10 As 245/2016-41 Nejvyšší správní soud.",
+      },
+    ];
+    const result = buildSearchResults({ pieces, query: "10 As 245/2016" });
+
+    expect(result.matchCount).toBe(1);
+    expect(result.rangesByPieceId["p1"]).toBeUndefined();
+    const text = pieces[1]?.text ?? "";
+    expect(
+      result.rangesByPieceId["p2"]?.map((range) =>
+        text.slice(range.start, range.end),
+      ),
+    ).toEqual(["10 As 245/2016"]);
+  });
+
+  it("does not run a phrase on from a longer number", () => {
+    const text = "Rozsudek 100 As 245/2016 a rozsudek 10 As 245/2016.";
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "10 as 245/2016",
+    });
+
+    expect(
+      result.rangesByPieceId["p1"]?.map((range) =>
+        text.slice(range.start, range.end),
+      ),
+    ).toEqual(["10 As 245/2016"]);
+  });
+
+  // The last word is the one the reader may still be typing.
+  it("lets the phrase's last word be a prefix", () => {
+    const text = "Náhrada škody a náhrada škodné události.";
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "nahrada skod",
+    });
+
+    expect(
+      result.rangesByPieceId["p1"]?.map((range) =>
+        text.slice(range.start, range.end),
+      ),
+    ).toEqual(["Náhrada škody", "náhrada škodné"]);
+  });
+
+  it("does not join a phrase across pieces", () => {
+    const result = buildSearchResults({
+      pieces: [
+        { id: "p1", text: "Krajský soud 10" },
+        { id: "p2", text: "As rozhodl." },
+      ],
+      query: "10 As",
+    });
+
+    expect(result.matchCount).toBe(2);
   });
 
   // An inflected corpus writes the word the sentence needs, not the one the
@@ -94,14 +223,44 @@ describe("buildSearchResults", () => {
     });
   });
 
-  it("has nothing to mark for a query of words too short to mean anything", () => {
+  it("finds a provision by its one-digit number", () => {
     const result = buildSearchResults({
-      pieces: [{ id: "p1", text: "Za to je odpovědný." }],
-      query: "za to",
+      pieces: [
+        { id: "p1", text: "ČÁST PRVNÍ" },
+        { id: "p2", text: "§ 1" },
+        { id: "p3", text: "(2) Podle odstavce 1 písm. a)" },
+      ],
+      query: "§ 1",
     });
 
-    expect(result.matchCount).toBe(0);
-    expect(result.rangesByPieceId).toEqual({});
+    expect(result.matchCount).toBe(2);
+    expect(result.rangesByPieceId).toEqual({
+      p2: [{ type: "search", start: 2, end: 3, matchIndex: 0 }],
+      p3: [{ type: "search", start: 19, end: 20, matchIndex: 1 }],
+    });
+  });
+
+  it("finds the short words a reader types", () => {
+    const text = "Za to je odpovědný, a to platí za vše.";
+    const phrase = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "za to",
+    });
+    const words = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "to za",
+    });
+
+    expect(
+      phrase.rangesByPieceId["p1"]?.map(({ end, start }) =>
+        text.slice(start, end),
+      ),
+    ).toEqual(["Za to"]);
+    expect(
+      words.rangesByPieceId["p1"]?.map(({ end, start }) =>
+        text.slice(start, end),
+      ),
+    ).toEqual(["Za", "to", "to", "za"]);
   });
 
   it("handles contextual lowercasing such as Greek final sigma", () => {
@@ -150,10 +309,10 @@ describe("buildSearchResults", () => {
       query: "خدمه احمد",
     });
 
-    expect(result.matchCount).toBe(2);
+    // Both words fold to the typed spelling, so the phrase is found whole.
+    expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { type: "search", start: 0, end: 4, matchIndex: 0 },
-      { type: "search", start: 5, end: 9, matchIndex: 1 },
+      { type: "search", start: 0, end: 9, matchIndex: 0 },
     ]);
   });
 

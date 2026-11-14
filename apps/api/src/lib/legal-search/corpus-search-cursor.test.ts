@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
@@ -10,10 +10,10 @@ import {
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  type CorpusSearchPhase,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
-  type CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import {
@@ -85,20 +85,10 @@ test("a cursor continues only against the read target it was cut from", () => {
   expect(
     isStaleCorpusSearchCursor(cut(TARGET_A), { ...ranking, target: TARGET_B }),
   ).toBe(true);
-  // A legacy cursor, or one cut from a base-only read, never continues a read
-  // whose target has a contract of its own, nor the other way round.
+  // A cursor cut from a base-only read never continues a read whose target
+  // has a contract of its own, nor the other way round.
   expect(
     isStaleCorpusSearchCursor(cut(null), { ...ranking, target: TARGET_A }),
-  ).toBe(true);
-  expect(
-    isStaleCorpusSearchCursor(
-      decodeCorpusSearchCursor(encodeCursor(0.5, `900:${DECISION_ID}`)),
-      {
-        dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
-        sort: "relevance",
-        target: TARGET_A,
-      },
-    ),
   ).toBe(true);
   expect(
     isStaleCorpusSearchCursor(cut(TARGET_A), { ...ranking, target: null }),
@@ -258,71 +248,25 @@ test("a first page is never stale", () => {
   ).toBe(false);
 });
 
-// Both legacy forms a rolling deploy can hand back. Neither could have been
-// issued by a replica that ran the expanded query, so `none` is what their
-// page was built with; the window is what the older format says it is.
-test("reads a cursor from before the window field as the first window", () => {
-  expect(decodeCorpusSearchCursor(encodeCursor(0.25, DECISION_ID))).toEqual({
-    dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
-    id: DECISION_ID,
-    score: 0.25,
-    sort: "relevance",
-    windowStart: 0,
-    target: null,
-  });
-});
-
-test("reads a cursor from before the dictionary field in its own window", () => {
-  expect(
-    decodeCorpusSearchCursor(encodeCursor(0.5, `900:${DECISION_ID}`)),
-  ).toEqual({
-    dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
-    id: DECISION_ID,
-    score: 0.5,
-    sort: "relevance",
-    windowStart: 900,
-    target: null,
-  });
-});
-
-// The form that predates sorting only: its window and dictionary are read as
-// written, and relevance is the order every replica issuing it could produce.
-test("reads a cursor from before the order field as a relevance page", () => {
-  expect(
-    decodeCorpusSearchCursor(encodeCursor(0.5, `900:${HASH_A}:${DECISION_ID}`)),
-  ).toEqual({
-    dictionary: DICTIONARY_A,
-    id: DECISION_ID,
-    score: 0.5,
-    sort: "relevance",
-    windowStart: 900,
-    target: null,
-  });
-});
-
-// The legacy readers admit a missing field, never a wrong one.
-test("a legacy cursor is not a way past the identity check", () => {
-  expect(
-    isStaleCorpusSearchCursor(
-      decodeCorpusSearchCursor(encodeCursor(0.25, `900:${DECISION_ID}`)),
-      { dictionary: DICTIONARY_A, sort: "relevance", target: null },
-    ),
-  ).toBe(true);
-});
-
 test.each([
-  // One metadata segment is a window rank and nothing else.
-  `garbage:${DECISION_ID}`,
-  `-3:${DECISION_ID}`,
-  `1.5:${DECISION_ID}`,
-  `${HASH_A}:${DECISION_ID}`,
-  `none:${DECISION_ID}`,
+  // Every page carries a window, a dictionary and an order: a payload short
+  // of one names no ranking, whatever its remaining segments say.
+  DECISION_ID,
+  `900:${DECISION_ID}`,
+  `900:${HASH_A}:${DECISION_ID}`,
+  `900:none:${DECISION_ID}`,
+  `none:relevance:${DECISION_ID}`,
+  // The first segment is a window rank and nothing else.
+  `garbage:none:relevance:${DECISION_ID}`,
+  `-3:none:relevance:${DECISION_ID}`,
+  `1.5:none:relevance:${DECISION_ID}`,
+  `${HASH_A}:none:relevance:${DECISION_ID}`,
   // A rank no scan could have reached is not one this service issued.
-  `${"9".repeat(11)}:${DECISION_ID}`,
+  `${"9".repeat(11)}:none:relevance:${DECISION_ID}`,
   // Well-shaped segments in the wrong order, or one too many.
-  `${HASH_A}:900:${DECISION_ID}`,
-  `900:none-ish:${DECISION_ID}`,
-  `900:${HASH_A.slice(0, 63)}:${DECISION_ID}`,
+  `${HASH_A}:900:relevance:${DECISION_ID}`,
+  `900:none-ish:relevance:${DECISION_ID}`,
+  `900:${HASH_A.slice(0, 63)}:relevance:${DECISION_ID}`,
   // An order this service does not declare is not one it ranked a page in.
   `900:none:oldest:${DECISION_ID}`,
   `900:none:relevance:extra:${DECISION_ID}`,
@@ -335,16 +279,18 @@ test.each([
 });
 
 test("decode is total — never throws on arbitrary strings", () => {
-  fc.assert(
+  assertProperty(
+    "decode is total — never throws on arbitrary strings",
     fc.property(fc.string(), (input) => {
       expect(() => decodeCorpusSearchCursor(input)).not.toThrow();
     }),
-    propertyConfig(),
+    {},
   );
 });
 
 test("encode → decode round-trips every window, identity and order", () => {
-  fc.assert(
+  assertProperty(
+    "encode → decode round-trips every window, identity and order",
     fc.property(
       fc.double({ noDefaultInfinity: true, noNaN: true }).filter(
         // -0 is excluded because String(-0) === "0" loses the sign.
@@ -376,7 +322,7 @@ test("encode → decode round-trips every window, identity and order", () => {
         ).toEqual({ dictionary, id, score, sort, windowStart, target });
       },
     ),
-    propertyConfig(),
+    {},
   );
 });
 
@@ -495,7 +441,7 @@ const phaseCursor = (phase: CorpusSearchPhase) => ({
 });
 
 const phaseSegment = (phase: unknown): string =>
-  `p${Buffer.from(JSON.stringify(phase)).toString("base64url")}`;
+  `p${Buffer.from(JSON.stringify(phase)).toBase64({ alphabet: "base64url", omitPadding: true })}`;
 
 const STRICT_PHASE = {
   type: "strict",
@@ -769,7 +715,7 @@ test("phase segments are canonical base64url and occur once after other optional
 test.each(['{"type":"strict', "{", '"unterminated'])(
   "malformed phase JSON %s rejects the cursor",
   (json) => {
-    const segment = `p${Buffer.from(json).toString("base64url")}`;
+    const segment = `p${Buffer.from(json).toBase64({ alphabet: "base64url", omitPadding: true })}`;
     expect(
       decodeCorpusSearchCursor(
         encodeCursor(0.5, `0:none:relevance:${segment}:${DECISION_ID}`),

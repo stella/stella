@@ -1,3 +1,4 @@
+import { CancelledError } from "@tanstack/react-query";
 import { describe, expect, mock, test } from "bun:test";
 
 import type {
@@ -8,6 +9,7 @@ import type {
 import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
+  RouteCancelledReadError,
 } from "./route-error-lifecycle";
 import { createLoadedRouteErrorLifecycleController } from "./route-error-lifecycle-loaded";
 
@@ -19,7 +21,7 @@ const setup = () => {
   const errors: { context: unknown; error: unknown }[] = [];
   const events: RouteErrorLifecycleProperties[] = [];
   const analytics = {
-    captureError: mock((error, context) => {
+    captureError: mock((error, { context }) => {
       errors.push({ context, error });
     }),
     captureRouteErrorLifecycle: mock(async (properties) => {
@@ -73,6 +75,83 @@ describe("route error lifecycle diagnostics", () => {
       routeTemplate: ROUTE_TEMPLATE,
     });
   });
+
+  test("reports a cancelled read on a visible error page exactly once", () => {
+    const { analytics, errors } = setup();
+    const controller = createRouteErrorLifecycleController(analytics);
+    const cancelled = new CancelledError({ revert: true });
+    controller.caught(ROUTE_TEMPLATE);
+    controller.shown({
+      error: cancelled,
+      recovery: "retry-route",
+      reference: FIRST_REFERENCE,
+    });
+    controller.shown({
+      error: cancelled,
+      recovery: "retry-route",
+      reference: FIRST_REFERENCE,
+    });
+    // A boundary reset shows the same stored error under a new reference.
+    controller.shown({
+      error: cancelled,
+      recovery: "retry-route",
+      reference: SECOND_REFERENCE,
+    });
+
+    expect(errors).toHaveLength(1);
+    const reported = errors.at(0)?.error;
+    expect(reported).toBeInstanceOf(RouteCancelledReadError);
+    expect(reported).not.toBeInstanceOf(CancelledError);
+    expect(reported).toMatchObject({
+      cause: cancelled,
+      reference: FIRST_REFERENCE,
+      routeTemplate: ROUTE_TEMPLATE,
+    });
+    expect(errors.at(0)?.context).toEqual({
+      reference: FIRST_REFERENCE,
+      type: "recovery",
+    });
+  });
+
+  test.each([
+    {
+      error: new TypeError(
+        "Failed to fetch dynamically imported module: https://app.test/assets/route-error-lifecycle-loaded.js",
+      ),
+      reported: false,
+    },
+    {
+      error: new TypeError("Importing a module script failed."),
+      reported: false,
+    },
+    { error: new RangeError("Unrelated load failure"), reported: true },
+  ])(
+    "reports a diagnostics load failure unless preload recovery owns it ($error.message)",
+    async ({ error, reported }) => {
+      const { analytics, errors, events } = setup();
+      const controller = createRouteErrorLifecycleController(
+        analytics,
+        async () => {
+          throw error;
+        },
+      );
+      controller.caught(ROUTE_TEMPLATE);
+
+      await controller.retryStarted(FIRST_REFERENCE, "retry-route");
+
+      expect(errors).toEqual(
+        reported
+          ? [
+              {
+                context: { operation: "route-error.load", type: "detached" },
+                error,
+              },
+            ]
+          : [],
+      );
+      expect(events).toEqual([]);
+    },
+  );
 
   test("reads the errored route or attempted leaf at catch time", () => {
     expect(

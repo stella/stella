@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
@@ -8,7 +9,10 @@ import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { E2E_API_ORIGIN } from "./api";
+import { openMemberDecision } from "./decision-reader";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
+import { apiJson, respond } from "./route-mock";
+import type { RouteReply } from "./route-mock";
 
 export const PROVISION_LAYOUT_SENTENCE =
   "Škůdce nahradí škodu způsobenou porušením povinnosti stanovené zákonem.";
@@ -158,79 +162,105 @@ export const installProvisionLayoutFixture = async (
     const path = (
       sameOriginMount ? url.pathname.slice(4) : url.pathname
     ).replace(/\/$/u, "");
-    const respond = async (body: unknown) =>
-      await route.fulfill({ json: body });
+    const answer = async (reply: RouteReply) => await respond(route, reply);
     if (
       path === `/v1/case/decisions/by-slug/${decision.slug}` ||
       path === `/v1/case/decisions/${decision.id}`
     ) {
-      await respond(decision);
+      await answer(apiJson("v1/case/decisions/:decisionId", "get", decision));
       return;
     }
     if (path.startsWith(`/v1/case/decisions/${decision.id}/`)) {
       if (path.endsWith("/analysis")) {
-        await respond({
-          status: "done",
-          analysis: {
-            version: 2,
-            generatedAt: "2026-10-06T08:00:00.000Z",
-            model: "synthetic",
-            inputFingerprint: "f".repeat(64),
-            tree: [],
-          } satisfies DecisionAnalysis,
-        });
+        await answer(
+          apiJson("v1/case/decisions/:decisionId/analysis", "get", {
+            status: "done",
+            analysis: {
+              version: 2,
+              generatedAt: "2026-10-06T08:00:00.000Z",
+              model: "synthetic",
+              inputFingerprint: "f".repeat(64),
+              tree: [],
+            } satisfies DecisionAnalysis,
+            aiDisclosure: aiDisclosure("caseLaw"),
+          }),
+        );
         return;
       }
       if (path.endsWith("/provisions")) {
-        await respond({
-          ...dockedChatLegalPayloads.noProvisions,
-          items: [provisionRow],
-        });
+        await answer(
+          apiJson("v1/case/decisions/:decisionId/provisions", "get", {
+            ...dockedChatLegalPayloads.noProvisions,
+            items: [provisionRow],
+          }),
+        );
         return;
       }
       if (path.endsWith("/citations/summary")) {
-        await respond(dockedChatLegalPayloads.citationSummary);
+        await answer(
+          apiJson(
+            "v1/case/decisions/:decisionId/citations/summary",
+            "get",
+            dockedChatLegalPayloads.citationSummary,
+          ),
+        );
         return;
       }
       if (path.endsWith("/citations/leading")) {
-        await respond(dockedChatLegalPayloads.noLeadingCitations);
+        await answer(
+          apiJson(
+            "v1/case/decisions/:decisionId/citations/leading",
+            "get",
+            dockedChatLegalPayloads.noLeadingCitations,
+          ),
+        );
         return;
       }
       if (path.endsWith("/citations")) {
-        await respond(dockedChatLegalPayloads.noCitations);
+        await answer(
+          apiJson(
+            "v1/case/decisions/:decisionId/citations",
+            "get",
+            dockedChatLegalPayloads.noCitations,
+          ),
+        );
         return;
       }
     }
     if (path === "/v1/law/statutes/resolve") {
-      await respond({
-        items: [
-          {
-            asOf: historical.versionValidFrom,
-            country: historical.country,
-            eli: historical.eli,
-            statute: historical,
-            unresolvedReason: null,
-          },
-        ],
-      });
+      await answer(
+        apiJson("v1/law/statutes/resolve", "post", {
+          items: [
+            {
+              asOf: historical.versionValidFrom,
+              country: historical.country,
+              eli: historical.eli,
+              statute: historical,
+              unresolvedReason: null,
+            },
+          ],
+        }),
+      );
       return;
     }
     if (path.endsWith("/versions") && path.startsWith("/v1/law/statutes/")) {
-      await respond({
-        ...dockedChatLegalPayloads.versions,
-        items: dockedChatLegalPayloads.versions.items.map((version) => ({
-          ...version,
-          eli: current.eli,
-          title: current.title,
-          ...(version.id === historical.id
-            ? {
-                effectiveDate: historical.effectiveDate,
-                versionValidFrom: historical.versionValidFrom,
-                versionValidTo: historical.versionValidTo,
-              }
-            : {}),
-        })),
-      });
+      await answer(
+        apiJson("v1/law/statutes/:documentId/versions", "get", {
+          ...dockedChatLegalPayloads.versions,
+          items: dockedChatLegalPayloads.versions.items.map((version) => ({
+            ...version,
+            eli: current.eli,
+            title: current.title,
+            ...(version.id === historical.id
+              ? {
+                  effectiveDate: historical.effectiveDate,
+                  versionValidFrom: historical.versionValidFrom,
+                  versionValidTo: historical.versionValidTo,
+                }
+              : {}),
+          })),
+        }),
+      );
       return;
     }
     for (const statute of [historical, current]) {
@@ -238,47 +268,68 @@ export const installProvisionLayoutFixture = async (
         path === `/v1/law/statutes/${statute.id}` ||
         path === `/v1/law/statutes/by-slug/${statute.slug}`
       ) {
-        await respond(statute);
+        await answer(apiJson("v1/law/statutes/:documentId", "get", statute));
         return;
       }
       if (
         path === `/v1/law/statutes/${statute.id}/provisions/par_2895/preview`
       ) {
-        await respond({
-          documentId: statute.id,
-          language: "cs",
-          anchorId: "par_2895",
-          citedAnchorId: null,
-          headings: [],
-          heading: {
-            id: "heading-2895",
-            anchorId: "par_2895",
-            level: 2,
-            text: "§ 2895",
-          },
-          blocks: [
+        await answer(
+          apiJson(
+            "v1/law/statutes/:documentId/provisions/:anchor/preview",
+            "get",
             {
-              id: "paragraph-2895",
-              anchorId: "par_2895-odst_1",
-              text:
-                statute.id === historical.id
-                  ? PROVISION_LAYOUT_SENTENCE
-                  : CURRENT_PROVISION_SENTENCE,
+              url: null,
+              country: statute.country,
+              documentId: statute.id,
+              language: "cs",
+              anchorId: "par_2895",
+              citedAnchorId: null,
+              headings: [],
+              heading: {
+                id: "heading-2895",
+                anchorId: "par_2895",
+                level: 2,
+                text: "§ 2895",
+              },
+              blocks: [
+                {
+                  id: "paragraph-2895",
+                  anchorId: "par_2895-odst_1",
+                  text:
+                    statute.id === historical.id
+                      ? PROVISION_LAYOUT_SENTENCE
+                      : CURRENT_PROVISION_SENTENCE,
+                },
+              ],
             },
-          ],
-        });
+          ),
+        );
         return;
       }
       if (
         path.includes(`/v1/law/statutes/${statute.id}/provisions/`) &&
         path.endsWith("/history")
       ) {
-        await respond({ items: [], nextCursor: null, limit: 50 });
+        await answer(
+          apiJson(
+            "v1/law/statutes/:documentId/provisions/:anchor/history",
+            "get",
+            { items: [], nextCursor: null, limit: 50 },
+          ),
+        );
         return;
       }
     }
     if (path === "/v1/case/provisions/citing-decisions") {
-      await respond({ items: [], nextCursor: null, limit: 50 });
+      await answer(
+        apiJson("v1/case/provisions/citing-decisions", "get", {
+          items: [],
+          nextCursor: null,
+          limit: 50,
+          snapshot: null,
+        }),
+      );
       return;
     }
     await route.continue();
@@ -289,33 +340,22 @@ export const openProvisionLayoutInspector = async (
   page: Page,
   webOrigin = "",
 ) => {
-  await page.goto(`${webOrigin}/chat`, { waitUntil: "commit" });
-  await page.locator("main").waitFor({ state: "visible", timeout: 30_000 });
-  await page.evaluate(
-    (path) => history.pushState(null, "", path),
-    PROVISION_LAYOUT_DECISION_PATH,
-  );
-  const citation = page
+  // The citation's preview belongs to the reader that stays mounted.
+  const reader = await openMemberDecision(page, {
+    bootPath: `${webOrigin}/chat`,
+    path: PROVISION_LAYOUT_DECISION_PATH,
+  });
+  const citation = reader
     .locator(".reader-case-law")
     .getByRole("link", { name: "§ 2895" })
     .first();
   await citation.waitFor({ state: "visible", timeout: 30_000 });
-  // The public reader remains visible while the authenticated workspace loads;
-  // its preview is replaced on that handoff. The editable composer belongs to
-  // the authenticated workspace, so open the preview only after it mounts.
-  await page
-    .locator('[data-file-viewer-root="true"]')
-    .filter({ has: page.locator(".reader-case-law") })
-    .locator(
-      '[data-slot="docked-chat-composer"] [role="textbox"][contenteditable="true"]',
-    )
-    .waitFor({ state: "visible", timeout: 30_000 });
   await citation.click();
   // Enter the preview before moving to its edge-aligned header action;
   // a direct pointer jump from the citation leaves the hover corridor.
   await page.getByText(PROVISION_LAYOUT_SENTENCE, { exact: true }).hover();
   await page
-    .getByRole("button", { name: "Open provision", exact: true })
+    .getByRole("button", { name: "Open in side panel", exact: true })
     .click();
   const article = page.locator(
     '[data-slot="inspector-dock-pane"] article.reader-statute',

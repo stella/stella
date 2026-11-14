@@ -13,6 +13,8 @@ const {
 } = await import("@/features/statutes/statute-sitemap");
 const { createPublicLawSitemapIndexXml } =
   await import("@/lib/public-law-sitemap");
+const { createSitemapReadFailureResponse } =
+  await import("@/lib/public-sitemap");
 
 const requestUrlForTest = (input: Request | URL | string): string => {
   if (input instanceof URL) {
@@ -118,6 +120,39 @@ describe("public statute sitemap", () => {
     });
 
     expect(works.isErr()).toBe(true);
+  });
+
+  test.each([429, 503])(
+    "an upstream %s refusal answers 503 with the upstream Retry-After",
+    async (status) => {
+      const fetchImpl = async () =>
+        new Response("busy", { headers: { "Retry-After": "7" }, status });
+
+      const works = await fetchPublicStatuteSitemapWorks({
+        fetchImpl,
+        shard: { bucket: "all", country: "cze" },
+      });
+      const response = createSitemapReadFailureResponse(
+        works.isErr() ? works.error : null,
+      );
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Retry-After")).toBe("7");
+    },
+  );
+
+  test("any other unreadable shard answers 503", async () => {
+    const fetchImpl = async () => new Response("nope", { status: 502 });
+
+    const works = await fetchPublicStatuteSitemapWorks({
+      fetchImpl,
+      shard: { bucket: "all", country: "cze" },
+    });
+    const response = createSitemapReadFailureResponse(
+      works.isErr() ? works.error : null,
+    );
+
+    expect(response.status).toBe(503);
   });
 
   test("a shard payload of the wrong shape is an error value", async () => {

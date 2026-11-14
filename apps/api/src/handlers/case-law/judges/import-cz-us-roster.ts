@@ -1,4 +1,3 @@
-import { panic, Result, TaggedError } from "better-result";
 /**
  * Import the Czech Constitutional Court's published roster of its justices
  * into `case_law_judges`, then re-link the decision rows whose printed name
@@ -15,13 +14,14 @@ import { panic, Result, TaggedError } from "better-result";
  * implementations pull their connections in on first use: importing this
  * module opens nothing.
  */
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { printError, sanitizeErrorForOutput } from "@stll/errors";
-import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import { sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -36,7 +36,6 @@ import type {
   PortraitSource,
 } from "@/api/handlers/case-law/judges/consts";
 import { PORTRAIT_SOURCE } from "@/api/handlers/case-law/judges/consts";
-import { relinkUnmatchedDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import {
   judgeNameKey,
   stripAcademicTitles,
@@ -74,6 +73,11 @@ export const CZ_US_ROSTER_LISTINGS = [
 
 const CZ_US_COUNTRY = "CZE";
 const CZ_US_COURT = CZ_ECLI_COURTS.US;
+/** The court whose decisions a run relinks once its roster is in. */
+export const CZ_US_ROSTER_COURT = {
+  country: CZ_US_COUNTRY,
+  court: CZ_US_COURT,
+} as const;
 /** The court credits its own portraits, so the attribution is its name. */
 const PORTRAIT_ATTRIBUTION = CZ_ECLI_COURTS.US;
 const PORTRAIT_KEY_PREFIX = "case-law/judges/";
@@ -84,32 +88,36 @@ const REQUEST_TIMEOUT_MS = 30_000;
 export const CZ_US_ROSTER_REQUEST_INTERVAL_MS = 1000;
 
 /**
- * The image types the court serves, and the extension the stored object
- * carries. A type outside the map is reported rather than guessed at: the
- * extension is part of the object key, so a wrong guess is durable.
+ * The image types the court serves. A type outside the list is reported rather
+ * than guessed at.
  */
-const PORTRAIT_EXTENSIONS = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-} as const satisfies Readonly<Record<string, string>>;
+const PORTRAIT_SOURCE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-export type PortraitContentType = keyof typeof PORTRAIT_EXTENSIONS;
+const isPortraitSourceType = (header: string): boolean =>
+  PORTRAIT_SOURCE_TYPES.includes(
+    header.split(";").at(0)?.trim().toLowerCase() ?? "",
+  );
 
-type ServedPortraitType = {
-  contentType: PortraitContentType;
-  extension: string;
-};
+/**
+ * The court publishes print-size photographs; the reader draws a head a few
+ * dozen pixels across. What is stored is a rendition sized for that, so a page
+ * never downloads megabytes for a face. Raising the version replaces every
+ * stored portrait on the next run.
+ */
+const PORTRAIT_RENDITION = {
+  contentType: "image/jpeg",
+  extension: "jpg",
+  maxHeight: 640,
+  maxWidth: 320,
+  quality: 82,
+  version: 1,
+} as const;
 
-const isPortraitContentType = (value: string): value is PortraitContentType =>
-  Object.hasOwn(PORTRAIT_EXTENSIONS, value);
-
-const servedPortraitType = (header: string): ServedPortraitType | undefined => {
-  const declared = header.split(";").at(0)?.trim().toLowerCase() ?? "";
-  return isPortraitContentType(declared)
-    ? { contentType: declared, extension: PORTRAIT_EXTENSIONS[declared] }
-    : undefined;
-};
+/**
+ * The most the import reads of a source photograph. Its rendition is what must
+ * fit the portrait route's ceiling, not the file the court happens to publish.
+ */
+const PORTRAIT_SOURCE_MAX_BYTES = 32 * 1024 * 1024;
 
 /* -- parsing ------------------------------------------------------------- */
 
@@ -159,7 +167,7 @@ const normalizeSpace = (value: string): string =>
 const TERM_DATE_PATTERN =
   /(?:\b(?<until>do)\s+)?(?<date>\d{1,2}\.\s*\d{1,2}\.\s*\d{4})/gu;
 
-export type JusticeTerm = {
+type JusticeTerm = {
   termStart?: string;
   termEnd?: string;
 };
@@ -185,10 +193,10 @@ const parseOfficeSpan = (line: string): OfficeSpan => {
     if (parsed === undefined) {
       continue;
     }
-    if (match.groups?.["until"] === undefined) {
-      start ??= parsed;
-    } else {
+    if (match.groups?.["until"] !== undefined) {
       end = parsed;
+    } else {
+      start ??= parsed;
     }
   }
   return { start, end };
@@ -213,7 +221,7 @@ const latest = (dates: readonly string[]): string | undefined =>
  * listing's non-judicial entries are told from a justice whose dates the
  * court did not print.
  */
-export const parseJusticeTerm = (
+const parseJusticeTerm = (
   lines: readonly string[],
 ): JusticeTerm | undefined => {
   const spans = lines.filter(isBenchLine).map(parseOfficeSpan);
@@ -263,7 +271,7 @@ export const parseRosterListing = ({
   html,
   listingUrl,
 }: RosterListingOptions): RosterListingEntry[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const entries: RosterListingEntry[] = [];
   $(".judges-list a.list_polozka").each((_, element) => {
     const anchor = $(element);
@@ -304,7 +312,7 @@ export const parseJusticePage = ({
   html,
   sourceUrl,
 }: JusticePageOptions): Result<ParsedJusticePage, CzUsRosterParseError> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const printed = normalizeSpace($("h1.judges_name").first().text());
   if (printed.length === 0) {
     return Result.err(
@@ -327,7 +335,7 @@ export const parseJusticePage = ({
 
 /* -- ports --------------------------------------------------------------- */
 
-export type CaseLawJudgeId = SafeId<"caseLawJudge">;
+type CaseLawJudgeId = SafeId<"caseLawJudge">;
 
 export type StoredRosterJudge = {
   id: CaseLawJudgeId;
@@ -338,7 +346,7 @@ export type StoredRosterJudge = {
   portraitS3Key: string | null;
 };
 
-export type NewRosterJudge = {
+type NewRosterJudge = {
   id: CaseLawJudgeId;
   fullName: string;
   nameKey: string;
@@ -352,7 +360,7 @@ export type NewRosterJudge = {
  * columns move together, because the row's check constraint holds them all
  * null or all set.
  */
-export type RosterJudgePatch = {
+type RosterJudgePatch = {
   fullName?: string;
   termStart?: string | null;
   termEnd?: string | null;
@@ -360,11 +368,11 @@ export type RosterJudgePatch = {
   portraitS3Key?: string;
   portraitSource?: PortraitSource;
   portraitAttribution?: string;
-  portraitContentType?: PortraitContentType;
+  portraitContentType?: typeof PORTRAIT_RENDITION.contentType;
   updatedAt?: Date;
 };
 
-export type InsertedRosterJudge = {
+type InsertedRosterJudge = {
   id: CaseLawJudgeId;
   inserted: boolean;
 };
@@ -390,7 +398,7 @@ export type CzUsRosterStore = {
 export type RosterPortrait = {
   key: string;
   bytes: Uint8Array;
-  contentType: PortraitContentType;
+  contentType: typeof PORTRAIT_RENDITION.contentType;
 };
 
 /**
@@ -409,7 +417,7 @@ export type RosterPortraitStore = {
 
 /* -- the import ---------------------------------------------------------- */
 
-export type RosterImportFailure = {
+type RosterImportFailure = {
   name: string;
   profileUrl: string;
   reason: string;
@@ -434,8 +442,10 @@ export type CzUsRosterImportOptions = {
   intervalMs: number;
 };
 
-type PortraitBytes = ServedPortraitType & {
+type PortraitBytes = {
+  /** The rendition to store. */
   bytes: Uint8Array;
+  /** The hash of what the court published. */
   sha256: string;
 };
 
@@ -499,8 +509,7 @@ const readPortrait = async (
       }),
     );
   }
-  const served = servedPortraitType(response.headers.get("content-type") ?? "");
-  if (served === undefined) {
+  if (!isPortraitSourceType(response.headers.get("content-type") ?? "")) {
     return Result.err(
       new CzUsRosterFetchError({
         message: "portrait served an unsupported content type",
@@ -508,18 +517,44 @@ const readPortrait = async (
       }),
     );
   }
-  const bytes = await response.bytes();
-  // The same ceiling the portrait route reads back with: storing a larger
-  // object would put a portrait in the bucket that nothing can serve.
-  if (bytes.byteLength > PORTRAIT_MAX_BYTES) {
+  const source = await response.bytes();
+  if (source.byteLength > PORTRAIT_SOURCE_MAX_BYTES) {
     return Result.err(
       new CzUsRosterFetchError({
-        message: `portrait is ${bytes.byteLength} bytes, past the ${PORTRAIT_MAX_BYTES}-byte ceiling`,
+        message: `portrait is ${source.byteLength} bytes, past the ${PORTRAIT_SOURCE_MAX_BYTES}-byte ceiling`,
         sourceUrl: url,
       }),
     );
   }
-  return Result.ok({ bytes, ...served, sha256: sha256Of(bytes) });
+  const rendition = await Result.tryPromise(
+    async () =>
+      await new Bun.Image(source)
+        .resize(PORTRAIT_RENDITION.maxWidth, PORTRAIT_RENDITION.maxHeight, {
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: PORTRAIT_RENDITION.quality })
+        .bytes(),
+  );
+  if (Result.isError(rendition)) {
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: `portrait could not be read as an image: ${rendition.error.message}`,
+        sourceUrl: url,
+      }),
+    );
+  }
+  // The same ceiling the portrait route reads back with: storing a larger
+  // object would put a portrait in the bucket that nothing can serve.
+  if (rendition.value.byteLength > PORTRAIT_MAX_BYTES) {
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: `portrait rendition is ${rendition.value.byteLength} bytes, past the ${PORTRAIT_MAX_BYTES}-byte ceiling`,
+        sourceUrl: url,
+      }),
+    );
+  }
+  return Result.ok({ bytes: rendition.value, sha256: sha256Of(source) });
 };
 
 /** What the court now states about a row that already exists. */
@@ -611,7 +646,9 @@ const applyJustice = async ({
   const refs = { ...stored.externalRefs, ...termChanges.externalRefs };
   const portraitChanges =
     portrait !== undefined &&
-    (refs.portraitSha256 !== portrait.sha256 || stored.portraitS3Key === null)
+    (refs.portraitSha256 !== portrait.sha256 ||
+      refs.portraitRendition !== PORTRAIT_RENDITION.version ||
+      stored.portraitS3Key === null)
       ? await storePortrait({ judgeId: stored.id, portrait, refs, s3 })
       : {};
   const patch = { ...termChanges, ...portraitChanges };
@@ -671,18 +708,22 @@ const storePortrait = async ({
   refs: JudgeExternalRefs;
   s3: RosterPortraitStore;
 }): Promise<RosterJudgePatch> => {
-  const key = `${PORTRAIT_KEY_PREFIX}${judgeId}.${portrait.extension}`;
+  const key = `${PORTRAIT_KEY_PREFIX}${judgeId}.${PORTRAIT_RENDITION.extension}`;
   await s3.put({
     key,
     bytes: portrait.bytes,
-    contentType: portrait.contentType,
+    contentType: PORTRAIT_RENDITION.contentType,
   });
   return {
-    externalRefs: { ...refs, portraitSha256: portrait.sha256 },
+    externalRefs: {
+      ...refs,
+      portraitRendition: PORTRAIT_RENDITION.version,
+      portraitSha256: portrait.sha256,
+    },
     portraitS3Key: key,
     portraitSource: PORTRAIT_SOURCE.COURT_OFFICIAL,
     portraitAttribution: PORTRAIT_ATTRIBUTION,
-    portraitContentType: portrait.contentType,
+    portraitContentType: PORTRAIT_RENDITION.contentType,
   };
 };
 
@@ -697,7 +738,8 @@ const storePortrait = async ({
  *
  * Re-running is a fixed point. A row is written only where the court's
  * statement differs from the stored one, and a portrait is transferred only
- * where its bytes hash differently from the hash the row carries.
+ * where the court's bytes hash differently from the hash the row carries, or
+ * the stored rendition is an older one.
  */
 export const importCzUsRoster = async ({
   store,
@@ -830,10 +872,13 @@ const ROSTER_COLUMNS = {
  * The roster store against the ingestion role's transaction runner: the role
  * the corpus tables grant writes to, one short transaction per operation, so
  * no lock is held while the court's site answers.
+ *
+ * The relink is not one of its operations: it walks the court's decisions,
+ * so the entrypoint runs it as a load-aware backfill pass of its own.
  */
 export const czUsRosterStore = (
   ingestionDb: CaseLawIngestionHandle,
-): CzUsRosterStore => {
+): Omit<CzUsRosterStore, "relinkUnmatched"> => {
   const findByNameKey = async (
     nameKey: string,
   ): Promise<StoredRosterJudge | undefined> =>
@@ -881,16 +926,6 @@ export const czUsRosterStore = (
           .where(eq(caseLawJudges.id, id));
       });
     },
-    relinkUnmatched: async () =>
-      (
-        await ingestionDb(
-          async (tx) =>
-            await relinkUnmatchedDecisionJudges(tx, {
-              country: CZ_US_COUNTRY,
-              court: CZ_US_COURT,
-            }),
-        )
-      ).linked,
   };
 };
 
@@ -941,27 +976,3 @@ export const corpusPortraitStore: RosterPortraitStore = {
     });
   },
 };
-
-if (import.meta.main) {
-  await runScriptWithErrorOutput(async () => {
-    // The maintenance lane is the door an operator pass takes to the case-law
-    // tables and it holds a connection for the life of the process, so only a
-    // direct run opens one.
-    const { enterCaseLawMaintenanceLane } =
-      await import("@/api/lib/case-law/maintenance-lane");
-    const { ingestionDb } = await enterCaseLawMaintenanceLane();
-    const imported = await importCzUsRoster({
-      store: czUsRosterStore(ingestionDb),
-      fetch: courtSiteFetch,
-      s3: corpusPortraitStore,
-      now: () => new Date(),
-      intervalMs: CZ_US_ROSTER_REQUEST_INTERVAL_MS,
-    });
-    if (Result.isError(imported)) {
-      printError(imported.error);
-      process.exit(1);
-    }
-    process.stdout.write(`${JSON.stringify(imported.value, null, 2)}\n`);
-    process.exit(imported.value.failures.length === 0 ? 0 : 1);
-  });
-}

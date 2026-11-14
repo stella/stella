@@ -1,11 +1,12 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD};
-use serde::Serialize;
+use crate::logging::best_effort;
+use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Instant};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
   clipboard::{
-    ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat, ClipboardGroup,
+    ClipboardAppState, ClipboardCaptureStatus, ClipboardCaptureUpdate,
+    ClipboardCopyFormat, ClipboardEditorNameUpdate, ClipboardGroup,
     ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
     ClipboardSnapshot, HISTORY_EVENT,
   },
@@ -31,6 +32,14 @@ pub struct ClipboardEditorContext {
   groups: Vec<ClipboardGroup>,
   item: ClipboardItem,
   source_app_visual: Option<ClipboardSourceAppVisual>,
+}
+
+/// The edited content of a text clip; an image clip saves without one.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardEditorText {
+  plain_text: String,
+  html: Option<String>,
 }
 
 fn lock_error<T>(poisoned: PoisonError<T>) -> String {
@@ -74,6 +83,17 @@ pub fn clipboard_get_snapshot(
 }
 
 #[tauri::command]
+pub fn clipboard_get_capture_update(
+  caller: ClipboardCaller,
+  revision: u32,
+  state: State<'_, ClipboardAppState>,
+) -> Result<Option<ClipboardCaptureUpdate>, String> {
+  let mut manager = state.lock().map_err(lock_error)?;
+  manager.prune_expired(chrono::Utc::now())?;
+  Ok(manager.capture_update_for_revision(&caller, revision))
+}
+
+#[tauri::command]
 pub fn clipboard_complete_welcome(
   caller: ClipboardCaller,
   state: State<'_, ClipboardAppState>,
@@ -95,7 +115,10 @@ pub fn clipboard_set_capture_status(
     manager.set_capture_status(status)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -111,7 +134,10 @@ pub fn clipboard_exclude_item_source_app(
     manager.exclude_source_app(&id)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -127,7 +153,10 @@ pub fn clipboard_remove_source_app_exclusion(
     manager.remove_source_app_exclusion(&identifier)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -143,7 +172,10 @@ pub fn clipboard_set_retention(
     manager.set_retention(retention)?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -160,7 +192,10 @@ pub fn clipboard_set_screen_capture(
 ) -> Result<ClipboardSnapshot, String> {
   let previous = state.lock().map_err(lock_error)?.screen_capture();
   let rollback = || {
-    let _ = clipboard_window::apply_screen_capture(&app, previous);
+    best_effort(
+      clipboard_window::apply_screen_capture(&app, previous),
+      "screen capture setting was not rolled back",
+    );
   };
   if let Err(error) = clipboard_window::apply_screen_capture(&app, capture) {
     rollback();
@@ -189,7 +224,10 @@ pub fn clipboard_delete_item(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -207,7 +245,10 @@ pub fn clipboard_duplicate_item(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -222,7 +263,10 @@ pub fn clipboard_clear_history(
     manager.clear()?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -240,7 +284,10 @@ pub fn clipboard_create_group(
     manager.create_group(&name, color, item_id.as_deref())?;
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -259,7 +306,10 @@ pub fn clipboard_delete_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -279,7 +329,10 @@ pub fn clipboard_update_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -298,7 +351,10 @@ pub fn clipboard_move_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -319,7 +375,10 @@ pub fn clipboard_update_item(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -338,7 +397,10 @@ pub fn clipboard_set_item_group(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -357,7 +419,10 @@ pub fn clipboard_set_item_name(
     }
     manager.snapshot(&caller)
   };
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(snapshot)
 }
 
@@ -420,34 +485,42 @@ pub fn clipboard_get_image_preview(
   id: String,
   state: State<'_, ClipboardAppState>,
 ) -> Result<String, String> {
-  let preview = {
+  let (preview, cache) = {
     let manager = state.lock().map_err(lock_error)?;
-    manager.image_preview(&id, &caller)?
-  }
-  .load()?;
-  Ok(format!(
-    "data:image/png;base64,{}",
-    STANDARD.encode(preview)
-  ))
+    (
+      manager.image_preview(&id, &caller)?,
+      std::sync::Arc::clone(&manager.preview_cache),
+    )
+  };
+  let mut cache = cache.lock().map_err(crate::logging::with_cause_logged(
+    "clipboard preview cache lock is poisoned",
+  ))?;
+  cache.load_preview(&id, preview)
 }
 
 #[tauri::command]
 pub fn clipboard_save_editor_item(
   _caller: ClipboardCaller,
   id: String,
-  plain_text: String,
-  html: Option<String>,
+  name: ClipboardEditorNameUpdate,
+  text: Option<ClipboardEditorText>,
   group_id: Option<String>,
   app: AppHandle,
   state: State<'_, ClipboardAppState>,
 ) -> Result<(), String> {
+  let text = text
+    .as_ref()
+    .map(|text| (text.plain_text.as_str(), text.html.as_deref()));
   {
     let mut manager = state.lock().map_err(lock_error)?;
-    if !manager.update_item(&id, &plain_text, html.as_deref(), group_id)? {
+    if !manager.save_editor_item(&id, name, group_id, text)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
   }
-  let _ = app.emit(HISTORY_EVENT, ());
+  best_effort(
+    app.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   Ok(())
 }
 
@@ -525,7 +598,10 @@ pub fn clipboard_copy_item(
   };
   // The clip is on the system clipboard either way, so the hand-off proceeds
   // and a history failure is reported after it.
-  let _ = window.emit(HISTORY_EVENT, ());
+  best_effort(
+    window.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
   clipboard_window::hide(&window)
     .map_err(|message| ClipboardCopyError::Hide { message })?;
   history
@@ -556,6 +632,23 @@ pub fn clipboard_copy_items(
   }
   clipboard_window::hide(&window)
     .map_err(|message| ClipboardCopyError::Hide { message })
+}
+
+/// Copies or cuts a selection made inside a Clips window (the panel or the
+/// editor). The webview routes every native copy here, so the write carries
+/// the internal marker and never comes back as a new clip.
+#[tauri::command]
+pub fn clipboard_copy_selection(
+  _caller: ClipboardCaller,
+  plain_text: String,
+  html: Option<String>,
+  state: State<'_, ClipboardAppState>,
+) -> Result<(), String> {
+  // Serialize with the watcher, which reads formats under the same lock.
+  let manager = state.lock().map_err(lock_error)?;
+  let written = crate::clipboard::write_clips_selection(plain_text, html);
+  drop(manager);
+  written
 }
 
 #[tauri::command]

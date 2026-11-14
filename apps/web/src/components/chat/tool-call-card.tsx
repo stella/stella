@@ -1,24 +1,41 @@
-import { useState } from "react";
+import { memo, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  isLocalRunInterruptedOutput,
+  localRunStepFailed,
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { StatusMark } from "@stll/ui/status-mark";
 import type { StatusMarkStatus } from "@stll/ui/status-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import {
   type ChatToolCallPart,
   getChatToolTitleKey,
+  type HarnessChatToolCallPart,
   isRunningToolPart,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
+import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -38,9 +55,11 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
-type ToolPart = ChatToolCallPart;
+/** A stella or connector tool's call, or a coding agent's own step. */
+type ToolPart = ChatToolCallPart | HarnessChatToolCallPart;
 
 const getToolInput = (part: ToolPart): unknown => {
   if (!("input" in part)) {
@@ -110,7 +129,7 @@ const getStringInputValue = ({
   if (input === undefined || input === null || typeof input !== "object") {
     return undefined;
   }
-  if (!(key in input)) {
+  if (!Object.hasOwn(input, key)) {
     return undefined;
   }
   const descriptor = Object.getOwnPropertyDescriptor(input, key);
@@ -380,47 +399,79 @@ const TOOL_CALL_SETTLED_STATUS = {
   error: "failed",
   "input-complete": "pending",
   "input-streaming": "pending",
-} as const satisfies Record<ToolPart["state"], StatusMarkStatus>;
-
-const toolCallStatus = ({
-  hasError,
-  isRunning,
-  state,
-}: {
-  hasError: boolean;
-  isRunning: boolean;
-  state: ToolPart["state"];
-}): StatusMarkStatus => {
-  if (hasError) {
-    return "failed";
-  }
-  return isRunning ? "running" : TOOL_CALL_SETTLED_STATUS[state];
-};
+} as const satisfies Record<
+  ToolPart["state"],
+  Exclude<StatusMarkStatus, "running">
+>;
 
 const TOOL_CALL_STATUS_LABEL_KEYS = {
   done: "common.done",
   pending: "chat.toolCall.statusWaiting",
-  running: "common.running",
-} as const satisfies Record<Exclude<StatusMarkStatus, "failed">, string>;
+} as const satisfies Record<
+  Exclude<StatusMarkStatus, "failed" | "running">,
+  string
+>;
 
 /** A follow-up a tool row offers once its call completed, such as opening
  *  what the call saved. */
 export type ToolCallAction = { label: string; onClick: () => void };
 
-export const toolFailureLabelKey = (
-  rawErrorDetails: ReturnType<typeof getToolOutputError>,
-  state: ToolPart["state"],
-) => {
-  if (rawErrorDetails !== undefined) {
+/**
+ * How a call that did not complete reads: interrupted only when it ended
+ * with no result at all (its stream died mid call) or with the explicit
+ * cancellation result; any other error result, an envelope, a step
+ * reporting `failed` or a connector's plain-text error, reads as failed.
+ */
+export const toolFailureLabelKey = ({
+  name,
+  output,
+  state,
+}: {
+  name: string;
+  output: unknown;
+  state: ToolPart["state"];
+}) => {
+  if (
+    getToolOutputError(output) !== undefined ||
+    localRunStepFailed(name, output)
+  ) {
     return "chat.toolCall.failed";
   }
-  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+  if (state !== "error") {
+    return undefined;
+  }
+  return output === undefined || isLocalRunInterruptedOutput(output)
+    ? "chat.toolCall.interrupted"
+    : "chat.toolCall.failed";
 };
 
-export const ToolCallCard = ({
+// Static marks make a running glyph impossible outside the turn owner.
+const SettledToolStatusMark = ({
+  label,
+  status,
+}: {
+  label: string | undefined;
+  status: Exclude<StatusMarkStatus, "running">;
+}) => {
+  switch (status) {
+    case "done":
+      return <StatusMark label={label} status="done" />;
+    case "failed":
+      return <StatusMark label={label} status="failed" />;
+    case "pending":
+      return <StatusMark label={label} status="pending" />;
+    default:
+      return panic("Unhandled settled tool status", {
+        status: status satisfies never,
+      });
+  }
+};
+
+const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
   durationMs,
+  turnStatus = "finished",
   part,
   showDetails,
 }: {
@@ -428,6 +479,7 @@ export const ToolCallCard = ({
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
+  turnStatus?: "running" | "finished";
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
@@ -442,8 +494,8 @@ export const ToolCallCard = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: mcpToolInfo !== null,
   });
-  const catalogDataView = useQueryView(catalogDataQuery);
-  useQueryViewError(catalogDataView);
+  const catalogDataView = queryView(catalogDataQuery);
+  useQueryViewError(catalogDataView, "ToolCallCard:query");
   const catalogData =
     catalogDataView.type === "items" ? catalogDataView.items : undefined;
   const connectors = catalogData ? catalogData.connectors : [];
@@ -460,13 +512,31 @@ export const ToolCallCard = ({
         isSkillResourceOutputToolName(name)),
     ),
   );
-  const label = catalogEntry?.brand ?? t(getChatToolTitleKey(name));
-  const subtitle = getToolSubtitle({
-    formatCharacterCount: (count) =>
-      t("chat.toolCall.characterCount", { count }),
-    part,
-    toolName: name,
+  // A step a coding agent took on the member's computer names what it was
+  // about: its command, file names, search or plan.
+  const localRunTool = localRunToolView({
+    name,
+    input: getToolInput(part),
+    output: part.output,
   });
+  const localRunTitleKind = localRunTool?.titleKind ?? null;
+  const label =
+    catalogEntry?.brand ??
+    (localRunTitleKind === null
+      ? t(getChatToolTitleKey(name))
+      : t(LOCAL_RUN_TITLE_KEYS[localRunTitleKind]));
+  const subtitle =
+    localRunTool === null
+      ? getToolSubtitle({
+          formatCharacterCount: (count) =>
+            t("chat.toolCall.characterCount", { count }),
+          part,
+          toolName: name,
+        })
+      : localRunToolSubtitleText(localRunTool.subtitle, {
+          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
+          commandExited: (values) => t("chat.toolCall.commandExited", values),
+        });
 
   const isLoading = isRunningToolPart(part);
   const [timing, setTiming] = useState(() =>
@@ -487,7 +557,9 @@ export const ToolCallCard = ({
     );
   }, [durationMs, isLoading]);
   const elapsed =
-    timing.status === "finished" && timing.durationMs !== undefined
+    turnStatus === "finished" &&
+    timing.status === "finished" &&
+    timing.durationMs !== undefined
       ? format.number(Math.max(1, Math.round(timing.durationMs / 1000)), {
           style: "unit",
           unit: "second",
@@ -502,17 +574,28 @@ export const ToolCallCard = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
-  const errorMessage =
-    failureLabelKey === undefined ? undefined : t(failureLabelKey);
-  const hasError = errorMessage !== undefined;
-  const status = toolCallStatus({
-    hasError,
-    isRunning: isLoading,
+  const failureLabelKey = toolFailureLabelKey({
+    name,
+    output: part.output,
     state: part.state,
   });
-  const statusLabel =
-    status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
+  const errorMessage =
+    failureLabelKey === undefined ? undefined : t(failureLabelKey);
+  // A call its turn cut off (a stop, a new message) never finished; that is
+  // not the tool failing, so it reads as stopped, without the failure tint.
+  const stopped = failureLabelKey === "chat.toolCall.interrupted";
+  const hasError = errorMessage !== undefined && !stopped;
+  const status = (() => {
+    if (hasError) {
+      return "failed";
+    }
+    return stopped ? "pending" : TOOL_CALL_SETTLED_STATUS[part.state];
+  })();
+  // A running call waits on nothing; the turn's live status names the work.
+  const settledStatusLabel =
+    errorMessage ??
+    (status === "failed" ? undefined : t(TOOL_CALL_STATUS_LABEL_KEYS[status]));
+  const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = isCodeToolName(name) && hasOutput;
@@ -545,11 +628,11 @@ export const ToolCallCard = ({
           />
         }
       >
-        <button
+        {/* The row owns the hover tint; a plain button paints none of its
+            own, so the header does not tint twice. */}
+        <Button
           className={cn(
-            "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start",
-            !hasError &&
-              "text-muted-foreground group-hover/tool-step:text-foreground-muted",
+            "flex min-h-11 min-w-0 flex-1",
             !headerInteractive && "cursor-default",
           )}
           onClick={() => {
@@ -580,30 +663,18 @@ export const ToolCallCard = ({
               setExpanded((e) => !e);
             }
           }}
-          type="button"
+          variant="plain"
         >
-          <StatusMark label={statusLabel} status={status} />
-          <span
-            className={cn(
-              "min-w-0 truncate",
-              isLoading && CHAT_PENDING_TEXT_CLASS,
-            )}
-          >
-            <span>{label}</span>
-            {subtitle && (
-              <span
-                className={cn("ms-1.5", !isLoading && "text-foreground-ghost")}
-              >
-                {subtitle}
-              </span>
-            )}
-          </span>
-          {elapsed && (
-            <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
-              {elapsed}
-            </span>
-          )}
-        </button>
+          <ToolCallHeaderLabel
+            elapsed={elapsed}
+            hasError={hasError}
+            isLoading={isLoading}
+            label={label}
+            status={status}
+            statusLabel={statusLabel}
+            subtitle={subtitle}
+          />
+        </Button>
         {action !== undefined && (
           <Button
             className="me-1 shrink-0"
@@ -639,80 +710,65 @@ export const ToolCallCard = ({
           </Popover>
         )}
         {canExpand && (
-          <button
-            aria-label={t("chat.toolCall.toggleDetails")}
-            className={cn(
-              "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none",
-              expanded && "opacity-100",
-            )}
-            onClick={() => {
+          <ToolCallExpandToggle
+            expanded={expanded}
+            onToggle={() => {
               setExpanded((e) => !e);
             }}
-            type="button"
-          >
-            <DirectionalIcon
-              className={cn(
-                "size-3.5 transition-transform duration-150",
-                expanded && "rotate-90",
-              )}
-              flip={!expanded}
-              icon={ChevronRightIcon}
-            />
-          </button>
+          />
         )}
       </Tooltip>
-      {expanded &&
-        (showMcpExactCall ||
-          codeToolSource !== undefined ||
-          showCodeToolOutput ||
-          toolInput !== undefined ||
-          hasOutput) && (
-          <div className="space-y-1 ps-2 pt-1 pb-2">
-            {showMcpExactCall && (
+      {expanded && canExpand && (
+        <div className="space-y-1 ps-2 pt-1 pb-2">
+          {showMcpExactCall && (
+            <ToolCallCodeBlock
+              code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
+              label={t("chat.toolCall.exactCall")}
+              language="json"
+              tone="call"
+            />
+          )}
+          {!showMcpExactCall &&
+            codeToolSource === undefined &&
+            toolInput !== undefined && (
               <ToolCallCodeBlock
-                code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
-                label={t("chat.toolCall.exactCall")}
+                code={JSON.stringify(toolInput, null, 2)}
+                label={t("chat.toolCall.input")}
                 language="json"
                 tone="call"
               />
             )}
-            {!showMcpExactCall &&
-              codeToolSource === undefined &&
-              toolInput !== undefined && (
-                <ToolCallCodeBlock
-                  code={JSON.stringify(toolInput, null, 2)}
-                  label={t("chat.toolCall.input")}
-                  language="json"
-                  tone="call"
-                />
-              )}
-            {codeToolSource !== undefined && (
-              <ToolCallCodeBlock
-                code={codeToolSource}
-                label={t("chat.toolCall.sourceCode")}
-                language="typescript"
-                lineNumbers
-                tone="call"
-              />
-            )}
-            {codeToolLogs.length > 0 && (
-              <ToolCallCodeBlock
-                code={codeToolLogs.join("\n")}
-                label={t("chat.toolCall.consoleLogs")}
-                language="text"
-                tone="result"
-              />
-            )}
-            {hasOutput && "output" in part && (
-              <ToolCallCodeBlock
-                code={JSON.stringify(part.output, null, 2)}
-                label={t("chat.toolCall.output")}
-                language="json"
-                tone="result"
-              />
-            )}
-          </div>
-        )}
+          {codeToolSource !== undefined && (
+            <ToolCallCodeBlock
+              code={codeToolSource}
+              label={t("chat.toolCall.sourceCode")}
+              language="typescript"
+              lineNumbers
+              tone="call"
+            />
+          )}
+          {codeToolLogs.length > 0 && (
+            <ToolCallCodeBlock
+              code={codeToolLogs.join("\n")}
+              label={t("chat.toolCall.consoleLogs")}
+              language="text"
+              tone="result"
+            />
+          )}
+          {hasOutput && "output" in part && (
+            <ToolCallCodeBlock
+              code={JSON.stringify(part.output, null, 2)}
+              label={t("chat.toolCall.output")}
+              language="json"
+              tone="result"
+            />
+          )}
+          <LocalRunStepOutputDetails
+            activeOrganizationId={activeOrganizationId}
+            part={part}
+          />
+        </div>
+      )}
       {hasError && errorMessage && (
         <ToolCallFailureDetails
           errorMessage={errorMessage}
@@ -721,6 +777,97 @@ export const ToolCallCard = ({
       )}
       <UnrestoredFieldsNotice output={part.output} />
     </div>
+  );
+};
+
+// A response can stream many tool calls, and each new chunk re-renders the
+// message's part list: a card whose call did not change skips that render.
+export const ToolCallCard = memo(ToolCallCardComponent);
+
+/** The header's status, label and elapsed time. The colour is set here,
+ *  since the header button paints none of its own and the row owns the
+ *  hover tint. */
+const ToolCallHeaderLabel = ({
+  elapsed,
+  hasError,
+  isLoading,
+  label,
+  status,
+  statusLabel,
+  subtitle,
+}: {
+  elapsed: string | null;
+  hasError: boolean;
+  isLoading: boolean;
+  label: ReactNode;
+  status: Exclude<StatusMarkStatus, "running">;
+  statusLabel: string | undefined;
+  subtitle: ReturnType<typeof getToolSubtitle>;
+}) => (
+  <span
+    className={cn(
+      "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2",
+      hasError
+        ? "text-destructive"
+        : "text-muted-foreground group-hover/tool-step:text-foreground-muted",
+    )}
+  >
+    <SettledToolStatusMark label={statusLabel} status={status} />
+    <TruncatedText
+      render={<span className={cn(isLoading && CHAT_PENDING_TEXT_CLASS)} />}
+    >
+      <span>{label}</span>
+      {subtitle && (
+        <span className={cn("ms-1.5", !isLoading && "text-foreground-ghost")}>
+          {subtitle}
+        </span>
+      )}
+    </TruncatedText>
+    {elapsed && (
+      <span
+        data-tool-duration
+        className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums"
+      >
+        {elapsed}
+      </span>
+    )}
+  </span>
+);
+
+/** Shows on the row's hover, its own focus, or always on touch; the wrapper
+ *  carries the fade so the button keeps its own surface. */
+const ToolCallExpandToggle = ({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100",
+        expanded && "opacity-100",
+      )}
+    >
+      <Button
+        aria-expanded={expanded}
+        aria-label={t("chat.toolCall.toggleDetails")}
+        onClick={onToggle}
+        size="icon-xl"
+        variant="muted"
+      >
+        <DirectionalIcon
+          className={cn(
+            "size-3.5 transition-transform duration-150",
+            expanded && "rotate-90",
+          )}
+          flip={!expanded}
+          icon={ChevronRightIcon}
+        />
+      </Button>
+    </span>
   );
 };
 
@@ -734,26 +881,32 @@ export const ToolCallFailureDetails = ({
   rawErrorDetails: string | undefined;
 }) => {
   const t = useTranslations();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   return (
     <div className="max-w-xl py-1">
       <p className="text-destructive text-2xs leading-relaxed">
         {errorMessage}
       </p>
       {rawErrorDetails !== undefined && (
-        <details className="group">
-          <summary className="text-muted-foreground hover:text-foreground text-2xs cursor-pointer">
-            <span className="group-open:hidden">{t("common.showDetails")}</span>
-            <span className="hidden group-open:inline">
-              {t("common.hideDetails")}
-            </span>
-          </summary>
-          <ToolCallCodeBlock
-            code={rawErrorDetails}
-            label={t("chat.toolCall.output")}
-            language="text"
-            tone="result"
-          />
-        </details>
+        <div className="text-2xs">
+          <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+            <CollapsibleTrigger render={<Button variant="plain" />}>
+              <span className="text-muted-foreground hover:text-foreground">
+                {detailsOpen
+                  ? t("common.hideDetails")
+                  : t("common.showDetails")}
+              </span>
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              <ToolCallCodeBlock
+                code={rawErrorDetails}
+                label={t("chat.toolCall.output")}
+                language="text"
+                tone="result"
+              />
+            </CollapsiblePanel>
+          </Collapsible>
+        </div>
       )}
     </div>
   );

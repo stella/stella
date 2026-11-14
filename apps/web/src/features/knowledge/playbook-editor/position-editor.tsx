@@ -4,13 +4,14 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import {
+  type ConditionNode,
   emptyCondition,
   pruneIncomplete,
-  type ConditionNode,
 } from "@stll/conditions";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -22,10 +23,13 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
-  CopyIcon,
+  DuplicateIcon,
   FlagIcon,
   GripVerticalIcon,
   Link2Icon,
@@ -55,6 +59,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
@@ -64,8 +69,8 @@ import {
   PositionHeader,
 } from "@/components/ai-suggestions/review-position-header";
 import {
-  ReferencePassageList,
   type ReferenceNameLookup,
+  ReferencePassageList,
   SeverityChip,
 } from "@/components/ai-suggestions/review-position-row";
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -113,7 +118,9 @@ import {
   type PositionDecisionSummary,
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".
@@ -381,7 +388,7 @@ export const PositionEditor = ({
               </MenuTrigger>
               <MenuPopup align="end">
                 <MenuItem onClick={onDuplicate}>
-                  <CopyIcon />
+                  <DuplicateIcon />
                   {t("knowledge.playbooks.duplicatePosition")}
                 </MenuItem>
                 <MenuItem onClick={onRemove} variant="destructive">
@@ -403,14 +410,15 @@ export const PositionEditor = ({
               type="button"
               variant="ghost"
             >
-              <ChevronDownIcon
-                className={cn("transition-transform", open && "rotate-180")}
+              <DirectionalIcon
+                className={cn("transition-transform", open && "rotate-90")}
+                flip={!open}
+                icon={ChevronRightIcon}
               />
             </Button>
           </span>
         }
         className="gap-1.5"
-        index={index}
         leading={
           <Button
             aria-label={t("knowledge.playbooks.reorderPosition")}
@@ -495,6 +503,7 @@ const PositionSourcesRow = ({
   onRemove: (source: ResolvedPositionSource) => void;
 }) => {
   const t = useTranslations();
+  const router = useRouter();
   if (sources.length === 0) {
     return null;
   }
@@ -506,30 +515,38 @@ const PositionSourcesRow = ({
       <ul className="flex min-w-0 flex-wrap items-center gap-1">
         {sources.map((source) => (
           <li
-            className="bg-muted/50 flex max-w-full min-w-0 items-center rounded-md text-xs"
+            className="bg-muted/50 flex max-w-full min-w-0 items-center rounded-md ps-2 text-xs"
             key={`${source.workspaceId}:${source.entityId}`}
           >
-            <button
-              className="hover:text-foreground flex min-w-0 items-baseline gap-1.5 py-1 ps-2 text-start"
+            <Button
+              className="group/plain flex min-w-0 self-stretch"
               onClick={() =>
                 detached(
-                  openEntityInInspector(
-                    source.entityId,
-                    source.name,
-                    source.workspaceId,
-                  ),
+                  openEntityInInspector({
+                    documentOnScreen: getCurrentWorkspaceDocument(
+                      router.state.matches,
+                    ),
+                    entityId: source.entityId,
+                    label: source.name,
+                    workspaceId: source.workspaceId,
+                  }),
                   "position-editor.open-source",
                 )
               }
-              type="button"
+              variant="plain"
             >
-              <UserText className="truncate font-medium">
-                {source.name}
-              </UserText>
-              <UserText className="text-muted-foreground truncate">
-                {source.workspaceName}
-              </UserText>
-            </button>
+              <span className="group-hover/plain:text-foreground flex min-w-0 items-baseline gap-1.5 py-1">
+                <TruncatedText className="font-medium" render={<UserText />}>
+                  {source.name}
+                </TruncatedText>
+                <TruncatedText
+                  className="text-muted-foreground"
+                  render={<UserText />}
+                >
+                  {source.workspaceName}
+                </TruncatedText>
+              </span>
+            </Button>
             <Button
               aria-label={t("knowledge.playbooks.removeSource", {
                 documentName: source.name,
@@ -1003,7 +1020,7 @@ const TierSection = ({
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span
           className={cn(
-            "flex size-4.5 items-center justify-center rounded",
+            "flex size-4.5 items-center justify-center rounded-sm",
             TIER_MARK_CLASS[tone],
           )}
         >
@@ -1241,7 +1258,7 @@ const ClausePicker = ({
   );
 
   const dataQuery = useQuery(clausesOptions(organizationId, { search }));
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => "items" in data && data.items.length === 0,
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -1254,8 +1271,8 @@ const ClausePicker = ({
     ...clauseDetailOptions(organizationId, clauseId),
     enabled: clauseId !== "",
   });
-  const detailView = useQueryView(detailQuery);
-  useQueryViewError(detailView);
+  const detailView = queryView(detailQuery);
+  useQueryViewError(detailView, "ClausePicker:query");
 
   const resolvedTitle = (() => {
     const detail = detailView.type === "items" ? detailView.items : undefined;
@@ -1600,26 +1617,24 @@ const ExtractionAdvanced = ({
           {t("knowledge.playbooks.derivedAutomatically")}
         </p>
         {ask.derived ? (
-          <dl className="border-border/60 divide-border/60 divide-y rounded-md border">
-            <div className="space-y-1 p-2.5">
-              <dt className="text-foreground-label text-2xs font-medium">
-                {t("knowledge.playbooks.derivedQuestion")}
-              </dt>
-              <dd className="text-foreground text-sm leading-5 text-pretty">
-                <bdi>{ask.derived.question}</bdi>
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3 p-2.5 text-xs">
-              <dt className="text-foreground-label">
-                {t("knowledge.playbooks.derivedType")}
-              </dt>
-              <dd className="text-foreground font-medium">
+          <div className="border-border/60 rounded-md border p-2.5">
+            <DetailsGrid orientation="vertical">
+              <DetailsItem
+                label={t("knowledge.playbooks.derivedQuestion")}
+                span="wide"
+              >
+                <bdi className="text-pretty">{ask.derived.question}</bdi>
+              </DetailsItem>
+              <DetailsItem
+                label={t("knowledge.playbooks.derivedType")}
+                span="wide"
+              >
                 {t(
                   ASK_CONTENT_LABEL_KEYS[toAskContentType(ask.derived.content)],
                 )}
-              </dd>
-            </div>
-          </dl>
+              </DetailsItem>
+            </DetailsGrid>
+          </div>
         ) : null}
         <Button
           onClick={() =>

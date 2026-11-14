@@ -22,9 +22,9 @@ import {
   caseLawDeepestPage,
   caseLawLandingPage,
   caseLawPageBeforeEnd,
+  caseLawPageEvidence,
   caseLawPageNumber,
   caseLawPageRest,
-  caseLawPageEvidence,
 } from "./case-law-pages.logic";
 
 const PAGE_SIZE: PublicLawPageSize = 50;

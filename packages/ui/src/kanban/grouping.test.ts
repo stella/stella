@@ -5,8 +5,8 @@ import {
   getKanbanGroupingPropertyId,
   getKanbanGroups,
   isKanbanGroupingRenderable,
-  resolveKanbanGroupOptions,
   resolveKanbanGrouping,
+  resolveKanbanGroupOptions,
   selectKanbanRows,
 } from "./grouping";
 

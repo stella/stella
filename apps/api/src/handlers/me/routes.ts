@@ -1,15 +1,19 @@
-import Elysia from "elysia";
-
 import acceptProfessionalUse from "@/api/handlers/me/accept-professional-use";
 import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connection";
 import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
 import readProfessionalUse from "@/api/handlers/me/professional-use";
+import registerPushDevice from "@/api/handlers/me/push-devices/register";
+import unregisterPushDevice from "@/api/handlers/me/push-devices/unregister";
+import readMemberRole from "@/api/handlers/me/role/get";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
+import actOnTimer from "@/api/handlers/me/timer-activity-devices/act";
+import registerTimerActivityDevice from "@/api/handlers/me/timer-activity-devices/register";
+import unregisterTimerActivityDevice from "@/api/handlers/me/timer-activity-devices/unregister";
 import twoFactorSendManageOtp from "@/api/handlers/me/two-factor-send-manage-otp";
 import updateGuideProgress from "@/api/handlers/me/update-guide-progress";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
-import { sessionAuthMacro } from "@/api/lib/auth";
+import { mount, routes } from "@/api/http/route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
@@ -20,60 +24,82 @@ const isDeleteAccountOtpSendPath = (pathname: string): boolean =>
 const isTwoFactorManageOtpSendPath = (pathname: string): boolean =>
   pathname === "/v1/me/two-factor/send-otp";
 
-export const meRoute = new Elysia({ prefix: "/me" })
-  .use(sessionAuthMacro)
-  .guard({ validateSession: true })
-  .get("/oauth-connections", listOAuthConnections.handler)
-  .patch("/guide-progress", updateGuideProgress.handler, {
-    body: updateGuideProgress.config.body,
-  })
-  .get("/professional-use", readProfessionalUse.handler)
-  .post("/professional-use", acceptProfessionalUse.handler, {
-    body: acceptProfessionalUse.config.body,
-  })
-  .delete("/oauth-connections/:consentId", disconnectOAuthConnection.handler, {
-    params: disconnectOAuthConnection.config.params,
-  })
-  .group("/delete", (app) =>
-    app
-      .get("/pending-tasks", deleteAccountPendingTasks.handler)
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.deleteAccountOtp.duration,
-          max: API_RATE_LIMITS.deleteAccountOtp.max,
-          budget: {
-            name: "api.delete_account_otp.address",
-            keyKind: "address",
-          },
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "delete-account-otp",
+export const meRoute = mount(
+  [
+    routes({
+      "/oauth-connections": { GET: listOAuthConnections },
+      "/guide-progress": { PATCH: updateGuideProgress },
+      "/professional-use": {
+        GET: readProfessionalUse,
+        POST: acceptProfessionalUse,
+      },
+      "/oauth-connections/:consentId": { DELETE: disconnectOAuthConnection },
+      "/role": { GET: readMemberRole },
+      "/push-devices": { PUT: registerPushDevice },
+      "/push-devices/:token": { DELETE: unregisterPushDevice },
+      "/timer-activity-devices/:deviceId": {
+        PUT: registerTimerActivityDevice,
+        DELETE: unregisterTimerActivityDevice,
+      },
+      "/timer-activity-devices/:deviceId/actions": { POST: actOnTimer },
+    }),
+    mount([
+      routes(
+        {
+          "/pending-tasks": { GET: deleteAccountPendingTasks },
+        },
+        { prefix: "/delete" },
+      ),
+      routes(
+        {
+          "/send-otp": { POST: deleteAccountSendOtp },
+          "/verify": { POST: deleteAccountVerify },
+        },
+        {
+          prefix: "/delete",
+          middleware: [
+            rateLimit({
+              duration: API_RATE_LIMITS.deleteAccountOtp.duration,
+              max: API_RATE_LIMITS.deleteAccountOtp.max,
+              budget: {
+                name: "api.delete_account_otp.address",
+                keyKind: "address",
+              },
+              ...createRedisRateLimit({
+                failurePolicy: "fail_open_local",
+                scope: "delete-account-otp",
+              }),
+              skip: (req) =>
+                !isDeleteAccountOtpSendPath(new URL(req.url).pathname),
+            }),
+          ],
+        },
+      ),
+    ]),
+    routes(
+      {
+        "/send-otp": { POST: twoFactorSendManageOtp },
+      },
+      {
+        prefix: "/two-factor",
+        middleware: [
+          rateLimit({
+            duration: API_RATE_LIMITS.twoFactorManageOtp.duration,
+            max: API_RATE_LIMITS.twoFactorManageOtp.max,
+            budget: {
+              name: "api.two_factor_manage_otp.address",
+              keyKind: "address",
+            },
+            ...createRedisRateLimit({
+              failurePolicy: "fail_open_local",
+              scope: "two-factor-manage-otp",
+            }),
+            skip: (req) =>
+              !isTwoFactorManageOtpSendPath(new URL(req.url).pathname),
           }),
-          skip: (req) => !isDeleteAccountOtpSendPath(new URL(req.url).pathname),
-        }),
-      )
-      .post("/send-otp", deleteAccountSendOtp.handler)
-      .post("/verify", deleteAccountVerify.handler, {
-        body: deleteAccountVerify.config.body,
-      }),
-  )
-  .group("/two-factor", (app) =>
-    app
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.twoFactorManageOtp.duration,
-          max: API_RATE_LIMITS.twoFactorManageOtp.max,
-          budget: {
-            name: "api.two_factor_manage_otp.address",
-            keyKind: "address",
-          },
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "two-factor-manage-otp",
-          }),
-          skip: (req) =>
-            !isTwoFactorManageOtpSendPath(new URL(req.url).pathname),
-        }),
-      )
-      .post("/send-otp", twoFactorSendManageOtp.handler),
-  );
+        ],
+      },
+    ),
+  ],
+  { prefix: "/me" },
+);

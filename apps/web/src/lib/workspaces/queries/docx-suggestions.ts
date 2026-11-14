@@ -6,11 +6,11 @@ import {
   DOCX_SUGGESTIONS_PENDING_MAX,
 } from "@stll/api-contract";
 
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import type { WebApiRoutes } from "@/lib/eden-client";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { captureQueryError } from "@/lib/errors/query-result";
 
 import { entitiesKeys } from "./entities";
 
@@ -75,7 +75,7 @@ export const docxSuggestionsOptions = ({
           query: { status, limit: DOCX_SUGGESTIONS_PAGE_SIZE_MAX },
           fetch: { signal },
         });
-        const firstData = unwrapEden(firstPage);
+        const firstData = unwrapApiResponse(firstPage);
 
         const items = [...firstData.items];
         let nextCursor = firstData.nextCursor;
@@ -89,7 +89,7 @@ export const docxSuggestionsOptions = ({
             },
             fetch: { signal },
           });
-          const pageData = unwrapEden(page);
+          const pageData = unwrapApiResponse(page);
           items.push(...pageData.items);
           nextCursor = pageData.nextCursor;
         }
@@ -110,10 +110,17 @@ export const docxSuggestionsOptions = ({
       // with more pending rows still available. Surface it so a truncated
       // pending hydration is never silent.
       if (pending.nextCursor !== null) {
-        getAnalytics().captureError(
+        captureQueryError(
           new Error(
             `docx-suggestions pending hydration capped at ${DOCX_SUGGESTIONS_PENDING_MAX} rows for entity ${entityId}; newer pending suggestions were not loaded`,
           ),
+          {
+            fingerprintKey: "docxSuggestionsOptions.queryFn:Error",
+            scope: {
+              type: "handler",
+              handlerId: "docxSuggestionsOptions.queryFn:Error",
+            },
+          },
         );
       }
 

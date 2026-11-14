@@ -1,22 +1,21 @@
-import * as cheerio from "cheerio";
-
 import {
   chatSourceScopeKey,
+  isChatMentionCategory,
+  isChatReferenceCategory,
   isChatSourceScopeKind,
   parseChatSourceScopeId,
+  RESOURCE_TYPE,
   resourceRef,
   SKILL_REF_HREF_PREFIX,
-  RESOURCE_TYPE,
   toChatMentionResourceHref,
   toChatResourceHref,
   toChatSourceScopeHref,
-  isChatMentionCategory,
-  isChatReferenceCategory,
 } from "@stll/api-contract";
 import type { ChatSourceScope } from "@stll/api-contract";
+import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
+import { load } from "@stll/html";
 
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
-import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";
 import {
   brandPersistedCaseLawDecisionId,
@@ -164,7 +163,7 @@ const replaceMentionsWithAnchors = (
   mentions: ChatMention[];
   sourceScopes: ChatSourceScope[];
 } => {
-  const $ = cheerio.load(html, undefined, false);
+  const $ = load(html, undefined, false);
   const mentions: ChatMention[] = [];
   const sourceScopes: ChatSourceScope[] = [];
 

@@ -12,6 +12,16 @@ export default {
     specifiers: ["@/api/lib/machine-api-keys/personal-lifecycle"],
     allowed: [
       {
+        path: "apps/api/src/handlers/api-keys/create.ts",
+        reason:
+          "Issues a machine key through the lifecycle's credential fence.",
+      },
+      {
+        path: "apps/api/src/handlers/api-keys/rotate.ts",
+        reason:
+          "Issues a machine key through the lifecycle's credential fence.",
+      },
+      {
         path: "apps/api/src/handlers/api-keys/personal/create.ts",
         reason: "Owns the session-authorized personal key operation.",
       },

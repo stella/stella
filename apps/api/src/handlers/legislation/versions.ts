@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { servedStatuteVersionChanges } from "@stll/api-contract/statute-version-changes";
 
 import { legislationDocuments } from "@/api/db/schema";
 import {
@@ -16,45 +17,54 @@ import {
   selectWorkKey,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import {
   LEGISLATION_AMENDMENT_PAGE_MAX,
   readLegislationAmendments,
   readLegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-amendments";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   effectOpensVersion,
   UNVERSIONED_SORT_DATE,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { legislationVersionPredecessorQuery } from "@/api/lib/legal-search/legislation-version-predecessor";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
-  isUuidPaginationCursorPart,
   isDateOnlyPaginationCursorPart,
+  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
-export const listStatuteVersionsParamsSchema = t.Object({
-  documentId: tSafeId("legislationDocument"),
+export const listStatuteVersionsParamsSchema = v.object({
+  documentId: resourceIdSchema("legislationDocument"),
 });
 
-export const listStatuteVersionsQuerySchema = t.Object({
-  limit: t.Optional(tPaginationLimit(LIMITS.legislationVersionsPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+export const listStatuteVersionsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(LIMITS.legislationVersionsPageSizeMax),
+    ),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
-type ListStatuteVersionsQuery = Static<typeof listStatuteVersionsQuerySchema>;
+type ListStatuteVersionsQuery = v.InferOutput<
+  typeof listStatuteVersionsQuerySchema
+>;
 
 type ListStatuteVersionsOptions = {
   documentId: SafeId<"legislationDocument">;
@@ -136,6 +146,9 @@ export const listStatuteVersionsHandler = async ({
     }
 
     const defaultId = await selectDefaultVersionId(tx, work, surface);
+    const predecessor = legislationVersionPredecessorQuery(tx).as(
+      "current_summary_base",
+    );
     const page = await tx
       .select({
         id: legislationDocuments.id,
@@ -145,15 +158,21 @@ export const listStatuteVersionsHandler = async ({
         country: legislationDocuments.country,
         language: legislationDocuments.language,
         documentType: legislationDocuments.documentType,
-        status: legislationDocuments.status,
+        status: legislationDocumentStatusToday,
         effectiveDate: legislationDocuments.effectiveDate,
         versionValidFrom: legislationDocuments.versionValidFrom,
         versionValidTo: legislationDocuments.versionValidTo,
         ...legislationExpressionLabelColumns,
         sourceUrl: legislationDocuments.sourceUrl,
         documentUrl: legislationDocuments.documentUrl,
+        changeSummary: legislationDocuments.changeSummary,
+        payloadRevision: legislationDocuments.payloadRevision,
+        // Flat: a lateral join on `true` has no key Drizzle could test.
+        baseDocumentId: predecessor.id,
+        basePayloadRevision: predecessor.payloadRevision,
       })
       .from(legislationDocuments)
+      .leftJoinLateral(predecessor, sql`true`)
       .where(and(...conditions))
       .orderBy(
         sql`${versionSortKey(legislationDocuments.versionValidFrom)} desc`,
@@ -208,20 +227,39 @@ export const listStatuteVersionsHandler = async ({
     }
     return {
       type: "found",
-      rows: page.map((row) =>
-        projectStatuteVersion({
-          ...row,
-          isDefault: row.id === defaultId,
-          // The actor comes from an explicit publisher relation; multiple acts
-          // starting on one day remain separate effects in that day's wording.
-          amendedBy: projectStatuteAmendments({
-            snapshot,
-            page: {
-              ...amendments,
-              items: amendmentsFor(row.id),
-            },
+      rows: page.map(
+        ({
+          changeSummary,
+          payloadRevision,
+          baseDocumentId,
+          basePayloadRevision,
+          ...row
+        }) =>
+          projectStatuteVersion({
+            ...row,
+            isDefault: row.id === defaultId,
+            // Counts computed from the wording the row holds now, or none.
+            changes: servedStatuteVersionChanges({
+              stored: changeSummary,
+              payloadRevision,
+              base:
+                baseDocumentId === null || basePayloadRevision === null
+                  ? null
+                  : {
+                      documentId: baseDocumentId,
+                      payloadRevision: basePayloadRevision,
+                    },
+            }),
+            // The actor comes from an explicit publisher relation; multiple acts
+            // starting on one day remain separate effects in that day's wording.
+            amendedBy: projectStatuteAmendments({
+              snapshot,
+              page: {
+                ...amendments,
+                items: amendmentsFor(row.id),
+              },
+            }),
           }),
-        }),
       ),
     } as const;
   });

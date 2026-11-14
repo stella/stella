@@ -1,5 +1,13 @@
 # @stll/money
 
+## 0.4.0
+
+### Minor Changes
+
+- [#7629](https://github.com/stella/stella/pull/7629) [`3978f45`](https://github.com/stella/stella/commit/3978f45cea7b4a37d42882f1be9075ea933d2f39) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add locale decimal input parsing and exact redisplay formatters, with branded `LocaleInputText` values that keep canonical stored decimals out of locale-validated form fields: such text comes only from the formatters, from an input element (`localeInputText`) or as `EMPTY_LOCALE_INPUT_TEXT`. Parsing accepts locale separators or an unambiguous dot or comma decimal, and reports a typed `LocaleAmountParseError` instead of guessing when text allows two readings.
+
+- [#7940](https://github.com/stella/stella/pull/7940) [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `toMajorUnitsText`: a stored minor-unit amount as exact major-unit decimal text (`123456 EUR` is `"1234.56"`), for machine readers such as prompts and exports.
+
 ## 0.3.1
 
 ### Patch Changes
@@ -40,8 +48,8 @@
   for JPY. The locale is always a parameter because a package cannot read the
   reader's.
 
-- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency. `toMinorUnits({
-  amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
+- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency.
+  `toMinorUnits({ amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
   currency's own exponent (100 for USD, 1 for JPY, 1000 for KWD), and
   `formatMoneyCents` takes an optional `fractionDigits` for a rounded summary.
 
@@ -51,8 +59,8 @@
   an amount it cannot store; `tryToMinorUnits` returns null instead, for callers
   holding text nobody has vouched for yet.
 
-  BREAKING: `cents()` now rejects an integer outside the safe range, where `x + 1
-  === x` and a running total silently stops moving. `@stll/workspace-ui` no
+  BREAKING: `cents()` now rejects an integer outside the safe range, where
+  `x + 1 === x` and a running total silently stops moving. `@stll/workspace-ui` no
   longer re-exports `currencyMinorUnitDigits`, `formatMoneyCents`, or
   `FormatMoneyCentsParams`; import them from `@stll/money`.
 

@@ -1,5 +1,9 @@
+import { STELLA_API_VERSION_PREFIX } from "./api-version";
+
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
+
+export type { ConversionRefusal } from "./conversion-refusal";
 
 export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
 export {
@@ -20,18 +24,25 @@ export {
   CHAT_SKILL_DOCUMENT,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
+  SKILL_RESOURCE_REFUSAL_CODE,
+  SKILL_SOURCE_UNREACHABLE_CODE,
 } from "./agent-skills";
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
 export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
+  caseLawAnalysisProgressSchema,
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
+  CASE_LAW_ANALYSIS_LANGUAGES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  isCaseLawAnalysisLanguage,
 } from "./case-law-analysis";
 export type {
   CaseLawAnalysisFailureCode,
+  CaseLawAnalysisLanguage,
   CaseLawAnalysisKeySource,
+  CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
 } from "./case-law-analysis";
 export {
@@ -41,29 +52,38 @@ export {
   BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
+  BROWSER_EXTENSION_STATUS,
   parseBrowserControlCommand,
   parseBrowserControlResult,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
 } from "./browser-control";
 export type {
-  BrowserClientCapability,
+  BrowserExtensionCapability,
   BrowserControlCommand,
   BrowserControlErrorCode,
   BrowserControlResult,
   BrowserControlSnapshot,
+  BrowserControlTargetMetadata,
   BrowserExtensionRequest,
   BrowserExtensionResponse,
+  BrowserExtensionStatus,
 } from "./browser-control";
 export {
   BILLING_STATUS,
   DEFAULT_INVOICE_DUE_DAYS,
   INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
+  INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
+  INVOICE_PAYMENT_INPUT_LIMITS,
+  INVOICE_PAYMENT_METHODS,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   NUMBER_SERIES_DOCUMENT_TYPES,
@@ -74,10 +94,13 @@ export {
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  UNPRICED_TIME_ENTRY_CURRENCY,
 } from "./billing";
 export type {
   ExpenseCategory,
+  InvoiceLanguage,
   InvoiceLineSource,
+  InvoicePaymentMethod,
   InvoiceStatus,
   TimeEntrySource,
   TimeEntryActivityGroup,
@@ -89,6 +112,7 @@ export {
   BUSINESS_REGISTRY_CONFIGURATION,
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
   isBusinessRegistryCredentialSlug,
   isBusinessRegistrySlug,
 } from "./business-registries";
@@ -96,6 +120,7 @@ export type {
   BusinessRegistrySlug,
   BusinessRegistryCredentialSlug,
   BusinessRegistryLookupDetail,
+  BusinessRegistrySearchCapabilities,
 } from "./business-registries";
 export {
   CHAT_RUN_MODE,
@@ -106,6 +131,7 @@ export {
   CHAT_TURN_INTENT,
   REQUEST_ID_HEADER,
 } from "./chat";
+export type { ChatTurnIntent } from "./chat";
 export {
   CLAUSE_WARNINGS_HEADER,
   UNDECIDED_CONDITIONS_HEADER,
@@ -202,6 +228,7 @@ export type {
   ChatSourceCitationTarget,
 } from "./chat-source-citations";
 export {
+  CONTACT_BULK_DELETE_LIMIT,
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
   CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_IGNORE_DESTINATION,
@@ -212,6 +239,7 @@ export {
   CONTACT_IMPORT_SCHEMA_VERSION,
   CONTACT_IMPORT_TARGET_FIELDS,
   CONTACT_IMPORT_TAX_ID_SCHEMES,
+  CONTACT_IMPORT_WARNING_CODE,
   parseContactImportMapping,
 } from "./contact-import";
 export type {
@@ -222,6 +250,7 @@ export type {
   ContactImportMappingParseResult,
   ContactImportTargetField,
   ContactImportTaxIdScheme,
+  ContactImportWarningCode,
 } from "./contact-import";
 export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -267,6 +296,7 @@ export type {
   EntityFindScopeType,
   PropertyContentType,
 } from "./entity-find";
+export { PROPERTY_SORT_KINDS } from "./property-sort";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
@@ -333,11 +363,19 @@ export {
   API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  CHAT_THREAD_NOT_FOUND_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
@@ -345,6 +383,7 @@ export {
   parseApiValidationIssues,
 } from "./error";
 export type {
+  ChatInputRefusalCode,
   ApiErrorInput,
   ApiErrorObjectValue,
   ApiErrorValue,
@@ -354,6 +393,7 @@ export type {
   ApiValidationConstraint,
   ApiValidationErrorValue,
   ApiValidationIssue,
+  ChatMessageEditErrorCode,
   FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";
@@ -361,6 +401,7 @@ export {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "./document-version-upload";
@@ -434,6 +475,7 @@ export {
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  ACCOUNT_EXPORT_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
@@ -447,17 +489,24 @@ export type {
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  OAuthConsentClient,
   VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatBackgroundTasksChangedRealtimeEvent,
+  chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
+  RESOURCE_MUTATION_ID_HEADER,
+  parseResourceMutationId,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
+  REALTIME_CHANNEL_EVENT_TYPES,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
   resourceDeletedChange,
@@ -466,6 +515,8 @@ export {
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
@@ -528,8 +579,10 @@ export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
+  UserEventRead,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";
@@ -566,8 +619,7 @@ export type {
   ChatMentionResourceLinkTarget,
 } from "./resource-link";
 
-/** Path prefix shared by the REST router and direct-fetch clients. */
-export const STELLA_API_VERSION_PREFIX = "/v1" as const;
+export { STELLA_API_VERSION_PREFIX } from "./api-version";
 export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
   big5: "big5",
@@ -991,8 +1043,15 @@ export {
   rulingKeysOf,
   rulingGroupKeys,
 } from "./decision-ruling-identity";
+export {
+  AI_CELL_SETTLEMENT_TYPES,
+  type AiCellSettlement,
+} from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,
   RulingIdentityKeys,
   RulingIdentityDefect,
 } from "./decision-ruling-identity";
+export * from "./vat-rate-presets";
+export { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
+export { SELLER_PROFILE_TEXT_FIELDS } from "./seller-profile-fields";

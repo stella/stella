@@ -4,28 +4,42 @@ import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { CI_GENERATED_DIRECTORIES } from "../packages/scripts/src/generated-files";
 import {
+  generatedDirectoryFiles,
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedSources,
   requireUnchangedGeneratedInputs,
   restorePreparedGeneratedSources,
-  hasPreparedGeneratedSources,
 } from "../packages/scripts/src/prepared-generated-sources";
 import { checkMcpGeneratedTracking } from "./check-mcp-generated-tracking";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
 
 const root = new URL("../", import.meta.url).pathname;
 
+const run = (command: readonly string[]) => {
+  const result = Bun.spawnSync([...command], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (childExitStatus(result) !== 0) {
+    process.exit(childExitStatus(result));
+  }
+};
+
 const generate = () => {
   for (const command of CI_GENERATION_COMMANDS) {
-    const result = Bun.spawnSync([...command], {
-      cwd: root,
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (childExitStatus(result) !== 0) {
-      process.exit(childExitStatus(result));
-    }
+    run(command);
+  }
+};
+
+// Only the producer fills generated directories: a consumer restores them, and
+// a local `prepare` leaves them to the checks that need them.
+const generateDirectories = () => {
+  for (const { command } of CI_GENERATED_DIRECTORIES) {
+    run(command);
   }
 };
 
@@ -39,15 +53,18 @@ if (mode === "produce") {
   const started = performance.now();
   const identity = generatedInputIdentity(root);
   generate();
+  generateDirectories();
   requireUnchangedGeneratedInputs(root, identity);
   const files = Object.fromEntries(
-    ciGeneratedFiles(root).map((file) => {
-      const bytes = readFileSync(path.join(root, file));
-      const output = path.join(destination, "files", file);
-      mkdirSync(path.dirname(output), { recursive: true });
-      writeFileSync(output, bytes);
-      return [file, generatedFileHash(bytes)];
-    }),
+    [...ciGeneratedFiles(root), ...generatedDirectoryFiles(root)].map(
+      (file) => {
+        const bytes = readFileSync(path.join(root, file));
+        const output = path.join(destination, "files", file);
+        mkdirSync(path.dirname(output), { recursive: true });
+        writeFileSync(output, bytes);
+        return [file, generatedFileHash(bytes)];
+      },
+    ),
   );
   writeFileSync(
     path.join(destination, "manifest.json"),

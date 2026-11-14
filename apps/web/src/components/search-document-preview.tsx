@@ -19,6 +19,7 @@ import type {
   NativeSearchStatus,
 } from "@/lib/search.logic";
 import { shouldShowNativeSearchFallback } from "@/lib/search.logic";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchDocumentPreviewProps = {
   fallback: ReactNode;
@@ -41,6 +42,7 @@ export const SearchDocumentPreview = ({
   const { handleResetZoom, handleWheelZoom, handleZoom, scaleOffsets } =
     usePdfTabZoom();
   const scaleOffset = scaleOffsets.get(target.fieldId) ?? 0;
+  const { viewId } = useWorkspaceViewParams(target.workspaceId);
   const handleSearchMatchSummaryChange = useCallback(
     (summary: SearchMatchSummary) => {
       setSearchMatchSummary(summary);
@@ -70,6 +72,7 @@ export const SearchDocumentPreview = ({
   }, []);
   const viewer = (
     <PeekPdfViewer
+      pdfPageSource="portfolio"
       activeSearchMatchIndex={activeSearchMatchIndex}
       activePropertyId=""
       docxFitMode="page"
@@ -83,7 +86,7 @@ export const SearchDocumentPreview = ({
       onWheelZoom={(deltaY) => handleWheelZoom(target.fieldId, deltaY)}
       scaleOffset={scaleOffset}
       searchText={searchText}
-      viewId="all"
+      viewId={viewId}
       workspaceId={target.workspaceId}
     />
   );

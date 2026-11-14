@@ -1,7 +1,6 @@
 /** Whose entries the browser holds: a signed-in user, or a visitor. */
 export type StorageOwner =
-  | { kind: "user"; userId: string }
-  | { kind: "visitor" };
+  { kind: "user"; userId: string } | { kind: "visitor" };
 
 /** Ends a visitor's key: `<base>:visitor`. */
 export const VISITOR_SUFFIX = ":visitor";
@@ -17,6 +16,21 @@ export const ownerStorageKey = (base: string, owner: StorageOwner): string =>
   owner.kind === "user"
     ? `${base}${USER_SEGMENT}${owner.userId}`
     : `${base}${VISITOR_SUFFIX}`;
+
+export const INSPECTOR_STORAGE = {
+  state: { prefix: "stella:inspector-state:v1", version: 1 },
+  minimized: { prefix: "stella:inspector-minimized:v1", version: 1 },
+  restorePending: { prefix: "stella:inspector-restore-pending:v1", version: 1 },
+} as const;
+
+type InspectorStorageDescriptor =
+  (typeof INSPECTOR_STORAGE)[keyof typeof INSPECTOR_STORAGE];
+
+/** The organization base; the account owner adds and validates its user scope. */
+export const inspectorStorageBaseKey = (
+  entry: InspectorStorageDescriptor,
+  organizationId: string,
+): string => `${entry.prefix}:${organizationId}:`;
 
 export const getStorageKey = (key: string) => `stella-${key}`;
 

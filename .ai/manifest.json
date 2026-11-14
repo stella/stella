@@ -13,7 +13,7 @@
       {
         "path": "apps/api",
         "title": "Stella API Development Guidelines",
-        "modules": ["backend-elysia", "database"],
+        "modules": ["database"],
         "local": ".ai/local/api-agents.md"
       },
       {

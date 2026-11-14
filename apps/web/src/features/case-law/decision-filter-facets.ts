@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { FetchStatus, QueryClient } from "@tanstack/react-query";
 
 import {
@@ -34,7 +34,13 @@ export const prefetchDecisionFacetsAfterSearch = async <T>({
         queryClient,
         decisionFacetsOptions(country),
         (error) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "prefetchDecisionFacetsAfterSearch:failure",
+            scope: {
+              type: "handler",
+              handlerId: "prefetchDecisionFacetsAfterSearch:failure",
+            },
+          });
         },
       ),
       "cases.facets-prefetch",
@@ -56,7 +62,6 @@ export const useDecisionBrowseFacets = ({
   useQuery({
     ...decisionFacetsOptions(country),
     enabled: searchFetched && searchFetchStatus === "idle",
-    placeholderData: keepPreviousData,
   });
 
 /**

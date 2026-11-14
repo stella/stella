@@ -15,7 +15,7 @@ import type MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import { cn } from "@stll/ui/utils";
 
 import { timelineWindows } from "./model";
-import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
+import type { ProvisionVersion, StatuteTimelineHistory } from "./parse";
 
 type MessageKey = keyof typeof MCP_APP_MESSAGES.en;
 const EXPRESSION_LABELS = {

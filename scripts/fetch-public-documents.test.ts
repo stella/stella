@@ -1,22 +1,24 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { sha256Hex } from "../packages/sha256/src/node.ts";
 import {
   classifyFailure,
+  fetchBudgetMinutes,
   fetchDocument,
   fetchDocuments,
-  fetchBudgetMinutes,
   jobBudgetMinutes,
-  retryDelayMs,
-  MAX_URLS,
-  TIMEOUT_MS,
-  MAX_RETRIES,
   MAX_INPUT_BYTES,
   MAX_RESPONSE_BYTES,
+  MAX_RETRIES,
+  MAX_URLS,
   parseUrls,
+  retryDelayMs,
+  TIMEOUT_MS,
 } from "./fetch-public-documents";
 
 const roots: string[] = [];
@@ -576,18 +578,16 @@ test("completed records are checkpointed while later documents remain pending", 
   );
   await started;
   try {
-    let partial: unknown = [];
-    for (let turn = 0; turn < 100; turn++) {
-      partial = JSON.parse(
-        await readFile(nodePath.join(root, "manifest.json"), "utf-8"),
-      );
-      if (Array.isArray(partial) && partial.length > 0) {
-        break;
-      }
-      await new Promise<void>((resolve) => {
-        setImmediate(resolve);
-      });
-    }
+    const partial = await waitForExternalState({
+      description: "the manifest file lists the first document",
+      timeoutMs: 1000,
+      read: async () => {
+        const manifest: unknown = JSON.parse(
+          await readFile(nodePath.join(root, "manifest.json"), "utf-8"),
+        );
+        return Array.isArray(manifest) && manifest.length > 0 && manifest;
+      },
+    });
     expect(partial).toEqual([
       expect.objectContaining({
         url: "https://example.com/first",

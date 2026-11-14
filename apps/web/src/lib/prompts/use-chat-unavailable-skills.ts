@@ -3,17 +3,19 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { UnavailableSkillIds } from "@/components/chat-editor-slash-items";
-import { useBrowserClientConnected } from "@/features/chat/browser-control/browser-extension-bridge";
+import { useBrowserExtensionState } from "@/features/chat/browser-control/browser-extension-bridge";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useOptionalChatAnonymized } from "@/lib/chat-anonymized-store";
 import { chatUnavailableSkillsOptions } from "@/lib/knowledge/queries";
 import {
+  chatCanUseBrowser,
   chatSkillAvailabilityQuery,
-  chatSkillMenuAvailability,
   type ChatSkillMenuAvailability,
+  chatSkillMenuAvailability,
   type ComposerSkillChatContext,
 } from "@/lib/prompts/chat-skill-availability.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The skills chat cannot offer the caller, keyed by id, with the tools each
@@ -32,8 +34,8 @@ export const useChatUnavailableSkills = (
     ),
     enabled: organizationId !== undefined && userId !== undefined,
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useChatUnavailableSkills:query");
   const data =
     dataView.type === "items" && dataView.refetchError === undefined
       ? dataView.items
@@ -84,18 +86,25 @@ export const useComposerSkillAvailability = ({
   userId: string;
 }): ChatSkillMenuAvailability => {
   const anonymized = useOptionalChatAnonymized(chat?.threadRef);
-  const browserExtension = useBrowserClientConnected();
+  const extensionStatus = useBrowserExtensionState().status;
   const query =
     chat === undefined
       ? undefined
-      : chatSkillAvailabilityQuery({ anonymized, browserExtension, chat });
+      : chatSkillAvailabilityQuery({
+          anonymized,
+          browserExtension: chatCanUseBrowser({
+            extensionStatus,
+            runTarget: chat.runTarget,
+          }),
+          chat,
+        });
   const known = query !== null;
   const dataQuery = useQuery({
     ...chatUnavailableSkillsOptions(organizationId, userId, query ?? undefined),
     enabled: enabled && known,
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useComposerSkillAvailability:query");
   const data =
     dataView.type === "items" && dataView.refetchError === undefined
       ? dataView.items

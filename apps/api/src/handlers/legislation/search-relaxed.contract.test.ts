@@ -579,12 +579,14 @@ describe.skipIf(!runEngineTests)(
     test("strict and relaxed scan rounds never fetch whole statutes through the native endpoint", async () => {
       const nativeStart = nativeScanQueries.length;
       const callStart = searchCalls.length;
+      // A limit no other test here asks for: a repeated search is answered
+      // from the coalescer and reaches no engine.
       await search({
         query: "závazek pohledávka",
         jurisdiction: "CZE",
-        limit: 3,
+        limit: 7,
       });
-      await search({ query: QUERY, jurisdiction: "CZE", limit: 3 });
+      await search({ query: QUERY, jurisdiction: "CZE", limit: 7 });
       expect(searchCalls.length).toBeGreaterThan(callStart);
       expect(nativeScanQueries.slice(nativeStart)).toEqual([]);
     });
@@ -765,7 +767,7 @@ describe.skipIf(!runEngineTests)(
         "malformed-cursor",
         encodeCursor(
           0.5,
-          `0:none:relevance:p${Buffer.from('{"type":"strict').toString("base64url")}:${String(code.id)}`,
+          `0:none:relevance:p${Buffer.from('{"type":"strict').toBase64({ alphabet: "base64url", omitPadding: true })}:${String(code.id)}`,
         ),
         encodeCorpusSearchCursor({
           ...cursor,
@@ -923,7 +925,7 @@ describe.skipIf(!runEngineTests)(
         page.nextCursor ?? panic("fixture issued no strict cursor");
       const callStart = searchCalls.length;
       const response = await searchLegislationHandler(
-        { query: QUERY, jurisdiction: "SVK", limit: 1, cursor },
+        { query: QUERY, jurisdiction: "AUT", limit: 1, cursor },
         legislationDb,
         "unobserved",
         { provider: "corpus-index", loadSearchConfigs: async () => [] },
@@ -933,8 +935,8 @@ describe.skipIf(!runEngineTests)(
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
           domain: "legislation",
-          country: "SVK",
-          reason: "pages_public",
+          country: "AUT",
+          reason: "pending_public",
         },
       });
       expect(searchCalls.length).toBe(callStart);

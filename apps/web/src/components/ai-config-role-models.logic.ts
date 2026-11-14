@@ -2,12 +2,12 @@ import { panic } from "better-result";
 
 import {
   BYOK_DEFAULT_MODELS,
-  MODEL_OVERRIDE_GROUPS,
   BYOK_MODEL_OPTIONS,
+  DECISION_MODEL_CATALOG,
+  DECISION_MODEL_PROVIDERS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
-  DECISION_MODEL_PROVIDERS,
-  DECISION_MODEL_CATALOG,
+  MODEL_OVERRIDE_GROUPS,
 } from "@stll/ai-catalog";
 import type { ModelOverrideGroup } from "@stll/ai-catalog";
 

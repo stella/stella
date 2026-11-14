@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -33,6 +33,7 @@ export const reserveRegistration = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Registration is temporarily unavailable.",
         cause,
       }),
@@ -44,6 +45,7 @@ export const reserveRegistration = async ({
     return Result.err(
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Registration is temporarily unavailable.",
       }),
     );

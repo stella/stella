@@ -141,13 +141,15 @@ test("the agenda keeps an older open task that newer activity would push out", a
     },
   ]);
 
-  const agenda = await readOverviewAgenda({
-    scopedDb,
-    workspaceId: ids.wsA1,
-    agendaFrom: undefined,
-  });
+  const agenda = await scopedDb(
+    async (tx) =>
+      await readOverviewAgenda({
+        tx,
+        workspaceId: ids.wsA1,
+      }),
+  );
 
-  const agendaIds = agenda.map(({ entityId: id }) => id);
+  const agendaIds = agenda.items.map(({ entityId: id }) => id);
   // Dated tasks lead; the fixture's own undated tasks may follow them.
   expect(agendaIds.indexOf(olderTaskId)).toBeGreaterThanOrEqual(0);
   expect(agendaIds.indexOf(olderTaskId)).toBeLessThan(
@@ -157,75 +159,74 @@ test("the agenda keeps an older open task that newer activity would push out", a
     factId,
     eventId,
     closedTaskId,
-    overdueTaskId,
     otherMatterTaskId,
     ...busyIds,
   ]) {
     expect(agendaIds).not.toContain(excluded);
   }
-  // Without a reader date, the database's today is the boundary.
-  expect(agendaIds).not.toContain(databaseYesterdayTaskId);
+  expect(agendaIds).toContain(overdueTaskId);
+  expect(agendaIds).toContain(databaseYesterdayTaskId);
+  expect(agenda.nextDeadline).toBe(agenda.items.at(0)?.dueDate ?? null);
   // Undated open tasks follow the dated ones.
   expect(agendaIds).toContain(undatedTaskId);
   expect(agendaIds.indexOf(undatedTaskId)).toBeGreaterThan(0);
 });
 
-test("the reader's own date bounds the agenda before the limit applies", async () => {
-  const yesterdayIds = Array.from(
-    { length: LIMITS.overviewUpcomingAgenda + 1 },
-    entityId,
+test("a deadline stays in the agenda after the date rolls over", async () => {
+  const taskId = entityId();
+  await testDb.insert(entities).values({
+    id: taskId,
+    workspaceId: ids.wsA1,
+    kind: "task",
+    name: "Due today",
+    dueDate: sql`CURRENT_DATE`,
+    status: "open",
+  });
+
+  const beforeRollover = await scopedDb(
+    async (tx) => await readOverviewAgenda({ tx, workspaceId: ids.wsA1 }),
   );
-  const todayTaskId = entityId();
-  await testDb.insert(entities).values([
-    ...yesterdayIds.map((id, index) => ({
+  expect(beforeRollover.items.map(({ entityId: id }) => id)).toContain(taskId);
+
+  await testDb
+    .update(entities)
+    .set({ dueDate: sql`CURRENT_DATE - 1` })
+    .where(inArray(entities.id, [taskId]));
+
+  const afterRollover = await scopedDb(
+    async (tx) => await readOverviewAgenda({ tx, workspaceId: ids.wsA1 }),
+  );
+  expect(afterRollover.items.map(({ entityId: id }) => id)).toContain(taskId);
+  expect(afterRollover.totalCount).toBe(beforeRollover.totalCount);
+});
+
+test("the capped agenda reports every open task and the earliest overdue deadline", async () => {
+  const existingAgenda = await scopedDb(
+    async (tx) => await readOverviewAgenda({ tx, workspaceId: ids.wsA1 }),
+  );
+  const taskCount = LIMITS.overviewUpcomingAgenda + 3;
+  const taskIds = Array.from({ length: taskCount }, entityId);
+
+  await testDb.insert(entities).values(
+    taskIds.map((id, index) => ({
       id,
       workspaceId: ids.wsA1,
       kind: "task" as const,
-      name: `Due yesterday ${index + 1}`,
-      dueDate: sql`CURRENT_DATE - 1`,
+      name: `Overflow agenda task ${index + 1}`,
+      dueDate:
+        index === 0
+          ? "1900-01-01"
+          : `2999-01-${String(index + 1).padStart(2, "0")}`,
       status: "open",
     })),
-    {
-      id: todayTaskId,
-      workspaceId: ids.wsA1,
-      kind: "task",
-      name: "Due today",
-      dueDate: sql`CURRENT_DATE`,
-      status: "open",
-    },
-  ]);
-  const dueDateOf = async (id: (typeof yesterdayIds)[number]) => {
-    const [row] = await testDb
-      .select({ dueDate: entities.dueDate })
-      .from(entities)
-      .where(inArray(entities.id, [id]));
-    return row?.dueDate ?? undefined;
-  };
-  const yesterday = await dueDateOf(yesterdayIds[0] ?? todayTaskId);
-  const today = await dueDateOf(todayTaskId);
+  );
 
-  // A reader a day behind the database still sees the deadlines of its today.
-  const behind = await readOverviewAgenda({
-    scopedDb,
-    workspaceId: ids.wsA1,
-    agendaFrom: yesterday,
-  });
-  // Ties on the due date order by id, so which of them fill the limit is not
-  // fixed; every slot going to one of them is.
-  expect(behind).toHaveLength(LIMITS.overviewUpcomingAgenda);
-  for (const { entityId: id } of behind) {
-    expect(yesterdayIds).toContain(id);
-  }
+  const agenda = await scopedDb(
+    async (tx) => await readOverviewAgenda({ tx, workspaceId: ids.wsA1 }),
+  );
 
-  // Yesterday's deadlines never use up the limit for a reader on today.
-  const current = await readOverviewAgenda({
-    scopedDb,
-    workspaceId: ids.wsA1,
-    agendaFrom: today,
-  });
-  const currentIds = current.map(({ entityId: id }) => id);
-  expect(currentIds).toContain(todayTaskId);
-  for (const id of yesterdayIds) {
-    expect(currentIds).not.toContain(id);
-  }
+  expect(agenda.items).toHaveLength(LIMITS.overviewUpcomingAgenda);
+  expect(agenda.totalCount).toBe(existingAgenda.totalCount + taskCount);
+  expect(agenda.items.at(0)?.entityId).toBe(taskIds.at(0));
+  expect(agenda.nextDeadline).toBe("1900-01-01");
 });

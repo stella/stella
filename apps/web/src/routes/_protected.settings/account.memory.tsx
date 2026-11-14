@@ -4,17 +4,19 @@ import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { loadCallerFeature } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { routePresentation } from "@/routes/-route-presentation";
 import { MemoryPanel } from "@/routes/_protected.settings/-components/account/memory/memory-panel";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
 
 export const Route = createFileRoute("/_protected/settings/account/memory")({
@@ -31,6 +33,7 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
 
     return { activeOrganizationId: context.user.activeOrganizationId };
   },
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   loader: async ({ context }) => {
     const admission = await loadCallerFeature({
       queryClient: context.queryClient,
@@ -54,7 +57,14 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
                 }),
               );
             } catch (error: unknown) {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "settings.account.memory.loader:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/settings/account/memory",
+                },
+              });
             }
           }),
         );
@@ -64,6 +74,7 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
       throw redirect({ to: "/settings/account/profile", replace: true });
     }
   },
+  head: () => ({ meta: [{ title: pageTitle("memory.pageTitle") }] }),
   component: MemoryPage,
   pendingComponent: MemoryPagePending,
 });

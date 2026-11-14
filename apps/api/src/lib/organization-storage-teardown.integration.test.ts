@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -15,13 +15,13 @@ import {
   entityDeletionCleanupRequests,
   entityVersions,
   fields,
+  fileComparisonUploads,
   folioCollabRooms,
   pendingUploads,
   properties,
-  fileComparisonUploads,
   styleSets,
-  templateVersions,
   templates,
+  templateVersions,
   userFiles,
   workspaces,
 } from "@/api/db/schema";
@@ -34,12 +34,19 @@ import {
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntents,
 } from "@/api/lib/buffer-intent-reconciliation";
-import type { FileKey } from "@/api/lib/file-key";
+import {
+  createUserFileKey,
+  createUserFileThumbnailKey,
+  type FileKey,
+} from "@/api/lib/file-key";
 import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { testFileKey } from "@/api/tests/helpers/file-key";
+import {
+  deleteAccountExports,
+  seedReadyOrganizationAuditExport,
+} from "@/api/tests/helpers/organization-audit-export";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -217,7 +224,11 @@ const seedChatAttachment = async ({
 }) => {
   const threadId = toSafeId<"chatThread">(uuid());
   const userFileId = toSafeId<"userFile">(uuid());
-  const s3Key = testFileKey(`${userId}/${userFileId}.pdf`);
+  const s3Key = createUserFileKey({
+    fileId: userFileId,
+    mimeType: PDF_MIME,
+    organizationId,
+  });
   await testDb.insert(chatThreads).values({
     id: threadId,
     organizationId,
@@ -541,7 +552,13 @@ beforeAll(async () => {
 
   fixture = {
     chatAttachmentKey: attachment.s3Key,
-    chatThumbnailKey: `${userId}/${chatThumbnailFileId}.webp`,
+    chatThumbnailKey:
+      createUserFileThumbnailKey({
+        sourceKey: attachment.s3Key,
+        thumbnailFileId: chatThumbnailFileId,
+        organizationId,
+        uploaderUserId: userId,
+      }) ?? panic("The chat attachment key must have an accepted owner"),
     checkpointKey: `${organizationId}/${firstWorkspaceId}/${checkpointFileId}.docx`,
     collabDocxKey: `${organizationId}/${secondWorkspaceId}/${collabDocxFileId}.docx`,
     collabSnapshotKey: `${organizationId}/${secondWorkspaceId}/${collabSnapshotFileId}.bin`,
@@ -572,13 +589,22 @@ beforeAll(async () => {
     userId,
   };
 
-  await testDb.transaction(
+  await seedReadyOrganizationAuditExport({
+    db: testDb,
+    userId,
+    organizationId,
+  });
+  const deletion = await testDb.transaction(
     async (tx) =>
       await completeOrganizationDeletion({
+        deletedBy: userId,
         organizationId,
         tx: asTestRaw<Transaction>(tx),
       }),
   );
+  if (deletion.type !== "deleted") {
+    panic("Organization deletion with a complete audit archive must proceed");
+  }
 });
 
 afterAll(async () => {
@@ -597,9 +623,15 @@ afterAll(async () => {
     );
   // The organization that survives is torn down through the same helper, which
   // is also the only ordering `user_files.thread_id`'s RESTRICT admits.
+  await seedReadyOrganizationAuditExport({
+    db: testDb,
+    userId: fixture.userId,
+    organizationId: fixture.otherOrganizationId,
+  });
   await testDb.transaction(
     async (tx) =>
       await completeOrganizationDeletion({
+        deletedBy: fixture.userId,
         organizationId: fixture.otherOrganizationId,
         tx: asTestRaw<Transaction>(tx),
       }),
@@ -612,6 +644,7 @@ afterAll(async () => {
         fixture.otherOrganizationId,
       ),
     );
+  await deleteAccountExports(testDb, fixture.userId);
   await testDb.delete(user).where(eq(user.id, fixture.userId));
   await releaseTestDb();
 });
@@ -634,7 +667,11 @@ const pageKeysMatchScope = ({
       ? key.startsWith(`${fixture.organizationId}/templates/`) ||
         key.startsWith(`${fixture.organizationId}/style-sets/`) ||
         key.startsWith(`${fixture.organizationId}/tmp/comparisons/`) ||
-        key.startsWith(`${fixture.userId}/`)
+        [
+          fixture.chatAttachmentKey,
+          fixture.chatThumbnailKey,
+          fixture.globalChatAttachmentKey,
+        ].includes(key)
       : key.startsWith(`${fixture.organizationId}/${workspaceId}/`) ||
         key.startsWith("tmp/"),
   );
@@ -775,10 +812,16 @@ describe("organization deletion storage teardown", () => {
     // deletion, never record a prefix: the pages left unwritten would name
     // objects nothing could ever find again. The organization that survives has
     // storage in more than one page, so one page is not enough for it.
+    await seedReadyOrganizationAuditExport({
+      db: testDb,
+      userId: fixture.userId,
+      organizationId: fixture.otherOrganizationId,
+    });
     const attempt = await testDb
       .transaction(
         async (tx) =>
           await completeOrganizationDeletion({
+            deletedBy: fixture.userId,
             organizationId: fixture.otherOrganizationId,
             pagesMax: 1,
             tx: asTestRaw<Transaction>(tx),

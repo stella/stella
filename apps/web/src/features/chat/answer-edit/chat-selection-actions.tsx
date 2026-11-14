@@ -2,11 +2,12 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { CheckIcon, CopyIcon, NewChatIcon, QuoteIcon } from "@stll/ui/icons";
+import { NewChatIcon, QuoteIcon } from "@stll/ui/icons";
 
 import { CHAT_SELECTION_ACTION } from "@/components/chat/chat-selection-branch.logic";
 import type { ChatSelectionAction } from "@/components/chat/chat-selection-branch.logic";
-import { detached } from "@/lib/detached";
+import { CopyControlButton } from "@/components/copy-control";
+import type { CopyControlState } from "@/components/copy-control";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 const ACTION_LABEL_CLASS = "max-sm:sr-only";
@@ -16,7 +17,7 @@ export const ChatSelectionActions = ({
   askInNewChat,
   quoteInReply,
   copy,
-  copied,
+  copyText,
 }: ChatSelectionActionsProps) => {
   const t = useTranslations();
   return (
@@ -74,24 +75,16 @@ export const ChatSelectionActions = ({
           }
           case CHAT_SELECTION_ACTION.copy: {
             return (
-              <Button
+              <CopyControlButton
+                content={copyText}
+                control={copy}
                 key={action}
-                onClick={() => {
-                  detached(copy(), "chat-selection-toolbar.copy");
-                }}
+                labelClassName={ACTION_LABEL_CLASS}
+                // Pressing it keeps the words selected.
                 onMouseDown={(event) => event.preventDefault()}
                 size="sm"
                 variant="ghost"
-              >
-                {copied ? (
-                  <CheckIcon className="size-3.5" />
-                ) : (
-                  <CopyIcon className="size-3.5" />
-                )}
-                <span className={ACTION_LABEL_CLASS}>
-                  {copied ? t("common.copied") : t("common.copy")}
-                </span>
-              </Button>
+              />
             );
           }
           default: {
@@ -108,6 +101,7 @@ type ChatSelectionActionsProps = {
   actions: ChatSelectionAction[];
   askInNewChat: () => void;
   quoteInReply: () => void;
-  copy: () => Promise<void>;
-  copied: boolean;
+  /** The bar's copy owner, which also confirms the reader's own copy. */
+  copy: CopyControlState<"selection">;
+  copyText: string;
 };

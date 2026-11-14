@@ -6,16 +6,16 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
-  toPersistedChatMessageContentV3,
   createChatAttachmentPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   applyChatToolPolicy,
@@ -28,6 +28,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -47,6 +48,10 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+});
 
 const anonymizeTextFieldsMock = mock(
   async ({
@@ -539,9 +544,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected prepared attachment part");
     }
     expect(getChatAttachmentUrl(part)).toContain(
-      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toString(
-        "base64",
-      ),
+      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toBase64(),
     );
   });
 
@@ -702,7 +705,12 @@ describe("chat third-party anonymization boundary", () => {
   test("every stored part type is prepared for the send mode", async () => {
     for (const [partType, part] of Object.entries(STORED_PART_CENSUS)) {
       const messages: ChatMessage[] = [
-        { id: `msg_${partType}`, role: "assistant", parts: [part] },
+        {
+          id: `msg_${partType}`,
+          // A member sends files; one on an answer never reaches a model.
+          role: isChatAttachmentPart(part) ? "user" : "assistant",
+          parts: [part],
+        },
       ];
       const raw = await prepareMessagesForThirdParty({
         boundary: createRawBoundary(),
@@ -721,6 +729,45 @@ describe("chat third-party anonymization boundary", () => {
       );
       // Anonymized mode sends it prepared, or not at all.
       expect(providerViewOf(anonymized)).not.toContain(STORED_PART_VALUE);
+    }
+  });
+
+  test("a file on an answer reaches no model, in either mode, whatever holds it", async () => {
+    for (const part of [
+      createChatAttachmentPart({
+        filename: "report.pdf",
+        mimeType: "application/pdf",
+        url: "stella://file::019a0000-0000-7000-8000-000000000001",
+      }),
+      createChatAttachmentPart({
+        filename: "chart.png",
+        mimeType: "image/png",
+        url: "stella://file::019a0000-0000-7000-8000-000000000002",
+      }),
+    ]) {
+      const text = { type: "text", content: "Here it is." } as const;
+      const withText: ChatMessage = {
+        id: "msg_answer",
+        role: "assistant",
+        parts: [text, part],
+      };
+      const fileOnly: ChatMessage = {
+        id: "msg_file_only",
+        role: "assistant",
+        parts: [part],
+      };
+      for (const boundary of [createRawBoundary(), createBoundary()]) {
+        // await-in-loop: each boundary keeps its own replacement state.
+        const prepared = await prepareMessagesForThirdParty({
+          boundary,
+          messages: [withText, fileOnly],
+        });
+        expect(Result.isOk(prepared)).toBe(true);
+        const sent = prepared.unwrap();
+        // The answer keeps its text; a message that was only a file goes.
+        expect(sent.map(({ id }) => id)).toEqual(["msg_answer"]);
+        expect(sent.at(0)?.parts.map(({ type }) => type)).toEqual(["text"]);
+      }
     }
   });
 
@@ -1096,6 +1143,43 @@ describe("chat third-party anonymization boundary", () => {
       participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
+  });
+
+  test("anonymizes a live tool error before it reaches the model", async () => {
+    const boundary = createBoundary();
+    const tools = {
+      failing_lookup: applyChatToolPolicy(
+        toolDefinition({
+          name: "failing_lookup",
+          description: "Fail with a sensitive fixture.",
+        }).server(async () => {
+          throw new ChatToolError({
+            kind: "invalid-input",
+            message: "Jan Novák cannot access Secret notes",
+          });
+        }),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["failing_lookup"],
+    );
+    if (!executable?.execute) {
+      throw new TypeError("Expected an executable tool");
+    }
+
+    const failure = await rejectionOf(executable.execute(undefined));
+
+    expect(failure).toMatchObject({
+      _tag: "ChatToolError",
+      kind: "invalid-input",
+      message: "[PERSON_1] cannot access [CUSTOM_1] notes",
+    });
+    expect(JSON.stringify(failure)).not.toContain("Jan Novák");
   });
 
   test("returns anonymized external MCP source tool output values", async () => {
@@ -2148,7 +2232,8 @@ describe("anonymization placeholders across a thread's requests", () => {
   });
 
   test("one placeholder never names two originals in a thread", async () => {
-    await fc.assert(
+    await assertProperty(
+      "one placeholder never names two originals in a thread",
       fc.asyncProperty(
         // Each request mentions some of the people in some order.
         fc.array(fc.shuffledSubarray([...PEOPLE], { minLength: 1 }), {
@@ -2186,7 +2271,7 @@ describe("anonymization placeholders across a thread's requests", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200, seed: propertySeed() }),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 });

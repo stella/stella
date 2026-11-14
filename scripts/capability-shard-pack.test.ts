@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import {
   canonicalJson,
   CLI_CONTRACT_SURFACE_PATHS,
@@ -114,7 +116,14 @@ const isCatalogPath = (file: string): boolean =>
 const legacyCatalogAtBase = () => {
   const catalogPath = `${CLI_DIRECTORY}/capability-catalog.json`;
   const files = run(
-    ["git", "ls-tree", "--name-only", "origin/main", "--", catalogPath],
+    [
+      "git",
+      "ls-tree",
+      "--name-only",
+      treeBaseRevision({ repoRoot: REPO_ROOT }),
+      "--",
+      catalogPath,
+    ],
     REPO_ROOT,
   );
   return files.trim() === catalogPath;
@@ -131,10 +140,7 @@ test.skipIf(!process.env["CI"] || !legacyCatalogAtBase())(
     const base = path.join(directory, "base");
     const head = path.join(directory, "head");
     try {
-      const baseRevision = run(
-        ["git", "rev-parse", "origin/main"],
-        REPO_ROOT,
-      ).trim();
+      const baseRevision = treeBaseRevision({ repoRoot: REPO_ROOT });
       // Pin the reference to committed main bytes before any lifecycle script runs.
       const committedBase = (part: CliContractSurfacePart) =>
         run(

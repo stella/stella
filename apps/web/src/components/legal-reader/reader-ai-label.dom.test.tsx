@@ -5,9 +5,9 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
@@ -235,13 +235,19 @@ describe("the AI mark at each place the reader marks generated text", () => {
 
   test("each layer in the margin carries the mark under its own name", async () => {
     const analysis = {
-      version: 3,
+      version: 4,
       generatedAt: "2026-02-01T00:00:00.000Z",
       model: "test-model",
       inputFingerprint: "fingerprint-1",
       tree: [],
-      holding: { anchors: [], language: "cs", text: "Model holding sentence." },
-      abstract: { language: "cs", text: "Model abstract sentence." },
+      holding: {
+        spans: [{ text: "Model holding sentence.", anchors: [] }],
+        language: "cs",
+      },
+      abstract: {
+        spans: [{ text: "Model abstract sentence.", anchors: [] }],
+        language: "cs",
+      },
       topics: ["Limitation periods"],
     } satisfies DecisionAnalysis;
     render(

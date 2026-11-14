@@ -20,9 +20,12 @@ import deleteSavedSearch from "@/api/handlers/saved-searches/delete";
 import updateSavedSearch from "@/api/handlers/saved-searches/update";
 import connectSharepoint from "@/api/handlers/sharepoint/connect";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
-import listSharepointDriveRoot from "@/api/handlers/sharepoint/list-drive-root";
+import listSharepointDriveItems from "@/api/handlers/sharepoint/drives/items/list";
+import listSharepointDrives from "@/api/handlers/sharepoint/drives/list";
 import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
+import listSharepointSites from "@/api/handlers/sharepoint/sites/list";
 import sharepointConnectionStatus from "@/api/handlers/sharepoint/status";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -67,7 +70,9 @@ const READS = {
   "legal-reader/annotations/list.ts": listReaderAnnotations,
   "mcp-connectors/list-connections.ts": listMcpConnections,
   "mcp-connectors/list-connectors.ts": listMcpConnectors,
-  "sharepoint/list-drive-root.ts": listSharepointDriveRoot,
+  "sharepoint/drives/items/list.ts": listSharepointDriveItems,
+  "sharepoint/drives/list.ts": listSharepointDrives,
+  "sharepoint/sites/list.ts": listSharepointSites,
   "sharepoint/status.ts": sharepointConnectionStatus,
 } as const;
 
@@ -76,7 +81,7 @@ const refusingDb: SafeDb = async <T>() =>
     new DatabaseError({ message: "a denied call must not reach the database" }),
   );
 
-const contextForRole = (role: MemberRole): unknown => ({
+const contextForRole = (role: MemberRole) => ({
   request: new Request("https://example.test/own-work"),
   route: "/own-work",
   body: {},
@@ -157,6 +162,8 @@ describe("own-work permissions", () => {
     for (const memberRole of [undefined, null, {}, { role: "unrecognized" }]) {
       const context = {
         memberRole,
+        request: new Request("https://api.test/v1/desktop-registry/grant"),
+        route: "/v1/desktop-registry/grant" satisfies ApiRoutePath,
         get body() {
           throw new DatabaseError({
             message: "Connection work must not start",

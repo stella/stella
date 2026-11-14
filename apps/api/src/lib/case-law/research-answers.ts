@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -10,13 +9,14 @@ import type {
 import type { JustificationContent } from "@/api/db/schema";
 import { fieldContentSchema } from "@/api/db/schema-validators";
 import type {
-  AiExtractablePropertyContent,
+  CaseLawQuestionContent,
   FieldContent,
 } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   answerSchemaForContent,
   answerShapeHint,
@@ -37,7 +37,7 @@ import type { ValidatedAnswer } from "@/api/lib/workflow/ai-validators";
  * same justification shape — so one cell renderer and one output registry serve
  * both surfaces.
  */
-export type CaseLawResearchColumnContent = AiExtractablePropertyContent;
+export type CaseLawResearchColumnContent = CaseLawQuestionContent;
 
 export const defaultResearchColumnTool = (): CaseLawResearchColumnTool => ({
   version: 1,
@@ -252,6 +252,7 @@ export const statedAnswerContent = (
     case "single-select":
     case "date":
     case "int":
+    case "money":
       return validated.value === null
         ? null
         : fieldContentFromValidated(validated);
@@ -387,14 +388,16 @@ export const buildAnswerJustification = (
  * as the union's own error arm, never handed to the client as an unknown shape.
  */
 export const parseStoredAnswerContent = (value: unknown): FieldContent => {
-  if (Value.Check(fieldContentSchema, value)) {
+  if (v.is(fieldContentSchema, value)) {
     return value;
   }
   captureError(
     new DatabaseError({
       message: "Stored research answer is not field content",
     }),
-    { source: "case-law-research-answers" },
+    handlerErrorContext("caselaw.parseStoredAnswerContent", {
+      source: "case-law-research-answers",
+    }),
   );
   return { version: 1, type: "error" };
 };

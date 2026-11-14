@@ -41,16 +41,25 @@ describe.serial("caller feature route census", () => {
     }
   }
   test("type-only imports cannot trigger runtime admission", async () => {
-    for (const declaration of [
-      'import type { ListData } from "@/lib/workspaces/queries/legal-lists";',
-      'import { type ListData } from "@/lib/workspaces/queries/legal-lists";',
-    ]) {
-      expect(
-        await lint(
-          `import { createFileRoute } from "@tanstack/react-router";\n${declaration}\nexport const Route = createFileRoute("/fixture")({ component: () => null });`,
-        ),
-      ).toEqual([]);
-    }
+    const results = await Promise.all(
+      [
+        'import type { ListData } from "@/lib/workspaces/queries/legal-lists";',
+        'import { type ListData } from "@/lib/workspaces/queries/legal-lists";',
+      ].map(async (lintCase, index) => {
+        const declaration = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(
+            `import { createFileRoute } from "@tanstack/react-router";\n${declaration}\nexport const Route = createFileRoute("/fixture")({ component: () => null });`,
+          ),
+          expected: [],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
     expect(
       await lint(
         'import { createFileRoute } from "@tanstack/react-router";\nimport { type ListData, legalListsOptions } from "@/lib/workspaces/queries/legal-lists";\nexport const Route = createFileRoute("/fixture")({ loader: () => legalListsOptions() });',
@@ -79,16 +88,25 @@ describe.serial("caller feature route census", () => {
   test("feature reads execute only inside the admission callback", async () => {
     const prefix =
       'import { createFileRoute } from "@tanstack/react-router";\nimport { legalListsOptions } from "@/lib/workspaces/queries/legal-lists";\nimport { loadCallerFeature } from "@/lib/organization/feature-access/access";\n';
-    for (const body of [
-      "await legalListsOptions(); await loadCallerFeature({ load: async () => {} });",
-      "await loadCallerFeature({ load: async () => {} }); await legalListsOptions();",
-    ]) {
-      expect(
-        await lint(
-          `${prefix}export const Route = createFileRoute("/fixture")({ loader: async () => { ${body} } });`,
-        ),
-      ).toEqual([2]);
-    }
+    const results = await Promise.all(
+      [
+        "await legalListsOptions(); await loadCallerFeature({ load: async () => {} });",
+        "await loadCallerFeature({ load: async () => {} }); await legalListsOptions();",
+      ].map(async (lintCase, index) => {
+        const body = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(
+            `${prefix}export const Route = createFileRoute("/fixture")({ loader: async () => { ${body} } });`,
+          ),
+          expected: [2],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
     expect(
       await lint(
         `${prefix}export const Route = createFileRoute("/fixture")({ loader: async () => { await loadCallerFeature({ load: async () => { await legalListsOptions(); } }); } });`,

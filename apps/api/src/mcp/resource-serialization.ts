@@ -1,8 +1,8 @@
 import {
   RESOURCE_TYPE,
-  toResourceName,
   type ResourceRef,
   type ResourceType,
+  toResourceName,
 } from "@stll/api-contract";
 
 import type { RESOURCE_AUTHORIZATION_DISPOSITION } from "@/api/lib/resource-authorization";
@@ -49,6 +49,7 @@ export const MCP_RESOURCE_SERIALIZATION_DISPOSITION = {
   [RESOURCE_TYPE.FLOW_RUN]: DOMAIN_PROJECTION,
   [RESOURCE_TYPE.INVOICE]: DOMAIN_PROJECTION,
   [RESOURCE_TYPE.LEGAL_LIST]: DOMAIN_PROJECTION,
+  [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: DOMAIN_PROJECTION,
   [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: {
     type: "authorized_corpus_resource_name",
   },

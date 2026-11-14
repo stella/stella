@@ -12,8 +12,18 @@
 
 import { panic } from "better-result";
 
-/** A built module: types and implementation, both emitted from one source. */
-export type DistModuleEntry = { types: string; import: string };
+/** One built module: types and implementation, both emitted from one source. */
+export type DistModulePair = { types: string; import: string };
+
+/**
+ * A built module, and the React Native build of the same export when the
+ * source names one (see `NATIVE_CONDITION`). The native pair is listed first:
+ * a resolver takes the first condition it knows, and only a React Native
+ * bundler knows `react-native`.
+ */
+export type DistModuleEntry = DistModulePair & {
+  "react-native"?: DistModulePair;
+};
 
 // An entry is either a built module or a file the build copies verbatim
 // (stylesheets: the design-system theme ships as source CSS, since the
@@ -31,8 +41,17 @@ export const isDistModuleEntry = (entry: DistEntry): entry is DistModuleEntry =>
   typeof entry !== "string";
 
 /** Files in the published tarball an export entry points at. */
-export const distEntryFiles = (entry: DistEntry): string[] =>
-  isDistModuleEntry(entry) ? [entry.types, entry.import] : [entry];
+export const distEntryFiles = (entry: DistEntry): string[] => {
+  if (!isDistModuleEntry(entry)) {
+    return [entry];
+  }
+  const native = entry["react-native"];
+  return [
+    ...(native === undefined ? [] : [native.types, native.import]),
+    entry.types,
+    entry.import,
+  ];
+};
 
 // A module compiles to `.js` + `.d.ts`; a stylesheet is copied under its own
 // name. `.tsx` is a module: a React package's components are its modules.
@@ -146,6 +165,55 @@ const distAsset = (srcPath: string): string =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/**
+ * The one export condition a source manifest may use: a component with a
+ * React Native renderer maps its subpath to
+ * `{ "react-native": "./src/x.native.tsx", "default": "./src/x.tsx" }`, so one
+ * import resolves to the native renderer in a React Native bundler and to the
+ * web renderer everywhere else.
+ */
+export const NATIVE_CONDITION = "react-native";
+
+/** The `{ "react-native", "default" }` pair, or undefined for any other shape. */
+const nativePair = (
+  target: unknown,
+): { native: string; web: string } | undefined => {
+  if (!isRecord(target)) {
+    return undefined;
+  }
+  const keys = Object.keys(target);
+  const native = target[NATIVE_CONDITION];
+  const web = target["default"];
+  return keys.length === 2 &&
+    keys[0] === NATIVE_CONDITION &&
+    typeof native === "string" &&
+    typeof web === "string" &&
+    web.startsWith("./src/") &&
+    hasExtension(web, MODULE_EXTENSIONS) &&
+    native === web.replace(/\.(tsx?)$/u, ".native.$1")
+    ? { native, web }
+    : undefined;
+};
+
+/**
+ * Subpath -> React Native source module, for the exports that name one. The
+ * web module of each is its entry in `sourceExportTargets`.
+ */
+export const sourceNativeExportTargets = (
+  manifest: unknown,
+): Record<string, string> => {
+  const exportsField = isRecord(manifest) ? manifest["exports"] : undefined;
+  if (!isRecord(exportsField)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(exportsField).flatMap(([subpath, target]) => {
+      const pair = nativePair(target);
+      return pair === undefined ? [] : [[subpath, pair.native]];
+    }),
+  );
+};
+
 // Validated `exports` map of a source-shaped manifest: subpath -> a single
 // source file, an explicitly shipped root JSON asset, or a shipped asset
 // pattern (`"./capabilities/*.json": "./capabilities/*.json"`, see
@@ -164,7 +232,8 @@ export const sourceExportTargets = (
   }
 
   const targets: Record<string, string> = {};
-  for (const [subpath, target] of Object.entries(exportsField)) {
+  for (const [subpath, entry] of Object.entries(exportsField)) {
+    const target = nativePair(entry)?.web ?? entry;
     if (
       typeof target !== "string" ||
       !(
@@ -176,7 +245,7 @@ export const sourceExportTargets = (
       )
     ) {
       panic(
-        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string, an explicitly shipped root JSON asset, or a "./<dir>/*.json" pattern mapped onto itself whose <dir> the files allowlist ships, got ${JSON.stringify(target)}`,
+        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string, a { "react-native": "./src/<module>.native.tsx", "default": "./src/<module>.tsx" } pair, an explicitly shipped root JSON asset, or a "./<dir>/*.json" pattern mapped onto itself whose <dir> the files allowlist ships, got ${JSON.stringify(entry)}`,
       );
     }
     targets[subpath] = target;
@@ -193,6 +262,7 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
     panic(`${manifest["name"]}: package.json must have a version`);
   }
 
+  const nativeTargets = sourceNativeExportTargets(manifest);
   const distExports: Record<string, DistEntry> = {};
   for (const [subpath, target] of Object.entries(sourceTargets)) {
     if (
@@ -207,7 +277,20 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
       continue;
     }
     const base = distBase(target);
-    distExports[subpath] = { types: `${base}.d.ts`, import: `${base}.js` };
+    const native = nativeTargets[subpath];
+    const nativeBase = native === undefined ? undefined : distBase(native);
+    distExports[subpath] = {
+      ...(nativeBase === undefined
+        ? {}
+        : {
+            [NATIVE_CONDITION]: {
+              types: `${nativeBase}.d.ts`,
+              import: `${nativeBase}.js`,
+            },
+          }),
+      types: `${base}.d.ts`,
+      import: `${base}.js`,
+    };
   }
 
   const root =

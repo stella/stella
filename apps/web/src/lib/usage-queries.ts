@@ -1,9 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { env } from "@/env";
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type UsageEntitlementKey = {
   organizationId: string;
@@ -41,17 +44,23 @@ const fetchUsageEntitlement = async ({
   const response = await api.usage.entitlement.get({
     fetch: { signal },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export const usageEntitlementOptions = ({
   organizationId,
 }: UsageEntitlementOptionsInput) =>
-  queryOptions({
-    queryKey: usageEntitlementKeys.byOrganization({ organizationId }),
-    queryFn: fetchUsageEntitlement,
-    enabled: env.VITE_FEATURE_USAGE,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: usageEntitlementKeys.byOrganization({ organizationId }),
+      queryFn: fetchUsageEntitlement,
+      enabled: env.VITE_FEATURE_USAGE,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization" },
+    },
+  );
 
 type UsageLaneKey = {
   organizationId: string;
@@ -88,7 +97,7 @@ const fetchUsageLane = async ({
   const response = await api.usage.lane.get({
     fetch: { signal },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 /**
@@ -129,5 +138,5 @@ export const organizationAccessOptions = ({
     queryKey: organizationAccessKeys.byOrganization({ organizationId }),
     retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) =>
-      unwrapEden(await api.usage.access.get({ fetch: { signal } })),
+      unwrapApiResponse(await api.usage.access.get({ fetch: { signal } })),
   });

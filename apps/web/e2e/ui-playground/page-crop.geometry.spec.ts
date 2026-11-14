@@ -1,21 +1,28 @@
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+import {
+  expect,
+  stableBoundingBox,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
+
 const field = (page: Page, side: string) =>
-  page.locator(`input[type="number"][id$="-${side}"]`);
+  page.locator(`[role="dialog"] input[id$="-${side}"]`);
 const box = (page: Page) => page.locator("[data-crop-box]");
 
 const openFixture = async (page: Page) => {
   await page.goto("/dev?visual=page-crop", { waitUntil: "domcontentloaded" });
   await expect(box(page)).toBeVisible();
-  await page.locator('[role="dialog"] summary').click();
+  await page.locator("[data-crop-advanced]").click();
 };
 
-const readBox = async (page: Page) =>
-  box(page).evaluate((element) => {
+const readBox = async (page: Page) => {
+  await waitForStableGeometry(page, box(page).locator(".."));
+  return await box(page).evaluate((element) => {
     const preview = element.parentElement?.querySelector("canvas");
     if (!(preview instanceof HTMLCanvasElement)) {
-      throw new Error("PDF preview is missing");
+      throw new TypeError("PDF preview is missing");
     }
     const surface = preview.getBoundingClientRect();
     const crop = element.getBoundingClientRect();
@@ -28,6 +35,7 @@ const readBox = async (page: Page) =>
       surfaceHeight: surface.height,
     };
   });
+};
 
 const readAppliedMargins = async (page: Page) =>
   page.locator("[data-crop-output]").evaluate((element) => {
@@ -111,7 +119,7 @@ test("renders PDF content and restores existing physical crop margins", async ({
   await page.locator('[data-crop-action="apply"]').click();
   await page.locator("[data-crop-reopen]").click();
   await expect(box(page)).toBeVisible();
-  await page.locator('[role="dialog"] summary').click();
+  await page.locator("[data-crop-advanced]").click();
   await expect(field(page, "left")).toHaveValue("25");
   expect((await readBox(page)).x).toBeCloseTo(geometry.x, 3);
 });
@@ -123,11 +131,7 @@ test("numeric edits and pointer resizing update the same crop rectangle", async 
   await field(page, "top").fill("30");
   expect((await readBox(page)).y).toBeCloseTo(30 / 297, 2);
   const handle = page.locator('[data-crop-handle="e"]');
-  const start = await handle.boundingBox();
-  expect(start).not.toBeNull();
-  if (!start) {
-    throw new Error("Right crop handle is missing");
-  }
+  const start = await stableBoundingBox(page, handle);
   const before = await readBox(page);
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.mouse.down();
@@ -190,7 +194,7 @@ test("reset clears stored crops and reopening shows the full source page", async
   await expect(page.locator("[data-crop-output]")).toContainText('"crop":null');
   await page.locator("[data-crop-reopen]").click();
   await expect(box(page)).toBeVisible();
-  await page.locator('[role="dialog"] summary').click();
+  await page.locator("[data-crop-advanced]").click();
   for (const side of ["top", "right", "bottom", "left"]) {
     await expect(field(page, side)).toHaveValue("0");
   }

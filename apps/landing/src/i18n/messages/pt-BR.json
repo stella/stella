@@ -91,11 +91,23 @@
   "nav": {
     "aiFactSheet": "Ficha para IA",
     "aiFactSheetBlurb": "stella em formato legível por máquinas.",
-    "beta": "Beta",
     "blog": "Blog",
     "changelog": "Novidades",
     "chooseLanguage": "Escolha um idioma",
     "docxEditor": "Editor DOCX independente",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Comentários"
+      },
+      "matters": {
+        "done": "Concluído",
+        "inProgress": "Em andamento",
+        "open": "Aberta"
+      },
+      "research": {
+        "caseLaw": "Jurisprudência"
+      }
+    },
     "github": "stella no GitHub",
     "openMenu": "Abrir navegação",
     "pillars": {

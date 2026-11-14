@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { SQL } from "drizzle-orm";
+import { is, SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -20,11 +20,25 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    requestReceipt: {
+      aggregate: "requestReceipt",
+      id: {
+        id: createSafeId<"requestIdempotencyReceipt">(),
+        organizationId,
+        userId,
+      },
+      mode: "update",
+    },
     account: { aggregate: "account", id: userId, mode: "no key update" },
     accountExport: {
       aggregate: "accountExport",
       id: { id: Bun.randomUUIDv7(), userId },
       mode: "share",
+    },
+    accountDeletionRequest: {
+      aggregate: "accountDeletionRequest",
+      id: createSafeId<"accountDeletionRequest">(),
+      mode: "update",
     },
     folioCollabRoom: {
       aggregate: "folioCollabRoom",
@@ -45,6 +59,15 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    organizationDataBoxes: {
+      aggregate: "organizationDataBoxes",
+      id: { organizationId },
+    },
+    organizationSettings: { aggregate: "organizationSettings", id: organizationId, mode: "update" },
+    organizationObjectIntent: {
+      aggregate: "organizationObjectIntent",
+      id: organizationId,
+    },
     professionalUseAcceptance: {
       aggregate: "professionalUseAcceptance",
       id: { userId: mintAuthProviderId<"user">() },
@@ -63,6 +86,14 @@ export const aggregateFences = () => {
       aggregate: "definition",
       id: { id: definitionId, organizationId },
       mode: "update",
+    },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
+    caseLawSitemapMonth: {
+      aggregate: "caseLawSitemapMonth",
+      id: { country: "CZE", year: "2020", month: "03" },
     },
     legislationAmendmentWork: {
       aggregate: "legislationAmendmentWork",
@@ -105,6 +136,14 @@ export const aggregateFences = () => {
       id: { type: "organization-member", id: "member-claim", organizationId },
       mode: "update",
     },
+    chatOwnerStoredContentEgress: {
+      aggregate: "chatOwnerStoredContentEgress",
+      id: { organizationId, userId },
+    },
+    chatStoredContentEgress: {
+      aggregate: "chatStoredContentEgress",
+      id: threadId,
+    },
     chatThread: {
       aggregate: "chatThread",
       id: { id: threadId, organizationId, userId },
@@ -114,6 +153,14 @@ export const aggregateFences = () => {
       aggregate: "readerAnswer",
       id: { id: answerId, organizationId, userId },
       mode: "update",
+    },
+    readerAnnotation: {
+      aggregate: "readerAnnotation",
+      id: {
+        id: createSafeId<"legalReaderAnnotation">(),
+        organizationId,
+        userId,
+      },
     },
     readerAnswerMessage: {
       aggregate: "readerAnswerMessage",
@@ -150,6 +197,11 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    correspondence: {
+      aggregate: "correspondence",
+      id: { id: createSafeId<"correspondence">(), workspaceId },
+      mode: "update",
+    },
     entityVersion: {
       aggregate: "entityVersion",
       id: { id: createSafeId<"entityVersion">(), workspaceId },
@@ -158,6 +210,20 @@ export const aggregateFences = () => {
     field: {
       aggregate: "field",
       id: { id: createSafeId<"field">(), workspaceId },
+      mode: "update",
+    },
+    memory: {
+      aggregate: "memory",
+      id: { id: createSafeId<"aiMemory">(), organizationId },
+      mode: "update",
+    },
+    searchProjectionRepair: {
+      aggregate: "searchProjectionRepair",
+      id: {
+        kind: "entity",
+        revision: Bun.randomUUIDv7(),
+        sourceId: Bun.randomUUIDv7(),
+      },
       mode: "update",
     },
     signal: {
@@ -175,6 +241,38 @@ export const aggregateFences = () => {
       mode: "update",
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    billingDraftSettings: {
+      aggregate: "billingDraftSettings",
+      id: { organizationId },
+    },
+    desktopRunnerCapacity: {
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    fileComparisonCapacity: {
+      aggregate: "fileComparisonCapacity",
+      id: { organizationId },
+    },
+    billingCodeCapacity: {
+      aggregate: "billingCodeCapacity",
+      id: { workspaceId },
+    },
+    expenseCapacity: {
+      aggregate: "expenseCapacity",
+      id: { workspaceId },
+    },
+    rateTableWorkspace: {
+      aggregate: "rateTableWorkspace",
+      id: { workspaceId },
+    },
+    mcpOAuthState: {
+      aggregate: "mcpOAuthState",
+      id: {
+        connectorId: createSafeId<"mcpConnector">(),
+        organizationId,
+        userId,
+      },
+    },
     sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
     chatToolGrants: {
       aggregate: "chatToolGrants",
@@ -231,6 +329,17 @@ export const aggregateExecutionRows = (statement: SQL, found = true) => {
     },
   ];
 };
+
+/**
+ * Rows for an advisory fence acquisition, or `undefined` for any other
+ * statement. An advisory fence reads no fixture data, so a unit double can
+ * always answer it; row locks and queries need rows only the test knows.
+ */
+export const advisoryExecutionRows = (statement: unknown) =>
+  is(statement, SQL) &&
+  new PgDialect().sqlToQuery(statement).sql.includes("AS key1")
+    ? aggregateExecutionRows(statement)
+    : undefined;
 
 export const aggregateRecorder = () => {
   const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];

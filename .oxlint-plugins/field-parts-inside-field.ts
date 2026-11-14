@@ -37,8 +37,8 @@ import type { AstNode, ScopeContext } from "./utils.ts";
 import {
   elementName,
   everyNode,
-  getImportLocalName,
   getImportedName,
+  getImportLocalName,
   isAstNode,
   resolveVariable,
 } from "./utils.ts";

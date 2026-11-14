@@ -5,8 +5,9 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
-import { buttonVariants } from "@stll/ui/button";
+import { Button, buttonVariants } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useReferenceActivation } from "@/components/references/reference-chip";
@@ -74,6 +75,7 @@ export const ChatThreadFilesButton = ({
       <PopoverTrigger
         aria-label={t("chat.threadFiles.title")}
         className={cn(buttonVariants({ size: "xs", variant: "ghost" }))}
+        tooltip={t("chat.threadFiles.title")}
       >
         <FileTiles layout={layout} />
       </PopoverTrigger>
@@ -173,9 +175,9 @@ const FileNameList = ({
             key={`${file.type}-${file.id}`}
           >
             <FileGlyph className="size-3 shrink-0" file={file} />
-            <BidiText as="span" className="min-w-0 truncate">
+            <TruncatedText render={<BidiText as="span" />}>
               {file.name}
-            </BidiText>
+            </TruncatedText>
           </li>
         ))}
       </ul>
@@ -241,24 +243,22 @@ const MatterFileRow = ({
     type: "entity",
   });
   return (
-    <button
-      className={ROW_CLASS}
+    <Button
       onClick={() => {
         activate?.();
         onOpen();
       }}
-      type="button"
+      size="row"
+      variant="ghost"
     >
       <ThreadFileRowContent file={file} />
-    </button>
+    </Button>
   );
 };
 
 const ThreadFileRowContent = ({ file }: { file: AttachedFile }) => (
   <>
     <FileGlyph className="size-4 shrink-0" file={file} />
-    <BidiText as="span" className="min-w-0 truncate">
-      {file.name}
-    </BidiText>
+    <TruncatedText render={<BidiText as="span" />}>{file.name}</TruncatedText>
   </>
 );

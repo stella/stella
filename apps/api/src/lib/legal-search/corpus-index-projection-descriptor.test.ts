@@ -6,9 +6,9 @@ import {
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  type CaseLawProjectionInput,
   caseLawProjectionTitle,
   deriveCorpusIndexProjectionDescriptor,
-  type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -34,6 +34,11 @@ const CASE_LAW_INPUT = {
   redacted: false,
   listingOnly: false,
   provisionKeys: [],
+  rankingSignals: {
+    citationAuthorityBucket: 0,
+    languageGroupKey: null,
+    languageGroupShared: false,
+  },
   vacatedFrom: null,
   caseNumber: "4 As 3/2008",
   identifiers: [
@@ -687,4 +692,85 @@ test("a generation the jurisdiction-serving pointer moved away from owes its cop
   // The fingerprint of what v9 keeps does not depend on where readers are
   // pointed, so the flip re-projects nothing there.
   expect(fingerprintOf(v9, flipped)).toBe(fingerprintOf(v9, CASE_LAW_INPUT));
+});
+
+const RANKED_INPUT = {
+  ...CASE_LAW_INPUT,
+  jurisdiction: "SVK",
+  rankingSignals: {
+    citationAuthorityBucket: 9,
+    languageGroupKey: "ECLI:SK:NSSR:2008:1",
+    languageGroupShared: false,
+  },
+} as const satisfies CaseLawProjectionInput;
+
+/** Each way a decision's written signals move without the decision changing. */
+const MOVED_SIGNALS = [
+  {
+    ...RANKED_INPUT,
+    rankingSignals: {
+      ...RANKED_INPUT.rankingSignals,
+      citationAuthorityBucket: 10,
+    },
+  },
+  {
+    ...RANKED_INPUT,
+    rankingSignals: {
+      ...RANKED_INPUT.rankingSignals,
+      languageGroupShared: true,
+    },
+  },
+  {
+    ...RANKED_INPUT,
+    rankingSignals: {
+      ...RANKED_INPUT.rankingSignals,
+      languageGroupKey: "ECLI:SK:NSSR:2008:2",
+    },
+  },
+  { ...RANKED_INPUT, courtId: "sk-court-7" },
+] as const satisfies readonly CaseLawProjectionInput[];
+
+test("a moved ranking signal re-projects the decision in the generation that writes it", () => {
+  const v10 = CORPUS_INDEX_MANIFESTS.case_law_v10;
+  const base = fingerprintOf(v10, RANKED_INPUT);
+  expect(base).not.toBeNull();
+  const moved = MOVED_SIGNALS.map((input) => fingerprintOf(v10, input));
+  for (const fingerprint of moved) {
+    expect(fingerprint).not.toBeNull();
+    expect(fingerprint).not.toBe(base);
+  }
+  // Each signal moves the fingerprint on its own.
+  expect(new Set(moved).size).toBe(MOVED_SIGNALS.length);
+  // The same signals derive the same fingerprint.
+  expect(
+    fingerprintOf(v10, {
+      ...RANKED_INPUT,
+      rankingSignals: { ...RANKED_INPUT.rankingSignals },
+    }),
+  ).toBe(base);
+});
+
+test("a generation without ranking signals never reads them into its fingerprint", () => {
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+    CORPUS_INDEX_MANIFESTS.case_law_v9,
+  ]) {
+    // The court id alone is a base input of no generation before v10, so the
+    // other moves are compared against the same court id.
+    for (const input of MOVED_SIGNALS.filter(
+      ({ courtId }) => courtId === RANKED_INPUT.courtId,
+    )) {
+      expect([manifest.generation, fingerprintOf(manifest, input)]).toEqual([
+        manifest.generation,
+        fingerprintOf(manifest, RANKED_INPUT),
+      ]);
+    }
+    expect([
+      manifest.generation,
+      fingerprintOf(manifest, { ...RANKED_INPUT, courtId: "sk-court-7" }),
+    ]).toEqual([manifest.generation, fingerprintOf(manifest, RANKED_INPUT)]);
+  }
 });

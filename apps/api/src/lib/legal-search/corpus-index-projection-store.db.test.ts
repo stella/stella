@@ -1,12 +1,5 @@
 import { panic, Result } from "better-result";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -22,7 +15,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   type CorpusIndexClient,
   CorpusIndexError,
@@ -54,13 +47,14 @@ import { CORPUS_INDEX_APPEND_CANCEL_REASON } from "@/api/lib/legal-search/corpus
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   corpusIndexAppendPublishDelayMs,
-  corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
+  proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionErasuresTx,
   CORPUS_PROJECTION_ERASURE_MAX_REVISIONS,
 } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   abandonCorpusProjectionAppendTx,
   classifyCorpusProjectionReservationFailureTx,
@@ -73,7 +67,12 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  capturePgliteDatabaseBaseline,
+  createTestPglite,
+  type PgliteDatabaseBaseline,
+  resetPgliteDatabase,
+} from "@/api/tests/pglite-test-db";
 
 /** The metastore instant a delete task receipt carries in these tests. */
 const DELETE_TASK_CREATED_AT = Temporal.Instant.from("2026-08-25T12:00:00Z");
@@ -117,13 +116,41 @@ const ERASE_CLEANUP_TOKEN = "0198e331-e578-7000-8000-000000000211";
 const FIRST_FINGERPRINT = "a".repeat(64);
 const SECOND_FINGERPRINT = "b".repeat(64);
 const INDEX_ID = "case_law_v5_cs_sk";
+
+/** Presence evidence from the real census over one exact engine bucket. */
+const appendPresenceProof = async ({
+  intentId,
+  indexId,
+}: {
+  intentId: SafeId<"corpusIndexProjectionIntent">;
+  indexId: string;
+}) => {
+  const census = await proveCorpusProjectionRevisionsPresent({
+    client: {
+      aggregate: async () =>
+        Result.ok({
+          projection_revisions: {
+            buckets: [{ key: intentId, doc_count: 1 }],
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 0,
+          },
+        }),
+    },
+    indexId,
+    expected: [{ revision: intentId, documentCount: 1 }],
+  });
+  if (census.isErr() || census.value.status !== "proven") {
+    return panic("Expected an exact census to prove presence");
+  }
+  return census.value.proofs.at(0) ?? panic("Expected one presence proof");
+};
 const POL_INDEX_ID = "case_law_v5_pol";
 const INITIAL_RUNNABLE_AT = new Date("2026-08-25T00:00:00.000Z");
 const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
-let seededSnapshot: Blob;
+let baseline: PgliteDatabaseBaseline;
 
 const clearDecisionIntents = async (): Promise<void> => {
   await db.transaction(async (tx) => {
@@ -308,9 +335,7 @@ const installProjectionMigrationDdl = async (): Promise<void> => {
   await executeInOrder(0);
 };
 
-const buildSeededSnapshot = async (): Promise<Blob> => {
-  db = drizzle({ client });
-  await installProjectionMigrationDdl();
+const seedDatabase = async (): Promise<void> => {
   await db.insert(caseLawSources).values({
     id: SOURCE_ID,
     adapterKey: "projection-store-test",
@@ -345,24 +370,22 @@ const buildSeededSnapshot = async (): Promise<Blob> => {
     desiredIndexId: INDEX_ID,
     updatedAt: INITIAL_RUNNABLE_AT,
   });
-  return await client.dumpDataDir("none");
 };
 
 beforeAll(async () => {
   client = await createTestPglite();
-  try {
-    seededSnapshot = await buildSeededSnapshot();
-  } finally {
-    await client.close();
-  }
+  db = drizzle({ client });
+  await installProjectionMigrationDdl();
+  baseline = await capturePgliteDatabaseBaseline(client);
+  await seedDatabase();
 });
 
 beforeEach(async () => {
-  client = await createTestPglite(seededSnapshot);
-  db = drizzle({ client });
+  await resetPgliteDatabase(client, baseline);
+  await seedDatabase();
 });
 
-afterEach(async () => {
+afterAll(async () => {
   await client.close();
 });
 
@@ -1206,8 +1229,8 @@ test("unknown append cleanup starts its barrier at append start", async () => {
     })
     .from(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.id, lease.intentId));
-  const expectedBarrier = corpusIndexUnknownAppendBarrierAt(
-    appendStartedAt,
+  const expectedBarrier = corpusProjectionAppendPublishBarrier(
+    { type: "unknown", appendStartedAt },
     CORPUS_INDEX_MANIFESTS.case_law_v5,
   );
   expect(intents).toEqual([
@@ -1974,9 +1997,8 @@ test("applied census rejects an incomplete multi-document revision", async () =>
     await db.transaction(
       async (tx) =>
         await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          intentId: lease.intentId,
+          proof: await appendPresenceProof(lease),
           leaseToken: lease.leaseToken,
-          documentCount: 1,
           testNow: appliedAt,
         }),
     ),
@@ -2308,9 +2330,8 @@ test("replacement deletes and settles the old revision before reserving the new 
     await db.transaction(
       async (tx) =>
         await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          intentId: firstLease.intentId,
+          proof: await appendPresenceProof(firstLease),
           leaseToken: firstLease.leaseToken,
-          documentCount: 1,
           testNow: acceptedAt,
         }),
     ),
@@ -2671,9 +2692,8 @@ test("cleanup-owned replacement work rotates behind a bounded queue window", asy
       await db.transaction(
         async (tx) =>
           await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-            intentId: lease.intentId,
+            proof: await appendPresenceProof(lease),
             leaseToken: lease.leaseToken,
-            documentCount: 1,
           }),
       ),
     ).toMatchObject({ status: "applied" });
@@ -2767,9 +2787,8 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
     await withDatabaseClock(
       async (tx) =>
         await commitCorpusProjectionAppendTx(tx, {
-          intentId: lease.intentId,
+          proof: await appendPresenceProof(lease),
           leaseToken: lease.leaseToken,
-          documentCount: 1,
         }),
     ),
   ).toMatchObject({ status: "applied" });
@@ -3081,9 +3100,8 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
     await db.transaction(
       async (tx) =>
         await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          intentId: retryLease.intentId,
+          proof: await appendPresenceProof(retryLease),
           leaseToken: retryLease.leaseToken,
-          documentCount: 1,
         }),
     ),
   ).toMatchObject({ status: "applied" });
@@ -4363,9 +4381,8 @@ test("an orphaned erasure applies only after its applied upsert settles", async 
     await db.transaction(
       async (tx) =>
         await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
-          intentId: lease.intentId,
+          proof: await appendPresenceProof(lease),
           leaseToken: lease.leaseToken,
-          documentCount: 1,
           testNow: acceptedAt,
         }),
     ),

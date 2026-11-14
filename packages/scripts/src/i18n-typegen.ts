@@ -87,13 +87,12 @@ type Messages = ${toLiteral(messages, 0)};
 export type { Messages as default };
 `;
 
+// Matching outputs stay untouched: concurrent generation can otherwise expose
+// a truncated file to consumers verifying prepared source hashes.
+const outputFile = Bun.file(outputPath);
+const existing = (await outputFile.exists()) ? await outputFile.text() : "";
+
 if (checkOnly) {
-  // A missing generated file is the "stale" answer this check is asking for,
-  // so it is tested for rather than caught: a blanket catch would report a
-  // permissions or I/O failure as staleness and send the reader to regenerate
-  // a file they cannot read.
-  const outputFile = Bun.file(outputPath);
-  const existing = (await outputFile.exists()) ? await outputFile.text() : "";
   if (existing !== declaration) {
     console.error(
       `Error: ${outputPath} is out of sync with en.json. Run \`bun run typegen\`.`,
@@ -102,6 +101,8 @@ if (checkOnly) {
   }
   console.log(`${outputPath} is in sync (${keyCount} keys)`);
 } else {
-  await Bun.write(outputPath, declaration);
+  if (existing !== declaration) {
+    await Bun.write(outputPath, declaration);
+  }
   console.log(`Generated ${outputPath} (${keyCount} keys)`);
 }

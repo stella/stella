@@ -1,26 +1,35 @@
+// The strip's hue and strength travel as `--reference-strip`, so the band is
+// drawn once below and each treatment only names its colour. Literal per
+// treatment: Tailwind only generates classes it can read in the source.
 const DECISION_REFERENCE_UNKNOWN_TINT =
-  "bg-foreground/6 hover:bg-foreground/10";
+  "[--reference-strip:color-mix(in_oklab,var(--foreground)_9%,transparent)] hover:[--reference-strip:color-mix(in_oklab,var(--foreground)_16%,transparent)]";
 
 const CITATION_TREATMENT_TINT = {
-  negative: "bg-destructive/8 hover:bg-destructive/14",
-  mixed: "bg-warning/8 hover:bg-warning/14",
+  negative:
+    "[--reference-strip:color-mix(in_oklab,var(--destructive)_16%,transparent)] hover:[--reference-strip:color-mix(in_oklab,var(--destructive)_26%,transparent)]",
+  mixed:
+    "[--reference-strip:color-mix(in_oklab,var(--warning)_18%,transparent)] hover:[--reference-strip:color-mix(in_oklab,var(--warning)_28%,transparent)]",
   neutral: DECISION_REFERENCE_UNKNOWN_TINT,
-  positive: "bg-success/10 hover:bg-success/16",
-  supportive: "bg-success/8 hover:bg-success/14",
+  positive:
+    "[--reference-strip:color-mix(in_oklab,var(--success)_16%,transparent)] hover:[--reference-strip:color-mix(in_oklab,var(--success)_26%,transparent)]",
+  supportive:
+    "[--reference-strip:color-mix(in_oklab,var(--success)_12%,transparent)] hover:[--reference-strip:color-mix(in_oklab,var(--success)_22%,transparent)]",
   unclassified: DECISION_REFERENCE_UNKNOWN_TINT,
 } as const;
 
 /**
- * `box-decoration-clone` so a citation broken across two lines keeps its
- * rounded ends on both, and no tint at all on paper, where a grey wash only
- * costs toner.
+ * A light band across the lower part of the words rather than a wash behind
+ * them: a decision's text names dozens of others, and a full highlight on
+ * each outweighs the prose the reader is in. `box-decoration-clone` so a
+ * citation broken across two lines keeps its band on both, and no band at all
+ * on paper, where it only costs toner.
  */
 const DECISION_REFERENCE_TINT_SHAPE =
-  "box-decoration-clone rounded-sm px-0.5 print:bg-transparent";
+  "box-decoration-clone px-0.5 bg-no-repeat bg-[linear-gradient(to_top,transparent_10%,var(--reference-strip)_10%_35%,transparent_35%)] print:bg-none";
 
 /**
  * The tint for one reference: its treatment's, where the citator classified
- * the citation, and the neutral wash where it did not (an unresolved or
+ * the citation, and the neutral band where it did not (an unresolved or
  * external reference is still a reference).
  */
 export const decisionReferenceTintClassName = (

@@ -2,10 +2,12 @@ import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { randomBytes } from "node:crypto";
@@ -42,6 +44,21 @@ import type {
   OAuthGrant,
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
+
+const routeServer = serveRoutesForTest([
+  ...apiKeysRoute,
+  ...desktopRegistryRoute,
+]);
+afterAll(async () => {
+  await routeServer.stop();
+  testFetchState.restore();
+  await releaseAgentAuthTestDb();
+});
 
 // One member's whole credential set, minted through the endpoints that issue
 // each kind in production, then checked against the verifier that accepts it
@@ -53,12 +70,13 @@ setDefaultTimeout(120_000);
 // The MCP verifier loads the signing keys over HTTP; serve that one address
 // from the real auth handler so the token path runs unchanged.
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveJwks: typeof fetch;
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
   const jwksUrl = getAuthEndpointUrl("jwks");
-  const serveJwks: typeof fetch = Object.assign(
+  serveJwks = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request =
         input instanceof Request
@@ -71,12 +89,6 @@ beforeAll(async () => {
     },
     { preconnect: passThroughFetch.preconnect },
   );
-  fetchSpy.mockImplementation(serveJwks);
-});
-
-afterAll(async () => {
-  fetchSpy.mockRestore();
-  await releaseAgentAuthTestDb();
 });
 
 const BASE = "http://localhost";
@@ -84,12 +96,11 @@ const BASE = "http://localhost";
 const createdKeySchema = v.looseObject({ key: v.string() });
 
 const postJson = async (
-  route: { handle: (request: Request) => Promise<Response> },
   path: string,
   browser: HumanBrowser,
   body: Record<string, unknown>,
 ) =>
-  await route.handle(
+  await routeServer.fetch(
     new Request(`${BASE}${path}`, {
       method: "POST",
       headers: {
@@ -111,19 +122,14 @@ const createDesktopCredential = async (
 ) => {
   const device = await createDesktopDeviceSigner();
   const correlationId = Bun.randomUUIDv7();
-  const verifier = randomBytes(32).toString("hex");
-  const grant = await postJson(
-    desktopRegistryRoute,
-    "/desktop-registry/grant",
-    browser,
-    {
-      correlationId,
-      deviceJkt: device.deviceJkt,
-      verifierHash: hashSha256Hex(verifier),
-    },
-  );
+  const verifier = randomBytes(32).toHex();
+  const grant = await postJson("/desktop-registry/grant", browser, {
+    correlationId,
+    deviceJkt: device.deviceJkt,
+    verifierHash: hashSha256Hex(verifier),
+  });
   expect(grant.status, await grant.clone().text()).toBe(200);
-  const redeemed = await desktopRegistryRoute.handle(
+  const redeemed = await routeServer.fetch(
     await device.signRequest({
       request: new Request(`${BASE}/desktop-registry/redeem-link`, {
         method: "POST",
@@ -243,7 +249,9 @@ const inviteIntoOrganization = async ({
 
 /** Whether an OAuth access token opens an MCP request context. */
 const opensMcpContext = async (accessToken: string): Promise<boolean> => {
-  const session = await authenticateMcpRequest(accessToken);
+  const session = await authenticateMcpRequest(accessToken, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   if (session.isErr()) {
     return false;
   }
@@ -255,6 +263,13 @@ const opensMcpContext = async (accessToken: string): Promise<boolean> => {
   );
   return context.isOk();
 };
+
+beforeEach(() => {
+  fetchSpy = Object.assign(mock(serveJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
+});
 
 describe("organization member credential lifecycle", () => {
   test("removing a member ends every credential they hold in that organization, and re-inviting them restores none", async () => {
@@ -281,7 +296,7 @@ describe("organization member credential lifecycle", () => {
     const credentials: MemberCredentials = {
       browser: member,
       machineKey: await readCreatedKey(
-        await postJson(apiKeysRoute, "/api-keys", member, {
+        await postJson("/api-keys", member, {
           name: "CI",
           scopes: ["stella:read"],
           permissions: { workspace: ["read"] },

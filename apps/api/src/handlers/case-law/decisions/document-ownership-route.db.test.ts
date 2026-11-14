@@ -1,21 +1,29 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
-  readThroughDeferredDocument,
+  caseLawDecisions,
+  caseLawSources,
+  unredactedCaseLawDecisions,
+} from "@/api/db/schema";
+import {
   type OnDemandDocumentDeps,
+  readThroughDeferredDocument,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -98,7 +106,9 @@ if (!databaseUrl || !enabled) {
             accountAccess: ACCOUNT_ACCESS.sandbox,
             mcp: { type: "internal", reason: "public_indexing" },
             cache: { kind: "none" },
-            params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+            params: v.object({
+              decisionId: resourceIdSchema("caseLawDecision"),
+            }),
           },
           caseLawDb: caseLawPublicReadDb,
           locate: ({ params }) => ({ kind: "id", id: params.decisionId }),
@@ -106,13 +116,13 @@ if (!databaseUrl || !enabled) {
             const row = (
               await subject.tx
                 .select({
-                  id: caseLawDecisions.id,
-                  caseNumber: caseLawDecisions.caseNumber,
-                  court: caseLawDecisions.court,
-                  fulltext: caseLawDecisions.fulltext,
+                  id: unredactedCaseLawDecisions.id,
+                  caseNumber: unredactedCaseLawDecisions.caseNumber,
+                  court: unredactedCaseLawDecisions.court,
+                  fulltext: unredactedCaseLawDecisions.fulltext,
                 })
-                .from(caseLawDecisions)
-                .where(eq(caseLawDecisions.id, subject.id))
+                .from(unredactedCaseLawDecisions)
+                .where(eq(unredactedCaseLawDecisions.id, subject.id))
             ).at(0);
             return row ?? panic("read fixture missing");
           },
@@ -130,12 +140,15 @@ if (!databaseUrl || !enabled) {
             };
           },
         });
-        const app = new Elysia().get(
-          "/case/decisions/:decisionId",
-          definition.handler,
-          { params: definition.config.params },
+        await using server = serveForTest(
+          createHttpApp({
+            routes: routes({
+              "/case/decisions/:decisionId": { GET: definition },
+            }),
+            middleware: [errorBoundary],
+          }),
         );
-        const response = await app.handle(
+        const response = await server.fetch(
           new Request(`http://localhost/case/decisions/${decisionId}`),
         );
         expect(response.status).toBe(200);

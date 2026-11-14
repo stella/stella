@@ -1,20 +1,19 @@
 /**
- * Background queue for list verifications: the same one-shot shape as the
- * document-review queue.
+ * List verifications on the document run queue
+ * (`@/api/lib/queue/document-run-queue`), which owns the one-shot skeleton:
+ * one attempt, the run id as the job id, the time budget and the stuck rules.
+ * This module keeps what is the verification's own: its table's reads and
+ * transitions, the requester's access settled at every step, and the run.
  *
- * `attempts: 1`: every run spends metered model calls, so a retry would pay
- * twice. Any failure lands `status: "failed"` with a closed error code, and a
- * person retries by starting a new run.
- *
- * Convergence: the job id is the run id, only a `queued` row is claimable,
- * and claims are written on `(runId, position)` in one statement that ignores
- * rows already there. A re-delivered job is a no-op or rewrites nothing.
+ * Convergence: only a `queued` row is claimable, and claims are written on
+ * `(runId, position)` in one statement that ignores rows already there. A
+ * re-delivered job is a no-op or rewrites nothing.
  */
 
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 
-import { DAY_IN_MS, Temporal } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { legalListClaims } from "@/api/db/schema";
@@ -22,143 +21,100 @@ import { fields, legalListVerificationRuns } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import {
-  requeueDeterministicJob,
-  QUEUE_REQUEUE_OUTCOME,
-} from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
+import {
+  assertedDateColumns,
+  claimAssertedDate,
+} from "@/api/lib/lists/verification/claim-date";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
 import type { ExtractedClaim } from "@/api/lib/lists/verification/claim-extract";
+import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
 import {
-  gradeClaims,
   gradedClaimType,
-} from "@/api/lib/lists/verification/claim-grade";
-import type { ClaimGrade } from "@/api/lib/lists/verification/claim-grade";
-import {
   VERIFICATION_LIMITS,
   VERIFICATION_RUN_ACTIVE_STATUSES,
 } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimAssertedDate,
+  ClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
+  VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
+import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
   ListVerificationAccessRevokedError,
   VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
-  checkVerificationDispatchBudget,
-  ListVerificationRunCapError,
-} from "@/api/lib/lists/verification/run-caps";
+  claimParagraphNumbers,
+  passageContext,
+  scopePassages,
+} from "@/api/lib/lists/verification/paragraph-scope";
+import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   completeVerificationRun,
   failVerificationRun,
 } from "@/api/lib/lists/verification/run-persistence";
 import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
   scanPendingRows,
 } from "@/api/lib/queue-reconcile-scan";
-import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
-import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import {
+  createDocumentRunJobs,
+  createDocumentRunQueue,
+  STANDARD_DOCUMENT_RUN_LIMITS,
+} from "@/api/lib/queue/document-run-queue";
+import type {
+  DocumentRunExecute,
+  DocumentRunJobData,
+  EnqueueDocumentRunArgs,
+  StuckRunAges,
+} from "@/api/lib/queue/document-run-queue";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
-import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
-import {
-  brandPersistedUserId,
-  brandPersistedListVerificationRunId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import {
   formatModelRef,
   getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
+import {
+  checkModelRunCaps,
+  ModelRunCapError,
+} from "@/api/lib/usage/model-run-caps/caps";
 
-const QUEUE_NAME = "legal-list-verification-runs";
+/** A verification's model calls re-check the list counter it was charged to. */
+const VERIFICATION_DISPATCH_CAPS = {
+  kind: "list-run",
+  operation: "lists.verifications.create",
+  phase: "dispatch",
+} as const;
 
 const CONFIG_FAILED_SINK = failureSink({
   event: "list_verification_run.config_failed",
   expected: [],
 });
-const RUN_FAILED_SINK = failureSink({
-  event: "list_verification_run.failed",
-  expected: [],
-});
-const MARK_FAILED_SINK = failureSink({
-  event: "list_verification_run.mark_failed_failed",
-  expected: [],
-});
-const JOB_NAME = "run-list-verification";
-const WORKER_CONCURRENCY = 2;
-const JOB_ATTEMPTS = 1;
-/** Budget for the whole run; each model call carries its own timeout. Stays
- *  under `STUCK_RUNNING_MS`, which catches a worker that died. */
-const RUN_TIMEOUT_MS = 15 * 60 * 1000;
 const SERVICE_TIER = "standard" as const;
-const STUCK_RUNNING_MS = 30 * 60 * 1000;
-/** Younger `queued` rows may simply be backlogged. */
-const STUCK_QUEUED_MS = DAY_IN_MS;
 
-type ListVerificationJobData = {
-  runId: string;
-  workspaceId: string;
-  organizationId: string;
-  userId: string;
+/** What a sweep or a direct `processRun` call runs with. */
+type VerificationQueueContext = {
+  grants?: FeatureAccessGrants | undefined;
+  execution?: VerificationExecutionBoundaries;
 };
 
-export type EnqueueListVerificationRunArgs = {
-  runId: SafeId<"legalListVerificationRun">;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-};
-
-const getQueue = createLazyBullMqQueue<ListVerificationJobData>({
-  name: QUEUE_NAME,
-  defaultJobOptions: {
-    attempts: JOB_ATTEMPTS,
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  },
-});
-
-/** The run id is the job identity, so a duplicate enqueue collapses. */
-const runJob = ({
-  runId,
-  workspaceId,
-  organizationId,
-  userId,
-}: EnqueueListVerificationRunArgs) => ({
-  name: JOB_NAME,
-  data: {
-    runId,
-    workspaceId,
-    organizationId,
-    userId,
-  } satisfies ListVerificationJobData,
-  opts: { jobId: createBullMqJobId(workspaceId, runId) },
-});
-
-export const enqueueListVerificationRun = async (
-  args: EnqueueListVerificationRunArgs,
-): Promise<void> => {
-  const { name, data, opts } = runJob(args);
-  await getQueue().add(name, data, opts);
-};
+/** A worker runs with the deployment's own grants and real I/O. */
+const WORKER_CONTEXT: VerificationQueueContext = {};
 
 const runCursorCodec = createTimestampIdCursorCodec({
   column: legalListVerificationRuns.createdAt,
@@ -265,25 +221,31 @@ export const resolveListVerificationRunAccess = async ({
   });
 };
 
+type ReconcileDb = Pick<SchedulerDb, "select" | "transaction">;
+
 /**
- * Fail runs a hard worker death left behind: a `kill -9` emits no `failed`
- * event, and the claim guard makes a stalled re-delivery a no-op, so the row
- * would hold its document's active slot forever. Cross-workspace, so it runs
- * on the scheduler's handle.
+ * Fail the runs older than the queue's stuck ages, and every active run whose
+ * requester lost access: the row would otherwise hold its document's active
+ * slot forever. Cross-workspace, so it runs on the scheduler's handle.
  */
-export const reconcileStuckListVerificationRuns = async (
-  db: Pick<SchedulerDb, "select" | "transaction">,
-  grants?: FeatureAccessGrants,
-): Promise<number> => {
+const failStuckRuns = async ({
+  db,
+  stuck,
+  context: { grants },
+}: {
+  db: ReconcileDb;
+  stuck: StuckRunAges;
+  context: VerificationQueueContext;
+}): Promise<number> => {
   let recovered = 0;
   await scanPendingRows({
     readPage: async (cursor: QueuedRunRow | null) =>
       await readActiveRunPage(db, cursor),
     handle: async (run) => {
       const runningCutoff =
-        Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS;
+        Temporal.Now.instant().epochMilliseconds - stuck.runningMs;
       const queuedCutoff =
-        Temporal.Now.instant().epochMilliseconds - STUCK_QUEUED_MS;
+        Temporal.Now.instant().epochMilliseconds - stuck.queuedMs;
       const stale =
         run.status === "running"
           ? run.startedAt !== null && run.startedAt.getTime() < runningCutoff
@@ -314,107 +276,48 @@ export const reconcileStuckListVerificationRuns = async (
   return recovered;
 };
 
-export class ListVerificationReconcileError extends TaggedError(
-  "ListVerificationReconcileError",
-)<{
-  message: string;
-  cause: unknown;
-}> {}
-
-type ReconcileQueuedRunsResult = ReconcileScanResult & {
-  /** Runs whose requester is gone and whose active slot was closed. */
-  unattributed: number;
-};
-
-type ReconcileQueuedOptions = {
-  db: Pick<SchedulerDb, "select" | "transaction">;
-  queue?: RequeueableQueue<ListVerificationJobData>;
-  grants?: FeatureAccessGrants | undefined;
-};
-
 /**
- * Hand `queued` runs back to the queue when nothing owns them. The row
- * commits before the job is added, so a crash in between, or a queue that
- * lost its jobs, leaves a run no worker will pick up. Re-adding is safe: the
- * job id is the run id and only a `queued` row is claimable.
+ * Whether a `queued` run may be handed back to the queue. A run whose
+ * requester lost access is closed instead, in the transaction that found it.
  */
-export const reconcileQueuedListVerificationRuns = async ({
+const admitQueuedRun = async ({
   db,
-  queue = getQueue(),
-  grants,
-}: ReconcileQueuedOptions): Promise<
-  Result<ReconcileQueuedRunsResult, ListVerificationReconcileError>
-> => {
-  let unattributed = 0;
-  const scan = await Result.tryPromise({
-    try: async () =>
-      await scanPendingRows({
-        readPage: async (cursor: QueuedRunRow | null) =>
-          await readActiveRunPage(db, cursor, "queued"),
-        handle: async (run) => {
-          const access = await db.transaction(async (tx) => {
-            const decision = await resolveListVerificationRunAccess({
-              tx,
-              run,
-              grants,
-            });
-            if (decision.status === "unavailable") {
-              await failVerificationRun({
-                tx,
-                run,
-                errorCode: "access_revoked",
-                expectedStatus: "queued",
-              });
-            }
-            return decision;
-          });
-          if (access.status === "unavailable" || run.requestedBy === null) {
-            if (run.requestedBy === null) {
-              unattributed += 1;
-            }
-            return false;
-          }
-          const { name, data, opts } = runJob({
-            runId: run.id,
-            workspaceId: run.workspaceId,
-            organizationId: run.organizationId,
-            userId: brandPersistedUserId(run.requestedBy),
-          });
-          const outcome = await requeueDeterministicJob({
-            data,
-            name,
-            jobId: opts.jobId,
-            queue,
-          });
-          return outcome === QUEUE_REQUEUE_OUTCOME.REQUEUED;
-        },
-      }),
-    catch: (cause) => {
-      observeFailure(cause, {
-        sink: RUN_FAILED_SINK,
-        ctx: { queue: QUEUE_NAME },
+  run,
+  context: { grants },
+}: {
+  db: ReconcileDb;
+  run: QueuedRunRow;
+  context: VerificationQueueContext;
+}): Promise<boolean> => {
+  const access = await db.transaction(async (tx) => {
+    const decision = await resolveListVerificationRunAccess({
+      tx,
+      run,
+      grants,
+    });
+    if (decision.status === "unavailable") {
+      await failVerificationRun({
+        tx,
+        run,
+        errorCode: "access_revoked",
+        expectedStatus: "queued",
       });
-      return new ListVerificationReconcileError({
-        message: "List verification reconciliation failed",
-        cause,
-      });
-    },
+    }
+    return decision;
   });
-  if (Result.isError(scan)) {
-    return scan;
-  }
-  return Result.ok({ ...scan.value, unattributed });
+  return access.status === "available";
 };
 
 type RunActor = RootRunActor<"legalListVerificationRun">;
 
-const brandActor = (data: ListVerificationJobData): RunActor =>
+const brandActor = (data: DocumentRunJobData): RunActor =>
   createRootRunActor(data, brandPersistedListVerificationRunId);
 
 type ClaimedRun = {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
+  scope: VerificationScope;
 };
 
 /** Conditional `queued -> running`: the loser of a double delivery updates
@@ -446,6 +349,7 @@ const claimRun = async ({
       fileFieldId: legalListVerificationRuns.fileFieldId,
       entityVersionId: legalListVerificationRuns.entityVersionId,
       contentSha256: legalListVerificationRuns.contentSha256,
+      scope: legalListVerificationRuns.scope,
     });
   return rows.at(0) ?? null;
 };
@@ -549,13 +453,23 @@ const resolvePinnedFile = async (
 
 type ClaimRow = typeof legalListClaims.$inferInsert;
 
-/** One row per claim in reading order; a set-aside claim is never graded. */
+type GradedClaims = {
+  grades: ReadonlyMap<string, ClaimGrade>;
+  assertedDates: ReadonlyMap<string, ClaimAssertedDate>;
+};
+
+/** One row per claim in reading order; a set-aside claim is never graded,
+ *  so its date is read from its words alone. Each claim keeps the printed
+ *  number of the paragraph it sits in, read from the whole document, so a
+ *  range run numbers it as the document does. */
 const claimRows = (
   actor: RunActor,
   claims: readonly ExtractedClaim[],
-  grades: ReadonlyMap<string, ClaimGrade>,
-): ClaimRow[] =>
-  claims.map((claim, position): ClaimRow => {
+  { grades, assertedDates }: GradedClaims,
+  documentBlocks: readonly VerificationBlock[],
+): ClaimRow[] => {
+  const paragraphOf = claimParagraphNumbers(documentBlocks);
+  return claims.map((claim, position): ClaimRow => {
     const base = {
       id: createSafeId<"legalListClaim">(),
       workspaceId: actor.workspaceId,
@@ -565,6 +479,11 @@ const claimRows = (
       framing: claim.framing,
       text: claim.text,
       anchor: claim.anchor,
+      ...assertedDateColumns(
+        assertedDates.get(String(position)) ??
+          claimAssertedDate(claim.text, null),
+      ),
+      paragraphNumber: paragraphOf(claim.anchor),
     };
     if (claim.type !== "fact") {
       return {
@@ -573,6 +492,7 @@ const claimRows = (
         score: null,
         refs: [],
         recordConflict: null,
+        qualifiers: [],
       };
     }
     const grade =
@@ -584,8 +504,10 @@ const claimRows = (
       score: grade.score,
       refs: grade.refs,
       recordConflict: grade.recordConflict,
+      qualifiers: grade.qualifiers,
     };
   });
+};
 
 const resolveRunningActorAccess = async (
   actor: RunActor,
@@ -606,6 +528,21 @@ const resolveRunningActorAccess = async (
       }),
   );
 
+/** The text a run reads, or null when it may read none: more blocks than
+ *  a run stores, or a stored range that no longer lands in the document (a
+ *  range never widens to the whole document). Only the blocks the range
+ *  reads are stored, so a range of a long document fits. */
+const runPassages = (
+  blocks: readonly VerificationBlock[],
+  scope: VerificationScope,
+) => {
+  const passages = scopePassages(blocks, scope);
+  return passages === null ||
+    passages.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX
+    ? null
+    : passages;
+};
+
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
   readDocument?: typeof readVerificationDocument;
@@ -618,6 +555,8 @@ type ExecuteRunArgs = {
   admission: ModelDispatchAdmission;
   run: ClaimedRun & { evidence: VerificationEvidence };
   accessProof: ListVerificationAccessProof;
+  /** Starts the queue's time budget for the run. */
+  deadline: () => AbortSignal;
   grants?: FeatureAccessGrants | undefined;
   execution?: VerificationExecutionBoundaries;
 };
@@ -627,6 +566,7 @@ const executeRun = async ({
   admission,
   run,
   accessProof,
+  deadline,
   grants,
   execution = {},
 }: ExecuteRunArgs): Promise<VerificationRunErrorCode | null> => {
@@ -638,7 +578,7 @@ const executeRun = async ({
   if (current.status === "unavailable") {
     return "access_revoked";
   }
-  const abortSignal = AbortSignal.timeout(RUN_TIMEOUT_MS);
+  const abortSignal = deadline();
   const readDocument = execution.readDocument ?? readVerificationDocument;
   const document = await readDocument({
     organizationId: actor.organizationId,
@@ -652,7 +592,8 @@ const executeRun = async ({
   if (document.type === "no-text") {
     return "no_text";
   }
-  if (document.blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX) {
+  const passages = runPassages(document.blocks, run.scope);
+  if (passages === null || passages.length === 0) {
     return "extraction_failed";
   }
 
@@ -713,9 +654,10 @@ const executeRun = async ({
     checkRunBudget: async () =>
       await actor.writeDb(
         async (tx) =>
-          await checkVerificationDispatchBudget({
+          await checkModelRunCaps({
             tx,
             organizationId: actor.organizationId,
+            ...VERIFICATION_DISPATCH_CAPS,
           }),
       ),
     ...(execution.generateObjectForTask === undefined
@@ -746,9 +688,9 @@ const executeRun = async ({
     abortSignal,
   };
 
-  const extracted = await extractClaims({ blocks: document.blocks, deps });
+  const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
-    if (extracted.error.cause instanceof ListVerificationRunCapError) {
+    if (extracted.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return extracted.error.cause instanceof ListVerificationAccessRevokedError
@@ -763,14 +705,13 @@ const executeRun = async ({
             {
               key: String(position),
               text: claim.text,
-              context: {
-                text:
-                  document.blocks.at(claim.blockIndex)?.text ??
-                  panic(
-                    "An extracted claim names a block outside the document",
-                  ),
-                anchor: claim.anchor,
-              },
+              context: passageContext(
+                passages.at(claim.blockIndex) ??
+                  panic("An extracted claim names a block outside the run"),
+                claim.anchor,
+              ),
+              // A new run's claims have no reviewer yet.
+              linkedFactIds: [],
             },
           ]
         : [],
@@ -779,7 +720,7 @@ const executeRun = async ({
     deps,
   });
   if (Result.isError(graded)) {
-    if (graded.error.cause instanceof ListVerificationRunCapError) {
+    if (graded.error.cause instanceof ModelRunCapError) {
       return "run_limit_reached";
     }
     return graded.error.cause instanceof ListVerificationAccessRevokedError
@@ -790,7 +731,7 @@ const executeRun = async ({
     return "grading_failed";
   }
 
-  const rows = claimRows(actor, claims, graded.value.grades);
+  const rows = claimRows(actor, claims, graded.value, document.blocks);
   await actor.writeDb(async (tx) => {
     const access = await resolveListVerificationRunAccess({
       tx,
@@ -820,31 +761,31 @@ const executeRun = async ({
       tx,
       runId: actor.runId,
       workspaceId: actor.workspaceId,
-      blocks: document.blocks,
+      blocks: passages.map((passage) => passage.block),
       claims: rows,
     });
   });
   return null;
 };
 
-type ProcessListVerificationRunArgs = {
-  data: ListVerificationJobData;
-  admission: ModelDispatchAdmission;
-  actor?: RunActor;
-  grants?: FeatureAccessGrants | undefined;
-  execute?: typeof executeRun;
-  execution?: VerificationExecutionBoundaries;
+type ClaimedVerification = {
+  run: ClaimedRun & { evidence: VerificationEvidence };
+  proof: ListVerificationAccessProof;
 };
 
-export const processListVerificationRun = async ({
-  data,
-  admission,
-  actor = brandActor(data),
-  grants,
-  execute = executeRun,
-  execution,
-}: ProcessListVerificationRunArgs): Promise<void> => {
-  const claim = await actor.writeDb(async (tx) => {
+/**
+ * Settle the persisted requester's access and claim the run in one
+ * transaction: a requester who lost access closes the run instead, so a
+ * revoked run never reaches the model.
+ */
+const claimVerificationRun = async ({
+  actor,
+  context: { grants },
+}: {
+  actor: RunActor;
+  context: VerificationQueueContext;
+}): Promise<ClaimedVerification | null> =>
+  await actor.writeDb(async (tx) => {
     const run = (
       await tx
         .select({ requestedBy: legalListVerificationRuns.requestedBy })
@@ -901,109 +842,112 @@ export const processListVerificationRun = async ({
       proof: decision.proof,
     };
   });
-  if (claim === null) {
-    return;
-  }
-  const outcome = await Result.tryPromise({
-    try: async () =>
-      await execute({
-        actor,
-        admission,
-        run: claim.run,
-        accessProof: claim.proof,
-        grants,
-        ...(execution === undefined ? {} : { execution }),
-      }),
-    catch: (cause) => cause,
-  });
-  if (Result.isError(outcome)) {
-    observeFailure(outcome.error, {
-      sink: RUN_FAILED_SINK,
-      ctx: { runId: actor.runId, workspaceId: actor.workspaceId },
-    });
-    await setRunFailed({
+
+/** The queue's execution for a run, from the verification's own. */
+const queueExecute =
+  (
+    execute: typeof executeRun,
+  ): DocumentRunExecute<
+    "legalListVerificationRun",
+    ClaimedVerification,
+    VerificationRunErrorCode,
+    VerificationQueueContext
+  > =>
+  async ({ actor, admission, run, context, deadline }) =>
+    await execute({
       actor,
-      errorCode:
-        outcome.error instanceof ListVerificationAccessRevokedError
-          ? "access_revoked"
-          : "internal",
+      admission,
+      run: run.run,
+      accessProof: run.proof,
+      deadline,
+      grants: context.grants,
+      ...(context.execution === undefined
+        ? {}
+        : { execution: context.execution }),
+    });
+
+const LIST_VERIFICATION_RUN_JOBS = createDocumentRunJobs<
+  "legal-list-verification-runs",
+  "legalListVerificationRun"
+>({
+  name: "legal-list-verification-runs",
+  jobName: "run-list-verification",
+});
+
+export const listVerificationRunQueue = createDocumentRunQueue({
+  jobs: LIST_VERIFICATION_RUN_JOBS,
+  actionKind: "list-verification.background",
+  limits: STANDARD_DOCUMENT_RUN_LIMITS,
+  workerContext: WORKER_CONTEXT,
+  actor: brandActor,
+  claim: claimVerificationRun,
+  execute: queueExecute(executeRun),
+  fail: async ({ actor, errorCode, context }) =>
+    await setRunFailed({ actor, errorCode, grants: context.grants }),
+  thrownErrorCode: (error) =>
+    error instanceof ListVerificationAccessRevokedError
+      ? "access_revoked"
+      : "internal",
+  readQueuedPage: async (db: ReconcileDb, cursor: QueuedRunRow | null) =>
+    await readActiveRunPage(db, cursor, "queued"),
+  admitQueued: admitQueuedRun,
+  failStuck: failStuckRuns,
+});
+
+export const enqueueListVerificationRun = async (
+  args: EnqueueDocumentRunArgs<"legalListVerificationRun">,
+): Promise<void> => {
+  await LIST_VERIFICATION_RUN_JOBS.enqueue(args);
+};
+
+export const reconcileStuckListVerificationRuns = async (
+  db: ReconcileDb,
+  grants?: FeatureAccessGrants,
+): Promise<number> =>
+  await listVerificationRunQueue.reconcileStuck({ db, context: { grants } });
+
+export const reconcileQueuedListVerificationRuns = async ({
+  db,
+  queue,
+  grants,
+}: {
+  db: ReconcileDb;
+  queue?: RequeueableQueue<DocumentRunJobData>;
+  grants?: FeatureAccessGrants | undefined;
+}) =>
+  await listVerificationRunQueue.reconcileQueued({
+    db,
+    context: { grants },
+    ...(queue === undefined ? {} : { queue }),
+  });
+
+type ProcessListVerificationRunArgs = {
+  data: DocumentRunJobData;
+  admission: ModelDispatchAdmission;
+  actor?: RunActor;
+  grants?: FeatureAccessGrants | undefined;
+  execute?: typeof executeRun;
+  execution?: VerificationExecutionBoundaries;
+};
+
+export const processListVerificationRun = async ({
+  data,
+  admission,
+  actor = brandActor(data),
+  grants,
+  execute,
+  execution,
+}: ProcessListVerificationRunArgs): Promise<void> => {
+  await listVerificationRunQueue.processRun({
+    actor,
+    admission,
+    context: {
       grants,
-    });
-    return;
-  }
-  if (outcome.value !== null) {
-    await setRunFailed({ actor, errorCode: outcome.value, grants });
-  }
+      ...(execution === undefined ? {} : { execution }),
+    },
+    ...(execute === undefined ? {} : { execute: queueExecute(execute) }),
+  });
 };
 
-export const initListVerificationRunWorker = () => {
-  const worker = new BullMqWorker<ListVerificationJobData>(
-    QUEUE_NAME,
-    async (job) => {
-      const actor = brandActor(job.data);
-      // The run's period action was drawn when it was queued; the job takes
-      // a background slot. The run bounds its own time.
-      await runBackgroundJob({
-        actionKind: "list-verification.background",
-        organizationId: actor.organizationId,
-        userId: actor.userId,
-        organizationStateDb: actor.writeDb,
-        job,
-        signal: new AbortController().signal,
-        run: async (_signal, admission) =>
-          await processListVerificationRun({
-            data: job.data,
-            actor,
-            admission,
-          }),
-      });
-    },
-    {
-      connection: createBullMqConnection({
-        storeClass: "durable-coordination",
-      }),
-      concurrency: WORKER_CONCURRENCY,
-    },
-  );
-
-  worker.on("failed", (job, error) => {
-    if (job) {
-      setRunFailed({
-        actor: brandActor(job.data),
-        errorCode: "internal",
-      }).catch((markError: unknown) => {
-        observeFailure(markError, {
-          sink: MARK_FAILED_SINK,
-          ctx: { runId: job.data.runId, workspaceId: job.data.workspaceId },
-        });
-      });
-    }
-    observeFailure(error, {
-      sink: RUN_FAILED_SINK,
-      ctx: {
-        queue: QUEUE_NAME,
-        ...(job
-          ? { runId: job.data.runId, workspaceId: job.data.workspaceId }
-          : {}),
-      },
-    });
-  });
-
-  worker.on(
-    "error",
-    createQueueWorkerErrorLogger("list_verification_run.worker_error", {
-      queue: QUEUE_NAME,
-    }),
-  );
-
-  logger.info("list_verification_run.worker_started", {
-    concurrency: String(WORKER_CONCURRENCY),
-  });
-
-  return {
-    queues: [QUEUE_NAME] as const,
-    close: async () => {
-      await worker.close();
-    },
-  };
-};
+export const initListVerificationRunWorker = () =>
+  listVerificationRunQueue.initWorker();

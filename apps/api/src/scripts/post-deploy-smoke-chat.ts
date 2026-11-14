@@ -22,9 +22,9 @@
  * connection or reads the app's env module.
  */
 import { TaggedError } from "better-result";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
@@ -39,6 +39,7 @@ import {
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
+import type { ApiRouteKey } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
@@ -304,7 +305,7 @@ export const buildSmokeAIConfigBody = (apiKey: string) => {
   };
 };
 
-type ChatSmokeBody = Static<typeof agUiSendMessageBodySchema>;
+type ChatSmokeBody = v.InferOutput<typeof agUiSendMessageBodySchema>;
 
 export const buildUserTurnBody = ({
   runId,
@@ -621,7 +622,8 @@ const hasOneCompletedSubagent = (output: unknown): boolean => {
 };
 
 /**
- * After the decline: the call is stored declined (settled, nothing ran), the
+ * After the decline: the call is stored declined (`isDeclinedChatToolCall`)
+ * and settled as the error a declined call is stored as, so nothing ran; the
  * continuation kept every earlier call, the model answered in text, and no
  * tool call is left open.
  */
@@ -640,10 +642,7 @@ export const evaluateDeclinedTurn = ({
   if (!call) {
     return fail(`declined call ${pending.callId} is no longer stored`);
   }
-  if (
-    call.state !== "approval-responded" ||
-    call.approval?.approved !== false
-  ) {
+  if (!isDeclinedChatToolCall(call) || call.state !== "error") {
     return fail(
       `declined call is ${call.state} (approved: ${String(call.approval?.approved)})`,
     );
@@ -790,7 +789,7 @@ const provisionAIConfig = async (
   request: SmokeRequest,
   apiKey: string,
 ): Promise<SmokeCheck> => {
-  const name = "POST /v1/organization-settings/ai-config";
+  const name = "POST /v1/organization-settings/ai-config" satisfies ApiRouteKey;
   const response = await request("/v1/organization-settings/ai-config", {
     method: "POST",
     body: buildSmokeAIConfigBody(apiKey),
@@ -935,7 +934,7 @@ const runJourneySteps = async ({
   const firstRunId = Bun.randomUUIDv7();
   const firstTurn = await sendTurn(
     request,
-    "POST /v1/chat/ (turn 1)",
+    `${"POST /v1/chat" satisfies ApiRouteKey}/ (turn 1)`,
     buildUserTurnBody({
       runId: firstRunId,
       text: SMOKE_FIRST_PROMPT,
@@ -959,7 +958,7 @@ const runJourneySteps = async ({
 
   const approval = await sendTurn(
     request,
-    "POST /v1/chat/ (decline)",
+    `${"POST /v1/chat" satisfies ApiRouteKey}/ (decline)`,
     buildDeclineBody({
       approvalId: pending.approvalId,
       callId: pending.callId,
@@ -984,7 +983,7 @@ const runJourneySteps = async ({
 
   const followUp = await sendTurn(
     request,
-    "POST /v1/chat/ (turn 2)",
+    `${"POST /v1/chat" satisfies ApiRouteKey}/ (turn 2)`,
     buildUserTurnBody({
       runId: Bun.randomUUIDv7(),
       text: SMOKE_FOLLOW_UP_PROMPT,
@@ -1046,7 +1045,7 @@ export const runAIChatJourney = async ({
       checks.push(
         await cleanUp(
           request,
-          "cleanup: DELETE /v1/chat/threads/:threadId",
+          `cleanup: ${"DELETE /v1/chat/threads/:threadId" satisfies ApiRouteKey}`,
           `/v1/chat/threads/${threadId}`,
         ),
       );
@@ -1054,7 +1053,7 @@ export const runAIChatJourney = async ({
     checks.push(
       await cleanUp(
         request,
-        "cleanup: DELETE /v1/organization-settings/ai-config",
+        `cleanup: ${"DELETE /v1/organization-settings/ai-config" satisfies ApiRouteKey}`,
         "/v1/organization-settings/ai-config",
       ),
     );

@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import grant from "@/api/handlers/desktop-registry/grant";
 import request, {
@@ -8,10 +8,11 @@ import request, {
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { createDesktopEditHandoff } from "@/api/handlers/entities/desktop-edit-handoffs";
 import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoffs";
+import { createHttpApp } from "@/api/http/app";
 import {
   authorizeDesktopAccount,
-  authorizeDesktopRegistry,
   authorizeDesktopMember,
+  authorizeDesktopRegistry,
 } from "@/api/lib/business-registries/desktop/auth";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
@@ -28,16 +29,21 @@ import {
   desktopRegistryRequestHeaders,
 } from "@/api/lib/business-registries/desktop/request-contract";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   hasMemberPermission,
   roleForDisplay,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const FORMAT_ID = "11111111-1111-4111-8111-111111111111";
 
 test("registering desktop routes preserves the grant authorization contract", () => {
-  desktopRegistryRoute.compile();
+  // Indexing the table refuses a path and method mounted twice.
+  expect(() =>
+    createHttpApp({ routes: desktopRegistryRoute, middleware: [] }),
+  ).not.toThrow();
 
   expect(grant.config.permissions).toEqual(DESKTOP_ACCOUNT_PERMISSION);
   expect(
@@ -48,22 +54,24 @@ test("registering desktop routes preserves the grant authorization contract", ()
 describe("the desktop request body union", () => {
   test("binds the public route and native headers to the owning contract", () => {
     expect(DESKTOP_REGISTRY_REQUEST_PATH).toBe("/v1/desktop-registry/request");
-    const route = desktopRegistryRoute.routes.find(
+    const route = desktopRegistryRoute.find(
       ({ method, path }) =>
         method === "POST" && path === "/desktop-registry/request",
     );
-    expect(route?.hooks.body).toBe(desktopRegistryRequestBody);
-    expect(route?.hooks.headers).toBe(desktopRegistryRequestHeaders);
+    expect(route?.definition.config.body).toBe(desktopRegistryRequestBody);
+    expect(route?.definition.config.headers).toBe(
+      desktopRegistryRequestHeaders,
+    );
     expect(request.config.body).toBe(desktopRegistryRequestBody);
     expect(
-      Value.Check(desktopRegistryNativeRequestHeaders, {
+      v.is(desktopRegistryNativeRequestHeaders, {
         authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
         "content-type": DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE,
         "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
       }),
     ).toBe(true);
     expect(
-      Value.Check(desktopRegistryNativeRequestHeaders, {
+      v.is(desktopRegistryNativeRequestHeaders, {
         authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
         "content-type": `${DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE}; charset=utf-8`,
         "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
@@ -72,7 +80,13 @@ describe("the desktop request body union", () => {
   });
 
   test("accepts JSON media-type parameters before authentication", async () => {
-    const response = await desktopRegistryRoute.handle(
+    await using server = serveForTest(
+      createHttpApp({
+        routes: desktopRegistryRoute,
+        middleware: [errorBoundary],
+      }),
+    );
+    const response = await server.fetch(
       new Request("http://localhost/desktop-registry/request", {
         method: "POST",
         headers: {
@@ -102,10 +116,7 @@ describe("the desktop request body union", () => {
       { type: "setDefaultFormat", registry: "ares", formatId: FORMAT_ID },
       { type: "setDefaultFormat", registry: "ares", formatId: null },
     ]) {
-      expect([body, Value.Check(request.config.body, body)]).toEqual([
-        body,
-        true,
-      ]);
+      expect([body, v.is(request.config.body, body)]).toEqual([body, true]);
     }
   });
 
@@ -123,10 +134,7 @@ describe("the desktop request body union", () => {
         organizationId: "00000000-0000-4000-8000-000000000001",
       },
     ]) {
-      expect([body, Value.Check(request.config.body, body)]).toEqual([
-        body,
-        false,
-      ]);
+      expect([body, v.is(request.config.body, body)]).toEqual([body, false]);
     }
   });
 });

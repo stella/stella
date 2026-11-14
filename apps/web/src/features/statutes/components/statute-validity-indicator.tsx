@@ -20,6 +20,7 @@ const STATUS_TONE = {
   future: "neutral",
   historical: "warning",
   repealed: "warning",
+  unknown: "neutral",
 } as const satisfies Record<StatuteDisplayStatus, ReviewStatusTone>;
 
 const STATUS_DOT_CLASS = {
@@ -28,6 +29,7 @@ const STATUS_DOT_CLASS = {
   future: "bg-info",
   historical: undefined,
   repealed: undefined,
+  unknown: undefined,
 } as const satisfies Record<StatuteDisplayStatus, string | undefined>;
 
 type StatuteValidityIndicatorProps = {

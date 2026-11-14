@@ -2,8 +2,8 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
-  parseCorpusSliceManifest,
   type CorpusSliceManifest,
+  parseCorpusSliceManifest,
 } from "@/api/lib/case-law/corpus-slice";
 
 export const CORPUS_SLICE_EXPORT_TABLES = [
@@ -14,11 +14,7 @@ export const CORPUS_SLICE_EXPORT_TABLES = [
 ] as const;
 
 type CorpusSliceShardName =
-  | "sources"
-  | "decisions"
-  | "supplements"
-  | "citations"
-  | "objects";
+  "sources" | "decisions" | "supplements" | "citations" | "objects";
 
 export type CorpusSliceTransferManifest = {
   corpus: CorpusSliceManifest;

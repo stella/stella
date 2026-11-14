@@ -91,16 +91,14 @@ generate it, with the `file` field withheld:
 
 - the CLI emits no `--file` flag and strips the field from the `--input` wrapper
   schema, and `--help` says the command covers the JSON modes only;
-- Each capability executor removes the field from the live TypeBox schema before
-  validating (a `t.File()` carries `default: "File"`, which the Default step
-  would otherwise inject into the absent optional field and then reject), and
-  refuses a call that supplies the field rather than dropping it — a
-  bytes-as-a-string value must never produce a success computed from the other
-  sources.
+- each capability executor validates the body against the route's own schema,
+  where the file field is optional, and refuses a call that supplies the field
+  rather than dropping it — a bytes-as-a-string value must never produce a
+  success computed from the other sources.
 
 `required: false` on the declaration is cross-checked against the schema's
-`required` list, so flipping `t.Optional` fails the export until the transport is
-re-reviewed. That flip is exactly the moment a capability enters or leaves the
+`required` list, so making the field required (dropping its `v.optional`) fails
+the export until the transport is re-reviewed. That flip is exactly the moment a capability enters or leaves the
 agent surface.
 
 ## Where the work could go next (not built)
@@ -222,7 +220,7 @@ are unchanged, so no HTTP client is affected. Each capability carries a
 description that states its step number and names the next call, which is what an
 agent reads.
 
-**Rate limiting.** Capability executors bypass the Elysia route middleware, so
+**Rate limiting.** Capability executors bypass the middleware mounted on `uploadsRoute`, so
 the `upload-presigned` limiter (500/min, `API_RATE_LIMITS.upload`) does not
 apply on the generic path. These capabilities inherit
 `DEFAULT_INVOKE_RATE_LIMIT` (60/min per organization per capability), which is

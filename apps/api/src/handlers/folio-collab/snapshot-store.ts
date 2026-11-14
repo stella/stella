@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   OrganizationFileUsageError,
@@ -17,12 +17,8 @@ import {
 import { resolveFolioCollabServiceRoom } from "@/api/lib/folio-collab-service-room";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import {
-  permissiveBodySchema,
-  validatePostAuth,
-} from "@/api/lib/permissive-route-schema";
 
-import { authorizeFolioCollabService } from "./service-credentials";
+import { verifyFolioCollabServiceCaller } from "./service-credentials";
 
 const SNAPSHOT_STORE_FAILURE_SINK = failureSink({
   event: "folio_collab.snapshot_store",
@@ -42,43 +38,27 @@ const config = {
       "Stores collaboration protocol state without delivering stored-file bytes.",
   },
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({
-    keys: [
-      "expectedGeneration",
-      "expectedSnapshotRevision",
-      "roomId",
-      "snapshotBase64",
-    ],
+  body: v.object({
+    expectedGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    expectedSnapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    roomId: resourceIdSchema("folioCollabRoom"),
+    snapshotBase64: v.pipe(
+      v.string(),
+      v.maxLength(FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH),
+    ),
   }),
 } satisfies TokenHandlerConfig;
 
-/** Validated after authorization; see `permissive-route-schema.ts`. */
-const strictBodySchema = t.Object({
-  expectedGeneration: t.Integer({ minimum: 0 }),
-  expectedSnapshotRevision: t.Integer({ minimum: 0 }),
-  roomId: tSafeId("folioCollabRoom"),
-  snapshotBase64: t.String({
-    maxLength: FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
-  }),
-});
-
 const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
   config,
-  async function* ({ body, request }) {
-    yield* authorizeFolioCollabService(request.headers.get("authorization"));
-
-    const validatedBody = validatePostAuth(strictBodySchema, body);
-    if (!validatedBody.ok) {
-      return Result.err(
-        new HandlerError({ status: 422, message: validatedBody.message }),
-      );
-    }
+  verifyFolioCollabServiceCaller,
+  async function* ({ body }) {
     const {
       expectedGeneration,
       expectedSnapshotRevision,
       roomId,
       snapshotBase64,
-    } = validatedBody.value;
+    } = body;
     const value = yield* Result.await(resolveFolioCollabServiceRoom(roomId));
 
     const snapshotBytes = Buffer.from(snapshotBase64, "base64");

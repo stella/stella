@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { createLogger, type ConfigEnv, type UserConfig } from "vite";
+import { type ConfigEnv, createLogger, type UserConfig } from "vite";
 
 import config, {
   capViteLogger,

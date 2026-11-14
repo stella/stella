@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import {
   recordSkillReadAudit,
@@ -33,6 +34,8 @@ export type RequestedSkills = {
 
 export type ResolveRequestedSkillsOptions = {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
+  /** Where the conversation may use a bound skill. */
+  bindingScope: SkillBindingScope;
   /** The skills the caller may use in this turn (the chat catalog). */
   catalog: ModelOfferedSkills<SkillMetadata>;
   messageText: string;
@@ -50,6 +53,7 @@ export type ResolveRequestedSkillsOptions = {
  */
 export const resolveRequestedSkills = async ({
   activeSkillId,
+  bindingScope,
   catalog,
   messageText,
   organizationId,
@@ -67,6 +71,7 @@ export const resolveRequestedSkills = async ({
 
   const loadResult = await loadAvailableChatSkills({
     activeSkillId,
+    bindingScope,
     organizationId,
     safeDb,
     skillNames: toLoad,

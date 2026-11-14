@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkills } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -8,10 +8,10 @@ import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
-const deleteSkillParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const deleteSkillParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
 const config = {

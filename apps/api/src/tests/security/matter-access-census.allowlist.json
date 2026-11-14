@@ -21,19 +21,6 @@
       "workspaceArrayCheck": 1
     }
   },
-  "apps/api/src/lib/auth.ts::derives-matter-access": {
-    "reason": "Route authorization and realtime audience resolution run on the owner connection before a scoped transaction exists; the proved id is pinned and every later read passes the row policies. Moves to the owner module once it offers a per-member check.",
-    "sites": {
-      "memberWorkspaceAccess.membershipExists": 3,
-      "memberWorkspaceAccess.membershipExists.id": 1
-    }
-  },
-  "apps/api/src/lib/auth.ts::names-matter-role-rule": {
-    "reason": "Request authorization checks matter reach in the query that reads the member on every request, as an indexed point lookup; it moves onto the database access function when the view and policies are rebuilt on it.",
-    "sites": {
-      "memberWorkspaceAccess": 1
-    }
-  },
   "apps/api/src/lib/auth.ts::owner-connection-workspace-set": {
     "reason": "Builds the request matter set from the authorization view inside a scoped transaction; the set only ever holds ids the row policies admitted, and later reads still pass the policies.",
     "sites": {
@@ -46,7 +33,6 @@
       "createAuth.membershipAuthAdapter.adapter.admitClient.execute#rootDb": 1,
       "createAuth.membershipAuthAdapter.adapter.protectCreate#rootDb": 1,
       "createAuth.membershipAuthAdapter.adapter.touchClient.touched#rootDb": 1,
-      "createAuth.organizationLifecycleHooks.recordAccessState#rootDb": 1,
       "createAuth.organizationLifecycleHooks.recordProfessionalUse#rootDb": 1,
       "createAuth.organizationLifecycleHooks.seedDefaultDocumentTypes#rootDb": 1,
       "createAuth.organizationLifecycleHooks.seedMemberDefaults#rootDb": 1,

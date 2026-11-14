@@ -73,13 +73,7 @@ export type UnbackedProjectionKeys<
  * Required keys remain classified even when their value is undefined.
  */
 type ProjectionScalar =
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined;
+  string | number | boolean | bigint | symbol | null | undefined;
 
 type ExtraProjectionFields<Payload, SchemaInput> = unknown extends SchemaInput
   ? never

@@ -47,6 +47,8 @@ describe("quick entry refusal display", () => {
       </IntlProvider>,
     );
     expect(markup).toContain('role="alert"');
-    expect(markup).toContain(englishMessages.errors.actionFailed);
+    expect(markup).toContain(
+      renderToStaticMarkup(englishMessages.errors.actionFailed),
+    );
   });
 });

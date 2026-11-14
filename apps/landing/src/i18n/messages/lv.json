@@ -91,11 +91,23 @@
   "nav": {
     "aiFactSheet": "AI faktu lapa",
     "aiFactSheetBlurb": "stella mašīnlasāmā formā.",
-    "beta": "Beta",
     "blog": "Blogs",
     "changelog": "Izmaiņu žurnāls",
     "chooseLanguage": "Izvēlieties valodu",
     "docxEditor": "Atsevišķs DOCX redaktors",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Komentāri"
+      },
+      "matters": {
+        "done": "Pabeigts",
+        "inProgress": "Izpildē",
+        "open": "Atvērts"
+      },
+      "research": {
+        "caseLaw": "Judikatūra"
+      }
+    },
     "github": "stella vietnē GitHub",
     "openMenu": "Atvērt navigāciju",
     "pillars": {
@@ -112,7 +124,7 @@
         "title": "AI aģents, kas strādā ar jūsu lietām, failiem un rīkiem."
       },
       "anonymization": {
-        "blurb": "Noņemiet vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk pie AI, tieši no tērzēšanas un dokumentu pārskatīšanas, ar aizklātu rezultātu, ko pārbaudāt, pirms turpināt.",
+        "blurb": "Noņemiet vārdus, organizācijas un identificējošu informāciju, pirms materiāls nonāk pie AI, tieši no tērzēšanas un dokumentu pārskatīšanas, ar aizklātu rezultātu, ko pārbaudāt, pirms turpināt.",
         "discover": "Atklājiet Anonimizāciju",
         "eyebrow": "Anonimizācija",
         "title": "Sagatavojiet materiālu AI, neatklājot identificējošu informāciju."
@@ -265,7 +277,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Noņem vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk AI solī.",
+          "body": "Noņem vārdus, organizācijas un identificējošu informāciju, pirms materiāls nonāk AI solī.",
           "title": "Identificējošā informācija paliek ārpusē"
         },
         "1": {
@@ -290,20 +302,20 @@
           "question": "Vai anonimizācija jau ir pieejama?"
         },
         "1": {
-          "answer": "Tā palīdz sagatavot materiālu AI darbplūsmām, neatklājot vārdus, subjektus vai identificējošu informāciju; aizklātais rezultāts paliek pieejams pārbaudei.",
+          "answer": "Tā palīdz sagatavot materiālu AI darbplūsmām, neatklājot vārdus, organizācijas vai identificējošu informāciju; aizklātais rezultāts paliek pieejams pārbaudei.",
           "question": "Kam tā noder?"
         }
       },
-      "metaDescription": "Noņemiet vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk pie AI, tieši no tērzēšanas un pārskatīšanas, ar pārbaudāmu rezultātu.",
+      "metaDescription": "Noņemiet vārdus, organizācijas un identificējošu informāciju, pirms materiāls nonāk pie AI, tieši no tērzēšanas un pārskatīšanas, ar pārbaudāmu rezultātu.",
       "metaTitle": "Dokumentu anonimizācija juridiskajam AI | stella",
       "quickAnswer": {
-        "answer": "Tā noņem vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk AI darbplūsmā, un parāda aizklāto rezultātu, lai apstiprinātu, kas atstāj lietu. Tā ir iekļauta tieši tērzēšanā un dokumentu pārskatīšanā.",
+        "answer": "Tā noņem vārdus, organizācijas un identificējošu informāciju, pirms materiāls nonāk AI darbplūsmā, un parāda aizklāto rezultātu, lai apstiprinātu, kas atstāj lietu. Tā ir iekļauta tieši tērzēšanā un dokumentu pārskatīšanā.",
         "question": "Kas ir anonimizācija lietotnē stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Vārdi, subjekti un identificējoša informācija nenonāk AI soļos",
+            "0": "Vārdi, organizācijas un identificējoša informācija nenonāk AI soļos",
             "1": "Veidota juridiskām AI darbplūsmām, nevis vispārīgai dokumentu aizklāšanai",
             "2": "Pirms nākamā soļa atstāj aizklātu dokumentu pārbaudei"
           },

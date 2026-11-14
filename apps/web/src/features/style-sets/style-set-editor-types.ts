@@ -11,8 +11,7 @@ type StellaStyleEditorData = Exclude<
 export type StyleSetEditorSettings = StellaStyleEditorData["settings"];
 
 export type StyleSetEditorTarget =
-  | { type: "stella" }
-  | { type: "saved"; styleSetId: string };
+  { type: "stella" } | { type: "saved"; styleSetId: string };
 
 export type ParagraphStyleSettings = StyleSetEditorSettings["title"];
 export type NumberedParagraphStyleSettings = StyleSetEditorSettings["level1"];

@@ -1,10 +1,9 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const MANUAL_CHECKS = [
   "typecheck-repo",
   "typecheck-package",
-  "typecheck-parity",
   "typecheck-probe",
   "lint",
   "test-files",

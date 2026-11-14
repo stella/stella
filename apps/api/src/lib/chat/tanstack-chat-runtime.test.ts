@@ -25,8 +25,8 @@ import { assertProperty } from "@stll/property-testing";
 import {
   chatMessageFromPersisted,
   isChatPart,
-  toPersistedChatMessageContentV3,
   normalizePersistedChatMessageContent,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
@@ -34,8 +34,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,
-  STRIPPED_CHUNK_KEYS,
   streamChatChunks,
+  STRIPPED_CHUNK_KEYS,
   toolCallEndInputOf,
   toolCallEndOutputOf,
   toolCallNameOf,

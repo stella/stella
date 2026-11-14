@@ -14,16 +14,14 @@ import {
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 /** Modal shown when the current organisation cannot run more AI work. */
 
 export type UsageLimitExceededReason =
-  | "no_entitlement"
-  | "usage_limit_exceeded"
-  | "entitlement_inactive";
+  "no_entitlement" | "usage_limit_exceeded" | "entitlement_inactive";
 
 export type UsageLimitModalProps = {
   open: boolean;
@@ -48,10 +46,7 @@ export const UsageLimitModal = ({
 }: UsageLimitModalProps) => {
   const t = useTranslations();
   const managementMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.usage.hosted.management.post();
-      return unwrapEden(response);
-    },
+    mutationFn: createHostedUsageManagementSession,
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
@@ -91,7 +86,7 @@ export const UsageLimitModal = ({
 
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>
-            {t("settings.organization.usageLimitNotNow")}
+            {t("common.notNow")}
           </DialogClose>
           {hasHostedEntitlement ? (
             <Button
@@ -122,3 +117,8 @@ const DESCRIPTION_KEYS = {
   usage_limit_exceeded:
     "settings.organization.usageLimitDescriptionUsageLimitExceeded",
 } as const satisfies Record<UsageLimitExceededReason, TranslationKey>;
+
+export const createHostedUsageManagementSession = async () => {
+  const response = await api.usage.hosted.management.post();
+  return unwrapApiResponse(response);
+};

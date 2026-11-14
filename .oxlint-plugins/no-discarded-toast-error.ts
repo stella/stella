@@ -2,7 +2,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   type AstNode,
-  type ScopeContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
@@ -10,6 +9,7 @@ import {
   isSingleAssignment,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
+  type ScopeContext,
   unwrapExpression,
 } from "./utils.ts";
 

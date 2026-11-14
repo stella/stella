@@ -30,8 +30,10 @@ export const DECISION_DATE_BOUNDS = {
   defaultMinYear: 1800,
   minYearByJurisdiction: {
     AUT: 1800,
+    BRA: 1800,
     CZE: 1800,
     EU: 1800,
+    GBR: 1600,
     HUN: 1800,
     POL: 1800,
     SVK: 1800,

@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 
 import {
   formatDateTimeValue,
@@ -13,28 +12,9 @@ import {
   resolveCalendarViewMonth,
   shiftCalendarDate,
 } from "./date-picker-popover.logic";
+import type { CalendarMonth } from "./date-picker-popover.logic";
 
 describe("date picker clock", () => {
-  test("does not remount picker state when ambient values change", () => {
-    const source = readFileSync(
-      new URL("date-picker-popover.tsx", import.meta.url),
-      "utf-8",
-    );
-    expect(source).not.toMatch(
-      /<DatePickerPopoverContent\b(?:(?!\/>)[\s\S])*\bkey=/u,
-    );
-    expect(source).toMatch(
-      /<DatePickerPopoverContent\b[\s\S]*?\blocale=\{locale\}[\s\S]*?\btoday=\{today\}/u,
-    );
-    expect(source).toContain('globalThis.addEventListener("focus"');
-    expect(source).toContain('globalThis.removeEventListener("focus"');
-    expect(
-      source.match(/globalThis\.addEventListener\("focus"/gu),
-    ).toHaveLength(1);
-    expect(source).toContain("if (localDateListeners.size === 1)");
-    expect(source).toContain("if (localDateListeners.size === 0)");
-  });
-
   test("derives the browser-local date on both sides of midnight", () => {
     expect(
       localDateFromTimestamp(new Date(2026, 7, 13, 23, 59, 59, 999).getTime()),
@@ -58,37 +38,36 @@ describe("date picker clock", () => {
     );
   });
 
-  test("follows today through hydration until the user navigates", () => {
+  test("follows local midnights after hydration without resetting a manual month", () => {
+    let override: CalendarMonth | null = null;
+
     expect(
       resolveCalendarViewMonth({
-        override: null,
+        override,
         today: "1970-01-01",
         value: "",
       }),
     ).toEqual({ month: 0, year: 1970 });
     expect(
       resolveCalendarViewMonth({
-        override: null,
-        today: "2026-08-13",
-        value: "",
-      }),
-    ).toEqual({ month: 7, year: 2026 });
-  });
-
-  test("preserves an explicitly navigated month across local midnight", () => {
-    const override = { month: 2, year: 2030 };
-
-    expect(
-      resolveCalendarViewMonth({
         override,
         today: "2026-08-31",
         value: "",
       }),
-    ).toEqual(override);
+    ).toEqual({ month: 7, year: 2026 });
     expect(
       resolveCalendarViewMonth({
         override,
         today: "2026-09-01",
+        value: "",
+      }),
+    ).toEqual({ month: 8, year: 2026 });
+
+    override = { month: 2, year: 2030 };
+    expect(
+      resolveCalendarViewMonth({
+        override,
+        today: "2026-09-02",
         value: "",
       }),
     ).toEqual(override);

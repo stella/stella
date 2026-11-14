@@ -15,7 +15,6 @@ import {
   oauthAccessToken,
   oauthClient,
   oauthRefreshToken,
-  organization,
   user,
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -27,6 +26,9 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+
+import rootManifest from "../../../../package.json" with { type: "json" };
 
 const CLIENT_AUTH_METHODS = ["client_secret_post", "none"] as const;
 
@@ -70,7 +72,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     }
   });
   beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
+    expect(provider.version).toBe(
+      rootManifest.catalog["@better-auth/oauth-provider"],
+    );
     expect(provider.options.refreshTokenReuseInterval).toBe(30);
   });
   afterEach(() => {
@@ -79,8 +83,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
 
   const fixture = async (
     tokenEndpointAuthMethod:
-      | "client_secret_post"
-      | "none" = "client_secret_post",
+      "client_secret_post" | "none" = "client_secret_post",
   ) => {
     const browser = await signInHuman(
       `rotation-${Bun.randomUUIDv7()}@example.test`,
@@ -93,8 +96,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       headers: browser.headers(),
     });
     cleanup.push(
-      async () =>
-        await rootDb.delete(organization).where(eq(organization.id, firm.id)),
+      async () => await deleteOrganizationsForTest(rootDb, [firm.id]),
     );
     await browser.setActiveOrganization(firm.id);
     const client = await registerOAuthClient(

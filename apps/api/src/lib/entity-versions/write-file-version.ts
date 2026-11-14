@@ -1,13 +1,15 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { Transaction } from "@/api/db/root";
 import {
   cellMetadata,
   desktopEditSessions,
   entities,
-  fileChatThreads,
   fields,
+  fileChatThreads,
   folioCollabRooms,
   properties,
   workspaces,
@@ -25,6 +27,7 @@ import {
   lockDesktopEditTarget,
   lockDocxEditTarget,
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { CARRIED_FIELD_COLUMNS } from "@/api/lib/entity-versions/field-clone-policy";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
@@ -391,7 +394,7 @@ export const writeFileVersion = async ({
   const targetsFileProperty =
     locksFileProperty ||
     writePolicy.type === "append-derived-file-from-version";
-  if (locksFileProperty && lockedWorkspace?.status !== "active") {
+  if (locksFileProperty && !workspaceAcceptsWrites(lockedWorkspace?.status)) {
     return { status: "workspace-not-active" };
   }
   const entityLock = await withAggregateRowQuery({
@@ -457,7 +460,7 @@ export const writeFileVersion = async ({
     },
     columns: { versionNumber: true },
     with: {
-      fields: { columns: { id: true, content: true, propertyId: true } },
+      fields: { columns: { id: true, ...CARRIED_FIELD_COLUMNS } },
     },
   });
   if (!fieldSourceVersion) {
@@ -581,6 +584,8 @@ export const writeFileVersion = async ({
     revisionFields.push({
       id: fieldId,
       content: replacementContent,
+      // A new file is no run's outcome.
+      aiSettlement: null,
       entityVersionId,
       propertyId: filePropertyId,
       workspaceId,

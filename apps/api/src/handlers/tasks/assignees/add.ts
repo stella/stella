@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -11,7 +10,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,12 +18,17 @@ import {
   lockTaskAssignmentMembers,
   writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
+import {
+  fileTaskAssignedNotifications,
+  taskAssignedNotifications,
+} from "@/api/lib/tasks/assignment-notifications";
+import type { FileTaskAssignedNotifications } from "@/api/lib/tasks/assignment-notifications";
 import { includes } from "@/api/lib/type-guards";
 
-const addAssigneeBodySchema = t.Object({
-  taskId: tSafeId("entity"),
-  userId: tUserId,
-  role: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
+const addAssigneeBodySchema = v.object({
+  taskId: resourceIdSchema("entity"),
+  userId: userIdSchema,
+  role: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
 });
 
 const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
@@ -33,8 +37,11 @@ const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
 export type AddAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  /** The authenticated caller, who is never notified of their own action. */
+  actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof addAssigneeBodySchema>;
+  body: v.InferOutput<typeof addAssigneeBodySchema>;
+  fileNotifications?: FileTaskAssignedNotifications;
 };
 
 // Shared task-assignee add logic reused by the HTTP handler and the
@@ -42,8 +49,10 @@ export type AddAssigneeHandlerProps = {
 export const addAssigneeHandler = async function* ({
   safeDb,
   workspaceId,
+  actorUserId,
   recordAuditEvent,
   body,
+  fileNotifications = fileTaskAssignedNotifications,
 }: AddAssigneeHandlerProps) {
   const role = body.role ?? "assignee";
   if (!isTaskAssigneeRole(role)) {
@@ -52,7 +61,7 @@ export const addAssigneeHandler = async function* ({
     );
   }
 
-  yield* Result.await(
+  const notifications = yield* Result.await(
     resultTx(safeDb, async (tx) => {
       const members = await lockTaskAssignmentMembers({
         tx,
@@ -90,7 +99,7 @@ export const addAssigneeHandler = async function* ({
         );
       }
 
-      await writeTaskAssignments({
+      const written = await writeTaskAssignments({
         tx,
         workspaceId,
         assignments: [{ entityId: body.taskId, userId: body.userId, role }],
@@ -107,10 +116,17 @@ export const addAssigneeHandler = async function* ({
           role,
         },
       });
-      return Result.ok(undefined);
+      return Result.ok(
+        await taskAssignedNotifications(tx, {
+          actorUserId,
+          workspaceId,
+          written,
+        }),
+      );
     }),
   );
 
+  fileNotifications(notifications);
   return Result.ok({ success: true });
 };
 
@@ -129,10 +145,11 @@ const addAssignee = createSafeHandler(
     mcp: { type: "covered", by: "save_task" },
     body: addAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
     return yield* addAssigneeHandler({
       safeDb,
       workspaceId,
+      actorUserId: user.id,
       recordAuditEvent,
       body,
     });

@@ -26,11 +26,12 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
-import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
+import { ViewChromeBar, ViewToolbarChrome } from "@stll/ui/view-toolbar";
 import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 
 import { InlineEdit } from "@/components/inline-edit";
+import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
 import {
   GroupByControl,
   KanbanGroupingSettings,
@@ -43,9 +44,10 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
 import type { InboxView } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -75,6 +77,7 @@ const isUnsavedViewId = (id: string) =>
 type EntityViewsProps = { organizationId: string; scope: EntityViewScope };
 
 export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
@@ -89,7 +92,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const latestSave = useRef(0);
   useExternalSyncEffect(() => {
     if (saved.error) {
-      analytics.captureError(saved.error);
+      analytics.captureError(saved.error, {
+        fingerprintKey: "EntityViews:failure",
+        scope: { type: "handler", handlerId: "EntityViews:failure" },
+      });
     }
   }, [analytics, saved.error]);
   const defaults = useMemo(
@@ -126,7 +132,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       ? draft
       : (views.find((view) => view.id === selectedId) ?? views.at(0));
   const reportError = (error: unknown) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "EntityViews.reportError:failure",
+      scope: { type: "handler", handlerId: "EntityViews.reportError:failure" },
+    });
     notifyUserError(error, t("common.unexpectedError"));
   };
   const save = useMutation({
@@ -134,13 +143,17 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     mutationFn: async (view: WorkspaceView) => {
       const id = savedIds.current.get(view.id) ?? view.id;
       const result = isUnsavedViewId(id)
-        ? unwrapEden(
-            await api["entity-views"].put({
-              name: view.name,
-              layout: view.layout,
+        ? unwrapApiResponse(
+            await idempotentSubmit.run({
+              operation: JSON.stringify(['api["entity-views"]']),
+              body: {
+                name: view.name,
+                layout: view.layout,
+              },
+              send: api["entity-views"].put,
             }),
           )
-        : unwrapEden(
+        : unwrapApiResponse(
             await api["entity-views"]({
               viewId: toSafeId<"workspaceView">(id),
             }).patch({ name: view.name, layout: view.layout }),
@@ -175,7 +188,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const remove = useMutation({
     scope: { id: `entity-views:${organizationId}` },
     mutationFn: async (viewId: string) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["entity-views"]({
           viewId: toSafeId<"workspaceView">(viewId),
         }).delete(),
@@ -195,7 +208,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   });
   const reorder = useMutation({
     mutationFn: async (viewIds: string[]) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["entity-views"].reorder.post({
           viewIds: viewIds.map((id) => toSafeId<"workspaceView">(id)),
         }),
@@ -241,215 +254,222 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   ];
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <fieldset
-        disabled={remove.isPending}
-        className="flex min-w-0 flex-wrap items-center border-b"
-      >
-        <WorkspaceViewSwitcher
-          activeViewId={activeView.id}
-          ariaLabel={t("workspaces.views.viewSettings")}
-          direction={direction}
-          views={views}
-          reorder={
-            canUpdateView &&
-            views.every((view) => !view.id.startsWith("default:"))
-              ? {
-                  onReorder: (ids) => reorder.mutate(ids),
-                  isBlocked: reorder.isPending,
-                }
-              : null
-          }
-          onViewChange={(id) => {
-            setSelectedId(id);
-            setDraft(null);
-          }}
-          onViewDoubleClick={(view) => {
-            if (isUnsavedViewId(view.id) ? canCreateView : canUpdateView) {
-              setEditing({ id: view.id, name: view.name });
+      {/* min-w-0: a fieldset's default min-inline-size is its content, which
+          would stop the bar inside from shrinking to one line. */}
+      <fieldset className="min-w-0" disabled={remove.isPending}>
+        <ViewChromeBar>
+          <WorkspaceViewSwitcher
+            activeViewId={activeView.id}
+            ariaLabel={t("workspaces.views.viewSettings")}
+            direction={direction}
+            views={views}
+            reorder={
+              canUpdateView &&
+              views.every((view) => !view.id.startsWith("default:"))
+                ? {
+                    onReorder: (ids) => reorder.mutate(ids),
+                    isBlocked: reorder.isPending,
+                  }
+                : null
             }
-          }}
-          renderIcon={(view) =>
-            view.layout.type === "table" ? (
-              <TableIcon className="size-3.5" />
-            ) : (
-              <KanbanIcon className="size-3.5" />
-            )
-          }
-          editing={
-            editing
-              ? {
-                  viewId: editing.id,
-                  renderLabel: (view) => (
-                    <InlineEdit
-                      value={editing.name}
-                      onChange={(name) => setEditing({ id: view.id, name })}
-                      onCancel={() => setEditing(null)}
-                      onCommit={() => {
-                        if (editing.name.trim()) {
-                          persist({ ...view, name: editing.name.trim() });
-                        }
-                        setEditing(null);
-                      }}
-                    />
-                  ),
-                }
-              : null
-          }
-          actionMenu={{
-            label: t("common.actions"),
-            renderItems: (view) => (
-              <>
-                <MenuItem
-                  disabled={
-                    isUnsavedViewId(view.id) ? !canCreateView : !canUpdateView
-                  }
-                  onClick={() => setEditing({ id: view.id, name: view.name })}
-                >
-                  <PencilIcon className="size-3.5" />
-                  {t("common.rename")}
-                </MenuItem>
-                {canDeleteView && !isUnsavedViewId(view.id) && (
-                  <MenuItem onClick={() => remove.mutate(view.id)}>
-                    <Trash2Icon className="size-3.5" />
-                    {t("workspaces.views.deleteView")}
-                  </MenuItem>
-                )}
-              </>
-            ),
-          }}
-          addControl={
-            canCreateView ? (
-              <Menu>
-                <MenuTrigger
-                  render={
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      aria-label={t("common.add")}
-                    />
-                  }
-                >
-                  <PlusIcon className="size-3.5" />
-                </MenuTrigger>
-                <MenuPopup>
-                  {defaults.map((view) => (
-                    <MenuItem
-                      key={view.id}
-                      onClick={() =>
-                        persist({ ...view, id: `draft:${createUuid()}` })
-                      }
-                    >
-                      {t("workspaces.views.newView", {
-                        layoutType: view.layout.type,
-                        layout: view.name,
-                      })}
-                    </MenuItem>
-                  ))}
-                </MenuPopup>
-              </Menu>
-            ) : null
-          }
-        />
-        <ViewToolbarChrome className="md:ms-auto md:justify-end">
-          <Select
-            onValueChange={(view) => {
-              if (view) {
-                setProposalView(view);
+            onViewChange={(id) => {
+              setSelectedId(id);
+              setDraft(null);
+            }}
+            onViewDoubleClick={(view) => {
+              if (isUnsavedViewId(view.id) ? canCreateView : canUpdateView) {
+                setEditing({ id: view.id, name: view.name });
               }
             }}
-            value={proposalView}
-          >
-            <SelectTrigger
-              aria-label={t("inbox.proposalView", {
-                view: t(
-                  proposalView === "open"
-                    ? "inbox.view.new"
-                    : `inbox.view.${proposalView}`,
-                ),
-              })}
-              size="sm"
+            renderIcon={(view) =>
+              view.layout.type === "table" ? (
+                <TableIcon className="size-3.5" />
+              ) : (
+                <KanbanIcon className="size-3.5" />
+              )
+            }
+            editing={
+              editing
+                ? {
+                    viewId: editing.id,
+                    renderLabel: (view) => (
+                      <InlineEdit
+                        value={editing.name}
+                        onChange={(name) => setEditing({ id: view.id, name })}
+                        onCancel={() => setEditing(null)}
+                        onCommit={() => {
+                          if (editing.name.trim()) {
+                            persist({ ...view, name: editing.name.trim() });
+                          }
+                          setEditing(null);
+                        }}
+                      />
+                    ),
+                  }
+                : null
+            }
+            actionMenu={{
+              label: t("common.actions"),
+              renderItems: (view) => (
+                <>
+                  <MenuItem
+                    disabled={
+                      isUnsavedViewId(view.id) ? !canCreateView : !canUpdateView
+                    }
+                    onClick={() => setEditing({ id: view.id, name: view.name })}
+                  >
+                    <PencilIcon className="size-3.5" />
+                    {t("common.rename")}
+                  </MenuItem>
+                  {canDeleteView && !isUnsavedViewId(view.id) && (
+                    <MenuItem onClick={() => remove.mutate(view.id)}>
+                      <Trash2Icon className="size-3.5" />
+                      {t("workspaces.views.deleteView")}
+                    </MenuItem>
+                  )}
+                </>
+              ),
+            }}
+            addControl={
+              canCreateView ? (
+                <Menu>
+                  <MenuTrigger
+                    render={
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        aria-label={t("common.add")}
+                      />
+                    }
+                  >
+                    <PlusIcon className="size-3.5" />
+                  </MenuTrigger>
+                  <MenuPopup>
+                    {defaults.map((view) => (
+                      <MenuItem
+                        key={view.id}
+                        onClick={() =>
+                          persist({ ...view, id: `draft:${createUuid()}` })
+                        }
+                      >
+                        {t("workspaces.views.newView", {
+                          layoutType: view.layout.type,
+                          layout: view.name,
+                        })}
+                      </MenuItem>
+                    ))}
+                  </MenuPopup>
+                </Menu>
+              ) : null
+            }
+          />
+          <ViewToolbarChrome>
+            <Select
+              onValueChange={(view) => {
+                if (view) {
+                  setProposalView(view);
+                }
+              }}
+              value={proposalView}
             >
-              <SelectValue>
-                {t("inbox.proposalView", {
+              <SelectTrigger
+                aria-label={t("inbox.proposalView", {
                   view: t(
                     proposalView === "open"
                       ? "inbox.view.new"
                       : `inbox.view.${proposalView}`,
                   ),
                 })}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {INBOX_VIEWS.map((view) => (
-                <SelectItem key={view} value={view}>
-                  {t(view === "open" ? "inbox.view.new" : `inbox.view.${view}`)}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-          <fieldset disabled={!canEditView} className="contents">
-            <FilterChips
-              filters={activeView.layout.filters}
-              properties={[]}
-              onUpdate={(filters) =>
-                onLayoutChange(mergeLayout(activeView.layout, { filters }))
-              }
-            />
-            <SortChips
-              sorts={activeView.layout.sorts}
-              properties={sortProperties}
-              maxSorts={VIEW_SORTS_MAX}
-              labels={{ add: t("common.add"), remove: t("common.remove") }}
-              onUpdate={(sorts) =>
-                onLayoutChange(mergeLayout(activeView.layout, { sorts }))
-              }
-            />
-            {activeView.layout.type === "kanban" && (
-              <KanbanGroupingSettings
+                size="sm"
+              >
+                <SelectValue>
+                  {t("inbox.proposalView", {
+                    view: t(
+                      proposalView === "open"
+                        ? "inbox.view.new"
+                        : `inbox.view.${proposalView}`,
+                    ),
+                  })}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                {INBOX_VIEWS.map((view) => (
+                  <SelectItem key={view} value={view}>
+                    {t(
+                      view === "open" ? "inbox.view.new" : `inbox.view.${view}`,
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+            <fieldset disabled={!canEditView} className="contents">
+              <FilterChips
+                filters={activeView.layout.filters}
                 properties={[]}
-                allowAssigneeGrouping
-                additionalSubgroups={groups}
-                groupByPropertyId={activeView.layout.groupByPropertyId}
-                subgroupByPropertyId={activeView.layout.subgroupByPropertyId}
-                onChange={(groupByPropertyId, subgroupByPropertyId) => {
-                  if (activeView.layout.type === "kanban") {
-                    onLayoutChange(
-                      mergeLayout(activeView.layout, {
-                        groupByPropertyId,
-                        subgroupByPropertyId,
-                      }),
-                    );
-                  }
+                onUpdate={(filters) =>
+                  onLayoutChange(mergeLayout(activeView.layout, { filters }))
+                }
+              />
+              <SortChips
+                sorts={activeView.layout.sorts}
+                properties={sortProperties}
+                maxSorts={VIEW_SORTS_MAX}
+                labels={{
+                  addSort: t("common.sort"),
+                  remove: t("common.remove"),
+                  directions: sortDirectionLabels((key) => t(key)),
                 }}
+                onUpdate={(sorts) =>
+                  onLayoutChange(mergeLayout(activeView.layout, { sorts }))
+                }
               />
-            )}
-            {isTableView(activeView) && (
-              <EntityViewColumnToggle
-                view={activeView}
-                onLayoutChange={onLayoutChange}
-              />
-            )}
-            {activeView.layout.type === "table" && (
-              <GroupByControl
-                properties={[]}
-                additionalGroups={groups}
-                allowNone
-                allowAssigneeGrouping
-                allowCreatedByGrouping
-                groupByPropertyId={activeView.layout.groupByPropertyId}
-                onChange={(groupByPropertyId) => {
-                  if (activeView.layout.type === "table") {
-                    onLayoutChange(
-                      mergeLayout(activeView.layout, {
-                        groupByPropertyId: groupByPropertyId || undefined,
-                      }),
-                    );
-                  }
-                }}
-              />
-            )}
-          </fieldset>
-        </ViewToolbarChrome>
+              {activeView.layout.type === "kanban" && (
+                <KanbanGroupingSettings
+                  properties={[]}
+                  allowAssigneeGrouping
+                  additionalSubgroups={groups}
+                  groupByPropertyId={activeView.layout.groupByPropertyId}
+                  subgroupByPropertyId={activeView.layout.subgroupByPropertyId}
+                  onChange={(groupByPropertyId, subgroupByPropertyId) => {
+                    if (activeView.layout.type === "kanban") {
+                      onLayoutChange(
+                        mergeLayout(activeView.layout, {
+                          groupByPropertyId,
+                          subgroupByPropertyId,
+                        }),
+                      );
+                    }
+                  }}
+                />
+              )}
+              {isTableView(activeView) && (
+                <EntityViewColumnToggle
+                  view={activeView}
+                  onLayoutChange={onLayoutChange}
+                />
+              )}
+              {activeView.layout.type === "table" && (
+                <GroupByControl
+                  properties={[]}
+                  additionalGroups={groups}
+                  allowNone
+                  allowAssigneeGrouping
+                  allowCreatedByGrouping
+                  groupByPropertyId={activeView.layout.groupByPropertyId}
+                  onChange={(groupByPropertyId) => {
+                    if (activeView.layout.type === "table") {
+                      onLayoutChange(
+                        mergeLayout(activeView.layout, {
+                          groupByPropertyId: groupByPropertyId || undefined,
+                        }),
+                      );
+                    }
+                  }}
+                />
+              )}
+            </fieldset>
+          </ViewToolbarChrome>
+        </ViewChromeBar>
       </fieldset>
       <EntityViewContent
         organizationId={organizationId}
@@ -527,7 +547,10 @@ const EntityViewContent = ({
   };
   useExternalSyncEffect(() => {
     if (records.error) {
-      analytics.captureError(records.error);
+      analytics.captureError(records.error, {
+        fingerprintKey: "EntityViewContent:failure",
+        scope: { type: "handler", handlerId: "EntityViewContent:failure" },
+      });
     }
   }, [analytics, records.error]);
   const loading = records.isPending;

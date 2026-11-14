@@ -8,7 +8,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { DocumentSwitcher } from "@/components/breadcrumbs/document-switcher";
 import {
   canRenameDocumentCrumb,
   resolveCrumbRenameShortcut,
@@ -25,7 +27,7 @@ import {
   resolveFileRenameSubmission,
   splitFileName,
 } from "@/lib/files/file-name-edit";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 export const PdfBreadcrumb = () => {
@@ -54,7 +56,7 @@ export const PdfBreadcrumb = () => {
     enabled: pdfMatch !== undefined && fieldId.length > 0,
     select: (file) => file.fileName,
   });
-  const fileNameView = useQueryView(fileQuery);
+  const fileNameView = queryView(fileQuery);
   const fileName =
     fileNameView.type === "items" ? fileNameView.items : undefined;
   const canUpdateEntity = usePermissions({ entity: ["update"] });
@@ -125,12 +127,12 @@ export const PdfBreadcrumb = () => {
           if (pendingName !== null) {
             return (
               <BreadcrumbPage>
-                <BidiText
-                  as="span"
-                  className="max-w-64 overflow-hidden text-ellipsis whitespace-pre"
+                <TruncatedText
+                  className="max-w-64 whitespace-pre"
+                  render={<BidiText as="span" />}
                 >
                   {pendingName}
-                </BidiText>
+                </TruncatedText>
               </BreadcrumbPage>
             );
           }
@@ -143,7 +145,7 @@ export const PdfBreadcrumb = () => {
                 explicitUndefined: true,
               }}
               activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-64 overflow-hidden text-ellipsis whitespace-pre"
+              className="hover:text-foreground max-w-64 min-w-0"
               params={{ workspaceId, viewId }}
               onDoubleClick={(event) => {
                 if (!isRenameable) {
@@ -168,7 +170,9 @@ export const PdfBreadcrumb = () => {
               to="/workspaces/$workspaceId/$viewId/document"
               {...(isRenameable ? { "aria-keyshortcuts": "F2" } : {})}
             >
-              <BidiText>{storedName}</BidiText>
+              <TruncatedText className="whitespace-pre" render={<BidiText />}>
+                {storedName}
+              </TruncatedText>
             </Link>
           );
 
@@ -183,6 +187,20 @@ export const PdfBreadcrumb = () => {
             />
           );
         })()}
+        {/* Switching away while pages are being organized would drop the
+            unsaved arrangement, so the caret waits until that ends. */}
+        {rename.state.mode !== "edit" &&
+        pendingName === null &&
+        pdfMode !== "organize" &&
+        entityId.length > 0 ? (
+          <DocumentSwitcher
+            entityId={entityId}
+            fieldId={fieldId}
+            fileName={storedName}
+            viewId={viewId}
+            workspaceId={workspaceId}
+          />
+        ) : null}
       </BreadcrumbItem>
       {pdfMode === "organize" && (
         <>

@@ -7,10 +7,10 @@ import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
 import { sanitizeExceptionEvent } from "@/lib/analytics/posthog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
-import { webApiClientOptions } from "@/lib/eden-client";
+import { webApiClientOptions } from "@/lib/api";
 import {
-  resetUserErrorReportDedupeForTests,
   reportUserVisibleError,
+  resetUserErrorReportDedupeForTests,
   setUserErrorRouteTemplate,
 } from "@/lib/errors/user-toast";
 import { reportOAuthCallbackError } from "@/routes/auth/-error-report";
@@ -61,7 +61,14 @@ test.each([
       Object.defineProperty(response, "url", {
         value: "https://api.test/v1/me/professional-use",
       });
-      await webApiClientOptions.onResponse(response);
+      await webApiClientOptions.onScopedResponse({
+        response,
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/v1/me/professional-use",
+        },
+      });
     },
   },
 ])("reports one user-visible auth error from the $name", async (path) => {
@@ -74,11 +81,20 @@ test.each([
   await path.replay();
 
   expect(capture).toHaveBeenCalledTimes(1);
-  const [, context] = capture.mock.calls.at(0) ?? [];
-  expect(context).toEqual({
-    feature: "auth",
-    routeTemplate: path.routeTemplate,
-    type: "user-visible",
+  const [, options] = capture.mock.calls.at(0) ?? [];
+  const context = options?.context;
+  expect(options).toEqual({
+    fingerprintKey: "reportUserVisibleError:failure",
+    scope: {
+      type: "request",
+      method: "GET",
+      routeTemplate: path.routeTemplate,
+    },
+    context: {
+      feature: "auth",
+      routeTemplate: path.routeTemplate,
+      type: "user-visible",
+    },
   });
   if (context?.type !== "user-visible") {
     throw new TypeError("Expected user-visible error context");
@@ -118,6 +134,12 @@ test.each([
     reported: false,
   },
   {
+    code: "OTP_EXPIRED",
+    name: "caller-handled expired OTP errors",
+    requestUrl: "https://api.test/api/auth/sign-in/email-otp",
+    reported: false,
+  },
+  {
     code: PROFESSIONAL_USE_REQUIRED_CODE,
     name: "other unhandled auth errors",
     requestUrl: "https://api.test/api/auth/get-session",
@@ -137,3 +159,78 @@ test.each([
     expect(report).toHaveBeenCalledTimes(reported ? 1 : 0);
   },
 );
+
+test.each([
+  { code: "UNAUTHORIZED", reported: false, status: 401 },
+  { code: "SESSION_EXPIRED", reported: false, status: 401 },
+  { code: "UNAUTHORIZED", reported: true, status: 400 },
+  { code: "INVALID_EMAIL_OR_PASSWORD", reported: true, status: 401 },
+])(
+  "reports $code on a $status only when it is not an ended session",
+  ({ code, reported, status }) => {
+    const report = mock(() => undefined);
+
+    reportUnhandledAuthClientError(
+      { code, message: "Unauthorized", status, statusText: "Unauthorized" },
+      report,
+      "https://api.test/api/auth/organization/get-active-member-role",
+    );
+
+    expect(report).toHaveBeenCalledTimes(reported ? 1 : 0);
+  },
+);
+
+test.each([
+  {
+    name: "refused credentials on password sign-in",
+    requestUrl: "https://api.test/api/auth/sign-in/email",
+    reported: false,
+  },
+  {
+    name: "refused credentials on another auth route",
+    requestUrl: "https://api.test/api/auth/change-email",
+    reported: true,
+  },
+])("reports $name only when no form owns them", ({ requestUrl, reported }) => {
+  const report = mock(() => undefined);
+
+  reportUnhandledAuthClientError(
+    {
+      code: "INVALID_EMAIL_OR_PASSWORD",
+      message: "Invalid email or password",
+      status: 401,
+      statusText: "Unauthorized",
+    },
+    report,
+    requestUrl,
+  );
+
+  expect(report).toHaveBeenCalledTimes(reported ? 1 : 0);
+});
+
+test("an ended session on a me route reports nothing", async () => {
+  const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+    () => undefined,
+  );
+  const response = new Response(
+    JSON.stringify({
+      code: "permission_denied",
+      message: "Sign in to continue.",
+    }),
+    { headers: { "content-type": "application/json" }, status: 401 },
+  );
+  Object.defineProperty(response, "url", {
+    value: "https://api.test/v1/me/professional-use",
+  });
+
+  await webApiClientOptions.onScopedResponse({
+    response,
+    scope: {
+      type: "request",
+      method: "GET",
+      routeTemplate: "/v1/me/professional-use",
+    },
+  });
+
+  expect(capture).not.toHaveBeenCalled();
+});

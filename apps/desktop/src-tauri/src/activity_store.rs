@@ -143,10 +143,10 @@ impl ActivityStore {
             continue;
           }
           if entry.file_name() != DAYS_DIR_NAME
-            && !entry
+            && entry
               .path()
               .extension()
-              .is_some_and(|extension| extension == "tmp")
+              .is_none_or(|extension| extension != "tmp")
           {
             paths.push(entry.path());
           }
@@ -164,7 +164,7 @@ impl ActivityStore {
         .map_err(EncryptedReadError::Unavailable)?
         .into_iter()
         .map(|(path, _)| path)
-        .filter(|path| !path.extension().is_some_and(|extension| extension == "tmp")),
+        .filter(|path| path.extension().is_none_or(|extension| extension != "tmp")),
     );
     let mut unavailable = None;
     for path in paths {
@@ -305,9 +305,9 @@ impl ActivityStore {
         Some(pending.clone())
       }
       PendingMutation::Cancel(key) => {
-        if !saved_pending
+        if saved_pending
           .as_ref()
-          .is_some_and(|saved| saved.idempotency_key == key)
+          .is_none_or(|saved| saved.idempotency_key != key)
         {
           return Err("activity batch key does not match".into());
         }
@@ -1028,6 +1028,10 @@ fn remove_file_if_present(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use chrono::{TimeZone, Utc};
@@ -1835,7 +1839,7 @@ mod tests {
     assert_eq!(store.load_drafted(day).unwrap(), vec![marker]);
     assert_eq!(store.load_assignments(day).unwrap(), vec![assignment]);
     assert_eq!(store.load_day(day).unwrap(), vec![segment("word")]);
-    let _ = fs::remove_dir_all(root);
+    fs::remove_dir_all(root).unwrap();
   }
 
   #[test]
@@ -1862,8 +1866,8 @@ mod tests {
     assert_eq!(restored.load_drafted(day).unwrap()[0].entry_id, "entry_a");
     store_a.delete_day(day).unwrap();
     assert!(store_a.load_drafted(day).unwrap().is_empty());
-    let _ = fs::remove_dir_all(root_a);
-    let _ = fs::remove_dir_all(root_b);
+    fs::remove_dir_all(root_a).unwrap();
+    assert!(!root_b.exists());
   }
 
   #[test]

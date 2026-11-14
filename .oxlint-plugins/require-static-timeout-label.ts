@@ -1,8 +1,9 @@
 // Timeout labels are telemetry identities, never runtime descriptions.
 //
 // Flags a `label` passed to `withTimeout` or a timeout-named wrapper unless it
-// is a string literal, an interpolation-free template literal, or a lookup in
-// a module-level `as const` table of literal strings. This keeps
+// is a string literal, an interpolation-free template literal, a module-level
+// `const` bound to one, or a lookup in a module-level `as const` table of
+// literal strings. This keeps
 // IDs, URLs, names, and other unbounded values out of issue identity.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
@@ -70,6 +71,28 @@ const staticLabelTableName = (statement: unknown): string | null => {
   return declaration.id.name;
 };
 
+/** The name a module-level `const NAME = "literal"` binds, else null. */
+const staticLabelConstantName = (statement: unknown): string | null => {
+  if (
+    !isAstNode(statement) ||
+    statement.type !== "VariableDeclaration" ||
+    statement.kind !== "const" ||
+    !Array.isArray(statement.declarations) ||
+    statement.declarations.length !== 1
+  ) {
+    return null;
+  }
+  const declaration = statement.declarations[0];
+  const init = unwrapSatisfies(declaration.init);
+  const value =
+    isAstNode(init) && init.type === "TSAsExpression"
+      ? unwrapSatisfies(init.expression)
+      : init;
+  return isIdentifier(declaration.id) && isStaticString(value)
+    ? declaration.id.name
+    : null;
+};
+
 const callName = (callee: unknown): string | null => {
   if (!isAstNode(callee)) {
     return null;
@@ -116,6 +139,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const staticLabelTables = new Set<string>();
+        const staticLabelConstants = new Set<string>();
         return {
           Program(node) {
             for (const statement of node.body) {
@@ -126,6 +150,10 @@ export default eslintCompatPlugin({
               const name = staticLabelTableName(declaration);
               if (name !== null) {
                 staticLabelTables.add(name);
+              }
+              const constant = staticLabelConstantName(declaration);
+              if (constant !== null) {
+                staticLabelConstants.add(constant);
               }
             }
           },
@@ -141,10 +169,13 @@ export default eslintCompatPlugin({
                 value.type === "MemberExpression" &&
                 isIdentifier(value.object) &&
                 staticLabelTables.has(value.object.name);
+              const isStaticConstant =
+                isIdentifier(value) && staticLabelConstants.has(value.name);
               if (
                 isAstNode(value) &&
                 !isStaticString(value) &&
-                !isStaticTableLookup
+                !isStaticTableLookup &&
+                !isStaticConstant
               ) {
                 context.report({ node: value, messageId: "dynamic" });
               }

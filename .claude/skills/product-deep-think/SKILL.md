@@ -1,6 +1,6 @@
 ---
 name: product-deep-think
-description: 'Deeply assess a consequential product idea using repository evidence, current market research, switching costs, international constraints, and maintainability before planning or coding.'
+description: "Deeply assess a consequential product idea using repository evidence, current market research, switching costs, international constraints, and maintainability before planning or coding."
 ---
 
 # Product Deep Think

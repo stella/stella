@@ -27,15 +27,15 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { foldItemCountConstraints } from "@/api/lib/docx/field-filters";
 import {
   CLEARED_FIELD_SOURCE,
-  FIELD_SOURCE_KEYS,
-  FIELD_WIRE_PROPERTY,
-  isLookupFormatKey,
-  LOOKUP_FORMATS_MAX,
   type DiscoveredField,
   type DiscoveredTemplate,
+  FIELD_SOURCE_KEYS,
+  FIELD_WIRE_PROPERTY,
   type FieldLookup,
   type FieldLookupFormat,
   type FieldMeta,
+  isLookupFormatKey,
+  LOOKUP_FORMATS_MAX,
 } from "@/api/lib/docx/types";
 
 /** One rejected entry. `path` is the dot path of the offending entry in

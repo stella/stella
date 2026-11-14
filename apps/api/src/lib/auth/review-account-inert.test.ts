@@ -12,8 +12,12 @@ import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { createReviewAccountPlugin } from "@/api/lib/auth/review-account-plugin";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+const routeServer = serveRoutesForTest(authCapabilitiesRoute);
 
 const email = "member@example.test";
 const password = "fixture password for tests";
@@ -31,7 +35,8 @@ beforeAll(() => {
   env.DEMO_ACCOUNT_EMAIL = undefined;
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await routeServer.stop();
   env.APP_REVIEW_ACCOUNT_EMAIL = previous.email;
   env.APP_REVIEW_ORGANIZATION_ID = previous.organizationId;
   env.DEMO_ACCOUNT_EMAIL = previous.demoEmail;
@@ -156,7 +161,7 @@ const runScenario = async (localPasswordEnabled: boolean) => {
 
 describe("restricted review account, unconfigured", () => {
   test("capabilities offer no restricted password sign-in", async () => {
-    const response = await authCapabilitiesRoute.handle(
+    const response = await routeServer.fetch(
       new Request("http://localhost/auth/capabilities"),
     );
     const body = v.parse(
@@ -200,6 +205,7 @@ describe("restricted review account, unconfigured", () => {
       ).scopes,
     ).toEqual(scopes);
     const authenticated = await authenticateMcpRequest("credential.fixture", {
+      resolveApiKeySession: resolveMachineApiKeySession,
       verifyToken: async () => ({
         sub: "user_one",
         org_id: "org_any",

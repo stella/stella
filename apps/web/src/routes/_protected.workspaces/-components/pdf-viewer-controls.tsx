@@ -13,6 +13,7 @@ import {
   FilePenLineIcon,
   PrinterIcon,
 } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
@@ -40,7 +41,7 @@ import {
   PDF_MIN_SCALE_OFFSET,
   PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const routeApi = getRouteApi(
@@ -82,7 +83,7 @@ export const PdfViewerControls = ({
     ...fileMetadataOptions({ workspaceId, fieldId }),
     enabled: fieldId.length > 0,
   });
-  const fileMetadataView = useQueryView(fileMetadataQuery);
+  const fileMetadataView = queryView(fileMetadataQuery);
   const fileMetadata =
     fileMetadataView.type === "items" ? fileMetadataView.items : undefined;
 
@@ -152,7 +153,13 @@ export const PdfViewerControls = ({
       const data = await fetchPrintPdf({ workspaceId, fieldId });
       printPdfBuffer(data);
     } catch (error: unknown) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "PdfViewerControls.handlePrint:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PdfViewerControls.handlePrint:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsPrinting(false);
@@ -216,11 +223,11 @@ export const PdfViewerControls = ({
             <ChevronDownIcon className="size-3.5" />
           </Button>
           <div className="ms-1.5 me-2 flex gap-x-1.5 text-sm">
-            <input
+            <Input
               aria-label={t("common.currentPage")}
               autoComplete="off"
+              className="me-1 w-14 *:text-end"
               dir="ltr"
-              className="me-1 w-14 rounded border px-1 text-end"
               inputMode="numeric"
               onBlur={() => {
                 if (
@@ -245,6 +252,7 @@ export const PdfViewerControls = ({
                 }
                 e.currentTarget.blur();
               }}
+              size="sm"
               value={pageInputValue}
             />
             <span>/</span>

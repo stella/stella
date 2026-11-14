@@ -6,6 +6,7 @@ import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import { LIMITS } from "@/api/lib/limits";
 import { sseResponse, withSseHeartbeat } from "@/api/lib/sse";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 
 const decoder = new TextDecoder();
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
@@ -61,7 +62,10 @@ describe("SSE heartbeat", () => {
   test("writes a comment frame for every interval the source stays silent", async () => {
     jest.useFakeTimers();
     const source = controlledSource();
-    const reader = sseResponse(source.stream).body?.getReader();
+    const reader = sseResponse(
+      source.stream,
+      HELD_TEST_STREAM_BINDING,
+    ).body?.getReader();
     if (!reader) {
       throw new Error("Event-stream response carried no body");
     }
@@ -80,7 +84,10 @@ describe("SSE heartbeat", () => {
   test("passes a producing source through unchanged and adds nothing", async () => {
     jest.useFakeTimers();
     const source = controlledSource();
-    const reader = sseResponse(source.stream).body?.getReader();
+    const reader = sseResponse(
+      source.stream,
+      HELD_TEST_STREAM_BINDING,
+    ).body?.getReader();
     if (!reader) {
       throw new Error("Event-stream response carried no body");
     }
@@ -100,7 +107,10 @@ describe("SSE heartbeat", () => {
   test("stops writing once the source closes", async () => {
     jest.useFakeTimers();
     const source = controlledSource();
-    const reader = sseResponse(source.stream).body?.getReader();
+    const reader = sseResponse(
+      source.stream,
+      HELD_TEST_STREAM_BINDING,
+    ).body?.getReader();
     if (!reader) {
       throw new Error("Event-stream response carried no body");
     }
@@ -115,7 +125,10 @@ describe("SSE heartbeat", () => {
   test("cancel drops the timer and cancels the source", async () => {
     jest.useFakeTimers();
     const source = controlledSource();
-    const reader = sseResponse(source.stream).body?.getReader();
+    const reader = sseResponse(
+      source.stream,
+      HELD_TEST_STREAM_BINDING,
+    ).body?.getReader();
     if (!reader) {
       throw new Error("Event-stream response carried no body");
     }
@@ -135,6 +148,7 @@ describe("SSE heartbeat", () => {
         headers: { "content-type": "text/event-stream", "x-run": "run-1" },
         status: 200,
       }),
+      HELD_TEST_STREAM_BINDING,
     );
 
     expect(wrapped.status).toBe(200);
@@ -143,7 +157,10 @@ describe("SSE heartbeat", () => {
   });
 
   test("serves an event stream that no intermediary may cache or buffer", () => {
-    const response = sseResponse(controlledSource().stream);
+    const response = sseResponse(
+      controlledSource().stream,
+      HELD_TEST_STREAM_BINDING,
+    );
 
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     expect(response.headers.get("cache-control")).toBe(

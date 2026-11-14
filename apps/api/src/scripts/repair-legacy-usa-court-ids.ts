@@ -37,8 +37,8 @@ import {
   rejectUnknownFlags,
 } from "@/api/scripts/repair-flags";
 import {
-  ENSURE_DECISION_COURT_ID_COLUMN_SQL,
   decisionCourtIdColumnExists,
+  ENSURE_DECISION_COURT_ID_COLUMN_SQL,
   legacyUsaCourtIdCensus,
   repairLegacyUsaCourtIdBatch,
 } from "@/api/scripts/repair-legacy-usa-court-ids-plan";

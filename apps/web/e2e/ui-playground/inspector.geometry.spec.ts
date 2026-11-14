@@ -15,8 +15,13 @@
  * fix that does not hold.
  */
 
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 const SECTION = '[data-playground-section="inspector-pane"]';
 const VIEWPORT = `${SECTION} [data-slot="scroll-area-viewport"]`;
@@ -45,8 +50,9 @@ type PaneGeometry = {
   drewTable: boolean;
 };
 
-const readGeometry = async (page: Page): Promise<PaneGeometry[]> =>
-  page.evaluate((sectionSelector) => {
+const readGeometry = async (page: Page): Promise<PaneGeometry[]> => {
+  await waitForStableGeometry(page, page.locator(SECTION));
+  return await page.evaluate((sectionSelector) => {
     const sections = [...document.querySelectorAll(sectionSelector)];
     return sections.map((section) => {
       const viewport = section.querySelector(
@@ -57,10 +63,12 @@ const readGeometry = async (page: Page): Promise<PaneGeometry[]> =>
         !(section instanceof HTMLElement) ||
         !(viewport instanceof HTMLElement)
       ) {
-        throw new Error("inspector pane bench is missing its scroll viewport");
+        throw new TypeError(
+          "inspector pane bench is missing its scroll viewport",
+        );
       }
       if (!(rail instanceof HTMLElement)) {
-        throw new Error("inspector pane bench is missing its tab rail");
+        throw new TypeError("inspector pane bench is missing its tab rail");
       }
       return {
         paneWidth: Number(section.dataset["paneWidth"]),
@@ -72,6 +80,7 @@ const readGeometry = async (page: Page): Promise<PaneGeometry[]> =>
       };
     });
   }, SECTION);
+};
 
 test("the pane's reader never scrolls sideways, at either width", async ({
   page,
@@ -81,6 +90,7 @@ test("the pane's reader never scrolls sideways, at either width", async ({
   // document load event fires.
   await expect(page.locator(VIEWPORT)).toHaveCount(PANE_WIDTHS.length);
   await expect(page.locator(`${SECTION} table`).first()).toBeVisible();
+  await waitForStableGeometry(page, page.locator(SECTION));
 
   const panes = await readGeometry(page);
   expect(panes.map((pane) => pane.paneWidth).toSorted((a, b) => a - b)).toEqual(
@@ -122,6 +132,7 @@ test("a table too wide for the column scrolls inside its own box", async ({
 }) => {
   await page.goto("/dev?visual=inspector-pane", { waitUntil: "commit" });
   await expect(page.locator(`${SECTION} table`).first()).toBeVisible();
+  await waitForStableGeometry(page, page.locator(SECTION));
 
   // The pane holds its width by wrapping what can wrap; a table cannot, so it
   // keeps the axis locally rather than giving it to the document.
@@ -132,7 +143,7 @@ test("a table too wide for the column scrolls inside its own box", async ({
     const table = narrow?.querySelector("table");
     const box = table?.parentElement;
     if (!(box instanceof HTMLElement)) {
-      throw new Error("inspector pane bench is missing its table");
+      throw new TypeError("inspector pane bench is missing its table");
     }
     return {
       overflowX: getComputedStyle(box).overflowX,

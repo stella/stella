@@ -2,9 +2,13 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { meterSqlClient } from "@/api/lib/db/meter-client";
+
+const wrappedBegin = new WeakMap<SQL, unknown>();
+
 /**
  * Runs every transaction callback on `client` in the async context of the
- * code that opened the transaction, and returns the same client.
+ * code that opened the transaction, and meters the raw results returned by its queries.
  *
  * Bun's pool calls a `begin` callback when a connection becomes free, in
  * whatever async context that happens: a new connection's context (no
@@ -17,6 +21,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * issued it. Savepoints run inside the callback, so they follow.
  */
 export const runTransactionsInCallerContext = (client: SQL): SQL => {
+  if (wrappedBegin.get(client) === client.begin) {
+    return client;
+  }
   const begin = client.begin.bind(client);
   const beginInCallerContext = async <const T>(
     optionsOrCallback: string | SQL.TransactionContextCallback<T>,
@@ -26,7 +33,7 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     if (typeof optionsOrCallback !== "string") {
       return await begin(
         async (transaction) =>
-          await runInCaller(optionsOrCallback, transaction),
+          await runInCaller(optionsOrCallback, meterSqlClient(transaction)),
       );
     }
     if (callback === undefined) {
@@ -34,12 +41,14 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     }
     return await begin(
       optionsOrCallback,
-      async (transaction) => await runInCaller(callback, transaction),
+      async (transaction) =>
+        await runInCaller(callback, meterSqlClient(transaction)),
     );
   };
   Object.defineProperty(client, "begin", {
     configurable: true,
     value: beginInCallerContext,
   });
-  return client;
+  wrappedBegin.set(client, beginInCallerContext);
+  return meterSqlClient(client);
 };

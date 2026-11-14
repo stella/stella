@@ -1,8 +1,11 @@
-import Elysia from "elysia";
-
 import readLegislation from "@/api/handlers/legislation/get";
+import createMatterLinksBatch from "@/api/handlers/legislation/matter-links/batch/create";
+import createMatterLink from "@/api/handlers/legislation/matter-links/create";
+import deleteMatterLink from "@/api/handlers/legislation/matter-links/delete";
+import listMatterLinks from "@/api/handlers/legislation/matter-links/list";
 import searchLegislation from "@/api/handlers/legislation/search";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { mount, routes } from "@/api/http/route";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 /**
  * Corpus-legislation routes (ingested statutes searchable via the
@@ -10,18 +13,24 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
  * avoid colliding with the existing BOE proxy routes in routes.ts.
  */
 
-export const legislationCorpusRoute = new Elysia({
-  prefix: "/legislation/corpus",
-})
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .post("/search", searchLegislation.handler, {
-    body: searchLegislation.config.body,
-    permissions: searchLegislation.config.permissions,
-    response: searchLegislation.config.response,
-  })
-  .get("/:documentId", readLegislation.handler, {
-    params: readLegislation.config.params,
-    permissions: readLegislation.config.permissions,
-  });
+const corpusRoute = routes(
+  {
+    "/search": { POST: searchLegislation },
+    "/:documentId": { GET: readLegislation },
+  },
+  { prefix: "/legislation/corpus" },
+);
+
+const matterLinksRoute = routes(
+  {
+    "/": { GET: listMatterLinks, POST: createMatterLink },
+    "/batch": { POST: createMatterLinksBatch },
+    "/:linkId": { DELETE: deleteMatterLink },
+  },
+  {
+    prefix: "/legislation/matter-links/:workspaceId",
+    middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")],
+  },
+);
+
+export const legislationCorpusRoute = mount([corpusRoute, matterLinksRoute]);

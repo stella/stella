@@ -28,6 +28,8 @@ export type TableRowRenderInput<TRow extends TableRowData = TableTreeNode> = {
   index: number;
   /** The row's number, or the range a collapsed row stands for. */
   rowLabel: string;
+  /** Accessible name for the selection control, when it differs from the ordinal. */
+  selectionLabel?: string | undefined;
   renderColumns: TableColumn<TRow>[];
   addPropertyColumn: TableColumn<TRow> | null;
   table: WorkspaceTable<TRow>;

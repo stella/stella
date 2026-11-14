@@ -152,22 +152,30 @@ const SessionsCardContent = () => {
 
               return (
                 <TableRow key={session.id}>
-                  <TableCell>{deviceLabel}</TableCell>
+                  <TableCell>
+                    {deviceLabel}
+                    {session.originClientName && (
+                      <p className="text-muted-foreground text-sm">
+                        {t("account.sessions.signedInFrom", {
+                          clientName: session.originClientName,
+                        })}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell>{session.ipAddress || MISSING_VALUE}</TableCell>
                   <TableCell>
-                    <Tooltip
-                      content={formatFullTimestamp(session.updatedAt)}
-                      render={
-                        <button
-                          className="rounded-sm text-start focus-visible:outline-2"
-                          type="button"
-                        />
-                      }
-                    >
-                      {formatRelativeTime(session.updatedAt)}
-                    </Tooltip>
+                    {isCurrent ? (
+                      t("account.sessions.activeNow")
+                    ) : (
+                      <Tooltip
+                        content={formatFullTimestamp(session.updatedAt)}
+                        render={<Button variant="plain" />}
+                      >
+                        {formatRelativeTime(session.updatedAt)}
+                      </Tooltip>
+                    )}
                   </TableCell>
-                  <TableCell className="text-end">
+                  <TableCell align="end">
                     {isCurrent ? (
                       <span className="bg-muted inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium">
                         {t("account.sessions.currentSession")}
@@ -229,7 +237,10 @@ const RevokeSessionButton = ({ sessionId }: RevokeSessionButtonProps) => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RevokeSessionButton:failure",
+        scope: { type: "handler", handlerId: "RevokeSessionButton:failure" },
+      });
     },
   });
 
@@ -275,7 +286,10 @@ const RevokeAllDialog = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RevokeAllDialog:failure",
+        scope: { type: "handler", handlerId: "RevokeAllDialog:failure" },
+      });
     },
     onSettled: () => {
       setIsOpen(false);

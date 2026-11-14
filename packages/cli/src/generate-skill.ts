@@ -362,13 +362,15 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
   return [
     "## Capability commands (full surface)",
     "",
-    `Beyond the curated commands above, the CLI generates ${summary.commandCount}`,
-    "capability commands from the server's capability catalog: every safe handler",
+    // No count here: parallel changes that each add a capability would all
+    // rewrite one number, and their merge would describe neither tree.
+    "Beyond the curated commands above, the CLI generates capability commands",
+    "from the server's capability catalog: every safe handler",
     `that is not a curated tool, reached through \`${MCP_CAPABILITY_EXECUTORS.read}\` or \`${MCP_CAPABILITY_EXECUTORS.write}\``,
     `paths. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
     "multi-segment capability actions are flattened with hyphens into `<action>`.",
     "",
-    "- **Discover**: `stella capability list [--domain <d>] [--access read|write]`",
+    "- **Discover**: `stella capability list [--query <text>] [--domain <d>] [--access read|write]`",
     "  enumerates them (paginated); `stella capability describe --capability <id>` prints one",
     "  capability's full input schema, scope, and flags.",
     "- **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or",

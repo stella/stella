@@ -22,6 +22,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
@@ -34,7 +35,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { browserApiRootUrl } from "@/lib/api-url";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
@@ -76,7 +77,7 @@ const GeneratedVisualFrame = ({
       const response = await api["user-files"]({ fileId }).visual.get({
         fetch: { signal },
       });
-      return v.parse(generatedVisualPageSchema, unwrapEden(response));
+      return v.parse(generatedVisualPageSchema, unwrapApiResponse(response));
     },
     gcTime: 0,
     staleTime: Infinity,
@@ -120,8 +121,15 @@ const GeneratedVisualFrame = ({
         }
         themeFailureReported.current = true;
         getAnalytics().captureError(error, {
-          type: "detached",
-          operation: "generated-visual.read-theme",
+          fingerprintKey: "GeneratedVisualFrame.report:failure",
+          scope: {
+            type: "handler",
+            handlerId: "GeneratedVisualFrame.report:failure",
+          },
+          context: {
+            type: "detached",
+            operation: "generated-visual.read-theme",
+          },
         });
       },
     }),
@@ -231,7 +239,7 @@ const GeneratedVisualFrame = ({
           })(),
           {
             context: "generated-visual.open-decision",
-            failureMessage: t("common.error"),
+            failureMessage: t("errors.actionFailed"),
           },
         );
         return;
@@ -269,9 +277,9 @@ const GeneratedVisualFrame = ({
       <header className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-xs">
         <span className="shrink-0">{t("chat.generatedView")}</span>
         <span aria-hidden="true">·</span>
-        <span className="text-foreground truncate font-medium">
+        <TruncatedText className="text-foreground font-medium">
           {view.title}
-        </span>
+        </TruncatedText>
       </header>
       <div className="overflow-hidden rounded-md border p-4">
         <iframe

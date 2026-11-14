@@ -41,7 +41,7 @@ every command accepts `--server <url>` to target another one. A default
 login requests the working set of scopes (everything but organization
 administration writes and one-off setup); pass `--scopes` to request an
 explicit set. The
-default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback`.
+default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback stella:organization_create`.
 `stella auth whoami` shows the active session; `stella auth logout` clears it.
 
 ## Conventions every agent must know
@@ -126,6 +126,8 @@ requires (request it at `stella auth login --scopes`).
 | document | `stella document save` | documents_write | destructive (needs `--yes` off a TTY) |
 | feedback | `stella feedback prepare` | feedback |  |
 | feedback | `stella feedback submit` | feedback |  |
+| guidance | `stella guidance read` | read | paginated |
+| guidance | `stella guidance search` | search | paginated |
 | invoice | `stella invoice list` | read | paginated |
 | legislation | `stella legislation boe-search` | read | paginated |
 | legislation | `stella legislation history` | read | paginated |
@@ -133,12 +135,13 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation read` | read | paginated; windowed text |
 | legislation | `stella legislation resolve` | law_read |  |
 | legislation | `stella legislation search` | search | paginated |
-| matter | `stella matter add-member` | admin_write |  |
+| matter | `stella matter add-member` | matters_write |  |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
-| matter | `stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
+| matter | `stella matter remove-member` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
+| organization | `stella organization create` | organization_create |  |
 | organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization update-settings` | admin_write |  |
 | playbook | `stella playbook list` | read | paginated |
@@ -184,11 +187,11 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: change
   - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
-  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --performer (people|automations), --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
-  - optional: --domain, --access (all|read|write)
+  - optional: --domain, --query, --access (all|read|write)
 - `stella capability read`
   - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
@@ -200,7 +203,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
-  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified)
+  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified), --detail (full|compact), --passage-query
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law open`
@@ -208,13 +211,13 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --paragraphs
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
-  - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
+  - optional: --max-chars, --page, --full, --text-version, --preferred-language, --query, --resume-after, --section (court_reasoning), --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
+  - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
 - `stella case-law search`
-  - `--country` — Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+  - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --continuation-token, --court, --courts, --category, --docket-registers, --senate, --provision, --has-legal-sentence, --language, --preferred-language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -232,14 +235,14 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
   - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
-  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (string)
+  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified) (string)
   - optional: --detail (standard|full)
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
-  - via `--input` only: date_of_birth
-  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1000}}'`
+  - optional: --prefix, --middle-name, --suffix, --color, --registration-number, --tax-id, --vat-id, --vat-payer, --default-hourly-rate, --currency, --payment-term-days, --invoice-language (ar|cs|de|en|es|et|fr|hu|lt|lv|pl|pt-BR|sk), --originating-attorney-id, --responsible-attorney-id, --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes, --external.source, --external.id
+  - via `--input` only: emails, phones, addresses, metadata, tags, bank_accounts, billing_address, date_of_birth
+  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1900}}'`
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
@@ -267,7 +270,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
   - via `--input` only: content
-  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
+  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer|null, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`
   - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
@@ -291,6 +294,11 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--what-happened` — What stella actually did. (string)
   - `--approval-token` — From prepare_feedback; covers only that report. (string)
   - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
+- `stella guidance read`
+  - `--document-id` — Guidance document id, as search_guidance returns it in documentId (string)
+- `stella guidance search`
+  - `--query` — Words to find in the guidance title or text (string)
+  - optional: --authority, --jurisdiction, --kind (methodology|recommendation|opinion|faq|guideline|position|statement|inspection_report|annual_report|other), --date-from, --date-to
 - `stella invoice list`
   - optional: --matter-id, --invoice-id
 - `stella legislation boe-search`
@@ -305,14 +313,14 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --language, --as-of
 - `stella legislation resolve`
   - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--section` — Section number, with optional §, e.g. 1729 or § 5a. (string)
+  - `--section` — Section or article, e.g. 1729, § 5a or čl. 38. (string)
   - optional: --as-of
   - via `--input` only: source
   - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
   - `--query` — Search query (string)
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of
+  - `--country` — Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of, --continuation-token
 - `stella matter add-member`
   - `--matter-id` — Matter ID (string)
   - `--user-id` — Existing organization member ID (string)
@@ -329,6 +337,9 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --reassign-to
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
+- `stella organization create`
+  - `--name` — Name of the new organization. (string)
+  - optional: --slug
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
   - optional: --matter-number-pattern, --matter-number-padding, --matter-numbering-enabled, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
@@ -345,6 +356,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
+  - optional: --activity-code
 - `stella search matters`
   - `--query` — Search query (string)
 - `stella task delete`
@@ -352,7 +364,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella task list`
   - optional: --matter-id, --task-id, --assignee (me|any|unassigned), --date-from, --date-to, --status
 - `stella task save`
-  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
+  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --description, --due-date, --workflow-reason, --assignee, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
   - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
   - via `--input` only: fields
@@ -383,7 +395,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella time-entry delete`
   - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
-  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
+  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|submitted|approved|billed|written_off)
 - `stella time-entry save`
   - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --narrative-language, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
 - `stella usage get` — no arguments
@@ -412,13 +424,13 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 417
-capability commands from the server's capability catalog: every safe handler
+Beyond the curated commands above, the CLI generates capability commands
+from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
-- **Discover**: `stella capability list [--domain <d>] [--access read|write]`
+- **Discover**: `stella capability list [--query <text>] [--domain <d>] [--access read|write]`
   enumerates them (paginated); `stella capability describe --capability <id>` prints one
   capability's full input schema, scope, and flags.
 - **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or
@@ -436,7 +448,7 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `conflict-checks`, `contacts`, `data-exports`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search`, `search-history`, `seller-profiles`, `sharepoint`, `signals`, `skills`, `soft-law`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.

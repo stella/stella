@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
@@ -24,8 +25,8 @@ import {
   registerOfficeEditIntentKeystroke,
 } from "@/components/office/office-edit-intent";
 import type {
-  OfficeViewerNavigationRequest,
   OfficeViewerFormat,
+  OfficeViewerNavigationRequest,
   OfficeViewerSpreadsheetSelection,
   OfficeViewerStatus,
 } from "@/components/office/silurus-office-viewer";
@@ -98,13 +99,19 @@ export const OfficeFileViewer = ({
   }, []);
   const handleViewerError = useCallback(
     (error: Error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OfficeFileViewer:failure",
+        scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
+      });
     },
     [analytics],
   );
   const handleNavigationError = useCallback(
     (error: Error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OfficeFileViewer:failure-2",
+        scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     [analytics, t],
@@ -231,13 +238,16 @@ export const OfficeFileViewer = ({
             >
               {SPREADSHEET_FORMULA_SYMBOL}
             </span>
-            <input
-              aria-label={t("common.formula")}
-              className="text-foreground focus-visible:ring-ring h-full min-w-0 flex-1 bg-transparent px-2 font-mono outline-none focus-visible:ring-2 focus-visible:ring-inset"
-              dir={contentDir(formulaBarValue)}
-              readOnly
-              value={formulaBarValue}
-            />
+            <div className="text-foreground has-focus-visible:ring-ring flex h-full min-w-0 flex-1 px-2 font-mono has-focus-visible:ring-2 has-focus-visible:ring-inset">
+              <Input
+                aria-label={t("common.formula")}
+                className="flex h-full w-full"
+                dir={contentDir(formulaBarValue)}
+                readOnly
+                unstyled
+                value={formulaBarValue}
+              />
+            </div>
           </div>
         )}
         <div

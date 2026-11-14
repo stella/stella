@@ -11,8 +11,8 @@
 
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
-  PG_DRIVER_ERROR,
   isTransientPgConnectionError,
+  PG_DRIVER_ERROR,
 } from "@/api/lib/pg-error";
 
 /**

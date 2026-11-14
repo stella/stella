@@ -47,7 +47,7 @@ describe("verifyWebhookSignature", () => {
       "serialized-webhook-secret-32-bytes",
       "utf-8",
     );
-    const serializedSecret = `whsec_${secretBytes.toString("base64")}`;
+    const serializedSecret = `whsec_${secretBytes.toBase64()}`;
     const id = "evt_serialized_secret_001";
     const timestamp = "1717400000";
     const body = `{"type":"entitlement.created","id":"sub_serialized"}`;
@@ -72,7 +72,7 @@ describe("verifyWebhookSignature", () => {
       "vendor-prefixed-webhook-secret-32-b",
       "utf-8",
     );
-    const serializedSecret = `polar_whs_${secretBytes.toString("base64")}`;
+    const serializedSecret = `polar_whs_${secretBytes.toBase64()}`;
     const id = "evt_vendor_secret_001";
     const timestamp = "1717400000";
     const body = `{"type":"entitlement.created","id":"sub_vendor"}`;

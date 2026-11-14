@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  DEDICATED_CONNECTIONS_PER_PROCESS,
   createDedicatedConnectionOwner,
   createDedicatedConnectionSlots,
+  DEDICATED_CONNECTIONS_PER_PROCESS,
 } from "./dedicated-connection-slots";
 
 type RecordingOwnerOptions = {

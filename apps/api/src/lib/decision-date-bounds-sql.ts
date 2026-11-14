@@ -29,6 +29,7 @@
  * from an `as const` declaration, never input.
  */
 
+import { panic } from "better-result";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -36,6 +37,11 @@ import {
   CASE_LAW_JURISDICTIONS,
   type CaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
+import {
+  DECISION_DASH_CLASS_SOURCE,
+  DECISION_DOCKET_GRAMMARS,
+  DECISION_IDENTIFIER_WHITESPACE,
+} from "@stll/api-contract/decision-docket-grammar";
 
 import { DECISION_DATE_BOUNDS } from "@/api/lib/dates";
 
@@ -149,3 +155,177 @@ export const decisionDateWithinBoundsSql = (
   AND ${column} < ${ceilingSql}
 )`;
 };
+
+const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
+/** Translate the grammar's classes, retaining only the year capture. */
+const postgresPatternSource = (pattern: RegExp) => {
+  const source = pattern.source
+    .replaceAll("(?<year>", "(")
+    .replaceAll(/\(\?<\w+>/gu, "(?:");
+  const unicodeClasses = [
+    [String.raw`\p{L}`, "[:alpha:]"],
+    [String.raw`\p{Lu}`, "[:upper:]"],
+    [String.raw`\p{Ll}`, "[:lower:]"],
+  ] as const;
+  let context: "pattern" | "character-class" = "pattern";
+  let translated = "";
+  let captures = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const character =
+      source[index] ?? panic("Missing filing-year regex character");
+    if (character === "\\") {
+      const property = unicodeClasses.find(([token]) =>
+        source.startsWith(token, index),
+      );
+      if (property !== undefined) {
+        const [token, posix] = property;
+        translated += context === "character-class" ? posix : `[${posix}]`;
+        index += token.length - 1;
+        continue;
+      }
+      if (
+        source.startsWith(String.raw`\p{`, index) ||
+        source.startsWith(String.raw`\P{`, index)
+      ) {
+        return panic("Filing-year SQL has an unsupported Unicode class");
+      }
+      const escaped =
+        source[index + 1] ?? panic("Unterminated filing-year regex escape");
+      // ECMAScript digits are ASCII; PostgreSQL's digit class is locale-aware.
+      if (escaped === "d") {
+        translated += context === "character-class" ? "0-9" : "[0-9]";
+      } else {
+        translated += `${character}${escaped}`;
+      }
+      index += 1;
+      continue;
+    }
+    if (character === "[") {
+      context = "character-class";
+    } else if (character === "]") {
+      context = "pattern";
+    } else if (
+      character === "(" &&
+      context === "pattern" &&
+      source[index + 1] !== "?"
+    ) {
+      captures += 1;
+    }
+    translated += character;
+  }
+  return {
+    source: `${pattern.ignoreCase ? "(?i)" : ""}${translated}`,
+    captures,
+  };
+};
+
+const UNPARSEABLE_FILING_YEAR_SQL = "jsonb_build_object('type', 'unparseable')";
+const NONE_IN_FORMAT_FILING_YEAR_SQL =
+  "jsonb_build_object('type', 'none-in-format')";
+
+/**
+ * One jurisdiction's formats as first-match statements over `folded`.
+ *
+ * Each pattern runs at most once per row: an encoded format binds its one
+ * `regexp_match` and reads the year capture from that array, and a
+ * none-in-format format is a plain match. A later format runs only when every
+ * earlier one missed.
+ */
+const filingYearFormatStatements = (
+  formats: readonly (
+    | { readonly type: "none-in-format"; readonly patterns: readonly RegExp[] }
+    | { readonly type: "encoded"; readonly patterns: readonly RegExp[] }
+  )[],
+): string[] =>
+  formats.flatMap((format) =>
+    format.patterns.map((pattern) => {
+      const { source, captures } = postgresPatternSource(pattern);
+      switch (format.type) {
+        case "none-in-format":
+          return `IF folded ~ ${quoteLiteral(source)} THEN
+        RETURN ${NONE_IN_FORMAT_FILING_YEAR_SQL};
+      END IF;`;
+        case "encoded":
+          if (!pattern.source.includes("(?<year>") || captures !== 1) {
+            return panic(
+              "Encoded filing-year SQL format needs exactly the year capture",
+            );
+          }
+          return `matched := regexp_match(folded, ${quoteLiteral(source)});
+      IF matched IS NOT NULL THEN
+        RETURN CASE WHEN length(matched[1]) = 4 AND matched[1]::integer > 0
+          THEN jsonb_build_object('type', 'known', 'year', matched[1]::integer)
+          ELSE ${UNPARSEABLE_FILING_YEAR_SQL} END;
+      END IF;`;
+        default:
+          format satisfies never;
+          return panic("Unknown docket filing-year SQL format");
+      }
+    }),
+  );
+
+/**
+ * Migration DDL derived from every registered grammar's explicit policy.
+ *
+ * PL/pgSQL, so the folded docket and each match are bound to a variable once.
+ * A SQL-language body cannot bind them: the planner pulls a `WITH` or
+ * subquery fold up into every reference, re-running the normalization and the
+ * pattern for each use of `folded` and of the year capture.
+ */
+export const decisionDocketFilingYearFunctionSql = (
+  declaration: "create" | "replace",
+) => {
+  const whitespace = Array.from(DECISION_IDENTIFIER_WHITESPACE)
+    .map(
+      (character) =>
+        `\\${(character.codePointAt(0) ?? panic("Missing whitespace code point")).toString(16).padStart(4, "0")}`,
+    )
+    .join("");
+  const fold = `folded := regexp_replace(btrim(regexp_replace(
+        regexp_replace(normalize(coalesce(case_number, ''), NFKC), ${quoteLiteral(`[${DECISION_DASH_CLASS_SOURCE}]`)}, '-', 'g'),
+        U&'[${whitespace}]+', ' ', 'g')), '-[0-9]{1,4}$', '');`;
+  const branches = Object.values(DECISION_DOCKET_GRAMMARS).map(
+    ({ jurisdiction, filingYearRule }) => {
+      switch (filingYearRule.type) {
+        case "none-in-format":
+          return `WHEN ${quoteLiteral(jurisdiction)} THEN
+      RETURN ${NONE_IN_FORMAT_FILING_YEAR_SQL};`;
+        case "formats":
+          return `WHEN ${quoteLiteral(jurisdiction)} THEN
+      ${[fold, ...filingYearFormatStatements(filingYearRule.formats), `RETURN ${UNPARSEABLE_FILING_YEAR_SQL};`].join("\n      ")}`;
+        default:
+          filingYearRule satisfies never;
+          return panic("Unknown docket filing-year SQL rule");
+      }
+    },
+  );
+  return `CREATE ${declaration === "replace" ? "OR REPLACE " : ""}FUNCTION public.decision_docket_filing_year(case_number text, jurisdiction text)
+RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
+AS $function$
+DECLARE
+  folded text;
+  matched text[];
+BEGIN
+  CASE jurisdiction
+    ${[...branches, `ELSE\n      RETURN ${UNPARSEABLE_FILING_YEAR_SQL};`].join("\n    ")}
+  END CASE;
+END
+$function$;`;
+};
+
+type DecisionDateFilingYearSqlOptions = {
+  readonly date: SQLWrapper;
+  readonly country: SQLWrapper;
+  readonly caseNumber: SQLWrapper;
+};
+
+/** Unknown filing years do not rule out a published date. */
+export const decisionDateNotBeforeFilingYearSql = ({
+  date,
+  country,
+  caseNumber,
+}: DecisionDateFilingYearSqlOptions) =>
+  sql`coalesce(extract(year FROM ${date}) >=
+    (public.decision_docket_filing_year(${caseNumber}, ${country})->>'year')::integer, true)`;

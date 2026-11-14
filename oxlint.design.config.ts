@@ -5,12 +5,12 @@ import repository from "./oxlint.config.ts";
 import {
   BUILTIN_LINT_BACKLOG_RULES,
   DESIGN_LINT_MEASURED_RULES,
+  isDesignLintLocalPlugin,
+  isDesignLintLocalRuleScope,
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_SETTINGS,
   SIZE_LINT_UNMEASURED,
-  isDesignLintLocalPlugin,
-  isDesignLintLocalRuleScope,
   sizeLintPolicyOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { flattenLayers } from "./scripts/oxlint-effective-config.ts";

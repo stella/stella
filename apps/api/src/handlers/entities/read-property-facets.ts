@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { entities, fields } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   buildFilterConditions,
   fieldValueExpr,
@@ -22,10 +22,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
-  body: t.Object({
-    propertyId: tSafeId("property"),
-    filters: t.Optional(
-      t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+  body: v.object({
+    propertyId: resourceIdSchema("property"),
+    filters: v.optional(
+      v.pipe(v.array(tConditionNode), v.maxLength(LIMITS.viewFiltersCount)),
     ),
   }),
 } satisfies WorkspaceHandlerConfig;

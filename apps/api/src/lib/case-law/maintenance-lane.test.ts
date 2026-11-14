@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";

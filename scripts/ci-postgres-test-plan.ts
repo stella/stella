@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { appendFileSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -10,6 +10,7 @@ import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selectio
 import { discoverGatedTestFiles } from "../apps/api/scripts/run-gated-tests";
 import { API_ALL_RULES, selectApiTestImpact } from "./api-test-impact";
 import { hasDeclaredMarkdownReader } from "./ci-package-scope";
+import { encodePostgresTestSelection } from "./plan-output-codec";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const PLANNER_ENTRY = "scripts/ci-postgres-test-plan.ts";
@@ -246,6 +247,6 @@ if (import.meta.main) {
   } as const satisfies Record<GatedTestSelection["mode"], string>;
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `postgres_test_selection=${JSON.stringify(selection)}\npostgres_selection_reason=${reasons[selection.mode]}\n`,
+    `postgres_test_selection_encoded=${encodePostgresTestSelection(selection)}\npostgres_selection_reason=${reasons[selection.mode]}\n`,
   );
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Result, panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
@@ -24,9 +24,9 @@ import { childExitStatus } from "./child-exit-status";
 import {
   dockerCommand,
   DockerEndpointError,
-  resolveInstalledDevDockerKeeper,
   type DockerTarget,
   resolveDockerTarget,
+  resolveInstalledDevDockerKeeper,
 } from "./dev-docker";
 import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
@@ -38,9 +38,9 @@ import {
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
-  MAX_PORT_OFFSET,
   type DevMode,
   type InfraOffsetSetting,
+  MAX_PORT_OFFSET,
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {
@@ -1421,6 +1421,7 @@ export const createApiEnv = ({
   // balance to read; an older apps/api/.env must not block migrations.
   DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: `http://localhost:${String(ports.web)}`,
+  DEPLOY_ENVIRONMENT: "development",
   NODE_ENV: "development",
   // Local development capabilities require an explicit runtime opt-in.
   STELLA_LOCAL_DEV: "1",
@@ -1436,9 +1437,13 @@ export const createApiEnv = ({
 
 export const createWebEnv = ({
   baseEnv,
+  infraOffset,
+  infraPorts,
   ports,
 }: {
   baseEnv: NodeJS.ProcessEnv;
+  infraOffset: number;
+  infraPorts: InfraPorts;
   ports: DevPorts;
 }) => ({
   ...baseEnv,
@@ -1446,6 +1451,11 @@ export const createWebEnv = ({
   STELLA_WEB_PORT: String(ports.web),
   VITE_API_URL: publicApiUrlForPort(ports.api),
   VITE_DESKTOP_BRIDGE_PORT: String(ports.desktopBridge),
+  // The browser talks to this stack's own object store, the same one as
+  // S3_ENDPOINT in the API env; the content security policy allows only this.
+  ...(infraOffset > 0 && {
+    VITE_DOCUMENTS_ENDPOINT: `http://localhost:${String(infraPorts.rustfs)}`,
+  }),
   // Set these together after inherited/.env values so Vite sees one origin.
   ...(baseEnv["STELLA_DEV_SAME_ORIGIN_API"] === "1" && {
     DEV_API_PROXY_TARGET: apiUrlForPort(ports.api),
@@ -1576,6 +1586,22 @@ export const loadEnvFile = (envFilePath: string): Record<string, string> => {
 
   return env;
 };
+
+// `.env` is written once, so a variable `.env.example` gains later would stop
+// every existing checkout from booting. The example's values sit underneath the
+// checkout's own; the file itself is left alone, since worktrees share it.
+export const loadEnvFileWithExampleDefaults = (
+  envFilePath: string,
+  inherited: NodeJS.ProcessEnv = process.env,
+) =>
+  expandEnvMap({
+    ...Object.fromEntries(
+      Object.entries(loadEnvFile(`${envFilePath}.example`)).map(
+        ([key, value]) => [key, inherited[key] ?? value],
+      ),
+    ),
+    ...loadEnvFile(envFilePath),
+  });
 
 export const expandEnvMap = (
   env: Record<string, string>,
@@ -1829,6 +1855,7 @@ const spawnPersistentStep = (step: Step, rootDir: string) => {
     label: step.label,
     cwd: step.cwd,
     env,
+    output: "inherit",
     stdin: "inherit",
   }).map((child) => ({
     cmd: step.cmd,
@@ -1850,6 +1877,7 @@ const startBackgroundStep = (step: Step, rootDir: string) => {
     label: step.label,
     cwd: step.cwd,
     env,
+    output: "inherit",
     stdin: "ignore",
   }).map((child) => ({
     cmd: step.cmd,
@@ -1975,7 +2003,7 @@ const buildApiEnv = ({
 }: BuildApiEnvOptions) => {
   const envFilePath = path.resolve(rootDir, "apps/api/.env");
   const env: NodeJS.ProcessEnv = {
-    ...expandEnvMap(loadEnvFile(envFilePath)),
+    ...loadEnvFileWithExampleDefaults(envFilePath),
     ...createApiEnv({
       baseEnv: stripAppEnvKeys({ baseEnv: process.env, envFilePath }),
       infraOffset,
@@ -2139,9 +2167,11 @@ export const buildPersistentSteps = ({
       }
     : configuredApiEnv;
   const webEnv = {
-    ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
+    ...loadEnvFileWithExampleDefaults(path.resolve(rootDir, "apps/web/.env")),
     ...createWebEnv({
       baseEnv: webBaseEnv,
+      infraOffset,
+      infraPorts,
       ports,
     }),
   };
@@ -2202,27 +2232,40 @@ export const buildPersistentSteps = ({
   }
 
   // Uploads only become searchable, extractable, and readable by AI once the
-  // document-processing worker drains their runs; without it every upload
-  // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position. With
-  // background workers disabled (always for a seeded stack, or by the
-  // developer's env) the process would exit at once and the runner would
-  // treat that as a crash, so it is not started.
-  if (modeIncludesApi(mode) && apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled") {
-    primary.push({
-      cmd: [
-        resolveCommandPath("bun"),
-        "--no-clear-screen",
-        "--no-env-file",
-        "--preload",
-        "./src/dev/register-mock-ai.ts",
-        ...watchArgs,
-        "src/scripts/document-processing-worker.ts",
-      ],
-      cwd: path.resolve(rootDir, "apps/api"),
-      env: apiEnv,
-      label: "Document processing worker",
-    });
+  // document-processing and file-derivative workers drain their runs; without
+  // them every upload stays queued forever. Workers have no HTTP surface, so
+  // they follow readiness-checked steps: checks pair with steps by position. Seeded stacks
+  // keep the scheduler disabled in the API process, but run the
+  // queue workers separately so uploaded documents are processed locally.
+  if (
+    modeIncludesApi(mode) &&
+    (seeded || apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled")
+  ) {
+    for (const { entrypoint, label } of [
+      {
+        entrypoint: "src/scripts/document-processing-worker.ts",
+        label: "Document processing worker",
+      },
+      {
+        entrypoint: "src/scripts/file-derivative-worker.ts",
+        label: "File derivative worker",
+      },
+    ]) {
+      primary.push({
+        cmd: [
+          resolveCommandPath("bun"),
+          "--no-clear-screen",
+          "--no-env-file",
+          "--preload",
+          "./src/dev/register-mock-ai.ts",
+          ...watchArgs,
+          entrypoint,
+        ],
+        cwd: path.resolve(rootDir, "apps/api"),
+        env: seeded ? { ...apiEnv, SCHEDULED_JOBS_MODE: "enabled" } : apiEnv,
+        label,
+      });
+    }
   }
 
   if (modeIncludesDesktop(mode)) {

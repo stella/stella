@@ -16,8 +16,8 @@ import {
   legalListVerificationRuns,
   organizationSettings,
   properties,
-  workspaces,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -846,7 +846,7 @@ test.each([
     }),
 );
 
-test("queue handoff failures surface while the persisted run remains recoverable", async () =>
+test("a queue handoff failure is isolated to its run, which stays recoverable", async () =>
   await withProductionPrerequisites(async () => {
     const runId = await seedRun();
     const healthy = queueFixture();
@@ -854,29 +854,28 @@ test("queue handoff failures surface while the persisted run remains recoverable
       asTestRaw<
         Parameters<typeof reconcileQueuedListVerificationRuns>[0]["db"]
       >(db);
-    const failed = await reconcileQueuedListVerificationRuns({
-      db: queueDb,
-      grants,
-      queue: {
-        ...healthy.queue,
-        add: async () => {
-          throw new Error("Fixture queue unavailable");
+    const failed = (
+      await reconcileQueuedListVerificationRuns({
+        db: queueDb,
+        grants,
+        queue: {
+          ...healthy.queue,
+          add: async () => {
+            throw new Error("Fixture queue unavailable");
+          },
         },
-      },
-    });
-    expect(failed.isErr()).toBe(true);
-    if (failed.isErr()) {
-      expect(failed.error.message).toBe(
-        "List verification reconciliation failed",
-      );
-    }
+      })
+    ).unwrap();
+    expect(failed.handedOff).toBe(0);
     expect(await readRun(runId)).toEqual({ status: "queued", errorCode: null });
-    const recovered = await reconcileQueuedListVerificationRuns({
-      db: queueDb,
-      grants,
-      queue: healthy.queue,
-    });
-    expect(recovered.isOk()).toBe(true);
+    const recovered = (
+      await reconcileQueuedListVerificationRuns({
+        db: queueDb,
+        grants,
+        queue: healthy.queue,
+      })
+    ).unwrap();
+    expect(recovered.handedOff).toBe(1);
     expect(healthy.added).toHaveLength(1);
   }));
 

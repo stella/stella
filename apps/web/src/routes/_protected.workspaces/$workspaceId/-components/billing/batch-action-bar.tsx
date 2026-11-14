@@ -35,10 +35,7 @@ export const BatchActionBar = ({
 
   const handleAction = (
     action:
-      | "approve"
-      | "revert_to_draft"
-      | "mark_billable"
-      | "mark_non_billable",
+      "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable",
   ) => {
     batchUpdate.mutate(
       { workspaceId, ids: selectedIds, action },
@@ -70,7 +67,7 @@ export const BatchActionBar = ({
   return (
     <div className="bg-muted/50 flex items-center gap-2 rounded-md border px-3 py-2">
       <span className="text-sm font-medium">
-        {t("billing.selectedCount", { count: selectedIds.length })}
+        {t("common.selectedCount", { count: selectedIds.length })}
       </span>
       <div className="ms-auto flex items-center gap-1">
         {canUpdateEntry && (

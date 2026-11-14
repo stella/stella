@@ -3,8 +3,8 @@
  * conversation between them.
  */
 
-import { OVERLAY_THREAD_PRESENTATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
-import type { OverlayThreadPresentation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
+import type { FileChatOverlayActivation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import type {
   ChatTab,
   InspectorTab,
@@ -53,7 +53,7 @@ export const activeChatTabThreadId = ({
   return tab?.type === "chat" ? tab.id : undefined;
 };
 
-type OverlayThreadCardVisibilityArgs = {
+type ReaderOverlayActivationArgs = {
   /** The thread the reader's floating composer is bound to. */
   overlayThreadId: ChatThreadId;
   /** The docked inspector is showing its active tab rather than minimized. */
@@ -63,18 +63,19 @@ type OverlayThreadCardVisibilityArgs = {
 };
 
 /**
- * Where the conversation is read while the composer floats over the text.
+ * Whether the composer floats over the text at all.
  *
- * A chat tab on screen showing this very thread IS the conversation view, so
- * the floating card would only repeat it beside itself. The composer stays
- * either way, and the card returns the moment that tab is closed, minimized,
- * or replaced by another tab.
+ * A chat tab on screen showing this very thread IS the conversation, composer
+ * included, so a second composer over the text would only repeat it beside
+ * itself with the same draft. The bar returns the moment that tab is closed,
+ * minimized, or replaced by another tab; the thread's runtime outlives either
+ * surface, so a reply still streaming carries over.
  */
-export const overlayThreadCardVisibility = ({
+export const readerOverlayActivation = ({
   overlayThreadId,
   tabOpen,
   tabThreadId,
-}: OverlayThreadCardVisibilityArgs): OverlayThreadPresentation =>
+}: ReaderOverlayActivationArgs): FileChatOverlayActivation =>
   tabOpen && tabThreadId === overlayThreadId
-    ? OVERLAY_THREAD_PRESENTATION.tab
-    : OVERLAY_THREAD_PRESENTATION.card;
+    ? FILE_CHAT_OVERLAY_ACTIVATION.deferred
+    : FILE_CHAT_OVERLAY_ACTIVATION.active;

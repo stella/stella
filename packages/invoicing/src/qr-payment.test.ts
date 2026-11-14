@@ -15,13 +15,15 @@ describe("Czech payment payload", () => {
         amountMinor: cents(55_555),
         currency: "CZK",
         variableSymbol: "0987654321",
+        constantSymbol: "0308",
+        specificSymbol: "42",
         dueDate: "2021-04-30",
         message: "PRISPEVEK NA NADACI",
       }).unwrap(),
     ).toEqual({
       status: "payable",
       payload:
-        "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20210430*MSG:PRISPEVEK NA NADACI",
+        "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*X-KS:0308*X-SS:42*DT:20210430*MSG:PRISPEVEK NA NADACI",
     });
   });
 
@@ -75,6 +77,22 @@ describe("Czech payment payload", () => {
     });
   });
 
+  test("preserves non-ASCII messages while escaping field delimiters", () => {
+    const result = buildCzechQrPaymentPayload({
+      documentType: "invoice",
+      iban,
+      amountMinor: cents(100),
+      currency: "CZK",
+      message: "Příliš * žluťoučký kůň",
+    }).unwrap();
+
+    expect(result).toEqual({
+      status: "payable",
+      payload:
+        "SPD*1.0*ACC:CZ3301000000000002970297*AM:1.00*CC:CZK*MSG:Příliš %2A žluťoučký kůň",
+    });
+  });
+
   test("rejects a checksum-invalid IBAN", () => {
     const result = buildCzechQrPaymentPayload({
       documentType: "invoice",
@@ -104,6 +122,30 @@ describe("Czech payment payload", () => {
         expect(result.error.message).toBe(
           "Variable symbol must contain 1 to 10 digits",
         );
+      }
+    }
+  });
+
+  test("applies digit and length limits to every Czech payment symbol", () => {
+    for (const [field, label] of [
+      ["variableSymbol", "Variable"],
+      ["constantSymbol", "Constant"],
+      ["specificSymbol", "Specific"],
+    ] as const) {
+      for (const symbol of ["", "12A34", "12345678901"]) {
+        const result = buildCzechQrPaymentPayload({
+          documentType: "invoice",
+          iban,
+          amountMinor: cents(100),
+          currency: "CZK",
+          [field]: symbol,
+        });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toBe(
+            `${label} symbol must contain 1 to 10 digits`,
+          );
+        }
       }
     }
   });

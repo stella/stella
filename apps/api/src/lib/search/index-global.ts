@@ -1,10 +1,18 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
+import {
+  ENTITY_KINDS,
+  GLOBAL_SEARCH_RESULT_TYPES,
+  isEntityKind,
+  RESOURCE_TYPE,
+  resourceRef,
+} from "@stll/api-contract";
+import {
+  GLOBAL_SEARCH_CHAT_COVERAGE,
+  GLOBAL_SEARCH_RESULT_LIMIT,
+} from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -20,16 +28,12 @@ import type {
 } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
-import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { escapeLike } from "@/api/lib/escape-like";
-import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  brandPersistedCaseLawDecisionId,
   brandPersistedChatThreadId,
   brandPersistedContactId,
   brandPersistedWorkspaceId,
@@ -41,7 +45,10 @@ import {
   searchDocumentsAccessSql,
   workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
-import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
+import {
+  mapEntityHit,
+  searchRankingTier,
+} from "@/api/lib/search/global-search-mappers";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
@@ -52,12 +59,21 @@ import {
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
+import type {
+  GlobalSearchCursor,
+  SearchRankingTier,
+} from "@/api/lib/search/pagination";
 import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
-import { buildSearchTsQuery } from "@/api/lib/search/query";
+import {
+  buildSearchCandidateTsQuery,
+  buildSearchTsQuery,
+} from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
+import { permittedSearchResultTypes } from "@/api/lib/search/result-type-scopes";
+import { searchTitleTierSql } from "@/api/lib/search/search-ranking";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
   ChatGlobalSearchHit,
@@ -68,79 +84,33 @@ import type {
   GlobalSearchResultType,
   MatterGlobalSearchHit,
 } from "@/api/lib/search/types";
+import {
+  projectChatSearchCandidates,
+  readChatCandidateBatches,
+} from "@/api/lib/search/withdrawn-chat-candidates";
+import type {
+  ChatCandidateRead,
+  ChatSearchCandidateRow,
+} from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
 const MATTER_RELEVANCE_BOOST = 0.15;
-
 type RawRow = Record<string, unknown>;
 type CountRow = { total?: unknown };
 
 type ScoredGlobalSearchHit = {
   hit: GlobalSearchHit;
+  tier: SearchRankingTier;
   score: number;
 };
-
-type SearchPromise = Promise<RawRow[]>;
-
-type ReadLanguageAlternates = (
-  languageGroupKeys: readonly string[],
-) => Promise<PublicDecisionLanguageAlternatesByGroup>;
 
 type SearchReadTransaction = Pick<Transaction, "execute">;
 
 type SearchGlobalReaders = {
   /** The request's scoped handle; every tenant read runs under its policies. */
   scopedDb: ScopedDb;
-  /** Language versions come from the public-law reader, as on every other
-   *  decision response. */
-  readLanguageAlternates?: ReadLanguageAlternates;
-};
-
-type GlobalSearchRead = {
-  result: GlobalSearchResult;
-  /** Language group of each fetched decision, keyed by decision id. */
-  caseLawLanguageGroups: ReadonlyMap<string, string>;
-};
-
-/**
- * Language versions of the case-law hits on the page, read in one batch on
- * the public-law reader once the tenant transaction has finished.
- */
-const withLanguageAlternates = async (
-  { result, caseLawLanguageGroups }: GlobalSearchRead,
-  readLanguageAlternates: ReadLanguageAlternates,
-): Promise<GlobalSearchResult> => {
-  const pageGroupKeys = new Set(
-    result.hits.flatMap((hit) => {
-      const key =
-        hit.type === "case-law"
-          ? caseLawLanguageGroups.get(hit.decisionId)
-          : undefined;
-      return key === undefined ? [] : [key];
-    }),
-  );
-  if (pageGroupKeys.size === 0) {
-    return result;
-  }
-  const alternates = await readLanguageAlternates([...pageGroupKeys]);
-  return {
-    ...result,
-    hits: result.hits.map((hit) =>
-      hit.type === "case-law"
-        ? {
-            ...hit,
-            // One entry per language already; the rest of each version stays
-            // off the wire, since a hit only needs to know whether to name
-            // its language.
-            languageAlternates: alternates
-              .alternatesFor(caseLawLanguageGroups.get(hit.decisionId) ?? null)
-              .map(({ language }) => ({ language })),
-          }
-        : hit,
-    ),
-  };
 };
 
 export type GlobalSearchQuery = {
@@ -154,6 +124,12 @@ export type GlobalSearchQuery = {
   /** User-selected subset to filter by; empty means no extra filter. */
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /**
+   * The caller's access-token scopes, or `undefined` for a browser session.
+   * A result type the scopes do not reach is neither searched nor counted,
+   * whatever `types` asks for (`permittedSearchResultTypes`).
+   */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -247,18 +223,41 @@ const toHeadline = (value: unknown): string | null => {
   return text === null ? null : escapeAndHighlight(text);
 };
 
-const selectedTypes = (types: readonly GlobalSearchResultType[]) =>
-  new Set<GlobalSearchResultType>(types);
+/**
+ * The result types one search reads. `searched` is what the caller asked for
+ * (every type when it asked for none), kept to the types it is `permitted`;
+ * `narrowed` says whether that falls short of every type.
+ */
+type ResultTypeSelection = {
+  readonly searched: ReadonlySet<GlobalSearchResultType>;
+  readonly permitted: ReadonlySet<GlobalSearchResultType>;
+  readonly narrowed: boolean;
+};
+
+const selectedTypes = (
+  types: readonly GlobalSearchResultType[],
+  permittedTypes: readonly GlobalSearchResultType[],
+): ResultTypeSelection => {
+  const permitted = new Set(permittedTypes);
+  const requested: readonly GlobalSearchResultType[] =
+    types.length === 0 ? GLOBAL_SEARCH_RESULT_TYPES : types;
+  return {
+    searched: new Set(requested.filter((type) => permitted.has(type))),
+    permitted,
+    narrowed:
+      types.length > 0 || permitted.size < GLOBAL_SEARCH_RESULT_TYPES.length,
+  };
+};
 
 const shouldSearchType = (
-  selected: ReadonlySet<GlobalSearchResultType>,
+  selected: ResultTypeSelection,
   type: GlobalSearchResultType,
-) => selected.size === 0 || selected.has(type);
+) => selected.searched.has(type);
 
 const NATIVE_PREVIEW_MIME_TYPES = [PDF_MIME_TYPE, DOCX_MIME_TYPE] as const;
 
-const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
-  selected.size === 0 || [...selected].some(isEntityKind);
+const hasSelectedEntityType = (selected: ResultTypeSelection) =>
+  [...selected.searched].some(isEntityKind);
 
 const fileFieldJoin = (mimeTypes: readonly string[]) => {
   const mimeFilter =
@@ -315,24 +314,6 @@ const fileFieldJoin = (mimeTypes: readonly string[]) => {
 `;
 };
 
-const caseLawBodyPreviewJoin = sql`
-  LEFT JOIN LATERAL (
-    SELECT string_agg(
-      section_item.value ->> 'text',
-      ' '
-      ORDER BY (section_item.value ->> 'index')::int
-    ) AS text
-    FROM jsonb_array_elements(
-      CASE jsonb_typeof(d.sections)
-        WHEN 'array' THEN d.sections
-        ELSE '[]'::jsonb
-      END
-    ) section_item(value)
-    WHERE section_item.value ->> 'type' <> 'header'
-      AND nullif(section_item.value ->> 'text', '') IS NOT NULL
-  ) body_preview ON true
-`;
-
 const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
 `;
@@ -355,7 +336,11 @@ const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
     color: toNullableString(row["color"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -376,45 +361,11 @@ const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
-};
-
-const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
-  const decisionId = String(row["id"]);
-  const resource = resourceRef({
-    type: RESOURCE_TYPE.CASE_LAW_DECISION,
-    id: brandPersistedCaseLawDecisionId(decisionId),
-  });
-  const hit: GlobalSearchHit = {
-    ...globalSearchIdentity(resource),
-    id: `case-law:${decisionId}`,
-    type: "case-law",
-    courtAbbreviation:
-      courtAbbreviation({
-        court: String(row["court"]),
-        country: String(row["country"]),
-        ecli: toNullableString(row["ecli"]),
-      }) ?? null,
-    decisionId,
-    caseNumber: String(row["case_number"]),
-    identifiers: decisionIdentifierProjection(row["identifiers"], {
-      caseNumber: String(row["case_number"]),
-      caseNumberType: primaryReferenceTypeFromStored(row["case_number_type"]),
-      ecli: toNullableString(row["ecli"]),
-    }),
-    court: String(row["court"]),
-    country: String(row["country"]),
-    decisionDate: toNullableString(row["decision_date"]),
-    slug: toNullableString(row["slug"]),
-    language: String(row["language"]),
-    // Filled in for the page's hits after the tenant transaction.
-    languageAlternates: [],
-    title: `${String(row["case_number"])} - ${String(row["court"])}`,
-    headline: toHeadline(row["headline"]),
-    updatedAt: toIso(row["updated_at"]),
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
   };
-
-  return { hit, score: Number(row["score"]) };
 };
 
 const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -435,7 +386,11 @@ const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
     updatedAt: toIso(row["updated_at"]),
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };
 
 const facetBuckets = (
@@ -454,10 +409,18 @@ const facetBuckets = (
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
-const rowsWhen = async (
+const readChatLeg = async (
   condition: boolean,
-  query: () => SearchPromise,
-): SearchPromise => {
+  read: () => Promise<ChatCandidateRead>,
+): Promise<ChatCandidateRead> =>
+  condition
+    ? await read()
+    : { rows: [], coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE };
+
+const rowsWhen = async <Row extends RawRow>(
+  condition: boolean,
+  query: () => Promise<Row[]>,
+) => {
   if (!condition) {
     return [];
   }
@@ -513,6 +476,7 @@ const toMimeTypeFacetMap = (
 type FilterFragmentInput = {
   query: string;
   types: readonly GlobalSearchResultType[];
+  permittedTypes: readonly GlobalSearchResultType[];
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -529,12 +493,13 @@ type FilterFragmentInput = {
 const buildSearchFilterFragments = ({
   query,
   types,
+  permittedTypes,
   editedByUserIds,
   mimeTypes,
   updatedFrom,
   updatedTo,
 }: FilterFragmentInput) => {
-  const selected = selectedTypes(types);
+  const selected = selectedTypes(types, permittedTypes);
   const hasEditorFilter = editedByUserIds.length > 0;
   const hasMimeTypeFilter = mimeTypes.length > 0;
   const hasSearchQuery = query.trim().length > 0;
@@ -553,7 +518,8 @@ const buildSearchFilterFragments = ({
           fractionalSecondDigits: 3,
         });
 
-  const entityTypes = [...selected].filter(isEntityKind);
+  const entityTypes = [...selected.searched].filter(isEntityKind);
+  const permittedEntityTypes = [...selected.permitted].filter(isEntityKind);
   const entityEditorFilter = sqlWhen(
     hasEditorFilter,
     () =>
@@ -576,7 +542,6 @@ const buildSearchFilterFragments = ({
   const entityUpdatedFilter = updatedRangeFilter(sql`sd.updated_at`);
   const matterUpdatedFilter = updatedRangeFilter(sql`wsd.updated_at`);
   const contactUpdatedFilter = updatedRangeFilter(sql`csd.updated_at`);
-  const caseLawUpdatedFilter = updatedRangeFilter(sql`d.updated_at`);
   const chatUpdatedFilter = updatedRangeFilter(sql`t.updated_at`);
   const entityTextSearchFilter = sqlWhen(
     hasSearchQuery,
@@ -590,14 +555,11 @@ const buildSearchFilterFragments = ({
     hasSearchQuery,
     () => sql`AND csd.tsv @@ ${tsQuery}`,
   );
-  const caseLawTextSearchFilter = sqlWhen(
-    hasSearchQuery,
-    () => sql`AND clsd.tsv @@ ${tsQuery}`,
-  );
-  const chatTextSearchFilter = sqlWhen(
-    hasSearchQuery,
-    () => sql`AND cst.tsv @@ ${tsQuery}`,
-  );
+  const chatCandidateTsQuery = buildSearchCandidateTsQuery(query);
+  const chatTextSearchFilter =
+    hasSearchQuery && chatCandidateTsQuery !== null
+      ? sql`AND cst.tsv @@ ${chatCandidateTsQuery}`
+      : sql``;
   // The truncation belongs here, not at the call sites: `ts_headline` cost
   // grows with the document it is handed, and a per-branch `left(...)` is a
   // bound each new branch has to remember. Snippets come from the head of the
@@ -633,6 +595,9 @@ const buildSearchFilterFragments = ({
     updatedAt: SQL;
     relevanceBoost?: number | undefined;
   }): SQL => sql`${searchScoreValue(options)} AS score`;
+  const searchTierValue = (title: SQL): SQL => searchTitleTierSql(title, query);
+  const searchTier = (title: SQL): SQL =>
+    sql`${searchTierValue(title)} AS tier`;
   const searchOrderBy = ({
     id,
     updatedAt,
@@ -641,38 +606,43 @@ const buildSearchFilterFragments = ({
     updatedAt: SQL;
   }): SQL =>
     hasSearchQuery
-      ? sql`score DESC, ${id} DESC`
+      ? sql`tier DESC, score DESC, ${id} DESC`
       : sql`${updatedAt} DESC, ${id} DESC`;
   const entityTypeFilter = sqlWhen(
-    selected.size > 0,
+    selected.narrowed,
     () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
   );
+  // The type facet counts every kind the caller may see, so a text search can
+  // offer the kinds it did not select; a kind outside the grant is never counted.
+  const permittedEntityTypeFilter = sqlWhen(
+    permittedEntityTypes.length < ENTITY_KINDS.length,
+    () => sql`AND sd.kind = ANY(${typedPgArray(permittedEntityTypes, "text")})`,
+  );
   const entityTypeFacetFilter =
-    selected.size > 0 && !hasSearchQuery && normalizedUpdatedFrom === undefined
+    selected.narrowed && !hasSearchQuery && normalizedUpdatedFrom === undefined
       ? entityTypeFilter
-      : sql``;
+      : permittedEntityTypeFilter;
 
   return {
     selected,
     hasEditorFilter,
     hasMimeTypeFilter,
     restrictToEntities,
-    tsQuery,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
     matterUpdatedFilter,
     contactUpdatedFilter,
-    caseLawUpdatedFilter,
     chatUpdatedFilter,
     entityTextSearchFilter,
     matterTextSearchFilter,
     contactTextSearchFilter,
-    caseLawTextSearchFilter,
     chatTextSearchFilter,
     searchHeadline,
     searchScore,
     searchScoreValue,
+    searchTier,
+    searchTierValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -688,6 +658,7 @@ const readGlobalSearch = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -696,30 +667,21 @@ const readGlobalSearch = async (
     limit,
   }: GlobalSearchQuery,
   database: SearchReadTransaction,
-): Promise<GlobalSearchRead> => {
+): Promise<Result<GlobalSearchResult, ArtefactProvenanceDecodeError>> => {
   const parsedCursor = parseGlobalSearchCursor(cursor);
   const pagination = (() => {
     switch (parsedCursor.type) {
       case "initial":
         return {
           isFirstPage: true,
-          legacyOffset: null,
           searchCursor: null,
           seen: 0,
         };
       case "keyset":
         return {
           isFirstPage: false,
-          legacyOffset: null,
           searchCursor: parsedCursor.cursor,
           seen: parsedCursor.cursor.seen,
-        };
-      case "legacy":
-        return {
-          isFirstPage: false,
-          legacyOffset: parsedCursor.offset,
-          searchCursor: null,
-          seen: parsedCursor.offset,
         };
       case "invalid":
         return panic("searchGlobal received an invalid cursor");
@@ -729,9 +691,9 @@ const readGlobalSearch = async (
       }
     }
   })();
-  const { isFirstPage, legacyOffset, searchCursor, seen } = pagination;
+  const { isFirstPage, searchCursor, seen } = pagination;
   const pageLimit = Math.min(limit, GLOBAL_SEARCH_RESULT_LIMIT - seen);
-  const fetchLimit = (legacyOffset ?? 0) + pageLimit + 1;
+  const fetchLimit = pageLimit + 1;
   // Counts and facets are computed only on the first page. Subsequent
   // pages reuse the values the client already has, saving ~7 of the
   // 15 SQL round-trips per request.
@@ -743,16 +705,16 @@ const readGlobalSearch = async (
     entityUpdatedFilter,
     matterUpdatedFilter,
     contactUpdatedFilter,
-    caseLawUpdatedFilter,
     chatUpdatedFilter,
     entityTextSearchFilter,
     matterTextSearchFilter,
     contactTextSearchFilter,
-    caseLawTextSearchFilter,
     chatTextSearchFilter,
     searchHeadline,
     searchScore,
     searchScoreValue,
+    searchTier,
+    searchTierValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -760,6 +722,7 @@ const readGlobalSearch = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -804,6 +767,7 @@ const readGlobalSearch = async (
         file_field.property_id AS file_property_id,
         file_field.mime_type,
         ${searchHeadline(sql`sd.title || ' ' || sd.searchable_text`)},
+        ${searchTier(sql`sd.title`)},
         ${searchScore({ tsv: sql`sd.tsv`, updatedAt: sql`sd.updated_at` })},
         sd.updated_at
       FROM search_documents sd
@@ -822,6 +786,7 @@ const readGlobalSearch = async (
         ${entityWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`sd.title`),
           score: searchScoreValue({
             tsv: sql`sd.tsv`,
             updatedAt: sql`sd.updated_at`,
@@ -842,6 +807,7 @@ const readGlobalSearch = async (
         wsd.title,
         w.color,
         ${searchHeadline(sql`wsd.title || ' ' || wsd.searchable_text`)},
+        ${searchTier(sql`wsd.title`)},
         ${searchScore({
           tsv: sql`wsd.tsv`,
           updatedAt: sql`wsd.updated_at`,
@@ -856,6 +822,7 @@ const readGlobalSearch = async (
         ${matterWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`wsd.title`),
           score: searchScoreValue({
             tsv: sql`wsd.tsv`,
             updatedAt: sql`wsd.updated_at`,
@@ -879,6 +846,7 @@ const readGlobalSearch = async (
         csd.contact_type,
         csd.title,
         ${searchHeadline(sql`csd.title || ' ' || csd.searchable_text`)},
+        ${searchTier(sql`csd.title`)},
         ${searchScore({ tsv: sql`csd.tsv`, updatedAt: sql`csd.updated_at` })},
         csd.updated_at
       FROM contact_search_documents csd
@@ -888,6 +856,7 @@ const readGlobalSearch = async (
         ${contactWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
+          tier: searchTierValue(sql`csd.title`),
           score: searchScoreValue({
             tsv: sql`csd.tsv`,
             updatedAt: sql`csd.updated_at`,
@@ -899,55 +868,6 @@ const readGlobalSearch = async (
     `),
   );
 
-  const caseLawPromise = rowsWhen(
-    !restrictToEntities && shouldSearchType(selected, "case-law"),
-    () =>
-      database.execute(sql`
-      SELECT
-        clsd.decision_id AS id,
-        d.case_number,
-        d.ecli,
-        d.case_number_type,
-        d.court,
-        d.country,
-        d.decision_date,
-        d.slug,
-        d.language,
-        d.language_group_key,
-        (
-          SELECT coalesce(
-            jsonb_agg(
-              jsonb_build_object('type', identifier.type, 'value', identifier.value)
-              ORDER BY identifier.type, identifier.value
-            ),
-            '[]'::jsonb
-          )
-          FROM case_law_decision_identifiers identifier
-          WHERE identifier.decision_id = d.id
-        ) AS identifiers,
-        ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
-        ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
-        d.updated_at
-      FROM case_law_search_documents clsd
-      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
-      ${publicCaseLawDecisionJoin}
-      ${caseLawBodyPreviewJoin}
-      WHERE TRUE
-        ${caseLawTextSearchFilter}
-        ${caseLawUpdatedFilter}
-        ${globalSearchCursorSql({
-          cursor: searchCursor,
-          score: searchScoreValue({
-            tsv: sql`clsd.tsv`,
-            updatedAt: sql`d.updated_at`,
-          }),
-          id: sql`'case-law:' || clsd.decision_id::text`,
-        })}
-      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
-      LIMIT ${fetchLimit}
-    `),
-  );
-
   const chatScope = chatThreadScopeSql({
     userId,
     organizationId,
@@ -955,16 +875,45 @@ const readGlobalSearch = async (
     selectedWorkspaceIds,
   });
 
-  const chatPromise = rowsWhen(
+  const chatSourceOrder = hasSearchQuery
+    ? sql`ms.created_at, ms.message_id`
+    : sql`ms.created_at DESC, ms.message_id DESC`;
+  const chatPromise = readChatLeg(
     !restrictToEntities && shouldSearchType(selected, "chat"),
-    () =>
-      database.execute(sql`
+    async () => {
+      const readPage = async (
+        pageCursor: GlobalSearchCursor | null,
+        rowLimit: number,
+      ) =>
+        await database.execute<ChatSearchCandidateRow>(sql`
       SELECT
         t.id AS id,
         t.workspace_id,
         w.name AS workspace_name,
-        cst.title,
-        ${searchHeadline(sql`cst.title || ' ' || cst.searchable_text`)},
+        t.title,
+        t.title_source,
+        t.generation_provenance,
+        t.subject_decision_id,
+        (SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'role', source_message.role,
+          'content', CASE WHEN source_message.source_bytes <= ${LIMITS.searchChatCandidateSourceBytesMax}
+            AND source_message.source_position <= ${LIMITS.searchChatCandidateSourceMessagesMax}
+            THEN source_message.content ELSE NULL END,
+          'overflow', source_message.source_bytes > ${LIMITS.searchChatCandidateSourceBytesMax}
+            OR source_message.source_position > ${LIMITS.searchChatCandidateSourceMessagesMax}
+        ) ORDER BY source_message.source_position), '[]'::jsonb) FROM (
+          SELECT m.role, m.content,
+            sum(octet_length(m.content::text)) OVER (ORDER BY ${chatSourceOrder}) AS source_bytes,
+            row_number() OVER (ORDER BY ${chatSourceOrder}) AS source_position
+          FROM chat_message_search_documents ms
+          JOIN chat_messages m ON m.id = ms.message_id AND m.thread_id = ms.thread_id
+          WHERE ms.thread_id = t.id
+          ORDER BY ${chatSourceOrder}
+          LIMIT ${hasSearchQuery ? LIMITS.searchChatCandidateSourceMessagesMax + 1 : LIMITS.searchChatPreviewMessageLimit}
+        ) source_message) AS source_messages,
+        NULL::text AS headline,
+        ${searchTier(sql`cst.title`)},
+
         ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
         t.updated_at
       FROM chat_thread_search_documents cst
@@ -977,7 +926,8 @@ const readGlobalSearch = async (
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         ${globalSearchCursorSql({
-          cursor: searchCursor,
+          cursor: pageCursor,
+          tier: searchTierValue(sql`cst.title`),
           score: searchScoreValue({
             tsv: sql`cst.tsv`,
             updatedAt: sql`t.updated_at`,
@@ -985,26 +935,23 @@ const readGlobalSearch = async (
           id: sql`'chat:' || cst.thread_id::text`,
         })}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
-      LIMIT ${fetchLimit}
-    `),
+      LIMIT ${rowLimit}
+    `);
+      if (!hasSearchQuery) {
+        return {
+          rows: await readPage(searchCursor, fetchLimit),
+          coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE,
+        };
+      }
+      return await readChatCandidateBatches({
+        readBatch: async (batchCursor) =>
+          await readPage(batchCursor, LIMITS.searchChatCandidateThreadsMax + 1),
+      });
+    },
   );
 
   const hasAlternativeFacetPredicate =
     hasSearchQuery || updatedFrom !== undefined;
-  const caseLawCountQuery = sql`
-    SELECT count(*)::int AS total
-    FROM (
-      SELECT 1
-      FROM case_law_search_documents clsd
-      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
-      ${publicCaseLawDecisionJoin}
-      WHERE TRUE
-        ${caseLawTextSearchFilter}
-        ${caseLawUpdatedFilter}
-      LIMIT ${GLOBAL_SEARCH_RESULT_LIMIT}
-    ) bounded_case_law
-  `;
-
   const countPromises = [
     countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
       database.execute(sql`
@@ -1053,12 +1000,6 @@ const readGlobalSearch = async (
       `),
     ),
     countWhen(
-      isFirstPage &&
-        !restrictToEntities &&
-        shouldSearchType(selected, "case-law"),
-      () => database.execute(caseLawCountQuery),
-    ),
-    countWhen(
       isFirstPage && !restrictToEntities && shouldSearchType(selected, "chat"),
       () =>
         database.execute(sql`
@@ -1100,13 +1041,13 @@ const readGlobalSearch = async (
 
   // The primary count already covers a selected type (or every type when no
   // type is selected). Only query alternative buckets for a text or lower-date
-  // search, not for blank type-only or upper-bound-only browsing. Public
-  // case-law counts are independently capped at the pagination horizon.
+  // search, not for blank type-only or upper-bound-only browsing.
   const shouldCountAlternativeTypeFacet = (
     type: GlobalSearchResultType,
   ): boolean =>
     isFirstPage &&
     !restrictToEntities &&
+    selected.permitted.has(type) &&
     !shouldSearchType(selected, type) &&
     hasAlternativeFacetPredicate;
 
@@ -1135,11 +1076,6 @@ const readGlobalSearch = async (
           ${contactTextSearchFilter}
           ${contactWorkspaceFilter}
       `),
-  );
-
-  const caseLawTypeFacetCountPromise = countWhen(
-    shouldCountAlternativeTypeFacet("case-law"),
-    () => database.execute(caseLawCountQuery),
   );
 
   const chatTypeFacetCountPromise = countWhen(
@@ -1262,17 +1198,14 @@ const readGlobalSearch = async (
     entityRows,
     matterRows,
     contactRows,
-    caseLawRows,
-    chatRows,
+    chatRead,
     entityCount,
     matterCount,
     contactCount,
-    caseLawCount,
     chatCount,
     entityTypeFacetRows,
     matterTypeFacetCount,
     contactTypeFacetCount,
-    caseLawTypeFacetCount,
     chatTypeFacetCount,
     workspaceFacetRows,
     editorFacetRows,
@@ -1281,41 +1214,45 @@ const readGlobalSearch = async (
     entityPromise,
     matterPromise,
     contactPromise,
-    caseLawPromise,
     chatPromise,
     ...countPromises,
     entityTypeFacetPromise,
     matterTypeFacetCountPromise,
     contactTypeFacetCountPromise,
-    caseLawTypeFacetCountPromise,
     chatTypeFacetCountPromise,
     workspaceFacetPromise,
     editorFacetPromise,
     mimeTypeFacetPromise,
   ]);
 
+  const projectedChatRows = await projectChatSearchCandidates({
+    database,
+    rows: chatRead.rows,
+    query,
+    cursor: searchCursor,
+    limit: fetchLimit,
+  });
+  if (projectedChatRows.isErr()) {
+    return Result.err(projectedChatRows.error);
+  }
   const scoredHits = [
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
-    ...caseLawRows.map(mapCaseLawHit),
-    ...chatRows.map(mapChatHit),
+    ...projectedChatRows.value.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);
 
   const page = paginateScoredSearchHits({
-    scoredHits:
-      legacyOffset === null ? scoredHits : scoredHits.slice(legacyOffset),
+    scoredHits,
     limit: pageLimit,
     seen,
   });
   const totalEntities = totalFrom(entityCount);
   const totalMatters = totalFrom(matterCount);
   const totalContacts = totalFrom(contactCount);
-  const totalCaseLaw = totalFrom(caseLawCount);
   const totalChat = totalFrom(chatCount);
-  const totalCount =
-    totalEntities + totalMatters + totalContacts + totalCaseLaw + totalChat;
+  const totalCount = totalEntities + totalMatters + totalContacts + totalChat;
 
   const typeFacetMap = new Map<string, { count: number }>();
   for (const row of entityTypeFacetRows) {
@@ -1327,9 +1264,6 @@ const readGlobalSearch = async (
   const contactFacetCount = shouldSearchType(selected, "contact")
     ? totalContacts
     : totalFrom(contactTypeFacetCount);
-  const caseLawFacetCount = shouldSearchType(selected, "case-law")
-    ? totalCaseLaw
-    : totalFrom(caseLawTypeFacetCount);
   const chatFacetCount = shouldSearchType(selected, "chat")
     ? totalChat
     : totalFrom(chatTypeFacetCount);
@@ -1339,9 +1273,6 @@ const readGlobalSearch = async (
   if (contactFacetCount > 0) {
     typeFacetMap.set("contact", { count: contactFacetCount });
   }
-  if (caseLawFacetCount > 0) {
-    typeFacetMap.set("case-law", { count: caseLawFacetCount });
-  }
   if (chatFacetCount > 0) {
     typeFacetMap.set("chat", { count: chatFacetCount });
   }
@@ -1350,45 +1281,38 @@ const readGlobalSearch = async (
   const editorFacetMap = toStringFacetMap(editorFacetRows);
   const mimeTypeFacetMap = toMimeTypeFacetMap(mimeTypeFacetRows);
 
-  const caseLawLanguageGroups = new Map(
-    caseLawRows.flatMap((row) => {
-      const key = toNullableString(row["language_group_key"]);
-      return key === null ? [] : [[String(row["id"]), key] as const];
-    }),
-  );
-
-  return {
-    result: {
-      hits: page.items,
-      facets: {
-        type: facetBuckets(typeFacetMap),
-        workspace: facetBuckets(workspaceFacetMap),
-        editor: facetBuckets(editorFacetMap),
-        mimeType: facetBuckets(mimeTypeFacetMap),
-      },
-      totalCount,
-      nextCursor: page.nextCursor,
+  return Result.ok({
+    hits: page.items,
+    facets: {
+      type: facetBuckets(typeFacetMap),
+      workspace: facetBuckets(workspaceFacetMap),
+      editor: facetBuckets(editorFacetMap),
+      mimeType: facetBuckets(mimeTypeFacetMap),
     },
-    caseLawLanguageGroups,
-  };
+    totalCount,
+    nextCursor: page.nextCursor,
+    chatCoverage: chatRead.coverage,
+  });
 };
 
 /**
  * Tenant global search. Every statement runs in one transaction on the
  * request's scoped handle, so the database policies decide which rows,
  * editor profiles included, the caller can see.
+ *
+ * Case law is not searched here. `"case-law"` stays a result type for
+ * contract compatibility, but the public corpus has one search engine, the
+ * per-country case-law search, and ranking the whole corpus in this
+ * transaction cannot be bounded: a common word makes most of it a candidate.
+ * The palette's case-law section asks that engine through
+ * `POST /v1/search/case-law`; a search here selecting only case law answers
+ * no hits.
  */
 export const searchGlobal = async (
   query: GlobalSearchQuery,
-  {
-    scopedDb,
-    readLanguageAlternates = readPublicDecisionLanguageAlternatesForGroupKeys,
-  }: SearchGlobalReaders,
-): Promise<GlobalSearchResult> =>
-  await withLanguageAlternates(
-    await scopedDb(async (tx) => await readGlobalSearch(query, tx)),
-    readLanguageAlternates,
-  );
+  { scopedDb }: SearchGlobalReaders,
+): Promise<Result<GlobalSearchResult, ArtefactProvenanceDecodeError>> =>
+  await scopedDb(async (tx) => await readGlobalSearch(query, tx));
 
 // ---------------------------------------------------------------------------
 // Per-facet bucket search — used when a user types in a facet's search box
@@ -1406,6 +1330,8 @@ export type GlobalFacetSearchQuery = {
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /** As on `GlobalSearchQuery`: the result types the buckets may count. */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -1431,6 +1357,7 @@ const readGlobalFacet = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -1452,6 +1379,7 @@ const readGlobalFacet = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -2009,74 +1937,95 @@ export const reindexWorkspacesForContact = async (
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  await rebuildSupplementalSearchDocuments(organizationId, rootDb);
+  // The owner connection reads contacts inside their organization only, so
+  // each page commits in its own organization-scoped transaction.
+  await rebuildSupplementalSearchDocuments(
+    organizationId,
+    rootDb,
+    async (database, run) =>
+      await withOwnerOrganizationScope(database, organizationId, run),
+  );
 };
 
 type KeysetPage<Id extends string> = { last: Id | null; more: boolean };
+
+/**
+ * Runs one page's read and projection writes; a caller that must scope them
+ * (the owner connection) wraps each page in its own transaction.
+ */
+type PageScope = <T>(
+  database: SearchDocumentDatabase,
+  run: (pageDatabase: SearchDocumentDatabase) => Promise<T>,
+) => Promise<T>;
 
 // One keyset page of an organization's contacts, rebuilt as one batch.
 const rebuildContactPage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"contact"> | null,
   database: SearchDocumentDatabase,
-): Promise<KeysetPage<SafeId<"contact">>> => {
-  const page = await database
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(
-      after
-        ? and(
-            eq(contacts.organizationId, organizationId),
-            gt(contacts.id, after),
-          )
-        : eq(contacts.organizationId, organizationId),
-    )
-    .orderBy(asc(contacts.id))
-    .limit(REINDEX_BATCH_SIZE);
-  await writeContactProjections(
-    page.map(({ id }) => id),
-    database,
-  );
-  return {
-    last: page.at(-1)?.id ?? after,
-    more: page.length === REINDEX_BATCH_SIZE,
-  };
-};
+  inPage: PageScope,
+): Promise<KeysetPage<SafeId<"contact">>> =>
+  await inPage(database, async (pageDatabase) => {
+    const page = await pageDatabase
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        after
+          ? and(
+              eq(contacts.organizationId, organizationId),
+              gt(contacts.id, after),
+            )
+          : eq(contacts.organizationId, organizationId),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(REINDEX_BATCH_SIZE);
+    await writeContactProjections(
+      page.map(({ id }) => id),
+      pageDatabase,
+    );
+    return {
+      last: page.at(-1)?.id ?? after,
+      more: page.length === REINDEX_BATCH_SIZE,
+    };
+  });
 
 // One keyset page of an organization's matters, rebuilt as one batch.
 const rebuildWorkspacePage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"workspace"> | null,
   database: SearchDocumentDatabase,
-): Promise<KeysetPage<SafeId<"workspace">>> => {
-  const page = await database
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      after
-        ? and(
-            eq(workspaces.organizationId, organizationId),
-            gt(workspaces.id, after),
-          )
-        : eq(workspaces.organizationId, organizationId),
-    )
-    .orderBy(asc(workspaces.id))
-    .limit(REINDEX_BATCH_SIZE);
-  await writeWorkspaceProjections(
-    page.map(({ id }) => id),
-    database,
-  );
-  return {
-    last: page.at(-1)?.id ?? after,
-    more: page.length === REINDEX_BATCH_SIZE,
-  };
-};
+  inPage: PageScope,
+): Promise<KeysetPage<SafeId<"workspace">>> =>
+  await inPage(database, async (pageDatabase) => {
+    const page = await pageDatabase
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        after
+          ? and(
+              eq(workspaces.organizationId, organizationId),
+              gt(workspaces.id, after),
+            )
+          : eq(workspaces.organizationId, organizationId),
+      )
+      .orderBy(asc(workspaces.id))
+      .limit(REINDEX_BATCH_SIZE);
+    await writeWorkspaceProjections(
+      page.map(({ id }) => id),
+      pageDatabase,
+    );
+    return {
+      last: page.at(-1)?.id ?? after,
+      more: page.length === REINDEX_BATCH_SIZE,
+    };
+  });
 
 // Keyset pages of one organization's contacts, then its matters. Each page
 // is one batch: a read of its sources and one projection transaction.
 export const rebuildSupplementalSearchDocuments = async (
   organizationId: SafeId<"organization">,
   database: SearchDocumentDatabase,
+  inPage: PageScope = async (pageDatabase, run) => await run(pageDatabase),
 ): Promise<void> => {
   let contactPage: KeysetPage<SafeId<"contact">> = { last: null, more: true };
   while (contactPage.more) {
@@ -2085,6 +2034,7 @@ export const rebuildSupplementalSearchDocuments = async (
       organizationId,
       contactPage.last,
       database,
+      inPage,
     );
   }
 
@@ -2098,6 +2048,7 @@ export const rebuildSupplementalSearchDocuments = async (
       organizationId,
       workspacePage.last,
       database,
+      inPage,
     );
   }
 };

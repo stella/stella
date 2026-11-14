@@ -11,6 +11,7 @@ import type {
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
@@ -102,6 +103,16 @@ export const readChatRevisionContextChanges = async ({
       },
     );
 
+    const { projection, subjectByThread } = await readChatCopyProjection({
+      tx,
+      threadIds: [threadId],
+      values: page.items,
+    });
+    const maskedContent = (content: PersistedChatMessageContent) =>
+      projection.chat(
+        { role: "assistant", content },
+        subjectByThread.get(threadId),
+      ).content;
     // Prompt context uses only the newest page; earlier edits stay in history.
     return page.items.map((row) => {
       if (
@@ -115,8 +126,10 @@ export const readChatRevisionContextChanges = async ({
       return {
         messageId: row.messageId,
         revision: row.revision + 1,
-        before: revisionText(row.content),
-        after: revisionText(row.nextContent ?? row.currentContent),
+        before: revisionText(maskedContent(row.content)),
+        after: revisionText(
+          maskedContent(row.nextContent ?? row.currentContent),
+        ),
       };
     });
   });

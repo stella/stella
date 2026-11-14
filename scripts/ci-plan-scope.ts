@@ -3,9 +3,15 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { MODEL_CATALOG_INPUTS } from "../packages/scripts/src/generated-files";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
-import { dependencyScope, type DependencyScope } from "./ci-dependency-scope";
+import {
+  directlyChangedSuiteSpecs,
+  hostedSuiteSpecs,
+  PRODUCTION_JOB,
+} from "./ci-browser-suites";
+import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
   requiresDesktopBrowser,
   requiresLandingBuild,
@@ -17,7 +23,11 @@ import {
   sourceImportClosure,
 } from "./detect-route-smoke-changes";
 import { planServiceSuites } from "./detect-service-suite-changes";
-import { landingDeployAffected } from "./landing-deploy-scope";
+import {
+  deployAffected,
+  type DeployRange,
+  LANDING_PACKAGE,
+} from "./landing-deploy-scope";
 import { productionE2eChanged } from "./production-e2e-inputs.mjs";
 
 const TRUE = "true";
@@ -39,6 +49,8 @@ export type ChangedFileScopeInput = {
   suiteDepth: string;
   heavyOnly: boolean;
   prTitle: string;
+  /** An armed pull request proves the queue-only suites at merge-group scope. */
+  armed?: boolean;
   versionChangedInHead?: boolean;
   root?: string | undefined;
 };
@@ -52,9 +64,7 @@ export type ChangedFileScopeDetectors = {
   landingBuild: (
     options: Parameters<typeof requiresLandingBuild>[0],
   ) => unknown;
-  landingDeploy: (
-    options: Parameters<typeof landingDeployAffected>[0],
-  ) => unknown;
+  landingDeploy: (range: DeployRange) => unknown;
   desktopBrowser: (
     options: Parameters<typeof requiresDesktopBrowser>[0],
   ) => unknown;
@@ -63,13 +73,25 @@ export type ChangedFileScopeDetectors = {
 export const DEFAULT_DETECTORS = {
   packageChecks: requiresPackageChecks,
   landingBuild: requiresLandingBuild,
-  landingDeploy: landingDeployAffected,
+  landingDeploy: (range) =>
+    deployAffected({ ...range, packageName: LANDING_PACKAGE }),
   desktopBrowser: requiresDesktopBrowser,
 } satisfies ChangedFileScopeDetectors;
 
 const widenScope = (message: string) => {
   console.log(`::warning title=Changed-file scope::${message}`);
 };
+
+const reportDetectorCrash = (name: string, error: unknown) => {
+  console.log(
+    `::error title=Changed-file scope detector::kind=infra class=scope-detector detector=${JSON.stringify(name)} error=${JSON.stringify(String(error))}`,
+  );
+};
+
+class MigrationDetectorError extends Error {
+  override name = "MigrationDetectorError";
+  readonly _tag = "MigrationDetectorError";
+}
 
 // A detector that throws or answers a non-boolean cannot prove a scope
 // unaffected, so its checks run and the run says why. The planner runs before
@@ -84,6 +106,7 @@ const failClosedDetector = (name: string, detect: () => unknown) => {
       `${name} detector failed (a non-boolean answer); running its checks`,
     );
   } catch (error) {
+    reportDetectorCrash(name, error);
     widenScope(
       `${name} detector failed (${String(error)}); running its checks`,
     );
@@ -91,18 +114,53 @@ const failClosedDetector = (name: string, detect: () => unknown) => {
   return true;
 };
 
+// The migration checks share their path predicate with the security workflow
+// detector, so one script decides both.
+const migrationsChanged = (files: readonly string[], root = REPO_ROOT) => {
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      "scripts/detect-security-workflow-changes.sh",
+      "migrations",
+      "--files",
+      ...files,
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  const answer = result.stdout.toString().trim();
+  if (result.exitCode !== 0) {
+    throw new MigrationDetectorError(
+      `migration detector exited ${String(result.exitCode)}: ${result.stderr.toString().trim()}`,
+    );
+  }
+  if (answer !== TRUE && answer !== FALSE) {
+    throw new MigrationDetectorError(
+      `migration detector returned ${JSON.stringify(answer)}`,
+    );
+  }
+  return answer === TRUE;
+};
+
 // A service-suite detector failure cannot prove any suite unaffected.
-const failClosedServiceSuites = (
+export const failClosedServiceSuites = (
   files: readonly string[],
   root: string | undefined,
+  detect = planServiceSuites,
 ) => {
   try {
-    return planServiceSuites(files, root);
+    return detect(files, root, REPO_ROOT);
   } catch (error) {
+    reportDetectorCrash("service suite", error);
     widenScope(
       `service suite detector failed (${String(error)}); running every service suite`,
     );
-    return { postgres: true, corpus: true, valkey: true, collab: true };
+    return {
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: true,
+      devSeed: true,
+    };
   }
 };
 
@@ -153,28 +211,17 @@ export const LEGAL_ATLAS_IMAGE_INPUTS = [
   ".github/workflows/ci.yml",
 ] as const;
 
-export const MODEL_CATALOG_DRIFT_INPUTS = [
-  ".github/workflows/ci.yml",
-  "packages/ai-catalog/package.json",
-  "packages/ai-catalog/src/capabilities-overrides.ts",
-  "packages/ai-catalog/src/capabilities.gen.ts",
-  "packages/ai-catalog/src/document-input-overrides.ts",
-  "packages/ai-catalog/src/index.ts",
-  "packages/ai-catalog/src/model-rate-policy.ts",
-  "packages/ai-catalog/src/model-rate.ts",
-  "packages/ai-catalog/src/model-rates.gen.ts",
-  "packages/scripts/src/model-catalog-capabilities-gen.ts",
-  "packages/scripts/src/model-catalog-capabilities.ts",
-  "packages/scripts/src/model-catalog-rates-gen.ts",
-] as const;
+export const MODEL_CATALOG_DRIFT_INPUTS = MODEL_CATALOG_INPUTS;
 
 export const ROUTE_TREE_INPUTS = [
   "apps/web/src/routes/*",
   "apps/web/vite.config.ts",
   "apps/web/route-tree.config.ts",
+  "apps/web/scripts/route-template-manifest.ts",
   "apps/web/scripts/generate-route-tree.ts",
   "apps/web/package.json",
   "apps/web/src/routeTree.gen.ts",
+  "apps/web/src/route-templates.gen.ts",
   "packages/scripts/src/prepared-generated-sources.ts",
   "packages/scripts/src/generated-input-identity.ts",
   "packages/scripts/src/generated-files.ts",
@@ -201,7 +248,10 @@ export const STACK_REDACTION_BROWSER_INPUTS = [
 ] as const;
 
 export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
+  "VERSION",
   "apps/desktop/*",
+  "packages/agent-engine/package.json",
+  "packages/agent-engine/scripts/build-sidecar.ts",
   "scripts/desktop-*",
   "scripts/*tauri*",
   "scripts/detect-desktop-*",
@@ -209,14 +259,13 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "scripts/ci-windows-dry-run-*",
   "scripts/wasm-*",
   "scripts/test-wasm-offline.sh",
-  "scripts/run-oxfmt.ts",
-  "scripts/check-format-environment.ts",
   "scripts/ci-install*",
   "scripts/build-updater-manifest.sh",
   "scripts/promote-desktop-release.sh",
   "scripts/release-channel.sh",
   "scripts/rename-desktop-artifacts.sh",
   "scripts/check-api-deployment.ts",
+  "scripts/check-release-publication-source.sh",
   "scripts/gh-retry.sh",
   "scripts/retry.sh",
   "scripts/build-desktop-dmg.sh",
@@ -280,17 +329,21 @@ const e2eRequired = (scope: "core" | "landing", files: readonly string[]) => {
 
 const desktopRustRequired = (files: readonly string[]) =>
   anyMatches(files, [
+    ".github/actions/cargo-deny/*",
     "apps/desktop/rust-toolchain.toml",
     "apps/desktop/src-tauri/*",
     "apps/desktop/fixtures/*",
     "apps/desktop/src/i18n/langs/*",
     "apps/desktop/src/activity/preview-apps.json",
     "apps/desktop/src/clipboard/clipboard-types.ts",
+    "packages/api-contract/src/desktop-account-link.fixtures.json",
     "packages/api-contract/src/desktop-account-policy.json",
     "packages/api-contract/src/desktop-feature-access.json",
     "packages/api-contract/src/desktop-handoff.ts",
     "packages/api-contract/src/desktop-presence-policy.json",
     "packages/api-contract/src/desktop-presence-request.fixture.json",
+    "packages/api-contract/src/desktop-runner.fixtures.json",
+    "packages/agent-engine/src/sidecar/protocol.fixtures.json",
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",
@@ -298,6 +351,13 @@ const desktopRustRequired = (files: readonly string[]) =>
 
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   const full = input.suiteDepth === "full";
+  const desktopWindowsDryRun =
+    input.eventName !== "merge_group" ||
+    input.scopeUnknown ||
+    input.changedFiles.some(
+      (file) =>
+        !/\.mdx?$/u.test(file) && matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+    );
   const releaseTypecheck =
     input.heavyOnly &&
     (PERIODIC_RELEASE_TYPECHECK_EVENTS.some(
@@ -320,6 +380,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     api_image_platforms: BOTH_PLATFORMS,
     api_image_smoke_required: TRUE,
     postgres_suites_required: TRUE,
+    dev_seed_required: TRUE,
     corpus_suites_required: TRUE,
     valkey_suites_required: TRUE,
     collaboration_suite_required: TRUE,
@@ -338,7 +399,12 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     legal_atlas_image_required: TRUE,
     legal_atlas_image_pr_required: TRUE,
     dependency_malware_required: TRUE,
+    // The dependency jobs run only for pull requests and merge groups.
+    dependency_changes_required: bool(
+      input.eventName === "pull_request" || input.eventName === "merge_group",
+    ),
     lockfile_ages_required: FALSE,
+    database_migrations_required: TRUE,
     migration_rehearsal_required: TRUE,
     mobile_build_required: TRUE,
     model_catalog_drift_required: TRUE,
@@ -354,7 +420,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     web_build_required: TRUE,
     web_image_smoke_required: TRUE,
     windows_scripts_required: TRUE,
-    desktop_windows_dry_run_required: TRUE,
+    desktop_windows_dry_run_required: bool(desktopWindowsDryRun),
   };
 };
 
@@ -404,6 +470,7 @@ const deriveScopeFacts = (
         api_image_platforms: "[]",
         api_image_smoke_required: FALSE,
         postgres_suites_required: api,
+        dev_seed_required: api,
         corpus_suites_required: api,
         valkey_suites_required: api,
         collaboration_suite_required: FALSE,
@@ -420,7 +487,9 @@ const deriveScopeFacts = (
         legal_atlas_image_required: FALSE,
         legal_atlas_image_pr_required: FALSE,
         dependency_malware_required: FALSE,
+        dependency_changes_required: FALSE,
         lockfile_ages_required: FALSE,
+        database_migrations_required: FALSE,
         migration_rehearsal_required: FALSE,
         mobile_build_required: FALSE,
         model_catalog_drift_required: FALSE,
@@ -490,6 +559,9 @@ const deriveNormalScopeFacts = (
     desktopBrowser = false;
   }
   const full = input.suiteDepth === "full";
+  // An armed pull request proves the queue-only suites at merge-group scope.
+  const heavyScope =
+    full || (input.eventName === "pull_request" && input.armed === true);
   const version = files.includes("VERSION");
   const imageInputs = anyMatches(files, [
     "*/Dockerfile",
@@ -545,21 +617,24 @@ const deriveNormalScopeFacts = (
   if (e2eCore || routeSmoke) {
     webBuild = true;
   }
+  const landingPaths = () =>
+    p([
+      "apps/landing/*",
+      "docs/changelog/*",
+      "VERSION",
+      "packages/*",
+      "patches/*",
+      "bun.lock",
+      "package.json",
+      ".github/workflows/ci.yml",
+    ]);
   let landing =
     input.eventName === "pull_request"
       ? failClosedDetector("landing build", () =>
           detectors.landingBuild({ changed: scopeFiles, root }),
-        )
-      : p([
-          "apps/landing/*",
-          "docs/changelog/*",
-          "VERSION",
-          "packages/*",
-          "patches/*",
-          "bun.lock",
-          "package.json",
-          ".github/workflows/ci.yml",
-        ]);
+        ) ||
+        (heavyScope && landingPaths())
+      : landingPaths();
   // e2e-landing runs the same landing build before it tests the preview.
   if (e2eLanding) {
     landing = false;
@@ -589,10 +664,21 @@ const deriveNormalScopeFacts = (
     "scripts/retry.sh",
   ]);
   const legal = legalAtlasImageSelected(files);
-  const postgres = full ? packageChecks : services.postgres;
-  const corpus = full ? packageChecks : services.corpus;
-  const valkey = full ? packageChecks : services.valkey;
-  const collaboration = full ? collab : services.collab;
+  const {
+    postgres,
+    devSeed,
+    corpus,
+    valkey,
+    collab: collaboration,
+  } = full
+    ? {
+        postgres: packageChecks,
+        devSeed: packageChecks,
+        corpus: packageChecks,
+        valkey: packageChecks,
+        collab,
+      }
+    : services;
   const servicePr =
     services.postgres || services.corpus || services.valkey || services.collab;
   const fixTest =
@@ -616,6 +702,7 @@ const deriveNormalScopeFacts = (
     services,
     desktopBrowser,
     full,
+    heavyScope,
     version,
     imageInputs,
     p,
@@ -629,6 +716,7 @@ const deriveNormalScopeFacts = (
     sandbox,
     legal,
     postgres,
+    devSeed,
     corpus,
     valkey,
     collaboration,
@@ -648,6 +736,7 @@ export const OUTPUT_ORDER = [
   "api_image_platforms",
   "api_image_smoke_required",
   "postgres_suites_required",
+  "dev_seed_required",
   "corpus_suites_required",
   "valkey_suites_required",
   "collaboration_suite_required",
@@ -664,7 +753,9 @@ export const OUTPUT_ORDER = [
   "legal_atlas_image_required",
   "legal_atlas_image_pr_required",
   "dependency_malware_required",
+  "dependency_changes_required",
   "lockfile_ages_required",
+  "database_migrations_required",
   "migration_rehearsal_required",
   "mobile_build_required",
   "model_catalog_drift_required",
@@ -720,8 +811,9 @@ export const OUTPUT_RULES = {
         bool((sandbox || apiDeps) && imageInputs),
     ),
   api_image_platforms: (facts) =>
-    scopeRule(facts, "api_image_platforms", ({ full, version }) =>
-      full || version ? BOTH_PLATFORMS : ARM_PLATFORM,
+    // Full depth, arming and a version change build every architecture.
+    scopeRule(facts, "api_image_platforms", ({ heavyScope, version }) =>
+      heavyScope || version ? BOTH_PLATFORMS : ARM_PLATFORM,
     ),
   api_image_smoke_required: (facts) =>
     scopeRule(facts, "api_image_smoke_required", ({ p }) =>
@@ -760,6 +852,8 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "postgres_suites_required", ({ postgres }) =>
       bool(postgres),
     ),
+  dev_seed_required: (facts) =>
+    scopeRule(facts, "dev_seed_required", ({ devSeed }) => bool(devSeed)),
   corpus_suites_required: (facts) =>
     scopeRule(facts, "corpus_suites_required", ({ corpus }) => bool(corpus)),
   valkey_suites_required: (facts) =>
@@ -797,9 +891,19 @@ export const OUTPUT_RULES = {
           full
             ? e2eCore
             : input.eventName === "pull_request" &&
-                failClosedDetector("production e2e", () =>
+                (failClosedDetector("production e2e", () =>
                   productionE2eChanged(files),
-                ),
+                ) ||
+                  // The job also runs the suites it hosts; the e2e planner
+                  // adds the changes their import graphs reach.
+                  failClosedDetector(
+                    "production browser suites",
+                    () =>
+                      hostedSuiteSpecs(
+                        directlyChangedSuiteSpecs(files, input.root),
+                        PRODUCTION_JOB,
+                      ).length > 0,
+                  )),
         ),
     ),
   e2e_landing_required: (facts) =>
@@ -824,17 +928,64 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "dependency_malware_required", ({ files }) =>
       bool(requiresMalwareScan(files)),
     ),
+  dependency_changes_required: (facts) =>
+    scopeRule(facts, "dependency_changes_required", ({ p }) =>
+      bool(
+        p([
+          "scripts/dependency-audit*",
+          "scripts/check-trusted-dependencies.ts",
+          "scripts/retry.sh",
+          "bun.lock",
+          "*/bun.lock",
+          "package.json",
+          "*/package.json",
+          "bunfig.toml",
+          "*/bunfig.toml",
+          "patches/*",
+          ".github/workflows/*",
+          "action.yml",
+          "action.yaml",
+          "*/action.yml",
+          "*/action.yaml",
+          "Cargo.toml",
+          "*/Cargo.toml",
+          "Cargo.lock",
+          "*/Cargo.lock",
+          "pyproject.toml",
+          "*/pyproject.toml",
+          "uv.lock",
+          "*/uv.lock",
+          "requirements*.txt",
+          "*/requirements*.txt",
+          "requirements*.in",
+          "*/requirements*.in",
+        ]),
+      ),
+    ),
   lockfile_ages_required: (facts) =>
     scopeRule(facts, "lockfile_ages_required", ({ p }) =>
       bool(
         p([
           "bun.lock",
           "*/bun.lock",
+          "Cargo.lock",
+          "*/Cargo.lock",
+          "Cargo.toml",
+          "*/Cargo.toml",
           "scripts/check-lockfile-release-ages.ts",
           "scripts/check-lockfile-release-ages.test.ts",
           "scripts/check-stll-quarantine-excludes.ts",
           "scripts/bun-lock-text.ts",
+          "scripts/crates-io-release-age.ts",
         ]),
+      ),
+    ),
+  database_migrations_required: (facts) =>
+    scopeRule(facts, "database_migrations_required", ({ files, input }) =>
+      bool(
+        failClosedDetector("migration change", () =>
+          migrationsChanged(files, input.root),
+        ),
       ),
     ),
   migration_rehearsal_required: (facts) =>
@@ -845,12 +996,19 @@ export const OUTPUT_RULES = {
           "apps/api/drizzle/*",
           "apps/api/src/db/*",
           "apps/api/src/lib/db/*",
+          // The OAuth resource policy the boot census and its online repair
+          // compare the stored policy against.
+          "apps/api/src/mcp/resource-policy-contract.ts",
+          "apps/api/src/lib/auth/oauth-own-client-links.ts",
+          "packages/api-contract/src/mcp.ts",
+          "packages/api-contract/src/api-oauth-resource.ts",
           "apps/api/src/lib/decision-date-bounds-sql.ts",
           "apps/api/src/handlers/case-law/citation-resolution.ts",
           "apps/api/src/scripts/*",
           "scripts/rehearse-migration-upgrade.sh",
           "scripts/resolve-promoted-release.ts",
           "scripts/migration-rehearsal-db.ts",
+          "scripts/migration-rehearsal-startup-refusal.ts",
           ".github/workflows/ci.yml",
         ]),
       ),
@@ -893,6 +1051,11 @@ export const OUTPUT_RULES = {
             "patches/*",
             "scripts/check-published-exports.ts",
             "scripts/prepare-publish.ts",
+            "scripts/publish-declarations.ts",
+            "scripts/pack-reproducibly.sh",
+            "scripts/check-publish-reproducibility.sh",
+            "scripts/publish-packages.ts",
+            "scripts/generate-npm-release-jobs.ts",
             "scripts/publish-manifest.ts",
             "scripts/published-export-guards.ts",
             "bun.lock",
@@ -918,7 +1081,12 @@ export const OUTPUT_RULES = {
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
       bool(
-        p(["packages/scan-engine/*", "bun.lock", ".github/workflows/ci.yml"]),
+        p([
+          "packages/scan-engine/*",
+          ".github/actions/cargo-deny/*",
+          "bun.lock",
+          ".github/workflows/ci.yml",
+        ]),
       ),
     ),
   stack_redaction_browsers_required: (facts) =>
@@ -941,6 +1109,7 @@ export const OUTPUT_RULES = {
             "packages/ai-catalog/*",
             "packages/api-contract/*",
             "packages/boe/*",
+            "packages/brand/*",
             "packages/cli/*",
             "packages/business-registries/*",
             "packages/chat-limits/*",
@@ -1005,14 +1174,18 @@ export const OUTPUT_RULES = {
       ),
     ),
   desktop_windows_dry_run_required: (facts) =>
-    scopeRule(facts, "desktop_windows_dry_run_required", ({ files }) =>
-      bool(
-        files.some(
-          (file) =>
-            !/\.mdx?$/u.test(file) &&
-            matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+    scopeRule(
+      facts,
+      "desktop_windows_dry_run_required",
+      ({ input, files, full }) =>
+        bool(
+          (full && input.eventName !== "merge_group") ||
+            files.some(
+              (file) =>
+                !/\.mdx?$/u.test(file) &&
+                matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+            ),
         ),
-      ),
     ),
 } as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;
 
@@ -1117,9 +1290,14 @@ if (import.meta.main) {
     suiteDepth: Bun.env["SUITE_DEPTH"] ?? "",
     heavyOnly,
     prTitle: Bun.env["PR_TITLE"] ?? "",
+    armed: Bun.env["ARMED"] === TRUE,
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;
+  writeFileSync(
+    path.join(runnerTemp, "changed-scope.json"),
+    `${JSON.stringify(scope)}\n`,
+  );
   if (Bun.env["GITHUB_OUTPUT"]) {
     await Bun.write(Bun.file(Bun.env["GITHUB_OUTPUT"]), output);
   } else {

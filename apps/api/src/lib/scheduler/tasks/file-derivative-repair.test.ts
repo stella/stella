@@ -51,6 +51,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -270,12 +271,12 @@ describe("file derivative repair", () => {
         task: REPAIR_FILE_DERIVATIVES_TASK,
         schedule: { type: "interval", everyMs: 300_000 },
         nextRunAt: new Date(),
-        lockedBy: LEASE_TOKEN,
+        ...heldSchedulerLease(LEASE_TOKEN),
         payload: { cursor: null },
       })
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { lockedBy: LEASE_TOKEN, payload: { cursor: null } },
+        set: { ...heldSchedulerLease(LEASE_TOKEN), payload: { cursor: null } },
       });
   });
 
@@ -624,7 +625,7 @@ describe("file derivative repair", () => {
     {
       cause: new Error("Queue write refused"),
       grade: "defect",
-      reason: "unclassified",
+      reason: "tagged_failure",
     },
     {
       cause: Object.assign(new Error("Redis connection reset"), {
@@ -634,7 +635,7 @@ describe("file derivative repair", () => {
       reason: "network_reset",
     },
   ])(
-    "the runner captures one $grade exception per failed tick",
+    "the runner records a $grade failure per failed tick",
     async ({ cause, grade, reason }) => {
       await seedFileField();
       const task = createRepairFileDerivativesTask({
@@ -645,11 +646,20 @@ describe("file derivative repair", () => {
 
       expect(await runRepairInRunner(task)).toBe("failed");
       const exceptions = analytics.exceptions();
-      expect(exceptions).toHaveLength(1);
-      expect(exceptions.at(0)?.properties).toMatchObject({
-        "error.class": "FileDerivativeRepairError",
-        "failure.grade": grade,
-        "failure.reason": reason,
+      expect(exceptions).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(exceptions.at(0)?.properties).toMatchObject({
+          "error.class": "FileDerivativeRepairError",
+          "failure.grade": grade,
+          "failure.reason": reason,
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason": reason,
       });
       expect(
         logs.records.filter(

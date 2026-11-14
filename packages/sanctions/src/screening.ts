@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
@@ -6,6 +6,7 @@ import { ObjectColumn } from "./compact-storage";
 import type {
   BirthDate,
   EntityType,
+  Identifier,
   ListVersion,
   ParsedList,
   SanctionsEntry,
@@ -17,25 +18,25 @@ import {
   spendScreeningWork,
 } from "./name-match";
 import type {
+  IndexBuildSteps,
   NameIndex,
   NameMatch,
   NameMatches,
   ScreeningWorkBudget,
-  IndexBuildSteps,
 } from "./name-match";
 import {
-  nameReading,
   hasExcessQueryTokens,
-  MAX_QUERY_TOKENS,
   MAX_QUERY_CHARACTERS,
+  MAX_QUERY_TOKENS,
+  nameReadings,
 } from "./normalise";
 import type { NameReading } from "./normalise";
 import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
 import type { ScreeningEntry } from "./screening-entries";
 import {
   screeningWorkBound,
-  screeningWorkStatsSteps,
   type ScreeningWorkStats,
+  screeningWorkStatsSteps,
 } from "./screening-work-bound";
 import { isCalendarDate } from "./values";
 
@@ -81,6 +82,33 @@ export type ScreeningIndex = {
 const identifierKey = (value: string): string =>
   value.toUpperCase().replaceAll(/[^\p{L}\p{N}]/gu, "");
 
+type IdentifierPostingsInput = {
+  postings: IdentifierPostings;
+  entryIndex: number;
+  identifiers: readonly Identifier[];
+};
+
+/** Files a record under each usable identifier it carries, once per key. */
+export const addIdentifierPostings = ({
+  postings,
+  entryIndex,
+  identifiers,
+}: IdentifierPostingsInput): void => {
+  const entryKeys = new Set<string>();
+  for (const { number, status, kind } of identifiers) {
+    // A document the list itself marks as false is no proof of identity.
+    if (status === "known-false" || kind === "unknown") {
+      continue;
+    }
+    const key = identifierKey(number);
+    if (key.length < MIN_IDENTIFIER_LENGTH || entryKeys.has(key)) {
+      continue;
+    }
+    entryKeys.add(key);
+    postings.add(key, entryIndex);
+  }
+};
+
 function* screeningIndexSteps(
   lists: readonly ParsedList[],
 ): IndexBuildSteps<ScreeningIndex> {
@@ -91,19 +119,11 @@ function* screeningIndexSteps(
     for (const entry of list.entries) {
       const entryIndex = entries.push(entry);
       sourceEntries.push(entry);
-      const entryKeys = new Set<string>();
-      for (const { number, status, kind } of entry.identifiers) {
-        // A document the list itself marks as false is no proof of identity.
-        if (status === "known-false" || kind === "unknown") {
-          continue;
-        }
-        const key = identifierKey(number);
-        if (key.length < MIN_IDENTIFIER_LENGTH || entryKeys.has(key)) {
-          continue;
-        }
-        entryKeys.add(key);
-        identifierEntries.add(key, entryIndex);
-      }
+      addIdentifierPostings({
+        postings: identifierEntries,
+        entryIndex,
+        identifiers: entry.identifiers,
+      });
       yield;
     }
   }
@@ -156,10 +176,7 @@ export type QueryBirthDate = {
 export type FieldComparison = "match" | "mismatch" | "not-compared";
 
 type BirthDateComparison =
-  | "exact"
-  | "approximate"
-  | "mismatch"
-  | "not-compared";
+  "exact" | "approximate" | "mismatch" | "not-compared";
 
 const birthDateMatch = (
   query: QueryBirthDate,
@@ -385,9 +402,15 @@ const identifierComparison = ({
   return identifierMatch ? "match" : "mismatch";
 };
 
-type EntryEvidenceInput = {
+/** The identity fields screening compares besides the name. */
+export type IdentityRecord = Pick<
+  SanctionsEntry,
+  "entityType" | "birthDates" | "nationalities" | "identifiers"
+>;
+
+type EntryEvidenceInput<TRecord extends IdentityRecord> = {
   cutoff: number;
-  entry: ScreeningEntry;
+  entry: TRecord;
   entryIndex: number;
   query: ScreeningQuery;
   nameScore: number;
@@ -395,8 +418,11 @@ type EntryEvidenceInput = {
   identifierMatch: boolean;
 };
 
-type ScreenedPossibleMatch = Omit<PossibleMatch, "entry"> & {
-  entry: ScreeningEntry;
+type ScreenedPossibleMatch<TRecord extends IdentityRecord> = Omit<
+  PossibleMatch,
+  "entry"
+> & {
+  entry: TRecord;
   entryIndex: number;
 };
 
@@ -452,7 +478,7 @@ const scoreNameEvidence = ({
   return score;
 };
 
-const scoreEntry = ({
+const scoreEntry = <TRecord extends IdentityRecord>({
   cutoff,
   entry,
   entryIndex,
@@ -460,7 +486,7 @@ const scoreEntry = ({
   nameScore,
   matchedName,
   identifierMatch,
-}: EntryEvidenceInput): ScreenedPossibleMatch => {
+}: EntryEvidenceInput<TRecord>): ScreenedPossibleMatch<TRecord> => {
   const birth = compareBirthDates(query.birthDate, entry.birthDates);
   const nationality = nationalityComparison(query.nationality, entry);
   const entityType = entityTypeComparison(query.entityType, entry);
@@ -598,7 +624,8 @@ const prepareScreeningQuery = (
       }),
     );
   }
-  const readings = kinds.map((kind) => nameReading(query.name, kind));
+  // Each reading of the name, its own first, in each interpretation.
+  const readings = kinds.flatMap((kind) => nameReadings(query.name, kind));
   const tokens = readings.at(0)?.tokens ?? [];
   const identifierKeys = new Set(
     (query.identifiers ?? [])
@@ -618,14 +645,85 @@ const prepareScreeningQuery = (
 };
 
 /**
+ * The records one screening reads. Sanctions editions supply one through
+ * {@link buildScreeningIndex}; any other set of named parties can supply its
+ * own, so every caller shares one matcher and one evidence model.
+ */
+export type ScreenedRecords<TRecord extends IdentityRecord, THydrated> = {
+  readonly entries: {
+    readonly length: number;
+    get: (id: number) => TRecord;
+  };
+  readonly names: NameIndex;
+  readonly workStats: ScreeningWorkStats;
+  readonly identifierEntries: Pick<IdentifierPostings, "get">;
+  /** The full record reported for a possible match. */
+  hydrate: (id: number) => THydrated;
+  /** Orders equally scored records, so the result does not depend on build order. */
+  compare: (left: TRecord, right: TRecord) => number;
+};
+
+export type RecordMatch<THydrated> = {
+  entry: THydrated;
+  /** 0..1; at or above the cutoff the result was screened with. */
+  score: number;
+  evidence: MatchEvidence;
+};
+
+export type RecordScreeningResult<THydrated> = {
+  /** The best `limit` of the records at or above the cutoff. */
+  possibleMatches: RecordMatch<THydrated>[];
+  /** Exact count found at or above the cutoff before limiting displayed matches. */
+  totalMatches: number;
+  truncated: boolean;
+};
+
+/**
  * Screens one party against the index and returns every entry scoring at or
  * above `cutoff`, best first. Each result is a possible match for review.
  */
 export const screen = (
   index: ScreeningIndex,
   query: ScreeningQuery,
-  { cutoff, limit = DEFAULT_LIMIT, maxWork, onWork }: ScreenOptions,
+  options: ScreenOptions,
 ): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
+  const screened = screenRecords(
+    {
+      entries: index.entries,
+      names: index.names,
+      workStats: index.workStats,
+      identifierEntries: index.identifierEntries,
+      hydrate: (id) => index.entryStorage.hydrate(id),
+      compare: (left, right) =>
+        left.source.localeCompare(right.source) ||
+        left.sourceId.localeCompare(right.sourceId),
+    },
+    query,
+    options,
+  );
+  if (screened.isErr()) {
+    return screened;
+  }
+  return Result.ok({
+    cutoff: options.cutoff,
+    versions: index.versions,
+    ...screened.value,
+  });
+};
+
+/**
+ * Screens one party against any record set and returns every record scoring
+ * at or above `cutoff`, best first. Each result is a possible match for
+ * review, never a confirmed hit.
+ */
+export const screenRecords = <TRecord extends IdentityRecord, THydrated>(
+  index: ScreenedRecords<TRecord, THydrated>,
+  query: ScreeningQuery,
+  { cutoff, limit = DEFAULT_LIMIT, maxWork, onWork }: ScreenOptions,
+): Result<
+  RecordScreeningResult<THydrated>,
+  ScreeningQueryError | ScreeningWorkLimitError
+> => {
   if (!(cutoff >= 0 && cutoff <= 1)) {
     panic(`cutoff must be within 0..1, got ${cutoff}`);
   }
@@ -688,7 +786,7 @@ export const screen = (
     }
   }
 
-  const possibleMatches: ScreenedPossibleMatch[] = [];
+  const possibleMatches: ScreenedPossibleMatch<TRecord>[] = [];
   for (const entryIndex of new Set([
     ...nameMatches.keys(),
     ...identifierMatches,
@@ -723,19 +821,15 @@ export const screen = (
   }
   possibleMatches.sort(
     (left, right) =>
-      right.score - left.score ||
-      left.entry.source.localeCompare(right.entry.source) ||
-      left.entry.sourceId.localeCompare(right.entry.sourceId),
+      right.score - left.score || index.compare(left.entry, right.entry),
   );
   const selectedMatches = possibleMatches.slice(0, limit).map((match) => ({
     score: match.score,
     evidence: match.evidence,
-    entry: index.entryStorage.hydrate(match.entryIndex),
+    entry: index.hydrate(match.entryIndex),
   }));
   onWork?.({ spent: workBudgetLimit - work.remaining, limit: workBudgetLimit });
   return Result.ok({
-    cutoff,
-    versions: index.versions,
     possibleMatches: selectedMatches,
     totalMatches: possibleMatches.length,
     truncated: matched.value.truncated || possibleMatches.length > limit,

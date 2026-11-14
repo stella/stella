@@ -8,8 +8,8 @@ import {
 } from "./organization-access";
 import type { OrganizationAccessSnapshot } from "./organization-access-snapshot";
 import {
-  resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
+  resolveOrganizationActionBudget,
 } from "./organization-action-budget";
 
 const expiresAtMs = Date.UTC(2026, 9, 1, 12, 30);

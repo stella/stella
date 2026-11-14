@@ -21,8 +21,10 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -94,8 +96,12 @@ const seedRunningTurn = async (): Promise<SeededRun> => {
     workspaceId: ids.wsA1,
   });
   const safeDb = toSafeDbMock(ownerDb());
-  const inserted = await safeDb(
-    async (tx) => await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+  const inserted = await withChatRunPings(
+    async (pings) =>
+      await safeDb(
+        async (tx) =>
+          await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+      ),
   );
   if (Result.isError(inserted)) {
     panic("Could not seed chat turn", inserted.error);
@@ -183,7 +189,8 @@ const resumeContext = ({
         ? {}
         : { headers: { "Last-Event-ID": lastEventIdHeader } },
     ),
-    route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+    route:
+      "/v1/chat/threads/:threadId/turns/:turnId/join" satisfies ApiRoutePath,
     safeDb: toSafeDbMock(viewer.db),
     scopedDb: viewer.db,
     session: { activeOrganizationId: viewer.organizationId },
@@ -484,14 +491,18 @@ describe("chat turn resume", () => {
     });
     const settled = await seedRunningTurn();
     await logFor(settled).append([customChunk("stopped")]);
-    const settledState = await ownerDb()(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: settled.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    const settledState = await withChatRunPings(
+      async (pings) =>
+        await ownerDb()(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: settled.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     expect(settledState).toBe("settled");
     for (const resume of [join, probe]) {

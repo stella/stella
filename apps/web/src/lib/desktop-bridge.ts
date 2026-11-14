@@ -1,20 +1,30 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import {
+  desktopAccountConnectUrl,
+  parseDesktopLinkStatus,
+  signedDesktopLinkStatus,
+} from "@stll/api-contract/desktop-account-link";
+import { readDesktopLinkProtocol } from "@stll/api-contract/desktop-registry";
 import type {
   DesktopAccountIdentity,
+  DesktopLinkFailure,
   LinkAccountRequest,
   LinkedAccountSnapshot,
 } from "@stll/api-contract/desktop-rpc";
 import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
-import type { FetchWithTimeoutInit } from "@stll/fetch";
+import type { FetchTimeout, FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
-import type { DesktopLinkOutcome } from "@/features/desktop/desktop-connection-store.logic";
+import type {
+  DesktopLinkApproval,
+  DesktopLinkOutcome,
+  DesktopLinkResult,
+} from "@/features/desktop/desktop-connection-store.logic";
 import {
   DESKTOP_HANDOFF_POLL_INTERVAL_MS,
   watchDesktopEditHandoff,
@@ -22,7 +32,7 @@ import {
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
@@ -31,7 +41,7 @@ const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
 const DESKTOP_ACCOUNT_LINK_HASH = "#desktop-account";
 
-export class DesktopBridgeUnavailableError extends Error {
+class DesktopBridgeUnavailableError extends Error {
   public constructor() {
     super("desktop_bridge_unavailable");
     this.name = "DesktopBridgeUnavailableError";
@@ -81,6 +91,14 @@ type DesktopAccountChallenge = {
   protocol: string;
 };
 
+export const desktopAccountGrantRequest = (
+  challenge: DesktopAccountChallenge,
+) => ({
+  correlationId: challenge.correlationId,
+  verifierHash: challenge.verifierHash,
+  deviceJkt: challenge.deviceJkt,
+});
+
 type DesktopAccountAttempt =
   | {
       type: "challenge";
@@ -103,7 +121,8 @@ export const parseDesktopAccountChallenge = (hash: string) => {
   const protocol = params.get("protocol");
   if (
     [...params].length !== 5 ||
-    protocol !== String(DESKTOP_ACCOUNT_POLICY.linkProtocol) ||
+    !protocol ||
+    readDesktopLinkProtocol(protocol) === null ||
     !correlationId ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
       correlationId,
@@ -239,37 +258,39 @@ export const desktopBridgeProofHeaders = async ({
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
   typeof value === "object" && value !== null;
 
-const parseDesktopConnectionStatus = (value: unknown) => {
-  if (typeof value !== "object" || value === null || !("status" in value)) {
-    return null;
-  }
-  switch (value.status) {
-    case "pending":
-    case "connected":
-    case "failed":
-      return value.status;
-    default:
-      return null;
-  }
-};
-
 const DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS = 30;
+
+/** The challenge fields a bridge status must be signed for. */
+type DesktopConnectionChallenge = Pick<
+  DesktopAccountChallenge,
+  "correlationId" | "verifierHash" | "deviceJkt" | "portSecret" | "protocol"
+>;
 
 type VerifyDesktopConnectionOptions = {
   payload: unknown;
-  correlationId: string;
-  portSecret: string;
+  challenge: DesktopConnectionChallenge;
   nowSeconds: number;
 };
 
+/**
+ * Accepts a status only when the app signed it with this challenge's port
+ * secret over `correlationId\nverifierHash\ndeviceJkt\nstatus\ntimestamp`
+ * within the skew window: a status signed for any other challenge fails, and
+ * so does a failure whose reason the app did not sign.
+ */
 export const verifyDesktopConnectionStatus = async ({
   payload,
-  correlationId,
-  portSecret,
+  challenge: { correlationId, verifierHash, deviceJkt, portSecret, protocol },
   nowSeconds,
 }: VerifyDesktopConnectionOptions) => {
-  const status = parseDesktopConnectionStatus(payload);
+  // The challenge names the protocol of the app that opened it.
+  const linkProtocol = readDesktopLinkProtocol(protocol);
+  const status =
+    linkProtocol === null
+      ? null
+      : parseDesktopLinkStatus(payload, linkProtocol);
   if (
+    linkProtocol === null ||
     status === null ||
     typeof payload !== "object" ||
     payload === null ||
@@ -307,7 +328,7 @@ export const verifyDesktopConnectionStatus = async ({
     key,
     signature,
     new TextEncoder().encode(
-      `${correlationId}\n${status}\n${payload.timestamp}`,
+      `${correlationId}\n${verifierHash}\n${deviceJkt}\n${signedDesktopLinkStatus(status, linkProtocol)}\n${payload.timestamp}`,
     ),
   );
   return valid ? status : null;
@@ -328,6 +349,39 @@ const loopback = (init: FetchWithTimeoutInit): LoopbackFetchInit => ({
   ...init,
   targetAddressSpace: "loopback",
 });
+
+type DesktopBridgeRequestOptions = {
+  path: string;
+  headers: Record<string, string>;
+  signal?: AbortSignal | undefined;
+  timeout: FetchTimeout;
+};
+
+/**
+ * A GET to the app's loopback bridge on this computer, with the caller's
+ * signed headers; `DesktopBridgeUnavailableError` when nothing answers there.
+ */
+export const requestDesktopBridge = async ({
+  path,
+  headers,
+  signal,
+  timeout,
+}: DesktopBridgeRequestOptions) =>
+  await Result.tryPromise({
+    try: async () =>
+      await fetchWithTimeout(
+        `${DESKTOP_BRIDGE_URL}${path}`,
+        loopback({
+          credentials: "omit",
+          method: "GET",
+          referrerPolicy: "no-referrer",
+          timeout,
+          headers,
+          signal,
+        }),
+      ),
+    catch: () => new DesktopBridgeUnavailableError(),
+  });
 
 const parseBridgeResponse = async (response: Response) => {
   try {
@@ -354,7 +408,7 @@ const createDesktopEditHandoff = async ({
       propertyId: toSafeId<"property">(propertyId),
     });
 
-  return unwrapEden(response) satisfies DesktopEditHandoff;
+  return unwrapApiResponse(response) satisfies DesktopEditHandoff;
 };
 
 const readDesktopEditHandoffStatus = async ({
@@ -371,11 +425,12 @@ const readDesktopEditHandoffStatus = async ({
     })
     .status.get();
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
-const launchDesktopEditHandoff = (deepLinkUrl: string) => {
-  window.location.href = deepLinkUrl;
+/** Hands a `stella://` link to the operating system. */
+export const openDesktopUrl = (desktopUrl: string) => {
+  window.location.href = desktopUrl;
 };
 
 const waitForDesktopEditHandoffOpened = async ({
@@ -406,19 +461,27 @@ export const hasDesktopAccountChallenge = () =>
   accountAttempt?.type === "challenge" &&
   accountAttempt.challenge.expiresAt > Temporal.Now.instant().epochMilliseconds;
 
-const readDesktopConnection = async (
-  correlationId: string,
-  portSecret: string,
-) => {
+type ReadDesktopConnectionOptions = {
+  challenge: DesktopConnectionChallenge;
+  request?: typeof fetchWithTimeout;
+};
+
+export const readDesktopConnection = async ({
+  challenge,
+  request = fetchWithTimeout,
+}: ReadDesktopConnectionOptions) => {
+  const { correlationId, portSecret } = challenge;
   const query = new URLSearchParams({ correlationId });
   const path = `/v1/connection?${query.toString()}`;
   const url = `${DESKTOP_BRIDGE_URL}${path}`;
   const fetched = await Result.tryPromise({
     try: async () =>
-      await fetchWithTimeout(
+      await request(
         url,
         loopback({
+          credentials: "omit",
           method: "GET",
+          referrerPolicy: "no-referrer",
           timeoutMs: 1000,
           headers: await desktopBridgeProofHeaders({
             portSecret,
@@ -460,8 +523,7 @@ const readDesktopConnection = async (
     try: async () =>
       await verifyDesktopConnectionStatus({
         payload: parsed.value,
-        correlationId,
-        portSecret,
+        challenge,
         nowSeconds: Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
       }),
     catch: () => new DesktopBridgeIncompatibleError(),
@@ -498,27 +560,90 @@ export const resolveDesktopAccountLink = ({
   return Result.ok(browserAccount.email);
 };
 
+/**
+ * Whether the app on this computer proves, over the loopback bridge, that it
+ * started this exact challenge and still waits for it. A link crafted
+ * elsewhere carries a port secret no local app holds, so it never proves.
+ */
+const provesLocalDesktopChallenge = async (
+  challenge: DesktopConnectionChallenge,
+) => {
+  const connection = await readDesktopConnection({ challenge });
+  return connection.isOk() && connection.value.status === "pending";
+};
+
+/**
+ * What a link the app ended reports: a refusal the page names with its own
+ * next step, the update it needs, or, for a failure the app did not classify,
+ * an error.
+ */
+const failedDesktopLinkOutcome = (
+  reason: DesktopLinkFailure,
+): Result<DesktopLinkOutcome, DesktopBridgeUnavailableError> => {
+  switch (reason) {
+    case "account_conflict":
+    case "switch_declined":
+    case "declined":
+      return Result.ok({
+        status: "refused",
+        reason,
+      } as const satisfies DesktopLinkOutcome);
+    case "update_required":
+      return Result.ok({
+        status: "update-required",
+      } as const satisfies DesktopLinkOutcome);
+    case "unavailable":
+      return Result.err(new DesktopBridgeUnavailableError());
+    default:
+      reason satisfies never;
+      return panic("Unknown desktop link failure");
+  }
+};
+
+type LinkDesktopAccountOptions = Pick<LinkAccountRequest, "apiBaseUrl"> & {
+  approval: DesktopLinkApproval;
+  /** Receives the app link once the grant exists, so the page can offer it again. */
+  onDesktopOpening: (desktopUrl: string) => void;
+};
+
 export const linkDesktopAccount = async ({
   apiBaseUrl,
-}: Pick<LinkAccountRequest, "apiBaseUrl">) => {
+  approval,
+  onDesktopOpening,
+}: LinkDesktopAccountOptions): Promise<DesktopLinkResult> => {
   captureDesktopAccountLink();
   const attempt = accountAttempt;
-  accountAttempt = null;
   if (attempt?.type === "update-required") {
+    accountAttempt = null;
     return Result.ok({
       status: "update-required",
     } as const satisfies DesktopLinkOutcome);
   }
   const challenge = attempt?.challenge;
+  const challengeLive =
+    challenge !== undefined &&
+    challenge.expiresAt > Temporal.Now.instant().epochMilliseconds;
+  // The challenge stays in place until the page may answer it, so a refused
+  // proof still leaves it for the explicit approval.
   if (
-    !challenge ||
-    challenge.expiresAt <= Temporal.Now.instant().epochMilliseconds
+    approval === "local-proof" &&
+    (!challengeLive || !(await provesLocalDesktopChallenge(challenge)))
   ) {
-    const params = new URLSearchParams({
-      apiBaseUrl,
-      webOrigin: window.location.origin,
-    });
-    window.location.href = `stella://account/connect?${params.toString()}`;
+    return Result.ok({
+      status: "approval-required",
+    } as const satisfies DesktopLinkOutcome);
+  }
+  if (accountAttempt === attempt) {
+    accountAttempt = null;
+  }
+  if (!challengeLive) {
+    openDesktopUrl(
+      desktopAccountConnectUrl({
+        apiBaseUrl,
+        webOrigin: window.location.origin,
+        intent: "connect",
+      }),
+    );
     return Result.ok({
       status: "started",
     } as const satisfies DesktopLinkOutcome);
@@ -531,12 +656,10 @@ export const linkDesktopAccount = async ({
           message: "desktop_account_conflict",
         });
       }
-      const grant = unwrapEden(
-        await api["desktop-registry"].grant.post({
-          correlationId: challenge.correlationId,
-          verifierHash: challenge.verifierHash,
-          deviceJkt: challenge.deviceJkt,
-        }),
+      const grant = unwrapApiResponse(
+        await api["desktop-registry"].grant.post(
+          desktopAccountGrantRequest(challenge),
+        ),
       );
       const matched = resolveDesktopAccountLink({
         browserAccount,
@@ -550,26 +673,30 @@ export const linkDesktopAccount = async ({
         userId: grant.userId,
         organizationId: grant.organizationId,
       });
-      window.location.href = `stella://account/complete?${params.toString()}`;
+      const desktopUrl = `stella://account/complete?${params.toString()}`;
+      onDesktopOpening(desktopUrl);
+      openDesktopUrl(desktopUrl);
       const deadline = Math.min(
         challenge.expiresAt,
         new Date(grant.expiresAt).getTime(),
       );
       while (Temporal.Now.instant().epochMilliseconds < deadline) {
-        const connection = await readDesktopConnection(
-          challenge.correlationId,
-          challenge.portSecret,
-        );
+        const connection = await readDesktopConnection({ challenge });
         if (connection.isOk()) {
           const status = connection.value;
-          switch (status) {
+          switch (status.status) {
             case "connected":
               return {
                 status: "connected",
                 email: matched.value,
               } as const satisfies DesktopLinkOutcome;
-            case "failed":
-              throw new DesktopBridgeUnavailableError();
+            case "failed": {
+              const failed = failedDesktopLinkOutcome(status.reason);
+              if (failed.isErr()) {
+                throw failed.error;
+              }
+              return failed.value;
+            }
             case "pending":
               break;
             default:
@@ -591,9 +718,28 @@ export const linkDesktopAccount = async ({
   });
 };
 
+type OpenDesktopAccountSwitchOptions = Pick<LinkAccountRequest, "apiBaseUrl">;
+
+/**
+ * Asks the app on this computer to replace its account with the one signed in
+ * here. The app decides: it asks the member to confirm in its own window and
+ * opens a fresh approval page, so this page alone never switches it.
+ */
+export const openDesktopAccountSwitch = ({
+  apiBaseUrl,
+}: OpenDesktopAccountSwitchOptions) => {
+  openDesktopUrl(
+    desktopAccountConnectUrl({
+      apiBaseUrl,
+      webOrigin: window.location.origin,
+      intent: "switch",
+    }),
+  );
+};
+
 export const openFileInDesktop = async (input: OpenFileInDesktopInput) => {
   const handoff = await createDesktopEditHandoff(input);
-  launchDesktopEditHandoff(handoff.deepLinkUrl);
+  openDesktopUrl(handoff.deepLinkUrl);
   return {
     type: "handoff-pending",
     waitUntilOpened: waitForDesktopEditHandoffOpened({

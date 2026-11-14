@@ -5,11 +5,11 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import { listLatestRunSummaries } from "@/api/lib/lists/verification/run-summary";
@@ -41,17 +41,17 @@ const config = {
     reason: "document_processing",
     consumesServices: false,
   },
-  body: t.Object({
-    documents: t.Array(
-      t.Object(
-        { entityId: tSafeId("entity"), fileFieldId: tSafeId("field") },
-        { additionalProperties: false },
+  body: v.object({
+    documents: v.pipe(
+      v.array(
+        v.strictObject({
+          entityId: resourceIdSchema("entity"),
+          fileFieldId: resourceIdSchema("field"),
+        }),
       ),
-      {
-        minItems: 1,
-        maxItems: VERIFICATION_LIMITS.LATEST_READ_DOCUMENTS_MAX,
-        uniqueItems: true,
-      },
+      v.minLength(1),
+      v.maxLength(VERIFICATION_LIMITS.LATEST_READ_DOCUMENTS_MAX),
+      uniqueItems(({ entityId, fileFieldId }) => `${entityId}/${fileFieldId}`),
     ),
   }),
 } satisfies WorkspaceHandlerConfig;

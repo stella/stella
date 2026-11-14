@@ -6,8 +6,8 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { SanctionsEntry } from "./entry";
 import {
-  MAX_QUERY_TOKENS,
   hasExcessQueryTokens,
+  MAX_QUERY_TOKENS,
   nameReading,
 } from "./normalise";
 import { buildScreeningIndex, screen } from "./screening";

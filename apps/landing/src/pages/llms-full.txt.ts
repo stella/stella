@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
 import { getCollection } from "astro:content";
 
-import { aiTagline, aiOverview, aiFaqs } from "../data/ai-facts";
+import { aiFaqs, aiOverview, aiTagline } from "../data/ai-facts";
 import {
-  primaryCapabilities,
-  dataStackCapabilities,
   controlCapabilities,
+  dataStackCapabilities,
+  primaryCapabilities,
 } from "../data/capabilities";
 
 // Full canonical content concatenated into one plain-text feed for LLM
@@ -19,7 +19,7 @@ export const GET: APIRoute = async () => {
     );
 
   const sections: string[] = [
-    "# stella — full content",
+    "# stella: full content",
     "",
     `> ${aiTagline}`,
     "",

@@ -7,6 +7,19 @@ import { rootCheckInputs, selectRootChecks } from "./ci-root-checks";
 const graph = readSelectionGraph(path.resolve(import.meta.dir, ".."));
 const inputs = rootCheckInputs(graph);
 
+test("instruction policy retains repository-wide input selection after its rename", () => {
+  const check = "ci-checks-policy/Instruction policy";
+  expect(inputs.has("ci-checks-policy/Instruction references")).toBe(false);
+  expect(inputs.get(check)).toEqual(["**"]);
+  expect(
+    selectRootChecks({
+      changed: ["apps/web/src/probe.ts"],
+      graph,
+      pathChange: "content",
+    }),
+  ).toContain(check);
+});
+
 // One content edit inside each check's declared inputs and one beside them,
 // in the same app where possible, so a declaration that widens back to the
 // whole tree or loses its real reader fails here.
@@ -64,7 +77,7 @@ const CASES = [
     outside: "apps/web/e2e/probe.spec.ts",
   },
   {
-    check: "ci-checks-rest/exactMirror route guard",
+    check: "ci-checks-rest/MCP coverage guard",
     inside: "apps/api/src/probe.ts",
     outside: "apps/landing/src/probe.ts",
   },

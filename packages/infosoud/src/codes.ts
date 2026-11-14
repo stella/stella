@@ -1,14 +1,14 @@
 import {
-  INFO_SOUD_ATTRIBUTE_LABELS,
   INFO_SOUD_ATTRIBUTE_LABEL_OVERRIDES,
+  INFO_SOUD_ATTRIBUTE_LABELS,
   INFO_SOUD_CODE_CATALOG_SOURCE_BUNDLE_URL,
   INFO_SOUD_CODE_CATALOG_SOURCE_PAGE_URL,
-  INFO_SOUD_EVENT_DESCRIPTIONS,
   INFO_SOUD_EVENT_DESCRIPTION_OVERRIDES,
-  INFO_SOUD_EVENT_LABELS,
+  INFO_SOUD_EVENT_DESCRIPTIONS,
   INFO_SOUD_EVENT_LABEL_OVERRIDES,
-  INFO_SOUD_EVENT_TOOLTIPS,
+  INFO_SOUD_EVENT_LABELS,
   INFO_SOUD_EVENT_TOOLTIP_OVERRIDES,
+  INFO_SOUD_EVENT_TOOLTIPS,
 } from "./code-catalog.generated.js";
 import type {
   CaseEvent,
@@ -211,8 +211,7 @@ export const collectUnknownInfoSoudCodes = ({
 }: {
   readonly details?: readonly Pick<EventDetailResult, "atributy">[] | undefined;
   readonly events?:
-    | readonly Pick<CaseEvent | CaseEventWithDetail, "udalost">[]
-    | undefined;
+    readonly Pick<CaseEvent | CaseEventWithDetail, "udalost">[] | undefined;
 }): UnknownInfoSoudCodes => ({
   attributeTypes: Array.from(
     new Set(

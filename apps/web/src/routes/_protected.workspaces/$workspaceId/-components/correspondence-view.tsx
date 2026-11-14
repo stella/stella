@@ -2,24 +2,23 @@ import { Suspense } from "react";
 
 import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
+import type { DataBoxDirectionBasis } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
-import { CopyIcon, RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
+import { RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { CopyControl } from "@/components/copy-control";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useAnalytics } from "@/lib/analytics/provider";
+import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  correspondenceAddressOptions,
   CORRESPONDENCE_PAGE_SIZE,
   CORRESPONDENCE_STATE_LABEL_KEYS,
+  correspondenceAddressOptions,
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
@@ -33,6 +32,21 @@ import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
+
+// An incoming message is the default and needs no label.
+const DIRECTION_LABEL_KEYS = {
+  organization_sender: "correspondence.dataBox.sent",
+  organization_recipient: null,
+  unknown: "correspondence.dataBox.directionUnknown",
+} as const satisfies Record<DataBoxDirectionBasis, TranslationKey | null>;
+
+const DataBoxDirectionLabel = ({ basis }: { basis: DataBoxDirectionBasis }) => {
+  const t = useTranslations();
+  const label = DIRECTION_LABEL_KEYS[basis];
+  return label === null ? null : (
+    <span className="text-muted-foreground text-xs">{t(label)}</span>
+  );
+};
 
 /**
  * Body of a matter's correspondence view: the matter's inbound address, the
@@ -74,7 +88,6 @@ export const CorrespondenceViewSkeleton = () => (
 
 const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
   const canUpdate = usePermissions({ workspace: ["update"] });
   const { data, isError, isPending, refetch } = useQuery(
     correspondenceAddressOptions(workspaceId),
@@ -82,19 +95,6 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const rotate = useRotateCorrespondenceAddress();
   const revoke = useRevokeCorrespondenceAddress();
   const address = data?.status === "configured" ? data.address : null;
-
-  const copyAddress = async () => {
-    if (!address) {
-      return;
-    }
-    const copied = await copyToClipboard(address);
-    if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
-      notifyUserError(copied.error, t("common.error"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
 
   let addressStatus = (
     <p className="text-muted-foreground mt-1 text-sm">
@@ -116,7 +116,9 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   } else if (isError) {
     addressStatus = (
       <div className="mt-1 flex items-center gap-2">
-        <p className="text-destructive text-sm">{t("common.error")}</p>
+        <p className="text-destructive text-sm">
+          {t("common.somethingWentWrong")}
+        </p>
         <Button
           className="min-h-11"
           onClick={() => detached(refetch(), "correspondence.retry-address")}
@@ -139,17 +141,13 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
       </div>
       <div className="flex flex-wrap gap-2">
         {address && (
-          <Button
+          <CopyControl
             className="min-h-11"
-            onClick={() =>
-              detached(copyAddress(), "correspondence.copy-address")
-            }
+            iconClassName="size-4"
             size="sm"
+            text={address}
             variant="outline"
-          >
-            <CopyIcon className="size-4" />
-            {t("common.copy")}
-          </Button>
+          />
         )}
         {canUpdate && (
           <Button
@@ -218,25 +216,51 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
             <span className="min-w-0 flex-1">
               <CorrespondenceProvenance record={item} />
               <span className="mt-2 block">
-                <AssertedHeadersLabel record={item} />
+                {item.channel === "email" && (
+                  <AssertedHeadersLabel record={item} />
+                )}
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="truncate text-sm font-medium">
+                  <TruncatedText className="text-sm font-medium">
                     <bdi dir="auto">
                       {item.subject || t("emailViewer.noSubject")}
                     </bdi>
-                  </span>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {t(CORRESPONDENCE_STATE_LABEL_KEYS[item.handlingState])}
                   </span>
-                </span>
-                <span className="text-muted-foreground mt-1 block truncate text-xs">
-                  {t(
-                    correspondenceProvenancePresentation(item)
-                      .originalSenderLabel,
+                  {item.channel === "data_box" && (
+                    <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-xs">
+                      {t("correspondence.dataBox.channel")}
+                    </span>
                   )}
-                  : <bdi dir="ltr">{item.from.address}</bdi>
+                  {item.channel === "data_box" && (
+                    <DataBoxDirectionLabel
+                      basis={item.dataBox.directionBasis}
+                    />
+                  )}
                 </span>
-                <span className="text-muted-foreground mt-1 block truncate text-xs">
+                {item.channel === "data_box" ? (
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
+                    {t("emailViewer.from")}:{" "}
+                    {item.from.name && (
+                      <bdi className="me-1" dir="auto">
+                        {item.from.name}
+                      </bdi>
+                    )}
+                    <bdi className="font-mono" dir="ltr">
+                      {item.from.address}
+                    </bdi>
+                  </TruncatedText>
+                ) : (
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
+                    {t(
+                      correspondenceProvenancePresentation(item)
+                        .originalSenderLabel,
+                    )}
+                    : <bdi dir="ltr">{item.from.address}</bdi>
+                  </TruncatedText>
+                )}
+                <TruncatedText className="text-muted-foreground mt-1 text-xs">
                   {t("emailViewer.to")}:{" "}
                   {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
                     <bdi
@@ -247,7 +271,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                       {recipient.name ?? recipient.address}
                     </bdi>
                   ))}
-                </span>
+                </TruncatedText>
               </span>
             </span>
             <time className="text-muted-foreground shrink-0 text-xs tabular-nums">

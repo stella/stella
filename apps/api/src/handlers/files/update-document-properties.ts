@@ -1,5 +1,4 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { status } from "elysia";
 
 import {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -10,6 +9,7 @@ import type { AuthoredDocumentPropertyKey } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";

@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { organization, member, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
   correspondenceFilers,
@@ -20,6 +20,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { DEFAULT_ORG_ID } from "./seed-utils";
 
@@ -198,7 +199,7 @@ describe.skipIf(!runPostgresTests)(
             await db.delete(user).where(eq(user.id, row.id));
           }
           for (const row of insertedOrganizations) {
-            await db.delete(organization).where(eq(organization.id, row.id));
+            await deleteOrganizationsForTest(db, [row.id]);
           }
         }
       });

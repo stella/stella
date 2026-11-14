@@ -6,8 +6,14 @@ import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
+import { createFormatter } from "use-intl/core";
 
-import { AI_ERROR_KINDS, AI_FAILURE_CODES } from "@stll/api-contract";
+import {
+  AI_ERROR_KINDS,
+  AI_FAILURE_CODES,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+} from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -26,12 +32,18 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 import { APIError, toAPIError } from "@/lib/errors/api";
+import {
+  ACTION_ADMISSION_ERROR_KEYS,
+  translateError,
+} from "@/lib/errors/localization";
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
@@ -42,6 +54,11 @@ const { ChatThreadMessages, ChatErrorMessage } =
   await import("@/components/chat/chat-thread-messages");
 const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
   await import("@/components/chat/chat-thread-messages.logic");
+
+// A button's label, which may sit in the button's cut-to-fit span.
+const RETRY_BUTTON = />Retry<\/(?:span><\/)?button>/u;
+const RETRY_BUTTONS = new RegExp(RETRY_BUTTON.source, "gu");
+const RESEND_BUTTON = />Resend<\/(?:span><\/)?button>/u;
 
 afterAll(() => {
   if (previousApiUrl === undefined) {
@@ -102,6 +119,23 @@ const renderedText = (html: string) => {
   // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
   root.innerHTML = html;
   return root.textContent;
+};
+
+/**
+ * Whether the disclosure whose trigger reads `label` is open: its trigger's
+ * `aria-expanded`, or null when no trigger carries that label. The innermost
+ * matching trigger wins, so a step list around a reasoning trace does not
+ * answer for it.
+ */
+const disclosureExpanded = (html: string, label: string): string | null => {
+  const window = new Window();
+  const root = window.document.createElement("div");
+  // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
+  root.innerHTML = html;
+  const triggers = [
+    ...root.querySelectorAll('[data-slot="collapsible-trigger"]'),
+  ].filter((trigger) => trigger.textContent.includes(label));
+  return triggers.at(-1)?.getAttribute("aria-expanded") ?? null;
 };
 
 describe("chat thread messages", () => {
@@ -292,7 +326,9 @@ describe("chat thread messages", () => {
         />,
       );
       expect(html).toContain('role="status"');
-      expect(html).toContain(refusal.message);
+      expect(renderedText(html)).toContain(
+        translateError(ACTION_ADMISSION_ERROR_KEYS[code]),
+      );
       expect(html.includes(messages.common.tryAgain)).toBe(refusal.retryable);
       expect(html.includes('href="https://example.test/contact"')).toBe(
         refusal.status === 403,
@@ -341,7 +377,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -365,7 +400,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -394,6 +428,61 @@ describe("chat thread messages", () => {
       expect(renderedText(html)).not.toContain(messages.chat.sendError);
     },
   );
+
+  test("a local run's usage limit says when it resets, in the member's locale and time zone, live and after a reload", () => {
+    const resetsAt = "2026-11-08T09:30:00.000Z";
+    const inZone = (timeZone: string, error: Error) =>
+      renderedText(
+        renderToStaticMarkup(
+          <IntlProvider locale="en" messages={messages} timeZone={timeZone}>
+            <FormattingProvider locale="en" timeZone={timeZone}>
+              <ChatErrorMessage error={error} isGenerating={false} />
+            </FormattingProvider>
+          </IntlProvider>,
+        ),
+      );
+    const expected = (timeZone: string) =>
+      messages.chat.localRun.errorLimitResetsAt.replace("{time}", () =>
+        createFormatter({ locale: "en", timeZone }).dateTime(
+          new Date(resetsAt),
+          MEDIUM_DATE_SHORT_TIME_FORMAT,
+        ),
+      );
+    const stored = {
+      id: "assistant-limited",
+      role: "assistant",
+      parts: [],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "local_runner_limit_reached",
+          limitResetsAt: resetsAt,
+        },
+      },
+    } satisfies PersistedChatMessage;
+    const reloaded =
+      getChatAssistantTurnError(structuredClone(stored)) ??
+      new Error("no turn error");
+    const live = withLocalRunLimitResetsAt(
+      new Error("local_runner_limit_reached"),
+      resetsAt,
+    );
+    for (const error of [reloaded, live]) {
+      expect(inZone("Europe/Prague", error)).toContain(
+        expected("Europe/Prague"),
+      );
+      expect(inZone("America/New_York", error)).toContain(
+        expected("America/New_York"),
+      );
+    }
+    // The fixture differs by zone, so the zone is what changed the text.
+    expect(expected("Europe/Prague")).not.toBe(expected("America/New_York"));
+
+    // Without a known reset the notice keeps its plain copy.
+    expect(inZone("UTC", new Error("local_runner_limit_reached"))).toContain(
+      messages.chat.localRun.errorLimitReached,
+    );
+  });
 
   test("an unknown AI failure keeps the chat's own copy", () => {
     const html = renderWithProviders(
@@ -562,8 +651,8 @@ describe("chat thread messages", () => {
     );
 
     expect(html).toContain(">Reasoning trace<");
-    expect(html).toContain("<details");
-    expect(html).not.toContain('open=""');
+    // Folded: the trace is still in the page, behind a closed disclosure.
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("12 reasoning tokens");
     expect(html).toContain("Checked the contract timeline.");
     expect(html).toContain("The deadline is Friday.");
@@ -810,6 +899,62 @@ describe("chat thread messages", () => {
     expect(html).toContain("Provide");
     expect(html).toContain("Decline");
     expect(html).toContain("Use saved credential");
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    expect(
+      root
+        .querySelector('input[type="password"]')
+        ?.closest('[data-slot="collapsible-panel"]'),
+    ).toBeNull();
+  });
+
+  test("keeps the connector sign-in card outside a closed process disclosure", () => {
+    const input = {
+      connectorSlug: "sample",
+      purpose: "Read the selected source",
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Read the source" }],
+            role: "user",
+          },
+          {
+            id: "message-connector",
+            parts: [
+              {
+                arguments: JSON.stringify(input),
+                id: "tool-call-connector",
+                input,
+                name: "connect_connector",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    const card = root.querySelector('[data-slot="connect-connector-card"]');
+    expect(card).not.toBeNull();
+    expect(card?.closest('[data-slot="collapsible-panel"]')).toBeNull();
   });
 
   // The same supersession withdraws a user-input card: the runtime has no
@@ -909,8 +1054,9 @@ describe("chat thread messages", () => {
     // own disclosure.
     expect(html).toContain(">1 analysis<");
     expect(html).not.toContain("3 steps");
-    expect(html).not.toContain("<details open");
-    expect(html).toContain("This step failed — stella will work around it.");
+    expect(disclosureExpanded(html, "1 analysis")).toBe("false");
+    expect(disclosureExpanded(html, "Show details")).toBe("false");
+    expect(html).toContain("This step failed; stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
   });
@@ -990,14 +1136,14 @@ describe("chat thread messages", () => {
     const loadedHtml = await renderWithLoadedMarkdown(content);
     expect(loadedHtml).toContain('data-streamdown="strong"');
     for (const output of [html, loadedHtml]) {
-      expect(output).toContain("<details");
-      expect(output).toContain('open=""');
+      expect(disclosureExpanded(output, "Reasoning trace")).toBe("true");
       expect(renderedText(output)).toContain(
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain('data-slot="loader"');
-      expect(output).not.toContain("Working with context");
+      expect(output.match(/data-slot="loader"/gu)).toHaveLength(1);
+      expect(output.match(/data-turn-live-status/gu)).toHaveLength(1);
+      expect(renderedText(output)).toContain(messages.chat.thinking);
     }
   });
 
@@ -1025,10 +1171,9 @@ describe("chat thread messages", () => {
     );
 
     // A settled message that never produced answer text now collapses into a
-    // foldable <details> (collapsed by default) rather than staying pinned
+    // foldable disclosure (collapsed by default) rather than staying pinned
     // open — the reasoning text is still present, just tucked away.
-    expect(html).toContain("<details");
-    expect(html).not.toContain("<details open");
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("Checking cited filings.");
     expect(html).not.toContain("Working with context");
   });
@@ -1206,6 +1351,58 @@ describe("chat thread messages", () => {
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
   });
 
+  describe("an answer's files", () => {
+    const fileUrl = "stella://file::file_report";
+    const documentPart = {
+      type: "document",
+      source: { type: "url", value: fileUrl, mimeType: "text/html" },
+      metadata: { filename: "report.html" },
+    } as const;
+    const render = (message: Partial<ChatUIMessage>) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[
+            {
+              id: "answer",
+              role: "assistant",
+              parts: [{ type: "text", content: "It is ready." }, documentPart],
+              ...message,
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+
+    test("opens from a chip under the answer", () => {
+      const html = render({});
+      expect(html).toContain("It is ready.");
+      expect(html).toContain("report.html");
+      expect(html).toContain('/v1/user-files/file_report/content"');
+    });
+
+    test("an answer holding only a file still shows it", () => {
+      const html = render({ parts: [documentPart] });
+      expect(html).toContain("report.html");
+    });
+
+    test("names what could not be shared", () => {
+      const html = render({
+        parts: [{ type: "text", content: "It is ready." }],
+        metadata: { localRunFilesNotShared: ["data.zip", "dump.bin"] },
+      });
+      expect(html).toContain(
+        "Files that could not be shared stay on your computer: data.zip, dump.bin",
+      );
+    });
+  });
+
   test("does not render remote image attachment URLs", () => {
     const remoteUrl = "https://untrusted.example/evidence.png";
     const chatMessages: ChatUIMessage[] = [
@@ -1277,7 +1474,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("First answer");
     expect(html).toContain("Second answer");
     expect(html.match(/aria-label="Copy"/gu)?.length).toBe(2);
-    expect(html.match(/>Retry<\/button>/gu)?.length).toBe(1);
+    expect(html.match(RETRY_BUTTONS)?.length).toBe(1);
   });
 
   test("hides retry when a later user message is the final turn", () => {
@@ -1312,7 +1509,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("Answer before retry");
     expect(html).toContain("Follow-up prompt");
     expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
-    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toMatch(RETRY_BUTTON);
   });
 
   test("hides retry while the latest assistant response is generating", () => {
@@ -1342,7 +1539,7 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Streaming answer");
     expect(html).toContain('aria-label="Copy"');
-    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toMatch(RETRY_BUTTON);
   });
 
   test("shows a resendable chat message when the chat runtime errors", () => {
@@ -1416,6 +1613,62 @@ describe("chat thread messages", () => {
       expect(html).not.toContain(messages.chat.sendError);
     },
   );
+
+  test("explains a permanent approval continuation rejection without offering resend", () => {
+    const refusal = toAPIError({
+      status: 400,
+      value: {
+        code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+        message: "Private continuation mismatch details",
+      },
+    });
+    const html = renderWithProviders(
+      <ChatErrorMessage
+        error={new Error("SDK transport wrapper", { cause: refusal })}
+        isGenerating={false}
+        onResend={() => {}}
+      />,
+    );
+    expect(html).toContain(messages.chat.sendErrorContinuationRejected);
+    expect(html).not.toContain("Resend");
+    expect(html).not.toContain("Private continuation mismatch details");
+  });
+
+  test("hides every retry action after a permanent approval continuation rejection", () => {
+    const refusal = toAPIError({
+      status: 400,
+      value: {
+        code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+        message: "Private continuation mismatch details",
+      },
+    });
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        error={new Error("SDK transport wrapper", { cause: refusal })}
+        messages={[
+          {
+            id: "answer-A",
+            role: "assistant",
+            parts: [{ type: "text", content: "Answer awaiting continuation" }],
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+    expect(html).toContain("Answer awaiting continuation");
+    expect(html).toContain(messages.chat.sendErrorContinuationRejected);
+    expect(html).not.toContain('aria-label="Retry"');
+    expect(html).not.toMatch(RETRY_BUTTON);
+    expect(html).not.toMatch(RESEND_BUTTON);
+  });
 
   test("maps model-unavailable stream errors to admin-facing copy", () => {
     const html = renderWithProviders(
@@ -1548,7 +1801,7 @@ describe("buildMessageTurns", () => {
     // Both assistant messages retain their secondary actions in the menu. The
     // user message has no assistant-message action row.
     expect(html.match(/aria-label="Actions"/gu)).toHaveLength(2);
-    expect(html.match(/>Retry<\/button>/gu)).toHaveLength(1);
+    expect(html.match(RETRY_BUTTONS)).toHaveLength(1);
   });
 
   test("keeps the actions menu off the sticky user header", () => {
@@ -1674,7 +1927,7 @@ describe("buildMessageTurns", () => {
 });
 
 test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
-  "runtime chat error %s renders full provider reason and guidance after reload",
+  "runtime chat error %s renders its typed message and setup fix, never the provider's wording",
   (code) => {
     const provider =
       code === null
@@ -1683,7 +1936,7 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     const diagnostic = {
       provider,
       code,
-      message: `The exact upstream reason\n${"full detail ".repeat(30)}`,
+      message: "messages.0: user messages must have non-empty content",
     };
     const stored = {
       id: "failed-diagnostic",
@@ -1706,13 +1959,19 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     }
     const restored = error;
     const html = renderWithProviders(
-      <ChatErrorMessage error={restored} isGenerating={false} />,
+      <ChatErrorMessage
+        error={restored}
+        isGenerating={false}
+        onResend={() => {}}
+      />,
     );
-    expect(renderedText(html)).toContain(`${provider}: ${diagnostic.message}`);
-    expect(html).toContain(messages.common.copy);
-    expect(html).not.toContain(
-      messages.chat.sendErrorProviderCredentialsRejected,
-    );
+    const text = renderedText(html);
+    expect(text).toContain(messages.chat.sendErrorProviderCredentialsRejected);
+    expect(text).not.toContain(diagnostic.message);
+    expect(text).not.toContain(`${provider}:`);
+    expect(html).not.toContain(messages.common.copy);
+    // A provider failure is worth sending again.
+    expect(text).toContain(messages.chat.resend);
     if (code !== null) {
       expect(html).toContain(
         PROVIDER_SETUP_ERROR_CATALOGUE[code].url.replaceAll("&", "&amp;"),
@@ -1720,6 +1979,27 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     }
   },
 );
+
+test("a message refused as empty says what to do and offers no resend", () => {
+  const refusal = toAPIError({
+    status: 422,
+    value: {
+      code: CHAT_MESSAGE_EMPTY_ERROR_CODE,
+      message: "Chat message has no text or attachment",
+    },
+  });
+  const html = renderWithProviders(
+    <ChatErrorMessage
+      error={new Error("Chat request failed", { cause: refusal })}
+      isGenerating={false}
+      onResend={() => {}}
+    />,
+  );
+  const text = renderedText(html);
+  expect(text).toContain(messages.chat.sendErrorMessageEmpty);
+  expect(text).not.toContain("Chat message has no text or attachment");
+  expect(text).not.toContain(messages.chat.resend);
+});
 test("sent pasted text renders once as a collapsed attachment", () => {
   const text = "First line\n  <literal> & whitespace\n";
   const html = renderWithProviders(

@@ -19,11 +19,62 @@ const presences: (DesktopPresence | undefined)[] = [
   { type: "current", desktop },
   { type: "outdated", desktop },
 ];
+const IDLE = { status: "idle" } as const;
+const DESKTOP_URL = "stella://account/complete?correlationId=fixture";
 
 describe("desktop connection card", () => {
+  test("an automatic approval shows the app opening until the proof decides", () => {
+    for (const presence of presences) {
+      expect(
+        desktopCardState({
+          challengeWaiting: true,
+          connection: { status: "connecting", approval: "local-proof" },
+          presence,
+        }),
+      ).toEqual({ type: "verifying" });
+      // An explicit click keeps the approve card while it loads.
+      expect(
+        desktopCardState({
+          challengeWaiting: true,
+          connection: { status: "connecting", approval: "explicit" },
+          presence,
+        }),
+      ).toEqual({ type: "approve" });
+      for (const challengeWaiting of [true, false]) {
+        expect(
+          desktopCardState({
+            challengeWaiting,
+            connection: { status: "opening", desktopUrl: DESKTOP_URL },
+            presence,
+          }),
+        ).toEqual({ type: "opening", desktopUrl: DESKTOP_URL });
+      }
+    }
+  });
+
+  test("an unproven automatic approval falls back to the approve card", () => {
+    for (const presence of presences) {
+      for (const connection of [
+        IDLE,
+        { status: "error" } as const,
+        { status: "update-required" } as const,
+      ]) {
+        expect(
+          desktopCardState({ challengeWaiting: true, connection, presence }),
+        ).toEqual({ type: "approve" });
+      }
+    }
+  });
+
   test("a pending approval wins over every other signal", () => {
     for (const presence of presences) {
-      expect(desktopCardState({ challengeWaiting: true, presence })).toEqual({
+      expect(
+        desktopCardState({
+          challengeWaiting: true,
+          connection: IDLE,
+          presence,
+        }),
+      ).toEqual({
         type: "approve",
       });
     }
@@ -33,12 +84,14 @@ describe("desktop connection card", () => {
     expect(
       desktopCardState({
         challengeWaiting: false,
+        connection: IDLE,
         presence: { type: "current", desktop },
       }),
     ).toEqual({ type: "connected", version: "1.4.0", onThisComputer: false });
     expect(
       desktopCardState({
         challengeWaiting: false,
+        connection: IDLE,
         presence: { type: "outdated", desktop },
       }),
     ).toEqual({ type: "outdated", version: "1.4.0" });
@@ -50,7 +103,13 @@ describe("desktop connection card", () => {
       { type: "none" } as const,
       { type: "not_connected", desktop } as const,
     ]) {
-      expect(desktopCardState({ challengeWaiting: false, presence })).toEqual({
+      expect(
+        desktopCardState({
+          challengeWaiting: false,
+          connection: IDLE,
+          presence,
+        }),
+      ).toEqual({
         type: "missing",
       });
     }
@@ -59,6 +118,7 @@ describe("desktop connection card", () => {
   test("a link on another computer still offers install and connect here", () => {
     const card = desktopCardState({
       challengeWaiting: false,
+      connection: IDLE,
       presence: { type: "current", desktop },
     });
     expect(offersDesktopSetup(card)).toBe(true);

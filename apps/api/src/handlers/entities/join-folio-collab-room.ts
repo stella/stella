@@ -1,17 +1,16 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   FOLIO_COLLAB_SEED_PREPARING_CODE,
   toFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { roles } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -25,10 +24,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BUFFER_INTENT_STALE_MS } from "@/api/lib/buffer-intent-reconciliation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
   lockDocxEditTarget,
@@ -47,15 +47,18 @@ import {
   recordFolioCollabContribution,
 } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
-const joinFolioCollabRoomBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  propertyId: tSafeId("property"),
+const joinFolioCollabRoomBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  propertyId: resourceIdSchema("property"),
 });
 
-type JoinFolioCollabRoomBody = Static<typeof joinFolioCollabRoomBodySchema>;
+type JoinFolioCollabRoomBody = v.InferOutput<
+  typeof joinFolioCollabRoomBodySchema
+>;
 
 type JoinFolioCollabRoomResponse = {
   baseVersionId: SafeId<"entityVersion">;
@@ -71,7 +74,8 @@ type JoinFolioCollabRoomResponse = {
 };
 
 type JoinFolioCollabRoomProps = {
-  sourceSessionId: string;
+  /** The browser session joining, or `null` for a credential that has none. */
+  sourceSessionId: string | null;
   body: JoinFolioCollabRoomBody;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
@@ -117,7 +121,7 @@ const canStillEditWorkspace = async ({
   const membership = memberships.at(0);
   if (
     !membership ||
-    membership.workspaceStatus !== "active" ||
+    !workspaceAcceptsWrites(membership.workspaceStatus) ||
     !isMemberRole(membership.organizationRole)
   ) {
     return false;
@@ -553,7 +557,7 @@ const joinFolioCollabRoomHandler = async function* ({
         await presignDocxFieldDownload({
           readSessionAuthority,
           userId,
-          source: { kind: "request", sessionId: sourceSessionId },
+          source: callerDownloadSource({ id: sourceSessionId }),
           fileContent: joined.seedFileContent,
           organizationId,
           workspaceId,

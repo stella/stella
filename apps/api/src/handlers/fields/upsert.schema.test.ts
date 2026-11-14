@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -16,7 +16,7 @@ describe("upsert field content schema", () => {
   test.each([
     [{ version: 1, type: "text", value: "Clause 4" }, true],
     [{ version: 1, type: "date", value: "2026-02-28" }, true],
-    [{ version: 1, type: "date", value: "2026-02-30" }, true],
+    [{ version: 1, type: "date", value: "2026-02-30" }, false],
     [{ version: 1, type: "date", value: "22/10/2026" }, false],
     [{ version: 1, type: "int", value: 42, currency: null }, true],
     [{ version: 1, type: "int", value: 4.2, currency: null }, false],
@@ -29,12 +29,12 @@ describe("upsert field content schema", () => {
     [{ version: 1, type: "multi-select", value: ["Open", "Closed"] }, true],
     [{ version: 1, type: "multi-select", value: [""] }, false],
   ] as const)("validates typed field value %#", (content, accepted) => {
-    expect(Value.Check(upsertFieldContentSchema, content)).toBe(accepted);
+    expect(v.is(upsertFieldContentSchema, content)).toBe(accepted);
   });
 
   test("accepts exactly the empty person sentinel used to clear a cell", () => {
     expect(
-      Value.Check(upsertFieldContentSchema, {
+      v.is(upsertFieldContentSchema, {
         version: 1,
         type: "person",
         userId: null,
@@ -43,7 +43,7 @@ describe("upsert field content schema", () => {
       }),
     ).toBe(true);
     expect(
-      Value.Check(upsertFieldContentSchema, {
+      v.is(upsertFieldContentSchema, {
         version: 1,
         type: "person",
         userId: "user-1",
@@ -55,7 +55,7 @@ describe("upsert field content schema", () => {
 
   test("keeps non-empty person assignments valid", () => {
     expect(
-      Value.Check(upsertFieldContentSchema, {
+      v.is(upsertFieldContentSchema, {
         version: 1,
         type: "person",
         userId: "user-1",

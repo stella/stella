@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { legalListItemSources } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -8,8 +10,8 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { projectListItemSource } from "@/api/lib/auth/feature-access/list-eligibility";
 import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -25,14 +27,21 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedLegalListItemSourceId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
 });
-const querySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.legalListSourcesPageSizeMax }),
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.legalListSourcesPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 const config = {
   contract: "patch",

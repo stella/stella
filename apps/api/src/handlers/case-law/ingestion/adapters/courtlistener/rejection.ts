@@ -1,4 +1,7 @@
+// parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 import { TaggedError } from "better-result";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 /**
  * Why a CourtListener record cannot become a decision. Every reason rejects
@@ -50,7 +53,11 @@ export class CourtListenerRecordRejectedError extends TaggedError(
   /** Diagnostics past the bound, counted rather than kept. */
   omittedDiagnostics: number;
   opinionIds: readonly string[];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type RejectCourtListenerRecordOptions = {
   readonly reason: CourtListenerRejectionReason;

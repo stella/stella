@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildSkillManifest,
+  type ContributeFormState,
   createLatestCommitLookupGuard,
   deriveSlug,
   evaluateManifest,
@@ -10,7 +11,6 @@ import {
   githubNewFileUrl,
   isFullCommitSha,
   normalizeGithubRepo,
-  type ContributeFormState,
 } from "@/features/knowledge/public/tools/contribute.logic";
 
 const SHA = "a".repeat(40);

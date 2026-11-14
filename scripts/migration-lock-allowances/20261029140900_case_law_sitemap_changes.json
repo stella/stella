@@ -1,0 +1,4 @@
+{
+  "row-level-security": "ENABLE and FORCE RLS apply to the sitemap change log created empty in the same migration, before publication, under 1s lock_timeout and 30s statement_timeout.",
+  "create-trigger": "Installing the row-level sitemap change triggers on case_law_decisions and case_law_sources is a catalog-only change without a row scan; each SHARE ROW EXCLUSIVE acquisition is bounded by 1s lock_timeout, and a lost lock wait rolls the migration back for the runner's lock-retry ladder to apply again."
+}

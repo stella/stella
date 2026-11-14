@@ -3,23 +3,23 @@ import { sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  SourceRawParts,
-  SourceRawObjects,
-  StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type { SkUsListingFetchOutcome } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   pgTimestampCursorBoundary,
   pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  SourceRawObjects,
+  SourceRawParts,
+  StoredRawReadError,
+} from "@/api/lib/legal-search/ingestion-types";
 
 export type SkUsRawCursor = {
   createdAt: string;

@@ -12,10 +12,10 @@ import { expect, test } from "bun:test";
 
 import {
   createSnapshotActivityReconciler,
-  SnapshotPartReconciler,
-  SnapshotReconciliationError,
   reconcileSnapshotCall,
   reconcileSnapshotResult,
+  SnapshotPartReconciler,
+  SnapshotReconciliationError,
 } from "@/api/handlers/chat/snapshot-reconciliation";
 
 test("a suspended subagent resumes with updated messages and stays terminal once settled", () => {

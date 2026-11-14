@@ -59,8 +59,7 @@ export const safeDbFromScoped =
 
 /** A safe scoped handle or a transaction already opened by its caller. */
 export type SafeDbOrTx =
-  | { safeDb: SafeDb; tx?: undefined }
-  | { safeDb?: undefined; tx: Transaction };
+  { safeDb: SafeDb; tx?: undefined } | { safeDb?: undefined; tx: Transaction };
 
 /**
  * Recover the failure a transaction callback threw to abort itself.

@@ -25,6 +25,9 @@ type AnalysisLayersProps = {
  * per layer rather than left to the column's badge: a reader who lands on
  * the abstract must be told that sentence was written by a model, without
  * having to scroll to find out.
+ *
+ * Generated text is never the decision's: as reader chrome it carries no
+ * anchored words, so no selection over it reaches Ask AI or Explain.
  */
 const Layer = ({
   children,
@@ -36,7 +39,7 @@ const Layer = ({
 }) => {
   const t = useTranslations();
   return (
-    <section className="px-2 pt-4">
+    <section className="px-2 pt-4" data-reader-chrome="">
       <h3 className="text-foreground-disabled text-3xs pb-1 font-medium tracking-wider uppercase">
         <ReaderAiLabel
           context="caseLaw"
@@ -80,7 +83,7 @@ export const AnalysisLayers = ({
           <ul className="flex flex-wrap gap-1">
             {topics.map((topic) => (
               <li
-                className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5"
+                className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5"
                 key={topic}
               >
                 {topic}

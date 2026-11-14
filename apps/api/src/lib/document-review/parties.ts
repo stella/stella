@@ -15,8 +15,8 @@ import * as v from "valibot";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
-  createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
+  createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -28,12 +28,14 @@ import {
 import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
+  fitReviewDocuments,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 
 const MODEL_TASK = "pdf";
 const TIMEOUT_MS = 60_000;
@@ -115,6 +117,19 @@ export const detectReviewParties = async ({
 }: DetectReviewPartiesArgs): Promise<
   Result<ReviewParty[], WorkflowIntegrationError>
 > => {
+  const fitted = fitReviewDocuments({
+    target,
+    references: [],
+    budgetBytes: requestBudgetBytesForTask(MODEL_TASK, orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fitted)) {
+    return Result.err(fitted.error);
+  }
+
   const caching = resolveCaching({
     promptCachingEnabled,
     task: MODEL_TASK,
@@ -154,7 +169,7 @@ export const detectReviewParties = async ({
           {
             role: "user",
             content: buildReviewDocumentParts({
-              target,
+              target: fitted.value.target,
               references: [],
               caching,
             }),

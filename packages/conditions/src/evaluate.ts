@@ -17,12 +17,7 @@ import type {
 } from "./schema";
 
 export type ConditionValue =
-  | string
-  | number
-  | boolean
-  | string[]
-  | null
-  | undefined;
+  string | number | boolean | string[] | null | undefined;
 
 export type OperandResolver = (operand: RefOperand) => ConditionValue;
 

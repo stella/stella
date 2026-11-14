@@ -4,10 +4,10 @@ import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import {
-  hasOptionalString,
   hasOptionalNumber,
-  isRecord,
+  hasOptionalString,
   isOptionalArrayOf,
+  isRecord,
 } from "../shared/guards.js";
 import {
   performRegistryRequest,

@@ -233,8 +233,8 @@ fi
 if [[ "$*" == *gen:capabilities* && "$FIXTURE_MODE" == capabilities ]]; then
   echo '// updated capabilities' > packages/ai-catalog/src/capabilities.gen.ts
 fi
-if [[ "$*" == 'run changeset --empty' ]]; then
-  printf '%s\\n' '---' '---' > .changeset/fixture-empty.md
+if [[ "$1" == fmt ]]; then
+  exec "$REAL_BUN" "$@"
 fi
 `,
   );
@@ -250,6 +250,9 @@ fi
           .filter((entry) => entry !== undefined)
           .join(path.delimiter),
         FIXTURE_MODE: mode,
+        // The formatter itself runs, so the written changeset is the one CI
+        // checks.
+        REAL_BUN: process.execPath,
         RUNNER_TEMP: tooling,
         GITHUB_OUTPUT: outputFile,
         REFRESH_CHANGESET: ".changeset/model-catalog-refresh.md",
@@ -283,6 +286,7 @@ fi
     changeset: Bun.file(
       path.join(directory, ".changeset/model-catalog-refresh.md"),
     ),
+    changesetPath: path.join(directory, ".changeset/model-catalog-refresh.md"),
   };
 };
 
@@ -315,7 +319,10 @@ describe("scheduled catalog refresh", () => {
   test("the refresh replaces its own earlier changesets", async () => {
     for (const earlier of [
       "---\n---\n",
+      // The shape an earlier refresh wrote before it was formatted.
+      "---\n\n---\n\n\n",
       '---\n"@stll/ai-catalog": patch\n---\n\nRefresh upstream model rates and request capabilities.\n',
+      '---\n"@stll/ai-catalog": patch\n---\nRefresh upstream model rates and request capabilities.\n',
     ]) {
       const result = await runRefresh("rates", earlier);
       expect(result.exitCode, result.log).toBe(0);
@@ -324,6 +331,21 @@ describe("scheduled catalog refresh", () => {
       ).toEqual(["@stll/ai-catalog"]);
     }
   });
+
+  test.each(["changed", "rates"] as const)(
+    "the %s refresh writes its changeset in the formatter's own shape",
+    async (mode) => {
+      const result = await runRefresh(mode);
+      expect(result.exitCode, result.log).toBe(0);
+      expect(result.calls).toContain("fmt .changeset/model-catalog-refresh.md");
+      const written = await result.changeset.text();
+      const check = Bun.spawnSync(
+        [process.execPath, "fmt", "--check", result.changesetPath],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      expect(check.exitCode, written + check.stderr.toString()).toBe(0);
+    },
+  );
 
   test("unchanged inputs produce no proposal", async () => {
     const result = await runRefresh("unchanged");

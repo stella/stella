@@ -12,15 +12,16 @@
     "./sleep": "./src/sleep.ts",
     "./event-loop": "./src/event-loop.ts",
     "./backoff-delay": "./src/backoff-delay.ts",
-    "./chunk": "./src/chunk.ts"
+    "./chunk": "./src/chunk.ts",
+    "./ttl-flight-cache": "./src/ttl-flight-cache.ts",
+    "./coalesced-drain": "./src/coalesced-drain.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/concurrency",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/concurrency",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/concurrency",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/concurrency",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
@@ -28,7 +29,7 @@
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
-    "@stll/test-kit": "0.3.0",
+    "@stll/test-kit": "0.4.1",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

@@ -1,4 +1,4 @@
-import { frameAccents, productCtaLabels, type Product } from "./types";
+import { frameAccents, type Product, productCtaLabels } from "./types";
 
 export const tabularReview = {
   slug: "tabular-review",

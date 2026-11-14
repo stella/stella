@@ -4,7 +4,6 @@ import type { ReaderAnnotationVisibility } from "@stll/api-contract/legal-reader
 
 import { abortableTx } from "@/api/db/safe-db";
 import { legalReaderAnswers } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { answerOwnerPredicate } from "@/api/handlers/legal-reader/answers/operation";
 import {
   answerParamsSchema,
@@ -17,6 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 
 const config = {
   contract: "patch",
@@ -85,7 +85,7 @@ const updateReaderAnswer = createSafeRootHandler(
     );
   },
 );
-declareAggregateMutation(updateReaderAnswer.handler, {
+declareAggregateMutation(updateReaderAnswer, {
   type: "aggregate",
   aggregates: ["readerAnswer"],
 });

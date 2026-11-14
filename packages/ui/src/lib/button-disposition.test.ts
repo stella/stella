@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  BUTTON_DISPOSITION,
   blockDisabledActivation,
   blockDisabledKeyActivation,
+  BUTTON_DISPOSITION,
   resolveButtonDisposition,
 } from "./button-disposition";
 

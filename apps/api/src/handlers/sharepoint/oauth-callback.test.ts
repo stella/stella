@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { createSharepointOAuthCallback } from "@/api/handlers/sharepoint/oauth-callback";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   getRequestId,
-  initRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -33,7 +35,9 @@ const userA = toSafeId<"user">("user_a");
 
 const reasonOf = (result: unknown): string | null => {
   if (!(result instanceof Response)) {
-    throw new Error(`expected a 302 Response, got ${JSON.stringify(result)}`);
+    throw new TypeError(
+      `expected a 302 Response, got ${JSON.stringify(result)}`,
+    );
   }
   expect(result.status).toBe(302);
   const location = result.headers.get("Location");
@@ -51,17 +55,12 @@ const queuedSafeDb = (results: unknown[]): CallbackCtx["safeDb"] =>
     return Result.ok(next);
   });
 
-const scopedRequest = (): Request => {
-  const request = new Request("https://api.test/sharepoint/oauth/callback");
-  initRequestContext(request);
-  return request;
-};
-
 const failingLookupContext = (
   error: Error,
-  request: Request = scopedRequest(),
+  request: Request = new Request("https://api.test/sharepoint/oauth/callback"),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    route: "/v1/sharepoint/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: queuedSafeDb([error]),
@@ -119,20 +118,23 @@ describe("sharepointOAuthCallback", () => {
   });
 
   test("logs the failure with the request id", async () => {
-    const request = scopedRequest();
-    await sharepointOAuthCallback.handler(
-      failingLookupContext(
-        new HandlerError({ status: 500, message: "db down" }),
-        request,
-      ),
-    );
+    await runWithRequestIdScope(async () => {
+      openRequestContext();
+      await sharepointOAuthCallback.handler(
+        failingLookupContext(
+          new HandlerError({ status: 500, message: "db down" }),
+        ),
+      );
 
-    expect(failureRecords().map((record) => record.attributes)).toMatchObject([
-      {
-        "request.id": getRequestId(request),
-        operation: "sharepoint_oauth_callback",
-      },
-    ]);
+      expect(failureRecords().map((record) => record.attributes)).toMatchObject(
+        [
+          {
+            "request.id": getRequestId(),
+            operation: "sharepoint_oauth_callback",
+          },
+        ],
+      );
+    });
   });
 
   test("logs a transient network failure as a warning without reporting it", async () => {

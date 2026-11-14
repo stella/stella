@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
+
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -11,21 +12,22 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tCurrencyCode, tDefaultVarchar } from "@/api/lib/custom-schema";
+import { displayNameSchema } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const createRateTableBodySchema = t.Object({
-  name: tDefaultVarchar,
-  currency: tCurrencyCode,
-  isDefault: t.Optional(t.Boolean()),
+const createRateTableBodySchema = v.object({
+  name: displayNameSchema(),
+  currency: currencyCodeSchema,
+  isDefault: v.optional(v.boolean()),
 });
 
 export type CreateRateTableHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createRateTableBodySchema>;
+  body: v.InferOutput<typeof createRateTableBodySchema>;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -41,16 +43,17 @@ export const createRateTableHandler = async function* ({
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
       // Row locks cannot serialize the first table in an empty matter.
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-      );
-      // Lock rows then count to serialize concurrent adds.
-      // PG rejects FOR UPDATE with aggregate functions.
+      await withAggregateLock({
+        aggregate: "rateTableWorkspace",
+        id: { workspaceId },
+        tx,
+      });
+      // Every rate-table write in the matter holds the lock above, so this
+      // read stays current until the insert commits.
       const lockedRows = await tx
-        .select({ id: rateTables.id })
+        .select({ id: rateTables.id, isDefault: rateTables.isDefault })
         .from(rateTables)
-        .where(eq(rateTables.workspaceId, workspaceId))
-        .for("update");
+        .where(eq(rateTables.workspaceId, workspaceId));
 
       if (lockedRows.length >= LIMITS.rateTablesPerWorkspace) {
         throw new HandlerError({
@@ -59,7 +62,13 @@ export const createRateTableHandler = async function* ({
         });
       }
 
-      const previousDefaults = body.isDefault
+      // Rates resolve only from a matter's default table, so a matter that
+      // has tables always has exactly one default: a table created while the
+      // matter has none becomes the default whatever the request asked.
+      const isDefault =
+        body.isDefault === true || !lockedRows.some((row) => row.isDefault);
+
+      const previousDefaults = isDefault
         ? await tx
             .update(rateTables)
             .set({ isDefault: false, updatedAt: new Date() })
@@ -79,7 +88,7 @@ export const createRateTableHandler = async function* ({
           workspaceId,
           name: body.name,
           currency: body.currency,
-          isDefault: body.isDefault ?? false,
+          isDefault,
         })
         .returning({ id: rateTables.id });
 
@@ -103,7 +112,7 @@ export const createRateTableHandler = async function* ({
               new: {
                 name: body.name,
                 currency: body.currency,
-                isDefault: body.isDefault ?? false,
+                isDefault,
               },
             },
           },
@@ -128,11 +137,14 @@ export const createRateTableHandler = async function* ({
 const createRateTable = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Create a rate table, a named set of hourly rates in a single " +
-      "currency, in a matter. Pass isDefault to make it the matter's " +
-      "default, which clears the flag on the previous default; matters have " +
-      "a fixed cap on how many rate tables they may hold. Add the rates " +
+      "currency, in a matter. Rates apply only from the matter's default " +
+      "table. Pass isDefault to make it the default, which clears the flag " +
+      "on the previous default; a table created while the matter has no " +
+      "default becomes the default. Matters have a fixed cap on how many " +
+      "rate tables they may hold. Add the rates " +
       "themselves with rates.entries.create.",
     permissions: { rate: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,

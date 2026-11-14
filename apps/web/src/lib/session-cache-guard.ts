@@ -30,8 +30,7 @@ type TransitionState = {
   lastMember: string | undefined;
   pending: Promise<void>;
 } & (
-  | { phase: "settled" }
-  | { phase: "awaiting-frame"; policy: TransitionPolicy }
+  { phase: "settled" } | { phase: "awaiting-frame"; policy: TransitionPolicy }
 );
 const transitions = new WeakMap<QueryClient, TransitionState>();
 const authFlowPages = new WeakMap<QueryClient, () => boolean>();
@@ -121,13 +120,16 @@ const observeAuthTransition = async (
         ? "identity"
         : transitionPolicy(current, visitor);
     const pending = cleanup(queryClient, removedBy(policy));
-    transitions.set(queryClient, {
-      visitor,
-      lastMember: memberIdentity(visitor) ?? current.lastMember,
-      phase: "awaiting-frame",
-      policy,
-      pending,
-    });
+    const lastMember = memberIdentity(visitor) ?? current.lastMember;
+    // Sign-in and onboarding pages render no frame, so nothing read for the
+    // previous visitor can be rebuilt after this pass. A second pass when the
+    // next frame mounts would only cancel the reads its page's loaders started.
+    transitions.set(
+      queryClient,
+      authFlowPages.get(queryClient)?.()
+        ? { visitor, lastMember, phase: "settled", pending }
+        : { visitor, lastMember, phase: "awaiting-frame", policy, pending },
+    );
     await pending;
     return;
   } else {

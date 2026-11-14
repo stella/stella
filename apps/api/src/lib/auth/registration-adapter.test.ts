@@ -11,8 +11,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { envApiServerSchema } from "@/api/env-schema";
 import {
   admitOpenClient,
-  REGISTRATION_RETENTION_SCHEMA_PLUGIN,
   authorizationClientId,
+  REGISTRATION_RETENTION_SCHEMA_PLUGIN,
   requireAuthRetention,
   withAuthRetention,
 } from "@/api/lib/auth/registration-adapter";

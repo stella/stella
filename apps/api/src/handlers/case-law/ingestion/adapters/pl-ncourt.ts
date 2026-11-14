@@ -1,7 +1,10 @@
-// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-import { Result, panic } from "better-result";
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+import { panic, Result } from "better-result";
+
+import {
+  DECISION_DOCUMENT_ROLE,
+  type DecisionDocumentRole,
+} from "@stll/api-contract/decision-document-role";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -49,13 +52,15 @@ import { Result, panic } from "better-result";
  * their own rows; {@link plCommonCourtRulingKeys} is the relationship between
  * them, and nothing here merges or deletes either side.
  */
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
-
-import {
-  DECISION_DOCUMENT_ROLE,
-  type DecisionDocumentRole,
-} from "@stll/api-contract/decision-document-role";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
+// parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+import { load } from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
@@ -69,21 +74,50 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
+import type { CommonCourtRulingKeyInput } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
+  PL_COURTS_RULING_DECISION_TYPES,
+  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
+import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
+import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { arrayOrEmpty } from "@/api/lib/array";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import {
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  decodeSourceRawEnvelope,
+  legacyExcludedSourceField,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionJudgeInput,
   DecisionSupplement,
@@ -102,38 +136,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
-import type { CommonCourtRulingKeyInput } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
-import {
-  PL_COURTS_RULING_DECISION_TYPES,
-  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import {
-  readPlNcourtContent,
-  validatePlNcourtDocument,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
-import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import { arrayOrEmpty } from "@/api/lib/array";
-import {
-  TEXT_ABSENCE_REASON,
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  sourceTextField,
-} from "@/api/lib/case-law/decision-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -294,7 +297,7 @@ const childElements = (element: Element): Element[] =>
   element.children.filter((child): child is Element => isTag(child));
 
 const rootElement = (xml: string): Element | undefined => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $.root().children().first().get(0);
   return root !== undefined && isTag(root) ? root : undefined;
 };
@@ -325,7 +328,7 @@ export const readPlNcourtListingRow = (
  * does not carry is refused too; an undercounted page would read as the end.
  */
 export const readPlNcourtListing = (xml: string): PlNcourtListing | null => {
-  const $ = cheerio.load(xml, {
+  const $ = load(xml, {
     xml: { xmlMode: true, withStartIndices: true, withEndIndices: true },
   });
   const root = $.root().children().first().get(0);
@@ -449,53 +452,52 @@ const CONTENT_ATTRIBUTE_PREFIX = "xPart@";
  * the record's elements (one name where both print it), the document's root
  * name and attributes, and the document itself.
  */
-const SOURCE_FIELDS = [
-  "id",
-  "signature",
-  "date",
-  "publicationDate",
-  "lastUpdate",
-  "courtId",
-  "departmentId",
-  "type",
-  "excerpt",
-  "chairman",
-  "judges",
-  "themePhrases",
-  "references",
-  "legalBases",
-  "recorder",
-  "decision",
-  "reviser",
-  "publisher",
-  "dateOfPublication",
-  "dateOfLastUpdate",
-  "thesis",
-  "xPart",
-  "xPart/xName",
-  "xPart@xVersion",
-  "xPart@xLang",
-  "xPart@xYear",
-  "xPart@xDocType",
-  "xPart@xVolType",
-  "xPart@xVolNmbr",
-  "xPart@xFromPg",
-  "xPart@xToPage",
-  "xPart@xFlag",
-  "xPart@xEditor",
-  "xPart@xEditorFullName",
-  "xPart@xPublisher",
-  "xPart@xPublisherFullName",
-  "xPart@xClassifier",
-  "xPart@xClassifierFullName",
-  "xPart@xClassified",
-  "xPart@xml:space",
-] as const;
+/** The publisher's detail record, beside the fields its listing row states. */
+type PlNcourtDetailRecord = {
+  chairman?: unknown;
+  judges?: unknown;
+  themePhrases?: unknown;
+  references?: unknown;
+  legalBases?: unknown;
+  recorder?: unknown;
+  decision?: unknown;
+  reviser?: unknown;
+  publisher?: unknown;
+  dateOfPublication?: unknown;
+  dateOfLastUpdate?: unknown;
+};
 
-type PlNcourtSourceField = (typeof SOURCE_FIELDS)[number];
+/** The publisher's document envelope: its `xPart` element and attributes. */
+type PlNcourtDocumentRecord = {
+  xPart?: unknown;
+  "xPart/xName"?: unknown;
+  "xPart@xVersion"?: unknown;
+  "xPart@xLang"?: unknown;
+  "xPart@xYear"?: unknown;
+  "xPart@xDocType"?: unknown;
+  "xPart@xVolType"?: unknown;
+  "xPart@xVolNmbr"?: unknown;
+  "xPart@xFromPg"?: unknown;
+  "xPart@xToPage"?: unknown;
+  "xPart@xFlag"?: unknown;
+  "xPart@xEditor"?: unknown;
+  "xPart@xEditorFullName"?: unknown;
+  "xPart@xPublisher"?: unknown;
+  "xPart@xPublisherFullName"?: unknown;
+  "xPart@xClassifier"?: unknown;
+  "xPart@xClassifierFullName"?: unknown;
+  "xPart@xClassified"?: unknown;
+  "xPart@xml:space"?: unknown;
+};
+
+type PlNcourtPublisherRecord = PlNcourtListingRow &
+  PlNcourtDetailRecord &
+  PlNcourtDocumentRecord;
+
+type PlNcourtSourceField = keyof PlNcourtPublisherRecord;
 
 const isSourceField = (value: string): value is PlNcourtSourceField =>
-  SOURCE_FIELDS.some((field) => field === value);
+  Object.hasOwn(PL_NCOURT_SOURCE_FIELDS, value);
 
 const DOCUMENT_FIELD = {
   disposition: "stored",
@@ -537,7 +539,7 @@ const PL_NCOURT_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "documentTypes" },
   },
-  excerpt: excludedSourceField(
+  excerpt: legacyExcludedSourceField(
     "the opening characters of the document the document part holds whole",
   ),
   chairman: JUDGES_FIELD,
@@ -603,10 +605,13 @@ const PL_NCOURT_SOURCE_FIELDS = {
   "xPart@xClassifier": DOCUMENT_FIELD,
   "xPart@xClassifierFullName": DOCUMENT_FIELD,
   "xPart@xClassified": DOCUMENT_FIELD,
-  "xPart@xml:space": excludedSourceField(
+  "xPart@xml:space": legacyExcludedSourceField(
     "a serialisation directive for the XML, not a statement about the judgment",
   ),
-} as const satisfies Record<PlNcourtSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlNcourtPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** The names a stored document states: its root, its name, its attributes. */
 const contentFieldNames = (content: PlNcourtContent): string[] => [
@@ -946,7 +951,7 @@ const unmappedFieldsOf = ({
   return unmapped;
 };
 
-type ParsedDocument = ReturnType<typeof parsePlDecisionContent>;
+type ParsedDocument = ReturnType<typeof parsePlCommonCourtDecision>;
 
 /** The document parsed as a Polish decision, or `null` where there is none. */
 const parseDocument = ({
@@ -967,20 +972,24 @@ const parseDocument = ({
   }
   const parsed = Result.try({
     try: () =>
-      parsePlDecisionContent({
-        caseNumber: keyed.caseNumber,
-        ecli: undefined,
-        court: keyed.court,
-        decisionDate: keyed.decisionDate,
-        decisionType: keyed.decisionType,
-        sourceUrl: portalUrlOf(id),
-        documentUrl: contentUrlOf(id),
-        content: content.html,
-        keywords,
-        statutes,
-        documentId: id,
-        sourceSystem: PL_NCOURT_SOURCE_SYSTEM,
-      }),
+      parsePlCommonCourtDecision(
+        {
+          caseNumber: keyed.caseNumber,
+          ecli: undefined,
+          court: keyed.court,
+          decisionDate: keyed.decisionDate,
+          decisionType: keyed.decisionType,
+          sourceUrl: portalUrlOf(id),
+          documentUrl: contentUrlOf(id),
+          content: content.html,
+          keywords,
+          statutes,
+          documentId: id,
+          sourceSystem: PL_NCOURT_SOURCE_SYSTEM,
+          superscripts: true,
+        },
+        "pl-ncourt",
+      ),
     catch: errorTag,
   });
   if (Result.isError(parsed)) {
@@ -1022,6 +1031,7 @@ const documentMetadataOf = (
     ? {}
     : {
         legalReferences: orUndefined(content.legalReferences),
+        rejectedLegalReferences: orUndefined(content.rejectedLegalReferences),
         documentTitle: content.title,
         document:
           Object.keys(content.attributes).length === 0
@@ -1099,20 +1109,10 @@ export const assemblePlNcourtDecision = ({
     keywords: listOf(detail, "themePhrases"),
     statutes: listOf(detail, "legalBases"),
   });
+  // The pipeline checks the blocks against the stored XML itself
+  // (retention/sources/pl-ncourt.ts), not against the HTML rendered from it.
   const documentAst: DocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
-  if (content !== null && document !== null) {
-    validatePlNcourtDocument(
-      {
-        parser: ADAPTER_KEYS.PL_NCOURT,
-        caseNumber,
-        language: PL_NCOURT_LANGUAGE,
-        url: contentUrlOf(id),
-      },
-      content,
-      document.documentAst.blocks,
-    );
-  }
 
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: listingXml,
@@ -2147,6 +2147,7 @@ const fetchUnreadableWindow = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNcourtCursor({
         ...cursor,
         window: Math.ceil(cursor.window / 2),
@@ -2165,6 +2166,7 @@ const fetchUnreadableWindow = async (
   return Result.ok({
     decisions: [buildPlNcourtQuarantine(quarantine.value)],
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlNcourtCursor({
       ...cursor,
       offset: cursor.offset + 1,
@@ -2268,6 +2270,7 @@ const plNcourtFetchPage = async (
   if (lapStart && parsed.from >= today()) {
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
       nextCursor: encodePlNcourtCursor(parsed),
     });
   }
@@ -2289,6 +2292,7 @@ const plNcourtFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: listed.value.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNcourtCursor({
         ...cursor,
         offset: Math.max(0, cursor.offset - PL_NCOURT_REWIND),
@@ -2325,6 +2329,7 @@ const plNcourtFetchPage = async (
         }),
     ...(supplements.length === 0 ? {} : { supplements }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlNcourtCursor(afterWindow({ cursor, listing, read })),
   });
 };

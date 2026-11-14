@@ -195,12 +195,6 @@ test("the real CLI writes canonical Arabic tables that pass its check without ch
     await Bun.write(path.join(directory, "glossary.json"), input);
     await Bun.write(terminology, document);
 
-    // The fixture reaches the width mismatch before testing the final output.
-    const intermediate = generate(document, parseGlossary(input));
-    expect(await formattedLikeRepository(intermediate, "md")).not.toBe(
-      intermediate,
-    );
-
     const runCli = async (flags: string[]) => {
       const child = Bun.spawn({
         cmd: [

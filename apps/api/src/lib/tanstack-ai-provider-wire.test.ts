@@ -1,14 +1,22 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { env } from "@/api/env";
+import {
+  classifyAIError,
+  providerErrorBody,
+  providerStatusCode,
+} from "@/api/lib/ai-error";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
@@ -38,7 +46,7 @@ import {
 } from "@/api/tests/helpers/provider-wire-contract";
 import {
   bodyBytesOf,
-  installProviderWireReplay,
+  registerProviderWireReplay,
 } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   Chunking,
@@ -70,6 +78,13 @@ let replay: ProviderWireReplay;
 let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ retryAfterMs: 1 }),
+});
+
 beforeAll(() => {
   // Real adapters, not the local mock model.
   previousMockAI = env.USE_MOCK_AI;
@@ -79,11 +94,9 @@ beforeAll(() => {
   previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay({ retryAfterMs: 1 });
 });
 
 afterAll(() => {
-  replay.restore();
   env.USE_MOCK_AI = previousMockAI;
   if (previousBedrockEndpoint === undefined) {
     delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
@@ -167,6 +180,41 @@ const checkCassette = async (cassette: ProviderWireCassette) => {
     findWireContractViolations({ cassette, replay: findings, run }),
   );
   expectSettledTranscripts({ requests, transcripts });
+  if (
+    cassette.scenario === "rate-limit" ||
+    cassette.scenario === "server-error"
+  ) {
+    const failed = run.chunks.findLast(
+      (chunk) => chunk.type === EventType.RUN_ERROR,
+    );
+    if (failed?.type !== EventType.RUN_ERROR) {
+      panic("An HTTP failure cassette produced no RUN_ERROR");
+    }
+    const evidence =
+      failed.rawEvent ??
+      providerErrorBody(failed.message) ??
+      Object.assign(new Error(failed.message), { code: failed.code });
+    const error = createProviderCallError({
+      model: { provider: cassette.provider, keySource: "byok" },
+      evidence,
+      status: 502,
+    });
+    if (cassette.expect.outcome !== "error") {
+      panic("An HTTP failure cassette needs an error expectation");
+    }
+    expect(classifyAIError(error)).toBe(cassette.expect.errorKind);
+    expect(
+      gradeFailure(
+        readEvidence(error),
+        failureSink({ event: "chat.stream_failed", expected: [] }),
+      ).grade,
+    ).toBe("transient");
+    // In-band failures answer HTTP 200 but retain their actual upstream code.
+    const responseStatus = cassette.exchanges.at(-1)?.response.status;
+    expect(error.providerStatus).toBe(
+      responseStatus === 200 ? 502 : responseStatus,
+    );
+  }
   // The rules first: a request a provider would refuse names the rule it
   // breaks before it shows as a changed shape.
   expectProviderRules(sent);
@@ -432,7 +480,8 @@ const LF = 0x0a;
 const hasCrlf = (bytes: Uint8Array): boolean =>
   bytes.some((byte, index) => byte === CR && bytes[index + 1] === LF);
 
-const checkSplit = async (cassette: ProviderWireCassette) => {
+/** The cut-anywhere property, after the one-byte read already matched. */
+const splitReadProperty = async (cassette: ProviderWireCassette) => {
   const multibyte = withMultibyteText(cassette);
   const { run: whole } = await replayWireScenario({
     cassette: multibyte,
@@ -452,17 +501,14 @@ const checkSplit = async (cassette: ProviderWireCassette) => {
   };
   await expectSame({ every: 1 });
   const length = firstBodyOf(multibyte).length;
-  await fc.assert(
-    fc.asyncProperty(
-      fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
-        minLength: 1,
-        maxLength: 48,
-      }),
-      async (at) => {
-        await expectSame({ at });
-      },
-    ),
-    propertyConfig({ numRuns: SPLIT_RUNS, seed: SPLIT_SEED }),
+  return fc.asyncProperty(
+    fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
+      minLength: 1,
+      maxLength: 48,
+    }),
+    async (at) => {
+      await expectSame({ at });
+    },
   );
 };
 
@@ -485,13 +531,19 @@ describe("every adapter reads a stream cut anywhere as it reads it whole", () =>
   });
 
   for (const cassette of streamed) {
-    test(
-      cassetteKey(cassette).replace("/", " "),
-      async () => {
-        await checkSplit(cassette);
-      },
-      propertyTestTimeout(RETRY_TIMEOUT_MS),
-    );
+    describe(cassetteKey(cassette).replace("/", " "), () => {
+      test(
+        "matches the whole read at any cut",
+        async () => {
+          await assertProperty(
+            "matches the whole read at any cut",
+            await splitReadProperty(cassette),
+            { numRuns: SPLIT_RUNS, seed: SPLIT_SEED },
+          );
+        },
+        propertyTestTimeout(RETRY_TIMEOUT_MS),
+      );
+    });
   }
 });
 
@@ -575,4 +627,68 @@ test("a cancelled structured Bedrock request never reaches the provider", async 
     );
   expect(outcome).toBe("rejected");
   expect(replay.takeFindings().unexpected).toEqual([]);
+});
+
+// Replay the existing quota response through Gemini's non-streaming SDK path:
+// rebuilding its ApiError from the message discards the status at this boundary.
+test("Gemini structured output preserves its provider HTTP status", async () => {
+  const cassette = cassetteFor(cassettes, "google", "rate-limit");
+  replay.serve({
+    ...cassette,
+    exchanges: cassette.exchanges.map((exchange) => ({
+      ...exchange,
+      request: {
+        ...exchange.request,
+        path: exchange.request.path.replace(
+          ":streamGenerateContent?alt=sse",
+          ":generateContent",
+        ),
+      },
+    })),
+  });
+  const model = wireChatModel("google");
+  const adapter = createTanStackTextAdapterFactory({
+    dataClass: "public_corpus",
+    apiKey: "cassette-replay-no-credentials",
+    provider: "google",
+  })(model);
+  const result = await Result.tryPromise(async () =>
+    adapter.structuredOutput({
+      chatOptions: {
+        logger: resolveDebugOption(false),
+        messages: [{ content: "Reply with OK.", role: "user" }],
+        model,
+      },
+      outputSchema: {
+        properties: { answer: { type: "string" } },
+        required: ["answer"],
+        type: "object",
+      },
+    }),
+  );
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    panic("The quota cassette unexpectedly returned structured output");
+  }
+  // Inspect the actual SDK exception, before our message-body recovery can
+  // compensate for an upstream rethrow that lost the field.
+  expect(result.error.cause).toMatchObject({ status: 429 });
+  expect(providerStatusCode(result.error.cause)).toBe(429);
+  expect(classifyAIError(result.error.cause)).toBe("quota_exhausted");
+  const error = createProviderCallError({
+    model: { provider: "google", keySource: "byok" },
+    evidence: result.error.cause,
+    status: 502,
+  });
+  expect(
+    gradeFailure(
+      readEvidence(error),
+      failureSink({ event: "chat.stream_failed", expected: [] }),
+    ),
+  ).toMatchObject({
+    grade: "transient",
+    reason: "quota_exhausted",
+  });
+  expect(replay.takeFindings()).toEqual({ unexpected: [], unconsumed: [] });
+  replay.takeRequests();
 });

@@ -18,17 +18,17 @@ import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
-  workspaces,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   loadManagedAIResidency,
   loadOrgAIConfig,
 } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   AUDIT_ACTION,
@@ -84,6 +84,7 @@ import {
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NotificationPing } from "@/api/lib/notifications";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -96,15 +97,15 @@ import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 import type { TaskDeploymentFeatures } from "@/api/lib/tasks/deployment-features";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
 import {
-  authorizedWorkspaceIds,
   type AuthorizedWorkspaceIds,
+  authorizedWorkspaceIds,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-
 /**
  * The flow run engine. `executeFlowStep` runs one step of one run per BullMQ
  * job (throwing to trigger the queue's retry/backoff, since the queue boundary
@@ -268,15 +269,20 @@ export const executeFlowStep = async (
         }),
       );
     }
+    const startedAt = new Date();
     await tx
       .update(flowRunSteps)
-      .set({ status: "running", startedAt: new Date() })
+      .set({ status: "running", startedAt })
       .where(
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       );
     await tx
       .update(flowRuns)
-      .set({ status: "running" })
+      .set({
+        status: "running",
+        // A run starts when it leaves `pending`; later steps keep that time.
+        ...(current.run.status === "pending" ? { startedAt } : {}),
+      })
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
   });
@@ -316,7 +322,7 @@ export const executeFlowStep = async (
           workspaceIds: [run.workspaceId],
         }),
         signal,
-        generateTextForTask,
+        dispatchText: async (options) => await generateTextForTask(options),
         loadAIConfig,
       });
       await completeStepAndAdvance({
@@ -433,7 +439,7 @@ type RunAiStepArgs = {
   scopedDb: ReturnType<typeof createRootScopedDb>;
   safeDb: SafeDb;
   signal: AbortSignal;
-  generateTextForTask: typeof generateTanStackTextForTask;
+  dispatchText: typeof generateTanStackTextForTask;
   loadAIConfig: typeof loadOrgAIConfig;
 };
 
@@ -450,7 +456,7 @@ const runAiStep = async ({
   scopedDb,
   safeDb,
   signal,
-  generateTextForTask,
+  dispatchText,
   loadAIConfig,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
   const priorOutputs = await scopedDb(
@@ -517,7 +523,7 @@ const runAiStep = async ({
   // exactly the retry signal the worker wants, so we let it propagate. Works
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
-  const markdown = await generateTextForTask({
+  const markdown = await dispatchText({
     userId: admission.userId,
     dataClass: "customer",
     task: "chat",
@@ -781,7 +787,7 @@ const settleReviewTask = async ({
         and(
           eq(entities.id, taskEntityId),
           eq(entities.workspaceId, workspaceId),
-          eq(entities.kind, "task"),
+          workTask(entities),
           inArray(entities.status, [
             TASK_STATUS.OPEN,
             TASK_STATUS.IN_PROGRESS,
@@ -1206,7 +1212,15 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushSearchRepairs([taskEntityId]).catch(captureError);
+  detached(
+    async () =>
+      flushSearchRepairs([taskEntityId]).catch(
+        createErrorCapture(
+          handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
+        ),
+      ),
+    "flow-executor.flush-search-repairs",
+  );
 };
 
 const readRunProgress = async (

@@ -1,5 +1,8 @@
+// parser-output-unchanged: registers telemetry fingerprint dimensions without changing error payloads or parser results.
 import { Result, TaggedError } from "better-result";
 import type { SQL } from "drizzle-orm";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,7 +25,11 @@ export type DecisionWriteExtension = (context: {
 
 class DecisionWriteExtensionError extends TaggedError(
   "DecisionWriteExtensionError",
-)<{ message: string }> {}
+)<{ message: string; reason: "invalid-deadline" | "closed" | "deadline" }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const DEFAULT_DEADLINE_MS = 1000;
 const MAX_DEADLINE_MS = 10_000;
@@ -52,6 +59,7 @@ export const runDecisionWriteExtension = async (
     return abortTransaction(
       new DecisionWriteExtensionError({
         message: "Invalid decision write deadline",
+        reason: "invalid-deadline",
       }),
     );
   }
@@ -77,6 +85,7 @@ export const runDecisionWriteExtension = async (
               return abortTransaction(
                 new DecisionWriteExtensionError({
                   message: "Decision write executor is closed",
+                  reason: "closed",
                 }),
               );
             }
@@ -86,6 +95,7 @@ export const runDecisionWriteExtension = async (
               return abortTransaction(
                 new DecisionWriteExtensionError({
                   message: "Decision write deadline expired",
+                  reason: "deadline",
                 }),
               );
             }
@@ -126,7 +136,14 @@ export const runDecisionWriteExtension = async (
         catch: (cause) => cause,
       }).then((result): DecisionWriteExtensionOutcome => {
         if (result.isErr()) {
-          return { type: "deferred", reason: "failed" };
+          return {
+            type: "deferred",
+            reason:
+              DecisionWriteExtensionError.is(result.error) &&
+              result.error.reason === "deadline"
+                ? "deadline"
+                : "failed",
+          };
         }
         return result.value;
       });

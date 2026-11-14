@@ -5,7 +5,7 @@ import { distance } from "@stll/fuzzy-search";
 
 import type { AliasQuality, EntityType, SanctionsEntry } from "../entry";
 import { nameReading } from "../normalise";
-import type { NameToken, NameReading } from "../normalise";
+import type { NameReading, NameToken } from "../normalise";
 
 // One budget covers vocabulary lookups, postings and scoring across readings.
 export const MAX_SCREENING_WORK = 2_000_000;

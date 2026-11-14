@@ -10,8 +10,8 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import {
   checkUserOrganizationOwnership,
-  ORGANIZATION_OWNERSHIP,
   getUserEmail,
+  ORGANIZATION_OWNERSHIP,
 } from "@/api/lib/delete-account";
 import { sendOTPEmail } from "@/api/lib/email/email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

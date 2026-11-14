@@ -1,5 +1,5 @@
-import { api, memoriesApi } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { api } from "@/lib/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 export const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
@@ -13,11 +13,7 @@ type WorkspaceNavigationStatusScope =
 export type MemoryScope = "organization" | "user" | "workspace";
 export type MemoryStatus = "suggested" | "active" | "stale" | "archived";
 type MemoryKind =
-  | "preference"
-  | "instruction"
-  | "fact"
-  | "decision"
-  | "relationship";
+  "preference" | "instruction" | "fact" | "decision" | "relationship";
 
 type FetchMemoriesPageOptions = {
   cursor: string | null;
@@ -36,7 +32,7 @@ export const fetchMemoriesPage = async ({
   status,
   workspaceId,
 }: FetchMemoriesPageOptions) => {
-  const response = await memoriesApi.get({
+  const response = await api.memories.get({
     ...(signal ? { fetch: { signal } } : {}),
     query: {
       limit,
@@ -48,7 +44,7 @@ export const fetchMemoriesPage = async ({
         : {}),
     },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 type MemoriesPage = Awaited<ReturnType<typeof fetchMemoriesPage>>;
@@ -69,7 +65,7 @@ type CreateMemoryOptions =
     };
 
 export const createMemory = async (options: CreateMemoryOptions) => {
-  const response = await memoriesApi.post(
+  const response = await api.memories.post(
     options.scope === "workspace"
       ? {
           ...options,
@@ -77,7 +73,7 @@ export const createMemory = async (options: CreateMemoryOptions) => {
         }
       : options,
   );
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 type CreateFirmMemoryOptions = {
@@ -86,8 +82,8 @@ type CreateFirmMemoryOptions = {
 };
 
 export const createFirmMemory = async (options: CreateFirmMemoryOptions) => {
-  const response = await memoriesApi.firm.post(options);
-  return unwrapEden(response);
+  const response = await api.memories.firm.post(options);
+  return unwrapApiResponse(response);
 };
 
 type UpdateMemoryOptions = {
@@ -100,21 +96,25 @@ type UpdateMemoryOptions = {
 };
 
 export const updateMemory = async ({ body, memoryId }: UpdateMemoryOptions) => {
-  const response = await memoriesApi({
-    memoryId: toSafeId<"aiMemory">(memoryId),
-  }).patch({
-    ...(body.content !== undefined ? { content: body.content } : {}),
-    ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
-    ...(body.status !== undefined ? { status: body.status } : {}),
-  });
-  return unwrapEden(response);
+  const response = await api
+    .memories({
+      memoryId: toSafeId<"aiMemory">(memoryId),
+    })
+    .patch({
+      ...(body.content !== undefined ? { content: body.content } : {}),
+      ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
+      ...(body.status !== undefined ? { status: body.status } : {}),
+    });
+  return unwrapApiResponse(response);
 };
 
 export const deleteMemory = async (memoryId: string) => {
-  const response = await memoriesApi({
-    memoryId: toSafeId<"aiMemory">(memoryId),
-  }).delete();
-  return unwrapEden(response);
+  const response = await api
+    .memories({
+      memoryId: toSafeId<"aiMemory">(memoryId),
+    })
+    .delete();
+  return unwrapApiResponse(response);
 };
 
 type FetchWorkspaceNavigationPageArgs = {
@@ -138,7 +138,7 @@ export const fetchWorkspaceNavigationPage = async ({
       ...(limit !== undefined ? { limit } : {}),
     },
   });
-  const page = unwrapEden(response);
+  const page = unwrapApiResponse(response);
   const restoreDates = (item: (typeof page.items)[number]) => ({
     ...item,
     lastActivityAt: new Date(item.lastActivityAt),

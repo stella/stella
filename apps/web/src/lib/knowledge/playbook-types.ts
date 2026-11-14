@@ -1,6 +1,5 @@
-import type { api } from "@/lib/api";
-import { optionalArray } from "@/lib/arrays";
 import type {
+  api,
   AskManual,
   DeterministicCheck,
   FallbackEntry,
@@ -14,7 +13,8 @@ import type {
   PositionStandard,
   ReferencePassage,
   TierRule,
-} from "@/lib/eden-client";
+} from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import { createUuid } from "@/lib/uuid";
 
 // Playbook position types are the backend `playbookPositionsSchema` (v3) types

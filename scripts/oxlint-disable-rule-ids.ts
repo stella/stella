@@ -2,8 +2,8 @@ import type { OxlintConfig } from "oxlint";
 
 import { BASE_SCOPE, isRecord, readScopes } from "./oxlint-config-scopes.ts";
 import {
-  PLUGIN_ALIASES,
   builtinRules,
+  PLUGIN_ALIASES,
   ruleCanonicalizer,
 } from "./oxlint-rule-ids.ts";
 

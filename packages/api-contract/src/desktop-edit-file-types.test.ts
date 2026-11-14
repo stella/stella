@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  DESKTOP_EDIT_FILE_TYPES,
   desktopEditFileTypeForMimeType,
   isDesktopEditFileType,
 } from "./desktop-edit-file-types";

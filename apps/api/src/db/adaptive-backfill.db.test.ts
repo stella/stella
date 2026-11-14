@@ -5,7 +5,11 @@ import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 import type { BatchState, Verdict } from "@stll/db-load-gate/health";
 import { tryAcquireBackfillTransactionSlot } from "@stll/db-load-gate/slot";
 
-import { getPgDriverErrorCode, isPgError, PG_ERROR } from "../lib/pg-error";
+import {
+  isPgError,
+  isTransientPgConnectionError,
+  PG_ERROR,
+} from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import { runAdaptiveBackfillBatch } from "./adaptive-backfill";
@@ -277,10 +281,10 @@ describe.skipIf(!enabled)(
           (error: unknown) => error,
         );
         expect(rejection).toBeInstanceOf(Error);
-        // Bun reports an interrupted read through its driver code, beneath Result's wrapper.
-        expect(getPgDriverErrorCode(rejection)).toBe(
-          "ERR_POSTGRES_EXPECTED_REQUEST",
-        );
+        // A terminated backend is a lost connection, whichever driver code
+        // reports it (Bun 1.4.4 surfaces the server's 57P01), beneath
+        // Result's wrapper: the batch is retryable as-is.
+        expect(isTransientPgConnectionError(rejection)).toBe(true);
         expect(
           (
             await writer.unsafe<StateRow[]>(

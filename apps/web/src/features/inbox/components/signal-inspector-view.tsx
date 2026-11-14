@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -15,8 +16,10 @@ import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import { InspectorTitle } from "@/components/inspector/inspector-title";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import type { InboxSignalViewPayload } from "@/features/inbox/signal-inspector.logic";
 import {
   OPEN_WORK_STATUS_LABEL_KEY,
@@ -32,6 +35,7 @@ import { detached } from "@/lib/detached";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 /** One inbox signal's evidence: the facts the card's claim rests on. */
 export const SignalInspectorView = ({
@@ -56,22 +60,22 @@ export const SignalInspectorView = ({
         <div className="flex flex-col gap-5 p-4">
           {isPending && <EvidenceSkeleton />}
           {isError && (
-            <div
+            <RecoverableErrorStatus
               className="text-muted-foreground flex flex-col items-center gap-3 py-10 text-center text-sm"
-              role="alert"
-            >
-              <AlertCircleIcon className="text-destructive size-8" />
-              <p>{t("common.unexpectedError")}</p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "inbox.refetch-signal-evidence");
-                }}
-                size="sm"
-                variant="outline"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
+              message={t("common.unexpectedError")}
+              icon={<AlertCircleIcon className="text-destructive size-8" />}
+              actions={
+                <Button
+                  onClick={() => {
+                    detached(refetch(), "inbox.refetch-signal-evidence");
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {t("common.retry")}
+                </Button>
+              }
+            />
           )}
           {signal && <SignalHeader signal={signal} />}
           {signal && (
@@ -124,9 +128,9 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
           )}
         </time>
       </div>
-      <h2 className="text-base font-semibold text-balance">
+      <InspectorTitle isEmpty={signal.title === ""}>
         <UserText>{signal.title}</UserText>
-      </h2>
+      </InspectorTitle>
       <UserText as="p" className="text-muted-foreground text-sm text-pretty">
         {signal.summary}
       </UserText>
@@ -239,8 +243,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
       );
     case SIGNAL_KIND.CONTRACT_REVIEWED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("inbox.evidence.verdict")}>
+        <DetailsGrid orientation="vertical">
+          <DetailsItem label={t("inbox.evidence.verdict")}>
             <span
               className={cn(
                 "rounded-sm px-1.5 py-0.5 text-xs font-medium",
@@ -253,15 +257,15 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
             >
               {t(VERDICT_LABEL_KEY[evidence.verdict])}
             </span>
-          </Row>
-          <Row label={t("common.document")}>
+          </DetailsItem>
+          <DetailsItem label={t("common.document")}>
             <DocumentRef
               entityId={evidence.entityId}
               name={evidence.entityName}
               signal={signal}
             />
-          </Row>
-          <Row label={t("inbox.evidence.findings")}>
+          </DetailsItem>
+          <DetailsItem label={t("inbox.evidence.findings")} span="wide">
             {evidence.findings.length === 0 ? (
               <span className="text-muted-foreground">{t("common.none")}</span>
             ) : (
@@ -289,8 +293,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                 ))}
               </ul>
             )}
-          </Row>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.WORK_UNACKNOWLEDGED:
       return (
@@ -354,24 +358,29 @@ const DocumentRef = ({
   name: string;
   signal: InboxSignal;
 }) => {
+  const router = useRouter();
   if (signal.workspaceId === null) {
     return <UserText>{name}</UserText>;
   }
 
   const workspaceId = signal.workspaceId;
   return (
-    <button
-      className="text-start underline-offset-2 hover:underline"
+    <Button
       onClick={() => {
         detached(
-          openEntityInInspector(entityId, name, workspaceId),
+          openEntityInInspector({
+            documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+            entityId,
+            label: name,
+            workspaceId,
+          }),
           "inbox.open-evidence-entity",
         );
       }}
-      type="button"
+      size="inline"
     >
       <UserText>{name}</UserText>
-    </button>
+    </Button>
   );
 };
 
@@ -389,16 +398,6 @@ const SourceLink = ({ url }: { url: string }) =>
       {url}
     </a>
   );
-
-const Row = ({
-  label,
-  children,
-}: React.PropsWithChildren<{ label: string }>) => (
-  <div className="flex flex-col gap-0.5">
-    <dt className="text-muted-foreground text-xs">{label}</dt>
-    <dd>{children}</dd>
-  </div>
-);
 
 const EvidenceSkeleton = () => (
   <div className="flex flex-col gap-3">

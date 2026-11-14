@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   CACHE_SAVE_WORKER_FILE,
@@ -18,23 +19,33 @@ const launcher = path.resolve(
   "../.github/actions/ci-store-save/index.mjs",
 );
 
-test("the native Node entry registers post state and converts preparation failures into warning telemetry", () => {
+test("the action has one main phase and no post-job save", () => {
+  const action = v.parse(
+    v.object({ runs: v.record(v.string(), v.unknown()) }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.resolve(
+          import.meta.dir,
+          "../.github/actions/ci-store-save/action.yml",
+        ),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(action.runs["main"]).toBe("index.mjs");
+  expect(action.runs).not.toHaveProperty("post");
+  expect(action.runs).not.toHaveProperty("post-if");
+});
+
+test("the native Node entry saves immediately and converts preparation failures into warning telemetry", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "cache-save-action-"));
-  const state = path.join(directory, "state");
   try {
-    const registered = Bun.spawnSync([node, launcher], {
-      env: { GITHUB_STATE: state, INPUT_KEY: "fixture", INPUT_PATH: directory },
-    });
-    expect(registered.exitCode).toBe(0);
-    expect(readFileSync(state, "utf-8")).toBe(
-      `key=fixture\nstore=${directory}\n`,
-    );
     const summary = path.join(directory, "summary");
     const failed = Bun.spawnSync([node, launcher], {
       env: {
         PATH: directory,
-        STATE_key: "fixture",
-        STATE_store: directory,
+        INPUT_KEY: "fixture",
+        INPUT_PATH: directory,
         GITHUB_STEP_SUMMARY: summary,
       },
     });
@@ -47,6 +58,14 @@ test("the native Node entry registers post state and converts preparation failur
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("missing main-phase inputs warn without failing the action", () => {
+  const result = Bun.spawnSync([node, launcher], { env: {} });
+  const log = new TextDecoder().decode(result.stdout);
+  expect(result.exitCode).toBe(0);
+  expect(log).toContain("Missing cache action inputs");
+  expect(log).toContain('"outcome":"failed"');
 });
 
 const runFixture = async (source: string) => {
@@ -176,7 +195,7 @@ test("upload bytes reset the watchdog even when progress lines arrive in separat
   ).toBe("saved");
 });
 
-test("repeated zero-progress upload messages cannot mask a stalled save", async () => {
+test("a stalled fake save is killed at the watchdog bound without failing", async () => {
   expect(
     await runFixture(
       `setInterval(() => console.log('Sent 0 of 100 (0%)'), 100)`,

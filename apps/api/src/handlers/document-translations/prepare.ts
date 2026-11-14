@@ -9,6 +9,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const config = {
   contract: "patch",
@@ -59,7 +60,13 @@ const prepareDocumentTranslation = createSafeHandler<
     })
   ).andThen((inspected) => inspected);
   if (Result.isError(inspection)) {
-    captureError(inspection.error, { source: "document-translation-prepare" });
+    captureError(
+      inspection.error,
+      handlerErrorContext(
+        "documenttranslations.prepareDocumentTranslation.inspection_error",
+        { source: "document-translation-prepare" },
+      ),
+    );
     return Result.err(
       new HandlerError({
         status: 422,

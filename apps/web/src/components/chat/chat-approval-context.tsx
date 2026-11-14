@@ -2,6 +2,10 @@ import { createContext, use } from "react";
 
 import { panic } from "better-result";
 
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 
 import type {
@@ -61,6 +65,18 @@ type ChatApprovalContextValue = {
   continueRequestSecret: (
     toolCallId: string,
     receipt: RequestSecretOutput,
+  ) => PromiseLike<void>;
+  /**
+   * Reports what the user did on a connector card. The server answers
+   * `connected` only for a stored, usable connection and refuses otherwise.
+   */
+  handleConnectConnector: (
+    toolCallId: string,
+    decision: ConnectConnectorDecision,
+  ) => PromiseLike<ConnectConnectorOutput>;
+  continueConnectConnector: (
+    toolCallId: string,
+    receipt: ConnectConnectorOutput,
   ) => PromiseLike<void>;
   secretAvailabilityKey: string;
   resolveSecretTarget: (

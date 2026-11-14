@@ -1,59 +1,64 @@
-import Elysia from "elysia";
-
+import createFactExtraction from "@/api/handlers/lists/fact-extractions/create";
+import listGraphNeighbours from "@/api/handlers/lists/graph/neighbours/list";
+import listGraphNodes from "@/api/handlers/lists/graph/nodes/list";
+import listGraphPaths from "@/api/handlers/lists/graph/paths/list";
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import createSampleCase from "@/api/handlers/lists/sample-case/create";
+import readSourceDocumentKinds from "@/api/handlers/lists/source-documents/list";
+import updateSourceDocumentKind from "@/api/handlers/lists/source-documents/update";
+import exportVerificationChronology from "@/api/handlers/lists/verifications/chronology/export";
+import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
+import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
+import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
+import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
+import createBulkClaimRechecks from "@/api/handlers/lists/verifications/claim-rechecks/bulk/create";
+import createClaimRecheck from "@/api/handlers/lists/verifications/claim-rechecks/create";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
+import listClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
 import createVerification from "@/api/handlers/lists/verifications/create";
 import readVerification from "@/api/handlers/lists/verifications/get";
+import readVerificationGraph from "@/api/handlers/lists/verifications/graph/get";
 import readLatestVerifications from "@/api/handlers/lists/verifications/latest/list";
 import readVerifications from "@/api/handlers/lists/verifications/list";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 
+/** List verification answers like an absent route for a caller without the feature. */
 export const createListVerificationRoutes = (
   dependencies?: Parameters<typeof featureAccessGate>[1],
 ) =>
-  new Elysia()
-    .use(featureAccessGate("list-verification", dependencies))
-    .use(workspaceAccessMacro)
-    .use(permissionMacro)
-    .guard({ validateWorkspaceAccess: true })
-    .patch("/item-sources", verifyItemSource.handler, {
-      body: verifyItemSource.config.body,
-      permissions: verifyItemSource.config.permissions,
-    })
-    .put("/item-fact-details", updateFactDetails.handler, {
-      body: updateFactDetails.config.body,
-      permissions: updateFactDetails.config.permissions,
-    })
-    .post("/claim-reviews", createClaimReview.handler, {
-      body: createClaimReview.config.body,
-      permissions: createClaimReview.config.permissions,
-    })
-    .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
-      body: createBulkClaimReviews.config.body,
-      permissions: createBulkClaimReviews.config.permissions,
-    })
-    .post("/sample-case", createSampleCase.handler, {
-      body: createSampleCase.config.body,
-      permissions: createSampleCase.config.permissions,
-    })
-    .post("/verifications", createVerification.handler, {
-      body: createVerification.config.body,
-      permissions: createVerification.config.permissions,
-    })
-    .post("/verifications/latest", readLatestVerifications.handler, {
-      body: readLatestVerifications.config.body,
-      permissions: readLatestVerifications.config.permissions,
-    })
-    .get("/verifications", readVerifications.handler, {
-      params: readVerifications.config.params,
-      permissions: readVerifications.config.permissions,
-      query: readVerifications.config.query,
-    })
-    .get("/verifications/:runId", readVerification.handler, {
-      params: readVerification.config.params,
-      permissions: readVerification.config.permissions,
-    });
+  routes(
+    {
+      "/item-sources": { PATCH: verifyItemSource },
+      "/item-fact-details": { PUT: updateFactDetails },
+      "/source-documents": { PATCH: updateSourceDocumentKind },
+      "/source-documents/kinds": { POST: readSourceDocumentKinds },
+      "/claim-reviews": { GET: listClaimReviews, POST: createClaimReview },
+      "/claim-reviews/bulk": { POST: createBulkClaimReviews },
+      "/claim-rechecks": { POST: createClaimRecheck },
+      "/claim-rechecks/bulk": { POST: createBulkClaimRechecks },
+      "/claim-comments": { GET: listClaimComments, POST: createClaimComment },
+      "/claim-comments/:annotationId": {
+        PATCH: updateClaimComment,
+        DELETE: deleteClaimComment,
+      },
+      "/sample-case": { POST: createSampleCase },
+      "/fact-extractions": { POST: createFactExtraction },
+      "/graph/nodes": { GET: listGraphNodes },
+      "/graph/neighbours": { GET: listGraphNeighbours },
+      "/graph/paths": { GET: listGraphPaths },
+      "/verifications": {
+        GET: readVerifications,
+        POST: createVerification,
+      },
+      "/verifications/latest": { POST: readLatestVerifications },
+      "/verifications/graph": { GET: readVerificationGraph },
+      "/verifications/chronology/export": {
+        GET: exportVerificationChronology,
+      },
+      "/verifications/:runId": { GET: readVerification },
+    },
+    { middleware: [featureAccessGate("list-verification", dependencies)] },
+  );

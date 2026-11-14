@@ -1,16 +1,17 @@
 import { panic, Result, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
-  CorpusIndexError,
-  corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexClient,
+  corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexDeleteTask,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { LIMITS } from "@/api/lib/limits";
@@ -88,7 +89,11 @@ export class CorpusProjectionAppendError extends TaggedError(
   unattemptedRevisions: ProjectionRevision[];
   unknownOutcomeObservedAt: Date | null;
   cause?: CorpusIndexError | undefined;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["stage"]);
+  }
+}
 
 const invalidAppend = (
   code: Exclude<CorpusProjectionAppendError["code"], "append_unknown">,
@@ -429,6 +434,107 @@ export const censusCorpusProjectionRevisions = async ({
   });
 };
 
+/** Not exported, so only the census below can construct presence evidence. */
+const PRESENCE_PROOF_CONSTRUCTION: unique symbol = Symbol(
+  "corpus projection presence proof",
+);
+
+/**
+ * Opaque evidence that an exact census of one index found, for one revision,
+ * exactly the documents its append wrote. Applied state is written only
+ * against it, so an acceptance, a timeout, or an absent, partial or excess
+ * count cannot reach it. The fields are private, so a structural copy is not
+ * evidence either.
+ */
+export class CorpusProjectionPresenceProof {
+  readonly #indexId: string;
+  readonly #revision: ProjectionRevision;
+  readonly #documentCount: number;
+
+  /** Callable only in this module: the presence census constructs it. */
+  constructor(
+    construction: typeof PRESENCE_PROOF_CONSTRUCTION,
+    indexId: string,
+    { revision, documentCount }: CorpusProjectionRevisionPresence,
+  ) {
+    if (construction !== PRESENCE_PROOF_CONSTRUCTION) {
+      panic("Corpus projection presence proof has a foreign constructor");
+    }
+    this.#indexId = indexId;
+    this.#revision = revision;
+    this.#documentCount = documentCount;
+  }
+
+  get indexId() {
+    return this.#indexId;
+  }
+
+  get revision() {
+    return this.#revision;
+  }
+
+  get documentCount() {
+    return this.#documentCount;
+  }
+}
+
+type ProveCorpusProjectionRevisionsOptions = {
+  client: Pick<CorpusIndexClient, "aggregate">;
+  indexId: string;
+  /** Each revision with the document count its append wrote. */
+  expected: readonly CorpusProjectionRevisionPresence[];
+};
+
+type CorpusProjectionPresenceCensus =
+  | { status: "proven"; proofs: CorpusProjectionPresenceProof[] }
+  | { status: "unproven" };
+
+/**
+ * Prove a bounded revision set present: one exact census, and every revision
+ * must count exactly the documents its append wrote. One revision that does
+ * not leaves the whole set unproven.
+ */
+export const proveCorpusProjectionRevisionsPresent = async ({
+  client,
+  indexId,
+  expected,
+}: ProveCorpusProjectionRevisionsOptions): Promise<
+  Result<CorpusProjectionPresenceCensus, CorpusIndexError>
+> => {
+  const census = await censusCorpusProjectionRevisions({
+    client,
+    indexId,
+    revisions: expected.map(({ revision }) => revision),
+  });
+  if (census.isErr()) {
+    return Result.err(census.error);
+  }
+  const counts = new Map(
+    census.value.present.map(({ revision, documentCount }) => [
+      revision,
+      documentCount,
+    ]),
+  );
+  if (
+    expected.some(
+      ({ revision, documentCount }) => counts.get(revision) !== documentCount,
+    )
+  ) {
+    return Result.ok({ status: "unproven" });
+  }
+  return Result.ok({
+    status: "proven",
+    proofs: expected.map(
+      (presence) =>
+        new CorpusProjectionPresenceProof(
+          PRESENCE_PROOF_CONSTRUCTION,
+          indexId,
+          presence,
+        ),
+    ),
+  });
+};
+
 export const deleteCorpusProjectionRevisions = async ({
   client,
   indexId,
@@ -464,24 +570,17 @@ export const countCorpusProjectionRevisions = async ({
   return searched.map(({ numHits }) => numHits);
 };
 
-export const corpusIndexUnknownAppendBarrierAt = (
-  appendStartedAt: Date,
-  manifest: CorpusIndexManifest,
-): Date => {
-  if (!Number.isFinite(appendStartedAt.getTime())) {
-    return panic("Corpus projection append barrier contract is invalid");
-  }
-  return new Date(
-    appendStartedAt.getTime() +
-      corpusIndexUnknownAppendBarrierDelayMs(manifest),
-  );
-};
-
-const corpusIndexUnknownAppendBarrierDelayMs = (
+/**
+ * Whole-request budget of one projection append into `manifest`'s indexes:
+ * the ingest waits for the generation's commit window. An append may start
+ * only while its lease covers this budget, and an append whose outcome is
+ * unknown may still be inside it, so the start margin and the unknown
+ * barrier both read it here.
+ */
+export const corpusProjectionAppendIngestBudgetMs = (
   manifest: CorpusIndexManifest,
 ): number =>
-  corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest)) +
-  corpusIndexAppendPublishDelayMs(manifest);
+  corpusIndexCommittedIngestTimeoutMs(corpusIndexCommitTimeoutSecs(manifest));
 
 /** The commit window a generation's indexes were created with. */
 export const corpusIndexCommitTimeoutSecs = (

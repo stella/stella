@@ -2,8 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
+
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -140,7 +144,33 @@ describe("parseRegionalDecision", () => {
       expect(introBlocks.length).toBe(2);
     });
 
-    test("adds takto: heading before verdict", () => {
+    test("maps the state and the formula in the header to the opening formula", () => {
+      const input = baseInput({
+        header: [
+          makePara("ČESKÁ REPUBLIKA"),
+          makePara("ROZSUDEK"),
+          makePara("JMÉNEM REPUBLIKY"),
+          makePara("Obvodní soud pro Prahu 1 rozhodl samosoudcem"),
+        ],
+      });
+
+      const { documentAst } = parseRegionalDecision(input);
+
+      expect(
+        documentAst.blocks.map((block) => [
+          block.type,
+          "role" in block ? block.role : undefined,
+          block.plainText,
+        ]),
+      ).toEqual([
+        ["paragraph", "opening-formula", "ČESKÁ REPUBLIKA"],
+        ["heading", "decision-title", "ROZSUDEK"],
+        ["paragraph", "opening-formula", "JMÉNEM REPUBLIKY"],
+        ["paragraph", "intro", "Obvodní soud pro Prahu 1 rozhodl samosoudcem"],
+      ]);
+    });
+
+    test("adds the takto: lead-in before verdict", () => {
       const input = baseInput({
         verdict: [makePara("Žaloba se zamítá.")],
       });
@@ -149,6 +179,9 @@ describe("parseRegionalDecision", () => {
 
       const texts = collectPlainTexts(documentAst.blocks);
       expect(texts).toContain("takto:");
+      expect(findAllByType(documentAst.blocks, "heading")).not.toContainEqual(
+        expect.objectContaining({ plainText: "takto:" }),
+      );
     });
 
     test("maps verdict paragraphs to holding role", () => {
@@ -188,6 +221,96 @@ describe("parseRegionalDecision", () => {
       const texts = collectPlainTexts(documentAst.blocks);
       expect(texts).toContain("Poučení:");
     });
+
+    const instructionTexts = (
+      information: ParseRegionalInput["information"],
+    ) => {
+      const { documentAst, fulltext } = parseRegionalDecision(
+        baseInput({ information }),
+      );
+      const texts = collectPlainTexts(documentAst.blocks);
+      return {
+        fulltext,
+        texts: texts.slice(texts.indexOf("Poučení:")),
+      };
+    };
+
+    test.each([
+      ["inline", "Poučení: Proti tomuto rozsudku lze podat odvolání."],
+      [
+        "letter-spaced",
+        "P o u č e n í : Proti tomuto rozsudku lze podat odvolání.",
+      ],
+      ["without a space", "Poučení:Proti tomuto rozsudku lze podat odvolání."],
+    ])("prints the court's %s Poučení label once", (_label, paragraph) => {
+      const { fulltext, texts } = instructionTexts([
+        makePara(paragraph),
+        makePara("Odvolání se podává u podepsaného soudu."),
+      ]);
+
+      expect(texts).toEqual([
+        "Poučení:",
+        "Proti tomuto rozsudku lze podat odvolání.",
+        "Odvolání se podává u podepsaného soudu.",
+      ]);
+      expect(fulltext.match(/P\s*o\s*u\s*č\s*e\s*n\s*í/gu)).toHaveLength(1);
+    });
+
+    test("drops the court's label printed alone in its paragraph", () => {
+      const { texts } = instructionTexts([
+        makePara("Poučení:"),
+        makePara("Proti tomuto rozsudku lze podat odvolání."),
+      ]);
+
+      expect(texts).toEqual([
+        "Poučení:",
+        "Proti tomuto rozsudku lze podat odvolání.",
+      ]);
+    });
+
+    test("keeps the instruction's own styling after the label", () => {
+      const { documentAst } = parseRegionalDecision(
+        baseInput({
+          information: [
+            {
+              texts: [
+                { text: "Poučení: ", anonStyle: "NORMAL" },
+                { text: "Proti tomuto rozsudku", anonStyle: "NORMAL" },
+                { text: " lze podat odvolání.", anonStyle: "NORMAL" },
+              ],
+              styleLocalId: 1,
+              tableCellInfo: null,
+            },
+          ],
+        }),
+      );
+
+      const instruction = documentAst.blocks.at(-1);
+      expect(instruction?.plainText).toBe(
+        "Proti tomuto rozsudku lze podat odvolání.",
+      );
+    });
+
+    test("keeps a first instruction that only starts with the word", () => {
+      const { texts } = instructionTexts([
+        makePara("Poučení o odvolání se nepoužije."),
+      ]);
+
+      expect(texts).toEqual(["Poučení:", "Poučení o odvolání se nepoužije."]);
+    });
+
+    test("keeps a later paragraph that opens with the label", () => {
+      const { texts } = instructionTexts([
+        makePara("Proti tomuto rozsudku lze podat odvolání."),
+        makePara("Poučení: lhůta běží od doručení."),
+      ]);
+
+      expect(texts).toEqual([
+        "Poučení:",
+        "Proti tomuto rozsudku lze podat odvolání.",
+        "Poučení: lhůta běží od doručení.",
+      ]);
+    });
   });
 
   // ── Full decision structure ───────────────────────────────
@@ -219,17 +342,25 @@ describe("parseRegionalDecision", () => {
       const headings = findAllByType(documentAst.blocks, "heading");
       const headingTexts = headings.map((h) => h.plainText);
       expect(headingTexts).toContain("ROZSUDEK");
-      expect(headingTexts).toContain("takto:");
       expect(headingTexts).toContain("Odůvodnění:");
       expect(headingTexts).toContain("Poučení:");
 
       // Verify order: title < takto < oduvodneni < pouceni
       const titleIdx = headingTexts.indexOf("ROZSUDEK");
-      const taktoIdx = headingTexts.indexOf("takto:");
+      const taktoIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "takto:",
+      );
+      const titleBlockIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "ROZSUDEK",
+      );
+      const oduvBlockIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "Odůvodnění:",
+      );
       const oduvIdx = headingTexts.indexOf("Odůvodnění:");
       const poucIdx = headingTexts.indexOf("Poučení:");
-      expect(titleIdx).toBeLessThan(taktoIdx);
-      expect(taktoIdx).toBeLessThan(oduvIdx);
+      expect(titleIdx).toBeGreaterThanOrEqual(0);
+      expect(titleBlockIdx).toBeLessThan(taktoIdx);
+      expect(taktoIdx).toBeLessThan(oduvBlockIdx);
       expect(oduvIdx).toBeLessThan(poucIdx);
 
       // Fulltext includes all content
@@ -638,5 +769,129 @@ describe("section text fallback", () => {
     expect(documentAst.blocks.map((block) => block.plainText)).toContain(
       "Flat reasoning",
     );
+  });
+});
+
+test("a fallback cannot reintroduce a removed running header", () => {
+  const header = "pokračování -2- sp. zn. 9 C 191/2025";
+  const { documentAst, fulltext } = parseRegionalDecision(
+    baseInput({
+      verdict: [makePara(header)],
+      verdictText: header,
+      justification: [makePara(header)],
+      justificationText: header,
+    }),
+  );
+  expect(
+    documentAst.blocks.some((block) => block.plainText.includes(header)),
+  ).toBe(false);
+  expect(fulltext).not.toContain(header);
+});
+
+test("quote repair preserves the publisher span owning every surviving character", () => {
+  const { documentAst } = parseRegionalDecision(
+    baseInput({
+      header: [
+        {
+          texts: [
+            { text: "též„", anonStyle: "NORMAL" },
+            { text: " J. N.", anonStyle: "ANON" },
+          ],
+          styleLocalId: 1,
+          tableCellInfo: null,
+        },
+      ],
+    }),
+  );
+  const intro = documentAst.blocks
+    .filter(isParagraph)
+    .find((block) => block.role === "intro");
+  expect(intro?.plainText).toBe("též „J. N.");
+  expect(intro?.inlines).toEqual([
+    { type: "text", text: "též" },
+    { type: "text", text: " ", anonymized: true },
+    { type: "text", text: "„" },
+    { type: "text", text: "J. N.", anonymized: true },
+  ]);
+});
+
+describe("the court's paragraph numbers", () => {
+  test("136 C 2/2019: a gapless run among quoted evidence and list items is numbered", async () => {
+    const [decision] = await PROCESSED_FIELD_EVIDENCE_READERS["cz-regional"](
+      "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-regional-136-c-2-2019.finaldoc.json.gz",
+    );
+    const body = (decision?.ast.blocks ?? []).filter(
+      (block): block is ParagraphBlock =>
+        block.type === "paragraph" && block.role === undefined,
+    );
+    expect(
+      body.flatMap((block) =>
+        block.number === undefined ? [] : [block.number],
+      ),
+    ).toEqual(Array.from({ length: 22 }, (_, index) => index + 1));
+    const first = body.find((block) => block.number === 1);
+    expect(first?.plainText).toStartWith("Žalobce se svou žalobou");
+    expect(body.find((block) => block.number === 10)?.plainText).toStartWith(
+      "Po provedeném dokazování",
+    );
+    // The evidence and the list items between the numbers stay unnumbered,
+    // and no printed label is left in the text.
+    expect(body.filter((block) => block.number === undefined).length).toBe(
+      body.length - 22,
+    );
+    expect(
+      body
+        .map(({ plainText }) => plainText)
+        .filter((text) => /^\d+\.\s/u.test(text)),
+    ).toEqual([]);
+  });
+});
+
+describe("a line break typed inside a paragraph", () => {
+  test("12 C 183/2022: the citation the publisher's entries split reads as one paragraph", async () => {
+    const [decision] = await PROCESSED_FIELD_EVIDENCE_READERS["cz-regional"](
+      "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-regional-12-c-183-2022.finaldoc.json.gz",
+    );
+    const texts = (decision?.ast.blocks ?? []).flatMap((block) =>
+      block.type === "paragraph" ? [block.plainText] : [],
+    );
+    expect(texts.filter((text) => text.startsWith("č. 351/2013 Sb."))).toEqual(
+      [],
+    );
+    expect(
+      texts.some((text) =>
+        /s\snařízením vlády č\. 351\/2013 Sb\., je její nárok/u.test(text),
+      ),
+    ).toBe(true);
+  });
+
+  test.each([
+    [
+      "a carriage return joins the entries",
+      "Žalobce uplatnil nárok podle\rzákona.\nSoud žalobě vyhověl.",
+      2,
+    ],
+    [
+      "a newline keeps them apart",
+      "Žalobce uplatnil nárok podle\nzákona.\nSoud žalobě vyhověl.",
+      3,
+    ],
+    ["texts that do not line up keep them apart", "Jiný text.\rZcela.", 3],
+  ])("%s", (_, justificationText, count) => {
+    const { documentAst } = parseRegionalDecision(
+      baseInput({
+        justification: [
+          makePara("Žalobce uplatnil nárok podle"),
+          makePara("zákona."),
+          makePara("Soud žalobě vyhověl."),
+        ],
+        justificationText,
+      }),
+    );
+    const texts = documentAst.blocks
+      .filter(isParagraph)
+      .map((block) => block.plainText);
+    expect(texts).toHaveLength(count);
+    expect(texts.join(" ")).toContain("podle zákona.");
   });
 });

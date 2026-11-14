@@ -6,6 +6,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import presignUpload from "@/api/handlers/uploads/create";
 import finalizeUpload from "@/api/handlers/uploads/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -71,7 +72,6 @@ export const runNumberingUpload = async ({
     managedAIResidency: "eu",
     promptCachingEnabled: false,
     request,
-    route: "/test/uploads",
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
     scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
     session: { activeOrganizationId: organizationId },
@@ -82,6 +82,7 @@ export const runNumberingUpload = async ({
   const presigned = await presignUpload.handler(
     asTestRaw<Parameters<typeof presignUpload.handler>[0]>({
       ...context,
+      route: "/v1/uploads/:workspaceId/presign" satisfies ApiRoutePath,
       body,
     }),
   );
@@ -100,6 +101,8 @@ export const runNumberingUpload = async ({
   const finalized = await finalizeUpload.handler(
     asTestRaw<Parameters<typeof finalizeUpload.handler>[0]>({
       ...context,
+      route:
+        "/v1/uploads/:workspaceId/:uploadId/finalize" satisfies ApiRoutePath,
       params: { workspaceId, uploadId: presigned.uploadId },
     }),
   );

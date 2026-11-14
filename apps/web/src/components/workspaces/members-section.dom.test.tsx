@@ -16,7 +16,7 @@ const { QueryClient, QueryClientProvider, useQuery } =
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { MembersList } = await import("./members-section");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 
 afterEach(cleanup);
 
@@ -28,7 +28,7 @@ test("member list shows an initial read error and retries before showing empty",
   });
   const readMembers = async () => (succeeded ? [] : await response.promise);
   const Read = () => {
-    const view = useQueryView(
+    const view = queryView(
       useQuery({
         queryKey: ["members"],
         queryFn: readMembers,

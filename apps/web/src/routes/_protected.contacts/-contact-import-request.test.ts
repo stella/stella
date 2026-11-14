@@ -1,28 +1,33 @@
 import { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
-import { toSafeId } from "@/lib/safe-id";
 import {
   clearContactImportRequest,
   resolveContactImportRequest,
 } from "@/routes/_protected.contacts/-contact-import-request";
 import type { ImportCommitPayload } from "@/routes/_protected.contacts/-import-candidate";
 
-const ROW_ID = toSafeId<"contact">("4f1a1a2e-1b23-4c56-9def-0123456789ab");
-
 const PAYLOAD = {
   taxIdScheme: "br_cpf_cnpj",
-  rows: [{ id: ROW_ID, type: "person", displayName: "Jane Doe" }],
+  rows: [{ type: "person", displayName: "Jane Doe" }],
 } as const satisfies ImportCommitPayload;
 
 const EDITED_PAYLOAD = {
   taxIdScheme: "br_cpf_cnpj",
-  rows: [{ id: ROW_ID, type: "person", displayName: "Jane Doerr" }],
+  rows: [{ type: "person", displayName: "Jane Doerr" }],
 } as const satisfies ImportCommitPayload;
 
 const SCOPE = { organizationId: "org-a", userId: "user-a" };
@@ -36,6 +41,8 @@ beforeEach(() => {
   fixtureClient.setQueryData(["session"], { user: { id: SCOPE.userId } });
 });
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   disconnectOwner();
   releaseUserStorage(fixtureAreas());
   fixtureClient.clear();

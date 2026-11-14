@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -9,7 +9,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { readStyleSetFile } from "@/api/lib/style-sets";
 import {
@@ -17,10 +17,10 @@ import {
   createStoredTemplate,
 } from "@/api/lib/templates/create-template";
 
-const bodySchema = t.Object({
-  name: tDefaultVarchar,
-  styleSetId: tSafeId("styleSet"),
-  categoryId: t.Optional(tSafeId("templateCategory")),
+const bodySchema = v.object({
+  name: displayNameSchema(),
+  styleSetId: resourceIdSchema("styleSet"),
+  categoryId: v.exactOptional(resourceIdSchema("templateCategory")),
 });
 
 type CreateTemplateFromStyleSetOptions = {

@@ -1,3 +1,5 @@
+// parser-output-unchanged: [sk-us] only adds isSkVerdictFormulaLine, which only the structure-fidelity guard calls; this source's lines are read as before.
+// parser-output-unchanged: [sk-courts] only adds isSkVerdictFormulaLine, which only the structure-fidelity guard calls; this source's lines are read as before.
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -25,6 +27,8 @@ import { caseLawSectionHeading } from "./case-law-heading";
  * with its spacing removed, so the vocabulary carries none either.
  */
 const DECISION_TITLES = new Set([
+  // The Constitutional Court's ruling on the merits.
+  "nález",
   "uznesenie",
   "rozsudok",
   "rozsudokbezodôvodnenia",
@@ -54,6 +58,58 @@ const normalized = (text: string): string =>
 
 export const isSkDecisionTitle = (text: string): boolean =>
   DECISION_TITLES.has(normalized(text));
+
+/**
+ * The formula a court decides under, printed with the title in the same
+ * type (`ROZSUDOK` / `V MENE SLOVENSKEJ REPUBLIKY`). It is the court's
+ * words, not its title, so it is never part of the `decision-title`; every
+ * Slovak reader gives it the `opening-formula` role.
+ */
+const OPENING_FORMULAE: ReadonlySet<string> = new Set([
+  "vmeneslovenskejrepubliky",
+  "vmenerepubliky",
+]);
+
+export const isSkOpeningFormula = (text: string): boolean =>
+  OPENING_FORMULAE.has(normalized(text));
+
+/**
+ * The state a court decides for, printed alone above the title
+ * (`SLOVENSKÁ REPUBLIKA`). Read as the opening formula only above the title:
+ * the same words on a line of their own further on are a party or a
+ * sentence the layout broke there.
+ */
+export const isSkStateLine = (text: string): boolean =>
+  normalized(text) === "slovenskárepublika";
+
+/**
+ * A row of the box the court portal prints at the head of every decision
+ * file (`Súd: …`, `Spisová značka: …`, `ECLI: …`): the record's metadata
+ * repeated, not the court's words, so never body text.
+ */
+const PORTAL_METADATA_ROW_RE =
+  /^(?:Súd|Spisová značka|Identifikačné číslo súdneho spisu|Dátum vydania rozhodnutia|Meno a priezvisko sudcu, VSÚ|ECLI):/u;
+
+export const isSkPortalMetadataRow = (text: string): boolean =>
+  PORTAL_METADATA_ROW_RE.test(text.trim());
+
+/**
+ * A title line run on into the formula, as the court sets them in one type
+ * (`ROZSUDOK V MENE` / `SLOVENSKEJ REPUBLIKY`): the offset in `text` where
+ * the formula's first word begins, or nothing when the line is not that run.
+ */
+export const skTitleFormulaStart = (text: string): number | undefined => {
+  const starts = [...text.matchAll(/\S+/gu)].map((word) => word.index);
+  for (const start of starts.slice(1)) {
+    if (
+      isSkDecisionTitle(text.slice(0, start)) &&
+      isSkOpeningFormula(text.slice(start))
+    ) {
+      return start;
+    }
+  }
+  return undefined;
+};
 
 export const isSkHoldingMarker = (text: string): boolean => {
   if (text.trim().length > MARKER_LINE_MAX_CHARS) {
@@ -93,11 +149,7 @@ export const SK_JUDGE_TITLE_RE =
 export const SK_ROMAN_DIVIDER_RE = /^(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})\.$/u;
 
 export type SkDocumentSection =
-  | "preamble"
-  | "holding"
-  | "reasoning"
-  | "instruction"
-  | "closing";
+  "preamble" | "holding" | "reasoning" | "instruction" | "closing";
 
 /** Roman dividers are structural everywhere; titled sections belong to reasoning. */
 export const skSectionHeading = (text: string, section: SkDocumentSection) => {
@@ -114,3 +166,18 @@ export const skSectionHeading = (text: string, section: SkDocumentSection) => {
   }
   return caseLawSectionHeading(trimmed);
 };
+
+/**
+ * The lines a criminal verdict prints between the parts of its ruling, each
+ * on its own line: `uznáva sa za vinného, že`, `teda`, `čím spáchal`,
+ * `pričom`, `za to mu súd ukladá`. The verdict's sentence runs on across
+ * them by the court's own layout, not where a line or a page ended.
+ */
+const VERDICT_FORMULA_RE =
+  /^(?:uznáva sa za vinn\p{Ll}+,? že|teda|čím spáchal\p{Ll}*|pričom|za to (?:mu|jej|im) súd ukladá)(?!\p{L})/iu;
+
+/** Whether a line opens one of a criminal verdict's formula lines. */
+export const isSkVerdictFormulaLine = (text: string): boolean =>
+  VERDICT_FORMULA_RE.test(
+    collapseSpacedLetters(text.trim()).replaceAll(/\s+/gu, " "),
+  );

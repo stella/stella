@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { RouteEntry } from "@/api/http/route";
 import type { AggregateName } from "@/api/lib/db/aggregate-lock";
 
 export type AggregateMutationDeclaration =
@@ -11,50 +12,31 @@ export type AggregateMutationDeclaration =
 
 const declarations = new WeakMap<object, AggregateMutationDeclaration>();
 
-/** Records ownership without changing the handler identity used by Elysia. */
-export const declareAggregateMutation = <
-  T extends (...args: never[]) => unknown,
->(
-  handler: T,
+/** Records which aggregates a route's mutation owns, keyed by its definition. */
+export const declareAggregateMutation = <T extends object>(
+  definition: T,
   declaration: AggregateMutationDeclaration,
 ): T => {
   if (declaration.type === "independent" && declaration.reason.trim() === "") {
     panic("An independent mutation requires a reason");
   }
-  if (declarations.has(handler)) {
+  if (declarations.has(definition)) {
     panic("Aggregate mutation ownership is already declared");
   }
-  declarations.set(handler, declaration);
-  return handler;
+  declarations.set(definition, declaration);
+  return definition;
 };
 
-export const getAggregateMutationDeclaration = (handler: object) =>
-  declarations.get(handler);
+const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE", "ALL"]);
-
-export type AggregateMutationRoute = {
-  method: string;
-  path: string;
-  handler: unknown;
-};
-
-/** Run against the composed route table; transports need their own declaration. */
+/** Run against the composed route table; every mutation must declare its ownership. */
 export const collectUndeclaredAggregateMutations = (
-  routes: readonly AggregateMutationRoute[],
-): string[] => {
-  const missing: string[] = [];
-  for (const route of routes) {
-    if (!MUTATION_METHODS.has(route.method.toUpperCase())) {
-      continue;
-    }
-    if (
-      typeof route.handler === "function" &&
-      declarations.has(route.handler)
-    ) {
-      continue;
-    }
-    missing.push(`${route.method.toUpperCase()} ${route.path}`);
-  }
-  return missing;
-};
+  entries: readonly Pick<RouteEntry, "method" | "path" | "definition">[],
+): string[] =>
+  entries
+    .filter(
+      (entry) =>
+        MUTATION_METHODS.has(entry.method) &&
+        !declarations.has(entry.definition),
+    )
+    .map((entry) => `${entry.method} ${entry.path}`);

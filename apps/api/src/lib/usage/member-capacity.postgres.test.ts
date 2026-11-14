@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -23,10 +24,10 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const BLOCK_OBSERVATION_ATTEMPTS = 200;
 
 const errorChainText = (error: unknown): string => {
   const parts: string[] = [];
@@ -144,21 +145,15 @@ if (!databaseUrl || !runPostgresTests) {
               (error: unknown) => ({ refused: true as const, error }),
             );
 
-          let blocked = false;
-          for (
-            let attempt = 0;
-            attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
-            attempt += 1
-          ) {
-            const [row] = await setup.sql<{ blocked: boolean }[]>`
-              SELECT cardinality(pg_blocking_pids(${secondSession.pid})) > 0 AS blocked
-            `;
-            blocked = row?.blocked === true;
-            if (!blocked) {
-              await Bun.sleep(10);
-            }
-          }
-          expect(blocked).toBe(true);
+          await waitForExternalState({
+            description: "the second addition waits on the first",
+            read: async () =>
+              (
+                await setup.sql<{ blocked: boolean }[]>`
+                  SELECT cardinality(pg_blocking_pids(${secondSession.pid})) > 0 AS blocked
+                `
+              ).at(0)?.blocked === true,
+          });
 
           commitFirst(undefined);
           await firstAddition;
@@ -176,9 +171,7 @@ if (!databaseUrl || !runPostgresTests) {
             [existingUserId, firstUserId].toSorted(),
           );
         } finally {
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
           await setup.db
             .delete(usagePolicies)
             .where(eq(usagePolicies.id, usagePolicyId));

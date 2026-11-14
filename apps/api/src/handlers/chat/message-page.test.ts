@@ -14,7 +14,10 @@ const MESSAGE_ID = brandPersistedChatMessageId(
 const CREATED_AT = new Date("2026-09-02T15:06:00.000Z");
 
 const encodeParts = (parts: unknown): string =>
-  Buffer.from(JSON.stringify(parts)).toString("base64url");
+  Buffer.from(JSON.stringify(parts)).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 
 describe("chat message page cursor", () => {
   test("roundtrips the message id", () => {

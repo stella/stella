@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ratesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -13,11 +13,17 @@ const ratesKeys = {
     "entries",
     rateTableId,
   ],
-  resolve: (workspaceId: string, userId: string, date: string) => [
+  resolve: ({
+    workspaceId,
+    userId,
+    date,
+    activityCode,
+  }: ResolvedRateOptions) => [
     ...ratesKeys.all(workspaceId),
     "resolve",
     userId,
     date,
+    activityCode,
   ],
 };
 
@@ -29,7 +35,7 @@ export const rateTablesOptions = (workspaceId: string) =>
         .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response).items;
+      return unwrapApiResponse(response).items;
     },
   });
 
@@ -43,27 +49,39 @@ export const rateEntriesOptions = (workspaceId: string, rateTableId: string) =>
         })
         .entries.get({ fetch: { signal } });
 
-      return unwrapEden(response).items;
+      return unwrapApiResponse(response).items;
     },
     enabled: rateTableId.length > 0,
   });
 
-export const resolvedRateOptions = (
-  workspaceId: string,
-  userId: string,
-  date: string,
-) =>
+type ResolvedRateOptions = {
+  workspaceId: string;
+  userId: string;
+  date: string;
+  activityCode: string;
+};
+
+export const resolvedRateOptions = ({
+  workspaceId,
+  userId,
+  date,
+  activityCode,
+}: ResolvedRateOptions) =>
   queryOptions({
-    queryKey: ratesKeys.resolve(workspaceId, userId, date),
+    queryKey: ratesKeys.resolve({ workspaceId, userId, date, activityCode }),
     queryFn: async ({ signal }) => {
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .resolve.get({
-          query: { userId: toSafeId<"user">(userId), date },
+          query: {
+            userId: toSafeId<"user">(userId),
+            date,
+            ...(activityCode && { activityCode }),
+          },
           fetch: { signal },
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     enabled: userId.length > 0 && date.length > 0,
   });

@@ -1,4 +1,4 @@
-import { expect, test, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -18,8 +18,8 @@ import {
 import {
   assertSmokeRouteCoverage,
   authenticatedRouteTemplates,
-  networkBaselineKey,
   networkBaselineCoverageProblem,
+  networkBaselineKey,
 } from "../apps/web/e2e/helpers/smoke-route-coverage";
 import { SMOKE_ROUTE_DEFS } from "../apps/web/e2e/helpers/smoke-route-defs";
 import { generateRouteTree } from "../apps/web/scripts/generate-route-tree";
@@ -373,7 +373,7 @@ test("light coverage prepares through the shared action before checking under th
   expect(steps.indexOf(checkout)).toBeLessThan(steps.indexOf(prepare));
   expect(checkout["with"]).toMatchObject({ "fetch-depth": 0 });
   expect(prepare["uses"]).toBe("./.github/actions/prepare-network-baseline");
-  expect(prepare["timeout-minutes"]).toBe(1);
+  expect(prepare["timeout-minutes"]).toBe(5);
   expect(coverage["if"]).toContain(
     "steps.network_manifest_prepare.outcome == 'success'",
   );

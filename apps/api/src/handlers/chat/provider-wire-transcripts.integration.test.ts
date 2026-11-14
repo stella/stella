@@ -5,6 +5,8 @@ import { inArray } from "drizzle-orm";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { createTestState } from "@stll/test-state";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -32,7 +34,7 @@ import {
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
 import type { ReplayGate } from "@/api/tests/helpers/provider-wire-gate";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import {
   committedTranscriptFiles,
@@ -40,15 +42,14 @@ import {
   normalizeOutboundRequest,
   plannedTranscript,
   transcriptPath,
-  transcriptSteps,
   TRANSCRIPTS_WRITE_ENV,
+  transcriptSteps,
 } from "@/api/tests/helpers/provider-wire-transcript";
 import type {
   ProviderWireTranscript,
   TranscriptPlan,
 } from "@/api/tests/helpers/provider-wire-transcript";
 import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -84,6 +85,13 @@ let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ retryAfterMs: 1 }),
+});
+
 testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -97,11 +105,9 @@ testState.beforeAll(async () => {
     "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
   );
-  replay = installProviderWireReplay({ retryAfterMs: 1 });
 });
 
 afterAll(async () => {
-  replay.restore();
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
@@ -293,7 +299,7 @@ const loadSendQueue = async (): Promise<SendQueueModule> => {
 
 // --- Scenarios ------------------------------------------------------------------
 
-const SCENARIOS = {
+const SCENARIOS: Record<string, ReplayScenario> = {
   // CHAT_ORACLE.ledgerEffectsAuthorized: a call stopped while its input
   // streams never runs, and the next message settles the thread around it.
   "interrupt-mid-tool": {
@@ -522,7 +528,7 @@ const SCENARIOS = {
       ).toContain("could not delete memo");
     },
   },
-} as const satisfies Record<string, ReplayScenario>;
+};
 
 const isNamed = (input: unknown, name: string) =>
   typeof input === "object" &&

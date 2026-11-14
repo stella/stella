@@ -3,24 +3,24 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import type { DecisionAnalysisV3 } from "@stll/legal-ast/analysis";
+import type { DecisionAnalysisV4 } from "@stll/legal-ast/analysis";
 
 import messages from "@/i18n/langs/en.json";
 
 import { AnalysisLayers } from "./analysis-layers";
 
 const analysis = {
-  version: 3,
+  version: 4,
   generatedAt: "2026-10-12T09:00:00.000Z",
   model: "test-model",
   inputFingerprint: "fingerprint",
   tree: [],
-  holding: { text: "Pravidlo.", language: "cs", anchors: [] },
-  abstract: { text: "Abstrakt.", language: "cs" },
+  holding: { spans: [{ text: "Pravidlo.", anchors: [] }], language: "cs" },
+  abstract: { spans: [{ text: "Abstrakt.", anchors: [] }], language: "cs" },
   topics: [],
-} satisfies DecisionAnalysisV3;
+} satisfies DecisionAnalysisV4;
 
-const markup = (stored: DecisionAnalysisV3, citedLater: boolean) =>
+const markup = (stored: DecisionAnalysisV4, citedLater: boolean) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <AnalysisLayers analysis={stored} citedLater={citedLater} />

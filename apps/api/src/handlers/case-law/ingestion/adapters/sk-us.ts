@@ -1,3 +1,9 @@
+// parser-output-unchanged: [sk-us] locating a stored row in its month's listing changes no parsed decision.
+// parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: Stored-object replay reuses the ingestion XHTML parser; PDF bytes are retained and verified without adding a PDF parser.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
@@ -5,7 +11,7 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: Publisher availability uses the shared contract without changing parsed values.
 // parser-output-unchanged: [sk-us] failed and refused publisher reads are typed outcomes; served and 404 reads build the same decision.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { SkUsEcliAvailability } from "@stll/api-contract/case-law-text-field";
@@ -49,7 +55,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
-import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -57,41 +62,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationListingItem,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -99,27 +69,28 @@ import {
   readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   normalizeMetadataValues,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
-  READ_OUTCOME_METADATA_KEY,
-  readPresent,
-  readUnavailable,
   type AbsenceEvidence,
+  isReadRefusal,
+  READ_OUTCOME_METADATA_KEY,
   type ReadOutcome,
+  readPresent,
   type ReadRefusal,
   type ReadRefusalScope,
+  readUnavailable,
   type ReadUnavailableCause,
 } from "@/api/lib/errors/read-outcome";
 import {
@@ -130,8 +101,44 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationListingItem,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -214,8 +221,7 @@ const FIELDS_TO_RETURN: string[] = [];
 // ── Cursor helpers ──────────────────────────────────────────
 
 type YearCursor = { year: number; offset: number } & (
-  | { status: "walking" }
-  | { status: "refused-frontier" }
+  { status: "walking" } | { status: "refused-frontier" }
 );
 
 const parseCursor = (cursor: string | null): YearCursor => {
@@ -668,8 +674,8 @@ const fetchCourtFile = async (
 
 /** The vocabularies the coded fields resolve against, whole. */
 type SkUsCodelist = {
-  /** Digest of the response the values below were read out of. */
-  sha256: string;
+  /** Verbatim vocabulary response, retained before resolving any judge names. */
+  raw: string;
   values: Readonly<Record<(typeof JUDGE_CODELISTS)[number], readonly string[]>>;
 };
 
@@ -689,40 +695,13 @@ const parseCodelist = (body: string): SkUsCodelist | undefined => {
       : [];
   };
   return {
-    sha256: hashContent(body),
+    raw: body,
     values: {
       mkJudgeReporter: roster("mkJudgeReporter"),
       mkDifferentViewJudges: roster("mkDifferentViewJudges"),
     },
   };
 };
-
-/**
- * What one decision's envelope keeps of the vocabularies.
- *
- * The response is corpus-level and two hundred kilobytes; a row per
- * decision holding all of it would store the same list fifty thousand
- * times. So the envelope keeps the digest of the response that was read and
- * the entries this decision's own judge fields matched in it, which is what
- * a later reader needs to ask whether a name was in the roster at the time.
- */
-type SkUsCodelistPart = {
-  sha256: string;
-  used: Record<string, readonly string[]>;
-};
-
-const codelistPart = (
-  codelist: SkUsCodelist,
-  named: Readonly<Record<(typeof JUDGE_CODELISTS)[number], readonly string[]>>,
-): SkUsCodelistPart => ({
-  sha256: codelist.sha256,
-  used: Object.fromEntries(
-    JUDGE_CODELISTS.map((name) => [
-      name,
-      named[name].filter((value) => codelist.values[name].includes(value)),
-    ]),
-  ),
-});
 
 /**
  * The responses a page of decisions shares, fetched once for the page.
@@ -1661,12 +1640,7 @@ const assembleSkUsDecision = ({
     ...(codelist === undefined
       ? {}
       : {
-          codelists: JSON.stringify(
-            codelistPart(codelist, {
-              mkJudgeReporter: rapporteurs,
-              mkDifferentViewJudges: dissenters,
-            }),
-          ),
+          codelists: codelist.raw,
         }),
     // The service's answer to the part it withheld. Kept so the fingerprint
     // tells a refused part from one stated absent, which otherwise store the
@@ -2420,6 +2394,7 @@ const SK_US_SOURCE_FIELDS_LIST = [
   "mkWordRegister",
   "mkMaterialRegister",
   "mkComplainedLegalRegulation",
+  "mkComplainedLegalRegulationAct",
   "mkClarificationOfLegalRegulation",
   "mkFileReference",
   "mkReferences",
@@ -2443,25 +2418,67 @@ const SK_US_SOURCE_FIELDS_LIST = [
 
 type SkUsSourceField = (typeof SK_US_SOURCE_FIELDS_LIST)[number];
 
+type SkUsPublisherRecord = Readonly<
+  Record<SkUsSourceField | keyof SearchDocumentFields, unknown>
+>;
+
 const SK_US_SOURCE_FIELDS = {
+  mkComplainedLegalRegulationAct: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "codelists",
+      path: ["codelist", "mkComplainedLegalRegulationAct"],
+      reason:
+        "The publisher's act vocabulary is retained verbatim alongside the decision's challenged legislation.",
+    },
+  },
   documentId: { disposition: "stored", target: { type: "identity" } },
   docType: {
     disposition: "stored",
     target: { type: "metadata", key: "docType" },
   },
   title: { disposition: "stored", target: { type: "metadata", key: "title" } },
-  content: excludedSourceField(
-    "always empty in a search row; the document body is served by an endpoint of its own and kept as the document part",
-  ),
-  index: excludedSourceField(
-    "the row's offset inside the page it arrived on, which changes with the page and states nothing about the document",
-  ),
-  extension: excludedSourceField(
-    "empty on every record of every corpus this endpoint serves",
-  ),
-  size: excludedSourceField(
-    "empty on every record of every corpus this endpoint serves",
-  ),
+  content: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["content"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  index: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["index"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  extension: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["extension"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  size: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["size"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
   contentType: {
     disposition: "stored",
     target: { type: "metadata", key: "contentType" },
@@ -2511,9 +2528,16 @@ const SK_US_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalBasis" },
   },
-  mkDecisionInTermsOfForSort: excludedSourceField(
-    "a sort projection of the basis field: the same values flattened into one string",
-  ),
+  mkDecisionInTermsOfForSort: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["mkDecisionInTermsOfForSort"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
   mkResultOfNegotiation: {
     disposition: "stored",
     target: { type: "metadata", key: "result" },
@@ -2642,7 +2666,7 @@ const SK_US_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "defendantProceedingFileNumber" },
   },
-} as const satisfies Record<SkUsSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof SkUsPublisherRecord, SourceFieldDisposition>;
 
 /**
  * Read back the field names the stored envelope states.
@@ -2686,14 +2710,19 @@ const listSkUsSourceFields = (parts: SourceRawParts): readonly string[] => {
     }
   }
 
-  // The vocabularies resolve two of the names above; the part states which
-  // ones were read, and a vocabulary nothing was read from states nothing.
+  // Older envelopes kept only matched vocabulary entries under `used`.
+  // New captures retain the complete publisher response under `codelist`.
   const codelists: unknown = Result.try({
     try: (): unknown => JSON.parse(parts["codelists"] ?? "null"),
     catch: () => null,
   }).unwrapOr(null);
+  const dictionaries = isRecord(codelists) ? codelists["codelist"] : undefined;
   const used = isRecord(codelists) ? codelists["used"] : undefined;
-  if (isRecord(used)) {
+  if (isRecord(dictionaries)) {
+    for (const name of Object.keys(dictionaries)) {
+      names.add(name);
+    }
+  } else if (isRecord(used)) {
     for (const [name, values] of Object.entries(used)) {
       if (Array.isArray(values) && values.length > 0) {
         names.add(name);
@@ -2752,9 +2781,9 @@ export const skUsStoredRawParts = (
  * is refused: its metadata was never stored, and inventing it from the
  * database row would write a decision the publisher never stated.
  */
-const reparseStoredRaw = (
+const reparseStoredRaw = async (
   stored: StoredRawReparseInput,
-): StoredRawReparseOutcome => {
+): Promise<StoredRawReparseValue> => {
   if (
     stored.contentType !== null &&
     !SK_US_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
@@ -2766,10 +2795,15 @@ const reparseStoredRaw = (
     };
   }
 
+  const readObject = await readStoredDocumentObject(stored, "document-file");
+  if (Result.isError(readObject)) {
+    return readObject;
+  }
+  const pdfBytes = readObject.value;
   const raw = new TextDecoder().decode(stored.raw);
   const parts = skUsStoredRawParts(raw, stored.contentType);
   const listingJson = parts?.["listing"];
-  if (listingJson === undefined) {
+  if (parts === null || listingJson === undefined) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
@@ -2804,66 +2838,91 @@ const reparseStoredRaw = (
     };
   }
 
-  const decisionDate = parseApiDate(listing.mkDateOfDecision);
-  const decisionType = listing.mkFormOfDecision ?? undefined;
-  const court = stored.court;
-  const documentUrl = `${DOC_DOWNLOAD_URL}/${fields.documentId}`;
-  const documentXhtml = parts?.["document"];
-  const facetsJson = parts?.["facets"];
-  const collection = skUsCollectionMatch({
+  // A row stored without its XHTML rendition or its document file replays
+  // from what was stored, the way the ingestion assembles a row whose
+  // document read is still pending.
+  const documentXhtml = parts["document"];
+  const refusal: unknown = Result.try({
+    try: (): unknown => JSON.parse(parts["refusal"] ?? "null"),
+    catch: () => null,
+  }).unwrapOr(null);
+  const result = assembleSkUsDecision({
     doc: listing,
-    collectionJson: parts?.["collection-listing"],
-    facetsJson,
+    caseNumber: fields.caseNumber,
+    documentId: fields.documentId,
+    responses: {
+      codelist: undefined,
+      documentXhtml,
+      facetsJson: parts["facets"],
+      collectionJson: parts["collection-listing"],
+      courtFileJson: parts["file"],
+      pdfBytes: pdfBytes ?? undefined,
+      withheld: isReadRefusal(refusal) ? refusal : undefined,
+    },
   });
-
-  const parsed =
-    documentXhtml === undefined
-      ? null
-      : parseSkUsDocumentXhtml({
-          xhtml: documentXhtml,
-          caseNumber: fields.caseNumber,
-          ecli: listing.mkECLI ?? undefined,
-          court,
-          decisionDate,
-          decisionType,
-          documentUrl,
-        });
-
+  // Codelists contain the digest and used values of a corpus-level response,
+  // not the full codelist. Keep that captured evidence byte-for-byte.
+  const sourceRaw = encodeSourceRawEnvelope(parts);
   return {
     type: "parsed",
-    result: plainTextIngestionResult({
-      caseNumber: fields.caseNumber,
-      sourceDocumentId: fields.documentId,
-      ecli: listing.mkECLI ?? undefined,
-      court,
-      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].country,
-      language: SK_US_LANGUAGE,
-      decisionDate,
-      decisionType,
-      ...(parsed === null ? {} : { fulltext: parsed.fulltext }),
-      judges: skUsJudges({
-        rapporteurs: skUsRapporteurs(listing),
-        dissenters: facetValues(facetsJson, "mkDifferentViewJudges"),
+    result: {
+      ...result,
+      sourceRaw,
+      rawHash: sourceFingerprint({
+        sourceRaw,
+        sourceRawObjects: result.sourceRawObjects,
       }),
-      sourceUrl: documentUrl,
-      documentUrl,
-      textFields: skUsCollectionTextFields(listing, collection),
-      metadata: checkedDecisionMetadata(
-        skUsMetadata({
-          doc: listing,
-          facetsJson,
-          header: courtFileHeader(parts?.["file"]),
-          collection,
-        }),
-      ),
-      // The stored envelope names each object by the digest of its bytes.
-      rawHash: sourceFingerprint({ sourceRaw: raw }),
-      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
-      documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
-      sourceRaw: raw,
-      sourceRawContentType: stored.contentType ?? "application/json",
-    }),
+    },
   };
+};
+
+// ── Locating a stored row in the listing ─────────────────
+
+const DECISION_MONTH = /^(\d{4}-\d{2})-\d{2}$/u;
+
+/**
+ * The month the search lists a stored row under: the listing is ranged by the
+ * decision date, which every row this adapter wrote states.
+ */
+const skUsLookupOf = (stored: StoredRawReparseInput): string | null =>
+  stored.decisionDate === null
+    ? null
+    : (DECISION_MONTH.exec(stored.decisionDate)?.[1] ?? null);
+
+/**
+ * The publisher's document id a stored row is keyed by: the id it holds, or
+ * for a row written before it held one, the id its `docDownload/{id}` URL
+ * names (the same rule `legacySourceUrls` re-keys such rows by). A row whose
+ * ids disagree names no single document, so it is keyed by none.
+ */
+const storedSkUsDocumentId = (
+  stored: StoredRawReparseInput,
+): string | undefined => {
+  const prefix = `${DOC_DOWNLOAD_URL}/`;
+  const named = [stored.documentUrl, stored.sourceUrl]
+    .filter((candidate) => candidate?.startsWith(prefix) === true)
+    .map((url) => url?.slice(prefix.length) ?? "")
+    .filter((id) => id.length > 0 && !id.includes("/"));
+  const ids = new Set(
+    stored.sourceDocumentId === null
+      ? named
+      : [stored.sourceDocumentId, ...named],
+  );
+  const [only] = ids;
+  return ids.size === 1 ? only : undefined;
+};
+
+/** A listed item is the stored row when it states the row's document id. */
+const skUsMatchesStored = (
+  { identity }: ReconciliationListingItem,
+  stored: StoredRawReparseInput,
+): boolean => {
+  const held = storedSkUsDocumentId(stored);
+  return (
+    held !== undefined &&
+    identity.type === "document" &&
+    identity.sourceDocumentId === held
+  );
 };
 
 // ── Adapter ──────────────────────────────────────────────
@@ -3064,6 +3123,14 @@ export const skUsAdapter = defineSourceAdapter({
       metadataKey: SK_US_PART_READ_METADATA_KEY,
       values: [SK_US_PART_READ_STATE.WITHHELD],
     },
+    // A row stored as the document file alone holds no search row and no
+    // rendition this adapter reads text from, so it is located in its month
+    // and re-observed rather than upgraded from the bytes it holds.
+    recapture: {
+      lookupOf: skUsLookupOf,
+      listLookup: listSkUsSlicePage,
+      matchesStored: skUsMatchesStored,
+    },
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,
   },
@@ -3113,6 +3180,7 @@ export const skUsAdapter = defineSourceAdapter({
           return {
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
+            publisherRequest: PUBLISHER_REQUEST.FAILED,
             nextCursor:
               year < currentYear
                 ? encodeCursor({ year: year + 1, offset: 0 })
@@ -3125,12 +3193,14 @@ export const skUsAdapter = defineSourceAdapter({
             // Move to next year
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
             };
           }
           // Current year exhausted; park at current offset
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year, offset }),
           };
         }
@@ -3243,6 +3313,7 @@ export const skUsAdapter = defineSourceAdapter({
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year, offset: nextOffset }),
           };
         }
@@ -3253,6 +3324,7 @@ export const skUsAdapter = defineSourceAdapter({
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
           };
         }
@@ -3270,6 +3342,7 @@ export const skUsAdapter = defineSourceAdapter({
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
           ...unreadPage(unreadItems),
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodeCursor({
             year,
             offset: offset + items.length,

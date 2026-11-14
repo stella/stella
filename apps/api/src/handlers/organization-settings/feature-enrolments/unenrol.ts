@@ -1,17 +1,19 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { featureEnrolments } from "@/api/db/schema";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import {
   FEATURE_REGISTRY,
   SELF_SERVE_FEATURE_IDS,
 } from "@/api/lib/feature-access/registry";
+import { publishMcpToolProjectionChange } from "@/api/mcp/tool-freshness";
 
 const config = {
   contract: "patch",
@@ -22,17 +24,13 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "internal", reason: "ui_navigation_state" },
-  params: t.Object({ featureId: t.UnionEnum(SELF_SERVE_FEATURE_IDS) }),
+  params: v.object({ featureId: v.picklist(SELF_SERVE_FEATURE_IDS) }),
 } satisfies HandlerConfig;
 
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, params, recordAuditEvent }) {
-    if (
-      !isDeploymentFeatureEnabled(
-        FEATURE_REGISTRY[params.featureId].deploymentFeature,
-      )
-    ) {
+    if (!isFeatureDeployed(FEATURE_REGISTRY, params.featureId)) {
       return Result.err(
         new HandlerError({ status: 404, message: "Not found" }),
       );
@@ -66,6 +64,14 @@ export default createSafeRootHandler(
           },
         });
       }),
+    );
+    detached(
+      async () =>
+        await publishMcpToolProjectionChange({
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      "mcp.feature-unenrolment-tool-projection",
     );
     return Result.ok({ featureId: params.featureId, enrolled: false });
   },

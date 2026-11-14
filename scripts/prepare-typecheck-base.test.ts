@@ -26,6 +26,7 @@ test("base recordings require the exact main SHA and authoritative successful wo
       "typecheck-base.json": "{}",
       "api-routes.gen.ts": "api",
       "routeTree.gen.ts": "routes",
+      "route-templates.gen.ts": "templates",
     })) {
       writeFileSync(path.join(data, name), content);
     }
@@ -40,6 +41,7 @@ test("base recordings require the exact main SHA and authoritative successful wo
           "typecheck-base.json",
           "api-routes.gen.ts",
           "routeTree.gen.ts",
+          "route-templates.gen.ts",
         ],
         { cwd: data },
       ).exitCode,
@@ -149,6 +151,11 @@ const runFallback = ({
     mkdirSync(path.join(base, "apps/api/scripts"), { recursive: true });
     writeFileSync(
       path.join(base, "apps/api/scripts/generate-capability-runtime.ts"),
+      "",
+    );
+    mkdirSync(path.join(base, "packages/scripts/src"), { recursive: true });
+    writeFileSync(
+      path.join(base, "packages/scripts/src/prepare-cli-runtime.ts"),
       "",
     );
     if (baseHasRetry) {
@@ -271,6 +278,9 @@ for (const failure of [
     expect(result.exitCode, result.stderr).toBe(0);
     expect(result.commands).toContain(
       `git:worktree add --detach ${result.base} ${sha}`,
+    );
+    expect(result.commands).toContain(
+      `${result.base}:--cwd=packages/cli run codegen:runtime`,
     );
     expect(result.commands).toContain(
       `${result.base}:--filter @stll/api generate:capability-runtime`,

@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { StellaMark } from "@stll/ui/stella-mark";
 
+import { StellaAppIcon } from "../shared/StellaAppIcon";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import type { StepProps } from "./step-props";
 import { StepFooter } from "./StepFooter";
@@ -12,9 +12,7 @@ export const WelcomeStep = ({ onContinue, snapshot }: StepProps) => {
   return (
     <>
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-        <div className="bg-primary text-primary-foreground grid size-20 place-items-center rounded-2xl shadow-lg">
-          <StellaMark className="size-11" />
-        </div>
+        <StellaAppIcon className="size-20 rounded-2xl shadow-lg" />
         <h1 className="mt-2 text-2xl font-semibold text-balance">
           {t("welcomeTitle")}
         </h1>

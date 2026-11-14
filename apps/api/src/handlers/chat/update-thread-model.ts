@@ -1,8 +1,12 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+import {
+  type ChatLocalRunTarget,
+  chatRunTargetSchema,
+} from "@stll/api-contract/chat-run-target";
 
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -15,7 +19,11 @@ import {
   isChatModelReasoningEffortAvailable,
   isChatModelSelectionAvailable,
 } from "@/api/lib/chat-model-selection";
-import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  chatRunTargetOf,
+  storedChatRunTarget,
+} from "@/api/lib/chat/run-target";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -23,31 +31,36 @@ const config = {
   permissions: { chat: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-  }),
-  // A required (not optional) union: Elysia coerces an absent optional
-  // `UnionEnum`-adjacent field, so a dedicated required body avoids that
-  // gotcha (see `webSearchEnabled` on updateThread for the sibling toggle).
-  body: t.Object({
-    model: t.Union([t.String(), t.Null()]),
-    // Optional for rolling compatibility with clients that predate the effort
-    // control. Literal union avoids Elysia's absent-UnionEnum coercion.
-    reasoningEffort: t.Optional(
-      t.Union([
-        t.Literal("none"),
-        t.Literal("minimal"),
-        t.Literal("low"),
-        t.Literal("medium"),
-        t.Literal("high"),
-        t.Literal("xhigh"),
-        t.Literal("max"),
-        t.Null(),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({
+    model: v.union([v.string(), v.null()]),
+    reasoningEffort: v.optional(
+      v.union([
+        v.literal("none"),
+        v.literal("minimal"),
+        v.literal("low"),
+        v.literal("medium"),
+        v.literal("high"),
+        v.literal("xhigh"),
+        v.literal("max"),
+        v.null(),
       ]),
     ),
+    /**
+     * Where the thread's turns run, kept so a reload shows the same choice.
+     * Omitted leaves the stored target as it is.
+     */
+    runTarget: v.optional(chatRunTargetSchema),
   }),
 } satisfies HandlerConfig;
+
+/** The audit change of a run target the request set; none when it left it. */
+const runTargetChange = (
+  stored: ChatLocalRunTarget | null,
+  next: ChatLocalRunTarget | null | undefined,
+) =>
+  next === undefined ? {} : { chatLocalRunTarget: { old: stored, new: next } };
 
 const updateThreadModel = createSafeRootHandler(
   config,
@@ -64,6 +77,12 @@ const updateThreadModel = createSafeRootHandler(
   }) {
     const { model } = body;
     const reasoningEffort = body.reasoningEffort ?? null;
+    const runTarget =
+      body.runTarget === undefined
+        ? undefined
+        : storedChatRunTarget(body.runTarget);
+    const runTargetSet =
+      runTarget === undefined ? {} : { chatLocalRunTarget: runTarget };
     if (model === null && reasoningEffort !== null) {
       return Result.err(
         new HandlerError({
@@ -93,6 +112,7 @@ const updateThreadModel = createSafeRootHandler(
     }
 
     const scope = yield* resolveChatScope({
+      admitted: "active",
       getWorkspaceAccess,
       workspaceId,
     });
@@ -114,6 +134,7 @@ const updateThreadModel = createSafeRootHandler(
             id: chatThreads.id,
             chatModel: chatThreads.chatModel,
             chatReasoningEffort: chatThreads.chatReasoningEffort,
+            chatLocalRunTarget: chatThreads.chatLocalRunTarget,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -122,7 +143,11 @@ const updateThreadModel = createSafeRootHandler(
         if (existing) {
           await tx
             .update(chatThreads)
-            .set({ chatModel: model, chatReasoningEffort: reasoningEffort })
+            .set({
+              chatModel: model,
+              chatReasoningEffort: reasoningEffort,
+              ...runTargetSet,
+            })
             .where(threadPredicate());
 
           await recordAuditEvent(tx, {
@@ -139,6 +164,7 @@ const updateThreadModel = createSafeRootHandler(
                 old: existing.chatReasoningEffort,
                 new: reasoningEffort,
               },
+              ...runTargetChange(existing.chatLocalRunTarget, runTarget),
             },
           });
 
@@ -162,6 +188,7 @@ const updateThreadModel = createSafeRootHandler(
             dataWorkspaceIds,
             chatModel: model,
             chatReasoningEffort: reasoningEffort,
+            chatLocalRunTarget: runTarget ?? null,
           })
           .onConflictDoNothing()
           .returning({ id: chatThreads.id });
@@ -179,6 +206,7 @@ const updateThreadModel = createSafeRootHandler(
                 new: {
                   chatModel: model,
                   chatReasoningEffort: reasoningEffort,
+                  chatLocalRunTarget: runTarget ?? null,
                 },
               },
             },
@@ -192,6 +220,7 @@ const updateThreadModel = createSafeRootHandler(
             id: chatThreads.id,
             chatModel: chatThreads.chatModel,
             chatReasoningEffort: chatThreads.chatReasoningEffort,
+            chatLocalRunTarget: chatThreads.chatLocalRunTarget,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -203,7 +232,11 @@ const updateThreadModel = createSafeRootHandler(
 
         await tx
           .update(chatThreads)
-          .set({ chatModel: model, chatReasoningEffort: reasoningEffort })
+          .set({
+            chatModel: model,
+            chatReasoningEffort: reasoningEffort,
+            ...runTargetSet,
+          })
           .where(threadPredicate());
 
         await recordAuditEvent(tx, {
@@ -220,6 +253,7 @@ const updateThreadModel = createSafeRootHandler(
               old: racedExisting.chatReasoningEffort,
               new: reasoningEffort,
             },
+            ...runTargetChange(racedExisting.chatLocalRunTarget, runTarget),
           },
         });
 
@@ -236,7 +270,13 @@ const updateThreadModel = createSafeRootHandler(
       );
     }
 
-    return Result.ok({ model, reasoningEffort });
+    return Result.ok({
+      model,
+      reasoningEffort,
+      ...(runTarget === undefined
+        ? {}
+        : { runTarget: chatRunTargetOf(runTarget) }),
+    });
   },
 );
 

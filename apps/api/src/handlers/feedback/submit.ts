@@ -56,6 +56,7 @@ import {
   isTransactionalEmailConfigured,
   sendFeedbackEmail,
 } from "@/api/lib/email/email";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { APP_VERSION } from "@/api/lib/version";
 
 /** Identical content inside this window is a resend, not new signal. */
@@ -269,7 +270,12 @@ export const submitFeedbackReport = async ({
     // The report and its receipt are already durable; a failed bookkeeping
     // update must not turn a delivered report into an error.
     if (Result.isError(recorded)) {
-      capture(recorded.error, { source: "feedback-submit" });
+      capture(
+        recorded.error,
+        handlerErrorContext("submitFeedbackReport.recorded_error", {
+          source: "feedback-submit",
+        }),
+      );
     }
   }
 
@@ -354,7 +360,12 @@ const deliver = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(sent)) {
-      capture(sent.error, { source: "feedback-delivery-email" });
+      capture(
+        sent.error,
+        handlerErrorContext("deliver.sent_error", {
+          source: "feedback-delivery-email",
+        }),
+      );
     }
     deliveries.push({
       channel: "email",
@@ -373,7 +384,12 @@ const deliver = async ({
       },
     });
     if (Result.isError(filed)) {
-      capture(filed.error, { source: "feedback-delivery-github" });
+      capture(
+        filed.error,
+        handlerErrorContext("deliver.filed_error", {
+          source: "feedback-delivery-github",
+        }),
+      );
       deliveries.push({ channel: "github", status: "failed" });
     } else {
       deliveries.push({

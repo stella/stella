@@ -40,6 +40,21 @@ const check = (files: Files, allowlist: readonly string[] = []) => {
 };
 
 describe("run step fetches", () => {
+  test("a workflow cannot use a direct partial-clone checkout", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+`),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Checkout: partial-clone actions/checkout must use stella/.github/actions/partial-clone-checkout`,
+    ]);
+  });
+
   test("a curl wrapped in retry.sh with a step timeout passes", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Download tool
@@ -98,7 +113,7 @@ describe("cargo dependency resolution", () => {
       cargo(
         [
           "cargo check --workspace --locked",
-          "cargo +1.99.0 test --locked",
+          "cargo +1.99.1 test --locked",
           "cargo clippy --all-targets --locked -- -D warnings",
           "cargo doc --no-deps --locked",
           "cargo deny check advisories",
@@ -196,6 +211,46 @@ ${stepEnv}        run: cargo build --locked
     ]);
   });
 
+  test("a package.json script run by name needs the step timeout", () => {
+    const step = (timeout: string) =>
+      workflow(`      - name: Install the docs MCP server
+${timeout}        run: bash scripts/retry.sh bun run setup:mcp
+`);
+    const manifest = JSON.stringify({
+      scripts: {
+        "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
+      },
+    });
+
+    expect(
+      check({ [WORKFLOW]: step(""), "package.json": manifest }).errors,
+    ).toEqual([
+      `${WORKFLOW}: build: Install the docs MCP server: bun install (package.json#setup:mcp) needs a step timeout-minutes`,
+    ]);
+    expect(
+      check({
+        [WORKFLOW]: step("        timeout-minutes: 5\n"),
+        "package.json": manifest,
+      }).errors,
+    ).toEqual([]);
+  });
+
+  test("a package.json script run by name outside retry.sh fails", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install the docs MCP server
+        timeout-minutes: 5
+        run: bun run setup:mcp
+`),
+      "package.json": JSON.stringify({
+        scripts: { "setup:mcp": "bun install --cwd .claude/mcp" },
+      }),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install the docs MCP server: route bun install (package.json#setup:mcp) through scripts/retry.sh`,
+    ]);
+  });
+
   test("a package script a step invokes is scanned", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Prepare toolchain
@@ -213,6 +268,57 @@ ${stepEnv}        run: cargo build --locked
 });
 
 describe("shell detection", () => {
+  test("git network subcommands are fetches with or without global options", () => {
+    for (const subcommand of ["clone", "fetch", "ls-remote", "pull"]) {
+      expect(
+        scanShell(`git ${subcommand} origin`, "git").map((fetch) => fetch.kind),
+      ).toEqual([`git ${subcommand}`]);
+      expect(
+        scanShell(
+          `git -c protocol.version=2 -C repo --no-pager --git-dir=.git --work-tree=. ${subcommand} origin`,
+          "git",
+        ).map((fetch) => fetch.kind),
+      ).toEqual([`git ${subcommand}`]);
+    }
+  });
+
+  test("git fetch through retry.sh counts as retried", () => {
+    expect(
+      scanShell("bash scripts/retry.sh git fetch origin main", "git").map(
+        (fetch) => [fetch.kind, fetch.wrapped],
+      ),
+    ).toEqual([["git fetch", true]]);
+  });
+
+  test("quoted global option values with spaces still reveal the subcommand", () => {
+    const command =
+      'git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main';
+    expect(
+      scanShell(command, "git").map((fetch) => [fetch.kind, fetch.wrapped]),
+    ).toEqual([["git fetch", false]]);
+    expect(
+      scanShell(`bash "$NETWORK_RETRY_SCRIPT" ${command}`, "git").map(
+        (fetch) => [fetch.kind, fetch.wrapped],
+      ),
+    ).toEqual([["git fetch", true]]);
+  });
+
+  test("option values quoted inside a word still reveal the subcommand", () => {
+    for (const command of [
+      'git -c http.extraheader="Authorization: basic $auth" fetch origin main',
+      'git --git-dir="repo with spaces/.git" fetch origin main',
+    ]) {
+      expect(
+        scanShell(command, "git").map((fetch) => fetch.kind),
+        command,
+      ).toEqual(["git fetch"]);
+    }
+  });
+
+  test("git commands without network access are not fetches", () => {
+    expect(scanShell("git status\ngit rev-parse HEAD", "git")).toEqual([]);
+  });
+
   test("loopback readiness probes are not fetches", () => {
     expect(
       scanShell(

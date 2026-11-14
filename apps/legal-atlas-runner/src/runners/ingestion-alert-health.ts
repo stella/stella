@@ -5,11 +5,11 @@ import {
 import { DAY_IN_MS } from "@stll/time";
 
 import {
-  INITIAL_STALL_ALERT,
-  type CycleResult,
-  type StallAlertState,
   cycleMadeProgress,
+  type CycleResult,
   cycleStopKind,
+  INITIAL_STALL_ALERT,
+  type StallAlertState,
   stepAdapterCycleHealth,
 } from "./cycle-progress";
 import { ingestionHealthRecord } from "./ingestion-health";

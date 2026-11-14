@@ -516,10 +516,6 @@ describe("explicit uses are not shapes", () => {
         ROOT_IMPORT,
         "export const resolveCredential = async (lookup: Lookup) =>",
         "  await resolveMemberAuthorization(lookup, rootDb);",
-        "export const hooks = {",
-        "  seed: async (organizationId: string) =>",
-        "    await ensureDefaultDocumentTypes(organizationId, rootDb),",
-        "};",
         "export const audience = async (lookup: Lookup) => {",
         "  return await resolveWorkspaceRealtimeAudience(lookup, rootDb);",
         "};",
@@ -717,4 +713,20 @@ test("reads a generic arrow in a .ts file", () => {
       "export const load = async <T>(db: Db = rootDb): Promise<T> => await db.one();",
     ),
   ).toEqual([ROOT_CONNECTION_SHAPE.parameterDefault]);
+});
+
+test("dynamic imports retain handle identity through destructuring defaults", () => {
+  for (const [binding, local] of [
+    ["rootDb = fallback", "rootDb"],
+    ["rootDb: owner = fallback", "owner"],
+    ["rlsDb = fallback", "rlsDb"],
+    ["rlsDb: owner = fallback", "owner"],
+  ] as const) {
+    expect(
+      shapesOf(
+        `const { ${binding} } = await import("@/api/db/root");`,
+        `const config = { db: ${local} };`,
+      ),
+    ).toEqual([ROOT_CONNECTION_SHAPE.dependencyProperty]);
+  }
 });

@@ -6,6 +6,7 @@ import {
   decisionOutline,
   locateDecisionBlocks,
 } from "@/api/mcp/case-law-decision-outline";
+import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 
 const heading = (
   plainText: string,
@@ -150,4 +151,76 @@ test("numbered navigation cannot replace or shorten a spaced AST heading", () =>
     text: title,
   });
   expect(outline.entries).toEqual([{ anchorId: "h", start: 0, title }]);
+});
+
+test("a decision numbered as structure names only its own paragraphs", () => {
+  // An Advocate General's opinion: the court's numbering is structure, and
+  // figures still opening a block belong to a heading, a quoted provision
+  // or a list item. None of them is a second "paragraph 2".
+  const blocks = [
+    heading("2. The provisional nature of the doubts", "h-1", 2),
+    paragraph("In the first place, the doubts are provisional.", "point1", 1),
+    paragraph("Article 25 provides:", "point2", 2),
+    paragraph(
+      "2. The adequacy of the level of protection shall be assessed.",
+      "point2-2",
+    ),
+    paragraph("1) disciplinary proceedings:", "point2-3"),
+  ];
+  const text = toPlainCorpusText({ blocks, fulltext: null }) ?? "";
+  const located = locateDecisionBlocks(blocks, text);
+  expect(located.map(({ label }) => label)).toEqual([
+    null,
+    "1",
+    "2",
+    null,
+    null,
+  ]);
+  const { entries } = decisionOutline({ blocks, text });
+  expect(entries.map(({ title, number }) => ({ title, number }))).toEqual([
+    { title: "2. The provisional nature of the doubts", number: undefined },
+    {
+      title: "In the first place, the doubts are provisional.",
+      number: 1,
+    },
+    { title: "Article 25 provides:", number: 2 },
+  ]);
+  for (const { start, title } of entries) {
+    expect(text.slice(start)).toStartWith(title);
+  }
+});
+
+test("anonymised initials are not numbered sections", () => {
+  const text = [
+    "I. Stan faktyczny",
+    "M. T. poznała pozwanego w 2010 r.",
+    "M. D., poszukując w związku z działalnością gospodarczą",
+    "L. wniósł o oddalenie powództwa.",
+    "II. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. A. Stan prawny",
+    "V. Posouzení věci",
+  ].join("\n\n");
+  const { entries } = decisionOutline({ text, blocks: null });
+  expect(entries.map(({ title }) => title)).toEqual([
+    "I. Stan faktyczny",
+    "II. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. A. Stan prawny",
+    "V. Posouzení věci",
+  ]);
+});
+
+test("a lettered run keeps its lower-case sections, a party line with a second initial does not", () => {
+  const text = [
+    "I. A. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. B. oddala powództwo w pozostałym zakresie",
+    "M. T. Pozwana wniosła o oddalenie powództwa.",
+    "V. K. poznała pozwanego w 2010 r.",
+    "C. Rozważania sądu",
+  ].join("\n\n");
+  const { entries } = decisionOutline({ text, blocks: null });
+  expect(entries.map(({ title }) => title)).toEqual([
+    "I. A. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. B. oddala powództwo w pozostałym zakresie",
+    "C. Rozważania sądu",
+  ]);
 });

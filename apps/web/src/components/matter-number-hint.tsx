@@ -9,11 +9,13 @@ import {
 import { Button } from "@stll/ui/button";
 import { AlertTriangleIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 
@@ -27,8 +29,8 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
-  useQueryViewError(settingsView);
+  const settingsView = queryView(settingsQuery);
+  useQueryViewError(settingsView, "MatterNumberHint:query");
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
@@ -154,7 +156,7 @@ const MatterNumberHintBody = ({
         </p>
         <Link
           className="text-foreground inline-flex text-xs font-medium hover:underline"
-          to="/admin/matter-numbering"
+          to="/settings/organization/matter-numbering"
         >
           {t("settings.organization.matterNumbering")}
         </Link>
@@ -163,8 +165,8 @@ const MatterNumberHintBody = ({
   }
 
   return (
-    <p className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
       {t("workspaces.referenceConventionHint", { example })}
-    </p>
+    </TruncatedText>
   );
 };

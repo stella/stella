@@ -2,6 +2,10 @@ import { GetWebIdentityTokenCommand, STSClient } from "@aws-sdk/client-sts";
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
@@ -15,6 +19,10 @@ import {
   emitManagedCredentialUnavailable,
   emitOpenRouterTokenExchange,
 } from "@/api/lib/observability/request-metrics";
+import {
+  MANAGED_MODEL_TIER,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const REQUEST_TIMEOUT_MS = 5000;
@@ -34,25 +42,40 @@ export type ManagedOpenRouterCredential =
   | { type: "static"; apiKey: string }
   | { type: "federated"; apiKey: string; invalidate: () => void };
 
-export const getManagedOpenRouterConfiguration =
-  (): ManagedOpenRouterConfiguration => {
-    if (env.OPENROUTER_API_KEY?.trim()) {
-      return { type: "static", apiKey: env.OPENROUTER_API_KEY };
-    }
-    if (
-      env.OPENROUTER_WIF_POLICY_ID &&
-      env.OPENROUTER_WIF_AUDIENCE &&
-      env.OPENROUTER_WIF_STS_REGION
-    ) {
-      return {
-        type: "federated",
-        policyId: env.OPENROUTER_WIF_POLICY_ID,
-        audience: env.OPENROUTER_WIF_AUDIENCE,
-        region: env.OPENROUTER_WIF_STS_REGION,
-      };
-    }
-    return { type: "unavailable" };
-  };
+export const getManagedOpenRouterConfiguration = (
+  tier: ManagedModelTier,
+): ManagedOpenRouterConfiguration => {
+  const configurations = {
+    [MANAGED_MODEL_TIER.standard]: {
+      apiKey: env.OPENROUTER_API_KEY,
+      policyId: env.OPENROUTER_WIF_POLICY_ID,
+    },
+    [MANAGED_MODEL_TIER.fast]: {
+      apiKey: env.OPENROUTER_FAST_TIER_API_KEY,
+      policyId: env.OPENROUTER_FAST_TIER_WIF_POLICY_ID,
+    },
+  } as const satisfies Record<
+    ManagedModelTier,
+    { apiKey: string | undefined; policyId: string | undefined }
+  >;
+  const configuration = configurations[tier];
+  if (configuration.apiKey?.trim()) {
+    return { type: "static", apiKey: configuration.apiKey };
+  }
+  if (
+    configuration.policyId &&
+    env.OPENROUTER_WIF_AUDIENCE &&
+    env.OPENROUTER_WIF_STS_REGION
+  ) {
+    return {
+      type: "federated",
+      policyId: configuration.policyId,
+      audience: env.OPENROUTER_WIF_AUDIENCE,
+      region: env.OPENROUTER_WIF_STS_REGION,
+    };
+  }
+  return { type: "unavailable" };
+};
 
 const exchangeSchema = v.object({
   access_token: v.pipe(
@@ -96,7 +119,12 @@ const retryAfterMs = (
     return undefined;
   }
   if (/^\d+$/u.test(value)) {
-    const delay = Number(value) * 1000;
+    // Finite, oversized delta-seconds still saturate the existing cooldown bound.
+    const seconds = parseDecimalToken(value, { sign: "unsigned" });
+    if (seconds.isErr()) {
+      return undefined;
+    }
+    const delay = seconds.value * 1000;
     return Number.isFinite(delay)
       ? Math.min(delay, MAX_RETRY_COOLDOWN_MS)
       : undefined;
@@ -126,12 +154,22 @@ const retryAfterMs = (
     Temporal.ZonedDateTime.from(
       {
         timeZone: "UTC",
-        year: Number(match[3]),
+        year: parseIntegerToken(match[3], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a four-digit year",
+        ),
         month: months.indexOf(match[2] ?? "") + 1,
-        day: Number(match[1]),
-        hour: Number(match[4]),
-        minute: Number(match[5]),
-        second: Number(match[6]),
+        day: parseIntegerToken(match[1], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit day",
+        ),
+        hour: parseIntegerToken(match[4], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit hour",
+        ),
+        minute: parseIntegerToken(match[5], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit minute",
+        ),
+        second: parseIntegerToken(match[6], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit second",
+        ),
       },
       { overflow: "reject" },
     ),
@@ -503,19 +541,33 @@ export const createManagedOpenRouterCredentialProvider = (
   options: CredentialProviderOptions,
 ) => new ManagedOpenRouterCredentialProvider(options);
 
-let provider:
-  | ReturnType<typeof createManagedOpenRouterCredentialProvider>
-  | undefined;
-export const getManagedOpenRouterCredentialProvider = () =>
-  (provider ??= createManagedOpenRouterCredentialProvider({
-    configuration: getManagedOpenRouterConfiguration,
-  }));
+const createProviderGetter = (tier: ManagedModelTier) => {
+  let provider:
+    ReturnType<typeof createManagedOpenRouterCredentialProvider> | undefined;
+  return () =>
+    (provider ??= createManagedOpenRouterCredentialProvider({
+      configuration: () => getManagedOpenRouterConfiguration(tier),
+    }));
+};
 
-export const getManagedOpenRouterCredential = async (): Promise<
-  Result<ManagedOpenRouterCredential, HandlerError<503>>
-> => {
-  const credentialProvider = getManagedOpenRouterCredentialProvider();
-  const configuration = getManagedOpenRouterConfiguration();
+const providerGetters = {
+  [MANAGED_MODEL_TIER.standard]: createProviderGetter(
+    MANAGED_MODEL_TIER.standard,
+  ),
+  [MANAGED_MODEL_TIER.fast]: createProviderGetter(MANAGED_MODEL_TIER.fast),
+} as const satisfies Record<
+  ManagedModelTier,
+  () => ManagedOpenRouterCredentialProvider
+>;
+export const getManagedOpenRouterCredentialProvider = (
+  tier: ManagedModelTier,
+) => providerGetters[tier]();
+
+export const getManagedOpenRouterCredential = async (
+  tier: ManagedModelTier,
+): Promise<Result<ManagedOpenRouterCredential, HandlerError<503>>> => {
+  const credentialProvider = getManagedOpenRouterCredentialProvider(tier);
+  const configuration = getManagedOpenRouterConfiguration(tier);
   const result = await credentialProvider.get();
   return result.map((apiKey) =>
     configuration.type === "federated"

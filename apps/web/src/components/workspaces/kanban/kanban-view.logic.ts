@@ -29,8 +29,8 @@ import {
   getKanbanBoardLaneIdentity,
   getKanbanGroups,
   isKanbanGroupingRenderable,
-  resolveKanbanGroupOptions,
   resolveKanbanGrouping,
+  resolveKanbanGroupOptions,
   selectKanbanRows,
 } from "@stll/ui/kanban";
 

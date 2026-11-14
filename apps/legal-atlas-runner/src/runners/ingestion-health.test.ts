@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
-  INGESTION_HEALTH_MESSAGE,
   createIngestionHealthRefresh,
+  INGESTION_HEALTH_MESSAGE,
   ingestionHealthRecord,
 } from "./ingestion-health";
 
@@ -81,17 +81,20 @@ describe("independent stored-total heartbeat refresh", () => {
       },
     });
     await refresh();
+    await refresh.idle();
     expect(credentials).toEqual(["s3", "corpus-s3"]);
     expect(heartbeatAttempts).toBe(1);
     expect(warnings).toEqual([failure]);
 
     now = 59_999;
     await refresh();
+    await refresh.idle();
     expect(heartbeatAttempts).toBe(1);
     expect(credentials).toHaveLength(4);
 
     now = 60_000;
     await refresh();
+    await refresh.idle();
     expect(heartbeatAttempts).toBe(2);
     expect(credentials).toHaveLength(6);
     expect(warnings).toEqual([failure]);
@@ -118,13 +121,17 @@ describe("independent stored-total heartbeat refresh", () => {
       },
     });
     await refresh();
+    await refresh.idle();
     now = 60_000;
     await refresh();
+    await refresh.idle();
     now = 119_999;
     await refresh();
+    await refresh.idle();
     expect(heartbeatAttempts).toBe(2);
     now = 120_000;
     await refresh();
+    await refresh.idle();
     expect(heartbeatAttempts).toBe(3);
     expect(credentialRefreshes).toBe(4);
     expect(warnings).toHaveLength(1);
@@ -150,7 +157,41 @@ describe("independent stored-total heartbeat refresh", () => {
     for (const minute of outcomes.keys()) {
       now = minute * 60_000;
       await refresh();
+      await refresh.idle();
     }
     expect(warnings).toEqual(["minute 0", "minute 3"]);
+  });
+
+  test("a pending read neither blocks the caller nor starts a second read", async () => {
+    let now = 0;
+    let heartbeatAttempts = 0;
+    let credentialRefreshes = 0;
+    const held = Promise.withResolvers<undefined>();
+    const refresh = createIngestionHealthRefresh({
+      clock: () => now,
+      emitStoredTotalHeartbeat: async () => {
+        heartbeatAttempts += 1;
+        if (heartbeatAttempts === 1) {
+          await held.promise;
+        }
+      },
+      observeHeartbeatFailure: () => {},
+      refreshCredentials: async () => {
+        credentialRefreshes += 1;
+      },
+    });
+    for (const minute of [0, 1, 2, 3]) {
+      now = minute * 60_000;
+      await refresh();
+    }
+    expect(heartbeatAttempts).toBe(1);
+    expect(credentialRefreshes).toBe(4);
+
+    held.resolve(undefined);
+    await refresh.idle();
+    now = 4 * 60_000;
+    await refresh();
+    await refresh.idle();
+    expect(heartbeatAttempts).toBe(2);
   });
 });

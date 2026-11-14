@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  createRustTestBaseline,
   discoverRustTestFiles,
   evaluateRustTestBaseline,
+  parseReviewedRustBoundaries,
   RUST_TEST_DISCOVERY_INPUTS,
 } from "./check-rust-test-determinism.ts";
 import { parseTestBaseline } from "./check-test-state-baseline.ts";
@@ -97,6 +99,18 @@ test("does not count local synchronization values as process-global state", () =
   );
 });
 
+test("reads a 'static lifetime and a path's double colon as neither a static nor its type", () => {
+  const source = `fn sender() -> &'static tokio::sync::watch::Sender<u64> {
+  static WAKES: OnceLock<tokio::sync::watch::Sender<u64>> = OnceLock::new();
+  WAKES.get_or_init(|| tokio::sync::watch::channel(0).0)
+}
+#[test] fn example() { let (send, receive) = tokio::sync::mpsc::unbounded_channel::<u64>(); }
+#[test] fn shared() { let value = &WAKES; }`;
+  expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual([
+    { line: 6, kind: "global-lock", escaped: false },
+  ]);
+});
+
 test("ignores nested comments, ordinary and raw strings, byte strings and characters", () => {
   const source = `#[test] fn example() {
   // thread::sleep(duration); Instant::now();
@@ -123,7 +137,7 @@ test("lifetimes and labels do not hide subsequent test code", () => {
   ]);
 });
 
-test("test attributes inside strings and comments cannot turn production code into tests", () => {
+test("`#[test]` attributes inside strings and comments cannot turn production code into tests", () => {
   const source = `// #[test]
 fn production() { Instant::now(); }
 const EXAMPLE: &str = "#[cfg(test)] mod tests {";
@@ -256,6 +270,129 @@ test("escaped occurrences consume their per-file baseline budget", () => {
       baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
     }),
   ).toEqual([expect.objectContaining({ file: FILE, line: 4 })]);
+});
+
+test("a listed reasoned kit-allow is reviewed without consuming the budget", () => {
+  const source =
+    "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  const escapedHits = scanRustTestDeterminism({
+    source,
+    integrationTest: false,
+  });
+  const boundary = {
+    file: FILE,
+    line: source,
+    reason: "exercise deadline",
+  };
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([[FILE, escapedHits]]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: JSON.stringify([boundary]),
+    }),
+  ).toEqual([]);
+});
+
+test("a baseline write followed by a check ignores reviewed boundaries", () => {
+  const source =
+    "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  const escapedHits = scanRustTestDeterminism({
+    source,
+    integrationTest: false,
+  });
+  const reviewedBoundaryText = JSON.stringify([
+    { file: FILE, line: source, reason: "exercise deadline" },
+  ]);
+  const files = new Map([[FILE, escapedHits]]);
+  const sources = new Map([[FILE, source]]);
+  const baseline = createRustTestBaseline({
+    sources: [{ file: FILE, crate: "crates/example" }],
+    files,
+    sourceText: sources,
+    reviewedBoundaryText,
+  });
+  expect(baseline).toEqual({});
+  expect(
+    evaluateRustTestBaseline({
+      files,
+      sources,
+      baselineText: JSON.stringify(baseline),
+      reviewedBoundaryText,
+    }),
+  ).toEqual([]);
+});
+
+test("an indented reviewed boundary matches its source hit", () => {
+  const source =
+    "  #[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([
+        [FILE, scanRustTestDeterminism({ source, integrationTest: false })],
+      ]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: JSON.stringify([
+        {
+          file: FILE,
+          line: `  ${source.trim()}  `,
+          reason: "exercise deadline",
+        },
+      ]),
+    }),
+  ).toEqual([]);
+});
+
+test("reviewed boundaries reject lines that are empty after trimming", () => {
+  expect(() =>
+    parseReviewedRustBoundaries(
+      JSON.stringify([{ file: FILE, line: "  ", reason: "documented" }]),
+      "boundaries",
+    ),
+  ).toThrow("must contain reviewed Rust boundaries");
+});
+
+test("an unlisted reasoned kit-allow still fails the determinism guard", () => {
+  const source =
+    "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([
+        [FILE, scanRustTestDeterminism({ source, integrationTest: false })],
+      ]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: "[]",
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      message: expect.stringContaining(
+        "Escaped occurrences still need a baseline slot",
+      ),
+    }),
+  ]);
+});
+
+test("a reasonless kit-allow cannot become a reviewed boundary", () => {
+  const source = "#[test] fn example() { Instant::now(); } // kit-allow:";
+  const reasonlessHits = scanRustTestDeterminism({
+    source,
+    integrationTest: false,
+  });
+  expect(reasonlessHits).toEqual([{ line: 1, kind: "clock", escaped: false }]);
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([[FILE, reasonlessHits]]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: "[]",
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      message: expect.stringContaining("Rust test clock"),
+    }),
+  ]);
 });
 
 test.each([
@@ -504,7 +641,7 @@ test("Rust baseline parser expands each count into stable occurrence membership"
   ).toEqual([`${FILE}::1`, `${FILE}::2`]);
 });
 
-test("test scope ends at its matching brace despite nested blocks and string braces", () => {
+test("a test scope ends at its matching brace despite nested blocks and string braces", () => {
   const source = `#[test] fn example() {
   if true { let value = "}"; Instant::now(); }
 }
@@ -517,7 +654,7 @@ fn second_production() { Command::new("worker"); }`;
   ]);
 });
 
-test("test markers inside non-test conditional attributes do not activate scope", () => {
+test("`test` markers inside non-test conditional attributes do not activate scope", () => {
   const source = `#[cfg(not(test))] fn production() { Instant::now(); }
 #[cfg(feature = "test")] fn feature_only() { thread::sleep(duration); }`;
   expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual(
@@ -529,6 +666,7 @@ test.each([
   "crates/new-engine/src/lib.rs",
   "crates/new-engine/Cargo.toml",
   "scripts/rust-test-determinism-baseline.json",
+  "scripts/rust-test-determinism-reviewed-boundaries.json",
   "scripts/rust-test-determinism-scan.ts",
   "scripts/check-rust-test-determinism.ts",
 ])("selects the baseline runner when %s changes or is deleted", (file) => {
@@ -536,8 +674,10 @@ test.each([
     const planned = planCheck({
       changedPaths: [file],
       presentChangedPaths,
+      repositoryPaths: presentChangedPaths,
       affectedWorkspacePaths: [],
       workspacePaths: new Set(),
+      pluginModulePaths: new Set(),
     });
     expect(planned.type).toBe("scoped");
     if (planned.type !== "scoped") {
@@ -553,6 +693,7 @@ test.each([
   "Cargo.toml",
   "crates/new-engine/Cargo.toml",
   "scripts/rust-test-determinism-baseline.json",
+  "scripts/rust-test-determinism-reviewed-boundaries.json",
 ])("baseline runner cache inputs cover changed or deleted %s", (file) => {
   expect(
     PLUGIN_FIXTURE_INPUTS.some((input) =>
@@ -571,6 +712,7 @@ test("baseline runner selection inputs include scanner and baseline owners", () 
   expect(PLUGIN_FIXTURE_INPUTS).toEqual(
     expect.arrayContaining([
       "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
+      "$TURBO_ROOT$/scripts/rust-test-determinism-reviewed-boundaries.json",
       "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
       "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",
     ]),
@@ -800,7 +942,7 @@ test.each([
   "unsafe impl Send for Helper",
   "default impl Trait for Helper",
   "#[allow(dead_code)] impl<'a, T> Trait for Helper<'a, T> where T: Clone",
-])("test scope covers associated helpers in %s", (header) => {
+])("a test scope covers associated helpers in %s", (header) => {
   const source = `#[cfg(test)] ${header} {
   fn helper() { thread::sleep(duration); }
 }

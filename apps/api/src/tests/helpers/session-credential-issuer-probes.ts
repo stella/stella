@@ -6,8 +6,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createDesktopLinkGrant } from "@/api/lib/business-registries/desktop/link-grant-store";
 import {
   createConfirmationOtp,
-  verifyConfirmationOtp,
   runConfirmedTransaction,
+  verifyConfirmationOtp,
 } from "@/api/lib/confirmation-otp";
 import {
   createDesktopEditHandoffToken,
@@ -15,17 +15,18 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { createPdfSigningToken } from "@/api/lib/files/pdf-signing/sessions";
+import { createTimerActivityActionKeySecret } from "@/api/lib/push/timer-activity-devices";
 import {
+  presignUploadUrl,
   resetAwsS3ClientForTesting,
   setScopedS3ClientFactoryForTesting,
   setScopedSigningEnabledForTesting,
-  presignUploadUrl,
 } from "@/api/lib/s3-presign";
 import { subscribe, subscribeUser } from "@/api/lib/sse";
 import { SYNTHETIC_PRINCIPAL } from "@/api/lib/synthetic-principal/constants";
 import type {
-  USER_SESSION_CREDENTIAL_ISSUERS,
   CredentialPrincipal,
+  USER_SESSION_CREDENTIAL_ISSUERS,
 } from "@/api/lib/synthetic-principal/credential-policy";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 
@@ -101,6 +102,7 @@ export const refusedCredentialIssuerProbes = {
       deviceJkt: "A".repeat(43),
       userId,
       organizationId,
+      sessionId: "issuing-session",
       db: {
         delete: () => {
           panic("The grant store was not expected to run");
@@ -123,6 +125,10 @@ export const refusedCredentialIssuerProbes = {
   pdfSigning: async ({ userId, organizationId }) =>
     await expectRefusal(() =>
       createPdfSigningToken({ userId, organizationId }),
+    ),
+  timerActivity: async ({ userId, organizationId }) =>
+    await expectRefusal(() =>
+      createTimerActivityActionKeySecret({ userId, organizationId }),
     ),
   signedUpload: async ({ userId, organizationId }) =>
     await withSignerSentinel(async () => {
@@ -172,7 +178,7 @@ export const refusedCredentialIssuerProbes = {
       subscribeUser({
         userId,
         organizationId,
-        sessionId: "synthetic-session-probe",
+        holder: { id: "synthetic-session-probe", kind: "session" },
         signal: new AbortController().signal,
       }),
     );

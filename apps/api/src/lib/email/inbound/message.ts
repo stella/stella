@@ -1,31 +1,33 @@
 import { panic, Result, TaggedError } from "better-result";
-import { load } from "cheerio";
 import PostalMime, {
-  addressParser,
   type Address,
+  addressParser,
   type Attachment,
   type Email,
 } from "postal-mime";
 
 import type {
+  CorrespondenceMessageContent,
   CorrespondenceProvenance,
-  ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { declareFingerprintFields } from "@stll/errors";
+import { load } from "@stll/html";
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import {
-  renderEmailBodyHtml,
   type ParsedEmail,
+  renderEmailBodyHtml,
 } from "@/api/lib/files/email-to-html";
 import {
-  parseOutlookMsg,
   type OutlookMsgEmail,
   type OutlookMsgRecipient,
+  parseOutlookMsg,
 } from "@/api/lib/files/outlook-msg";
 import {
-  sanitizeFilename,
   type SanitizedFileName,
+  sanitizeFilename,
 } from "@/api/lib/sanitize-filename";
 
 import { findInboundHeaderEnd, INBOUND_MAIL_LIMITS } from "./limits";
@@ -87,7 +89,11 @@ export type InboundMessageErrorReason =
 export class InboundMessageError extends TaggedError("InboundMessageError")<{
   message: string;
   reason: InboundMessageErrorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const INVALID_MAILBOX = /[\s<>;,]/u;
 const MESSAGE_ID_PATTERN = /<[^<>\s@]+@[^<>\s@]+>/gu;
@@ -167,7 +173,7 @@ const normalizeMailbox = (address: Address): string | null => {
   if (address.group || !address.address) {
     return null;
   }
-  const mailbox = address.address.trim().toLowerCase();
+  const mailbox = normalizeEmail(address.address);
   const at = mailbox.lastIndexOf("@");
   if (
     at <= 0 ||
@@ -903,10 +909,10 @@ export const parseEmailFile = async ({
   }
 };
 
-type CorrespondenceContent = Omit<
-  ParsedCorrespondence,
-  keyof CorrespondenceProvenance
->;
+type CorrespondenceContent = CorrespondenceMessageContent & {
+  channel: "email";
+  dataBox: null;
+};
 
 type CorrespondenceFromMessageOptions<
   TProvenance extends CorrespondenceProvenance,
@@ -927,20 +933,23 @@ export const correspondenceFromMessage = <
   sender,
   receivedAt,
 }: CorrespondenceFromMessageOptions<TProvenance>): TProvenance &
-  CorrespondenceContent => ({
-  ...provenance,
-  channel: "email",
-  direction: message.from === sender ? "out" : "in",
-  from: { address: message.from, name: null },
-  to: message.to.map((address) => ({ address, name: null })),
-  cc: message.cc.map((address) => ({ address, name: null })),
-  subject: message.subject ?? "",
-  sentAt: message.date,
-  receivedAt,
-  messageId: message.messageId,
-  contentHash: message.contentHash,
-  inReplyTo: message.inReplyTo,
-  references: message.references,
-  bodyText: message.text,
-  bodyHtml: message.html,
-});
+  CorrespondenceContent => {
+  const content: CorrespondenceContent = {
+    channel: "email",
+    dataBox: null,
+    direction: message.from === sender ? "out" : "in",
+    from: { address: message.from, name: null },
+    to: message.to.map((address) => ({ address, name: null })),
+    cc: message.cc.map((address) => ({ address, name: null })),
+    subject: message.subject ?? "",
+    sentAt: message.date,
+    receivedAt,
+    messageId: message.messageId,
+    contentHash: message.contentHash,
+    inReplyTo: message.inReplyTo,
+    references: message.references,
+    bodyText: message.text,
+    bodyHtml: message.html,
+  };
+  return { ...provenance, ...content };
+};

@@ -51,6 +51,7 @@ const readScope = async ({
   limit = 10,
 }: ReadScopeOptions) => {
   const result = await queryEntities({
+    textMode: "full",
     safeDb: asTestRaw<SafeDb>(
       createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
     ),

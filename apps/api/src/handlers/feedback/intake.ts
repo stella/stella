@@ -6,16 +6,15 @@
  * not the protection; abuse bounding is:
  *   - a coarse raw-string cap at the route plus a strict Valibot
  *     `strictObject` here, rejecting unknown keys and oversize fields;
- *   - a per-IP rate limit (`intake-guards.ts`), so a bot cannot flood the
- *     maintainer inbox;
+ *   - per-IP and deployment-wide rate limits (`intake-guards.ts`), so address
+ *     rotation cannot flood the maintainer inbox;
  *   - the shared submit service, which sanitizes every field again (the
  *     caller's own pass is never trusted) and deduplicates identical content
  *     against the stored reports.
  *
- * The route hands us the raw body string (Elysia `parse: "text"`) rather than
- * a pre-validated object: Elysia's normalizer strips unknown keys before a
- * handler sees them, so a strict "reject anything else" contract must run on
- * the raw payload here, the same shape as the hosted-usage webhook receiver.
+ * The route hands us the raw body string (`bodyMode: "text"`) rather than a
+ * pre-validated object, and the strict "reject anything else" contract runs
+ * on the raw payload here, the same shape as the hosted-usage webhook receiver.
  *
  * All error bodies use the MCP `{ error: { code, message, hint } }` envelope
  * (codes from `McpErrorCode`) so a forwarding tool can branch on HTTP status
@@ -41,7 +40,14 @@ import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/handlers/feedback/sanitize-re
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
 import type { SubmitFeedbackDependencies } from "@/api/handlers/feedback/submit";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
+
+const FEEDBACK_INTAKE_FAILED = failureSink({
+  event: "feedback.intake_failed",
+  expected: [],
+});
 
 // Coarse raw-body string cap enforced at the route before JSON parsing: bounds
 // an unauthenticated write independently of the per-field caps below. Sized so
@@ -58,6 +64,8 @@ export const MAX_RAW_FEEDBACK_BODY_CHARS = 96_000;
 const RATE_LIMIT_MAX_PER_IP = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const UNKNOWN_IP_KEY = "unknown";
+const DEPLOYMENT_RATE_LIMIT_KEY = "all";
+export const PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR = 100;
 
 const optionalCapped = (max: number) =>
   v.optional(v.pipe(v.string(), v.maxLength(max)));
@@ -256,6 +264,20 @@ export const receivePublicFeedback = async ({
         `Up to ${RATE_LIMIT_MAX_PER_IP} submissions per hour are accepted; try again later.`,
       );
     }
+    const withinDeploymentRate = await guards.consumeCounter({
+      bucket: "deployment",
+      key: DEPLOYMENT_RATE_LIMIT_KEY,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      max: PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR,
+    });
+    if (!withinDeploymentRate) {
+      return errorResponse(
+        429,
+        "rate_limited",
+        "The feedback intake is temporarily at capacity",
+        "Try again later.",
+      );
+    }
   }
 
   const submit = deps?.submit ?? submitFeedbackReport;
@@ -263,14 +285,19 @@ export const receivePublicFeedback = async ({
     input: toReportInput(body),
     reporter: { via: "intake" },
     instance: body.instance,
-    ...(deps?.submitDeps === undefined ? {} : { deps: deps.submitDeps }),
+    ...(deps?.submitDeps !== undefined ? { deps: deps.submitDeps } : {}),
   });
   if (Result.isError(submitted)) {
-    return errorResponse(
-      503,
-      "internal_error",
-      "Could not record the feedback report",
-      "Try again later.",
+    return observedResponse(
+      { sink: FEEDBACK_INTAKE_FAILED, cause: submitted.error },
+      JSON.stringify({
+        error: {
+          code: "internal_error",
+          message: "Could not record the feedback report",
+          hint: "Try again later.",
+        },
+      }),
+      { status: 503, headers: { "content-type": "application/json" } },
     );
   }
 

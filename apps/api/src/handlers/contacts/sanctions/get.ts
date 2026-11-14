@@ -1,11 +1,13 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
-  tSafeId,
-  tPaginationCursor,
-  tPaginationLimit,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import {
   readContactSanctions,
@@ -26,10 +28,12 @@ export default createSafeRootHandler(
       consumesServices: false,
       readClass: "tenant",
     },
-    params: t.Object({ contactId: tSafeId("contact") }),
-    query: t.Object({
-      cursor: t.Optional(tPaginationCursor({ maxChars: 8192 })),
-      limit: t.Optional(tPaginationLimit(SANCTIONS_MONITORING_PAGE_SIZE)),
+    params: v.object({ contactId: resourceIdSchema("contact") }),
+    query: v.object({
+      cursor: v.exactOptional(paginationCursorSchema({ maxChars: 8192 })),
+      limit: v.exactOptional(
+        numberFromString(paginationLimitSchema(SANCTIONS_MONITORING_PAGE_SIZE)),
+      ),
     }),
   },
   async function* ({ safeDb, session, params, query }) {

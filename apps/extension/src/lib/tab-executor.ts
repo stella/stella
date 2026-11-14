@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -7,12 +8,14 @@ import {
   type BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  ELEMENT_REFERENCE_SHADOW_SEGMENT,
+  BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
+  type BrowserControlTab,
   type BrowserObservedTab,
+  ELEMENT_REFERENCE_SHADOW_SEGMENT,
   parseBrowserControlResult,
   parseElementReference,
 } from "@stll/api-contract/browser-control";
@@ -23,14 +26,32 @@ import type { CommandBudget } from "./command-budget";
 import { readBrowserController } from "./controller";
 import { isControllableFrame, parseControllableUrl } from "./origin-policy";
 import {
+  IDENTITY_PROVIDER_HOSTS,
+  isIdentityProviderUrl,
+  needsMember,
+  SIGN_IN_MESSAGE,
+  SIGN_IN_POLICY,
+  type SignInPolicy,
+} from "./sign-in-policy";
+import {
   checkCommandIdentity,
   type LiveTopDocument,
   type SnapshotState,
   type TopDocument,
 } from "./snapshot-guard";
 import { frameSnapshotSchema, mergeFrameSnapshots } from "./snapshot-merge";
+import { readStellaTabs } from "./stella-tabs";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
-import { containControlledTab, forgetContainedTab } from "./tab-containment";
+import {
+  chatTabsAtLimit,
+  containControlledTab,
+  forgetContainedTab,
+  operableTabIds,
+  readContainedTabs,
+  readTabOwner,
+  reclaimControlledTab,
+  switchContainedTab,
+} from "./tab-containment";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const PAGE_SETTLE_MS = 250;
@@ -66,6 +87,9 @@ const cancelled = (): BrowserControlResult =>
     BROWSER_CONTROL_ERROR_CODE.cancelled,
     "The browser action was stopped before it ran.",
   );
+
+/** A frame's answer to a snapshot when its document asks for a sign-in. */
+const signInRefusalSchema = v.strictObject({ refused: v.literal("sign-in") });
 
 const frameLocationSchema = v.strictObject({
   origin: v.string(),
@@ -412,15 +436,55 @@ type PageOperation =
       expectedOrigin: string;
       kind: "action";
       limits: typeof BROWSER_CONTROL_LIMITS;
+      metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
       path: string;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
+      signIn: SignInPolicy;
+      /** What the action returns on a document that asks for a sign-in. */
+      signInMessage: string;
+      signInPolicies: typeof SIGN_IN_POLICY;
+      identityProviderHosts: typeof IDENTITY_PROVIDER_HOSTS;
     }
   | { kind: "locate" }
   | {
+      /**
+       * The origin the tab's top document must have; every frame refuses
+       * before reading anything when it is another. Absent reads any page.
+       */
+      expectedTopOrigin?: string;
       kind: "snapshot";
       limits: typeof BROWSER_CONTROL_LIMITS;
+      metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
+      /** A read, or only whether the frame asks for a sign-in. */
+      purpose: SnapshotPurpose;
+      purposes: typeof SNAPSHOT_PURPOSE;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
+      signIn: SignInPolicy;
+      signInPolicies: typeof SIGN_IN_POLICY;
+      identityProviderHosts: typeof IDENTITY_PROVIDER_HOSTS;
     };
+
+const SNAPSHOT_PURPOSE = {
+  read: "read",
+  /** Answers `{ refused: "sign-in" }` or `{ refused: "none" }`; reads nothing. */
+  signInCheck: "sign-in-check",
+} as const;
+
+type SnapshotPurpose = (typeof SNAPSHOT_PURPOSE)[keyof typeof SNAPSHOT_PURPOSE];
+
+/**
+ * A value `chrome.scripting.executeScript` hands to the injected function as
+ * it was sent. Chrome drops an object property whose value is `null`, so the
+ * page would read `undefined` there; no injected argument may hold one.
+ * `undefined` is allowed: it arrives as itself.
+ */
+type InjectableArgument =
+  | boolean
+  | number
+  | string
+  | undefined
+  | readonly InjectableArgument[]
+  | { readonly [key: string]: InjectableArgument };
 
 /**
  * The one script injected into a frame of the controlled tab. Chrome
@@ -431,7 +495,7 @@ type PageOperation =
  */
 const runPageOperation = async (
   injectionTarget: chrome.scripting.InjectionTarget,
-  operation: PageOperation,
+  operation: PageOperation & InjectableArgument,
 ) =>
   await chrome.scripting.executeScript({
     args: [operation],
@@ -439,7 +503,22 @@ const runPageOperation = async (
       if (pageOperation.kind === "locate") {
         return { origin: window.origin, url: window.location.href };
       }
-      const { limits, shadowSegment } = pageOperation;
+      if (
+        pageOperation.kind === "snapshot" &&
+        typeof pageOperation.expectedTopOrigin === "string"
+      ) {
+        // A frame learns its top document's origin from its own ancestors;
+        // when the browser withholds it, the frame refuses as well.
+        const ancestors = window.location.ancestorOrigins;
+        const topOrigin =
+          window === window.top
+            ? window.origin
+            : ancestors.item(ancestors.length - 1);
+        if (topOrigin !== pageOperation.expectedTopOrigin) {
+          return { refused: "top-origin" };
+        }
+      }
+      const { limits, metadataType, shadowSegment } = pageOperation;
       const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
       const normalize = (value: string) =>
         value.replaceAll(/\s+/gu, " ").trim();
@@ -593,55 +672,63 @@ const runPageOperation = async (
           }
         }
       };
-      rememberSensitiveFields(document);
-      // From the first injection on, secret values are learned as they
-      // change, not only when a command looks: a password typed while the
-      // user has the tab, then shown by a page that swaps or retypes the
-      // field, is still known. Installed once per document, in the
-      // extension's isolated world, where the page cannot remove it.
-      const WATCH_KEY = "stellaSecretWatch";
-      if (Reflect.get(globalThis, WATCH_KEY) !== true) {
-        Reflect.set(globalThis, WATCH_KEY, true);
-        const learn = (node: unknown) => {
-          if (node instanceof Element) {
-            rememberSecretValue(node);
-          }
-        };
-        const onEdit = (event: Event) => {
-          learn(event.composedPath().at(0));
-        };
-        document.addEventListener("input", onEdit, true);
-        document.addEventListener("change", onEdit, true);
-        new MutationObserver((records) => {
-          for (const record of records) {
-            if (
-              record.type === "attributes" &&
-              record.attributeName === "type" &&
-              record.oldValue?.toLowerCase() === "password" &&
-              record.target instanceof Element
-            ) {
-              sensitiveHistory.add(record.target);
+      // Learns the page's secret values and keeps learning them. Runs only
+      // once a desktop sign-in refusal is ruled out: a page handed to the
+      // member is never read. The watchers it installed earlier go on
+      // learning after a sign-in form appears: the values stay in the
+      // extension's isolated world and only withhold the same text from
+      // every later read, as when a single-page app shows it again.
+      const learnSecrets = () => {
+        rememberSensitiveFields(document);
+        // From the first injection on, secret values are learned as they
+        // change, not only when a command looks: a password typed while the
+        // user has the tab, then shown by a page that swaps or retypes the
+        // field, is still known. Installed once per document, in the
+        // extension's isolated world, where the page cannot remove it.
+        const WATCH_KEY = "stellaSecretWatch";
+        if (Reflect.get(globalThis, WATCH_KEY) !== true) {
+          Reflect.set(globalThis, WATCH_KEY, true);
+          const learn = (node: unknown) => {
+            if (node instanceof Element) {
+              rememberSecretValue(node);
             }
-            learn(record.target);
-            for (const removed of record.removedNodes) {
-              if (removed instanceof Element) {
-                learn(removed);
-                for (const field of removed.querySelectorAll(
-                  "input, textarea",
-                )) {
-                  learn(field);
+          };
+          const onEdit = (event: Event) => {
+            learn(event.composedPath().at(0));
+          };
+          document.addEventListener("input", onEdit, true);
+          document.addEventListener("change", onEdit, true);
+          new MutationObserver((records) => {
+            for (const record of records) {
+              if (
+                record.type === "attributes" &&
+                record.attributeName === "type" &&
+                record.oldValue?.toLowerCase() === "password" &&
+                record.target instanceof Element
+              ) {
+                sensitiveHistory.add(record.target);
+              }
+              learn(record.target);
+              for (const removed of record.removedNodes) {
+                if (removed instanceof Element) {
+                  learn(removed);
+                  for (const field of removed.querySelectorAll(
+                    "input, textarea",
+                  )) {
+                    learn(field);
+                  }
                 }
               }
             }
-          }
-        }).observe(document, {
-          attributeFilter: ["autocomplete", "id", "name", "type"],
-          attributeOldValue: true,
-          attributes: true,
-          childList: true,
-          subtree: true,
-        });
-      }
+          }).observe(document, {
+            attributeFilter: ["autocomplete", "id", "name", "type"],
+            attributeOldValue: true,
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+        }
+      };
       // A rect(...) clip or a clip-path that leaves nothing to see.
       const clippedAway = (style: CSSStyleDeclaration) => {
         // Computed as `rect(top, right, bottom, left)`; `auto` edges parse
@@ -787,8 +874,14 @@ const runPageOperation = async (
           return "textbox";
         }
         if (element instanceof HTMLInputElement) {
-          return element.type === "checkbox" || element.type === "radio"
-            ? element.type
+          if (element.type === "checkbox" || element.type === "radio") {
+            return element.type;
+          }
+          // A search field, or a text field in a search landmark: typing a
+          // query there is what a search is.
+          return element.type === "search" ||
+            element.closest("[role='search'], search") !== null
+            ? "searchbox"
             : "textbox";
         }
         return "interactive";
@@ -838,6 +931,10 @@ const runPageOperation = async (
           ? undefined
           : text;
       };
+      const metadataFor = (value: string | undefined) =>
+        value === undefined
+          ? { type: metadataType.absent }
+          : { type: metadataType.present, value };
       const focusableSelector =
         "a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])";
       const moveFocus = (element: HTMLElement) => {
@@ -979,6 +1076,104 @@ const runPageOperation = async (
         return container instanceof Element ? container : null;
       };
 
+      // A field only the member fills in: a password, a one-time code, or
+      // a masked secret. A document showing one is a sign-in, which the
+      // member completes; nothing of it is read or acted on.
+      const SIGN_IN_NAME_WORDS = new Set([
+        "onetime",
+        "otp",
+        "passcode",
+        "passphrase",
+        "passwd",
+        "password",
+        "pwd",
+        "totp",
+      ]);
+      const namedLikeSignIn = (identifier: string) => {
+        const words = nameWords(identifier);
+        return words.some(
+          (word, index) =>
+            SIGN_IN_NAME_WORDS.has(word) ||
+            (word === "one" && words[index + 1] === "time"),
+        );
+      };
+      const isSignInField = (element: HTMLInputElement | HTMLTextAreaElement) =>
+        element.type === "password" ||
+        (element.getAttribute("autocomplete") ?? "")
+          .toLowerCase()
+          .split(/\s+/u)
+          .some((token) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) ||
+        masked(element) ||
+        namedLikeSignIn(element.name) ||
+        namedLikeSignIn(element.id);
+      const asksForSignIn = (root: ParentNode): boolean => {
+        for (const element of root.querySelectorAll("*")) {
+          // A text area counts like an input: a one-time code is typed
+          // into either.
+          const field =
+            (element instanceof HTMLInputElement &&
+              element.type !== "hidden") ||
+            element instanceof HTMLTextAreaElement
+              ? element
+              : null;
+          if (
+            field !== null &&
+            isSignInField(field) &&
+            visible(field) &&
+            !concealedInTree(field)
+          ) {
+            return true;
+          }
+          if (element.shadowRoot && asksForSignIn(element.shadowRoot)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Under the desktop policy a sign-in is refused before anything is
+      // read or done; a web connection reads on with secrets withheld.
+      const signInRefusal = () => {
+        if (
+          pageOperation.signIn !== pageOperation.signInPolicies.handToMember
+        ) {
+          return null;
+        }
+        // An identity provider's page, here a frame the worker's address
+        // check of the top document does not see, is the member's whatever
+        // fields it shows (matched as `isIdentityProviderUrl` does).
+        const host =
+          URL.parse(window.location.href)?.hostname.toLowerCase() ?? "";
+        const onIdentityProvider = pageOperation.identityProviderHosts.some(
+          (pattern) =>
+            pattern.startsWith(".")
+              ? host.endsWith(pattern) && host.length > pattern.length
+              : host === pattern,
+        );
+        const asks = onIdentityProvider || asksForSignIn(document);
+        if (
+          pageOperation.kind === "snapshot" &&
+          pageOperation.purpose === pageOperation.purposes.signInCheck
+        ) {
+          return { refused: asks ? "sign-in" : "none" } as const;
+        }
+        if (!asks) {
+          return null;
+        }
+        return pageOperation.kind === "snapshot"
+          ? ({ refused: "sign-in" } as const)
+          : ({
+              code: pageOperation.errorCode.needsMember,
+              error: pageOperation.signInMessage,
+              ok: false,
+            } as const);
+      };
+      const refusedSignIn = signInRefusal();
+      if (refusedSignIn !== null) {
+        return refusedSignIn;
+      }
+      learnSecrets();
+
       if (pageOperation.kind === "snapshot") {
         const interactiveSelector = [
           "a[href]",
@@ -997,8 +1192,12 @@ const runPageOperation = async (
           "[role='textbox']",
         ].join(",");
         const elements: {
-          context?: string;
-          href?: string;
+          context:
+            | { type: typeof metadataType.absent }
+            | { type: typeof metadataType.present; value: string };
+          href:
+            | { type: typeof metadataType.absent }
+            | { type: typeof metadataType.present; value: string };
           name: string;
           path: string;
           role: string;
@@ -1021,11 +1220,11 @@ const runPageOperation = async (
                 const href = hrefFor(element);
                 const value = valueFor(element);
                 elements.push({
+                  context: metadataFor(context),
+                  href: metadataFor(href),
                   name: nameFor(element),
                   path,
                   role: roleFor(element),
-                  ...(context === undefined ? {} : { context }),
-                  ...(href === undefined ? {} : { href }),
                   ...(value === undefined ? {} : { value }),
                 });
               }
@@ -1064,14 +1263,28 @@ const runPageOperation = async (
       }
       // Why the element can no longer take the action; null when it still
       // matches the snapshot and accepts it.
+      const targetMetadataMatches = (
+        expected:
+          | { type: typeof metadataType.absent }
+          | { type: typeof metadataType.present; value: string },
+        current: string | undefined,
+      ) => {
+        switch (expected.type) {
+          case metadataType.absent:
+            return current === undefined;
+          case metadataType.present:
+            return current === expected.value;
+          default:
+            expected satisfies never;
+            return panic("Unhandled browser target metadata type");
+        }
+      };
       const targetRefusal = (element: Element) => {
         if (
           nameFor(element) !== action.target.name ||
           roleFor(element) !== action.target.role ||
-          (action.target.href !== undefined &&
-            hrefFor(element) !== action.target.href) ||
-          (action.target.context !== undefined &&
-            contextFor(element) !== action.target.context)
+          !targetMetadataMatches(action.target.href, hrefFor(element)) ||
+          !targetMetadataMatches(action.target.context, contextFor(element))
         ) {
           return {
             error: "The referenced element changed after the page snapshot.",
@@ -1203,8 +1416,7 @@ const runPageOperation = async (
   });
 
 type ActionFrameCheck =
-  | { error: BrowserControlResult; ok: false }
-  | { ok: true; origin: string };
+  { error: BrowserControlResult; ok: false } | { ok: true; origin: string };
 
 /**
  * Reads the origin of the document an element ref points into and holds it
@@ -1261,13 +1473,24 @@ type DomActionOutcome =
   | { status: "dispatched" }
   | { status: "unobserved" };
 
-const injectDomAction = async (
-  tabId: number,
-  documentId: string,
-  path: string,
-  expectedOrigin: string,
-  command: BrowserControlElementCommand,
-): Promise<DomActionOutcome> => {
+type InjectDomActionOptions = {
+  command: BrowserControlElementCommand;
+  documentId: string;
+  /** The frame origin the worker checked; the action refuses any other. */
+  expectedOrigin: string;
+  path: string;
+  signIn: SignInPolicy;
+  tabId: number;
+};
+
+const injectDomAction = async ({
+  command,
+  documentId,
+  expectedOrigin,
+  path,
+  signIn,
+  tabId,
+}: InjectDomActionOptions): Promise<DomActionOutcome> => {
   let results: Awaited<ReturnType<typeof runPageOperation>>;
   try {
     results = await runPageOperation(
@@ -1278,8 +1501,13 @@ const injectDomAction = async (
         expectedOrigin,
         kind: "action",
         limits: BROWSER_CONTROL_LIMITS,
+        metadataType: BROWSER_CONTROL_TARGET_METADATA,
         path,
         shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+        signIn,
+        signInMessage: SIGN_IN_MESSAGE,
+        signInPolicies: SIGN_IN_POLICY,
+        identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
       },
     );
   } catch {
@@ -1313,17 +1541,68 @@ const injectDomAction = async (
   };
 };
 
+/**
+ * A tab's address as chat's tab list shows it: origin and path only. Query
+ * strings and fragments can carry what a page put there for itself, and
+ * `switch-tab` matches on the origin. Null for a page chat may not operate.
+ */
+const listedTabUrl = (rawUrl: string): string | null => {
+  const url = parseControllableUrl(rawUrl);
+  return url === null
+    ? null
+    : `${url.origin}${url.pathname}`.slice(0, BROWSER_CONTROL_LIMITS.urlChars);
+};
+
+/**
+ * Chat's tabs for a snapshot: the one just read first, at the URL that read
+ * returned; then chat's others, newest first, at the URL Chrome reports.
+ * Tabs that are only confined are never listed. A tab on a page chat may not
+ * operate (an error page, another scheme) is left out, since chat could not
+ * switch to it.
+ */
+const listChatTabs = async (
+  activeTabId: number,
+  activeUrl: string,
+): Promise<BrowserControlTab[]> => {
+  const others = operableTabIds(await readContainedTabs())
+    .filter((tabId) => tabId !== activeTabId)
+    .toReversed();
+  const tabs = await Promise.all(
+    others.map(async (tabId): Promise<BrowserControlTab | null> => {
+      const tab = await chrome.tabs.get(tabId).catch(() => null);
+      const url = tab?.url !== undefined ? listedTabUrl(tab.url) : null;
+      return url === null ? null : { active: false, tabId, url };
+    }),
+  );
+  const active = listedTabUrl(activeUrl);
+  return [
+    ...(active === null
+      ? []
+      : [{ active: true, tabId: activeTabId, url: active }]),
+    ...tabs.filter((tab) => tab !== null),
+  ].slice(0, BROWSER_CONTROL_LIMITS.tabs);
+};
+
 type ReadSnapshotOptions = {
   controllerId: string;
+  /**
+   * The only origin the page may be read on, and what to return otherwise.
+   * The page refuses before reading anything, and nothing is stored.
+   */
+  requiredOrigin?: { origin: string; refusal: BrowserControlResult };
+  signIn: SignInPolicy;
   tabId: number;
   textOffset: number;
 };
 
 const readSnapshot = async ({
   controllerId,
+  requiredOrigin,
+  signIn,
   tabId,
   textOffset,
 }: ReadSnapshotOptions): Promise<BrowserControlResult> => {
+  const handsSignInToMember = signIn === SIGN_IN_POLICY.handToMember;
   const tab = await chrome.tabs.get(tabId);
   if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
     return browserControlError(
@@ -1331,14 +1610,40 @@ const readSnapshot = async ({
       UNSUPPORTED_PAGE_MESSAGE,
     );
   }
+  if (handsSignInToMember && isIdentityProviderUrl(tab.url)) {
+    return needsMember();
+  }
+  // Every frame is checked before any is read: a frame without a sign-in
+  // is never read for a tab another frame hands to the member. Each frame
+  // checks again as it reads, for a sign-in that appears in between.
+  if (handsSignInToMember && (await tabAsksForSignIn(tabId))) {
+    return needsMember();
+  }
   const results = await runPageOperation(
     { allFrames: true, tabId },
     {
+      ...(requiredOrigin === undefined
+        ? {}
+        : { expectedTopOrigin: requiredOrigin.origin }),
       kind: "snapshot",
       limits: BROWSER_CONTROL_LIMITS,
+      metadataType: BROWSER_CONTROL_TARGET_METADATA,
+      purpose: SNAPSHOT_PURPOSE.read,
+      purposes: SNAPSHOT_PURPOSE,
       shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+      signIn,
+      signInPolicies: SIGN_IN_POLICY,
+      identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
     },
   );
+  // A sign-in in any frame, or a top document that turned out to be an
+  // identity provider's, is the member's: nothing is returned or stored.
+  if (
+    handsSignInToMember &&
+    results.some(({ result }) => v.is(signInRefusalSchema, result))
+  ) {
+    return needsMember();
+  }
   const frames = results.flatMap(({ documentId, frameId, result }) => {
     const parsed = v.safeParse(frameSnapshotSchema, result);
     return parsed.success
@@ -1348,6 +1653,17 @@ const readSnapshot = async ({
   // The tab URL was checked before injection; the page may have navigated
   // since, so the document that was actually read is checked again.
   const top = frames.find(({ frameId }) => frameId === TOP_FRAME_ID);
+  // A top document that refused, or that was read on another origin, is
+  // neither returned nor stored.
+  if (
+    requiredOrigin !== undefined &&
+    top?.snapshot.origin !== requiredOrigin.origin
+  ) {
+    return requiredOrigin.refusal;
+  }
+  if (handsSignInToMember && top && isIdentityProviderUrl(top.snapshot.url)) {
+    return needsMember();
+  }
   if (
     top &&
     !isControllableFrame({
@@ -1374,6 +1690,7 @@ const readSnapshot = async ({
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       revision: crypto.randomUUID(),
       tabId,
+      tabs: await listChatTabs(tabId, merged.url),
       ...merged,
     },
     status: "success",
@@ -1419,9 +1736,8 @@ const readSnapshot = async ({
  */
 const readOutcome = async (
   navigation: TabNavigationObserver,
-  controllerId: string,
   tabId: number,
-  signal: AbortSignal,
+  { controllerId, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
   for (let attempt = 0; attempt < OUTCOME_SNAPSHOT_ATTEMPTS; attempt += 1) {
     const settled = await navigation.waitForSettled(signal);
@@ -1436,14 +1752,25 @@ const readOutcome = async (
     const generation = navigation.generation();
     let result: BrowserControlResult | null;
     try {
-      result = await readSnapshot({ controllerId, tabId, textOffset: 0 });
+      result = await readSnapshot({
+        controllerId,
+        signIn,
+        tabId,
+        textOffset: 0,
+      });
     } catch {
       result = null;
     }
     if (navigation.generation() !== generation) {
       continue;
     }
-    if (result?.status === "success") {
+    // The action led to a sign-in: what happened is known, and the page
+    // is the member's.
+    if (
+      result?.status === "success" ||
+      (result?.status === "error" &&
+        result.code === BROWSER_CONTROL_ERROR_CODE.needsMember)
+    ) {
       return result;
     }
     return outcomeUnknown(
@@ -1462,23 +1789,34 @@ export type AdoptControlledTabResult =
 /**
  * Makes a tab the user already has open the controlled tab, so chat can read
  * and act on it without re-navigating. Same origin policy and containment as
- * a tab opened by `open`; the controller's own stella tab is never adopted.
+ * a tab opened by `open`; a tab stella runs in is never adopted, even after
+ * it navigated elsewhere.
  */
 export const adoptControlledTab = async (
   controllerId: string,
   tab: chrome.tabs.Tab,
+  /** Takes the browser back for this connection, once the tab qualifies. */
+  takeOver: (() => Promise<void>) | null,
 ): Promise<AdoptControlledTabResult> => {
-  const controller = await readBrowserController();
+  const [controller, stellaTabs] = await Promise.all([
+    readBrowserController(),
+    readStellaTabs(),
+  ]);
   if (
     controller?.controllerId !== controllerId ||
     tab.id === undefined ||
-    tab.id === controller.tabId ||
+    stellaTabs.has(tab.id) ||
     tab.url === undefined ||
     parseControllableUrl(tab.url) === null
   ) {
     return { status: "unsupported-page" };
   }
-  await containControlledTab(tab.id);
+  if (takeOver !== null) {
+    await takeOver();
+  }
+  // The user's hand-over always succeeds: at chat's tab limit the oldest of
+  // chat's other tabs stays confined but is no longer chat's.
+  await containControlledTab(tab.id, { adopted: true, atLimit: "drop-oldest" });
   await writeControlledTabState({
     adopted: true,
     controllerId,
@@ -1492,43 +1830,72 @@ export const adoptControlledTab = async (
 type OpenedControlledTab =
   | { status: "cancelled" }
   | { loaded: boolean; status: "navigated"; tabId: number }
+  | { status: "navigation-refused" }
+  | { status: "over-limit" }
   | { status: "unavailable" };
 
 /**
- * Points the controlled tab at an approved URL. A new tab starts at
- * `about:blank` so the containment rules are in place before it requests
- * anything.
+ * Points the controlled tab, or with `newTab` a tab created for it, at an
+ * approved URL. A new tab starts at `about:blank` so the containment rules
+ * are in place before it requests anything; the tab controlled until then
+ * stays contained beside it as one of chat's tabs.
  */
 const openControlledTab = async (
   controllerId: string,
   url: URL,
-  signal: AbortSignal,
+  { newTab, signal }: { newTab: boolean; signal: AbortSignal },
 ): Promise<OpenedControlledTab> => {
   const existing = await readControlledTab(controllerId);
+  const reused = newTab ? null : existing;
   const tabId =
-    existing?.tab.id ??
+    reused?.tab.id ??
     (await chrome.tabs.create({ active: true, url: "about:blank" })).id;
   if (tabId === undefined) {
     return { status: "unavailable" };
   }
-  // A tab created for this command and stopped before it navigated holds
-  // nothing; closing it leaves no controlled tab chat has never read.
+  // Not yet chat's: the tab Chrome just created is confined as unknown, and
+  // nothing else changed.
+  const closeCreatedTab = async (): Promise<void> => {
+    await forgetContainedTab(tabId);
+    await chrome.tabs.remove(tabId).catch(() => undefined);
+  };
+  // A tab created for this command that did not navigate holds nothing;
+  // closing it hands control back to the tab chat had, but only while that
+  // tab is still chat's: one the user navigated or that closed meanwhile is
+  // not taken back, and no tab is left controlled. Either way no controlled
+  // tab is one chat has never read.
   const discardCreatedTab = async (): Promise<void> => {
-    if (existing === null) {
-      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-      await forgetContainedTab(tabId);
-      await chrome.tabs.remove(tabId).catch(() => undefined);
+    if (reused !== null) {
+      return;
     }
+    const restored =
+      existing === null ? null : await switchContainedTab(existing.state.tabId);
+    if (existing !== null && restored?.status === "switched") {
+      await writeControlledTabState({
+        ...existing.state,
+        adopted: restored.adopted,
+      });
+    } else {
+      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
+    }
+    await closeCreatedTab();
   };
   if (isStopped(signal)) {
-    await discardCreatedTab();
+    if (reused === null) {
+      await closeCreatedTab();
+    }
     return { status: "cancelled" };
   }
-  await containControlledTab(tabId);
+  // Checked again where the tab joins chat's: a tab a page opened since the
+  // caller's check may have taken the last place.
+  if ((await containControlledTab(tabId)) === "over-limit") {
+    await closeCreatedTab();
+    return { status: "over-limit" };
+  }
   await writeControlledTabState({
-    adopted: existing?.state.adopted ?? false,
+    adopted: reused?.state.adopted ?? false,
     controllerId,
-    settled: existing?.state.settled ?? null,
+    settled: reused?.state.settled ?? null,
     snapshot: null,
     tabId,
   });
@@ -1538,7 +1905,16 @@ const openControlledTab = async (
   }
   const navigation = createTabNavigationObserver(tabId);
   try {
-    await chrome.tabs.update(tabId, { active: true, url: url.href });
+    const navigated = await Result.tryPromise(
+      async () =>
+        await chrome.tabs.update(tabId, { active: true, url: url.href }),
+    );
+    if (Result.isError(navigated)) {
+      // Chrome refused the navigation, so the page never loaded: a new tab
+      // is discarded as if stopped.
+      await discardCreatedTab();
+      return { status: "navigation-refused" };
+    }
     return {
       loaded: await navigation.waitForNavigation(signal),
       status: "navigated",
@@ -1556,6 +1932,14 @@ type ExecuteBrowserCommandOptions = {
   observedTab: BrowserObservedTab | null;
   /** Aborts when chat stops the command or control changes. */
   signal: AbortSignal;
+  /** How a page that asks for a sign-in is treated; set by the transport. */
+  signIn: SignInPolicy;
+  /**
+   * For an `open` by a controller that does not hold the browser: hands it
+   * over, run once every check of the open passed and right before the tab
+   * changes. `null` when the controller holds it already.
+   */
+  takeOver: (() => Promise<void>) | null;
 };
 
 /** The tab's top document now; see `TopDocument`. */
@@ -1614,7 +1998,10 @@ type ControlledTab = NonNullable<Awaited<ReturnType<typeof readControlledTab>>>;
  */
 type CommandProgress = { dispatched: boolean };
 
-type CommandRun = Pick<ExecuteBrowserCommandOptions, "budget" | "signal"> & {
+type CommandRun = Pick<
+  ExecuteBrowserCommandOptions,
+  "budget" | "signal" | "signIn" | "takeOver"
+> & {
   controllerId: string;
   progress: CommandProgress;
 };
@@ -1626,8 +2013,10 @@ const readCommandIdentity = async (
   observedTab: BrowserObservedTab | null,
 ) => {
   const tabId = controlledTab?.tab.id;
+  // Only these move the controlled tab away from the page it shows.
   const isNavigation =
-    command.action === BROWSER_CONTROL_ACTION.open ||
+    (command.action === BROWSER_CONTROL_ACTION.open &&
+      command.newTab !== true) ||
     command.action === BROWSER_CONTROL_ACTION.goBack;
   return checkCommandIdentity({
     command,
@@ -1657,7 +2046,7 @@ const runOpen = async (
     BrowserControlCommand,
     { action: typeof BROWSER_CONTROL_ACTION.open }
   >,
-  { budget, controllerId, progress, signal }: CommandRun,
+  { budget, controllerId, progress, signal, signIn, takeOver }: CommandRun,
 ): Promise<BrowserControlResult> => {
   const requested = parseControllableUrl(command.url);
   if (requested === null) {
@@ -1666,15 +2055,54 @@ const runOpen = async (
       "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
     );
   }
+  const newTab = command.newTab === true;
+  const tabLimitReached = (): BrowserControlResult =>
+    browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
+      `Chat already has ${BROWSER_CONTROL_LIMITS.tabs} tabs open, the most it may keep. Switch to one of them with switch-tab, or open the page in the current tab without newTab.`,
+    );
+  // Spares creating a tab only to close it; the limit itself holds where
+  // the tab joins chat's.
+  // A takeover's new holder keeps none of the previous holder's tabs: the
+  // limit then holds where the tab joins.
+  if (
+    newTab &&
+    takeOver === null &&
+    chatTabsAtLimit(await readContainedTabs())
+  ) {
+    return tabLimitReached();
+  }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
   }
+  // Nothing refused the page: only now may the browser change hands.
+  if (takeOver !== null) {
+    if (isStopped(signal)) {
+      await budget.refund();
+      return cancelled();
+    }
+    await takeOver();
+  }
   progress.dispatched = true;
-  const opened = await openControlledTab(controllerId, requested, signal);
+  const opened = await openControlledTab(controllerId, requested, {
+    newTab,
+    signal,
+  });
   if (opened.status === "cancelled") {
     await budget.refund();
     return cancelled();
+  }
+  if (opened.status === "over-limit") {
+    await budget.refund();
+    return tabLimitReached();
+  }
+  if (opened.status === "navigation-refused") {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+      "Chrome refused to open this page in the tab; nothing was loaded.",
+    );
   }
   if (opened.status === "unavailable") {
     return browserControlError(
@@ -1696,14 +2124,26 @@ const runOpen = async (
   const landed = await chrome.tabs.get(opened.tabId);
   const landedUrl =
     landed.url === undefined ? null : parseControllableUrl(landed.url);
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    landedUrl !== null &&
+    isIdentityProviderUrl(landedUrl.href)
+  ) {
+    return needsMember();
+  }
   if (landedUrl === null || landedUrl.origin !== requested.origin) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.redirected,
       `The page redirected away from ${requested.origin} to ${landedUrl?.origin ?? "an unsupported address"} and was not read. Use snapshot to read it after approval.`,
     );
   }
+  // The tab now shows the page chat opened, whatever the user had navigated
+  // it to before. Its own commit was a plain link, which never counts as
+  // the user's, so this runs after it and a later user commit still counts.
+  await reclaimControlledTab(opened.tabId);
   return await readSnapshot({
     controllerId,
+    signIn,
     tabId: opened.tabId,
     textOffset: 0,
   });
@@ -1712,8 +2152,9 @@ const runOpen = async (
 const runGoBack = async (
   tabId: number,
   state: ControlledTabState,
-  { budget, controllerId, progress, signal }: CommandRun,
+  run: CommandRun,
 ): Promise<BrowserControlResult> => {
+  const { budget, progress, signal } = run;
   const navigation = createTabNavigationObserver(tabId);
   try {
     const overBudget = await budget.charge();
@@ -1727,18 +2168,209 @@ const runGoBack = async (
     }
     progress.dispatched = true;
     await navigateBack(tabId);
-    return await readOutcome(navigation, controllerId, tabId, signal);
+    return await readOutcome(navigation, tabId, run);
   } finally {
     navigation.dispose();
   }
 };
 
-const runElementAction = async (
-  command: BrowserControlElementCommand,
-  { state, tab, tabId }: ControlledTab & { tabId: number },
-  documentId: string | null,
-  { budget, controllerId, progress, signal }: CommandRun,
+/** What the user had in front before a tab was shown, to put back. */
+type Foreground = {
+  /** The window that had focus; null when none did. */
+  focusedWindowId: number | null;
+  /** The tab that was active in the shown tab's window. */
+  tabId: number | null;
+};
+
+/**
+ * Makes the tab active in its window and focuses that window, after noting
+ * what was in front. Any failure, reading or showing, fails the whole step.
+ */
+const showTab = async (tabId: number, windowId: number) =>
+  await Result.tryPromise(async (): Promise<Foreground> => {
+    const [active, focused] = await Promise.all([
+      chrome.tabs.query({ active: true, windowId }),
+      chrome.windows.getLastFocused(),
+    ]);
+    await chrome.tabs.update(tabId, { active: true });
+    await chrome.windows.update(windowId, { focused: true });
+    return {
+      focusedWindowId: focused.focused ? (focused.id ?? null) : null,
+      tabId: active.at(0)?.id ?? null,
+    };
+  });
+
+/** Puts back the tab and window focus `showTab` found. */
+const restoreForeground = async ({ focusedWindowId, tabId }: Foreground) =>
+  await Result.tryPromise(async () => {
+    if (tabId !== null) {
+      await chrome.tabs.update(tabId, { active: true });
+    }
+    if (focusedWindowId !== null) {
+      await chrome.windows.update(focusedWindowId, { focused: true });
+    }
+  });
+
+/** What makes a tab chat's to switch to: who opened it, never a listing. */
+const NOT_A_CHAT_TAB =
+  "That tab is not one of chat's tabs. Chat may switch only to a tab it controlled before, or one a page in its tabs opened, that the user has not navigated themselves since. Open the page instead.";
+
+/**
+ * Hands control to another of chat's tabs: one chat controlled before, or
+ * one a page in chat's tabs opened, unless the user navigated it since. A
+ * stella tab, a tab of the user's, one only confined and a tab of unknown
+ * owner are refused. The tab must still be on the origin the
+ * user approved, both before control moves and in the page then read.
+ */
+const runSwitchTab = async (
+  command: Extract<
+    BrowserControlCommand,
+    { action: typeof BROWSER_CONTROL_ACTION.switchTab }
+  >,
+  { budget, controllerId, signal, signIn }: CommandRun,
 ): Promise<BrowserControlResult> => {
+  const { tabId } = command;
+  const [owner, stellaTabs] = await Promise.all([
+    readTabOwner(tabId),
+    readStellaTabs(),
+  ]);
+  if ((owner !== "controlled" && owner !== "chat") || stellaTabs.has(tabId)) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      NOT_A_CHAT_TAB,
+    );
+  }
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (tab === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabClosed,
+      "That tab was closed. Switch to another of chat's tabs or open the page.",
+    );
+  }
+  const approved = parseControllableUrl(command.url);
+  const current = tab.url === undefined ? null : parseControllableUrl(tab.url);
+  if (approved === null || current === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+      UNSUPPORTED_PAGE_MESSAGE,
+    );
+  }
+  const leftApprovedOrigin = (): BrowserControlResult =>
+    browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      `That tab no longer shows ${approved.origin} and was not read. Take a snapshot for chat's tabs and their current addresses.`,
+    );
+  if (current.origin !== approved.origin) {
+    return leftApprovedOrigin();
+  }
+  const overBudget = await budget.charge();
+  if (overBudget !== null) {
+    return budgetExceeded(overBudget);
+  }
+  if (isStopped(signal)) {
+    await budget.refund();
+    return cancelled();
+  }
+  // The user sees the tab chat will operate, as with `open`: active in its
+  // window, and that window focused. It comes to the front before anything
+  // is committed, so a tab Chrome cannot show changes nothing.
+  const shown = await showTab(tabId, tab.windowId);
+  if (Result.isError(shown)) {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "Chrome could not bring that tab to the front, so control stayed where it was. Take a snapshot to see chat's tabs.",
+    );
+  }
+  if (isStopped(signal)) {
+    // Control never moved, so what the user saw before comes back too.
+    if (Result.isError(await restoreForeground(shown.value))) {
+      return outcomeUnknown(
+        "The tab was brought to the front, and Chrome could not put the previous one back; control stayed on the tab chat had.",
+      );
+    }
+    await budget.refund();
+    return cancelled();
+  }
+  // Containment moves first: it re-checks the tab is chat's in the same step,
+  // and nothing else needs undoing when it refuses. Should the worker stop
+  // before the second write, the stored controlled tab is still the old one,
+  // with the snapshot the web client last saw: it is confined and chat's,
+  // so the next command acts where chat expects, and nothing the user owns
+  // is reached.
+  const switched = await switchContainedTab(tabId);
+  if (switched.status === "refused") {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      NOT_A_CHAT_TAB,
+    );
+  }
+  const previous = await readControlledTabState();
+  if (previous?.controllerId !== controllerId || previous.tabId !== tabId) {
+    await writeControlledTabState({
+      // A tab the user handed over keeps the stricter checks that go with it.
+      adopted: switched.adopted,
+      controllerId,
+      settled: null,
+      snapshot: null,
+      tabId,
+    });
+  }
+  // Control has moved; the web client still knows the old tab, so a stop
+  // from here on asks it to read the page before anything else.
+  if (isStopped(signal)) {
+    return outcomeUnknown(STOPPED_AFTER_DISPATCH);
+  }
+  // Read only on the approved origin: a page that left it in the meantime
+  // refuses before anything is read, and nothing is stored.
+  return await readSnapshot({
+    controllerId,
+    requiredOrigin: { origin: approved.origin, refusal: leftApprovedOrigin() },
+    signIn,
+    tabId,
+    textOffset: 0,
+  });
+};
+
+/**
+ * Whether any frame of the tab asks for a sign-in now. A desktop action
+ * checks the whole tab before it acts: a sign-in frame that appeared after
+ * the last read must stop the action, not only the read that follows it.
+ */
+const tabAsksForSignIn = async (tabId: number): Promise<boolean> => {
+  const results = await runPageOperation(
+    { allFrames: true, tabId },
+    {
+      kind: "snapshot",
+      limits: BROWSER_CONTROL_LIMITS,
+      metadataType: BROWSER_CONTROL_TARGET_METADATA,
+      purpose: SNAPSHOT_PURPOSE.signInCheck,
+      purposes: SNAPSHOT_PURPOSE,
+      shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+      signIn: SIGN_IN_POLICY.handToMember,
+      signInPolicies: SIGN_IN_POLICY,
+      identityProviderHosts: IDENTITY_PROVIDER_HOSTS,
+    },
+  );
+  return results.some(({ result }) => v.is(signInRefusalSchema, result));
+};
+
+type ElementActionArgs = {
+  command: BrowserControlElementCommand;
+  controlledTab: ControlledTab & { tabId: number };
+  /** The document the element's frame showed when the page was read. */
+  documentId: string | null;
+  run: CommandRun;
+};
+
+const runElementAction = async ({
+  command,
+  controlledTab: { state, tab, tabId },
+  documentId,
+  run,
+}: ElementActionArgs): Promise<BrowserControlResult> => {
+  const { budget, progress, signal, signIn } = run;
   if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
@@ -1756,6 +2388,12 @@ const runElementAction = async (
   if (!frame.ok) {
     return frame.error;
   }
+  if (
+    signIn === SIGN_IN_POLICY.handToMember &&
+    (await tabAsksForSignIn(tabId))
+  ) {
+    return needsMember();
+  }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
@@ -1768,13 +2406,14 @@ const runElementAction = async (
       return cancelled();
     }
     progress.dispatched = true;
-    const outcome = await injectDomAction(
-      tabId,
-      documentId,
-      reference.path,
-      frame.origin,
+    const outcome = await injectDomAction({
       command,
-    );
+      documentId,
+      expectedOrigin: frame.origin,
+      path: reference.path,
+      signIn,
+      tabId,
+    });
     if (outcome.status === "refused") {
       // The page refused before acting, so the snapshot still describes it
       // and nothing was spent.
@@ -1787,7 +2426,7 @@ const runElementAction = async (
         "Chrome lost the page before the action reported back.",
       );
     }
-    return await readOutcome(navigation, controllerId, tabId, signal);
+    return await readOutcome(navigation, tabId, run);
   } finally {
     navigation.dispose();
   }
@@ -1796,10 +2435,23 @@ const runElementAction = async (
 const runBrowserCommand = async (
   controllerId: string,
   command: BrowserControlCommand,
-  { budget, observedTab, signal }: ExecuteBrowserCommandOptions,
+  {
+    budget,
+    observedTab,
+    signal,
+    signIn,
+    takeOver,
+  }: ExecuteBrowserCommandOptions,
   progress: CommandProgress,
 ): Promise<BrowserControlResult> => {
-  const run: CommandRun = { budget, controllerId, progress, signal };
+  const run = {
+    budget,
+    controllerId,
+    progress,
+    signal,
+    signIn,
+    takeOver,
+  };
   try {
     if (isStopped(signal)) {
       return cancelled();
@@ -1816,10 +2468,13 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.open) {
       return await runOpen(command, run);
     }
+    if (command.action === BROWSER_CONTROL_ACTION.switchTab) {
+      return await runSwitchTab(command, run);
+    }
     if (!controlledTab) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.noControlledTab,
-        "Open a page with stella before using this action.",
+        "No tab is under chat's control. Open a page, or switch to one of chat's tabs listed in the latest snapshot.",
       );
     }
     const tabId = controlledTab.tab.id;
@@ -1832,6 +2487,7 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.snapshot) {
       return await readSnapshot({
         controllerId,
+        signIn,
         tabId,
         textOffset: command.textOffset ?? 0,
       });
@@ -1839,12 +2495,12 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.goBack) {
       return await runGoBack(tabId, controlledTab.state, run);
     }
-    return await runElementAction(
+    return await runElementAction({
       command,
-      { ...controlledTab, tabId },
-      identity.documentId,
+      controlledTab: { ...controlledTab, tabId },
+      documentId: identity.documentId,
       run,
-    );
+    });
   } catch {
     if (progress.dispatched) {
       return outcomeUnknown(

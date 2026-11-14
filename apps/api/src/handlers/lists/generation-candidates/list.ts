@@ -1,6 +1,9 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
   legalListGenerationCandidates,
@@ -10,8 +13,8 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -27,26 +30,32 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedLegalListGenerationCandidateId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
-  listId: tSafeId("legalList"),
-  runId: tSafeId("legalListGenerationRun"),
+  listId: resourceIdSchema("legalList"),
+  runId: resourceIdSchema("legalListGenerationRun"),
 });
-const querySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.legalListGenerationCandidatesMax,
-    }),
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.legalListGenerationCandidatesMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 const config = {
   contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one generation run's candidates in proposal order with cursor " +
-    "pagination: the proposed item fields, the candidate's status, the item " +
-    "it was accepted as when it has one, and the sources it cites. The run's " +
-    "own status is returned alongside the page.",
+    "pagination: the proposed item fields, a fact's proposed fact details " +
+    "(null for other item types; a null scoring is accepted as included), " +
+    "the candidate's status, the item it was accepted as when it has one, " +
+    "and the sources it cites. The run's own status is returned alongside " +
+    "the page.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -133,6 +142,15 @@ const readGenerationCandidates = createSafeHandler(
             dueDate: legalListGenerationCandidates.dueDate,
             suggestedAssigneeUserIds:
               legalListGenerationCandidates.suggestedAssigneeUserIds,
+            occurredOn: legalListGenerationCandidates.occurredOn,
+            occurredOnPrecision:
+              legalListGenerationCandidates.occurredOnPrecision,
+            evidenceKind: legalListGenerationCandidates.evidenceKind,
+            medium: legalListGenerationCandidates.medium,
+            confidence: legalListGenerationCandidates.confidence,
+            interpretationNote:
+              legalListGenerationCandidates.interpretationNote,
+            scoring: legalListGenerationCandidates.scoring,
             status: legalListGenerationCandidates.status,
             acceptedEntityId: legalListGenerationCandidates.acceptedEntityId,
           })
@@ -207,8 +225,32 @@ const readGenerationCandidates = createSafeHandler(
     return Result.ok({
       ...page,
       runStatus: result.runStatus,
-      items: page.items.map((candidate) =>
-        Object.assign(candidate, {
+      items: page.items.map(
+        ({
+          occurredOn,
+          occurredOnPrecision,
+          evidenceKind,
+          medium,
+          confidence,
+          interpretationNote,
+          scoring,
+          ...candidate
+        }) => ({
+          ...candidate,
+          factDetails:
+            candidate.itemType === LIST_ITEM_TYPE.FACT
+              ? {
+                  occurredOn:
+                    occurredOn === null || occurredOnPrecision === null
+                      ? null
+                      : { date: occurredOn, precision: occurredOnPrecision },
+                  evidenceKind,
+                  medium,
+                  confidence,
+                  interpretationNote,
+                  scoring,
+                }
+              : null,
           sources:
             result.sourcesByCandidate.get(candidate.id) ??
             panic(`Candidate ${candidate.id} missing from source grouping`),

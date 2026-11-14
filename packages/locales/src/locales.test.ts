@@ -7,8 +7,8 @@ import {
   LANGUAGES,
   resolveUiLocale,
   toLanguageCode,
-  UI_LOCALE_DIRECTIONS,
   UI_LANGUAGES,
+  UI_LOCALE_DIRECTIONS,
 } from "./index.js";
 
 test("locale directions preserve their public literal types", () => {

@@ -35,15 +35,18 @@ const devErrorContext = (
 };
 
 export const noopAnalytics: Analytics = {
-  captureError: (error, context) => {
+  captureError: (error, { context }) => {
     if (error instanceof CancelledError) {
       return;
     }
     logDevError(error, devErrorContext(context));
   },
   capturePageViewed: noop,
+  capturePageHangSuspected: noop,
+  captureLongAnimationFrame: noop,
   captureGuideStepSkipped: noop,
   captureProvisionPlacementGaps: noop,
+  captureCaseLawAnalysisTiming: noop,
   captureInspectorRestoreRecovered: noop,
   captureFollowupShown: noop,
   captureFollowupSelected: noop,

@@ -2,30 +2,30 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
 import {
-  registryString,
-  registryExtras,
+  expectNullableString,
   expectRegistryOutcome,
   expectRegistryResponses,
   forEachRegistryMutation,
-  expectNullableString,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupFullRecordByIco, searchByName } from "./client.js";
 import {
-  parseExtract,
-  parseSearchHit,
-  parseHistory,
   parseDocument,
+  parseExtract,
+  parseHistory,
   parseRelatedHit,
+  parseSearchHit,
 } from "./parse.js";
 import type {
-  OrsrRawExtractResponse,
   OrsrRawDocument,
+  OrsrRawExtractResponse,
   OrsrRawRelatedHit,
 } from "./types.js";
 
@@ -135,7 +135,8 @@ const normalizedName = (value: string | undefined) =>
 test(
   "extract and history preserve selected source identity and temporal provenance",
   () => {
-    fc.assert(
+    assertProperty(
+      "extract and history preserve selected source identity and temporal provenance",
       fc.property(extract, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseExtract(enriched));
@@ -193,7 +194,7 @@ test(
           }
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -229,7 +230,8 @@ const related = fc
 test(
   "documents and related search retain normalized names and reference atoms",
   () => {
-    fc.assert(
+    assertProperty(
+      "documents and related search retain normalized names and reference atoms",
       fc.property(
         document,
         related,
@@ -283,7 +285,7 @@ test(
           }
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -292,7 +294,8 @@ test(
 test(
   "current nested records retain identity and stakeholder role strings",
   () => {
-    fc.assert(
+    assertProperty(
+      "current nested records retain identity and stakeholder role strings",
       fc.property(
         registryString,
         registryString,
@@ -343,7 +346,7 @@ test(
           expect(typeof stakeholder?.organName).toBe("string");
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),

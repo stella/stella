@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { getAuth } from "@/api/lib/auth";
-import { initRequestContext } from "@/api/lib/observability/request-context";
-import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
+import { apiPipeline } from "@/api/api-pipeline";
+import { createHttpApp } from "@/api/http/app";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { createSyntheticRoute } from "./routes";
 
@@ -26,18 +25,26 @@ const mintRequest = (credential?: string) =>
         ? {}
         : { "x-stella-synthetic-key": credential, "user-agent": "monitor" },
   });
-const appFor = (options: Parameters<typeof createSyntheticRoute>[0]) =>
-  new Elysia()
-    .onRequest(({ request }) => initRequestContext(request))
-    .onError(answerRequestError)
-    .use(createSyntheticRoute(options))
-    .mount(getAuth().handler);
+// The production pipeline, so the route sees the request id every request
+// carries.
+const serveFor = (options: Parameters<typeof createSyntheticRoute>[0]) =>
+  serveForTest(
+    createHttpApp({
+      routes: createSyntheticRoute(options),
+      middleware: apiPipeline,
+    }),
+  );
+const describeResponse = async (response: Response) => ({
+  status: response.status,
+  body: new Uint8Array(await response.arrayBuffer()),
+  contentType: response.headers.get("content-type"),
+});
 
 test("configured credentials mint the session and preserve its expiry", async () => {
   const received: Parameters<
     Parameters<typeof createSyntheticRoute>[0]["mintSession"]
   >[0][] = [];
-  const app = appFor({
+  await using server = serveFor({
     keys,
     nowMs: () => nowMs,
     reserveBudget: async () => true,
@@ -46,7 +53,7 @@ test("configured credentials mint the session and preserve its expiry", async ()
       return session;
     },
   });
-  const response = await app.handle(mintRequest(key));
+  const response = await server.fetch(mintRequest(key));
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual(session);
   expect(received).toEqual([
@@ -60,48 +67,43 @@ test("configured credentials mint the session and preserve its expiry", async ()
 
 test("unavailable credentials have the same response as an unmounted route", async () => {
   const mintSession = async () => session;
-  const unavailable = appFor({ keys: undefined, mintSession });
-  const reference = await unavailable.handle(mintRequest());
-  const expected = {
-    status: reference.status,
-    body: new Uint8Array(await reference.arrayBuffer()),
-    contentType: reference.headers.get("content-type"),
-  };
+  await using unavailable = serveFor({ keys: undefined, mintSession });
+  const expected = await describeResponse(
+    await unavailable.fetch(mintRequest()),
+  );
   expect(expected).toEqual({
     status: 404,
     body: new Uint8Array(),
     contentType: null,
   });
-  const configured = appFor({
+  await using configured = serveFor({
     keys,
     mintSession,
     reserveBudget: async () => true,
     nowMs: () => nowMs,
   });
-  const expired = appFor({
+  await using expired = serveFor({
     keys,
     mintSession,
     nowMs: () => Date.parse(notAfter),
   });
-  for (const [app, credential] of [
-    [configured, undefined],
-    [configured, `stl_syn_${"b".repeat(43)}`],
-    [configured, "malformed"],
-    [expired, key],
-    [unavailable, key],
-  ] as const) {
-    const response = await app.handle(mintRequest(credential));
-    expect({
-      status: response.status,
-      body: new Uint8Array(await response.arrayBuffer()),
-      contentType: response.headers.get("content-type"),
-    }).toEqual(expected);
+  const cases = [
+    { server: configured, credential: undefined },
+    { server: configured, credential: `stl_syn_${"b".repeat(43)}` },
+    { server: configured, credential: "malformed" },
+    { server: expired, credential: key },
+    { server: unavailable, credential: key },
+  ];
+  for (const { server, credential } of cases) {
+    expect(
+      await describeResponse(await server.fetch(mintRequest(credential))),
+    ).toEqual(expected);
   }
 });
 
 test("the next configured credential is accepted during rotation", async () => {
   const next = `stl_syn_${"c".repeat(43)}`;
-  const app = appFor({
+  await using server = serveFor({
     keys: [...keys, { label: "next", sha256: sha256Hex(next), notAfter }],
     nowMs: () => nowMs,
     reserveBudget: async () => true,
@@ -110,11 +112,11 @@ test("the next configured credential is accepted during rotation", async () => {
       return session;
     },
   });
-  expect((await app.handle(mintRequest(next))).status).toBe(200);
+  expect((await server.fetch(mintRequest(next))).status).toBe(200);
 });
 
 test("the session budget refuses requests before minting", async () => {
-  const app = appFor({
+  await using server = serveFor({
     keys,
     nowMs: () => nowMs,
     reserveBudget: async () => false,
@@ -122,65 +124,56 @@ test("the session budget refuses requests before minting", async () => {
       throw new TypeError("Unexpected mint");
     },
   });
-  expect((await app.handle(mintRequest(key))).status).toBe(429);
+  expect((await server.fetch(mintRequest(key))).status).toBe(429);
 });
 
 test("disabled session controls return the unavailable response", async () => {
-  const app = appFor({
+  await using server = serveFor({
     keys,
     nowMs: () => nowMs,
     reserveBudget: async () => true,
     mintSession: async () => null,
   });
-  const response = await app.handle(mintRequest(key));
-  const reference = await appFor({
+  await using reference = serveFor({
     keys: undefined,
     mintSession: async () => null,
-  }).handle(mintRequest(key));
-  expect(response.status).toBe(reference.status);
-  expect(new Uint8Array(await response.arrayBuffer())).toEqual(
-    new Uint8Array(await reference.arrayBuffer()),
-  );
-  expect(response.headers.get("content-type")).toBe(
-    reference.headers.get("content-type"),
+  });
+  expect(await describeResponse(await server.fetch(mintRequest(key)))).toEqual(
+    await describeResponse(await reference.fetch(mintRequest(key))),
   );
 });
 
 test("unavailable credentials ignore request body content", async () => {
-  const app = appFor({
+  await using server = serveFor({
     keys,
     nowMs: () => nowMs,
     mintSession: async () => null,
   });
-  const response = await app.handle(
+  await using reference = serveFor({
+    keys: undefined,
+    mintSession: async () => null,
+  });
+  const response = await server.fetch(
     new Request("http://localhost/synthetic/session", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{",
     }),
   );
-  const reference = await appFor({
-    keys: undefined,
-    mintSession: async () => null,
-  }).handle(mintRequest());
-  expect(response.status).toBe(reference.status);
-  expect(new Uint8Array(await response.arrayBuffer())).toEqual(
-    new Uint8Array(await reference.arrayBuffer()),
-  );
-  expect(response.headers.get("content-type")).toBe(
-    reference.headers.get("content-type"),
+  expect(await describeResponse(response)).toEqual(
+    await describeResponse(await reference.fetch(mintRequest())),
   );
 });
 
 test("the session credential is read only from its dedicated header", async () => {
-  const app = appFor({
+  await using server = serveFor({
     keys,
     nowMs: () => nowMs,
     mintSession: async () => {
       throw new TypeError("Unexpected mint");
     },
   });
-  const response = await app.handle(
+  const response = await server.fetch(
     new Request("http://localhost/synthetic/session", {
       method: "POST",
       headers: { authorization: `Bearer ${key}` },

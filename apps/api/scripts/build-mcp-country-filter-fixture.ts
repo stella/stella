@@ -6,8 +6,8 @@ import {
   parseCaseLawLaunchReadiness,
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
-  publicCountriesFor,
   PUBLIC_COUNTRY_CAPABILITIES,
+  publicCountriesFor,
 } from "@stll/api-contract/public-country-capability";
 
 // An explicitly launched country carries no serving receipt: the app refuses

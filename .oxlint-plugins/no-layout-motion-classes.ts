@@ -14,8 +14,14 @@
 // ignores mobile browser chrome and leaves the page scrolled or overlapped.
 // The dynamic and small viewport units (`dvh`, `svh`) track it.
 //
+// Touch reveal: a hover-only affordance stays visible on touch screens through
+// the `pointer-coarse:` variant. The `hover: none` media query (written as
+// `[@media(hover:none)]:`) is the competing spelling; it also matches a stylus
+// without hover on a fine pointer, which is not the intent.
+//
 // Flagged:
 //   <div className="transition-all duration-150" />
+//   <div className="opacity-0 [@media(hover:none)]:opacity-100" /> -> pointer-coarse:
 //   <div className="transition-[height] md:transition-[top]" />
 //   <div className={cn("min-h-screen", className)} />        → min-h-dvh
 //   <div className="max-h-[70vh]" />
@@ -95,8 +101,17 @@ const durationMs = (utility: string): number | undefined => {
 // `scale-0` and its axis forms, plus the arbitrary zero spellings.
 const SCALE_FROM_ZERO = /^-?scale-(?:[xy]-)?(?:0|\[0(?:\.0+)?\])$/u;
 
+// `hover: none` / `any-hover: none` in any spelling, including inside an
+// arbitrary `[@media(...)]` variant, where whitespace is written as `_`.
+const HOVER_NONE = /hover_*:_*none(?![a-z-])/u;
+
+// The one spelling with a provable equivalent; any other is reported only.
+const HOVER_NONE_VARIANT = "[@media(hover:none)]:";
+const TOUCH_VARIANT = "pointer-coarse:";
+
 type MessageId =
   | "easeIn"
+  | "hoverNone"
   | "layoutTransition"
   | "longDuration"
   | "scaleFromZero"
@@ -212,6 +227,9 @@ const messageIdIn = (
   value: string,
   allowedUtilities: ReadonlySet<string>,
 ): MessageId | undefined => {
+  if (HOVER_NONE.test(value)) {
+    return "hoverNone";
+  }
   for (const token of value.split(SPLIT)) {
     if (token === "") {
       continue;
@@ -242,7 +260,9 @@ const rewriteToken = (token: string): string => {
 };
 
 const rewriteClassString = (source: string): string =>
-  source.replaceAll(/[^\s"'`{}()]+/gu, rewriteToken);
+  source
+    .replaceAll(HOVER_NONE_VARIANT, () => TOUCH_VARIANT)
+    .replaceAll(/[^\s"'`{}()]+/gu, rewriteToken);
 
 const isClassNameAttribute = (node) =>
   node?.type === "JSXAttribute" &&
@@ -355,34 +375,42 @@ export default eslintCompatPlugin({
         ],
         messages: {
           easeIn:
-            "conventions-ux (Interactions & Animations): never use `ease-in` " +
+            "Never use `ease-in` " +
             "for UI; it starts slowly, so the interface feels late to react. " +
             "Entering and exiting surfaces use ease-out; movement on screen " +
             "uses ease-in-out.",
           longDuration:
-            "conventions-ux (Interactions & Animations): UI transitions stay " +
+            "UI transitions stay " +
             "at or under 300ms (press 100-160ms, tooltip and small popover " +
             "125-200ms, dropdown 150-250ms, dialog and sheet up to 300ms). " +
             "Decorative or teaching motion that is not interface feedback " +
             "goes in the rule's allowedFiles with a reason.",
           scaleFromZero:
-            "conventions-ux (Interactions & Animations): never enter or exit " +
+            "Never enter or exit " +
             "from `scale-0`; nothing in the real world appears from a point. " +
             "Start near full size with opacity 0 (scale-95 or scale-98 with " +
             "opacity-0), scaled from the trigger with origin-(--transform-origin).",
+          hoverNone:
+            "conventions-ux (Interactions & Animations): keep hover-only " +
+            "affordances visible on touch with the `pointer-coarse:` variant " +
+            "(for example `pointer-coarse:opacity-100`), not a " +
+            "`hover: none` media query.",
           layoutTransition:
-            "conventions-ux (Interactions & Animations): animate transform " +
-            "and opacity only. This transition names a layout property " +
-            "(width, height, top, left, right, bottom, inset, margin, " +
-            "padding, flex-basis, font-size), which forces a layout recalc " +
-            "on every frame. Use scale/translate instead.",
+            "Animate transform and opacity only. This transition names a " +
+            "layout property (width, height, top, left, right, bottom, " +
+            "inset, margin, padding, flex-basis, font-size), which forces a " +
+            "layout recalc on every frame. Use scale/translate instead. A " +
+            "surface that changes its own box (a disclosure panel, a " +
+            "collapsible rail, a popup positioner, a progress bar) may " +
+            "transition the box property it owns: list the exact utility " +
+            "in the rule's allowedFiles with its file and reason.",
           transitionAll:
-            "conventions-ux (Interactions & Animations): never transition " +
+            "Never transition " +
             "`all`; it repaints properties nobody chose to animate. Use " +
             "an exact compositable property: transition-opacity or " +
             "transition-transform.",
           viewportUnit:
-            "conventions-ux (Viewport & Responsive): `h-screen`/`w-screen` " +
+            "`h-screen`/`w-screen` " +
             "and `vh` lengths resolve against the largest viewport and " +
             "ignore mobile browser chrome, which causes scroll and overlap " +
             "bugs. Use the dynamic-viewport units: min-h-dvh, h-dvh, " +

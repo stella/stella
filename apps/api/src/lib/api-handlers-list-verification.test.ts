@@ -2,16 +2,26 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { env } from "@/api/env";
+import graphNeighbours from "@/api/handlers/lists/graph/neighbours/list";
+import graphNodes from "@/api/handlers/lists/graph/nodes/list";
+import graphPaths from "@/api/handlers/lists/graph/paths/list";
 import factDetails from "@/api/handlers/lists/items/fact-details/update";
 import sourceReview from "@/api/handlers/lists/items/sources/verification/update";
+import chronologyExport from "@/api/handlers/lists/verifications/chronology/export";
+import createComment from "@/api/handlers/lists/verifications/claim-comments/create";
+import deleteComment from "@/api/handlers/lists/verifications/claim-comments/delete";
+import listComments from "@/api/handlers/lists/verifications/claim-comments/list";
+import updateComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import bulkReview from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import review from "@/api/handlers/lists/verifications/claim-reviews/create";
+import listReviews from "@/api/handlers/lists/verifications/claim-reviews/list";
 import create from "@/api/handlers/lists/verifications/create";
 import get from "@/api/handlers/lists/verifications/get";
+import graph from "@/api/handlers/lists/verifications/graph/get";
 import latest from "@/api/handlers/lists/verifications/latest/list";
 import list from "@/api/handlers/lists/verifications/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -47,18 +57,29 @@ const context = (
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   request: new Request("https://example.test/lists"),
+  route: "/lists",
   set: { headers: {} },
 });
 
 const endpoints = {
+  graphNodes,
+  graphNeighbours,
+  graphPaths,
   create,
   list,
   get,
+  graph,
+  chronologyExport,
   latest,
   review,
   bulkReview,
+  listReviews,
   factDetails,
   sourceReview,
+  listComments,
+  createComment,
+  updateComment,
+  deleteComment,
 };
 
 describe("verification handler access admission", () => {
@@ -120,6 +141,7 @@ describe("verification handler access admission", () => {
       entityVersionId: createSafeId<"entityVersion">(),
       contentSha256: "a".repeat(64),
       evidence: { listId: createSafeId<"legalList">(), facts: [] },
+      scope: { kind: "whole" },
       status: "completed",
       errorCode: null,
       requestedBy: "user_a",
@@ -306,7 +328,7 @@ test.each(["active", "daily"] as const)(
                 insertAttempts += 1;
                 throw Object.assign(new TypeError("Postgres cap fixture"), {
                   code: "23514",
-                  constraint: `legal_list_verification_${reason}_cap`,
+                  constraint: `model_run_${reason}_cap`,
                 });
               },
             }),
@@ -315,7 +337,15 @@ test.each(["active", "daily"] as const)(
       };
       const capability =
         await CAPABILITY_DISPATCH["lists.verifications.create"].load();
-      for (const endpoint of [create, capability.default]) {
+      const capabilityEndpoint = capability["default"];
+      const isRestHandler = (value: unknown): value is typeof create =>
+        value === create;
+      if (!isRestHandler(capabilityEndpoint)) {
+        throw new TypeError(
+          "Verification capability must load the REST handler",
+        );
+      }
+      for (const endpoint of [create, capabilityEndpoint]) {
         const result = await endpoint.handler(
           asTestRaw({
             ...context(tx, {
@@ -344,11 +374,11 @@ test.each(["active", "daily"] as const)(
           status: "error",
           error: {
             type: "structured",
-            code: VERIFICATION_RUN_CAP_CODES[reason],
+            code: MODEL_RUN_CAP_CODES[reason],
             retryable: true,
             hint:
               reason === "active"
-                ? "Wait for an active verification to finish, then retry lists.verifications.create."
+                ? "Wait for a verification or fact extraction in progress to finish, then retry lists.verifications.create."
                 : "Retry lists.verifications.create after midnight in Europe/Prague.",
           },
         });

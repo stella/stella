@@ -7,6 +7,7 @@ import { PencilIcon, SaveIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
@@ -17,11 +18,12 @@ import {
 } from "@/components/skill-body-markdown";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
-import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
+import { isMarkdownFile, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 import { skillResourceTabSkill } from "./inspector-active-skill";
@@ -80,8 +82,10 @@ const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => {
     <Tooltip
       content={`${tab.skillName} · ${tab.resourcePath}`}
       render={
-        <span className="text-muted-foreground text-3xs truncate">
-          {skillLabel(skillResourceTabSkill(tab))}
+        <span className="text-muted-foreground text-3xs min-w-0">
+          <TruncatedText>
+            {skillLabel(skillResourceTabSkill(tab))}
+          </TruncatedText>
         </span>
       }
     />
@@ -310,48 +314,56 @@ const InstalledSkillResourcePanel = ({
     <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <InspectorTabHeader
         actions={
-          isEditable && !useHybridEditor ? (
-            <div className="flex items-center gap-1">
-              {editing ? (
-                <>
-                  <Button
-                    aria-label={t("common.cancel")}
-                    disabled={saving}
-                    onClick={cancelEdit}
-                    size="xs"
-                    variant="ghost"
-                  >
-                    <XIcon className="size-3.5" />
-                    {t("common.cancel")}
-                  </Button>
-                  <Button
-                    aria-label={t("common.save")}
-                    disabled={saving || draft === tab.content}
-                    onClick={() => {
-                      detached(save(), "skill-resource-panel.save");
-                    }}
-                    size="xs"
-                  >
-                    <SaveIcon className="size-3.5" />
-                    {t("common.save")}
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  aria-label={t("common.edit")}
-                  onClick={() => {
-                    setDraft(tab.content);
-                    setEditing(true);
-                  }}
-                  size="xs"
-                  variant="ghost"
-                >
-                  <PencilIcon className="size-3.5" />
-                  {t("common.edit")}
-                </Button>
-              )}
-            </div>
-          ) : null
+          isEditable && !useHybridEditor
+            ? [
+                {
+                  id: "edit",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <div className="flex items-center gap-1">
+                      {editing ? (
+                        <>
+                          <Button
+                            aria-label={t("common.cancel")}
+                            disabled={saving}
+                            onClick={cancelEdit}
+                            size="xs"
+                            variant="ghost"
+                          >
+                            <XIcon className="size-3.5" />
+                            {t("common.cancel")}
+                          </Button>
+                          <Button
+                            aria-label={t("common.save")}
+                            disabled={saving || draft === tab.content}
+                            onClick={() => {
+                              detached(save(), "skill-resource-panel.save");
+                            }}
+                            size="xs"
+                          >
+                            <SaveIcon className="size-3.5" />
+                            {t("common.save")}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          aria-label={t("common.edit")}
+                          onClick={() => {
+                            setDraft(tab.content);
+                            setEditing(true);
+                          }}
+                          size="xs"
+                          variant="ghost"
+                        >
+                          <PencilIcon className="size-3.5" />
+                          {t("common.edit")}
+                        </Button>
+                      )}
+                    </div>
+                  ),
+                },
+              ]
+            : []
         }
         label={basenameOf(tab.resourcePath)}
         matter={<SkillResourceTabMatter tab={tab} />}

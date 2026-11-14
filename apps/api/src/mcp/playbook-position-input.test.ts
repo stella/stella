@@ -1,9 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
@@ -450,7 +449,7 @@ describe("save_playbook position merge", () => {
     expect(written?.change).toBe("added");
     expect(result.items[1]?.sourceId).toBe(written?.sourceId);
     expect(written?.sourceId).not.toBe(stored[0]?.sourceId);
-    expect(Value.Check(positionSchema, result.items[1])).toBe(true);
+    expect(v.is(positionSchema, result.items[1])).toBe(true);
   });
 
   test("a replaced position keeps the ids of unchanged lines, its derived ask, and its check", () => {
@@ -536,7 +535,7 @@ describe("save_playbook position merge", () => {
 
     const [added] = merge({ stored: [], positions: [parsed] }).items;
 
-    expect(Value.Check(positionSchema, added)).toBe(true);
+    expect(v.is(positionSchema, added)).toBe(true);
     expect(added).not.toHaveProperty("guidance");
     expect(
       added?.mode === "graded" && added.standard.source === "tiers"
@@ -859,8 +858,8 @@ describe("save_playbook position input mirrors positionSchema", () => {
     inputKey === "tiers" ? "standard" : camelCaseKey(inputKey);
 
   const storedBranch = (mode: Position["mode"]) => {
-    const branch = positionSchema.anyOf.find(
-      (candidate) => candidate.properties.mode.const === mode,
+    const branch = positionSchema.options.find(
+      (candidate) => candidate.entries.mode.literal === mode,
     );
     if (branch === undefined) {
       throw new TypeError(`positionSchema has no ${mode} branch`);
@@ -883,13 +882,13 @@ describe("save_playbook position input mirrors positionSchema", () => {
     (mode) => {
       const inputKeys = Object.keys(inputBranch(mode).entries).map(storedKeyOf);
       expect([...inputKeys, ...SERVER_OWNED_KEYS[mode]].toSorted()).toEqual(
-        Object.keys(storedBranch(mode).properties).toSorted(),
+        Object.keys(storedBranch(mode).entries).toSorted(),
       );
     },
   );
 
   test("the negotiation fields match", () => {
-    const stored = storedBranch("graded").properties;
+    const stored = storedBranch("graded").entries;
     const input = inputBranch("graded").entries;
     if (!("negotiation" in stored) || !("negotiation" in input)) {
       throw new TypeError("expected negotiation on both graded branches");
@@ -898,13 +897,14 @@ describe("save_playbook position input mirrors positionSchema", () => {
       Object.keys(input.negotiation.wrapped.entries)
         .map(camelCaseKey)
         .toSorted(),
-    ).toEqual(Object.keys(stored.negotiation.properties).toSorted());
+    ).toEqual(Object.keys(stored.negotiation.wrapped.entries).toSorted());
   });
 });
 
 describe("save_playbook position merge, over the input class", () => {
   test("positions a call does not name come back as the same objects", () => {
-    fc.assert(
+    assertProperty(
+      "positions a call does not name come back as the same objects",
       fc.property(
         storedArbitrary,
         fc.nat(),
@@ -929,12 +929,13 @@ describe("save_playbook position merge, over the input class", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("the merged playbook never holds two positions with one issue or one sourceId", () => {
-    fc.assert(
+    assertProperty(
+      "the merged playbook never holds two positions with one issue or one sourceId",
       fc.property(
         storedArbitrary,
         fc.array(fc.tuple(fc.nat(), fc.boolean(), fc.boolean()), {
@@ -961,12 +962,13 @@ describe("save_playbook position merge, over the input class", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("reading a position through the chat projection and saving it unchanged is a fixed point", () => {
-    fc.assert(
+    assertProperty(
+      "reading a position through the chat projection and saving it unchanged is a fixed point",
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
         const refRegistry = createChatRefRegistry();
@@ -980,7 +982,7 @@ describe("save_playbook position merge, over the input class", () => {
         expect(result.issues).toEqual([]);
         expect(result.items).toEqual(stored);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
@@ -997,7 +999,8 @@ describe("save_playbook position merge, over the input class", () => {
       { requiredKeys: [] },
     );
 
-    fc.assert(
+    assertProperty(
+      "whatever the merge writes passes the shared position checks, and every other entry is refused by path",
       fc.property(
         storedArbitrary,
         fc.array(fc.tuple(fc.nat(), fc.boolean(), tiersArbitrary), {
@@ -1035,12 +1038,13 @@ describe("save_playbook position merge, over the input class", () => {
           expect(written.length + refused.length).toBe(positions.length);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a replace that leaves out enabled keeps the stored value", () => {
-    fc.assert(
+    assertProperty(
+      "a replace that leaves out enabled keeps the stored value",
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
         const refRegistry = createChatRefRegistry();
@@ -1058,7 +1062,7 @@ describe("save_playbook position merge, over the input class", () => {
         expect(result.issues).toEqual([]);
         expect(result.items).toEqual(stored);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

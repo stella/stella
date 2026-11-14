@@ -1,10 +1,10 @@
 import {
   DATE_FORMAT_STYLES,
   DIRECTIVE_KINDS,
-  FILTER_NAMES,
-  LOOP_PROPERTIES,
   type DirectiveKind,
+  FILTER_NAMES,
   type FilterName,
+  LOOP_PROPERTIES,
 } from "@stll/template-conditions";
 
 import { INPUT_TYPES, LOOKUP_REGISTRIES } from "@/api/lib/docx/types";

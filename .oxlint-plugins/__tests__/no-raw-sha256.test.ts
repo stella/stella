@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 
 import oxlintConfig from "../../oxlint.config.ts";
-import migrationLedger from "../../scripts/sha256-migration-ledger.json" with { type: "json" };
 import { SHA256_OWNERS } from "../../scripts/sha256-owners.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -33,14 +32,23 @@ test("confines every supported primitive and immutable alias", async () => {
 
 test("admits only the exact runtime owners", async () => {
   expect(Object.keys(SHA256_OWNERS).length).toBeLessThanOrEqual(4);
-  for (const owner of Object.keys(SHA256_OWNERS)) {
-    expect(
-      await lintSingleRule("no-raw-sha256", source, {
-        sourcePath: owner,
-        cwd: "scratch",
-      }),
-    ).toEqual([]);
-  }
+  const results = await Promise.all(
+    Object.keys(SHA256_OWNERS).map(async (lintCase, index) => {
+      const owner = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule("no-raw-sha256", source, {
+          sourcePath: owner,
+          cwd: "scratch",
+        }),
+        expected: [],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
   expect(
     await lintSingleRule("no-raw-sha256", 'new Bun.CryptoHasher("sha256");', {
       sourcePath: "packages/sha256/src/bun.ts.copy.ts",
@@ -66,6 +74,34 @@ test("preserves other algorithms, keyed HMAC, dynamic CMS and shadowed locals", 
       ].join("\n"),
     ),
   ).toEqual([]);
+});
+
+test("unifies HMAC on Bun's keyed hasher only in an enrolled runtime", async () => {
+  const hmacSource = [
+    'import { createHmac, createHmac as hmac } from "node:crypto";',
+    'import * as nodeCrypto from "node:crypto";',
+    'createHmac("sha256", key);',
+    'hmac("sha512", key);',
+    'nodeCrypto.createHmac("sha1", key);',
+    'new Bun.CryptoHasher("sha256", key);',
+  ].join("\n");
+  expect(await lintSingleRule("no-raw-sha256", hmacSource)).toEqual([]);
+  expect(
+    await lintSingleRule("no-raw-sha256", hmacSource, {
+      ruleOptions: { hmacTarget: "bun" },
+    }),
+  ).toEqual([3, 4, 5]);
+});
+
+test("HMAC export acquisition retains the runtime decision", async () => {
+  const exportSource =
+    'import { createHmac } from "node:crypto";\nexport const sign = createHmac;';
+  expect(await lintSingleRule("no-raw-sha256", exportSource)).toEqual([]);
+  expect(
+    await lintSingleRule("no-raw-sha256", exportSource, {
+      ruleOptions: { hmacTarget: "bun" },
+    }),
+  ).toEqual([2]);
 });
 
 test("resolves constant algorithms and default module aliases", async () => {
@@ -137,10 +173,7 @@ test("confines Bun namespace and default exports including extracted primitives"
 });
 
 test("enforces confinement in the repository base configuration", () => {
-  expect(oxlintConfig.rules["no-raw-sha256/no-raw-sha256"]).toEqual([
-    "error",
-    { allowedFiles: migrationLedger.map(({ id }) => id) },
-  ]);
+  expect(oxlintConfig.rules["no-raw-sha256/no-raw-sha256"]).toBe("error");
 });
 
 test("confines WebCrypto SHA-256 algorithm descriptors and immutable aliases", async () => {
@@ -160,32 +193,6 @@ test("confines WebCrypto SHA-256 algorithm descriptors and immutable aliases", a
       ].join("\n"),
     ),
   ).toEqual([1, 2, 4, 5]);
-});
-
-test("migration exemptions name exact files while other files remain confined", async () => {
-  const migrationSource = 'new Bun.CryptoHasher("sha256");';
-  const options = { allowedFiles: ["apps/api/src/migration-example.ts"] };
-  expect(
-    await lintSingleRule("no-raw-sha256", migrationSource, {
-      sourcePath: "apps/api/src/migration-example.ts",
-      ruleOptions: options,
-      cwd: "scratch",
-    }),
-  ).toEqual([]);
-  expect(
-    await lintSingleRule("no-raw-sha256", migrationSource, {
-      sourcePath: "apps/api/src/migration-example.ts.copy.ts",
-      ruleOptions: options,
-      cwd: "scratch",
-    }),
-  ).toEqual([1]);
-  expect(
-    await lintSingleRule("no-raw-sha256", migrationSource, {
-      sourcePath: "apps/api/src/new-example.ts",
-      ruleOptions: options,
-      cwd: "scratch",
-    }),
-  ).toEqual([1]);
 });
 
 test("an absent key does not classify a digest as keyed hashing", async () => {
@@ -308,7 +315,8 @@ const cryptoReExports = [
   "export const { subtle: api } = crypto;",
 ];
 
-test.each(cryptoReExports)(
+// Scratch-rooted cases lint alone: concurrent, they would queue on one oxlint.
+test.serial.each(cryptoReExports)(
   "confines crypto-bearing re-exports: %s",
   async (bridge) => {
     const reports = await lintSingleRule("no-raw-sha256", bridge, {
@@ -316,14 +324,23 @@ test.each(cryptoReExports)(
       cwd: "scratch",
     });
     expect(reports).toEqual([1]);
-    for (const owner of Object.keys(SHA256_OWNERS)) {
-      expect(
-        await lintSingleRule("no-raw-sha256", bridge, {
-          sourcePath: owner,
-          cwd: "scratch",
-        }),
-      ).toEqual([]);
-    }
+    const results = await Promise.all(
+      Object.keys(SHA256_OWNERS).map(async (lintCase, index) => {
+        const owner = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule("no-raw-sha256", bridge, {
+            sourcePath: owner,
+            cwd: "scratch",
+          }),
+          expected: [],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   },
 );
 

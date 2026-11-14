@@ -2,13 +2,14 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import {
   assertModelDispatchScope,
-  NO_ORGANIZATION_MODEL_DISPATCH,
   type ModelDispatchScope,
+  NO_ORGANIZATION_MODEL_DISPATCH,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   brandPersistedOrganizationId,
@@ -22,7 +23,6 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { SYNTHETIC_PRINCIPAL } from "./constants";
 

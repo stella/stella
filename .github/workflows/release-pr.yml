@@ -15,40 +15,6 @@ concurrency:
 permissions: {}
 
 jobs:
-  tag-version:
-    name: Dispatch the merged version commit for tagging
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - name: Check out the pushed main history
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Dispatch the version commit
-        timeout-minutes: 2
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-          # Resolve against this push even when main advanced while the run queued.
-          git update-ref refs/remotes/origin/main "$GITHUB_SHA"
-          version_commit=$(bash scripts/check-release-candidate.sh --version-commit)
-          if [[ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] && git merge-base --is-ancestor "$version_commit" "$BEFORE_SHA"; then
-            echo "No version commit landed in this push."
-            exit 0
-          fi
-          bash scripts/gh-retry.sh api --method POST \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/release-tag.yml/dispatches" \
-            -f ref=main -f "inputs[sha]=$version_commit"
-
   # Open release pull requests own their pending changesets. An untagged
   # VERSION does not block: a tag may only name its version commit, so the
   # next version commit supersedes it.
@@ -56,6 +22,7 @@ jobs:
     name: Check release versioning state
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -93,7 +60,7 @@ jobs:
 
   version:
     needs: gate
-    if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''
+    if: needs.gate.outputs.may-version == 'true'
     name: Maintain Version Packages PR
     permissions:
       contents: read

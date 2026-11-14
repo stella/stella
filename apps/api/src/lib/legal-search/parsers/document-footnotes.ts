@@ -11,9 +11,7 @@ import type {
 } from "@stll/docx-core/model";
 
 type InlineContent =
-  | ParagraphContent
-  | TrackedRunContent
-  | Hyperlink["children"][number];
+  ParagraphContent | TrackedRunContent | Hyperlink["children"][number];
 
 /**
  * Resolve notes at their paragraph references, in reference order. Use one
@@ -145,6 +143,10 @@ export const createParagraphLineReader = <T>(
           case "preservedBlock":
           case "bookmarkStart":
           case "bookmarkEnd":
+          case "moveFromRangeStart":
+          case "moveFromRangeEnd":
+          case "moveToRangeStart":
+          case "moveToRangeEnd":
             break;
           default:
             block satisfies never;

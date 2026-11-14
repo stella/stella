@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
-  readFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,8 +12,8 @@ import path from "node:path";
 import {
   OWNERSHIP,
   SCHEMA_INTROSPECTION,
-  withSchemaIntrospection,
   validateOwnership,
+  withSchemaIntrospection,
 } from "./ownership.ts";
 import { assessMeasurements, RATCHET_METRICS } from "./ratchet.ts";
 import {
@@ -39,14 +39,14 @@ const fixture = (sources: Record<string, string>) => {
   };
 };
 
-const validate = (
+const validate = async (
   source: string,
   dependencies: Record<string, string> = {},
 ) => {
   const file = "apps/api/src/inventory.ts";
   const { root, dispose } = fixture({ [file]: source, ...dependencies });
   try {
-    return validateSchemaIntrospection({
+    return await validateSchemaIntrospection({
       entries: [{ path: file, reason: "Enumerates table metadata." }],
       repoRoot: root,
     });
@@ -57,18 +57,18 @@ const validate = (
 
 describe("schema-only dependency validation", () => {
   // This scan parses the committed runtime dependency graph, unlike the tiny fixtures.
-  test("accepts the complete committed set", () => {
+  test("accepts the complete committed set", async () => {
     expect(
-      validateSchemaIntrospection({
+      await validateSchemaIntrospection({
         entries: SCHEMA_INTROSPECTION,
         repoRoot: path.resolve(import.meta.dir, ".."),
       }),
     ).toEqual([]);
   }, 30_000);
 
-  test("accepts table enumeration and type-only database references", () => {
+  test("accepts table enumeration and type-only database references", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nimport type { Db } from "@/api/db/root";\nObject.values(schema);`,
       ),
     ).toEqual([]);
@@ -85,8 +85,8 @@ describe("schema-only dependency validation", () => {
     "query",
     "findMany",
   ]) {
-    test(`reports ${method} for any injected receiver name`, () => {
-      const problems = validate(
+    test(`reports ${method} for any injected receiver name`, async () => {
+      const problems = await validate(
         `${FULL_IMPORT}\nexport const inventory = (connection: any) => connection["${method}"](schema.tables);`,
       );
       expect(problems).toContain(
@@ -95,14 +95,14 @@ describe("schema-only dependency validation", () => {
     });
   }
 
-  test("resolves local callback maps and rejects unresolved computed calls", () => {
+  test("resolves local callback maps and rejects unresolved computed calls", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nconst callbacks = { tables: () => Object.values(schema) } as const; callbacks[key]();`,
       ),
     ).toEqual([]);
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nexport const inventory = (connection: any, method: string) => connection[method]();`,
       ),
     ).toContain(
@@ -110,9 +110,9 @@ describe("schema-only dependency validation", () => {
     );
   });
 
-  test("distinguishes error query metadata and console dispatch from database calls", () => {
+  test("distinguishes error query metadata and console dispatch from database calls", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nconst error = { query: "shape", params: [] }; const shape = error["query"]; console[level](shape);`,
       ),
     ).toEqual([]);
@@ -126,17 +126,17 @@ describe("schema-only dependency validation", () => {
       "let query; query = connection.query; const run = query; run();",
     ];
     for (const source of queryAliases) {
-      expect(validate(`${FULL_IMPORT}\n${source}`)).toContain(
+      expect(await validate(`${FULL_IMPORT}\n${source}`)).toContain(
         "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: query",
       );
     }
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nconst query = error.query; const run = query; function invoke(run: () => void) { run(); }`,
       ),
     ).toEqual([]);
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nconst run = (console: Record<string, () => void>, level: string) => console[level]();`,
       ),
     ).toContain(
@@ -144,29 +144,29 @@ describe("schema-only dependency validation", () => {
     );
   });
 
-  test("reports method aliases and malformed runtime sources", () => {
+  test("reports method aliases and malformed runtime sources", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nexport const inventory = (connection: any) => { const read = connection.select; return read(); };`,
       ),
     ).toContain(
       "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: select",
     );
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nexport const inventory = ({select: read}: any) => read();`,
       ),
     ).toContain(
       "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: select",
     );
-    expect(validate(`${FULL_IMPORT}\nconnection.select(`)).toContain(
+    expect(await validate(`${FULL_IMPORT}\nconnection.select(`)).toContain(
       "apps/api/src/inventory.ts: cannot parse runtime dependency: apps/api/src/inventory.ts",
     );
   });
 
-  test("reports database bindings even when renamed", () => {
+  test("reports database bindings even when renamed", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nimport { rootDb as connection } from "./db/root";`,
       ),
     ).toContain(
@@ -174,9 +174,9 @@ describe("schema-only dependency validation", () => {
     );
   });
 
-  test("walks runtime imports, re-exports and import cycles", () => {
+  test("walks runtime imports, re-exports and import cycles", async () => {
     expect(
-      validate(`${FULL_IMPORT}\nimport { inventory } from "./helper";`, {
+      await validate(`${FULL_IMPORT}\nimport { inventory } from "./helper";`, {
         "apps/api/src/helper.ts": 'export * from "./nested";',
         "apps/api/src/nested.ts":
           'import "./helper"; export const inventory = (connection: any) => connection.select();',
@@ -186,44 +186,48 @@ describe("schema-only dependency validation", () => {
     );
   });
 
-  test("walks literal dynamic imports and refuses unresolved imports", () => {
+  test("walks literal dynamic imports and refuses unresolved imports", async () => {
     expect(
-      validate(`${FULL_IMPORT}\nawait import("./helper");`, {
+      await validate(`${FULL_IMPORT}\nawait import("./helper");`, {
         "apps/api/src/helper.ts":
           'import { drizzle } from "drizzle-orm/pglite";',
       }),
     ).toContain(
       "apps/api/src/inventory.ts: database handle import in apps/api/src/helper.ts: drizzle-orm/pglite",
     );
-    expect(validate(`${FULL_IMPORT}\nawait import(moduleName);`)).toContain(
+    expect(
+      await validate(`${FULL_IMPORT}\nawait import(moduleName);`),
+    ).toContain(
       "apps/api/src/inventory.ts: unresolved runtime import in apps/api/src/inventory.ts",
     );
-    expect(validate(`${FULL_IMPORT}\nimport "./absent";`)).toContain(
+    expect(await validate(`${FULL_IMPORT}\nimport "./absent";`)).toContain(
       "apps/api/src/inventory.ts: unresolved runtime import in apps/api/src/inventory.ts: ./absent",
     );
   });
 
-  test("reports stale named-only schema imports", () => {
-    expect(validate('import { tables } from "@/api/db/schema";')).toContain(
+  test("reports stale named-only schema imports", async () => {
+    expect(
+      await validate('import { tables } from "@/api/db/schema";'),
+    ).toContain(
       "apps/api/src/inventory.ts: stale schema introspection entry: no full-schema import or re-export",
     );
   });
 
-  test("distinguishes bound collection and hash operations", () => {
+  test("distinguishes bound collection and hash operations", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nimport { createHash } from "node:crypto"; const keys = new Map(); keys.delete("a"); createHash("sha256").update("a"); const hash = new Bun.CryptoHasher("sha256"); hash.update("a"); const localHash = () => new Bun.CryptoHasher("sha256"); localHash().update("a");`,
       ),
     ).toEqual([]);
     expect(
-      validate(`${FULL_IMPORT}\nconst keys = new Map(); keys.select();`),
+      await validate(`${FULL_IMPORT}\nconst keys = new Map(); keys.select();`),
     ).toContain(
       "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: select",
     );
   });
 
   for (const runtime of ["bun", "node"]) {
-    test(`recognizes aliased SHA-256 ${runtime} owners without permitting database calls`, () => {
+    test(`recognizes aliased SHA-256 ${runtime} owners without permitting database calls`, async () => {
       const dependencies = {
         "node_modules/@stll/sha256/package.json": JSON.stringify({
           name: "@stll/sha256",
@@ -234,22 +238,22 @@ describe("schema-only dependency validation", () => {
       };
       const imported = `${FULL_IMPORT}\nimport { createSha256 as makeHash } from "@stll/sha256/${runtime}";`;
       expect(
-        validate(
+        await validate(
           `${imported} const hash = makeHash(); hash.update("a"); makeHash().update("b");`,
           dependencies,
         ),
       ).toEqual([]);
       expect(
-        validate(`${imported} makeHash().select();`, dependencies),
+        await validate(`${imported} makeHash().select();`, dependencies),
       ).toContain(
         "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: select",
       );
     });
   }
 
-  test("does not exempt local factories returning database receivers", () => {
+  test("does not exempt local factories returning database receivers", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nconst connection = {}; const createSha256 = () => connection; createSha256().update(schema.tables);`,
       ),
     ).toContain(
@@ -257,9 +261,9 @@ describe("schema-only dependency validation", () => {
     );
   });
 
-  test("does not trust a factory solely by its name", () => {
+  test("does not trust a factory solely by its name", async () => {
     expect(
-      validate(
+      await validate(
         `${FULL_IMPORT}\nimport { createSha256 } from "./connection"; createSha256().update(schema.tables);`,
         {
           "apps/api/src/connection.ts":
@@ -271,11 +275,11 @@ describe("schema-only dependency validation", () => {
     );
   });
 
-  test("requires exact files, distinct membership and reasons", () => {
+  test("requires exact files, distinct membership and reasons", async () => {
     const { root, dispose } = fixture({});
     try {
       const entry = { path: "apps/api/src/db/schema.ts", reason: "" };
-      const problems = validateSchemaIntrospection({
+      const problems = await validateSchemaIntrospection({
         entries: [
           entry,
           entry,
@@ -298,7 +302,7 @@ describe("schema-only dependency validation", () => {
   });
 });
 
-test("treats schema-owned Drizzle view callbacks as declarations, not runtime reads", () => {
+test("treats schema-owned Drizzle view callbacks as declarations, not runtime reads", async () => {
   const schemaFile = "apps/api/src/db/schema/case-law.ts";
   const source = [
     FULL_IMPORT,
@@ -307,7 +311,7 @@ test("treats schema-owned Drizzle view callbacks as declarations, not runtime re
   const { root, dispose } = fixture({ [schemaFile]: source });
   try {
     expect(
-      validateSchemaIntrospection({
+      await validateSchemaIntrospection({
         entries: [{ path: schemaFile, reason: "Declares a schema view." }],
         repoRoot: root,
       }),
@@ -319,7 +323,7 @@ test("treats schema-owned Drizzle view callbacks as declarations, not runtime re
     );
     writeFileSync(path.join(root, schemaFile), ordinaryQuery);
     expect(
-      validateSchemaIntrospection({
+      await validateSchemaIntrospection({
         entries: [{ path: schemaFile, reason: "Declares a schema view." }],
         repoRoot: root,
       }),

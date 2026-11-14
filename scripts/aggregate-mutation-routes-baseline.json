@@ -1,0 +1,2192 @@
+[
+  {
+    "key": "DELETE /v1/billing-codes/:workspaceId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/case/matter-links/:workspaceId/:linkId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/case/research/columns/:columnId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/chat/threads/:threadId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/clause-categories/:categoryId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/clauses/:clauseId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/clauses/:clauseId/variants/:variantId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/contacts/:contactId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/document-types/:documentTypeId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/entities/:workspaceId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/entities/:workspaceId/entity/:entityId/versions/:versionId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/entity-views/:viewId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/expenses/:workspaceId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/flows/:flowId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/invoices/:workspaceId/:invoiceId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/invoices/:workspaceId/:invoiceId/entries",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/invoices/:workspaceId/:invoiceId/lines/:lineId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/mcp/connections/:connectionId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/mcp/connectors/:slug",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/me/oauth-connections/:consentId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/organization-settings/ai-config",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/organization-settings/business-registry-credentials",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId/scope",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/organization-settings/deepl",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/organization-settings/feature-enrolments/:featureId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/organization-settings/web-search-key",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/playbooks/:playbookId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/properties/:workspaceId/property/:propertyId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/rates/:workspaceId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/rates/:workspaceId/:rateTableId/entries",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/reader/annotations/:annotationId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/saved-searches/:savedSearchId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/saved-time-narratives/:id",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/sharepoint/connection",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/skills/:skillId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/skills/:skillId/comments/:commentId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/skills/:skillId/proposals/:proposalId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/skills/:skillId/resources",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/style-sets/:styleSetId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/tasks/:workspaceId/assignees",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/tasks/:workspaceId/links",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/template-categories/:categoryId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/template-recipes/:recipeId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/templates/:templateId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/templates/:templateId/clauses/:linkId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/templates/lookup-formats/:formatId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/time-entries/:workspaceId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/time-entries/:workspaceId/batch",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/time-timers/:id",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/usage/assignments",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/view-templates/:workspaceId/:templateId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/views/:workspaceId/view/:viewId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/workspaces/:workspaceId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/workspaces/:workspaceId/anonymization-allowlist/:entryId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/workspaces/:workspaceId/anonymization-terms/:entryId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/workspaces/:workspaceId/contacts/:workspaceContactId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/workspaces/:workspaceId/correspondence/address",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "DELETE /v1/workspaces/:workspaceId/members/:userId",
+    "count": 1,
+    "reason": "Existing DELETE route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/billing-codes/:workspaceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/case/research/columns/:columnId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/chat/threads/:threadId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/chat/threads/:threadId/model",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/chat/threads/:threadId/title",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/document-types/:documentTypeId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/reject-pending",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/resolve",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/description",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/label",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/entities/:workspaceId/move",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/entities/:workspaceId/rename",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/entity-views/:viewId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/expenses/:workspaceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/fields/:workspaceId/kanban-placement",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/fields/:workspaceId/metadata",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/fields/:workspaceId/metadata-batch",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/files/:workspaceId/document-properties/:fieldId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/invoices/:workspaceId/:invoiceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/invoices/:workspaceId/:invoiceId/lines/:lineId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/lists/:workspaceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/lists/:workspaceId/item-sources",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/lists/:workspaceId/items",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/mcp/connections/:connectionId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/mcp/native-tools/:slug",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/me/guide-progress",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/memories/:memoryId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/number-series/:numberSeriesId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/rates/:workspaceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/rates/:workspaceId/:rateTableId/entries",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/reader/annotations/:annotationId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/saved-searches/:savedSearchId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/saved-time-narratives/:id",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/seller-profiles/:sellerProfileId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/skills/:skillId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/skills/:skillId/comments/:commentId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/skills/:skillId/proposals/:proposalId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/skills/:skillId/resources",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/tasks/:workspaceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/templates/:templateId/clauses/:linkId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/time-entries/:workspaceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/time-timers/:id",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/vat-rates/:vatRateId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/work-obligations/:workspaceId/:entityId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/workspaces/:workspaceId/correspondence/:correspondenceId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PATCH /v1/workspaces/:workspaceId/document-reviews/findings/:findingId",
+    "count": 1,
+    "reason": "Existing PATCH route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /agent/event/notify",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /agent/identity",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /agent/identity/claim",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /agent/identity/confirm",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /agent/token",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /public/feedback",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /smoke/session",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /usage/hosted/webhook",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/ai-autocomplete/stream",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/ai-config/validate-provider",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys/personal",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys/personal/organization/revoke",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys/personal/policy",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys/personal/revoke",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys/personal/rotate",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys/revoke",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/api-keys/rotate",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/decisions/search",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/decisions/search/expand",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/decisions/search/refine",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/matter-links/:workspaceId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/matter-links/:workspaceId/batch",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/research/answers/lookup",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/research/answers/run",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/research/columns",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/case/research/columns/suggest-prompt",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/catalogue/install-skill",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/improve-prompt",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/template-thread",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/template-thread/rotate",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/threads/:threadId/export",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/threads/:threadId/fork",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/threads/:threadId/recap",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/threads/:threadId/suggested-prompts",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/threads/:threadId/title/suggest",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/chat/workspaces/:workspaceId/file-thread",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/clause-categories/:categoryId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/clauses/:clauseId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/clauses/:clauseId/variants/:variantId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/clauses/:clauseId/versions/:versionId/restore",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/clauses/:clauseId/versions/:versionId/summarize",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/clauses/ai-rewrite",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/clauses/import",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/:contactId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/:contactId/sanctions/monitoring",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/:contactId/sanctions/reviews",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/business-registries/checks",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/extract-from-procuracao",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/import/inspect",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/import/preview",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/import/validate",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/contacts/procuracao-upload",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-edit-handoffs/:handoffId/opened",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-edit-handoffs/redeem",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-edit-sessions/:sessionId/finalize",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-edit-sessions/:sessionId/respond-takeover",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-registry/grant",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-registry/redeem-link",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop-registry/request",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/desktop/presence",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/dev/clean",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/dev/clear-cache",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/dev/public-law-connection",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/dev/rebuild-search",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/dev/seed",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/dev/seed-firm-knowledge",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/document-reviews/passages",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/document-types",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/document-types/reorder",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/documents/:workspaceId/document/:documentId/compare",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/bilingual",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/check-stamp",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/clip",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/copy-to-workspace",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/create-from-legal-source",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/desktop-edit-handoffs",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/desktop-edit-sessions/open",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/desktop-edit-sessions/release",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/desktop-edit-sessions/request-takeover",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/duplicate",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/entity/:entityId/ocr",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/restore",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/summarize",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/filesystem-tree",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/folio-collab-rooms/checkpoint",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/folio-collab-rooms/join",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/folio-collab-rooms/publish-version",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/group-counts",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/kanban-group",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/organize-suggestions",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/pdf-signing-handoffs",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/pdf-signing-sessions/:sessionId/cancel",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/property-facets",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/query",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/query-window",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/upload",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/upload-generated-document",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entities/:workspaceId/upload-version",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entity-views/query-window",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/entity-views/reorder",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/feedback",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/fields/:workspaceId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId/save",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/flows",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/folio-collab-rooms/authorize",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/folio-collab-rooms/heartbeat",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/folio-collab-rooms/refresh-token",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/folio-collab-rooms/snapshot/load",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/folio-collab-rooms/snapshot/store",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/invoices/:workspaceId/:invoiceId/entries",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/invoices/:workspaceId/:invoiceId/lines",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/invoices/:workspaceId/:invoiceId/pdf",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/invoices/:workspaceId/:invoiceId/transition",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/law/statutes/resolve",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/legislation/corpus/search",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/claim-reviews",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/claim-reviews/bulk",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/columns",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/generation-candidates",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/generation-candidates/accept",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/generation-candidates/reject",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/generations",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/item-comments",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/item-reviews",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/item-sources",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/sections",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/verifications",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/lists/:workspaceId/verifications/latest",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/mcp/connections",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/mcp/connectors",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/mcp/connectors/:slug/approve-authorization",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/mcp/connectors/:slug/connect",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/mcp/connectors/probe",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/me/delete/send-otp",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/me/delete/verify",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/me/two-factor/send-otp",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/memories",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/memories/firm",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/notifications/announcements",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/notifications/read-all",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/number-series",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/number-series/:numberSeriesId/archive",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/number-series/:numberSeriesId/default",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/ai-config",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/business-registry-credentials",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/correspondence/allowed-senders",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/correspondence/allowed-senders/:senderId/scope",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/deepl",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/practice-jurisdictions",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/preview",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/sanctions-monitoring",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/organization-settings/web-search-key",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/pdf-signing-handoffs/redeem",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/pdf-signing-sessions/:sessionId/cancel",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/pdf-signing-sessions/:sessionId/certificate",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/pdf-signing-sessions/:sessionId/signature",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/playbooks",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/playbooks/:playbookId/approve",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/playbooks/:playbookId/versions/:version/restore",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/playbooks/from-run",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/playbooks/from-starter",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/properties/:workspaceId/preview",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/properties/:workspaceId/property/:propertyId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/properties/:workspaceId/suggest-prompt",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/reader/annotations",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/sanctions/search",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/saved-time-narratives",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/search",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/search/facets",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/search/preview",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/search/refine",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/search/summary",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/search/summary/chat",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/seller-profiles",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/seller-profiles/:sellerProfileId/archive",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/seller-profiles/:sellerProfileId/default",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/sharepoint/connect",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/signals/:signalId/acceptances",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/signals/:signalId/assignments",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/signals/:signalId/dismissals",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/signals/:signalId/snoozes",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/signals/requests",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/comments",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/proposals",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/proposals/:proposalId/review",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/proposals/from-comments",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/resources",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/resources/rename",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/resources/rewrite",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/:skillId/resources/upload",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/discover-url",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/from-blueprint",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/generate-draft",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/import-url",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/import-urls",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/skills/upload",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/style-sets/:styleSetId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/style-sets/:styleSetId/editor",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/style-sets/:styleSetId/source",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/style-sets/editor/preview",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/tasks/:workspaceId/assignees",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/tasks/:workspaceId/assignees/move",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/tasks/:workspaceId/calendar",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/tasks/:workspaceId/links",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/template-categories/:categoryId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/template-packs/:packId/install",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/template-packs/visibility",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/clauses/:linkId/sync",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/clauses/sync",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/decide-conditions",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/document",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/fill",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/fill-preview",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/fill-to/:workspaceId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/prefill",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/:templateId/versions/:versionId/summarize",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/discover",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/fill",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/lookup-formats",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/lookup-formats/default",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/lookup-formats/my-default",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/lookup-preview",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/prepare",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/templates/suggest-fields",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-entries/:workspaceId/batch",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-entries/:workspaceId/polish-narrative",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-entries/:workspaceId/split",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-entries/:workspaceId/suggestions/decisions",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-entries/approval-queue/return",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-entries/approve",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-entries/internal",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-timers/:id/confirm",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-timers/:id/pause",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-timers/:id/resume",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-timers/admin/:id/stop",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/time-timers/start",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/uploads/:workspaceId/:uploadId/abort",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/uploads/:workspaceId/:uploadId/finalize",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/uploads/:workspaceId/entity-create/preflight",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/uploads/:workspaceId/entity-create/tree",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/uploads/:workspaceId/presign",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/usage/assignments",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/usage/hosted/management",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/usage/hosted/setup",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/vat-rates",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/vat-rates/:vatRateId/archive",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/views/:workspaceId/reorder",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/views/:workspaceId/view/:viewId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/views/:workspaceId/view/:viewId/convert",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/work-obligations/:workspaceId/:entityId/acknowledge",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/work-obligations/:workspaceId/:entityId/transition",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/active",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/archive",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/bilingual-translations/prepare",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/bilingual-translations/runs",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/bounding-boxes",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/cell-retry",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/correspondence/address",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/document-reviews/parties",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/document-reviews/positions",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/document-reviews/positions/stream",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/document-reviews/runs",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/document-translations/prepare",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/document-translations/runs",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/duplicate",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/flows/runs",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/flows/runs/:runId/cancel",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/flows/runs/:runId/review",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/infosoud/import-agenda",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/infosoud/lookup",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/justifications/query",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/playbooks/:playbookId/run",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/playbooks/auto-run",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/reports/export",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/reports/templates/clone-builtin",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/unarchive",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/workflow/start",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "POST /v1/workspaces/:workspaceId/workflow/target-count",
+    "count": 1,
+    "reason": "Existing POST route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/billing-codes/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/case/research/columns/order",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/clause-categories",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/clauses",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/clauses/:clauseId/variants",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/clauses/import",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/contacts",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/contacts/import",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/docx-suggestions/:workspaceId/entity/:entityId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/entities/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/entities/:workspaceId/blank-document",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/entities/:workspaceId/blank-document-from-style-set",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/entity-views",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/expenses/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/flows/:flowId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/invoices/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/lists/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/lists/:workspaceId/item-fact-details",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/organization-settings/anonymization-blacklist",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/organization-settings/feature-enrolments/:featureId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/playbooks/:playbookId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/properties/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/properties/:workspaceId/batch",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/rates/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/rates/:workspaceId/:rateTableId/entries",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/rates/:workspaceId/arrangement",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/sharepoint/enablement",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/style-sets",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/style-sets/editor",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/tasks/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/template-categories",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/template-recipes",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/templates",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/templates/:templateId/clauses",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/templates/blank",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/templates/style-set",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/templates/styles",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/time-entries/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/time-entries/me/daily-target",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/time-entries/members/:userId/daily-target",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/views/:workspaceId",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/workspaces",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/workspaces/:workspaceId/anonymization-allowlist",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/workspaces/:workspaceId/anonymization-terms",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/workspaces/:workspaceId/contacts",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  },
+  {
+    "key": "PUT /v1/workspaces/:workspaceId/members",
+    "count": 1,
+    "reason": "Existing PUT route awaits ownership declaration at its route definition."
+  }
+]

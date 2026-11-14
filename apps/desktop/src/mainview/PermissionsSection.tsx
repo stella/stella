@@ -10,7 +10,7 @@ import {
   isPermissionsSnapshot,
   PERMISSION_REFRESH_MS,
 } from "../shared/permissions";
-import type { PermissionsSnapshot } from "../shared/permissions";
+import type { Permission, PermissionsSnapshot } from "../shared/permissions";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -25,11 +25,15 @@ import { PermissionRow } from "./PermissionRow";
  * which notify no one.
  */
 export const PermissionsSection = ({
+  descriptions,
+  only,
   window: telemetryWindow,
 }: {
+  /** What each permission is for, where one feature asks for it. */
+  descriptions?: Partial<Record<Permission, string>>;
+  only?: readonly Permission[];
   window: DesktopTelemetryWindow;
 }) => {
-  const t = useTranslations("settings");
   const [snapshot, setSnapshot] = useState<PermissionsSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
   // Polls, focus, visibility and user actions read concurrently; only the
@@ -108,11 +112,44 @@ export const PermissionsSection = ({
   };
 
   return (
+    <PermissionsContent
+      apply={apply}
+      descriptions={descriptions}
+      failed={failed}
+      snapshot={
+        snapshot && only
+          ? {
+              rows: snapshot.rows.filter(({ permission }) =>
+                only.includes(permission),
+              ),
+            }
+          : snapshot
+      }
+    />
+  );
+};
+
+type PermissionsContentProps = {
+  descriptions: Partial<Record<Permission, string>> | undefined;
+  failed: boolean;
+  apply: (run: () => Promise<unknown>) => Promise<void>;
+  snapshot: PermissionsSnapshot | null;
+};
+
+const PermissionsContent = ({
+  apply,
+  descriptions,
+  failed,
+  snapshot,
+}: PermissionsContentProps) => {
+  const t = useTranslations("settings");
+  return (
     <>
       {snapshot?.rows.map((row, index) => (
         <div key={row.permission}>
           {index > 0 ? <Separator /> : null}
           <PermissionRow
+            description={descriptions?.[row.permission]}
             onOpenSettings={() => {
               void apply(async () =>
                 invoke("permissions_open_settings", {

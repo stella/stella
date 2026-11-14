@@ -26,8 +26,7 @@ export type TanStackValibotSchema<TSchema extends GenericSchema> =
  * member must be the latter.
  */
 export type ToolSchemaInput =
-  | StandardSchemaV1
-  | (JSONSchema & { "~standard"?: never });
+  StandardSchemaV1 | (JSONSchema & { "~standard"?: never });
 
 type ToolSchemaFields = {
   inputSchema?: SchemaInput | undefined;

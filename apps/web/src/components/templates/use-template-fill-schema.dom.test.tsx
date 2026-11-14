@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/template-fill" });
 
@@ -27,71 +27,70 @@ const linkedClause = () => ({
   variantDeleted: false,
 });
 const requests: string[] = [];
-globalThis.fetch = Object.assign(
-  async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(input instanceof Request ? input.url : String(input));
-    requests.push(url.pathname);
-    if (url.pathname.startsWith("/api/auth/")) {
-      return Response.json(null);
+const fakeFetch = async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  requests.push(url.pathname);
+  if (url.pathname.startsWith("/api/auth/")) {
+    return Response.json(null);
+  }
+  if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clauses`) {
+    return Response.json({ links: [linkedClause()] });
+  }
+  if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clause-slots`) {
+    return Response.json({ slots: [] });
+  }
+  if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clauses/sync`) {
+    syncStarted.resolve(undefined);
+    await sync.promise;
+    version = 2;
+    return Response.json({ syncedCount: 1 });
+  }
+  if (url.pathname === `/v1/templates/${TEMPLATE_ID}`) {
+    return Response.json({
+      fileName: "terms.docx",
+      presignedUrl: "http://localhost:3001/source.docx",
+      manifest: { version: 1, fields: [] },
+    });
+  }
+  if (url.pathname === "/source.docx") {
+    return new Response(new Uint8Array([1, 2, 3]));
+  }
+  if (url.pathname === "/v1/templates/discover") {
+    const body = init?.body;
+    if (!(body instanceof FormData) && typeof body !== "string") {
+      throw new TypeError("expected a FormData or JSON request body");
     }
-    if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clauses`) {
-      return Response.json({ links: [linkedClause()] });
-    }
-    if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clause-slots`) {
-      return Response.json({ slots: [] });
-    }
-    if (url.pathname === `/v1/templates/${TEMPLATE_ID}/clauses/sync`) {
-      syncStarted.resolve(undefined);
-      await sync.promise;
-      version = 2;
-      return Response.json({ syncedCount: 1 });
-    }
-    if (url.pathname === `/v1/templates/${TEMPLATE_ID}`) {
-      return Response.json({
-        fileName: "terms.docx",
-        presignedUrl: "http://localhost:3001/source.docx",
-        manifest: { version: 1, fields: [] },
-      });
-    }
-    if (url.pathname === "/source.docx") {
-      return new Response(new Uint8Array([1, 2, 3]));
-    }
-    if (url.pathname === "/v1/templates/discover") {
-      const body = init?.body;
-      if (!(body instanceof FormData) && typeof body !== "string") {
-        throw new TypeError("expected a FormData or JSON request body");
-      }
-      const payload =
-        body instanceof FormData
-          ? { templateId: body.get("templateId"), file: body.get("file") }
-          : JSON.parse(body);
-      expect(payload.file).toBeUndefined();
-      const templateId = payload.templateId;
-      discoveredTemplateIds.push(templateId);
-      // The template body has no variable; only stored-source discovery adds
-      // the linked clause's declaration.
-      return Response.json({
-        fields:
-          templateId === TEMPLATE_ID
-            ? [
-                {
-                  path: version === 1 ? "party" : "updatedParty",
-                  kind: "string",
-                  count: 1,
-                  label:
-                    version === 1 ? "Clause party" : "Updated clause party",
-                  required: true,
-                },
-              ]
-            : [],
-        conditions: [],
-        structureErrors: [],
-      });
-    }
-    throw new TypeError(`Unexpected template form request: ${url.pathname}`);
-  },
-  { preconnect: originalFetch.preconnect },
-);
+    const payload =
+      body instanceof FormData
+        ? { templateId: body.get("templateId"), file: body.get("file") }
+        : JSON.parse(body);
+    expect(payload.file).toBeUndefined();
+    const templateId = payload.templateId;
+    discoveredTemplateIds.push(templateId);
+    // The template body has no variable; only stored-source discovery adds
+    // the linked clause's declaration.
+    return Response.json({
+      fields:
+        templateId === TEMPLATE_ID
+          ? [
+              {
+                path: version === 1 ? "party" : "updatedParty",
+                kind: "string",
+                count: 1,
+                label: version === 1 ? "Clause party" : "Updated clause party",
+                required: true,
+              },
+            ]
+          : [],
+      conditions: [],
+      structureErrors: [],
+    });
+  }
+  throw new TypeError(`Unexpected template form request: ${url.pathname}`);
+};
+globalThis.fetch = Object.assign(fakeFetch, {
+  preconnect: originalFetch.preconnect,
+});
 
 const { cleanup, render, waitFor, fireEvent } =
   await import("@testing-library/react");

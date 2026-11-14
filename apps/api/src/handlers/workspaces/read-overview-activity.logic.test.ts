@@ -4,14 +4,21 @@ import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { sha256Base64Url as legacyBase64Url } from "@stll/sha256/node";
 
 import { auditLogs } from "@/api/db/schema";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditAction,
+} from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { decodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
+import { TASK_LINK_AUDIT_CHANGE } from "@/api/lib/tasks/entity-link-audit";
 
 import {
   ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE,
+  activityDetailText,
+  activityLinkedEntityId,
   activityTargetSource,
   bindActivityCursorToFilters,
   FEED_ACTIVITY_RESOURCE_TYPES,
@@ -19,6 +26,7 @@ import {
   parseFieldAuditResourceId,
   resolveActivityAction,
   resolveActivityCategory,
+  resolveActivityDetail,
   resolveActivityRunId,
   timestampMicroseconds,
   VISIBLE_ACTIVITY_ACTION_BY_ACTION,
@@ -30,6 +38,14 @@ const entityVersionId = toSafeId<"entityVersion">(
   "00000000-0000-0000-0000-000000000002",
 );
 const propertyId = "00000000-0000-0000-0000-000000000003";
+const MCP_WEB_HANDOFF_AUDIT_ACTION_PREFIX = "mcp_web_handoff.";
+
+const isMcpWebHandoffAuditAction = (
+  action: AuditAction,
+): action is Extract<
+  AuditAction,
+  `${typeof MCP_WEB_HANDOFF_AUDIT_ACTION_PREFIX}${string}`
+> => action.startsWith(MCP_WEB_HANDOFF_AUDIT_ACTION_PREFIX);
 
 describe("parseFieldAuditResourceId", () => {
   test("keeps persisted field ids on the field lookup path", () => {
@@ -276,6 +292,18 @@ describe("activity target sources", () => {
   });
 });
 
+describe("visible activity actions", () => {
+  test("excludes every handoff audit action from the activity feed", () => {
+    const handoffActions = Object.values(AUDIT_ACTION).filter(
+      isMcpWebHandoffAuditAction,
+    );
+    expect(handoffActions.length).toBeGreaterThan(0);
+    for (const action of handoffActions) {
+      expect(VISIBLE_ACTIVITY_ACTION_BY_ACTION[action]).toBeNull();
+    }
+  });
+});
+
 describe("activity date bounds", () => {
   test("retains fractional precision with lowercase RFC 3339 timezone markers", () => {
     const lower = timestampMicroseconds("2026-08-13T09:10:11.800000z");
@@ -314,3 +342,115 @@ for (const actorId of [null, "", "Žluťoučký kůň 📄", "e\u0301"]) {
     ]);
   });
 }
+
+describe("activity detail", () => {
+  const noLink = { linkChange: null, linkedName: null };
+
+  test("names the version a version row is about", () => {
+    const deleted = resolveActivityDetail({
+      ...noLink,
+      changes: {
+        deleted: { new: null, old: { entityId: "e", versionNumber: 3 } },
+      },
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+    });
+    const added = resolveActivityDetail({
+      ...noLink,
+      changes: { created: { new: { versionNumber: 4 }, old: null } },
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+    });
+
+    expect(deleted).toEqual({
+      change: "deleted",
+      type: "version",
+      versionNumber: 3,
+    });
+    expect(added).toEqual({
+      change: "added",
+      type: "version",
+      versionNumber: 4,
+    });
+    expect([added, deleted].map(activityDetailText)).toEqual([
+      "added version 4",
+      "deleted version 3",
+    ]);
+  });
+
+  test("leaves a version row without a number to the plain verb", () => {
+    expect(
+      resolveActivityDetail({
+        ...noLink,
+        changes: null,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+      }),
+    ).toEqual({ type: "none" });
+  });
+
+  test("narrates both task link changes", () => {
+    const linked = resolveActivityDetail({
+      changes: null,
+      linkChange: TASK_LINK_AUDIT_CHANGE.ADDED,
+      linkedName: "Lease.pdf",
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+    });
+    const unlinked = resolveActivityDetail({
+      changes: null,
+      linkChange: TASK_LINK_AUDIT_CHANGE.REMOVED,
+      linkedName: null,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+    });
+
+    expect(linked).toEqual({
+      change: "added",
+      linkedName: "Lease.pdf",
+      type: "taskLink",
+    });
+    expect(unlinked).toEqual({
+      change: "removed",
+      linkedName: null,
+      type: "taskLink",
+    });
+    expect([linked, unlinked].map(activityDetailText)).toEqual([
+      "linked Lease.pdf",
+      "unlinked",
+    ]);
+  });
+
+  test("reads a link change only on an entity row", () => {
+    expect(
+      resolveActivityDetail({
+        changes: null,
+        linkChange: TASK_LINK_AUDIT_CHANGE.ADDED,
+        linkedName: null,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+      }),
+    ).toEqual({ type: "none" });
+  });
+
+  test("finds the far end of a link from either side", () => {
+    const task = "00000000-0000-0000-0000-000000000005";
+    const document = "00000000-0000-0000-0000-000000000006";
+
+    expect(
+      activityLinkedEntityId({
+        linkSourceId: task,
+        linkTargetId: document,
+        resourceId: task,
+      }),
+    ).toBe(document);
+    expect(
+      activityLinkedEntityId({
+        linkSourceId: document,
+        linkTargetId: task,
+        resourceId: task,
+      }),
+    ).toBe(document);
+    expect(
+      activityLinkedEntityId({
+        linkSourceId: "not-a-uuid",
+        linkTargetId: null,
+        resourceId: task,
+      }),
+    ).toBeNull();
+  });
+});

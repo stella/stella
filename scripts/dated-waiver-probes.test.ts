@@ -2,24 +2,24 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 
+import { parseSource } from "../packages/scripts/src/syntax-tree";
 import {
-  removeWaiver,
-  runWaiverProbe,
-  probeDocUrl,
   createProbeBudget,
   PROBE_PHASE_BUDGET_MS,
   PROBE_TIMEOUT_MS,
+  probeDocUrl,
+  removeWaiver,
+  runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
+  type DatedWaiver,
   readTestQuarantines,
   ZERO_AGE_OVERRIDE,
-  type DatedWaiver,
 } from "./dated-waivers";
 import {
-  serializeRegistry,
   type QuarantineEntry,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const waiver = (
@@ -103,13 +103,7 @@ test("AST docs edits preserve comments, unrelated objects, separators and remain
     expect(changed).toContain('expiresAt: "2026-10-06T00:00:00.000Z"');
     expect(changed).not.toContain('expiresAt: "2026-10-05T00:00:00.000Z"');
     expect(changed).toContain('url: "https://example.com/llms.txt"');
-    expect(
-      ts
-        .transpileModule(changed, { reportDiagnostics: true })
-        .diagnostics?.filter(
-          ({ category }) => category === ts.DiagnosticCategory.Error,
-        ) ?? [],
-    ).toEqual([]);
+    expect(parseSource("doc-sources.ts", changed).program.type).toBe("Program");
   }
   expect(() =>
     removeWaiver(
@@ -207,7 +201,7 @@ test("suppression removal deletes the waiver and only its anchored directive rul
     changed.flatMap(({ after }) => after.match(/\d{4}-\d{2}-\d{2}/gu) ?? []),
   ).toEqual([]);
 });
-test("test quarantine removal unmasks only its exact dated test and removes its deadline", () => {
+test("removing a test quarantine unmasks only its exact dated test and removes its deadline", () => {
   const source =
     '// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("case", () => {});\ntest.skip("other", () => {});';
   const entry = readTestQuarantines({ "a.test.ts": source }).at(0);
@@ -240,7 +234,7 @@ test("command launch failures become private red evidence for all N samples", as
   expect(evidence.output).not.toContain("private details");
 });
 
-test("test green requires exactly one named passing selected receipt", async () => {
+test("a green test requires exactly one named passing selected receipt", async () => {
   for (const [output, expected] of [
     ["0 pass\n0 fail", "red"],
     ["1 pass\n0 skip\n0 fail", "red"],
@@ -655,4 +649,69 @@ test.each([
   "bun install --minimum-release-age 01",
 ])("a nonzero release age %j is not a zero-age override", (command) => {
   expect(ZERO_AGE_OVERRIDE.test(` ${command}`)).toBe(false);
+});
+
+const rolloutFile = (id: string, fields: string) =>
+  `{ "id": ${JSON.stringify(id)}, ${fields} "check": ["bun", "scripts/check-${id}.ts"] }\n`;
+
+test("guard rollout healing restores full enforcement in only the entry's own file", () => {
+  const entry = waiver(
+    "guard-rollout",
+    "scripts/guard-rollouts/fixture-guard.json",
+    "fixture-guard",
+  );
+  const other = {
+    file: "scripts/guard-rollouts/other-guard.json",
+    source: rolloutFile(
+      "other-guard",
+      '"type": "changed-lines", "expiresAt": "2026-10-06T00:00:00.000Z",',
+    ),
+  };
+  for (const fields of [
+    '"type": "changed-lines", "expiresAt": "2026-10-05T00:00:00.000Z",',
+    '"expiresAt": "2026-10-05T00:00:00.000Z", "type": "changed-lines",',
+  ]) {
+    const changes = removeWaiver(
+      entry,
+      reader({
+        [entry.source]: rolloutFile("fixture-guard", fields),
+        [other.file]: other.source,
+      }),
+    );
+    expect(changes.map(({ source }) => source)).toEqual([entry.source]);
+    const changed = changes.at(0)?.after ?? "";
+    expect(JSON.parse(changed).id).toBe("fixture-guard");
+    expect(JSON.parse(changed).type).toBe("full");
+    expect(JSON.parse(changed).check).toEqual([
+      "bun",
+      "scripts/check-fixture-guard.ts",
+    ]);
+    expect(changed).not.toContain(entry.expiresAt);
+    expect(() =>
+      removeWaiver(entry, reader({ [entry.source]: changed })),
+    ).toThrow("Guard rollout scope or expiry changed");
+  }
+  expect(() =>
+    removeWaiver(
+      { ...entry, source: other.file },
+      reader({ [other.file]: other.source }),
+    ),
+  ).toThrow(
+    "Guard rollout heals only in its own file: scripts/guard-rollouts/other-guard.json (fixture-guard)",
+  );
+});
+
+test("guard rollout healing rejects a changed deadline", () => {
+  const entry = waiver(
+    "guard-rollout",
+    "scripts/guard-rollouts/fixture-guard.json",
+    "fixture-guard",
+  );
+  const source = rolloutFile(
+    "fixture-guard",
+    '"type": "changed-lines", "expiresAt": "2026-10-06T00:00:00.000Z",',
+  );
+  expect(() => removeWaiver(entry, reader({ [entry.source]: source }))).toThrow(
+    "Guard rollout scope or expiry changed",
+  );
 });

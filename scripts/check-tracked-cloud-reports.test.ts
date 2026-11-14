@@ -22,14 +22,20 @@ const withRepository = (
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "tracked-cloud-reports-"));
   try {
-    const init = spawnSync("git", ["init", "--quiet"], { cwd: root });
+    const init = spawnSync("git", ["init", "--quiet"], {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+    });
     expect(init.status).toBe(0);
     for (const file of files) {
       const absolutePath = path.join(root, file);
       mkdirSync(path.dirname(absolutePath), { recursive: true });
       writeFileSync(absolutePath, "task output\n");
     }
-    const add = spawnSync("git", ["add", "--", ...files], { cwd: root });
+    const add = spawnSync("git", ["add", "--", ...files], {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+    });
     expect(add.status).toBe(0);
     run(root);
   } finally {
@@ -39,6 +45,7 @@ const withRepository = (
 
 const runCheck = (root: string) =>
   spawnSync(process.execPath, [checkScript], {
+    maxBuffer: 2 ** 30,
     cwd: root,
     encoding: "utf-8",
   });

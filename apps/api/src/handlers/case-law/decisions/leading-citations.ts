@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   listLeadingCitationsHandler,
@@ -12,7 +12,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 const config = {
@@ -23,7 +23,7 @@ const config = {
   ),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
-  params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
   query: listLeadingCitationsQuerySchema,
 } satisfies PublicHandlerConfig;
 

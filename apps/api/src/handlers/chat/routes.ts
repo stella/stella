@@ -1,5 +1,6 @@
-import Elysia from "elysia";
-
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
@@ -8,8 +9,14 @@ import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
+import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
+import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import approveLocalFolder from "@/api/handlers/chat/local-folder-approval";
+import getLocalRunStepOutputGrant from "@/api/handlers/chat/local-run-step-output-grant";
+import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
 import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
@@ -21,14 +28,19 @@ import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
+import listActiveChatRuns from "@/api/handlers/chat/runs/list";
 import savedSecret from "@/api/handlers/chat/saved-secret";
 import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
+import readBackgroundTasks from "@/api/handlers/chat/threads/background-tasks";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -36,219 +48,86 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  readLocalFilesUndo,
+  undoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
-export const chatRoute = new Elysia({ prefix: "/chat" })
-  .use(workspaceAccessMacro)
-  .use(permissionMacro)
-  // Kept deliberately: this guard is the type-level carrier of
-  // `validateAuth` for Elysia's context composition. `permissions` is a
-  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md) that
-  // applies `validateAuth` at runtime but not in type composition, so a
-  // per-route `validateAuth: true` literal instead of this guard breaks
-  // sibling macro context composition. The per-request memoization in
-  // `resolveValidateAuth`
-  // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
-  // of `permissions`. See tests/security/route-auth-invariants.test.ts.
-  .guard({ validateAuth: true })
-  .get("/link-icons/exact", getExactIcon.handler, {
-    query: getExactIcon.config.query,
-    permissions: getExactIcon.config.permissions,
-  })
-  .get("/link-icons/:hostname", getLinkIcon.handler, {
-    params: getLinkIcon.config.params,
-    permissions: getLinkIcon.config.permissions,
-  })
-  .post("/", sendMessage.handler, {
-    body: sendMessage.config.body,
-    permissions: sendMessage.config.permissions,
-  })
-  .post("/threads/:threadId/secrets/:toolCallId", submitSecret.handler, {
-    body: submitSecret.config.body,
-    params: submitSecret.config.params,
-    permissions: submitSecret.config.permissions,
-  })
-  .get("/threads/:threadId/saved-secret", savedSecret.handler, {
-    params: savedSecret.config.params,
-    query: savedSecret.config.query,
-    permissions: savedSecret.config.permissions,
-  })
-  .get("/tool-grants", listChatToolGrants.handler, {
-    query: listChatToolGrants.config.query,
-    permissions: listChatToolGrants.config.permissions,
-  })
-  .get("/tool-grants/coverage", readChatToolGrantCoverage.handler, {
-    query: readChatToolGrantCoverage.config.query,
-    permissions: readChatToolGrantCoverage.config.permissions,
-  })
-  .post("/tool-grants", createChatToolGrant.handler, {
-    body: createChatToolGrant.config.body,
-    permissions: createChatToolGrant.config.permissions,
-  })
-  .delete("/tool-grants/:grantId", deleteChatToolGrant.handler, {
-    params: deleteChatToolGrant.config.params,
-    permissions: deleteChatToolGrant.config.permissions,
-  })
-  .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
-    body: resolveFileThread.config.body,
-    permissions: resolveFileThread.config.permissions,
-    validateWorkspaceAccess: true,
-  })
-  .get("/workspaces/:workspaceId/file-thread", readFileThread.handler, {
-    permissions: readFileThread.config.permissions,
-    query: readFileThread.config.query,
-    validateWorkspaceAccess: true,
-  })
-  .post("/template-thread", resolveTemplateThread.handler, {
-    body: resolveTemplateThread.config.body,
-    permissions: resolveTemplateThread.config.permissions,
-  })
-  .post("/template-thread/rotate", rotateTemplateThread.handler, {
-    body: rotateTemplateThread.config.body,
-    permissions: rotateTemplateThread.config.permissions,
-  })
-  .get("/threads", getThreads.handler, {
-    permissions: getThreads.config.permissions,
-    query: getThreads.config.query,
-  })
-  .get("/decision-threads/:decisionId", getDecisionChatThread.handler, {
-    params: getDecisionChatThread.config.params,
-    permissions: getDecisionChatThread.config.permissions,
-  })
-  .get("/model-options", getModelOptions.handler, {
-    permissions: getModelOptions.config.permissions,
-  })
-  .get("/skill-availability", listUnavailableChatSkills.handler, {
-    permissions: listUnavailableChatSkills.config.permissions,
-    query: listUnavailableChatSkills.config.query,
-  })
-  .post("/table-chart", tableChart.handler, {
-    body: tableChart.config.body,
-    permissions: tableChart.config.permissions,
-  })
-  .post("/improve-prompt", improvePrompt.handler, {
-    body: improvePrompt.config.body,
-    permissions: improvePrompt.config.permissions,
-    requiresUsage: improvePrompt.config.requiresUsage,
-  })
-  .delete("/threads/:threadId", deleteThread.handler, {
-    params: deleteThread.config.params,
-    permissions: deleteThread.config.permissions,
-    query: deleteThread.config.query,
-  })
-  .patch("/threads/:threadId", updateThread.handler, {
-    body: updateThread.config.body,
-    params: updateThread.config.params,
-    permissions: updateThread.config.permissions,
-    query: updateThread.config.query,
-  })
-  .patch("/threads/:threadId/model", updateThreadModel.handler, {
-    body: updateThreadModel.config.body,
-    params: updateThreadModel.config.params,
-    permissions: updateThreadModel.config.permissions,
-    query: updateThreadModel.config.query,
-  })
-  .patch("/threads/:threadId/title", renameThread.handler, {
-    body: renameThread.config.body,
-    params: renameThread.config.params,
-    permissions: renameThread.config.permissions,
-    query: renameThread.config.query,
-  })
-  .get("/threads/:threadId/title", getThreadTitle.handler, {
-    params: getThreadTitle.config.params,
-    permissions: getThreadTitle.config.permissions,
-    query: getThreadTitle.config.query,
-  })
-  .post("/threads/:threadId/title/suggest", suggestThreadTitle.handler, {
-    params: suggestThreadTitle.config.params,
-    permissions: suggestThreadTitle.config.permissions,
-    query: suggestThreadTitle.config.query,
-  })
-  .get("/threads/:threadId/messages", getMessages.handler, {
-    params: getMessages.config.params,
-    permissions: getMessages.config.permissions,
-    query: getMessages.config.query,
-  })
-  .post(
-    "/threads/:threadId/messages/:messageId/span-edit",
-    proposeMessageSpanEdit.handler,
-    {
-      body: proposeMessageSpanEdit.config.body,
-      params: proposeMessageSpanEdit.config.params,
-      permissions: proposeMessageSpanEdit.config.permissions,
+export const chatRoute = routes(
+  {
+    "/link-icons/exact": { GET: getExactIcon },
+    "/link-icons/:hostname": { GET: getLinkIcon },
+    "/": { POST: sendMessage },
+    "/threads/:threadId/secrets/:toolCallId": { POST: submitSecret },
+    "/threads/:threadId/connectors/:toolCallId": { POST: submitConnector },
+    "/threads/:threadId/saved-secret": { GET: savedSecret },
+    "/tool-grants": { GET: listChatToolGrants, POST: createChatToolGrant },
+    "/tool-grants/coverage": { GET: readChatToolGrantCoverage },
+    "/tool-grants/:grantId": { DELETE: deleteChatToolGrant },
+    "/browser-site-grants": {
+      GET: listBrowserSiteGrants,
+      POST: createBrowserSiteGrant,
     },
-  )
-  .get("/threads/:threadId/messages/:messageId", getMessage.handler, {
-    params: getMessage.config.params,
-    permissions: getMessage.config.permissions,
-  })
-  .post(
-    "/threads/:threadId/messages/:messageId/revisions",
-    acceptMessageRevision.handler,
-    {
-      body: acceptMessageRevision.config.body,
-      params: acceptMessageRevision.config.params,
-      permissions: acceptMessageRevision.config.permissions,
+    "/browser-site-grants/:grantId": { DELETE: deleteBrowserSiteGrant },
+    "/workspaces/:workspaceId/file-thread": {
+      POST: resolveFileThread,
+      GET: readFileThread,
     },
-  )
-  .post(
-    "/threads/:threadId/messages/:messageId/revisions/:revision/revert",
-    revertMessageRevision.handler,
-    {
-      body: revertMessageRevision.config.body,
-      params: revertMessageRevision.config.params,
-      permissions: revertMessageRevision.config.permissions,
+    "/template-thread": { POST: resolveTemplateThread },
+    "/template-thread/rotate": { POST: rotateTemplateThread },
+    "/threads": { GET: getThreads },
+    "/runs/active": { GET: listActiveChatRuns },
+    "/decision-threads/:decisionId": { GET: getDecisionChatThread },
+    "/model-options": { GET: getModelOptions },
+    "/local-runners": { GET: getLocalRunners },
+    "/local-runs/:runId/step-output-grant": {
+      GET: getLocalRunStepOutputGrant,
     },
-  )
-  .get(
-    "/threads/:threadId/messages/:messageId/revisions",
-    getMessageRevisions.handler,
-    {
-      params: getMessageRevisions.config.params,
-      query: getMessageRevisions.config.query,
-      permissions: getMessageRevisions.config.permissions,
+    "/local-runners/:desktopId/folders/:linkId/approval": {
+      PUT: approveLocalFolder,
     },
-  )
-  .get("/threads/:threadId/messages/older", getOlderMessages.handler, {
-    params: getOlderMessages.config.params,
-    permissions: getOlderMessages.config.permissions,
-    query: getOlderMessages.config.query,
-  })
-  .post("/threads/:threadId/recap", getThreadRecap.handler, {
-    params: getThreadRecap.config.params,
-    permissions: getThreadRecap.config.permissions,
-    query: getThreadRecap.config.query,
-  })
-  .post("/threads/:threadId/suggested-prompts", getSuggestedPrompts.handler, {
-    params: getSuggestedPrompts.config.params,
-    permissions: getSuggestedPrompts.config.permissions,
-    query: getSuggestedPrompts.config.query,
-  })
-  .get("/threads/:threadId/turns/:turnId/resume", probeChatTurn.handler, {
-    params: probeChatTurn.config.params,
-    permissions: probeChatTurn.config.permissions,
-    query: probeChatTurn.config.query,
-  })
-  .get("/threads/:threadId/turns/:turnId/join", joinChatTurn.handler, {
-    params: joinChatTurn.config.params,
-    permissions: joinChatTurn.config.permissions,
-    query: joinChatTurn.config.query,
-  })
-  .post("/threads/:threadId/turns/:turnId/cancel", cancelTurn.handler, {
-    params: cancelTurn.config.params,
-    permissions: cancelTurn.config.permissions,
-  })
-  .post("/threads/:threadId/fork", forkThread.handler, {
-    body: forkThread.config.body,
-    params: forkThread.config.params,
-    permissions: forkThread.config.permissions,
-    query: forkThread.config.query,
-  })
-  .post("/threads/:threadId/export", createMessageExport.handler, {
-    body: createMessageExport.config.body,
-    params: createMessageExport.config.params,
-    permissions: createMessageExport.config.permissions,
-    query: createMessageExport.config.query,
-  });
+    "/skill-availability": { GET: listUnavailableChatSkills },
+    "/table-chart": { POST: tableChart },
+    "/improve-prompt": { POST: improvePrompt },
+    "/threads/:threadId": { DELETE: deleteThread, PATCH: updateThread },
+    "/threads/:threadId/model": { PATCH: updateThreadModel },
+    "/threads/:threadId/limit-reminder": {
+      GET: getChatLimitReminder,
+      PUT: setChatLimitReminder,
+      DELETE: cancelChatLimitReminder,
+    },
+    "/threads/:threadId/read-state": { PATCH: updateChatThreadReadState },
+    "/threads/:threadId/pin-state": { PATCH: updateChatThreadPinState },
+    "/threads/:threadId/title": { PATCH: renameThread, GET: getThreadTitle },
+    "/threads/:threadId/title/suggest": { POST: suggestThreadTitle },
+    "/threads/:threadId/messages": { GET: getMessages },
+    "/threads/:threadId/messages/:messageId/span-edit": {
+      POST: proposeMessageSpanEdit,
+    },
+    "/threads/:threadId/messages/:messageId": { GET: getMessage },
+    "/threads/:threadId/messages/:messageId/revisions": {
+      POST: acceptMessageRevision,
+      GET: getMessageRevisions,
+    },
+    "/threads/:threadId/messages/:messageId/revisions/:revision/revert": {
+      POST: revertMessageRevision,
+    },
+    "/threads/:threadId/messages/older": { GET: getOlderMessages },
+    "/threads/:threadId/recap": { POST: getThreadRecap },
+    "/threads/:threadId/suggested-prompts": { POST: getSuggestedPrompts },
+    "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
+    "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
+    "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/local-files/undo": {
+      GET: readLocalFilesUndo,
+      POST: undoLocalFiles,
+    },
+    "/threads/:threadId/background-tasks": { GET: readBackgroundTasks },
+    "/threads/:threadId/fork": { POST: forkThread },
+    "/threads/:threadId/export": { POST: createMessageExport },
+  },
+  { prefix: "/chat" },
+);

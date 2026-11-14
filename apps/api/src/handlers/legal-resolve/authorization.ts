@@ -3,9 +3,10 @@ import { decodeJwt } from "jose";
 
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
-import { captureRequestError } from "@/api/lib/analytics/capture";
+import { captureRequestError as captureAuthorizationError } from "@/api/lib/analytics/capture";
 import { isServiceResolveSession } from "@/api/lib/db/service-client-contract";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
@@ -18,7 +19,7 @@ import { authenticateLegalResolveToken } from "./authentication";
 
 export type LegalResolveAuthorizationDependencies = {
   authenticate?: typeof authenticateLegalResolveToken;
-  captureError?: typeof captureRequestError;
+  captureError?: typeof captureAuthorizationError;
   publicLawEnabled?: () => boolean;
   resolveSessionContext?: (
     ...args: Parameters<typeof resolveMcpSessionContext>
@@ -42,7 +43,7 @@ export const authorizeLegalResolveRequest = async (
   request: Request,
   {
     authenticate = authenticateLegalResolveToken,
-    captureError = captureRequestError,
+    captureError = captureAuthorizationError,
     publicLawEnabled = () => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
     resolveSessionContext = resolveMcpSessionContext,
   }: LegalResolveAuthorizationDependencies = {},
@@ -59,7 +60,10 @@ export const authorizeLegalResolveRequest = async (
     if (session.error instanceof McpTokenVerificationError) {
       captureError(session.error, {
         request,
-        context: { source: "legal-resolve", phase: "authentication" },
+        ...handlerErrorContext("legalResolve.authentication", {
+          source: "legal-resolve",
+          phase: "authentication",
+        }),
       });
       return {
         status: 503 as const,
@@ -85,7 +89,10 @@ export const authorizeLegalResolveRequest = async (
       if (!(liveSession.error instanceof McpOrganizationAccessError)) {
         captureError(liveSession.error, {
           request,
-          context: { source: "legal-resolve", phase: "session-resolution" },
+          ...handlerErrorContext("legalResolve.sessionResolution", {
+            source: "legal-resolve",
+            phase: "session-resolution",
+          }),
         });
         return {
           session: session.value,
@@ -139,7 +146,7 @@ type LegalResolveAuthorization = ReturnType<
  */
 export const authorizeOncePerRequest = (
   authorize: (request: Request) => LegalResolveAuthorization,
-  captureError: typeof captureRequestError = captureRequestError,
+  captureError: typeof captureAuthorizationError = captureAuthorizationError,
 ) => {
   const byRequest = new WeakMap<Request, LegalResolveAuthorization>();
   const settle = async (request: Request) => {
@@ -152,7 +159,10 @@ export const authorizeOncePerRequest = (
     }
     captureError(authorization.error, {
       request,
-      context: { source: "legal-resolve", phase: "authorization" },
+      ...handlerErrorContext("legalResolve.authorization", {
+        source: "legal-resolve",
+        phase: "authorization",
+      }),
     });
     return {
       status: 503 as const,

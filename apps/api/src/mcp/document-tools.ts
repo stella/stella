@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
@@ -74,7 +75,6 @@ import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   COMPARE_DOCUMENTS_OUTPUT_CONTRACT,
   COMPARE_DOCUMENTS_TOOL_DEFINITION,
@@ -112,6 +112,11 @@ import {
   PREPARE_FILE_COMPARISON_OUTPUT_CONTRACT,
   PREPARE_FILE_COMPARISON_TOOL_DEFINITION,
 } from "@/api/mcp/file-comparison-prepare-tool";
+import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import {
   defineTextFieldSpec,
@@ -128,7 +133,6 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  cursorInput,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -138,11 +142,9 @@ import {
   isToolErrorResult,
   MAX_LIST_LIMIT,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -150,6 +152,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -173,6 +176,8 @@ const PROPERTY_WRITE_METHODS = {
   // alongside the amount and a person needs resolving to a workspace member.
   money: "unsupported",
   person: "unsupported",
+  // A record comes from its data source or its AI column, never typed in.
+  record: "unsupported",
   text: "set_field_value",
   "single-select": "set_field_value",
   "multi-select": "set_field_value",
@@ -843,7 +848,7 @@ const loadVersionHistory = async ({
   entityId,
   cursor,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   cursor: string | undefined;
@@ -1012,7 +1017,7 @@ const loadDocumentProcessingStates = async ({
   entityId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   current: CurrentDocumentForState;
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -1410,7 +1415,10 @@ const handleReadDocumentTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(baseResult)) {
-      return internalFailureResult(baseResult.error);
+      return internalFailureResult(
+        baseResult.error,
+        "mcp.handleReadDocumentTool.baseResult_error",
+      );
     }
     const targetResult = await Result.gen(() =>
       loadEntityVersionDocxText({
@@ -1422,7 +1430,10 @@ const handleReadDocumentTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(targetResult)) {
-      return internalFailureResult(targetResult.error);
+      return internalFailureResult(
+        targetResult.error,
+        "mcp.handleReadDocumentTool.targetResult_error",
+      );
     }
 
     const segments = buildLineDiffSegments(
@@ -1500,7 +1511,10 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
   );
   if (Result.isError(currentResult)) {
-    return internalFailureResult(currentResult.error);
+    return internalFailureResult(
+      currentResult.error,
+      "mcp.handleReadDocumentTool.currentResult_error",
+    );
   }
   const current = currentResult.value;
   const processingStates = await loadDocumentProcessingStates({
@@ -1729,7 +1743,7 @@ const createDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
@@ -1763,7 +1777,10 @@ const createDocumentEntity = async ({
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.createDocumentEntity.created_error",
+    );
   }
 
   return toolDataResult(
@@ -1788,7 +1805,7 @@ const validateUpdateDocumentTargets = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | undefined;
   versionId: SafeId<"entityVersion"> | undefined;
@@ -1840,7 +1857,7 @@ const applyVersionAnnotations = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   description: string | null | undefined;
   entityId: SafeId<"entity">;
   label: string | null | undefined;
@@ -1860,7 +1877,10 @@ const applyVersionAnnotations = async ({
       }),
     );
     if (Result.isError(labelled)) {
-      return internalFailureResult(labelled.error);
+      return internalFailureResult(
+        labelled.error,
+        "mcp.applyVersionAnnotations.labelled_error",
+      );
     }
   }
   if (description !== undefined) {
@@ -1875,7 +1895,10 @@ const applyVersionAnnotations = async ({
       }),
     );
     if (Result.isError(described)) {
-      return internalFailureResult(described.error);
+      return internalFailureResult(
+        described.error,
+        "mcp.applyVersionAnnotations.described_error",
+      );
     }
   }
   return null;
@@ -1888,7 +1911,7 @@ const updateDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
@@ -1948,7 +1971,10 @@ const updateDocumentEntity = async ({
       }),
     );
     if (Result.isError(renamed)) {
-      return internalFailureResult(renamed.error);
+      return internalFailureResult(
+        renamed.error,
+        "mcp.updateDocumentEntity.renamed_error",
+      );
     }
   }
 
@@ -1962,7 +1988,10 @@ const updateDocumentEntity = async ({
       }),
     );
     if (Result.isError(moved)) {
-      return internalFailureResult(moved.error);
+      return internalFailureResult(
+        moved.error,
+        "mcp.updateDocumentEntity.moved_error",
+      );
     }
   }
 
@@ -2117,7 +2146,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(deleted)) {
-      return internalFailureResult(deleted.error);
+      return internalFailureResult(deleted.error, "mcp.deleteDocumentVersion");
     }
     return toolDataResult(
       projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -2139,7 +2168,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(deleted.error, "mcp.deleteDocument");
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -2259,8 +2288,8 @@ const handleListPropertiesTool: TypedMcpToolHandler<
 const SET_FIELD_VALUE_TYPE_DESCRIPTION =
   "Value type; must match the property's value type";
 const SET_FIELD_VALUE_VALUE_DESCRIPTION =
-  "The value: string for text, string or null for single-select, array of " +
-  "strings for multi-select, ISO YYYY-MM-DD or null for date, integer for " +
+  "The value: string for text, string or null for single-select, string " +
+  "array for multi-select, YYYY-MM-DD or null for date, integer for " +
   "int. Null or empty clears the cell.";
 
 const setFieldValueContentSchema = v.variant("type", [
@@ -2297,7 +2326,7 @@ const setFieldValueContentSchema = v.variant("type", [
       v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
     ),
     value: v.pipe(
-      v.nullable(v.pipe(v.string(), v.isoDate())),
+      v.nullable(apiDateSchema),
       v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
     ),
   }),
@@ -2307,8 +2336,7 @@ const setFieldValueContentSchema = v.variant("type", [
       v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
     ),
     value: v.pipe(
-      v.number(),
-      v.integer(),
+      v.nullable(v.pipe(v.number(), v.integer())),
       v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
     ),
     currency: v.optional(
@@ -2335,8 +2363,14 @@ const setFieldValueArgsSchema = nullAsAbsent(
 
 type SetFieldValueContent = v.InferOutput<typeof setFieldValueContentSchema>;
 
-const toFieldContent = (content: SetFieldValueContent): FieldWriteContent => {
+const toFieldContent = (
+  content: SetFieldValueContent,
+): FieldWriteContent | null => {
   if (content.type === "int") {
+    // An int has no empty value, so a null value clears the cell.
+    if (content.value === null) {
+      return null;
+    }
     return {
       version: 1,
       type: "int",
@@ -2415,10 +2449,15 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
       entityId,
       propertyId: brandPersistedPropertyId(parsed.output.property_id),
       content: toFieldContent(parsed.output.content),
+      // A null int clear still names its type, so it must match the property.
+      expectedType: parsed.output.content.type,
     }),
   );
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleSetFieldValueTool.result_error",
+    );
   }
 
   return toolDataResult(projectionPayload(SET_FIELD_VALUE_PROJECTION, {}));
@@ -2448,6 +2487,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The mode/parent_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2481,6 +2521,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The compare_with_version_id/version_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2576,6 +2617,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "upload/version tools replace only a document's primary file.",
     inputSchema: listPropertiesArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2587,13 +2629,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Set a document's value for a property (a cell in the matter's table). " +
-      "Pass the document entity_id, the property_id (from list_properties), and " +
-      "a content object whose 'type' matches the property's value type: text " +
-      "(value: string), single-select (value: string or null), multi-select " +
-      "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
-      "(value: integer, optional currency: 3-letter ISO code). An empty value " +
-      "clears the cell.",
+      "Set a document property cell. Pass entity_id, property_id from " +
+      "list_properties, and content matching the property's type: 'text' string; " +
+      "'single-select' string or null; 'multi-select' string array; 'date' ISO value " +
+      "or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     inputSchema: setFieldValueArgsSchema,
     // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
     // reindexes the cell and records a fresh audit event + updatedAt bump on

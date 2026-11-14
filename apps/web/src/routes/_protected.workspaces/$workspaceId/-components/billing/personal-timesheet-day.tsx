@@ -4,7 +4,7 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
@@ -22,13 +22,20 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 import { PencilIcon, PlusIcon, TrashIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   ManualTimeEntryForm,
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
+import {
+  timeEntryActionLabel,
+  timeEntryNarrativeExcerpt,
+} from "@/components/billing/time-entry-copy.logic";
+import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -45,10 +52,6 @@ import {
   timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
-import {
-  timeEntryActionLabel,
-  timeEntryNarrativeExcerpt,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 import { TimeSuggestionsLane } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane";
 
 type PersonalTimesheetDayProps = {
@@ -109,8 +112,14 @@ export const PersonalTimesheetDay = ({
   const deleteEntry = useDeleteTimeEntry();
   const decideSuggestion = useDecideTimeSuggestion();
 
-  const reportFailure = (error: unknown) => {
-    getAnalytics().captureError(error);
+  const reportFailure = (
+    error: unknown,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
+    getAnalytics().captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, tErrors("actionFailed"));
   };
 
@@ -144,6 +153,8 @@ export const PersonalTimesheetDay = ({
           durationMinutes: values.durationMinutes,
           narrative: values.narrative,
           narrativeLanguage: values.narrativeLanguage,
+          // The value the form showed, even when it was the default, so a
+          // rate change while the form is open cannot flip it.
           billable: values.billable,
         },
       });
@@ -187,13 +198,16 @@ export const PersonalTimesheetDay = ({
       }
       setDialog({ type: "closed" });
     } catch (error) {
-      reportFailure(error);
+      if (isTimeEntryRateRequired(error)) {
+        return Result.err(error);
+      }
+      reportFailure(error, "PersonalTimesheetDay:submit");
     }
+    return undefined;
   };
 
-  const submitOnce = async (values: Parameters<typeof submit>[0]) => {
+  const submitOnce = async (values: Parameters<typeof submit>[0]) =>
     await submitGuard.run(async () => await submit(values));
-  };
 
   const pending =
     createEntry.isPending ||
@@ -221,7 +235,7 @@ export const PersonalTimesheetDay = ({
           durationMinutes: dialog.suggestion.durationMinutes,
           narrative: dialog.narrative,
           narrativeLanguage: null,
-          billable: false,
+          billable: dialog.suggestion.billableByDefault,
         }
       : {
           dateWorked: editingEntry?.dateWorked ?? date,
@@ -254,21 +268,25 @@ export const PersonalTimesheetDay = ({
           activeMinutes={suggestions.activeMinutes}
           busyFingerprints={busySuggestions}
           items={suggestions.items}
-          loggedMinutes={summary.totalMinutes}
+          loggedMinutes={suggestions.loggedMinutes}
           onAccept={(suggestion, narrative) => {
             detached(
               acceptSuggestion(suggestion, {
                 durationMinutes: suggestion.durationMinutes,
                 narrative,
                 narrativeLanguage: null,
-                billable: false,
-              }).catch(reportFailure),
+                billable: suggestion.billableByDefault,
+              }).catch((error: unknown) =>
+                reportFailure(error, "PersonalTimesheetDay:accept-suggestion"),
+              ),
               "personal-timesheet-day.accept-suggestion",
             );
           }}
           onDismiss={(suggestion) => {
             detached(
-              dismissSuggestion(suggestion).catch(reportFailure),
+              dismissSuggestion(suggestion).catch((error: unknown) =>
+                reportFailure(error, "PersonalTimesheetDay:dismiss-suggestion"),
+              ),
               "personal-timesheet-day.dismiss-suggestion",
             );
           }}
@@ -286,13 +304,19 @@ export const PersonalTimesheetDay = ({
               key={entry.id}
             >
               <div className="min-w-0 flex-1">
-                <BidiText as="p" className="truncate text-sm font-medium">
+                <TruncatedText
+                  className="text-sm font-medium"
+                  render={<BidiText as="p" />}
+                >
                   {entry.narrative}
-                </BidiText>
-                {(!entry.billable || entry.source === "suggested") && (
+                </TruncatedText>
+                {(!entry.billable ||
+                  entry.source === "suggested" ||
+                  entry.source === "activity") && (
                   <span className="text-muted-foreground text-xs">
                     {[
-                      entry.source === "suggested"
+                      entry.source === "suggested" ||
+                      entry.source === "activity"
                         ? tCommon("suggested")
                         : null,
                       entry.billable ? null : tBilling("nonBillable"),
@@ -388,6 +412,8 @@ export const PersonalTimesheetDay = ({
               onSubmit={submitOnce}
               pending={pending}
               workspaceId={workspaceId}
+              userId={editingEntry?.userId ?? userId}
+              activityCode={editingEntry?.activityCode ?? null}
             />
           </DialogPanel>
         </DialogPopup>
@@ -425,7 +451,7 @@ export const PersonalTimesheetDay = ({
                     .mutateAsync({ workspaceId, id: deletingId })
                     .then(() => setDeletingId(null))
                     .catch((error: unknown) => {
-                      reportFailure(error);
+                      reportFailure(error, "PersonalTimesheetDay:delete-entry");
                     }),
                   "personal-timesheet-day.delete-entry",
                 );

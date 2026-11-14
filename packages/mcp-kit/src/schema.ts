@@ -4,7 +4,7 @@
  * titles, no examples. Guidance lives in `describe_capability`.
  */
 
-import type { McpJsonSchema, ListedTool } from "./types";
+import type { ListedTool, McpJsonSchema } from "./types";
 
 const ANNOTATION_KEYWORDS: ReadonlySet<string> = new Set([
   "$comment",

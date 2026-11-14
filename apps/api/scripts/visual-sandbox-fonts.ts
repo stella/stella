@@ -41,7 +41,7 @@ export const buildVisualFontFaces = async (guestCss: string) => {
       ).arrayBuffer();
       sources.set(
         match[0],
-        `url("data:font/woff2;base64,${Buffer.from(bytes).toString("base64")}")`,
+        `url("data:font/woff2;base64,${Buffer.from(bytes).toBase64()}")`,
       );
     }),
   );

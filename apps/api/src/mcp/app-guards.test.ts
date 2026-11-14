@@ -10,6 +10,7 @@ const readerTool = {
   name: "reader_blocks",
   description: "Read decision blocks",
   access: "read",
+  permissions: { type: "open-read", reason: "reads only fixture data" },
   readClass: "public",
   annotationReasons: {
     readOnlyHint: "Reads fixture data without modifying it.",
@@ -78,7 +79,7 @@ describe("presentation app tool audiences", () => {
     ).toEqual(["App calls require app-visible tools: reader_blocks"]);
   });
 
-  test("app-only writes remain forbidden for presentation apps", () => {
+  test("app-only writes are allowed for presentation apps", () => {
     const writeTool = {
       name: readerTool.name,
       description: readerTool.description,
@@ -96,8 +97,32 @@ describe("presentation app tool audiences", () => {
       permissions: { type: "delegated", reason: "Test upstream authorization" },
       accountAccess: "account-control",
     } as const satisfies McpToolDefinition;
+    expect(inspect(writeTool)).toEqual([]);
+  });
+
+  test("model-visible writes remain forbidden for presentation apps", () => {
+    const writeTool = {
+      name: readerTool.name,
+      description: readerTool.description,
+      scope: readerTool.scope,
+      inputSchema: readerTool.inputSchema,
+      annotations: { ...readerTool.annotations, readOnlyHint: false },
+      annotationReasons: {
+        ...readerTool.annotationReasons,
+        readOnlyHint: "Changes the selected record.",
+      },
+      anonymized: readerTool.anonymized,
+      consumesServices: readerTool.consumesServices,
+      _meta: {
+        ui: { visibility: ["model", "app"] },
+      },
+      access: "write",
+      permissions: { type: "delegated", reason: "The target enforces access" },
+      accountAccess: "standard",
+    } as const satisfies McpToolDefinition;
+
     expect(inspect(writeTool)).toContain(
-      "Presentation apps require read-only tools: reader_blocks",
+      "Presentation apps cannot call model-visible write tools: reader_blocks",
     );
   });
 });

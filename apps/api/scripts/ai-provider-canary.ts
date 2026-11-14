@@ -7,15 +7,15 @@ import * as v from "valibot";
 import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  resolveDefaultModel,
   isBYOKModelRoleSupported,
-  MODEL_TASKS,
-  MODEL_TASK_OVERRIDE_GROUP,
-  MODEL_OVERRIDE_GROUPS,
   MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
+  resolveDefaultModel,
   supportsStreamingToolUse,
 } from "@stll/ai-catalog";
-import type { ModelTask, ModelOverrideGroup } from "@stll/ai-catalog";
+import type { ModelOverrideGroup, ModelTask } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { AIErrorKind } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
@@ -42,14 +42,14 @@ import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
-  CANARY_TIERS,
   CANARY_PROVIDERS,
-  modelTaskMaxOutputTokens,
-  structuredOutputBudgetEdgeMaxOutputTokens,
-  structuredOutputModelTaskMaxOutputTokens,
+  CANARY_TIERS,
   IMPOSSIBLE_STRING_MAX_LENGTH,
   isCanaryProvider,
+  modelTaskMaxOutputTokens,
   NULL_WIDENING_CANARY_PROVIDERS,
+  structuredOutputBudgetEdgeMaxOutputTokens,
+  structuredOutputModelTaskMaxOutputTokens,
   TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
@@ -186,7 +186,7 @@ export const createPdfCanaryMessages = (): ModelMessage[] => [
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(createSyntheticPdf()).toString("base64"),
+          value: Buffer.from(createSyntheticPdf()).toBase64(),
           mimeType: PDF_MIME_TYPE,
         },
         metadata: { filename: PDF_CANARY_FILENAME },
@@ -271,13 +271,22 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
   deadline_exceeded: true,
   loop_detected: false,
   empty_completion: false,
+  // Named by the computer that ran the turn, never by a provider call here.
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: false,
+  local_runner_turn_too_large: false,
+  // Named by the chat turn's delivery log, never by a provider call here.
+  turn_too_large: false,
+  local_runner_not_reached: false,
+  local_runner_relinked: false,
+  local_runner_restoring: false,
+  local_runner_folder_unavailable: false,
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 
 type CanaryRunStage =
-  | "before-tool-call"
-  | "after-tool-call"
-  | "after-tool-result";
+  "before-tool-call" | "after-tool-call" | "after-tool-result";
 
 const PROVIDER_ERROR_NESTED_KEYS = ["rawEvent", "error", "cause"] as const;
 

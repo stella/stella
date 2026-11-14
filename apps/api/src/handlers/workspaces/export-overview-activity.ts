@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { Temporal } from "@stll/time";
@@ -16,6 +16,7 @@ import {
   matterActivityFilterQueryProperties,
   toMatterActivityFilters,
 } from "./matter-activity-query";
+import { activityDetailText } from "./read-overview-activity.logic";
 import { readOverviewActivityExport } from "./read-overview-activity.query";
 import type { MatterActivityItem } from "./read-overview-activity.query";
 
@@ -44,9 +45,9 @@ const config = {
         "no capability returns the matter's complete filtered activity history",
     },
   },
-  query: t.Object({
+  query: v.object({
     ...matterActivityFilterQueryProperties,
-    format: t.UnionEnum([...MATTER_ACTIVITY_EXPORT_FORMATS]),
+    format: v.picklist([...MATTER_ACTIVITY_EXPORT_FORMATS]),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -57,6 +58,7 @@ const matterActivityCsv = (items: readonly MatterActivityItem[]): string => {
       "Actor",
       "Actor type",
       "Action",
+      "Detail",
       "Category",
       "Target type",
       "Target",
@@ -73,6 +75,7 @@ const matterActivityCsv = (items: readonly MatterActivityItem[]): string => {
         item.performer.name ?? "",
         item.performer.type,
         item.action,
+        activityDetailText(item.detail),
         item.category,
         item.target.kind,
         item.target.name ?? "",

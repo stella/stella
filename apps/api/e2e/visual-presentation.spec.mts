@@ -18,7 +18,7 @@ test.beforeAll(() => {
       "--target=browser",
       "--format=esm",
     ],
-    { encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, encoding: "utf-8" },
   );
 });
 
@@ -65,5 +65,5 @@ test("host themes override fallback tokens and replace one guest stylesheet", as
         .getPropertyValue("--radius")
         .trim(),
     ),
-  ).toBe(".625rem");
+  ).toBe(".5rem");
 });

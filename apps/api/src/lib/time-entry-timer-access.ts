@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
@@ -9,8 +10,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessAssignments,
   lockTimerMatterAccessRows,
-  TIMER_MATTER_LOCK_SCOPE,
   lockWorkspaceLifecycle,
+  TIMER_MATTER_LOCK_SCOPE,
 } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
@@ -73,7 +74,7 @@ export const hasCurrentTimerMatterAccess = async ({
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         memberReachesMatterSql({ organizationId, userId }, workspaces.id),
       ),
     )

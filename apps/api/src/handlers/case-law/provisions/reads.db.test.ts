@@ -14,8 +14,8 @@ import {
 import {
   caseLawDecisions,
   caseLawProvisionCitations,
-  caseLawStatuteCitationCounts,
   caseLawSources,
+  caseLawStatuteCitationCounts,
   STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
 import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
@@ -452,6 +452,101 @@ test("citing decisions page through a stable cursor", async () => {
     { decisionId: highAuthorityId, mentionCount: 3 },
   ]);
   expect(cursor).toBeUndefined();
+});
+
+test("a decision whose mentions disagree on its date is listed once, with every mention", async () => {
+  const work = `split-date-${String(createSafeId<"caseLawDecision">())}`;
+  const splitId = createSafeId<"caseLawDecision">();
+  const newerId = createSafeId<"caseLawDecision">();
+  const betweenId = createSafeId<"caseLawDecision">();
+  const olderId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values(
+    [
+      { id: splitId, decisionDate: "2023-06-01" },
+      { id: newerId, decisionDate: "2024-01-01" },
+      { id: betweenId, decisionDate: "2022-01-01" },
+      { id: olderId, decisionDate: "2019-01-01" },
+    ].map(({ id, decisionDate }) =>
+      decisionRow({
+        caseNumber: `split-date-${decisionDate}`,
+        citationAuthority: 1,
+        decisionDate,
+        id,
+        sourceId: openSourceId,
+      }),
+    ),
+  );
+  const mention = (
+    decisionId: SafeId<"caseLawDecision">,
+    anchor: string,
+    decisionDate: string | null,
+    spanStart: number,
+  ) =>
+    provisionRow({
+      anchor,
+      decisionDate,
+      decisionId,
+      spanStart,
+      workEli: null,
+      workIdentifier: work,
+    });
+  await db
+    .insert(caseLawProvisionCitations)
+    .values([
+      mention(splitId, ANCHOR_A, "2023-06-01", 30),
+      mention(splitId, ANCHOR_A, "2021-01-01", 10),
+      mention(splitId, ANCHOR_B, null, 20),
+      mention(newerId, ANCHOR_A, "2024-01-01", 10),
+      mention(betweenId, ANCHOR_A, "2022-01-01", 10),
+      mention(olderId, ANCHOR_A, "2019-01-01", 10),
+    ]);
+
+  // The split decision sorts by the newest date its mentions carry, and its
+  // excerpt is its earliest mention whatever date that mention carries.
+  const expected = [newerId, splitId, betweenId, olderId];
+  const page = await citingDecisions({ limit: 10, work });
+  expect(page.items.map(({ decisionId }) => decisionId)).toEqual(expected);
+  expect(
+    page.items.find(({ decisionId }) => decisionId === splitId),
+  ).toMatchObject({
+    decisionDate: "2023-06-01",
+    mentionCount: 3,
+    spanStart: 10,
+  });
+
+  const seen: string[] = [];
+  let cursor: string | undefined;
+  for (let request = 0; request < expected.length + 2; request += 1) {
+    const next = await citingDecisions({
+      limit: 1,
+      work,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    seen.push(...next.items.map(({ decisionId }) => decisionId));
+    cursor = next.nextCursor ?? undefined;
+    if (cursor === undefined) {
+      break;
+    }
+  }
+  expect(seen).toEqual(expected);
+  expect(cursor).toBeUndefined();
+
+  const byCitations = await citingDecisions({
+    limit: 10,
+    sort: "citations",
+    work,
+  });
+  expect(
+    byCitations.items.map(({ decisionId, mentionCount }) => ({
+      decisionId,
+      mentionCount,
+    })),
+  ).toEqual([
+    { decisionId: splitId, mentionCount: 3 },
+    { decisionId: newerId, mentionCount: 1 },
+    { decisionId: betweenId, mentionCount: 1 },
+    { decisionId: olderId, mentionCount: 1 },
+  ]);
 });
 
 test("citing decisions filter by anchor", async () => {
@@ -984,8 +1079,8 @@ test("EU cited-by lists and counts share decision admission and publication gate
       decisionDate: "2025-01-01",
       sourceId: openSourceId,
     }),
-    country: "SVK",
-    language: "sk",
+    country: "AUT",
+    language: "de",
   });
   const ids = [highAuthorityId, lowAuthorityId, closedDecisionId, pendingId];
   await db.insert(caseLawProvisionCitations).values(

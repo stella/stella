@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BUNDLED_CONSUMERS,
-  compareSiteCounts,
-  scanBundledConsumers,
   type BundledConsumerSite,
+  compareSiteCounts,
   type RepositoryFile,
+  scanBundledConsumers,
 } from "./bundled-consumers";
 
 const SCAN_GLOBS = [

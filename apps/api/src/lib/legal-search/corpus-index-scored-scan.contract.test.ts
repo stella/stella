@@ -10,11 +10,10 @@ import { assertProperty } from "@stll/property-testing";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
-  type CorpusIndexHit,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
+  type CorpusIndexHit,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
@@ -179,6 +178,11 @@ const decisionDocuments = (batch: number, slot: number) => {
     redacted: false,
     listingOnly: false,
     provisionKeys: [],
+    rankingSignals: {
+      citationAuthorityBucket: 0,
+      languageGroupKey: null,
+      languageGroupShared: false,
+    },
     vacatedFrom: null,
     caseNumber: `${String(slot + 1)} Cdo ${String(batch + 1)}/2020`,
     identifiers: [],
@@ -215,6 +219,11 @@ const tiedDocuments = (serial: number) => {
     redacted: false,
     listingOnly: false,
     provisionKeys: [],
+    rankingSignals: {
+      citationAuthorityBucket: 0,
+      languageGroupKey: null,
+      languageGroupShared: false,
+    },
     vacatedFrom: null,
     caseNumber: "",
     identifiers: [],
@@ -260,6 +269,11 @@ const provisionDocuments = () =>
         redacted: false,
         listingOnly: false,
         provisionKeys: [],
+        rankingSignals: {
+          citationAuthorityBucket: 0,
+          languageGroupKey: null,
+          languageGroupShared: false,
+        },
         vacatedFrom: null,
         caseNumber: "",
         identifiers: [],
@@ -318,6 +332,11 @@ const floodDocuments = () =>
         redacted: false,
         listingOnly: false,
         provisionKeys: [],
+        rankingSignals: {
+          citationAuthorityBucket: 0,
+          languageGroupKey: null,
+          languageGroupShared: false,
+        },
         vacatedFrom: null,
         caseNumber: "",
         identifiers: [],
@@ -369,7 +388,7 @@ const handlerQuery = (
   if (query === null) {
     throw new Error(`the entry ${text} built no engine query`);
   }
-  return withCaseLawDatedDecisions(query, "relevance");
+  return query;
 };
 
 const ENTRIES = [
@@ -667,6 +686,11 @@ describe.skipIf(!runEngineTests)(
           redacted: false,
           listingOnly: false,
           provisionKeys: [],
+          rankingSignals: {
+            citationAuthorityBucket: 0,
+            languageGroupKey: null,
+            languageGroupShared: false,
+          },
           vacatedFrom: null,
           caseNumber: "1 Cdo 1/2024",
           identifiers: [],
@@ -760,8 +784,9 @@ describe.skipIf(!runEngineTests)(
           }
           // Equal-count buckets have no tie order in the engine contract.
           // Compare every facet's complete bucket contents across the flip.
+          const { country, court, year } = result.value;
           return Object.fromEntries(
-            Object.entries(result.value).map(([name, buckets]) => [
+            Object.entries({ country, court, year }).map(([name, buckets]) => [
               name,
               buckets.toSorted((left, right) =>
                 getCollator("en").compare(left.value, right.value),
@@ -1057,6 +1082,29 @@ describe.skipIf(!runEngineTests)(
           : null;
 
       expect(Array.isArray(splits) ? splits.length : 0).toBeGreaterThan(1);
+    });
+
+    test("the split census reports each index it is asked about", async () => {
+      const counts = await client.readPublishedSplitCounts({
+        includes: (indexId) => indexId === INDEX_ID,
+        observer: "unobserved",
+      });
+      if (counts.isErr()) {
+        throw counts.error;
+      }
+      expect(counts.value).toHaveLength(1);
+      expect(counts.value.at(0)?.indexId).toBe(INDEX_ID);
+      expect(counts.value.at(0)?.publishedSplits ?? 0).toBeGreaterThan(1);
+    });
+
+    test("the split census ends when its shared deadline has passed", async () => {
+      const counts = await client.readPublishedSplitCounts({
+        includes: (indexId) => indexId === INDEX_ID,
+        observer: "unobserved",
+        signal: AbortSignal.abort(),
+      });
+
+      expect(counts.isErr()).toBe(true);
     });
 
     test.each(ENTRIES)(

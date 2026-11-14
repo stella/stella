@@ -1,5 +1,16 @@
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
+
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  definedFields,
+  toFileTab,
+} from "@/components/inspector/open-entities.logic";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import { getEntityName } from "@/components/workspaces/entity-utils";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { WorkspaceEntity } from "@/lib/types";
 
@@ -48,8 +59,57 @@ export const VersionCell = ({ entity }: { entity: WorkspaceEntity }) => {
   }
 
   return (
-    <span className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs">
       {entity.version}
-    </span>
+    </TruncatedText>
+  );
+};
+
+type VersionHistoryCellProps = {
+  entity: WorkspaceEntity;
+  workspaceId: string;
+};
+
+/**
+ * The table's version cell: opens the row's file in the inspector on its
+ * version history. The tree view keeps the inert `VersionCell` because its
+ * cells sit inside the row's own button, where a nested control is invalid.
+ */
+export const VersionHistoryCell = ({
+  entity,
+  workspaceId,
+}: VersionHistoryCellProps) => {
+  const t = useTranslations();
+  const fileTab = toFileTab({
+    entityId: entity.entityId,
+    fields: definedFields(entity),
+    label: getEntityName(entity),
+    workspaceId,
+  });
+
+  if (fileTab === null) {
+    return <VersionCell entity={entity} />;
+  }
+
+  const label = t("fileDetail.showVersionList");
+  return (
+    <Button
+      aria-label={label}
+      // `static` lets the pseudo-element stretch the hit area over the whole
+      // cell instead of the button.
+      className="static after:absolute after:inset-0"
+      onClick={() =>
+        useInspectorTabsStore
+          .getState()
+          .openFile({ ...fileTab, facet: "versions" })
+      }
+      size="inline"
+      tooltip={label}
+      variant="muted"
+    >
+      <TruncatedText className="text-xs" hint={false}>
+        {entity.version}
+      </TruncatedText>
+    </Button>
   );
 };

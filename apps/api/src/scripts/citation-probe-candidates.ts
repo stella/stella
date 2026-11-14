@@ -13,7 +13,11 @@ export const standaloneCandidate = (match: string): string => {
 // administrative-authority file numbers (letter blocks joined by dashes),
 // anonymization placeholders, and statute/collection references.
 const BENIGN: readonly RegExp[] = [
-  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–][\w/–-]{0,30}\d/u,
+  // Dashes include the non-breaking hyphen (U+2011) some sources print.
+  // Anchored to the case-number prefix: an authority reference that only
+  // follows a court docket ("sp. zn. 12 C 345/2020 ÚOHS-S123/2019/VZ") must
+  // not hide the docket.
+  /^(?:[Ss]p\.\s{0,3}[Zz]n\.|[Ss]en\.\s{0,3}[Zz]n\.|[Ss]ygn\.(?:\s{1,3}akt\.?)?|[ČčCc]\.\s{0,3}[Jj]\.:?)\s{0,3}[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–‑][\w/–‑-]{0,30}\d/u,
   /X{2,}/u,
   /\b\d{1,5}\/\d{2,4}\s{1,3}Sb\b/u,
   /\bZb\.\s*z\b/u,
@@ -25,9 +29,9 @@ const BENIGN: readonly RegExp[] = [
   /\bKIO\s{0,1}\/?\s{0,1}\d{1,5}\s{0,1}\/\s{0,1}\d{2,4}\b/u,
   // The procurement office's earlier arbitration-panel files
   // ("UZP/ZO/0-1234/05", also written with a letter O, and with a space
-  // or line break after the hyphen): same out-of-corpus quasi-judicial body
-  // under its pre-KIO file format.
-  /\bUZP\/ZO\/[0O]-\s{0,2}\d{1,5}\/\d{2,4}(?![\p{L}\d/-])/u,
+  // or line break around the slash or hyphen): same out-of-corpus
+  // quasi-judicial body under its pre-KIO file format.
+  /\bUZP\/ZO\/\s{0,2}[0O]\s{0,2}-\s{0,2}\d{1,5}\/\d{2,4}(?![\p{L}\d/-])/u,
   // A case-number prefix ("sp. zn.", "sen. zn.", "sygn.[ akt]", "č. j.")
   // with no digit anywhere in the captured tail is never a real citation:
   // every actual docket carries a number. Covers Polish anonymization
@@ -55,14 +59,15 @@ const BENIGN: readonly RegExp[] = [
   // department code sits in one of the slash-joined segments: "č. j.
   // KK/547/DS/19-3" (regional authority), "č. j. 2194/OD/19-4/Rsz" (city
   // transport department), "č. j. 5/OH/8433/01-Sa/533" (environmental
-  // inspectorate). Two properties separate these from a court docket: the
+  // inspectorate), and its "sp. zn." spelling ("sp. zn. IV/12/345/2000/AB",
+  // tax directorate). Two properties separate these from a court docket: the
   // reference carries no whitespace, and it joins four or more segments,
   // while the widest court docket the extractor accepts
   // (CASE_NUMBER_BODY_COMMA) reaches three. The leading lookahead keeps the
   // no-whitespace chamber+registry spelling ("36Co/52/53/2023") out, and the
   // trailing one prevents a longer or oversized reference from matching a
   // benign-looking prefix of itself.
-  /[čc]\.\s{0,3}j\.:?\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
+  /(?:[čc]\.\s{0,3}j\.|sp\.\s{0,3}zn\.):?\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
   // The same administrative reference written with a whitespace-separated
   // authority code: "č.j. MCO5 155283/2019/ODP/Mach" (městská část office),
   // "sp.zn. MCO5/OSU/1827/2017/Šev/Sm.p.967" (its sp. zn. spelling). The
@@ -83,6 +88,12 @@ const BENIGN: readonly RegExp[] = [
   // rule above misses it whenever the detector's greedy tail reaches into
   // following prose that carries a date.
   /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}[Aa]nonymizov[aá]no\b/u,
+  // Czech anonymization label standing where the file number belongs ("č. j.
+  // číslo jednací ze dne …", "č. j. Číslo jednací …", "č. j. č. účtu ze dne
+  // …"): a lowercase word follows the label, never a number, so trailing prose
+  // digits must not keep it a residual. A docket-shaped number/year shortly
+  // after the label ("č. j. číslo jednací 12 C 345/2020") is a real reference.
+  /^[čc]\.\s{0,3}j\.:?\s{0,3}(?:[čČ]íslo|[čČ]\.\s{0,2}účtu)(?=\s{1,3}\p{Ll}|$)(?![^\n]{0,45}?\d{1,6}\/\d{2,4})/u,
   // Czech regional-authority file number with a space-separated office
   // code ("č. j. KUAB 12345/2020"): every krajský úřad code opens with
   // "KU", which no court registry does, and the reference is not a court
@@ -102,6 +113,12 @@ const BENIGN: readonly RegExp[] = [
   // led by a chamber number or written "Spr."): the agenda of the court's
   // president, not a decision docket the corpus can hold.
   /^sp\.\s{0,3}zn\.\s{0,3}(?:\d{1,3}\s{0,2})?Spr\.?\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
+  // Slovak prosecutor-office file ("sp. zn. VI/2 Pz 123/07", "sp. zn. XV/2
+  // Gn 45/09"): a Roman division and numeric department joined by a slash
+  // lead the reference, where every court docket opens with a plain chamber
+  // number; the prosecution service's files are not decisions the corpus
+  // can hold.
+  /^sp\.\s{0,3}zn\.\s{0,3}[IVX]{1,5}\/\d{1,2}\s{1,3}\p{Lu}\p{Ll}{1,3}\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
 ];
 
 export const isBenign = (candidate: string): boolean =>

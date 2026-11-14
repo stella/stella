@@ -9,8 +9,8 @@ import {
   createOriginalSignatureVerifier,
 } from "./authentication";
 import {
-  ingestInboundMail,
   type InboundDeliveryOutcome,
+  ingestInboundMail,
   type PersistInboundDeliveryOptions,
 } from "./ingest";
 import { INBOUND_MAIL_LIMITS } from "./limits";
@@ -57,7 +57,7 @@ const attachOriginal = (raw: Uint8Array) =>
       'Content-Disposition: attachment; filename="original.eml"',
       "Content-Transfer-Encoding: base64",
       "",
-      Buffer.from(raw).toString("base64"),
+      Buffer.from(raw).toBase64(),
       "--outer--",
       "",
     ].join("\r\n"),
@@ -155,7 +155,7 @@ test("verifies only a complete DKIM signature over the exact attached original b
   const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" });
   const publicKeyRecord = publicKey
     .export({ type: "spki", format: "der" })
-    .toString("base64");
+    .toBase64();
   const resolver = () => ({
     resolve: async (domain: string, rrtype: string) => {
       if (domain === "case._domainkey.outside.test" && rrtype === "TXT") {

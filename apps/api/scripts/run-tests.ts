@@ -14,10 +14,10 @@ import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
 import {
+  type ComposedTestBatches,
   listApiTestPaths,
   planApiTestBatches,
   TEST_ROOTS,
-  type ComposedTestBatches,
 } from "./api-test-plan";
 import {
   BATCH_MEMORY,
@@ -28,20 +28,21 @@ import {
   measuredTestRssTable,
   parseRssMeasurementArguments,
   staleTestRssTableAnnotation,
-  testRssArtifact,
   TEST_BATCH_KIND,
   type TestBatchKind,
+  testRssArtifact,
   type TestRssMeasurement,
 } from "./test-batch-plan";
 import {
   acquireCurrentSnapshot,
   exitAfterSnapshotFailure,
+  SnapshotBuildError,
   snapshotCacheDir,
   snapshotDigest,
   snapshotKey,
-  SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 import {
+  API_TEST_FILES_ENCODED_ENV,
   API_TEST_SHARD_ENV,
   restrictApiTestFiles,
   selectApiTestFiles,
@@ -54,8 +55,8 @@ import {
 } from "./test-lanes";
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 import {
-  TestProcessSupervisor,
   testProcessBudgets,
+  TestProcessSupervisor,
 } from "./test-process-supervisor";
 import {
   API_TEST_DURATIONS_FILE_ENV,
@@ -82,7 +83,7 @@ const forwardedArguments = runnerArguments.filter(
 
 const allTestPaths = restrictApiTestFiles(
   listApiTestPaths(apiRoot),
-  process.env["API_TEST_FILES"],
+  process.env[API_TEST_FILES_ENCODED_ENV],
 );
 const durationWeights = loadTestDurationWeights({
   files: allTestPaths,

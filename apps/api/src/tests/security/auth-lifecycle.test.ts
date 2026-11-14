@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { account } from "@/api/db/auth-schema";
 import { isBootstrapTokenMatch } from "@/api/lib/selfhost-auth";
 
 const readSecurityFixture = (relativePath: string) =>
@@ -132,7 +134,10 @@ describe("self-host auth bootstrap lifecycle", () => {
       "apps/api/drizzle/20260703233000_account_credential_singleton/migration.sql",
     );
 
-    expect(authSchemaSource).toContain("account_credential_singleton_uidx");
+    const singleton = getTableConfig(account).indexes.find(
+      (index) => index.config.name === "account_credential_singleton_uidx",
+    );
+    expect(singleton?.config.unique).toBe(true);
     expect(authSchemaSource).toContain("'credential'");
     expect(migrationSource).toContain("account_credential_singleton_uidx");
     expect(migrationSource).toContain("WHERE provider_id = 'credential'");
@@ -153,10 +158,26 @@ describe("two-factor management lifecycle", () => {
     // it is confirmed the same way disable, rotation, and backup-code
     // regeneration are. The one exemption is a deployment with no transactional
     // email transport, which cannot deliver a code at all: current
-    // second-factor state alone never waives the gate, so both clauses must
-    // stay in the same condition.
+    // second-factor state alone never waives the gate. Only a credential
+    // account has the plugin's independent password check in that deployment
+    // shape; passwordless accounts must fail closed.
     expect(gateSource.replaceAll(/\s+/gu, " ")).toContain(
       'session.user["twoFactorEnabled"] !== true && !isTransactionalEmailConfigured()',
+    );
+    expect(gateSource).toContain("await hasCredentialAccount(");
+    const accountRowSource = readSecurityFixture("../../lib/db/account-row.ts");
+    const credentialStart = accountRowSource.indexOf(
+      "export const hasCredentialAccount",
+    );
+    expect(credentialStart).toBeGreaterThanOrEqual(0);
+    expect(
+      accountRowSource.slice(
+        credentialStart,
+        accountRowSource.indexOf(";\n", credentialStart),
+      ),
+    ).toContain('hasAccountForProvider(userId, "credential")');
+    expect(gateSource).toContain(
+      "Two-factor enrollment requires transactional email or a password account",
     );
     expect(gateSource).toContain('purpose: "two-factor-manage"');
 
@@ -166,5 +187,11 @@ describe("two-factor management lifecycle", () => {
       "../../handlers/me/two-factor-send-manage-otp.ts",
     );
     expect(sendSource).not.toContain("twoFactorEnabled");
+  });
+
+  test("trusted-device grants stay disabled until they can be bound to a factor generation", () => {
+    const authSource = readSecurityFixture("../../lib/auth.ts");
+
+    expect(authSource).toContain("trustDeviceMaxAge: 0");
   });
 });

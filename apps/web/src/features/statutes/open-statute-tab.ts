@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 /**
  * The one action that opens a listed statute beside the results, the way a
  * listed decision opens: the row, its Enter and its title link all go through
@@ -5,10 +6,9 @@
  * below `md`), the act's own page opens instead.
  */
 
-import type { MouseEvent } from "react";
-
 import { useNavigate } from "@tanstack/react-router";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
@@ -20,7 +20,13 @@ import { detached } from "@/lib/detached";
 
 type StatuteOpenTarget = Pick<
   StatuteListItem,
-  "country" | "id" | "eli" | "slug" | "title" | "versionValidFrom"
+  | "country"
+  | "id"
+  | "eli"
+  | "slug"
+  | "title"
+  | "documentType"
+  | "versionValidFrom"
 >;
 
 /** The page a listed statute opens on: the act's canonical address. */
@@ -51,7 +57,7 @@ export const useOpenStatuteTab = (searchQuery?: string) => {
         documentId: statute.id,
         eli: statute.eli,
         slug: statute.slug,
-        statuteTitle: statute.title,
+        statuteTitle: statuteDisplayLabel(statute).text,
         versionValidFrom: statute.versionValidFrom,
       }),
     );

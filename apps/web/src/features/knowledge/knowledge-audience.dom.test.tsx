@@ -3,11 +3,10 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { RouteComponent } from "@tanstack/react-router";
 import { plugin } from "bun";
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 // A DOM for this file only: the frames and sections mount, fetch and react to
 // session changes, which a static render cannot show. Everything that touches
@@ -31,6 +30,23 @@ plugin({
   },
 });
 
+// The member frame holds the signed-in user's event stream open. These pages
+// assert on requests and timing, so the stream stays open and silent instead
+// of dialing a server that is not there.
+class SilentEventSource extends EventTarget {
+  static readonly CLOSED = 2;
+  readyState = 1;
+  readonly url: string;
+  constructor(url: string | URL) {
+    super();
+    this.url = String(url);
+  }
+  close() {
+    this.readyState = SilentEventSource.CLOSED;
+  }
+}
+Object.assign(globalThis, { EventSource: SilentEventSource });
+
 // Build-time constants the member frame shows.
 for (const name of ["__APP_VERSION__", "__APP_COMMIT_SHA__"]) {
   Object.defineProperty(globalThis, name, {
@@ -38,28 +54,6 @@ for (const name of ["__APP_VERSION__", "__APP_COMMIT_SHA__"]) {
     value: "test",
   });
 }
-
-// The browser build keeps only the client half of an isomorphic function;
-// without the build step both halves exist and the server one would run.
-const start = await import("@tanstack/react-start");
-type ClientHalf = (...args: never[]) => unknown;
-await mock.module("@tanstack/react-start", () => ({
-  ...start,
-  createIsomorphicFn: () => {
-    let clientHalf: ClientHalf = () => undefined;
-    const isomorphic = Object.assign(
-      (...args: never[]) => clientHalf(...args),
-      {
-        server: () => isomorphic,
-        client: (half: ClientHalf) => {
-          clientHalf = half;
-          return isomorphic;
-        },
-      },
-    );
-    return isomorphic;
-  },
-}));
 
 // ── The network ─────────────────────────────────────
 
@@ -258,7 +252,8 @@ const { createRouteErrorLifecycleController } =
 const { HotkeysProvider } = await import("@tanstack/react-hotkeys");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
-const { refreshAuthQueries } = await import("@/lib/auth-queries");
+const { professionalUseOptions, refreshAuthQueries } =
+  await import("@/lib/auth-queries");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
 const { RouteProviderScopeBoundary } =
   await import("@/components/route-provider-scope/route-provider-scope");
@@ -482,6 +477,11 @@ describe("Knowledge for every visitor, on one live client", () => {
       requests.map(() => "/api/auth/get-session"),
     );
     expect(cachedKeys(queryClient)).toEqual([JSON.stringify(["session"])]);
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: professionalUseOptions(undefined).queryKey }),
+    ).toBeUndefined();
     view.unmount();
   });
 
@@ -494,6 +494,11 @@ describe("Knowledge for every visitor, on one live client", () => {
     );
 
     expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: professionalUseOptions(undefined).queryKey }),
+    ).toBeUndefined();
     for (const key of cachedKeys(queryClient)) {
       expect(
         key === JSON.stringify(["session"]) ||
@@ -609,7 +614,7 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
 
   test("switching from organization A to B keeps nothing of A, frame included", async () => {
     session = "org-a";
@@ -631,5 +636,5 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
 });

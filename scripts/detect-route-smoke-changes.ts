@@ -9,6 +9,10 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 export const ROUTE_SMOKE_SPEC_PATH = "apps/web/e2e/specs/route-smoke.spec.ts";
 const ENTRY_POINTS = [
   ROUTE_SMOKE_SPEC_PATH,
+  // The phone layout walk runs in the route-smoke job too.
+  "apps/web/e2e/phone/phone-layout.spec.ts",
+  "apps/web/e2e/phone/phone-layout-rules.spec.ts",
+  "apps/web/e2e/playwright.phone.config.ts",
   "apps/web/e2e/playwright.config.ts",
   // Playwright loads this by configuration string, rather than an import.
   "apps/web/e2e/global-teardown.ts",
@@ -53,6 +57,9 @@ const RUNTIME_PREFIXES = [
   // Helpers read these from disk (e.g. the uploaded document), so the import
   // graph cannot see them.
   "apps/web/e2e/fixtures/",
+  // Every spec here runs in the route-smoke job's phone suite, including a
+  // new one no entry point imports yet.
+  "apps/web/e2e/phone/",
   "apps/web/e2e/network-budgets/",
   ".github/actions/prepare-network-baseline/",
   ".github/actions/setup-e2e-stack/",

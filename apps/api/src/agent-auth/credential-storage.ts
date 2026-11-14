@@ -56,6 +56,7 @@ const compareAndSetCredential = async ({
     catch: () =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Could not update agent credentials",
       }),
   });
@@ -95,6 +96,7 @@ export const readStoredAgentClientCredential = async (
         catch: () =>
           new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Could not read agent credentials",
           }),
       });
@@ -110,6 +112,7 @@ export const readStoredAgentClientCredential = async (
         return Result.err(
           new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Could not read agent credentials",
           }),
         );
@@ -227,6 +230,7 @@ export const runAgentClientCredentialBatch = async ({
     catch: () =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Could not update agent credentials",
       }),
   });

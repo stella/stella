@@ -168,7 +168,7 @@ test("courtlistener-source-attribution-rejects-injected-plain-text", () => {
         })),
       };
       const validation = validateAst(
-        text.validationHtml,
+        { type: "paragraphs", paragraphs: text.validationParagraphs },
         text.units.flatMap(({ blocks }) => [...blocks]),
         { sourcePolicy: courtListenerValidationPolicy },
       );

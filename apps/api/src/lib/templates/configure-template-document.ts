@@ -12,9 +12,9 @@
 import {
   arrayFiltersFromFieldConfig,
   assertNever,
+  type FilterCall,
   filtersFromFieldConfig,
   unwritableFilterValues,
-  type FilterCall,
   type UnwritableReason,
 } from "@stll/template-conditions";
 
@@ -29,17 +29,17 @@ import type {
   TemplateManifest,
 } from "@/api/lib/docx/types";
 import {
-  writeFieldFilters,
   type ConditionRewrite,
   type FieldFilterRewrite,
+  writeFieldFilters,
 } from "@/api/lib/docx/write-field-filters";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import {
+  type FieldConfigurationIssue,
   fieldConfigurationIssuePath,
   mergeFieldConfiguration,
   partitionFieldConfiguration,
-  type FieldConfigurationIssue,
 } from "./configure-field-input";
 
 export type ConfigureTemplateDocumentResult = {

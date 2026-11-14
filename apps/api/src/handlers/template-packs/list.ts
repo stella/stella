@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentInputNormalizationMetadata } from "@stll/agent-input";
+import { numberFromString } from "@stll/api-contract/http-input";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -11,7 +12,7 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -34,20 +35,32 @@ import {
   readTemplatePackOrganizationContext,
 } from "./organization-context";
 
-const listTemplatePacksQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.templatePacksPageSizeMax }),
-  ),
-  cursor: t.Optional(tPaginationCursor({ maxChars: 128 })),
-  locale: t.Optional(
-    t.String({
-      minLength: 2,
-      maxLength: 35,
-      ...agentInputNormalizationMetadata(
-        { kind: "locale" },
-        "BCP-47 tag of the caller's interface language; packs in that language rank first",
+const { description: localeDescription, ...localeNormalization } =
+  agentInputNormalizationMetadata(
+    { kind: "locale" },
+    "BCP-47 tag of the caller's interface language; packs in that language rank first",
+  );
+
+const listTemplatePacksQuerySchema = v.object({
+  limit: v.exactOptional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.templatePacksPageSizeMax),
       ),
-    }),
+    ),
+  ),
+  cursor: v.exactOptional(paginationCursorSchema({ maxChars: 128 })),
+  locale: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.minLength(2),
+      v.maxLength(35),
+      v.metadata(localeNormalization),
+      v.description(localeDescription),
+    ),
   ),
 });
 

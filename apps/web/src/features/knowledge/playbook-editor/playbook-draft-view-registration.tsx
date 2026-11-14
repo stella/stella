@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { ClipboardCheckIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -22,7 +23,7 @@ import {
 } from "@/lib/knowledge/playbook-draft-view";
 import type { PlaybookDraftViewPayload } from "@/lib/knowledge/playbook-draft-view";
 import { playbookDetailOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 // The kind registers with the app shell, so a tab restored after a reload
 // renders on any page; the editor itself loads with the first pane opened.
@@ -38,14 +39,21 @@ const PlaybookDraftRailIcon = ({
   <ClipboardCheckIcon className={cn("size-3.5", !active && "opacity-70")} />
 );
 
-const PlaybookDraftRailLabel = ({
-  tab,
+type PlaybookRailLabelProps = {
+  playbookId: string;
+  fallback: string;
+  renderLabel: InspectorRailLabelProps<PlaybookDraftViewPayload>["renderLabel"];
+};
+
+const PlaybookRailLabel = ({
+  playbookId,
+  fallback,
   renderLabel,
-}: InspectorRailLabelProps<PlaybookDraftViewPayload>) => {
+}: PlaybookRailLabelProps) => {
   const { activeOrganizationId } = useAuthenticatedUser();
-  const detailView = useQueryView(
+  const detailView = queryView(
     useQuery({
-      ...playbookDetailOptions(activeOrganizationId, tab.payload.playbookId),
+      ...playbookDetailOptions(activeOrganizationId, playbookId),
       enabled: false,
     }),
   );
@@ -53,7 +61,28 @@ const PlaybookDraftRailLabel = ({
     detailView.type === "items" && "name" in detailView.items
       ? detailView.items.name
       : null;
-  return renderLabel(name !== null && name.trim() !== "" ? name : tab.label);
+  return renderLabel(name !== null && name.trim() !== "" ? name : fallback);
+};
+
+const PlaybookDraftRailLabel = ({
+  tab,
+  renderLabel,
+}: InspectorRailLabelProps<PlaybookDraftViewPayload>) => {
+  switch (tab.payload.type) {
+    case "pending":
+      return renderLabel(tab.label);
+    case "playbook":
+      return (
+        <PlaybookRailLabel
+          fallback={tab.label}
+          playbookId={tab.payload.playbookId}
+          renderLabel={renderLabel}
+        />
+      );
+    default:
+      tab.payload satisfies never;
+      return panic("Unhandled playbook pane payload");
+  }
 };
 
 const PlaybookDraftViewSlot = (
@@ -72,18 +101,29 @@ registerInspectorView<PlaybookDraftViewPayload>({
   validate: isPlaybookDraftViewPayload,
   ariaLabel: (tab) => tab.label,
   beforeLeave: ({ tabId, payload, nextPayload, proceed }) => {
-    if (
-      isPlaybookDraftViewPayload(nextPayload) &&
-      nextPayload.playbookId === payload.playbookId
-    ) {
-      proceed();
-      return;
+    switch (payload.type) {
+      case "pending":
+        proceed();
+        return;
+      case "playbook":
+        if (
+          isPlaybookDraftViewPayload(nextPayload) &&
+          nextPayload.type === "playbook" &&
+          nextPayload.playbookId === payload.playbookId
+        ) {
+          proceed();
+          return;
+        }
+        requestPlaybookPaneLeave({
+          tabId,
+          playbookId: payload.playbookId,
+          proceed,
+        });
+        return;
+      default:
+        payload satisfies never;
+        panic("Unhandled playbook pane payload");
     }
-    requestPlaybookPaneLeave({
-      tabId,
-      playbookId: payload.playbookId,
-      proceed,
-    });
   },
   onClose: discardParkedPlaybookPane,
 });

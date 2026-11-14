@@ -15,6 +15,11 @@ import { defineMcpCliToolAnnotations } from "@/api/mcp/tool-types";
 export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
   DEFAULT_MCP_TOOL_DEFINITIONS,
   {
+    mint_web_handoff: {
+      command: ["web", "open"],
+      excluded: true,
+      scope: "read",
+    },
     open_case_law_decision: {
       command: ["case-law", "open"],
       scope: "read",
@@ -27,6 +32,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     },
     preview_cited_provision: {
       command: ["case-law", "reader-provision"],
+      excluded: true,
+      scope: "read",
+    },
+    list_case_law_courts: {
+      command: ["case-law", "courts"],
       excluded: true,
       scope: "read",
     },
@@ -289,7 +299,6 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["template", "list"],
       scope: "templates",
       itemsKey: "templates",
-      paginationless: true,
       singleReadWhen: "template_id",
     },
     fill_template: { command: ["template", "fill"], scope: "templates" },
@@ -387,6 +396,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    search_guidance: {
+      command: ["guidance", "search"],
+      scope: "search",
+      itemsKey: "results",
+    },
+    // No windowedText: the attribution must stay with the text in every output.
+    read_guidance: {
+      command: ["guidance", "read"],
+      scope: "read",
+    },
     read_statute: {
       command: ["legislation", "read"],
       scope: "read",
@@ -432,11 +451,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
 
     add_matter_member: {
       command: ["matter", "add-member"],
-      scope: "admin_write",
+      scope: "matters_write",
     },
     remove_matter_member: {
       command: ["matter", "remove-member"],
-      scope: "admin_write",
+      scope: "matters_write",
+    },
+    create_organization: {
+      confirmPassthrough: true,
+      command: ["organization", "create"],
+      scope: "organization_create",
     },
     update_organization_settings: {
       command: ["organization", "update-settings"],

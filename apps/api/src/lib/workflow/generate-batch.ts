@@ -1,5 +1,5 @@
-import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
-import { Result } from "better-result";
+import { PDF, Standard14Font, StandardFonts } from "@libpdf/core";
+import { panic, Result } from "better-result";
 
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { libpdfColor, PDF_NEUTRALS } from "@/api/lib/files/pdf-color";
 import { savePdfForModelInput } from "@/api/lib/files/pdf-signatures";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -20,11 +21,16 @@ import {
   canPrepareExtractedTextFile,
   isAISupportedFile,
 } from "@/api/lib/workflow/ai-file-support";
-import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
+import {
+  generateWorkflowData,
+  propertyOutput,
+} from "@/api/lib/workflow/ai-generate-batch";
 import {
   fieldContentFromValidated,
+  isEmptyFieldContent,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
+import { withGradingSource } from "@/api/lib/workflow/cited-passages";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -54,14 +60,6 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 // reuses the exact same file-preparation + citation-allow-list wiring the batch
 // workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
 export { isAISupportedFile };
-
-export type GenerateBatchDependencies = {
-  fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
-};
-
-const defaultGenerateBatchDependencies = {
-  fetchInputFieldsForBatch,
-} satisfies GenerateBatchDependencies;
 
 const addBatesNumbers = async (
   pdfBuffer: ArrayBuffer,
@@ -94,14 +92,14 @@ const addBatesNumbers = async (
         y: pos.y,
         width: rectangleWidth,
         height: rectangleHeight,
-        color: rgb(0, 0, 0),
+        color: libpdfColor(PDF_NEUTRALS.black),
       });
 
       page.drawText(batesNumber, {
         x: pos.x + padding,
         y: pos.y + padding,
         size: fontSize,
-        color: rgb(1, 1, 1),
+        color: libpdfColor(PDF_NEUTRALS.white),
       });
     }
   }
@@ -139,9 +137,7 @@ export type PreparedExtractedTextFile = {
 };
 
 export type PreparedInputFile =
-  | PreparedPdfFile
-  | PreparedDocxFile
-  | PreparedExtractedTextFile;
+  PreparedPdfFile | PreparedDocxFile | PreparedExtractedTextFile;
 
 export const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],
@@ -253,6 +249,18 @@ export const buildJustificationFilenames = (
   return filenames;
 };
 
+export type GenerateBatchDependencies = {
+  fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
+  fetchAndPrepareFiles: typeof fetchAndPrepareFiles;
+  generateWorkflowData: typeof generateWorkflowData;
+};
+
+const defaultGenerateBatchDependencies = {
+  fetchInputFieldsForBatch,
+  fetchAndPrepareFiles,
+  generateWorkflowData,
+} satisfies GenerateBatchDependencies;
+
 export const generateBatch = async (
   {
     abortSignal,
@@ -295,6 +303,7 @@ export const generateBatch = async (
         skippedPropertyIds,
         unsupportedPropertyIds: [],
         settlements: new Map(),
+        withheld: [],
       });
     }
 
@@ -313,6 +322,7 @@ export const generateBatch = async (
         skippedPropertyIds,
         unsupportedPropertyIds: aiInputProperties.map((p) => p.id),
         settlements,
+        withheld: [],
       });
     }
 
@@ -324,7 +334,7 @@ export const generateBatch = async (
     const preparedFiles = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await fetchAndPrepareFiles(
+          await dependencies.fetchAndPrepareFiles(
             resolvedFiles,
             organizationId,
             workspaceId,
@@ -353,8 +363,8 @@ export const generateBatch = async (
       }),
     );
 
-    const output = yield* Result.await(
-      generateWorkflowData({
+    const generation = yield* Result.await(
+      dependencies.generateWorkflowData({
         entityVersionId,
         files: preparedFiles,
         properties: aiInputProperties,
@@ -377,22 +387,49 @@ export const generateBatch = async (
     const aiResults: AIResult[] = [];
     const aiJustifications: AIJustification[] = [];
     const settlements = new Map<SafeId<"property">, BatchSettlement>();
+    const noAnswer =
+      generation.fit.type === "cut" ? "notFoundInCutDocument" : "notStated";
 
-    for (const property of aiInputProperties) {
-      const propertyResult = output[property.id];
-      if (!propertyResult) {
-        settlements.set(property.id, "notStated");
-        continue;
+    for (const property of generation.properties) {
+      const output = propertyOutput(generation, property);
+      switch (output.type) {
+        case "returned":
+          break;
+        case "refused":
+          settlements.set(property.id, "refused");
+          continue;
+        case "not-asked":
+          settlements.set(property.id, noAnswer);
+          continue;
+        // A missing entry is a failed request, not a model saying the
+        // document is silent: settling it as "not stated" would grade the
+        // position as a missing clause.
+        case "omitted":
+          return Result.err(
+            new WorkflowIntegrationError({
+              message:
+                "Workflow AI generation returned no answer for a property",
+              cause: { propertyId: property.id },
+            }),
+          );
+        default:
+          output satisfies never;
+          return panic("Unhandled workflow property output");
       }
 
       const validated = yield* validateAIOutput({
-        aiResult: propertyResult,
+        aiResult: output.result,
         property,
       });
 
       const content = fieldContentFromValidated(validated);
-      if (content === null) {
-        settlements.set(property.id, "notStated");
+      // In a cut document an empty answer says nothing about the document: the
+      // value may sit in the text the model never read.
+      if (
+        content === null ||
+        (generation.fit.type === "cut" && isEmptyFieldContent(content))
+      ) {
+        settlements.set(property.id, noAnswer);
         continue;
       }
 
@@ -409,6 +446,10 @@ export const generateBatch = async (
           fieldId,
           justificationId,
           ...justification,
+          content: withGradingSource(
+            justification.content,
+            property.answerShape,
+          ),
         });
       }
 
@@ -426,5 +467,6 @@ export const generateBatch = async (
       skippedPropertyIds,
       unsupportedPropertyIds: [],
       settlements,
+      withheld: generation.fit.type === "cut" ? generation.fit.withheld : [],
     });
   });

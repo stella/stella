@@ -1,24 +1,25 @@
 import { panic } from "better-result";
 
 import type { createLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
+import type { LinkIconTarget } from "@/api/handlers/chat/link-icons/origin";
 import type { LinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import type { SafeId } from "@/api/lib/branded-types";
 
-type ReadLinkIconOptions = {
-  hostname: string;
+type ReadLinkIconOptions<Target extends LinkIconTarget> = {
+  hostname: Target;
   userId: SafeId<"user">;
   ip: string;
   cache: Pick<ReturnType<typeof createLinkIconCache>, "readOrLease" | "store">;
-  readOrigin: (hostname: string) => Promise<LinkIconOutcome>;
+  readOrigin: (hostname: Target) => Promise<LinkIconOutcome>;
 };
 
-export const readLinkIcon = async ({
+export const readLinkIcon = async <Target extends LinkIconTarget>({
   hostname,
   userId,
   ip,
   cache,
   readOrigin,
-}: ReadLinkIconOptions): Promise<LinkIconOutcome> => {
+}: ReadLinkIconOptions<Target>): Promise<LinkIconOutcome> => {
   const cached = await cache.readOrLease({ hostname, userId, ip });
   switch (cached.type) {
     case "icon":

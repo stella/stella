@@ -92,6 +92,53 @@ describe("createBusinessRegistryTools", () => {
     );
   });
 
+  test("does not advertise verified KRS name search without web search", () => {
+    const tools = createBusinessRegistryTools({
+      organizationId: toSafeId<"organization">("fixture-org"),
+      enabledHandlers: [BUSINESS_REGISTRY_DISPATCH.krs],
+      webSearchProvider: null,
+    });
+    const lookupTool = tools[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME];
+
+    expect(lookupTool?.description).not.toContain(
+      "Company-name matches are verified",
+    );
+    expect(lookupTool?.description).toContain("PL/KRS requires the KRS number");
+  });
+
+  test.each([
+    [BUSINESS_REGISTRY_DISPATCH.ares, false],
+    [BUSINESS_REGISTRY_DISPATCH.krs, true],
+  ] as const)(
+    "advertises web verification only for enabled capable handlers: %s",
+    (handler, advertised) => {
+      const tools = createBusinessRegistryTools({
+        organizationId: toSafeId<"organization">("fixture-org"),
+        enabledHandlers: [handler],
+        webSearchProvider: {
+          name: "tavily",
+          search: async () => ({ results: [] }),
+        },
+      });
+      const lookupTool =
+        tools[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME] ??
+        panic("Expected registry tool");
+      const querySchema = convertSchemaToJsonSchema(lookupTool.inputSchema);
+      if (!hasToolInputJsonSchema(querySchema)) {
+        panic("Expected lookup query schema");
+      }
+      const guidance =
+        "Company-name matches are verified against the selected register";
+      expect(lookupTool.description.includes(guidance)).toBe(advertised);
+      expect(
+        querySchema.properties?.query?.description?.includes(guidance),
+      ).toBe(advertised);
+      if (!advertised) {
+        expect(lookupTool.description).not.toContain("KRS");
+      }
+    },
+  );
+
   test("executes with the same organization-bound handler it advertises", async () => {
     let lookupCalls = 0;
     const boundHandler = {

@@ -1,9 +1,11 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
@@ -18,14 +20,18 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
-  query: t.Object({
+  query: v.object({
     ...matterActivityFilterQueryProperties,
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.matterActivityPageSizeMax,
-      }),
+    cursor: v.exactOptional(paginationCursorSchema()),
+    limit: v.exactOptional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.matterActivityPageSizeMax),
+        ),
+      ),
     ),
   }),
 } satisfies WorkspaceHandlerConfig;

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -94,6 +94,13 @@ test("query performance scope follows registry imports and database boundaries",
   expect(queryPerfRequired(["docs/query-perf-explainer.md"], false, root)).toBe(
     false,
   );
+  expect(
+    queryPerfRequired(
+      ["apps/api/src/lib/db/read-budget-entries/statement.new.ts"],
+      false,
+      root,
+    ),
+  ).toBe(true);
   expect(queryPerfRequired([], true, root)).toBe(true);
 });
 

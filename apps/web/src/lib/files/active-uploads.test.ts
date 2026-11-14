@@ -1,13 +1,17 @@
 import { afterEach, expect, test } from "bun:test";
 
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { BLOB_HASH_CHUNK_BYTES, sha256Hex } from "@stll/sha256/browser";
 
 import {
   hasActiveUpload,
+  hashActiveUploadFile,
   resetActiveUploadsForTests,
   retainActiveUpload,
   withActiveUpload,
 } from "@/lib/files/active-uploads";
+import { UploadFileSizeError } from "@/lib/files/upload-file-validation";
 
 afterEach(() => {
   resetActiveUploadsForTests();
@@ -34,4 +38,110 @@ test("an upload counts while it runs and releases when it fails", async () => {
   pending.reject(new Error("network"));
   expect(await rejectionOf(upload)).toBeInstanceOf(Error);
   expect(hasActiveUpload()).toBe(false);
+});
+
+test("an upload hash keeps the reload guard on until its last chunk is read", async () => {
+  const bytes = new Uint8Array(BLOB_HASH_CHUNK_BYTES * 2 + 3).fill(7);
+  const firstChunkRead = Promise.withResolvers<undefined>();
+  const releaseFirstChunk = Promise.withResolvers<undefined>();
+  let chunkReads = 0;
+  // Holds the first chunk read open, the way a slow disk would.
+  class GatedChunk extends Blob {
+    override async arrayBuffer(): Promise<ArrayBuffer> {
+      chunkReads += 1;
+      if (chunkReads === 1) {
+        firstChunkRead.resolve(undefined);
+        await releaseFirstChunk.promise;
+      }
+      return await super.arrayBuffer();
+    }
+  }
+  class GatedFile extends Blob {
+    override slice(start?: number, end?: number): Blob {
+      return new GatedChunk([super.slice(start, end)]);
+    }
+  }
+  const file = new GatedFile([bytes]);
+
+  const hashed = hashActiveUploadFile(file);
+  await firstChunkRead.promise;
+  expect(hasActiveUpload()).toBe(true);
+
+  releaseFirstChunk.resolve(undefined);
+  expect(await hashed).toBe(await sha256Hex(bytes));
+  expect(chunkReads).toBe(3);
+  expect(hasActiveUpload()).toBe(false);
+});
+
+test("a failed standalone hash releases only its own reload guard", async () => {
+  const releaseUpload = retainActiveUpload();
+  const readFailure = new DOMException("File read failed", "NotReadableError");
+  class UnreadableChunk extends Blob {
+    override async arrayBuffer(): Promise<ArrayBuffer> {
+      return await Promise.reject(readFailure);
+    }
+  }
+  class UnreadableFile extends Blob {
+    override slice(): Blob {
+      return new UnreadableChunk();
+    }
+  }
+
+  expect(
+    await rejectionOf(hashActiveUploadFile(new UnreadableFile(["bytes"]))),
+  ).toBe(readFailure);
+  expect(hasActiveUpload()).toBe(true);
+  releaseUpload();
+  expect(hasActiveUpload()).toBe(false);
+});
+
+test.each([
+  {
+    name: "an empty file",
+    size: 0,
+    message: "The file is empty.",
+  },
+  {
+    name: "a file over the limit",
+    size: UPLOAD_DOCUMENT_MAX_BYTES + 1,
+    message: "The file is larger than 50 MB.",
+  },
+])(
+  "$name is refused by size without reading a byte",
+  async ({ size, message }) => {
+    let reads = 0;
+    class SizedFile extends Blob {
+      override get size(): number {
+        return size;
+      }
+      override slice(): Blob {
+        reads += 1;
+        return new Blob();
+      }
+    }
+
+    const rejection = await rejectionOf(hashActiveUploadFile(new SizedFile()));
+
+    expect(UploadFileSizeError.is(rejection)).toBe(true);
+    expect(rejection).toMatchObject({ message });
+    expect(reads).toBe(0);
+    expect(hasActiveUpload()).toBe(false);
+  },
+);
+
+test("a file of exactly the limit is hashed", async () => {
+  let reads = 0;
+  class SizedFile extends Blob {
+    override get size(): number {
+      return UPLOAD_DOCUMENT_MAX_BYTES;
+    }
+    override slice(): Blob {
+      reads += 1;
+      return new Blob(["x"]);
+    }
+  }
+
+  await hashActiveUploadFile(new SizedFile());
+
+  expect(reads).toBeGreaterThan(0);
 });

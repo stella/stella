@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
-  generatedVisualInputSchema,
-  generatedVisualPartSchema,
   GENERATED_VISUAL_MIME_TYPE,
   GENERATED_VISUAL_URI_PREFIX,
+  generatedVisualInputSchema,
+  generatedVisualPartSchema,
 } from "./generated-visual";
 import { VISUAL_PREVIEW_TOOL_NAME } from "./visual-preview";
 

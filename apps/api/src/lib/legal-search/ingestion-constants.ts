@@ -1,87 +1,12 @@
-// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
-/** Adapter keys for all supported court data sources. */
-export const ADAPTER_KEYS = {
-  CZ_REGIONAL: "cz-regional",
-  CZ_NS: "cz-ns",
-  CZ_NSS: "cz-nss",
-  CZ_US: "cz-us",
-  CZ_UOHS: "cz-uohs",
-  SK_COURTS: "sk-courts",
-  SK_US: "sk-us",
-  PL_COURTS: "pl-courts",
-  PL_SN: "pl-sn",
-  PL_KIO: "pl-kio",
-  PL_TK: "pl-tk",
-  PL_NSA: "pl-nsa",
-  PL_NCOURT: "pl-ncourt",
-  AT_COURTS: "at-courts",
-  AT_VFGH: "at-vfgh",
-  AT_VWGH: "at-vwgh",
-  AT_BVWG: "at-bvwg",
-  AT_LVWG: "at-lvwg",
-  AT_ASYLGH: "at-asylgh",
-  AT_UBAS: "at-ubas",
-  AT_UVS: "at-uvs",
-  AT_VERG: "at-verg",
-  AT_UMSE: "at-umse",
-  AT_BKS: "at-bks",
-  AT_FINDOK: "at-findok",
-  EU_ECJ: "eu-ecj",
-  HU_BHGY: "hu-bhgy",
-  PL_KIS: "pl-kis",
-  PL_UODO: "pl-uodo",
-  PL_UOKIK: "pl-uokik",
-} as const;
-
-export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
-
-/** Import discovery is owned by callers, never the crawl scheduler. */
-export const IMPORT_SOURCE_KEYS = {
-  COURTLISTENER: "us-courtlistener",
-} as const;
-export type ImportSourceKey =
-  (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];
-
-/**
- * Parser output version for each source.
- *
- * A parser change must only make that source's rows eligible for replay. The
- * total map makes a version decision mandatory whenever an adapter is added;
- * a single global number would turn one publisher's markup fix into a replay
- * of every court corpus.
- */
-export const PARSER_VERSIONS = {
-  [ADAPTER_KEYS.CZ_REGIONAL]: 13,
-  [ADAPTER_KEYS.CZ_NS]: 18,
-  [ADAPTER_KEYS.CZ_NSS]: 20,
-  [ADAPTER_KEYS.CZ_US]: 25,
-  [ADAPTER_KEYS.CZ_UOHS]: 2,
-  [ADAPTER_KEYS.SK_COURTS]: 16,
-  [ADAPTER_KEYS.SK_US]: 11,
-  [ADAPTER_KEYS.PL_COURTS]: 13,
-  [ADAPTER_KEYS.PL_SN]: 6,
-  [ADAPTER_KEYS.PL_KIO]: 6,
-  [ADAPTER_KEYS.PL_TK]: 7,
-  [ADAPTER_KEYS.PL_NSA]: 8,
-  [ADAPTER_KEYS.PL_NCOURT]: 12,
-  [ADAPTER_KEYS.AT_COURTS]: 8,
-  [ADAPTER_KEYS.AT_VFGH]: 8,
-  [ADAPTER_KEYS.AT_VWGH]: 8,
-  [ADAPTER_KEYS.AT_BVWG]: 8,
-  [ADAPTER_KEYS.AT_LVWG]: 8,
-  [ADAPTER_KEYS.AT_ASYLGH]: 8,
-  [ADAPTER_KEYS.AT_UBAS]: 8,
-  [ADAPTER_KEYS.AT_UVS]: 8,
-  [ADAPTER_KEYS.AT_VERG]: 8,
-  [ADAPTER_KEYS.AT_UMSE]: 8,
-  [ADAPTER_KEYS.AT_BKS]: 8,
-  [ADAPTER_KEYS.AT_FINDOK]: 9,
-  [ADAPTER_KEYS.EU_ECJ]: 15,
-  [ADAPTER_KEYS.HU_BHGY]: 19,
-  [ADAPTER_KEYS.PL_KIS]: 8,
-  [ADAPTER_KEYS.PL_UODO]: 12,
-  [ADAPTER_KEYS.PL_UOKIK]: 10,
-} as const satisfies Record<AdapterKey, number>;
+// parser-output-unchanged: source declarations move to independent entries; values are unchanged.
+export {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  IMPORT_SOURCE_KEYS,
+  type ImportSourceKey,
+  PARSER_VERSIONS,
+  SOURCE_FINGERPRINT_VERSIONS,
+} from "./parser-registry.gen";
 
 /**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.

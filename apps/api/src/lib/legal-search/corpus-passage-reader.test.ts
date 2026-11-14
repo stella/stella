@@ -5,9 +5,9 @@ import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import {
+  type CorpusPayloadSource,
   readCorpusPassages,
   selectCorpusPassage,
-  type CorpusPayloadSource,
 } from "@/api/lib/legal-search/corpus-passage-reader";
 
 /**

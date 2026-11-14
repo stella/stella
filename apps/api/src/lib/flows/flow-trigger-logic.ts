@@ -1,9 +1,9 @@
 import type { SchedulerDailySchedule } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY,
   type FlowScheduleFrequency,
   type FlowTrigger,
+  MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY,
 } from "@/api/lib/flows/flow-types";
 import type { DueSlot } from "@/api/lib/scheduler/due-slot";
 

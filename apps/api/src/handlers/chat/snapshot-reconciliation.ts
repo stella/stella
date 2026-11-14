@@ -1,16 +1,18 @@
 import { EventType } from "@tanstack/ai";
 import type {
   ActivityPart,
-  ToolCallPart,
-  ToolResultPart,
   MessagePart,
   StreamChunk,
   StructuredOutputPart,
   SubagentPart,
+  ToolCallPart,
+  ToolResultPart,
   UIMessage,
 } from "@tanstack/ai";
 import { panic, TaggedError } from "better-result";
 import { deepEquals } from "bun";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -21,7 +23,11 @@ export class SnapshotReconciliationError extends TaggedError(
 )<{
   message: string;
   phase: "provenance" | "normalization" | "textual-delta";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["phase"]);
+  }
+}
 
 const SNAPSHOT_FAILURE_SINK = failureSink({
   event: "chat.snapshot_reconciliation.failed",
@@ -84,11 +90,14 @@ const CALL_FIELDS = {
   arguments: ({ selected }) => selected.arguments,
   input: ({ selected }) => selected.input,
   metadata: ({ selected }) => selected.metadata,
-  approval: ({ selected, other }) =>
-    selected.approval?.approved === undefined &&
-    other.approval?.approved !== undefined
+  approval: ({ selected, other }) => {
+    if (selected.approval?.approved !== undefined) {
+      return selected.approval;
+    }
+    return other.approval?.approved !== undefined
       ? other.approval
-      : (selected.approval ?? other.approval),
+      : (selected.approval ?? other.approval);
+  },
   state: ({ selected, result }) => {
     if (result === undefined) {
       return selected.state;

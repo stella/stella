@@ -3,10 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   isWorkspaceViewLayoutType,
   workspaceCalendarModes,
-  workspaceTimelineZoomLevels,
-  workspaceViewLayoutTypes,
   type WorkspaceSavedView,
   type WorkspaceTimelineViewLayout,
+  workspaceTimelineZoomLevels,
+  workspaceViewLayoutTypes,
 } from "./views";
 
 describe("workspace saved-view model", () => {

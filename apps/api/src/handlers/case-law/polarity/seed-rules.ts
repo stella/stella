@@ -6,7 +6,7 @@
  * corpus (Harasta, Masaryk University).
  */
 
-import { REPORTED_PARTY_SUBMISSION_GROUP, type Polarity } from "./consts";
+import { type Polarity, REPORTED_PARTY_SUBMISSION_GROUP } from "./consts";
 
 type SeedRule = {
   pattern: string;
@@ -37,6 +37,29 @@ export const SK_DECISION_ANCHOR =
  * aplikovat" likewise. A clause break ends the search.
  */
 export const WORDS_BETWEEN = "(?:[^\\s,;.()]+\\s+){0,3}?";
+
+/**
+ * The words for the cited decision itself, without "závěr": a cue that the
+ * decision does not carry over is said of a decision, and "závěry soudu" is as
+ * often the court below as the authority cited beside it.
+ */
+const CS_CITED_DECISION =
+  "(?:judikát|rozsud|usnesen|nález|rozhodnut|stanovisk)";
+
+/**
+ * `WORDS_BETWEEN` that also stops at a coordinating "a": in "... proti výroku
+ * rozsudku a neobsahuje ..." the cue's subject is another clause's, not the
+ * decision named before it.
+ */
+const WORDS_IN_CLAUSE = "(?:(?!a\\s)[^\\s,;.()]+\\s+){0,3}?";
+
+/**
+ * The court's way of pointing back at the matter a party invoked: "ve
+ * zmiňované věci", "v citovaném rozsudku". "Uvedené" and "předmětné" are
+ * deliberately absent: they as often mean the case at hand.
+ */
+const CS_CITED_MATTER =
+  "\\bv(?:e)?\\s+(?:zmiňovan|citovan|odkazovan|poukazovan|namítan)\\p{L}*\\s+(?:věci|kauze|rozsudku|usnesení|nálezu|rozhodnutí)";
 
 /**
  * A named capture declares the extent of a reported submission. The engine
@@ -237,6 +260,36 @@ export const SEED_RULES: readonly SeedRule[] = [
   },
   {
     pattern: "k\\s+závěru\\s+odlišnému\\s+od",
+    polarity: "negative",
+    language: "cs",
+  },
+  // Distinguishing: the cited decision answered another question, or does
+  // not carry over to the case at hand. The court is declining to rely on
+  // it, so a `supportive` cue beside these ("s poukazem na rozsudek") must
+  // not stand. Each cue is bound to the cited decision, as the rest of this
+  // tier is (see `CS_DECISION_ANCHOR`).
+  {
+    pattern: `${CS_CITED_MATTER}\\s+${WORDS_BETWEEN}(?:řešil|posuzoval|zabýval)\\p{L}*\\b[^.;]{0,280}?,\\s+nikoli(?:v)?\\b`,
+    polarity: "negative",
+    language: "cs",
+  },
+  {
+    pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+${WORDS_IN_CLAUSE}řeš\\p{L}*\\s+(?:zcela\\s+)?jin\\p{L}+\\s+(?:otázk|situac|problematik)`,
+    polarity: "negative",
+    language: "cs",
+  },
+  {
+    pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+${WORDS_IN_CLAUSE}neobsahuj\\p{L}*\\s+(?:žádné\\s+)?(?:zobecnitelné|přenositelné|obecně\\s+použitelné)\\s+závěr`,
+    polarity: "negative",
+    language: "cs",
+  },
+  {
+    pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+${WORDS_IN_CLAUSE}(?:nelze|nemůže\\s+být|není\\s+možné)\\s+(?:přenést|přenesen|vztáhnout|vztažen)`,
+    polarity: "negative",
+    language: "cs",
+  },
+  {
+    pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+(?:na\\s+(?:\\p{L}+\\s+){0,2}(?:věc|případ|situaci)\\s+)?nedopad`,
     polarity: "negative",
     language: "cs",
   },

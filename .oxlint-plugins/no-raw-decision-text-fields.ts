@@ -23,8 +23,7 @@ import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
-} from "@stll/api-contract/case-law-text-field";
-
+} from "../packages/api-contract/src/case-law-text-field.ts";
 import {
   getPropertyName,
   isAstNode,

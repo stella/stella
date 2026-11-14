@@ -20,6 +20,7 @@ import {
   getTemplateSlashMenu,
   resetTemplateSlashQuery,
 } from "@stll/folio-react";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
@@ -30,8 +31,8 @@ import {
   TextQuoteIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
-import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
@@ -40,17 +41,19 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clausesOptions as clauseLibraryOptions,
   invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   clauseSlotMarker,
-  conditionOpenTag,
   CONDITION_CLOSE_TAG,
+  conditionOpenTag,
   fieldMarker,
 } from "@/routes/knowledge/-components/template-markers";
 import { slugify } from "@/routes/knowledge/-components/template-studio-model";
@@ -60,8 +63,8 @@ import {
   type SlashRootItem,
 } from "@/routes/knowledge/-components/template-studio-search.logic";
 import {
-  useTemplateStudioStore,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 
 // Marker shapes the menu shows as a hint badge or a preview: document
@@ -241,6 +244,7 @@ export const useTemplateStudioSlashMenu = ({
   markDirty,
   upsertField,
 }: UseTemplateStudioSlashMenuOptions) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [slash, setSlashState] = useState<SlashMenu | null>(null);
@@ -271,8 +275,8 @@ export const useTemplateStudioSlashMenu = ({
     }),
     enabled: slashClausesEnabled,
   });
-  const slashClauseDataView = useQueryView(slashClauseDataQuery);
-  useQueryViewError(slashClauseDataView);
+  const slashClauseDataView = queryView(slashClauseDataQuery);
+  useQueryViewError(slashClauseDataView, "useTemplateStudioSlashMenu:query");
   const slashClauseData =
     slashClauseDataView.type === "items"
       ? slashClauseDataView.items
@@ -504,9 +508,14 @@ export const useTemplateStudioSlashMenu = ({
   };
 
   const linkClauseToSlot = async (clauseId: string, slotName: string) => {
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses.put({ clauseId: toSafeId<"clause">(clauseId), slotName });
+    const response = await idempotentSubmit.run({
+      operation: `templates.${templateId}.clauses.create`,
+      body: { clauseId: toSafeId<"clause">(clauseId), slotName },
+      send: async (body) =>
+        api
+          .templates({ templateId: toSafeId<"template">(templateId) })
+          .clauses.put(body),
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("clauses.linkFailed"), {
         description: userErrorMessage(
@@ -696,9 +705,12 @@ const SlashMenuHeader = ({
   const t = useTranslations();
   if (view === "root") {
     return (
-      <p className="text-muted-foreground text-2xs truncate border-b px-3 py-1.5 leading-snug">
+      <TruncatedText
+        className="text-muted-foreground text-2xs border-b px-3 py-1.5 leading-snug"
+        render={<p />}
+      >
         {query === "" ? t("templates.studio.slashHint") : `/${query}`}
-      </p>
+      </TruncatedText>
     );
   }
   const label =
@@ -706,18 +718,20 @@ const SlashMenuHeader = ({
       ? t("templates.studio.existingField")
       : t("common.clauses");
   return (
-    <button
-      className="text-muted-foreground hover:text-foreground text-2xs flex items-center gap-1 border-b px-3 py-1.5 text-start leading-snug"
+    <Button
+      className="w-full"
       onClick={onBack}
       onMouseDown={keepEditorFocus}
-      type="button"
+      variant="plain"
     >
-      <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
-      <span className="truncate">
-        {label}
-        {query === "" ? "" : ` · ${query}`}
+      <span className="text-muted-foreground hover:text-foreground text-2xs flex w-full items-center gap-1 border-b px-3 py-1.5 leading-snug">
+        <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
+        <TruncatedText>
+          {label}
+          {query === "" ? "" : ` · ${query}`}
+        </TruncatedText>
       </span>
-    </button>
+    </Button>
   );
 };
 
@@ -864,12 +878,8 @@ const SlashMenuRow = ({
     }
   }, [selected]);
   return (
-    <button
+    <Button
       aria-selected={selected}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-start",
-        selected ? "bg-accent text-accent-foreground" : "text-foreground",
-      )}
       onClick={containedEventHandler(onSelect)}
       onMouseDown={containedEventHandler((event: ReactMouseEvent) =>
         event.preventDefault(),
@@ -877,17 +887,19 @@ const SlashMenuRow = ({
       onMouseEnter={onHighlight}
       ref={rowRef}
       role="option"
+      selected={selected}
+      size="row"
       tabIndex={-1}
-      type="button"
+      variant="ghost"
     >
       <Icon className="text-muted-foreground size-3.5 shrink-0" />
-      <span className="flex-1 truncate" dir="auto">
+      <TruncatedText className="flex-1" dir="auto">
         {label}
-      </span>
+      </TruncatedText>
       {hint !== undefined && (
-        <span className="text-muted-foreground text-3xs shrink-0 truncate font-mono">
+        <TruncatedText className="text-muted-foreground text-3xs shrink-0 font-mono">
           {hint}
-        </span>
+        </TruncatedText>
       )}
       {chevron && (
         <DirectionalIcon
@@ -895,7 +907,7 @@ const SlashMenuRow = ({
           icon={ChevronRightIcon}
         />
       )}
-    </button>
+    </Button>
   );
 };
 
@@ -993,7 +1005,7 @@ const SlashTextPreview = ({
   body: string;
 }) => (
   <div className="flex h-full flex-col gap-1.5 overflow-hidden text-xs">
-    <code className="bg-primary/10 text-primary text-3xs w-fit rounded px-1 py-0.5">
+    <code className="bg-primary/10 text-primary text-3xs w-fit rounded-sm px-1 py-0.5">
       {marker}
     </code>
     <p className="text-foreground font-medium">{title}</p>

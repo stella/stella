@@ -9,6 +9,39 @@ import {
 } from "./invoice-document";
 
 describe("invoice document totals", () => {
+  test("calculates Czech 21%, 12%, and 0% VAT rates", () => {
+    const result = calculateDocumentTotals({
+      documentType: "invoice",
+      lines: [
+        {
+          description: "21%",
+          netAmountMinor: cents(10_005),
+          vatRateBps: 2100,
+          vatTreatment: "domestic_vat",
+        },
+        {
+          description: "12%",
+          netAmountMinor: cents(10_005),
+          vatRateBps: 1200,
+          vatTreatment: "domestic_vat",
+        },
+        {
+          description: "0%",
+          netAmountMinor: cents(10_005),
+          vatRateBps: 0,
+          vatTreatment: "domestic_vat",
+        },
+      ],
+    }).unwrap();
+
+    expect(result.lines.map(({ vatAmountMinor }) => vatAmountMinor)).toEqual([
+      cents(2101),
+      cents(1201),
+      cents(0),
+    ]);
+    expect(result.totals.grossAmountMinor).toBe(cents(33_317));
+  });
+
   test("rounds VAT on each line before summing by rate", () => {
     const result = calculateDocumentTotals({
       documentType: "invoice",
@@ -59,6 +92,32 @@ describe("invoice document totals", () => {
 
     expect(result.totals.grossAmountMinor).toBe(cents(50_000));
     expect(result.totals.vatAmountMinor).toBe(cents(0));
+  });
+
+  test("accepts zero lines and accumulates per-line rounding across many lines", () => {
+    const result = calculateDocumentTotals({
+      documentType: "invoice",
+      lines: [
+        {
+          description: "Zero",
+          netAmountMinor: cents(0),
+          vatRateBps: 2100,
+          vatTreatment: "domestic_vat",
+        },
+        ...Array.from({ length: 100 }, (_, index) => ({
+          description: `Small ${index}`,
+          netAmountMinor: cents(5),
+          vatRateBps: 2100,
+          vatTreatment: "domestic_vat" as const,
+        })),
+      ],
+    }).unwrap();
+
+    expect(result.totals).toMatchObject({
+      netAmountMinor: cents(500),
+      vatAmountMinor: cents(100),
+      grossAmountMinor: cents(600),
+    });
   });
 
   test("an advance has positive totals and a credit note reverses them", () => {

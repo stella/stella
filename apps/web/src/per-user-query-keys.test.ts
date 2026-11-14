@@ -1,4 +1,4 @@
-import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
+import { QueryClient, type QueryKey, skipToken } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -8,19 +8,31 @@ import { repoRelativePath } from "@stll/portable-path";
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { documentAnnotationKeys } from "@/components/pdf/annotations/document-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
+import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
+import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { chatLimitReminderOptions } from "@/features/chat/chat-limit-reminder";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
+import {
+  sharepointAccessOptions,
+  sharepointChildrenOptions,
+  sharepointDrivesOptions,
+  sharepointSitesOptions,
+} from "@/features/sharepoint/sharepoint-queries";
 import { timeTimersOptions } from "@/features/time-timers/queries";
+import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
 import { professionalUseOptions } from "@/lib/auth-queries";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -31,8 +43,13 @@ import {
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
+import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { searchPreviewOptions } from "@/lib/search";
+import {
+  searchFacetOptions,
+  searchInfiniteOptions,
+  searchPreviewOptions,
+} from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -51,19 +68,25 @@ import {
   legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
+import {
+  timeApprovalPendingOptions,
+  timeApprovalQueueOptions,
+} from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
 import {
-  organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
+  organizationSettingsOptions,
 } from "@/queries/organization-settings";
-import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
+import { auditLogOptions } from "@/routes/_protected.settings/organization/-queries/audit-logs";
+import { timeReportOptions } from "@/routes/_protected.time_.report/-components/report-query";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -116,12 +139,38 @@ const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 const READ_FRESH = "read fresh at each use, never cached";
+const SHAREPOINT_QUERIES = "features/sharepoint/sharepoint-queries.ts";
+const SHAREPOINT_VIEWER = { organizationId: ORG, userId: USER };
+
+const SEARCH_PROBE = {
+  editedByUserIds: [],
+  enabled: true,
+  kinds: [],
+  mimeTypes: [],
+  organizationId: ORG,
+  query: "query",
+  types: [],
+  userId: USER,
+  workspaceIds: [],
+};
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
-  "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/download/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/get.ts": {
+    kind: "keyed",
+    calls: ['api.me["data-exports"].get'],
+    files: ["lib/account/account-data-export-queries.ts"],
+    keys: () => [accountDataExportLatestOptions(USER).queryKey],
+  },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "organizations/audit-export/get.ts": {
+    kind: "keyed",
+    calls: ['api.organizations["audit-export"].get'],
+    files: ["lib/organization/audit-export-queries.ts"],
+    keys: () => [organizationAuditExportLatestOptions(ORG, USER).queryKey],
+  },
   "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
     kind: "keyed",
@@ -131,10 +180,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       lawHistoryKeys.list({
         scope: { organizationId: ORG, userId: USER },
         filter: "all",
+        country: "CZE",
       }),
     ],
     opaqueKeys: {
-      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter, country, })":
         KEY_TYPE_HAS_USER,
     },
   },
@@ -221,7 +271,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "audit-logs/list.ts": {
     kind: "keyed",
     calls: ['api["audit-logs"].get'],
-    files: ["routes/_protected.admin/-queries/audit-logs.ts"],
+    files: ["routes/_protected.settings/organization/-queries/audit-logs.ts"],
     keys: () => [
       auditLogOptions({
         viewer: { userId: USER, organizationId: ORG },
@@ -234,6 +284,30 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason:
       "The actor determines the read-audit receipt; returned run content is shared within the matter.",
+  },
+  "lists/verifications/graph/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipts; the returned graph is shared within the matter.",
+  },
+  "lists/verifications/chronology/export.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
+  "lists/graph/nodes/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/neighbours/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/paths/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
   },
   "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
@@ -320,6 +394,29 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
+  "chat/limit-reminder/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat.threads()["limit-reminder"].get'],
+    files: ["features/chat/chat-limit-reminder.ts"],
+    keys: () => [
+      chatLimitReminderOptions({
+        activeOrganizationId: ORG,
+        threadRef: { scope: "global", threadId: toChatThreadId("thread") },
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/browser-site-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["browser-site-grants"].get'],
+    files: ["features/chat/browser-control/browser-site-grants.ts"],
+    keys: () => [
+      browserSiteGrantsOptions({
+        activeOrganizationId: ORG,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],
@@ -336,6 +433,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: {
       "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
+  },
+  "chat/runs/list.ts": {
+    kind: "keyed",
+    calls: ["api.chat.runs.active.get"],
+    files: ["features/chat/active-runs.ts"],
+    keys: () => [chatKeys.activeRuns(ORG, USER)],
   },
   "chat/threads/list.ts": {
     kind: "keyed",
@@ -407,6 +510,34 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  "lists/verifications/claim-comments/list.ts": {
+    kind: "keyed",
+    calls: ['api.lists()["claim-comments"].get'],
+    files: ["features/avt/claim-comments-query.ts"],
+    keys: () => [
+      claimCommentKeys.forClaim({
+        claimId: "claim-probe",
+        runId: "run-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "claimCommentKeys.forClaim(key)": KEY_TYPE_HAS_USER },
+  },
+  "entities/annotations/list.ts": {
+    kind: "keyed",
+    calls: ["api.entities().entity().field().annotations.get"],
+    files: ["components/pdf/annotations/document-annotations-query.ts"],
+    keys: () => [
+      documentAnnotationKeys.forFile({
+        entityId: "entity-probe",
+        fieldId: "field-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "documentAnnotationKeys.forFile(key)": KEY_TYPE_HAS_USER },
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],
@@ -476,7 +607,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   // Filtered by row-level security rather than in the handler.
   "memories/list.ts": {
     kind: "keyed",
-    calls: ["memoriesApi.get", "fetchMemoriesPage"],
+    calls: ["api.memories.get", "fetchMemoriesPage"],
     files: [
       "lib/memory-api.ts",
       "routes/_protected.settings/-queries/memories.ts",
@@ -494,7 +625,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "notifications/read-all.ts": { kind: "not-per-user", reason: WRITE },
-  "notifications/read.ts": { kind: "not-per-user", reason: WRITE },
+  "notifications/read-state/update.ts": { kind: "not-per-user", reason: WRITE },
   "playbooks/recent/list.ts": {
     kind: "keyed",
     calls: ["api.playbooks.recent.get"],
@@ -558,17 +689,56 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
-  "sharepoint/list-drive-root.ts": {
-    kind: "no-web-caller",
-    calls: ["api.sharepoint.drive.root.get"],
+  // Facet buckets count only the matters and result types the caller may see.
+  "search/facets/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.facets.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.facet(params)": KEY_TYPE_HAS_USER },
+    keys: () => [
+      searchFacetOptions({ ...SEARCH_PROBE, facet: "workspace", search: "" })
+        .queryKey,
+    ],
+  },
+  "search/results/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
+    keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
+  },
+  "sharepoint/drives/items/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives().items().children.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [
+      sharepointChildrenOptions(SHAREPOINT_VIEWER, {
+        driveId: "drive-probe",
+        folderId: null,
+      }).queryKey,
+    ],
+  },
+  "sharepoint/drives/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointDrivesOptions(SHAREPOINT_VIEWER, null).queryKey],
   },
   "sharepoint/oauth-callback.ts": {
     kind: "not-per-user",
     reason: OAUTH_REDIRECT,
   },
+  "sharepoint/sites/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.sites.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointSitesOptions(SHAREPOINT_VIEWER, "").queryKey],
+  },
   "sharepoint/status.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.sharepoint.connection.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointAccessOptions(SHAREPOINT_VIEWER).queryKey],
   },
   "signals/count.ts": {
     kind: "keyed",
@@ -593,6 +763,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [skillsOptions(ORG, USER).queryKey],
   },
+  "tasks/list.ts": { kind: "no-web-caller", calls: ["api.tasks.get"] },
   "templates/condition-decisions/get.ts": {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
@@ -622,15 +793,48 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
   "time-entries/approval-queue/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-entries"]["approval-queue"].get'],
+    files: ["lib/workspaces/queries/time-approvals.ts"],
+    keys: () => [
+      timeApprovalQueueOptions(ORG, USER, {}).queryKey,
+      timeApprovalPendingOptions(ORG, USER).queryKey,
+    ],
+  },
+  "time-entries/report/get.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].report.get'],
+    files: ["routes/_protected.time_.report/-components/report-query.ts"],
+    keys: () => [
+      timeReportOptions(ORG, USER, {
+        bucket: "day",
+        from: "2026-10-26",
+        groupBy: "member",
+        to: "2026-11-01",
+      }).queryKey,
+    ],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
-    calls: ["myTimeEntriesApi.get"],
+    calls: ['api["time-entries"].me.get'],
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
-      myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
+      myTimeEntriesInfiniteOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+      }).queryKey,
+    ],
+  },
+  "time-entries/me/suggestions/list.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].me.suggestions.get'],
+    files: ["lib/workspaces/queries/my-time-suggestions.ts"],
+    keys: () => [
+      myTimeSuggestionsOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+        timezoneId: "UTC",
+      }).queryKey,
     ],
   },
   "time-entries/suggestions/list.ts": {
@@ -701,6 +905,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
+  "workspaces/member-candidates/list.ts": {
+    kind: "not-per-user",
+    reason: JOINS_NAMES,
+  },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],
@@ -1307,11 +1515,11 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
   infiniteQueryOptions({
     queryKey: myTimeEntriesKeys.day(organizationId, date),
     queryFn: async ({ signal }) =>
-      unwrapEden(await myTimeEntriesApi.get({ query: { date }, fetch: { signal } })),
+      unwrapApiResponse(await api["time-entries"].me.get({ query: { date }, fetch: { signal } })),
   });
 `;
 
-    expect(unkeyedQueries(source, ["myTimeEntriesApi.get"])).toEqual([
+    expect(unkeyedQueries(source, ['api["time-entries"].me.get'])).toEqual([
       "myTimeEntriesKeys.day(organizationId, date)",
     ]);
     expect(
@@ -1320,7 +1528,7 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
           "(organizationId, date)",
           "(organizationId, userId, date)",
         ),
-        ["myTimeEntriesApi.get"],
+        ['api["time-entries"].me.get'],
       ),
     ).toEqual([]);
   });

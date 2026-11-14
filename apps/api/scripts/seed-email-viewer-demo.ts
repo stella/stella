@@ -21,19 +21,20 @@ import {
   fields,
   properties,
   workspaceMembers,
-  workspaceViews,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
+import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
-import { createSeedEmail, SEED_EMAIL_FILE_NAMES } from "./seed-dev";
+import { EN_SEED_CONTENT, SEED_EMAIL_FILE_NAMES } from "./seed-content/en";
+import { createSeedEmail } from "./seed-dev";
 import { seedFileIdentity, seedId } from "./seed-utils";
 
 const EMAIL_QA_MATTER_NAME = "Email Viewer QA";
@@ -235,7 +236,7 @@ const seedEmailViewerDemo = async () => {
     const fileId = seedId<"userFile">(
       `email-viewer-demo-${target.workspaceId}-${fileName}-file`,
     );
-    const content = createSeedEmail(fileName);
+    const content = createSeedEmail(fileName, EN_SEED_CONTENT.emails[fileName]);
     const { sha256Hex, sizeBytes } = seedFileIdentity(content);
     const createdAt = new Date(Date.UTC(2026, 6, 14 + index, 9, index * 7));
 

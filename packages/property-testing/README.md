@@ -25,16 +25,17 @@ test("normalization is idempotent", () => {
 Use an explicit stable id matching the literal test title so `bun test -t`
 selects the property. Async properties return a promise: await it or return it
 from the test. Custom reporters are unsupported because this API owns failure
-reporting. Older `fc.assert(property, propertyConfig({ seed: propertySeed() }))`
-call sites remain supported; migrate them to `assertProperty` to replay pins.
+reporting. Pass raw run parameters to `assertProperty`: it applies
+`propertyConfig` once internally. Do not wrap its parameters in `propertyConfig`.
+`no-raw-property-assert` confines fast-check's `assert` export to this runner.
 
 Every workspace with properties needs a `test:property` script preloading
 `@stll/property-testing/preload`. Property runners select both `fc.assert` and
 `assertProperty`; the convention guard checks workspace/script agreement.
 
-Every `fc.assert` or `fc.check` call must pass parameters through
-`propertyConfig`, directly or through a configured helper. The guard checks
-each call, including files that already import the configuration helper.
+Low-level `fc.check` calls that inspect run details must pass parameters through
+`propertyConfig`, directly or through a configured helper. The convention guard
+checks each call, including files that already import the configuration helper.
 
 `propertyConfig()` defaults an omitted `seed` key to `propertySeed()`: a fixed
 seed in PR CI and `undefined` during the nightly sweep, so fast-check draws
@@ -44,6 +45,42 @@ supplied seed is preserved.
 `PROPERTY_TEST_SEED` controls the default seed in every environment, sweep or
 not. A non-integer value throws rather than being silently ignored. A seed
 explicitly supplied by the caller takes precedence over this default.
+
+## Response order
+
+`responseOrderProperty` from `@stll/property-testing/response-order` checks
+code that issues overlapping async requests (a refresh racing a user action,
+two overlapping searches) against the response orders fast-check's scheduler
+explores. The scenario answers each request through `hold`, computing the
+reply when the request is made and delivering it when the scheduler releases
+it; `settle` releases everything before the assertions run.
+
+```ts
+test("search shows the newest query's results", async () => {
+  await assertProperty(
+    "search shows the newest query's results",
+    responseOrderProperty({
+      scenario: fc.array(fc.string(), { minLength: 2 }),
+      act: reactAct,
+      run: async (order, queries) => {
+        const search = renderSearch((query) =>
+          order.hold(`search ${query}`, () => resultsFor(query)),
+        );
+        for (const query of queries) {
+          search.type(query);
+        }
+        await order.settle();
+        expect(search.shownQuery()).toBe(queries.at(-1));
+      },
+    }),
+  );
+});
+```
+
+A run fails as misconfigured when it never had two responses in flight or
+asserts while a response is still held or its delivery is still pending.
+React scenarios must also await async `act` around interactions and unmounts;
+a scheduler cannot observe work that has not issued a held request yet.
 
 ## Seeds and failures
 

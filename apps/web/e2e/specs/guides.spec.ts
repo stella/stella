@@ -1,16 +1,19 @@
 import type { APIRequestContext, Page } from "@playwright/test";
-import { array, looseObject, parse, string } from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
 
 import { getStorageKey } from "../../src/consts";
 import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
+import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiGet } from "../helpers/api";
+import type { ApiOk } from "../helpers/route-mock";
+import { apiError, apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const HELP_BUTTON_NAME = "Help and feedback";
@@ -56,9 +59,9 @@ const selectGuideWorkspace = async ({
   request,
   workspaceId,
 }: GuideWorkspaceOptions) => {
-  const navigation = parse(
-    looseObject({ workspaces: array(looseObject({ id: string() })) }),
-    await apiGet(request, "/workspaces/navigation?statusScope=active"),
+  const navigation = await apiGet<ApiOk<"v1/workspaces/navigation", "get">>(
+    request,
+    "/workspaces/navigation?statusScope=active",
   );
   const workspaces = navigation.workspaces.filter(
     ({ id }) => id === workspaceId,
@@ -67,13 +70,14 @@ const selectGuideWorkspace = async ({
   // Keep the outside-matter entry point deterministic while parallel tests
   // create and delete their own matters in the same organization.
   await page.route(/\/v1\/workspaces\/navigation(?:\?|$)/u, async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/workspaces/navigation", "get", {
         ...navigation,
         items: workspaces,
         workspaces,
-      },
-    });
+      }),
+    );
   });
 };
 
@@ -128,12 +132,16 @@ const finishGuide = async (page: Page) => {
 
 const startGuide = async (page: Page, title: string) => {
   const helpButton = page.getByRole("button", { name: HELP_BUTTON_NAME });
-  await expect(helpButton).toBeVisible({ timeout: 30_000 });
+  await expect(helpButton).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await helpButton.click();
   const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
   const card = drawer.locator("li").filter({ hasText: title });
   const start = card.getByRole("button", { name: /^(?:Start again|Start)$/u });
-  await expect(start).toBeEnabled({ timeout: 30_000 });
+  await expect(start).toBeEnabled({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await start.click();
   await expect(drawer).toHaveCount(0);
 };
@@ -273,13 +281,15 @@ test("Guide checklist stays stable until matter availability resolves", async ({
       waitUntil: "commit",
     });
     const helpButton = page.getByRole("button", { name: HELP_BUTTON_NAME });
-    await expect(helpButton).toBeVisible({ timeout: 30_000 });
+    await expect(helpButton).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await helpButton.click();
     const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
     await expect(drawer.locator('[aria-busy="true"]')).toBeVisible();
     await expect(
       drawer.locator("li").filter({ hasText: "Work with documents" }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   } finally {
     if (workspace) {
       await deleteTestWorkspace(request, workspace.id);
@@ -465,19 +475,20 @@ for (const availability of [
       });
       await expect(
         page.getByRole("button", { name: HELP_BUTTON_NAME }),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
       browserErrors.expectCaptured(/Failed to load resource:.*503/u);
       await page.route(availability.path, async (route) => {
-        await route.fulfill({
-          status: 503,
-          json: { message: "Guide availability test failure" },
-        });
+        await respond(
+          route,
+          apiError(503, { message: "Guide availability test failure" }),
+        );
       });
       await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
       const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
-      await expect(drawer.getByRole("alert")).toContainText("Action failed", {
-        timeout: 30_000,
-      });
+      await expect(drawer.getByRole("alert")).toContainText(
+        messages.errors.actionFailed,
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+      );
       await expect(
         drawer.locator("li").filter({ hasText: availability.title }),
       ).toHaveCount(0);

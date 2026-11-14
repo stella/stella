@@ -1,7 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
-import { contactDataBoxSchema } from "@/api/db/schema-validators";
+import { contactDataBoxSchema } from "@stll/api-contract/contact-write";
+
 import {
   mergeContactMetadata,
   normalizeContactMetadata,
@@ -10,31 +11,31 @@ import {
 describe("contact metadata", () => {
   test("validates Czech data box IDs as seven alphanumeric characters", () => {
     expect(
-      Value.Check(contactDataBoxSchema, {
+      v.is(contactDataBoxSchema, {
         id: "abc1234",
         isPrimary: true,
       }),
     ).toBe(true);
     expect(
-      Value.Check(contactDataBoxSchema, {
+      v.is(contactDataBoxSchema, {
         id: "ABC1234",
         isPrimary: false,
       }),
     ).toBe(true);
     expect(
-      Value.Check(contactDataBoxSchema, {
+      v.is(contactDataBoxSchema, {
         id: "abc123",
         isPrimary: false,
       }),
     ).toBe(false);
     expect(
-      Value.Check(contactDataBoxSchema, {
+      v.is(contactDataBoxSchema, {
         id: "abc12345",
         isPrimary: false,
       }),
     ).toBe(false);
     expect(
-      Value.Check(contactDataBoxSchema, {
+      v.is(contactDataBoxSchema, {
         id: "abc-123",
         isPrimary: false,
       }),

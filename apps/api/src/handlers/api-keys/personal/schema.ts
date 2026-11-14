@@ -1,48 +1,56 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { machineApiKeyNameSchema } from "@/api/handlers/api-keys/mint";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema, uniqueItems } from "@/api/lib/custom-schema";
 import {
   API_KEY_POLICY,
   PERSONAL_API_KEY_AUDIENCES,
   PERSONAL_API_KEY_SCOPES,
 } from "@/api/lib/machine-api-key-config";
 
-export const personalApiKeyExpirySchema = t.Optional(
-  t.Integer({
-    minimum: API_KEY_POLICY.personal.minDays,
-    maximum: API_KEY_POLICY.personal.maxDays,
-  }),
-);
-export const personalApiKeyBodySchema = t.Object({
-  name: machineApiKeyNameSchema,
-  scopes: t.Optional(
-    t.Array(t.UnionEnum([...PERSONAL_API_KEY_SCOPES]), {
-      minItems: 1,
-      maxItems: PERSONAL_API_KEY_SCOPES.length,
-      uniqueItems: true,
-    }),
+export const personalApiKeyExpirySchema = v.optional(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(API_KEY_POLICY.personal.minDays),
+    v.maxValue(API_KEY_POLICY.personal.maxDays),
   ),
-  audience: t.Optional(
-    t.Union([
-      t.Literal(PERSONAL_API_KEY_AUDIENCES[0]),
-      t.Literal(PERSONAL_API_KEY_AUDIENCES[1]),
+);
+export const personalApiKeyBodySchema = v.object({
+  name: machineApiKeyNameSchema,
+  scopes: v.optional(
+    v.pipe(
+      v.array(v.picklist([...PERSONAL_API_KEY_SCOPES])),
+      v.minLength(1),
+      v.maxLength(PERSONAL_API_KEY_SCOPES.length),
+      uniqueItems(),
+    ),
+  ),
+  audience: v.optional(
+    v.union([
+      v.literal(PERSONAL_API_KEY_AUDIENCES[0]),
+      v.literal(PERSONAL_API_KEY_AUDIENCES[1]),
     ]),
   ),
   expiresInDays: personalApiKeyExpirySchema,
 });
-export const personalApiKeyIdBodySchema = t.Object({
-  keyId: t.String({ minLength: 1, maxLength: 128 }),
+export const personalApiKeyIdBodySchema = v.object({
+  keyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 });
-export const personalApiKeyListQuerySchema = t.Object({
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 50 })),
-  cursor: t.Optional(tPaginationCursor()),
+export const personalApiKeyListQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(50)),
+    ),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 type PersonalAudience = (typeof PERSONAL_API_KEY_AUDIENCES)[number];
 type SchemaAudience = NonNullable<
-  Static<typeof personalApiKeyBodySchema>["audience"]
+  v.InferOutput<typeof personalApiKeyBodySchema>["audience"]
 >;
 true satisfies Exclude<PersonalAudience, SchemaAudience> extends never
   ? true

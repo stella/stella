@@ -10,6 +10,8 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
+import { readKanbanDraggedCards } from "@/components/workspaces/kanban/kanban-selection.logic";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
@@ -23,36 +25,14 @@ import {
 
 export const attachElementDropTarget = dropTargetForElements;
 
-/**
- * The dragged card's source subgroup lane, read from the drag payload.
- * `undefined` means the payload carried no lane at all (a flat board, or a
- * card that never declared one) — distinct from `null`, the Unassigned
- * lane, which is a real source value a caller must not discard.
- */
-export const readSourceSubgroupValue = (
-  data: Record<string, unknown>,
-): string | null | undefined => {
-  const raw = data["subgroupValue"];
-  if (typeof raw === "string") {
-    return raw;
-  }
-  return raw === null ? null : undefined;
-};
-
 type UseKanbanEntityDropTargetParams<TElement extends HTMLElement> = {
   elementRef: RefObject<TElement | null>;
   enabled?: boolean;
   name: string;
-  canDrop?:
-    | ((
-        entityId: string,
-        sourceSubgroupValue: string | null | undefined,
-      ) => boolean)
-    | undefined;
-  onDrop: (
-    entityId: string,
-    sourceSubgroupValue: string | null | undefined,
-  ) => void;
+  /** Asked per card; a drag is accepted only when every card it carries is. */
+  canDrop?: ((card: KanbanDraggedCard) => boolean) | undefined;
+  /** Every card the drag carries: the selection, or the one card. */
+  onDrop: (cards: readonly KanbanDraggedCard[]) => void;
 };
 
 /** One card drop contract for flat columns and subgroup cells. */
@@ -66,8 +46,8 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
   const [isDragOver, setIsDragOver] = useState(false);
   const handleDrop = useLatestCallback(onDrop);
   const acceptsDrop = useLatestCallback(
-    (entityId: string, lane: string | null | undefined) =>
-      canDrop?.(entityId, lane) ?? true,
+    (cards: readonly KanbanDraggedCard[]) =>
+      cards.length > 0 && (canDrop === undefined || cards.every(canDrop)),
   );
 
   useExternalSyncEffect(() => {
@@ -79,22 +59,17 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
     return attachElementDropTarget({
       element,
       name,
-      canDrop: ({ source }) => {
-        const entityId = source.data["entityId"];
-        return (
-          source.data["type"] === ENTITY_DRAG_TYPE &&
-          typeof entityId === "string" &&
-          acceptsDrop(entityId, readSourceSubgroupValue(source.data))
-        );
-      },
+      canDrop: ({ source }) =>
+        source.data["type"] === ENTITY_DRAG_TYPE &&
+        acceptsDrop(readKanbanDraggedCards(source.data)),
       getData: () => withDropAnnouncementData({}, { type: "container", name }),
       onDragEnter: () => setIsDragOver(true),
       onDragLeave: () => setIsDragOver(false),
       onDrop: ({ source }) => {
         setIsDragOver(false);
-        const entityId = source.data["entityId"];
-        if (typeof entityId === "string") {
-          handleDrop(entityId, readSourceSubgroupValue(source.data));
+        const cards = readKanbanDraggedCards(source.data);
+        if (cards.length > 0) {
+          handleDrop(cards);
         }
       },
     });

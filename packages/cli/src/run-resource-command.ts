@@ -14,21 +14,21 @@ import {
 } from "./mcp-client.js";
 import {
   EXIT_CODES,
-  mapHttpStatusExit,
   type ExitCode,
+  mapHttpStatusExit,
 } from "./mcp-constants.js";
 import {
-  renderResult,
   type OutputFormat,
-  type Writers,
+  renderResult,
   terminalWidth,
+  type Writers,
 } from "./output.js";
 import type { ResourceLeafSpec } from "./resource-types.js";
 import {
   readOutputFormat,
+  renderClientError,
   RESERVED_FLAG_KEYS,
   writersFor,
-  renderClientError,
 } from "./run-leaf-command.js";
 
 type LeafFlags = Record<string, unknown>;

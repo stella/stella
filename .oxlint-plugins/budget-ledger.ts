@@ -10,11 +10,11 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
+  type AstNode,
   isAstNode,
   isIdentifier,
   memberPropertyName,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 type LedgerRow = { id: string; count: number; reason: string };

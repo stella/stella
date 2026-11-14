@@ -1,8 +1,8 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
@@ -14,6 +14,7 @@ import type { PublicCountrySurface } from "@stll/api-contract/public-country-cap
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { projectInconsistentVersion } from "@/api/handlers/legislation/catalog-response";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -23,16 +24,19 @@ import {
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import { legislationWorkIdentifierCondition } from "@/api/lib/legal-search/legislation-work-identifiers";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 
-export const readStatuteByEliQuerySchema = t.Object({
-  eli: t.String({ minLength: 1, maxLength: 512 }),
-  language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
-  /** Absent means "the text in force today". */
-  asOf: t.Optional(t.String({ format: "date" })),
+export const readStatuteByEliQuerySchema = v.object({
+  eli: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  language: v.optional(v.pipe(v.string(), v.minLength(2), v.maxLength(8))),
+  asOf: v.optional(apiDateSchema),
 });
 
-type ReadStatuteByEliQuery = Static<typeof readStatuteByEliQuerySchema>;
+type ReadStatuteByEliQuery = v.InferOutput<typeof readStatuteByEliQuerySchema>;
 
 /**
  * Which Expression a Work-plus-date address names, or why it names none.
@@ -81,20 +85,19 @@ export const publisherWindowInconsistentBody = (
  * statutes the same way: one implementation decides what an ELI plus a date
  * means, so a tool cannot resolve it differently from the reader.
  */
-const workConditionsFor = (
-  {
-    eli,
-    language,
-  }: {
-    eli: string;
-    language?: string | undefined;
-  },
-  surface: PublicCountrySurface,
-): SQL[] => {
-  const conditions: SQL[] = [
-    eq(legislationDocuments.eli, eli),
-    publishedLegislationDocumentFor(surface),
-  ];
+type WorkConditionsOptions = {
+  tx: LegislationReadTransaction;
+  query: { eli: string; language?: string | undefined };
+  surface: PublicCountrySurface;
+};
+
+const workConditionsFor = async ({
+  tx,
+  query: { eli, language },
+  surface,
+}: WorkConditionsOptions): Promise<SQL[]> => {
+  const identity = await legislationWorkIdentifierCondition(tx, eli);
+  const conditions = [identity, publishedLegislationDocumentFor(surface)];
   if (language !== undefined) {
     conditions.push(eq(legislationDocuments.language, language));
   }
@@ -117,10 +120,9 @@ export const resolveStatuteWorkVersion = async (
   query: { eli: string; language?: string | undefined },
   legislationDb: LegislationReadDb,
   surface: PublicCountrySurface,
-): Promise<StatuteExpressionResolution> => {
-  const conditions = workConditionsFor(query, surface);
-
-  return await legislationDb(async (tx) => {
+): Promise<StatuteExpressionResolution> =>
+  await legislationDb(async (tx) => {
+    const conditions = await workConditionsFor({ tx, query, surface });
     const [version] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)
@@ -141,7 +143,6 @@ export const resolveStatuteWorkVersion = async (
       ? ({ type: "unknown-work" } as const)
       : ({ type: "expression", id: version.id } as const);
   });
-};
 
 export const resolveStatuteExpression = async (
   query: ReadStatuteByEliQuery,
@@ -151,9 +152,8 @@ export const resolveStatuteExpression = async (
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
 
-  const workConditions = workConditionsFor(query, surface);
-
   return await legislationDb(async (tx) => {
+    const workConditions = await workConditionsFor({ tx, query, surface });
     const [expression] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)

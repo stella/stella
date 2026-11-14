@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
@@ -27,12 +30,15 @@ export const useCreateViewTemplate = () => {
     select: (ctx) => ctx.user.id,
   });
 
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: CreateViewTemplateVars) => {
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, ...body }: CreateViewTemplateVars,
+      request,
+    ) => {
       const response = await api["view-templates"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
-      }).put(body);
-      return { data: unwrapEden(response), workspaceId };
+      }).put(body, request);
+      return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {
       detached(
@@ -43,7 +49,11 @@ export const useCreateViewTemplate = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateViewTemplate:failure",
+        scope: { type: "handler", handlerId: "useCreateViewTemplate:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -72,7 +82,7 @@ export const useDeleteViewTemplate = () => {
       })({
         templateId: toSafeId<"workspaceViewTemplate">(templateId),
       }).delete();
-      return { data: unwrapEden(response), workspaceId };
+      return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {
       detached(
@@ -83,7 +93,11 @@ export const useDeleteViewTemplate = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteViewTemplate:failure",
+        scope: { type: "handler", handlerId: "useDeleteViewTemplate:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

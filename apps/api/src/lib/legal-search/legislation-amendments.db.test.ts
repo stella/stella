@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -85,7 +86,7 @@ let scopedDb: ScopedDb;
 const corpus = {
   mode: "off",
   write: async () =>
-    await Promise.resolve({
+    Result.ok({
       type: "skipped-empty" as const,
       written: null,
       contentHash: "0".repeat(64),
@@ -468,7 +469,7 @@ describe("publisher amendment snapshots", () => {
           // Production identity constraints normally collapse same-date rows. The
           // handler still defends its response budget while such rows are present.
           await tx.execute(
-            sql`DROP INDEX legislation_documents_eli_version_lang_idx`,
+            sql`DROP INDEX legislation_documents_legacy_version_lang_idx`,
           );
           await tx.insert(legislationDocuments).values({
             id: otherVersionId,

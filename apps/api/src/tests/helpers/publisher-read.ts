@@ -2,10 +2,10 @@ import { panic } from "better-result";
 
 import {
   readAbsent,
+  type ReadOutcome,
   readOutcomeOfStatus,
   readPresent,
   readUnavailable,
-  type ReadOutcome,
 } from "@/api/lib/errors/read-outcome";
 
 /** A stubbed response as `readPublisher` types it, by its status alone. */

@@ -6,8 +6,8 @@ import * as v from "valibot";
 
 import {
   VISUAL_PREVIEW_LIMITS,
-  visualPreviewToolOutputSchema,
   type VisualPreviewOutput,
+  visualPreviewToolOutputSchema,
 } from "@stll/api-contract/visual-preview";
 import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 

@@ -2,18 +2,21 @@ import { panic, Result, TaggedError } from "better-result";
 import { getDomain } from "tldts";
 import * as v from "valibot";
 
-import { withTimeout, TimeoutError } from "@stll/concurrency/with-timeout";
+import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { FIRST_PARTY_OAUTH_CLIENTS } from "@/api/lib/auth/oauth-consent-info";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   FetchBoundaryError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import { isRetryLaterStatus } from "@/api/lib/errors/upstream-status";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 import {
   authorizationServerMetadataUrls,
@@ -22,7 +25,8 @@ import {
 } from "@/api/lib/mcp-upstream/url-safety";
 import { logger } from "@/api/lib/observability/logger";
 import {
-  safeOutboundFetchBytes,
+  isOutboundTransportFailure,
+  SafeOutboundFetchError,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
 import type {
@@ -38,6 +42,8 @@ import type {
 const OAUTH_FETCH_TIMEOUT_MS = 10_000;
 export const MCP_OAUTH_BINDING_FAILURE_CODE = "mcp_oauth_binding_invalid";
 export const MCP_OAUTH_INVALID_GRANT_CODE = "mcp_oauth_invalid_grant";
+/** The token endpoint refused the refresh for a reason only new credentials or configuration fix. */
+export const MCP_OAUTH_REFRESH_REFUSED_CODE = "mcp_oauth_refresh_refused";
 export const MCP_OAUTH_DISCOVERY_TIMEOUT_CODE = "mcp_oauth_discovery_timeout";
 const OAUTH_FETCH_MAX_BYTES = 1_000_000;
 // A revocation response carries no content worth reading (RFC 7009 §2.2).
@@ -442,6 +448,7 @@ const discoverOAuthMetadataWithinDeadline = async (
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "upstream_unavailable",
         message: "MCP server did not expose protected resource metadata",
       }),
     );
@@ -459,6 +466,7 @@ const discoverOAuthMetadataWithinDeadline = async (
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "MCP authorization server metadata could not be discovered",
       }),
     );
@@ -479,7 +487,10 @@ const discoverOAuthMetadataWithinDeadline = async (
 const randomBase64Url = (byteLength: number): string => {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
-  return Buffer.from(bytes).toString("base64url");
+  return Buffer.from(bytes).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 };
 
 export const createPkce = () => {
@@ -493,16 +504,16 @@ export const createOAuthState = (): string => randomBase64Url(32);
 
 export const getMcpOAuthRedirectUri = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-  return new URL("/v1/mcp/oauth/callback", publicUrl).toString();
+  return new URL(
+    FIRST_PARTY_OAUTH_CLIENTS.mcp_connector.redirect.path,
+    publicUrl,
+  ).toString();
 };
 
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
 
 export type AuthorizationResponseRegistrationMode =
-  | "cimd"
-  | "dcr"
-  | "pre_registered"
-  | "unknown";
+  "cimd" | "dcr" | "pre_registered" | "unknown";
 
 type KnownAuthorizationResponseRegistrationMode = Exclude<
   AuthorizationResponseRegistrationMode,
@@ -656,11 +667,12 @@ export const clientRegistrationMode = (
   return "unsupported";
 };
 
-const MCP_CLIENT_METADATA_DOCUMENT_PATH = "/v1/mcp/oauth/client-metadata.json";
-
 export const getMcpClientMetadataDocumentUrl = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-  return new URL(MCP_CLIENT_METADATA_DOCUMENT_PATH, publicUrl).toString();
+  return new URL(
+    FIRST_PARTY_OAUTH_CLIENTS.mcp_connector.documentPath,
+    publicUrl,
+  ).toString();
 };
 
 export type McpClientMetadataDocument = {
@@ -765,6 +777,22 @@ export const buildOAuthClientRegistrationRequest = ({
   ...(requestedScopes.length > 0 ? { scope: requestedScopes.join(" ") } : {}),
 });
 
+/**
+ * A third party's refusal or outage at its OAuth endpoint is its answer, not a
+ * fault here. A successful response that does not parse breaks the endpoint's
+ * contract, and a request this client refused to send or finish (its URL policy,
+ * its size limit) never got that answer, so both stay internal failures that
+ * are reported.
+ */
+const oauthEndpointFailureCode = (
+  cause: unknown,
+): "internal_error" | "upstream_unavailable" =>
+  cause instanceof SyntaxError ||
+  v.isValiError(cause) ||
+  (SafeOutboundFetchError.is(cause) && !isOutboundTransportFailure(cause))
+    ? "internal_error"
+    : "upstream_unavailable";
+
 export const registerOAuthClient = async ({
   metadata,
   permit,
@@ -785,6 +813,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "upstream_unavailable",
         message:
           "MCP authorization server does not support dynamic registration",
       }),
@@ -813,6 +842,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: oauthEndpointFailureCode(response.error.cause),
         message: "Failed to register stella with MCP authorization server",
         cause: response.error,
       }),
@@ -856,6 +886,7 @@ export const exchangeAuthorizationCode = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "MCP authorization response issuer does not match",
       }),
     );
@@ -891,6 +922,7 @@ export const exchangeAuthorizationCode = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: oauthEndpointFailureCode(token.error.cause),
         message: "Failed to exchange MCP authorization code",
         cause: token.error,
       }),
@@ -914,7 +946,7 @@ export const refreshOAuthToken = async ({
   clientId: string;
   clientSecret: ClientSecret | null;
   refreshToken: RefreshToken;
-}): Promise<Result<TokenResponse, HandlerError<502>>> => {
+}): Promise<Result<TokenResponse, HandlerError<500 | 502>>> => {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     client_id: clientId,
@@ -951,21 +983,44 @@ export const refreshOAuthToken = async ({
         : Result.try(() =>
             v.parse(v.object({ error: v.string() }), JSON.parse(errorBody)),
           );
+    const message = "Failed to refresh MCP access token";
+    const code = refreshFailureCode(cause, oauthError);
     return Result.err(
-      new HandlerError({
-        status: 502,
-        ...(oauthError !== null &&
-        Result.isOk(oauthError) &&
-        oauthError.value.error === "invalid_grant"
-          ? { code: MCP_OAUTH_INVALID_GRANT_CODE }
-          : {}),
-        message: "Failed to refresh MCP access token",
-        cause: token.error,
-      }),
+      code === null
+        ? new HandlerError({ status: 500, message, cause: token.error })
+        : new HandlerError({ status: 502, code, message, cause: token.error }),
     );
   }
 
   return Result.ok(token.value);
+};
+
+/**
+ * A refused grant needs a new authorization and any other 4xx refusal new
+ * credentials or configuration, so neither is retried. A retry-later status or
+ * a transport failure is an upstream outage worth retrying. A successful
+ * response that does not parse breaks the endpoint's contract: `null`, so it
+ * stays an internal failure that is reported rather than retried.
+ */
+const refreshFailureCode = (
+  cause: unknown,
+  oauthError: Result<{ error: string }, unknown> | null,
+): string | null => {
+  if (
+    oauthError !== null &&
+    Result.isOk(oauthError) &&
+    oauthError.value.error === "invalid_grant"
+  ) {
+    return MCP_OAUTH_INVALID_GRANT_CODE;
+  }
+  if (cause instanceof SyntaxError || v.isValiError(cause)) {
+    return null;
+  }
+  const status = cause instanceof FetchBoundaryError ? cause.status : undefined;
+  if (status !== undefined && !isRetryLaterStatus(status)) {
+    return MCP_OAUTH_REFRESH_REFUSED_CODE;
+  }
+  return "upstream_unavailable";
 };
 
 const revocationEndpointSchema = v.pipe(v.string(), v.url());
@@ -1095,6 +1150,7 @@ const discoverAuthorizationServer = async (
   return Result.err(
     new HandlerError({
       status: 502,
+      code: "upstream_unavailable",
       message: "MCP authorization server metadata could not be discovered",
     }),
   );
@@ -1124,6 +1180,7 @@ const validateAuthorizationServerMetadata = async (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "MCP authorization server metadata contains an unsafe URL",
           cause: validation.error,
         }),

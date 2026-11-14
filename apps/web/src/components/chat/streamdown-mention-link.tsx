@@ -1,13 +1,18 @@
 import type React from "react";
 import { Fragment, isValidElement } from "react";
 
+import { useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
-  parseCanonicalChatSourceCitationHref,
   type ChatSourceCitationTarget,
+  parseCanonicalChatSourceCitationHref,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
+import {
+  isReferenceHref,
+  referenceFromHref,
+} from "@stll/api-contract/chat-reference-href";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
 import { MailIcon } from "@stll/ui/icons";
@@ -37,10 +42,6 @@ import {
   MarkdownReferenceChip,
   ReferenceFileTypeIcon,
 } from "@/components/references/reference-chip";
-import {
-  isReferenceHref,
-  referenceFromHref,
-} from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
@@ -60,6 +61,7 @@ import {
   FOLIO_SCROLL_EVENT,
   type FolioScrollEventDetail,
 } from "@/lib/folio-scroll-event";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol
@@ -123,6 +125,10 @@ type StreamdownMentionLinkProps =
   React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     interactive: boolean;
     workspaceId?: string | undefined;
+    /** `written`: a web link shows the text it was written with, not a
+     *  citation chip (a person's own message, not a model's cited source).
+     *  References, mentions and citations render as chips either way. */
+    externalLinks?: "citation" | "written" | undefined;
   };
 
 const ReferenceCitationLink = ({
@@ -183,6 +189,7 @@ const ReferenceCitationLink = ({
       anchorId={decision?.paragraph?.anchorId}
       fallback={fallback}
       interactive={interactive}
+      linkIconSource={{ kind: "tool-source" }}
       source={source}
       workspaceId={workspaceId}
     >
@@ -196,6 +203,7 @@ export const StreamdownMentionLink = ({
   children,
   interactive,
   workspaceId,
+  externalLinks = "citation",
   ...props
 }: StreamdownMentionLinkProps) => {
   const emailCitation = useVerifiedEmailCitationTarget(href ?? "", workspaceId);
@@ -273,6 +281,17 @@ export const StreamdownMentionLink = ({
     (href.startsWith("/")
       ? getHttpUrl(new URL(href, env.VITE_PUBLIC_APP_URL).toString())
       : null);
+  if (httpUrl && externalLinks === "written") {
+    return (
+      <ProxyChatLink
+        href={href}
+        iconSource={{ kind: "model-text" }}
+        urlLabel="written"
+      >
+        {children}
+      </ProxyChatLink>
+    );
+  }
   if (httpUrl) {
     return (
       <ExternalCitationLink
@@ -288,7 +307,11 @@ export const StreamdownMentionLink = ({
 
   // Keep the id: footnote back-links point at the reference anchor.
   return (
-    <ProxyChatLink href={href} id={props.id}>
+    <ProxyChatLink
+      href={href}
+      iconSource={{ kind: "model-text" }}
+      id={props.id}
+    >
       {children}
     </ProxyChatLink>
   );
@@ -371,6 +394,7 @@ const EmailCitationChip = ({
   interactive: boolean;
   workspaceId: string | undefined;
 }) => {
+  const router = useRouter();
   const tCommon = useTranslations("common");
   const { target } = citation;
   const retryLabel = tCommon("retry");
@@ -389,7 +413,11 @@ const EmailCitationChip = ({
           if (!source) {
             return;
           }
-          openEmailCitationSource({ source, workspaceId });
+          openEmailCitationSource({
+            documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+            source,
+            workspaceId,
+          });
           requestEmailCitationScroll(target);
         })(),
         "email-citation.verify",
@@ -397,7 +425,11 @@ const EmailCitationChip = ({
       return;
     }
     if (citation.type === "verified") {
-      openEmailCitationSource({ source: citation.source, workspaceId });
+      openEmailCitationSource({
+        documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+        source: citation.source,
+        workspaceId,
+      });
     } else {
       const inspector = useInspectorTabsStore.getState();
       const mountedTab = inspector.tabs.find(
@@ -447,6 +479,7 @@ const OfficeCitationChip = ({
   interactive: boolean;
   workspaceId: string | undefined;
 }) => {
+  const router = useRouter();
   const tChat = useTranslations("chat");
   const tCommon = useTranslations("common");
   const { target } = citation;
@@ -474,6 +507,7 @@ const OfficeCitationChip = ({
           return;
         }
         openOfficeCitationSource({
+          documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
           source: verified.source,
           workspaceId,
         });
@@ -692,6 +726,10 @@ const ExternalCitationLink = ({
       appearance="inline"
       interactive={interactive}
       externalHref={href}
+      // A link the source store does not know came from model text only.
+      linkIconSource={
+        source === undefined ? { kind: "model-text" } : { kind: "tool-source" }
+      }
       source={source ?? { title: inlineLabel || hostname, url: url.toString() }}
       workspaceId={workspaceId}
     >

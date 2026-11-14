@@ -325,7 +325,7 @@ trigger, so the split cannot come back silently.
 
 | Locale | Noun (button, card title)                          | Verb phrase (body copy)                 |
 | ------ | -------------------------------------------------- | --------------------------------------- |
-| ar     | الاستضافة الذاتية                                   | استضافته ذاتياً                          |
+| ar     | الاستضافة الذاتية                                  | استضافته ذاتياً                         |
 | cs     | self-hosting / _Na vlastní infrastruktuře_         | provozovat na vlastní infrastruktuře    |
 | sk     | self-hosting / _Na vlastnej infraštruktúre_        | prevádzkovať na vlastnej infraštruktúre |
 | pl     | self-hosting / _Na własnej infrastrukturze_        | uruchomić na własnej infrastrukturze    |
@@ -430,7 +430,7 @@ product is named once per locale across the menu, the footer, and its own page.
 
 | Locale | Workspace          | Editor      | Templates  | Tabular Review        | AI agent              | Anonymization  | Public data       |
 | ------ | ------------------ | ----------- | ---------- | --------------------- | --------------------- | -------------- | ----------------- |
-| ar     | مساحة العمل        | المحرر      | القوالب    | المراجعة الجدولية     | وكيل الذكاء الاصطناعي  | إخفاء الهوية   | البيانات العامة   |
+| ar     | مساحة العمل        | المحرر      | القوالب    | المراجعة الجدولية     | وكيل الذكاء الاصطناعي | إخفاء الهوية   | البيانات العامة   |
 | cs     | Pracovní prostor   | Editor      | Vzory      | Tabulková revize      | AI agent              | Anonymizace    | Veřejná data      |
 | de     | Arbeitsbereich     | Editor      | Vorlagen   | Tabellenprüfung       | KI-Agent              | Anonymisierung | Öffentliche Daten |
 | es     | Espacio de trabajo | Editor      | Plantillas | Revisión tabular      | Agente de IA          | Anonimización  | Datos públicos    |

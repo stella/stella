@@ -2,8 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
-  mkdirSync,
   linkSync,
+  mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -236,6 +236,7 @@ type SpawnDevProcessOptions = {
   cwd: string;
   env: NodeJS.ProcessEnv;
   label: string;
+  output: "inherit" | "ignore" | "pipe";
   stdin: "inherit" | "ignore";
 };
 export const spawnDevProcess = ({
@@ -244,6 +245,7 @@ export const spawnDevProcess = ({
   cwd,
   env,
   label,
+  output,
   stdin,
 }: SpawnDevProcessOptions) =>
   Result.gen(function* () {
@@ -273,8 +275,8 @@ export const spawnDevProcess = ({
           cwd,
           env,
           stdin,
-          stdout: "inherit",
-          stderr: "inherit",
+          stdout: output,
+          stderr: output,
           detached: true,
         }),
       catch: (cause) =>

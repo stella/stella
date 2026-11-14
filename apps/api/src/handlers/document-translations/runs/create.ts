@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
 
@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -62,7 +63,7 @@ type CreateDocumentTranslationRunResult =
   | { type: "started"; runId: SafeId<"documentTranslationRun"> };
 
 const validateTranslationSource = (
-  body: Static<typeof createDocumentTranslationRunBodySchema>,
+  body: v.InferOutput<typeof createDocumentTranslationRunBodySchema>,
   source: EntityVersionFile,
 ) => {
   if (
@@ -175,7 +176,13 @@ export const createDocumentTranslationRunHandler = ({
               })
             ).andThen((inspected) => inspected);
         if (Result.isError(inspection)) {
-          captureError(inspection.error, { entityId: body.entityId });
+          captureError(
+            inspection.error,
+            handlerErrorContext(
+              "runs.createDocumentTranslationRunHandler.inspection_error",
+              { entityId: body.entityId },
+            ),
+          );
           return Result.err(
             new HandlerError({
               status: 422,

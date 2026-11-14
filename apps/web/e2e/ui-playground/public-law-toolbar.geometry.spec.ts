@@ -10,8 +10,13 @@
  * phone, a split-pane and a desktop width.
  */
 
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 /** Mirrors PUBLIC_LAW_TOOLBAR_BENCH_WIDTHS; the spec stays out of the app graph. */
 const BENCH_WIDTHS = [360, 600, 1024] as const;
@@ -36,12 +41,15 @@ type ToolbarGeometry = {
     clientWidth: number;
     scrollWidth: number;
     textOverflow: string;
-    title: string | null;
   };
 };
 
-const readGeometry = async (page: Page, width: number) =>
-  page.evaluate((benchWidth): ToolbarGeometry => {
+const readGeometry = async (page: Page, width: number) => {
+  const toolbarLocator = page.locator(
+    `[data-playground-section="public-law-toolbar:${width}"]`,
+  );
+  await waitForStableGeometry(page, toolbarLocator);
+  return await page.evaluate((benchWidth): ToolbarGeometry => {
     const section = document.querySelector(
       `[data-playground-section="public-law-toolbar:${benchWidth}"]`,
     );
@@ -51,13 +59,13 @@ const readGeometry = async (page: Page, width: number) =>
     const summary = toolbar?.querySelector(
       '[data-slot="public-law-results-summary"]',
     );
-    const resultsLine = summary?.querySelector("p[title]");
+    const resultsLine = summary?.querySelector('[data-slot="truncated-text"]');
     if (
       !(toolbar instanceof HTMLElement) ||
       !(summary instanceof HTMLElement) ||
       !(resultsLine instanceof HTMLElement)
     ) {
-      throw new Error("public-law toolbar bench is not mounted");
+      throw new TypeError("public-law toolbar bench is not mounted");
     }
     const box = (element: Element): Box => {
       const rect = element.getBoundingClientRect();
@@ -81,10 +89,10 @@ const readGeometry = async (page: Page, width: number) =>
         clientWidth: resultsLine.clientWidth,
         scrollWidth: resultsLine.scrollWidth,
         textOverflow: style.textOverflow,
-        title: resultsLine.getAttribute("title"),
       },
     };
   }, width);
+};
 
 const overlaps = (a: Box, b: Box) =>
   a.left < b.right - TOLERANCE_PX &&
@@ -128,11 +136,11 @@ for (const width of BENCH_WIDTHS) {
       );
     }
 
-    // A long query ends in an ellipsis on one line; the title keeps it whole.
+    // A long query ends in an ellipsis on one line; TruncatedText shows it
+    // whole on hover, focus or tap.
     const line = geometry.resultsLine;
     expect(line.height).toBeLessThanOrEqual(line.lineHeight + TOLERANCE_PX);
     expect(line.textOverflow).toBe("ellipsis");
-    expect(line.title?.length ?? 0).toBeGreaterThan(0);
     if (toolbarWidth < OWN_ROW_BELOW_PX) {
       expect(line.scrollWidth).toBeGreaterThan(line.clientWidth);
     }

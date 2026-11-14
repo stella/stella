@@ -8,6 +8,7 @@ git ls-files --stage > "$export_dir/tracked-index"
 git archive HEAD | tar -x -C "$export_dir"
 cd "$export_dir"
 test ! -e apps/web/src/routeTree.gen.ts
+test ! -e apps/web/src/route-templates.gen.ts
 test ! -e apps/web/src/generated/api-routes.gen.ts
 # Metadata lets manifest tests check ignores, while all sources come from archive.
 git init --quiet
@@ -17,9 +18,11 @@ cp apps/web/.env.example apps/web/.env
 bun run typegen
 bun run --cwd apps/web typecheck
 test -s apps/web/src/routeTree.gen.ts
-rm apps/web/src/routeTree.gen.ts
+test -s apps/web/src/route-templates.gen.ts
+rm apps/web/src/routeTree.gen.ts apps/web/src/route-templates.gen.ts
 bun run --cwd apps/web test scripts/generate-route-tree.test.ts scripts/network-baseline-route-tree.test.ts src/public-crawl-policy.test.ts
 test -s apps/web/src/routeTree.gen.ts
+test -s apps/web/src/route-templates.gen.ts
 bun test scripts/generated-files.test.ts scripts/code-check-affected.test.ts
 bun run --cwd packages/scripts test src/web-generation-cache.test.ts
 bun run --cwd apps/web generate:route-tree --check
@@ -42,8 +45,9 @@ cat "$export_dir/mutation.log"
 test "$status" -ne 0
 grep -q 'rejects injected nondeterminism' "$export_dir/mutation.log"
 grep -Eq 'promise.*resolv|[1-9][0-9]* fail' "$export_dir/mutation.log"
-rm apps/web/src/routeTree.gen.ts
+rm apps/web/src/routeTree.gen.ts apps/web/src/route-templates.gen.ts
 bun run --cwd apps/web build
 test -s apps/web/src/routeTree.gen.ts
+test -s apps/web/src/route-templates.gen.ts
 test -s apps/web/dist/runtime.js
 printf 'Fresh export: web typecheck, focused tests, build, cache restoration and mutation proof passed.\n' >> "$GITHUB_STEP_SUMMARY"

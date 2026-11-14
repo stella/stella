@@ -82,8 +82,9 @@ export const decisionTableSchema = ({
       size: model.size,
       minSize: DECISION_COLUMN_MIN_SIZE,
       capabilities: {
-        // Decisions are ordered by the search, never by a column.
-        sort: false,
+        // Decisions are ordered by the search or the listing; only a column
+        // holding the value that order runs by can state it.
+        sort: model.sortKind !== null,
         hide: model.hide,
         resize: true,
         pin: true,

@@ -18,6 +18,30 @@ import { seedId } from "./seed-utils";
 
 const SOURCE_ID = seedId("legislation-source-agent-fixtures");
 export const SECTION_51_VERSION_DATE = "2025-06-01";
+
+/** The ELI of a seeded act of the Czech collection. */
+export const seededStatuteEli = ({
+  year,
+  number,
+}: {
+  year: number;
+  number: number;
+}) => `/eli/cz/sb/${String(year)}/${String(number)}`;
+
+/** The id of one seeded consolidation, named by the day it took effect. */
+export const seededStatuteVersionId = ({
+  year,
+  number,
+  versionValidFrom,
+}: {
+  year: number;
+  number: number;
+  versionValidFrom: string;
+}) =>
+  seedId<"legislationDocument">(
+    `legislation-${String(year)}-${String(number)}-${versionValidFrom}`,
+  );
+
 const STATUTES = [
   {
     year: 2012,
@@ -47,9 +71,9 @@ export const seedLegislation = async (scopedDb: ScopedDb) => {
           : "2024-01-01";
 
         return {
-          id: seedId(`legislation-${year}-${number}-${versionValidFrom}`),
+          id: seededStatuteVersionId({ year, number, versionValidFrom }),
           sourceId: SOURCE_ID,
-          eli: `/eli/cz/sb/${year}/${number}`,
+          eli: seededStatuteEli({ year, number }),
           title: `${number}/${year} Sb., ${title}`,
           slug: `${number}-${year}-sb-${slug}`,
           country: fixture.country,

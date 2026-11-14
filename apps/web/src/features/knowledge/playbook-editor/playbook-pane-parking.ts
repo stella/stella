@@ -9,10 +9,7 @@ import { detached } from "@/lib/detached";
 import type { PlaybookApprovalStatus } from "@/lib/knowledge/playbook-types";
 
 export type PaneDraftState =
-  | "saved"
-  | "dirty-autosaveable"
-  | "dirty-unsaveable"
-  | "save-failed";
+  "saved" | "dirty-autosaveable" | "dirty-unsaveable" | "save-failed";
 
 type ResolvePaneDraftStateArgs = {
   isDirty: boolean;
@@ -190,7 +187,10 @@ const removePaneDraft = <T>(
   { tabId, playbookId }: PaneDraftId,
 ): PaneDraftRegistry<T> => {
   const tab = current[tabId];
-  if (tab?.[playbookId] === undefined) {
+  if (tab === undefined) {
+    return current;
+  }
+  if (tab[playbookId] === undefined) {
     return current;
   }
   const remaining = Object.fromEntries(

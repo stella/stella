@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 
 import { useHotkeyRecorder } from "@tanstack/react-hotkeys";
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -106,7 +106,10 @@ const ShortcutGroupSection = ({ group }: ShortcutGroupSectionProps) => {
 type ShortcutRowProps = {
   shortcut: ShortcutDescriptor;
   isOverridden: boolean;
-  onRebind: (id: ShortcutId, hotkey: Hotkey) => Promise<RebindError | null>;
+  onRebind: (
+    id: ShortcutId,
+    hotkey: HotkeyChord,
+  ) => Promise<RebindError | null>;
   onReset: (id: ShortcutId) => Promise<void>;
 };
 
@@ -124,7 +127,7 @@ const ShortcutRow = ({
   return (
     <li
       className={cn(
-        "group flex items-center justify-between gap-4 rounded px-1 py-1",
+        "group flex items-center justify-between gap-4 rounded-sm px-1 py-1",
         isFlashing && "bg-accent/60",
       )}
     >
@@ -138,7 +141,7 @@ const ShortcutRow = ({
           onReset={onReset}
         />
       ) : (
-        <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+        <kbd className="border-border bg-muted text-muted-foreground rounded-sm border px-1.5 py-0.5 text-xs">
           {shortcut.binding.char}
         </kbd>
       )}
@@ -148,9 +151,12 @@ const ShortcutRow = ({
 
 type RebindableBindingProps = {
   id: ShortcutId;
-  hotkey: Hotkey;
+  hotkey: HotkeyChord;
   isOverridden: boolean;
-  onRebind: (id: ShortcutId, hotkey: Hotkey) => Promise<RebindError | null>;
+  onRebind: (
+    id: ShortcutId,
+    hotkey: HotkeyChord,
+  ) => Promise<RebindError | null>;
   onReset: (id: ShortcutId) => Promise<void>;
 };
 
@@ -163,7 +169,7 @@ const RebindableBinding = ({
 }: RebindableBindingProps) => {
   const t = useTranslations();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
-  const [pending, setPending] = useState<Hotkey | null>(null);
+  const [pending, setPending] = useState<HotkeyChord | null>(null);
   const [rebindError, setRebindError] = useState<RebindError | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -202,7 +208,10 @@ const RebindableBinding = ({
       }
       setPending(null);
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RebindableBinding.save:failure",
+        scope: { type: "handler", handlerId: "RebindableBinding.save:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);
@@ -214,7 +223,13 @@ const RebindableBinding = ({
     try {
       await onReset(id);
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RebindableBinding.resetToDefault:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RebindableBinding.resetToDefault:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);
@@ -245,7 +260,7 @@ const RebindableBinding = ({
     return (
       <div className="flex flex-col items-end gap-1">
         <div className="flex items-center gap-2">
-          <kbd className="border-primary bg-muted text-foreground min-w-16 rounded border border-dashed px-1.5 py-0.5 text-center text-xs">
+          <kbd className="border-primary bg-muted text-foreground min-w-16 rounded-sm border border-dashed px-1.5 py-0.5 text-center text-xs">
             {preview
               ? formatHotkeyForPlatform(preview, hotkeyPlatform)
               : t("navigation.shortcutsDialog.pressKeys")}
@@ -285,18 +300,18 @@ const RebindableBinding = ({
           {t("common.resetToDefault")}
         </Button>
       ) : null}
-      <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+      <kbd className="border-border bg-muted text-muted-foreground rounded-sm border px-1.5 py-0.5 text-xs">
         {formatShortcutBinding({ type: "hotkey", hotkey }, hotkeyPlatform)}
       </kbd>
       <Button
-        // Quiet entry affordance: hidden until the row is hovered or receives
-        // keyboard focus. `focus-visible:opacity-100` keeps it reachable by
-        // Tab even when the pointer never touches the row (a11y), so it is not
-        // hover-only.
+        // Coarse pointers show the edit action at rest; mouse users reveal it
+        // on hover, keyboard users on focus-visible. Not focus-within: the
+        // dialog focuses the first row's button on open, which would pin it
+        // visible there for mouse users.
         aria-label={t("navigation.shortcutsDialog.editShortcut")}
         className={cn(
           "text-muted-foreground opacity-0 transition-opacity",
-          "group-focus-within:opacity-100 group-hover:opacity-100",
+          "group-hover:opacity-100 pointer-coarse:opacity-100",
           "focus-visible:opacity-100",
         )}
         disabled={isBusy}
@@ -312,7 +327,7 @@ const RebindableBinding = ({
 
 /**
  * Open the cheatsheet on `?`, but never while typing. `?` cannot be a
- * TanStack `Hotkey` (see `SHOW_SHORTCUTS_KEY`), so match the produced
+ * TanStack `HotkeyChord` (see `SHOW_SHORTCUTS_KEY`), so match the produced
  * character directly, which stays correct across keyboard layouts.
  */
 const useShowShortcutsHotkey = (open: () => void) => {

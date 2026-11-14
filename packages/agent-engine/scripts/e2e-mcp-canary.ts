@@ -403,7 +403,10 @@ const main = async (): Promise<void> => {
 
   try {
     const serverPath = await compileServer(tempDirectory);
-    const signingSecret = randomBytes(32).toString("base64url");
+    const signingSecret = randomBytes(32).toBase64({
+      alphabet: "base64url",
+      omitPadding: true,
+    });
     const nowSeconds = Math.floor(Date.now() / 1000);
     const validToken = signCanaryCredential(
       credentialClaims(nowSeconds),

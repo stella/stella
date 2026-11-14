@@ -1,3 +1,7 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: adapter callback normalization preserves successful parsing and translates typed read failures at its protocol boundary.
+// parser-output-unchanged: Stored-object readers and metadata-only replay outcomes leave ingestion parsing unchanged.
+// parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
@@ -7,20 +11,22 @@
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 // parser-output-unchanged: a page may also report listed items whose read did not produce them; built decisions are unchanged.
+// parser-output-unchanged: adapter definitions keep their declared reconciliation types; parsed output is unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
-  TextField,
   ReadDecisionTextFields,
+  TextField,
 } from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_TEXT_FIELD,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { withExceptionScope } from "@stll/errors/exception-scope-context";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
@@ -33,11 +39,11 @@ import type {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import {
-  toPlainText,
-  PlainTextError,
-  toPlainTextMetadataObject,
   type PlainText,
+  PlainTextError,
   type PlainTextMetadataValue,
+  toPlainText,
+  toPlainTextMetadataObject,
 } from "@/api/lib/case-law/plain-text";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -45,8 +51,8 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
-  withDocumentStageWindow,
   type DocumentStagePageOptions,
+  withDocumentStageWindow,
 } from "@/api/lib/legal-search/document-stage-observation";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
@@ -64,16 +70,40 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type SourceRawParts,
 } from "@/api/lib/legal-search/source-raw-envelope";
+import { readStoredRawReparseResult } from "@/api/lib/legal-search/stored-raw-reparse-boundary";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
 export type { EmptyAst };
 
-/** A judge as one decision names them, before the roster is consulted. */
-export type DecisionJudgeInput = {
+/**
+ * A judge the source names in the form a reader sees, titles removed.
+ *
+ * Each variant rules out the other's name field, so a reader of either
+ * spelling (`judge.czechDeclinedName !== undefined`) tells them apart, and a
+ * consumer that only reads printed names still compiles against both.
+ */
+export type PrintedDecisionJudge = {
   role: DecisionJudgeRole;
   nameAsPrinted: string;
+  czechDeclinedName?: never;
 };
+
+/**
+ * A judge a Czech text names inside a sentence, in the case its grammar asks
+ * for ("z předsedy Jana Svatoně"). The declined form is never shown: the row
+ * is written only when the court's roster names exactly one person it can be,
+ * and then under that person's own name.
+ */
+export type CzechDeclinedDecisionJudge = {
+  role: DecisionJudgeRole;
+  czechDeclinedName: string;
+  nameAsPrinted?: never;
+};
+
+/** A judge as one decision names them, before the roster is consulted. */
+export type DecisionJudgeInput =
+  PrintedDecisionJudge | CzechDeclinedDecisionJudge;
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
@@ -168,7 +198,9 @@ export type RawIngestionResult = {
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
    * the pipeline may use it to attach a newly learned `sourceDocumentId` to
-   * the right legacy null-id row without guessing from a shared docket.
+   * the right legacy null-id row without guessing from a shared docket. A URL
+   * that holds the document id itself proves the row even over a contradicting
+   * ECLI: a publisher can reissue one when it adds a sibling to the docket.
    */
   legacySourceUrls?: readonly string[] | undefined;
   /**
@@ -179,6 +211,15 @@ export type RawIngestionResult = {
    * null-id row this document produced; it is never stored.
    */
   legacyEcli?: string | undefined;
+  /**
+   * The docket an older adapter version stored this same publisher document
+   * under, where it differs from `caseNumber` (a court letter the publisher
+   * never printed, read off the publisher's own identifier). Like
+   * `legacyEcli`, it only lets the pipeline find the legacy null-id row this
+   * document produced, which it adopts only on ECLI or source URL proof; it
+   * is never stored.
+   */
+  legacyCaseNumber?: string | undefined;
   /**
    * Sheet number within the court file, where the source appends one to the
    * docket. Split it out with `splitCaseReference` rather than leaving it on
@@ -260,8 +301,7 @@ export type RawIngestionResult = {
    * address it wrote them at; the adapter states only the bytes.
    */
   sourceRawObjects?:
-    | Readonly<Record<string, SourceRawObjectPayload>>
-    | undefined;
+    Readonly<Record<string, SourceRawObjectPayload>> | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
 };
@@ -272,13 +312,23 @@ type PlainTextResultFields = {
   sheetNumber?: PlainText | undefined;
   ecli?: PlainText | undefined;
   legacyEcli?: PlainText | undefined;
+  legacyCaseNumber?: PlainText | undefined;
   court: PlainText;
   decisionType?: PlainText | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
   judges?:
-    | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
-        nameAsPrinted: PlainText;
-      })[]
+    | readonly (
+        | {
+            role: DecisionJudgeRole;
+            nameAsPrinted: PlainText;
+            czechDeclinedName?: never;
+          }
+        | {
+            role: DecisionJudgeRole;
+            czechDeclinedName: PlainText;
+            nameAsPrinted?: never;
+          }
+      )[]
     | undefined;
   textFields: Readonly<
     Record<
@@ -300,8 +350,7 @@ type PlainTextResultFields = {
 };
 
 type PlainTextOutcome =
-  | { type: "accepted" }
-  | { type: "item_build_failed"; error: PlainTextError };
+  { type: "accepted" } | { type: "item_build_failed"; error: PlainTextError };
 
 export type IngestionResult = Omit<
   RawIngestionResult,
@@ -315,6 +364,7 @@ export const PLAIN_TEXT_RESULT_FIELDS = {
   sheetNumber: true,
   ecli: true,
   legacyEcli: true,
+  legacyCaseNumber: true,
   court: true,
   decisionType: true,
   metadata: true,
@@ -412,6 +462,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       sheetNumber: yield* optionalPlainText(raw.sheetNumber),
       ecli: yield* optionalPlainText(raw.ecli),
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
+      legacyCaseNumber: yield* optionalPlainText(raw.legacyCaseNumber),
       court: yield* requiredLabel(raw.court),
       decisionType: yield* optionalPlainText(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
@@ -422,11 +473,16 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
         raw.judges === undefined
           ? undefined
           : yield* Result.all(
-              raw.judges.map(({ role, nameAsPrinted }) =>
-                toPlainText(nameAsPrinted).map((plain) => ({
-                  role,
-                  nameAsPrinted: plain,
-                })),
+              raw.judges.map((judge) =>
+                judge.czechDeclinedName !== undefined
+                  ? toPlainText(judge.czechDeclinedName).map((plain) => ({
+                      role: judge.role,
+                      czechDeclinedName: plain,
+                    }))
+                  : toPlainText(judge.nameAsPrinted).map((plain) => ({
+                      role: judge.role,
+                      nameAsPrinted: plain,
+                    })),
               ),
             ),
       textFields: {
@@ -600,7 +656,26 @@ export type SyncPage = {
    * adapter that names nothing.
    */
   sourceUrl?: string | undefined;
+  /**
+   * Whether the publisher was heard while building this page. Required, so
+   * an adapter cannot leave it to a default: only `answered` moves the
+   * source's `last_sync_at`, which coverage reads as how current it is.
+   */
+  publisherRequest: PublisherRequest;
 };
+
+/** What a page says about asking the publisher. */
+export const PUBLISHER_REQUEST = {
+  /** A request reached the publisher and it answered, whatever it held. */
+  ANSWERED: "answered",
+  /** Nothing was asked: the cursor is parked, waiting, or past the end. */
+  NONE: "none",
+  /** Every request this page made failed; recovery may advance the cursor. */
+  FAILED: "failed",
+} as const;
+
+export type PublisherRequest =
+  (typeof PUBLISHER_REQUEST)[keyof typeof PUBLISHER_REQUEST];
 
 /** A read that did not produce a listed item, in the read-outcome vocabulary. */
 export type UnreadOutcome = Extract<
@@ -804,6 +879,8 @@ export const LEGACY_RAW_SHAPES = {
  */
 export type StoredRawReparseInput = {
   raw: Uint8Array;
+  /** Reads stored envelope objects only; supplied by the replay driver. */
+  readObject?: StoredRawResultReader;
   /** Media type recorded with the payload; null on rows stored without one. */
   contentType: string | null;
   caseNumber: string;
@@ -841,6 +918,18 @@ export const STORED_RAW_REPARSE_REJECTION = {
 export type StoredRawReparseRejection =
   (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
 
+export const STORED_RAW_REPLAY_STATUS = {
+  METADATA_ONLY: "metadata-only",
+} as const;
+
+/** Missing capture is incomplete metadata, never a parsed-document withdrawal. */
+type StoredRawMetadataOnlyOutcome = {
+  type: "rejected";
+  rejection: typeof STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA;
+  status: typeof STORED_RAW_REPLAY_STATUS.METADATA_ONLY;
+  detail: string;
+};
+
 export type StoredRawReparseOutcome =
   | {
       type: "parsed";
@@ -862,9 +951,15 @@ export type StoredRawReparseOutcome =
   | {
       type: "rejected";
       rejection: StoredRawReparseRejection;
+      status?: never;
       /** Row-specific context for the operator; safe to print. */
       detail: string;
-    };
+    }
+  | StoredRawMetadataOnlyOutcome;
+
+/** Definitions can return a typed read failure; the adapter factory owns callback rejection. */
+export type StoredRawReparseValue =
+  StoredRawReparseOutcome | Result<StoredRawReparseOutcome, StoredRawReadError>;
 
 /** A rejection on its own, for a step that can refuse before a result exists. */
 type StoredRawReparseRejected = Extract<
@@ -879,6 +974,8 @@ export type StoredRawListing =
       parts: SourceRawParts;
       /** The listing row, verified to name the decision the database holds. */
       listing: Record<string, unknown>;
+      /** The decoded envelope, reusable when replay preserves it verbatim. */
+      sourceRaw: string;
     }
   | StoredRawReparseRejected;
 
@@ -914,7 +1011,8 @@ export const readStoredRawListing = ({
     };
   }
 
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  const sourceRaw = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(sourceRaw);
   const listingRaw = parts?.[part];
   if (parts === null || listingRaw === undefined) {
     return {
@@ -945,7 +1043,7 @@ export const readStoredRawListing = ({
     };
   }
 
-  return { type: "listing", parts, listing };
+  return { type: "listing", parts, listing, sourceRaw };
 };
 
 /**
@@ -1155,10 +1253,78 @@ export type HeldRowRules = {
 };
 
 /**
+ * What recapturing one stored row's missing publisher responses produced.
+ *
+ * `identity-mismatch` is a finding, not a failure to retry: the listed item and
+ * the payload already held describe different decisions, and neither is
+ * written over the other.
+ */
+export type StoredRawRecaptureOutcome =
+  | {
+      type: "recaptured";
+      /** The envelope the crawl would have stored for this row. */
+      raw: string;
+      contentType: string;
+    }
+  | { type: "identity-mismatch"; detail: string }
+  | { type: "not-recapturable"; detail: string };
+
+export type StoredRawRecaptureInput = {
+  /** One item exactly as the slice listing serves it. */
+  listingPayload: unknown;
+  stored: StoredRawReparseInput;
+};
+
+/**
+ * Re-reading the publisher responses an older stored payload never kept.
+ *
+ * A row the crawl wrote before the adapter stored a response (most often the
+ * listing row) cannot be replayed: the replay rebuilds from retained bytes
+ * alone. The listing is cheap to ask again, so the row is upgraded to the
+ * envelope a crawl writes today and then rebuilt by `reparseStoredRaw` like
+ * any other row; the envelope and the decision each keep a single builder.
+ */
+export type SourceRecapture = {
+  /**
+   * What to ask the publisher for to find the stored row, read off what the
+   * row holds: a slice where the publisher lists by slice (one request then
+   * serves every row it lists), a narrower query where a slice is too large to
+   * be served whole. Null where the row names nothing to ask for.
+   */
+  lookupOf: (stored: StoredRawReparseInput) => string | null;
+  /** One page of what the publisher lists for a lookup, keyed as the crawl keys it. */
+  listLookup: (
+    options: ReconciliationSlicePageOptions,
+  ) => Promise<ReconciliationSlicePage>;
+  /**
+   * Whether a listed item is the stored row. The adapter decides, because a
+   * row stored without the publisher's id can only be told by what it holds.
+   */
+  matchesStored: (
+    item: ReconciliationListingItem,
+    stored: StoredRawReparseInput,
+  ) => boolean;
+  /**
+   * The envelope for `stored` with the listed item added. Pure: the payload
+   * already held is reused, never fetched again.
+   *
+   * Absent where what a legacy row holds cannot stand in for the responses a
+   * crawl reads (a document file the adapter no longer parses, where the text
+   * comes from another rendition): such a row is located here and then
+   * re-observed through `buildDecision`, never upgraded from bytes that would
+   * build a poorer decision than the one stored.
+   */
+  recaptureStoredRaw?:
+    ((input: StoredRawRecaptureInput) => StoredRawRecaptureOutcome) | undefined;
+};
+
+/**
  * The capability that makes a source reconcilable: the publisher can be asked
  * what it holds for a slice, independently of the cursor the crawl advanced.
  */
 export type SourceReconciliation = SourceSliceWalk & {
+  /** Present where rows stored without a listing can be upgraded from it. */
+  recapture?: SourceRecapture | undefined;
   /**
    * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
    * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
@@ -1228,8 +1394,7 @@ export type SourceReconciliation = SourceSliceWalk & {
   ) => Promise<ReconciliationBuildOutcome>;
   /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
   createSliceBuildDecision?:
-    | (() => SourceReconciliation["buildDecision"])
-    | undefined;
+    (() => SourceReconciliation["buildDecision"]) | undefined;
 };
 
 /**
@@ -1343,22 +1508,78 @@ export type SourceFieldDisposition =
   | { readonly disposition: "stored"; readonly target: SourceFieldTarget }
   | {
       readonly disposition: "excluded";
+      readonly reason: SourceExclusionReason;
+      readonly justification: string;
+      readonly pointer: string;
+      readonly [STATED_REASON]: true;
+    }
+  | {
+      readonly disposition: "excluded";
+      readonly legacy: true;
       readonly reason: string;
       readonly [STATED_REASON]: true;
     };
 
-/**
- * State why a field the source publishes is not stored. The reason has to say
- * something: `""` and `"   "` are compile errors rather than a check somebody
- * has to remember to run.
- */
-export const excludedSourceField = <const TText extends string>(
+/** Migration-only constructor, held to the exact legacy source exclusion census. */
+export const legacyExcludedSourceField = <const TText extends string>(
   reason: StatedReason<TText>,
 ): SourceFieldDisposition => ({
   disposition: "excluded",
   reason,
+  legacy: true,
   [STATED_REASON]: true,
 });
+
+/** Closed policy vocabulary; exclusion is a decision that must be reviewable. */
+export const SOURCE_EXCLUSION_REASONS = [
+  "duplicate_of",
+  "personal_data_minimisation",
+  "publisher_noise",
+  "licence_restriction",
+  "unsupported_format_tracked",
+] as const;
+
+export type SourceExclusionReason = (typeof SOURCE_EXCLUSION_REASONS)[number];
+
+type SourceFieldExclusionOptions<
+  TJustification extends string,
+  TPointer extends string,
+> = {
+  reason: SourceExclusionReason;
+  justification: StatedReason<TJustification>;
+  /** Stored field, minimisation rule, publisher element, licence term, or issue. */
+  pointer: StatedReason<TPointer>;
+};
+
+/** Literal blanks fail typecheck; dynamic inputs fail before an inventory exists. */
+export const excludedSourceField = <
+  const TJustification extends string,
+  const TPointer extends string,
+>({
+  reason,
+  justification,
+  pointer,
+}: SourceFieldExclusionOptions<
+  TJustification,
+  TPointer
+>): SourceFieldDisposition => {
+  if (
+    !SOURCE_EXCLUSION_REASONS.includes(reason) ||
+    !justification.trim() ||
+    !pointer.trim()
+  ) {
+    return panic(
+      "Source exclusions require an allowed reason, justification and pointer",
+    );
+  }
+  return {
+    disposition: "excluded",
+    reason,
+    justification,
+    pointer,
+    [STATED_REASON]: true,
+  };
+};
 
 /**
  * The adapters that may still declare a surface they do not record.
@@ -1421,9 +1642,7 @@ export type BacklogSourceSurface = {
  * because the inventory only ever sees the pages already fetched.
  */
 export type SourceSurfaceDisposition =
-  | StoredSourceSurface
-  | ExcludedSourceSurface
-  | BacklogSourceSurface;
+  StoredSourceSurface | ExcludedSourceSurface | BacklogSourceSurface;
 
 /** A response the crawl fetches with the decision and keeps as `part`. */
 export const storedSourceSurface = (part: string): StoredSourceSurface => ({
@@ -1563,8 +1782,9 @@ export type SourceAdapter = {
    * decisions, one blob cannot be mapped back to one row, and the adapter
    * omits this rather than guessing.
    *
-   * The outcome may be returned directly by a parser that needs no I/O, or
-   * as a promise by one that does (an office-format extractor, say).
+   * Replays use retained publisher bytes and must not fetch the publisher.
+   * Await the outcome: common field inspection is asynchronous even for pure
+   * parsers; office-format extraction may also require local or service I/O.
    */
   reparseStoredRaw?: (
     stored: StoredRawReparseInput,
@@ -1610,24 +1830,137 @@ export type SourceAdapter = {
 
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
-  "country" | "key" | "name" | "observeDocumentStage"
+  "country" | "key" | "name" | "observeDocumentStage" | "reparseStoredRaw"
 > & {
   readonly key: TKey;
   readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
+  reparseStoredRaw?:
+    | ((
+        stored: StoredRawReparseInput,
+      ) => StoredRawReparseValue | Promise<StoredRawReparseValue>)
+    | undefined;
+};
+
+type ScopedCallbacks<TSource> = {
+  [
+    TKey in keyof TSource as Extract<
+      TSource[TKey],
+      (...args: never[]) => unknown
+    > extends never
+      ? never
+      : TKey
+  ]-?: TSource[TKey] | undefined;
+};
+
+/** The publisher record a stored replay produced, for field-coverage inspection. */
+const replayedPublisherRecord = (
+  outcome: StoredRawReparseOutcome,
+): IngestionResult | undefined => {
+  switch (outcome.type) {
+    case "parsed":
+      return outcome.result;
+    case "supplement":
+      return outcome.supplement.document;
+    case "rejected":
+      return undefined;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled publisher replay outcome");
+  }
 };
 
 /** Build an adapter from the source facts declared for its registry key. */
-export const defineSourceAdapter = <const TKey extends AdapterKey>(
-  adapter: SourceAdapterDefinition<TKey>,
-): SourceAdapter & { readonly key: TKey } => {
+export const defineSourceAdapter = <
+  const TKey extends AdapterKey,
+  const TAdapter extends SourceAdapterDefinition<TKey>,
+>(
+  // `key` names TKey for inference; the constraint then binds documentStage to
+  // that key's manifest instead of the union of every manifest's stage.
+  adapter: TAdapter & { readonly key: TKey },
+): Omit<SourceAdapter, "key" | "documentStage" | "reconciliation"> & {
+  readonly key: TAdapter["key"];
+  readonly documentStage: TAdapter["documentStage"];
+  readonly reconciliation: TAdapter["reconciliation"] & SourceReconciliation;
+} => {
+  const scope = { type: "ingestion", adapterKey: adapter.key } as const;
+  const scoped = <TArgs extends unknown[], TResult>(
+    operation: (...args: TArgs) => TResult,
+  ) =>
+    function (this: unknown, ...args: TArgs) {
+      return withExceptionScope(scope, () => operation.apply(this, args));
+    };
+  const inspectRecord = async (result: IngestionResult) => {
+    const { inspectPublisherFieldCoverage } =
+      await import("@/api/lib/legal-search/publisher-field-coverage");
+    await inspectPublisherFieldCoverage({
+      adapterKey: adapter.key,
+      inventory: adapter.sourceFields,
+      result,
+    });
+  };
+  const inspectBuild = <
+    TArgs extends unknown[],
+    TOutcome extends ReconciliationBuildOutcome,
+  >(
+    operation: (...args: TArgs) => Promise<TOutcome>,
+  ) =>
+    scoped(async function (this: unknown, ...args: TArgs) {
+      const outcome = await operation.apply(this, args);
+      switch (outcome.type) {
+        case "built":
+          await inspectRecord(outcome.decision);
+          if (outcome.companions !== undefined) {
+            for (const companion of outcome.companions) {
+              await inspectRecord(companion);
+            }
+          }
+          break;
+        case "built-supplement":
+          await inspectRecord(outcome.supplement.document);
+          break;
+        case "unkeyable":
+        case "detail-unavailable":
+          break;
+        default:
+          outcome satisfies never;
+          return panic("Unhandled publisher build outcome");
+      }
+      return outcome;
+    });
+  const reconciliation = adapter.reconciliation;
+  const createSliceBuildDecision = reconciliation.createSliceBuildDecision;
+  const textlessHeldRecheck = reconciliation.textlessHeldRecheck;
+  const reparseStoredRaw = adapter.reparseStoredRaw;
+  const collectionEnrichment = adapter.collectionEnrichment;
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
-  ) => await withDocumentStageWindow({ ...options, source: adapter.key });
-  return {
-    ...adapter,
+  ) =>
+    await withExceptionScope(
+      scope,
+      async () =>
+        await withDocumentStageWindow({ ...options, source: adapter.key }),
+    );
+  // Total callback projections make a new callback require a scope decision.
+  const callbacks = {
     observeDocumentStage,
-    country: ADAPTER_MANIFESTS[adapter.key].country,
-    name: ADAPTER_MANIFESTS[adapter.key].name,
+    getTotalCount: scoped(adapter.getTotalCount),
+    reparseStoredRaw:
+      reparseStoredRaw === undefined
+        ? undefined
+        : scoped(async function (this: unknown, stored: StoredRawReparseInput) {
+            const outcome = readStoredRawReparseResult(
+              await reparseStoredRaw.call(this, stored),
+            );
+            const record = replayedPublisherRecord(outcome);
+            if (
+              record !== undefined &&
+              (stored.contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
+                decodeSourceRawEnvelope(record.sourceRaw ?? "") !== null)
+            ) {
+              await inspectRecord(record);
+            }
+            return outcome;
+          }),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
         fetchPage: async () => {
@@ -1641,9 +1974,99 @@ export const defineSourceAdapter = <const TKey extends AdapterKey>(
                 cause,
               }),
           });
-          return fetched.andThen((page) => page);
+          const page = fetched.andThen((outcome) => outcome);
+          if (Result.isError(page)) {
+            return page;
+          }
+          for (const decision of page.value.decisions) {
+            await inspectRecord(decision);
+          }
+          if (page.value.supplements !== undefined) {
+            for (const supplement of page.value.supplements) {
+              await inspectRecord(supplement.document);
+            }
+          }
+          if (page.value.unreadItems !== undefined) {
+            for (const unread of page.value.unreadItems) {
+              await inspectRecord(unread.listing);
+            }
+          }
+          return page;
         },
         observe: onDocumentObservation,
       }),
+  } satisfies ScopedCallbacks<SourceAdapter>;
+  const { reparseStoredRaw: scopedReparseStoredRaw, ...requiredCallbacks } =
+    callbacks;
+  const reconciliationCallbacks = {
+    revisionOf: scoped(reconciliation.revisionOf),
+    sliceOf: scoped(reconciliation.sliceOf),
+    nextSlice: scoped(reconciliation.nextSlice),
+    previousSlice: scoped(reconciliation.previousSlice),
+    listSlicePage: scoped(reconciliation.listSlicePage),
+    buildDecision: inspectBuild(reconciliation.buildDecision),
+    heldWithoutDetail:
+      reconciliation.heldWithoutDetail === undefined
+        ? undefined
+        : scoped(reconciliation.heldWithoutDetail),
+    createSliceBuildDecision:
+      createSliceBuildDecision === undefined
+        ? undefined
+        : scoped(function (this: unknown) {
+            return inspectBuild(createSliceBuildDecision.call(this));
+          }),
+  } satisfies ScopedCallbacks<SourceReconciliation>;
+  const recapture =
+    reconciliation.recapture === undefined
+      ? undefined
+      : ({
+          lookupOf: scoped(reconciliation.recapture.lookupOf),
+          listLookup: scoped(reconciliation.recapture.listLookup),
+          matchesStored: scoped(reconciliation.recapture.matchesStored),
+          recaptureStoredRaw:
+            reconciliation.recapture.recaptureStoredRaw === undefined
+              ? undefined
+              : scoped(reconciliation.recapture.recaptureStoredRaw),
+        } satisfies SourceRecapture);
+  const sourceFieldCallbacks = {
+    listSourceFields: scoped(adapter.sourceFields.listSourceFields),
+  } satisfies ScopedCallbacks<SourceFieldInventory>;
+  const collection =
+    collectionEnrichment === undefined
+      ? undefined
+      : {
+          ...collectionEnrichment,
+          ...({
+            readIssue: scoped(collectionEnrichment.readIssue),
+            join: scoped(collectionEnrichment.join),
+          } satisfies ScopedCallbacks<SkCollectionConnector>),
+        };
+  const textless =
+    textlessHeldRecheck === undefined
+      ? undefined
+      : {
+          ...textlessHeldRecheck,
+          ...({
+            buildDecisionFromStored: inspectBuild(
+              textlessHeldRecheck.buildDecisionFromStored,
+            ),
+          } satisfies ScopedCallbacks<TextlessHeldRecheck>),
+        };
+  return {
+    ...adapter,
+    ...requiredCallbacks,
+    ...(scopedReparseStoredRaw === undefined
+      ? {}
+      : { reparseStoredRaw: scopedReparseStoredRaw }),
+    country: ADAPTER_MANIFESTS[adapter.key].country,
+    name: ADAPTER_MANIFESTS[adapter.key].name,
+    sourceFields: { ...adapter.sourceFields, ...sourceFieldCallbacks },
+    collectionEnrichment: collection,
+    reconciliation: {
+      ...reconciliation,
+      ...reconciliationCallbacks,
+      textlessHeldRecheck: textless,
+      recapture,
+    },
   };
 };

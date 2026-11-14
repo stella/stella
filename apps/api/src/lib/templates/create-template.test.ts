@@ -4,8 +4,8 @@ import { eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  bufferObjectCleanupIntents,
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
 } from "@/api/db/schema";
 import type { TemplateOrigin } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";

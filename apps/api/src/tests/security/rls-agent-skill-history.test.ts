@@ -16,8 +16,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
   createScopedQuery,
+  TestDatabase,
 } from "@/api/tests/security/test-utils";
 
 // Postgres's check_violation SQLSTATE. Not part of the shared PG_ERROR map

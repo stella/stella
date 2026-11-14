@@ -5,7 +5,6 @@ defaults:
     shell: bash
 
 on:
-  pull_request:
   push:
     branches: [main]
   schedule:
@@ -16,17 +15,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 jobs:
   audit:
     name: bun audit (high/critical)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
     outputs:
       advisory_failure: ${{ steps.full-audit.outputs.advisory_failure || 'false' }}
+      stale_acceptance: ${{ steps.full-audit.outputs.stale_acceptance || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,24 +35,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # This git-only probe runs before setup or install, so a pull request with
-      # no lockfile change performs no registry or advisory-database access.
-      # package.json carries the lifecycle trust set, so manifest changes
-      # still run the trust check.
-      - name: Detect lockfile changes
-        id: lockfile
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json'; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
+      # Pull requests and merge groups audit their changed resolutions in
+      # ci.yml; this workflow audits the whole lockfile on main.
       - name: Setup Bun
-        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -59,41 +45,30 @@ jobs:
 
       - name: Install dependencies
         timeout-minutes: 2
-        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
         # The audit reads bun.lock; its scripts import root workspace packages only.
         run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter stella
         env:
           NPM_TOKEN: ""
 
-      - name: Audit changed dependency resolutions
-        if: github.event_name == 'pull_request' && steps.lockfile.outputs.changed == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"
-
       - name: Audit full lockfile
         id: full-audit
-        if: github.event_name != 'pull_request'
         continue-on-error: true
         run: bun scripts/dependency-audit.ts --check
 
       - name: Check lockfile deduplication
-        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
         run: bun --no-env-file dedupe --check
 
       - name: Check trusted lifecycle dependencies
-        if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
         run: bun --no-env-file scripts/check-trusted-dependencies.ts
 
       - name: Fail a full audit with findings
-        if: github.event_name != 'pull_request' && steps.full-audit.outcome == 'failure'
+        if: steps.full-audit.outcome == 'failure'
         run: exit 1
 
   cargo-advisories:
-    name: cargo deny advisories (desktop)
+    name: cargo deny advisories
     # A newly published advisory is not caused by the change under review, so
     # merges never wait on the advisory database; main and the schedule check it.
-    if: github.event_name != 'pull_request'
     runs-on: macos-latest
     timeout-minutes: 15
     permissions:
@@ -125,13 +100,16 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/registry/cache
-          key: cargo-desktop-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          key: cargo-deny-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'packages/scan-engine/Cargo.lock') }}
 
       - name: Fetch dependencies and advisory database
+        id: fetch
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index
+        run: |
+          bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index
+          bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
 
       - name: Save advisory database
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -144,11 +122,16 @@ jobs:
       - name: Desktop advisories
         run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph advisories
 
+      - name: Scan engine advisories
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph advisories
+
   remediate:
     name: Open dependency audit remediation
     needs: audit
-    if: always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'
+    if: always() && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     # Audit runs are independent, but remediation shares one branch and pull
     # request: runs queue here so each sees the previous run's pull request.
     concurrency:
@@ -176,7 +159,7 @@ jobs:
 
       - name: Mint app token
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
@@ -185,8 +168,35 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Open one remediation
+      - name: Prepare remediation
+        id: remediation
+        timeout-minutes: 10
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           FIX_BRANCH: automation/dependency-audit-fix
         run: bash scripts/remediate-dependency-audit.sh
+
+      - name: Open one remediation
+        id: signed-commit
+        if: steps.remediation.outputs.changed == 'true'
+        uses: stella/.github/.github/actions/signed-commit@fc5f380b18234429cb60682ccfe1537561311e61
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: refresh-pr
+          branch: automation/dependency-audit-fix
+          base: main
+          paths: |
+            bun.lock
+            bunfig.toml
+            scripts/dependency-audit-baseline.json
+            :(glob)**/package.json
+          commit-message: "chore(deps): update dependency audit state"
+          pr-title: "chore(deps): update dependency audit state"
+          pr-body: ${{ steps.remediation.outputs.quarantined == 'true' && steps.remediation.outputs.pr_body || 'Pins available patched releases, adds temporary release-age exclusions when a security fix is still quarantined, drafts dated acceptances for remaining upstream blockers, and removes stale acceptances.' }}
+
+      - name: Hold quarantined remediation for publisher review
+        if: steps.remediation.outputs.changed == 'true' && steps.remediation.outputs.quarantined == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.signed-commit.outputs.pull-request-number }}
+        run: gh pr edit "$PR_NUMBER" --add-label hold

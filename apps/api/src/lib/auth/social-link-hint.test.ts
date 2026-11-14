@@ -7,13 +7,13 @@ import { emailOTP } from "better-auth/plugins";
 import { describe, expect, setSystemTime, test } from "bun:test";
 import * as v from "valibot";
 
+import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 import { SOCIAL_ACCOUNT_LINKING_OPTIONS } from "@/api/lib/auth/social-identity-policy";
 import {
   createSocialLinkHintPlugin,
   socialLinkHintIdentifier,
 } from "@/api/lib/auth/social-link-hint";
-import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const baseURL = "http://localhost:3001";

@@ -2,7 +2,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { filenameForContext, isStringLiteral } from "./utils.ts";
 
-const CACHE_POLICY_OWNERS = ["apps/api/src/lib/security-headers.ts"] as const;
+const CACHE_POLICY_OWNERS = ["apps/api/src/http/cache.ts"] as const;
 
 const CACHE_DIRECTIVE =
   /^(?:no-cache|no-store|no-transform|must-revalidate|proxy-revalidate|must-understand|private|public|immutable|stale-while-revalidate|stale-if-error|max-age|s-maxage)(?:\s*=.*)?$/iu;
@@ -10,6 +10,12 @@ const CACHE_DIRECTIVE =
 const isCacheControlLiteral = (value: string): boolean => {
   if (value.trim().toLowerCase() === "cache-control") {
     return true;
+  }
+  // Cache-Control separates directives with commas only; a `;`-separated
+  // value (Strict-Transport-Security's `max-age=…; includeSubDomains`) is
+  // another header's policy.
+  if (value.includes(";")) {
+    return false;
   }
   const directives = value.split(",").map((directive) => directive.trim());
   if (

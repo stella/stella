@@ -3,6 +3,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -12,12 +13,12 @@ import {
   DownloadIcon,
   ExternalLinkIcon,
   FilePlusIcon,
-  SearchIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { SearchField } from "@stll/ui/search-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
-import { cn } from "@stll/ui/utils";
 
 import { useChatMatters } from "@/components/chat/chat-matters-context";
 import { assistantMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
@@ -25,10 +26,7 @@ import type {
   ChatUITools,
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
-import {
-  buildCreateDocumentDownloadFileName,
-  normalizeCreateDocumentInput,
-} from "@/components/chat/create-document-draft.logic";
+import { normalizeCreateDocumentInput } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
@@ -49,8 +47,7 @@ type CreateDocumentMatterSuccess = Extract<
 >;
 
 export type CreateDocumentDestination =
-  | { type: "matter"; matterId: string }
-  | { type: "download" };
+  { type: "matter"; matterId: string } | { type: "download" };
 
 export type NeedsMatterMatter = {
   id: string;
@@ -226,9 +223,13 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {fileName && (
-          <p className="truncate text-xs font-semibold" dir="auto">
+          <TruncatedText
+            className="text-xs font-semibold"
+            dir="auto"
+            render={<p />}
+          >
             {fileName}
-          </p>
+          </TruncatedText>
         )}
         {snippet ? (
           <MarkdownPreview
@@ -248,7 +249,7 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
 };
 
 const DocumentThumbnail = () => (
-  <div className="bg-background border-border/60 flex h-16 w-12 shrink-0 items-center justify-center rounded border shadow-sm">
+  <div className="bg-background border-border/60 flex h-16 w-12 shrink-0 items-center justify-center rounded-sm border shadow-sm">
     <DocumentIcon
       className="size-9"
       fileName="document.docx"
@@ -373,21 +374,14 @@ const MatterPickerSection = ({
       <div className="border-border/50 space-y-2 border-t px-3 py-3">
         <p className="text-xs">{t("chat.createDocument.pickMatterPrompt")}</p>
 
-        <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background flex items-center gap-1.5 rounded-md border px-1.5 focus-within:ring-2">
-          <SearchIcon
-            aria-hidden="true"
-            className="text-muted-foreground size-3.5 shrink-0"
-          />
-          <input
-            className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
-            dir={contentDir(search)}
-            disabled={isSubmitting || isDownloading}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("inspector.matterPicker.searchPlaceholder")}
-            type="text"
-            value={search}
-          />
-        </div>
+        <SearchField
+          clearLabel={t("common.clearSearch")}
+          dir={contentDir(search)}
+          disabled={isSubmitting || isDownloading}
+          onValueChange={setSearch}
+          placeholder={t("inspector.matterPicker.searchPlaceholder")}
+          value={search}
+        />
 
         {view.type === "items" && view.refetchError !== undefined && (
           <MatterReadError retry={view.retry} />
@@ -429,37 +423,35 @@ const MatterPickerSection = ({
               {filtered.map((m) => {
                 const isSelected = m.id === selectedMatterId;
                 return (
-                  <button
-                    className={cn(
-                      "flex w-full items-center gap-2 px-2 py-1.5 text-start text-xs",
-                      isSelected
-                        ? "bg-foreground text-background"
-                        : "hover:bg-muted",
-                    )}
+                  <Button
+                    aria-pressed={isSelected}
                     disabled={isSubmitting || isDownloading}
                     key={m.id}
                     onClick={() => setSelectedMatterId(m.id)}
-                    type="button"
+                    selected={isSelected}
+                    size="row"
+                    variant="ghost"
                   >
                     <MatterIcon
                       className="size-3.5 shrink-0"
                       matter={{ id: m.id, color: m.color }}
                     />
-                    <BidiText as="span" className="min-w-0 flex-1 truncate">
+                    {/* Menu rows name their item in regular weight. */}
+                    <TruncatedText
+                      className="flex-1 font-normal"
+                      render={<BidiText as="span" />}
+                    >
                       {m.name}
-                    </BidiText>
+                    </TruncatedText>
                     {m.client?.displayName && (
                       <BidiText
                         as="span"
-                        className={cn(
-                          "text-3xs shrink-0",
-                          isSelected ? "opacity-80" : "text-muted-foreground",
-                        )}
+                        className="text-muted-foreground text-3xs shrink-0 font-normal"
                       >
                         {m.client.displayName}
                       </BidiText>
                     )}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -516,9 +508,12 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
     <>
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <BidiText as="span" className="truncate text-xs font-semibold">
+        <TruncatedText
+          className="text-xs font-semibold"
+          render={<BidiText as="span" />}
+        >
           {output.fileName}
-        </BidiText>
+        </TruncatedText>
         {canOpen && (
           <span className="text-muted-foreground text-2xs inline-flex items-center gap-1">
             {t("chat.createDocument.openInFolio")}
@@ -543,17 +538,17 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
         <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
       </div>
       {canOpen ? (
-        <button
-          className={cn(
-            "border-border/50 hover:bg-muted/60 flex w-full items-center gap-3 border-t px-3 py-3 text-start",
-          )}
+        <Button
+          className="flex w-full"
           onClick={() => {
             detached(onOpen(matterOutput), "needs-matter-card.open");
           }}
-          type="button"
+          variant="plain"
         >
-          {body}
-        </button>
+          <span className="border-border/50 hover:bg-muted/60 flex w-full items-center gap-3 border-t px-3 py-3">
+            {body}
+          </span>
+        </Button>
       ) : (
         <div className="border-border/50 flex w-full items-center gap-3 border-t px-3 py-3 text-start">
           {body}

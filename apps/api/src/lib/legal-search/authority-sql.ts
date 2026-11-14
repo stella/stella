@@ -15,7 +15,7 @@
  * compares them to `saturateAuthority()` value by value.
  */
 
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import {
   AUTHORITY_PIVOT,

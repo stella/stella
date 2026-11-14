@@ -16,17 +16,17 @@ import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
   type AstNode,
-  type FilenameContext,
-  type ScopeContext,
   canonicalModuleId,
-  repoRelativeFilename,
-  isStringLiteral,
+  type FilenameContext,
   getPropertyName,
   isAstNode,
   isIdentifierReference,
+  isStringLiteral,
   memberPropertyName,
+  repoRelativeFilename,
   resolveImport,
   resolveVariable,
+  type ScopeContext,
   unwrapExpression,
 } from "./utils.ts";
 

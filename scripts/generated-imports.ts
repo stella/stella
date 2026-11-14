@@ -1,10 +1,10 @@
 import path from "node:path";
-import ts from "typescript6";
 
+import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
 import {
+  type Generator,
   GENERATORS,
   matchesGeneratedGlob,
-  type Generator,
 } from "./generated-files";
 
 /**
@@ -198,12 +198,61 @@ export const findUnbuildableGeneratedImports = ({
   const violations: GeneratedImportViolation[] = [];
   for (const importer of trackedFiles.filter(isPackageSource)) {
     const directory = owningPackage(importer, tracked);
-    const { importedFiles } = ts.preProcessFile(
-      readSource(importer),
-      true,
-      true,
+    const source = readSource(importer);
+    const parsed = parseSource(importer, source);
+    const imports = new Map<number, string>();
+    for (const entry of parsed.module.staticImports) {
+      imports.set(entry.start, entry.moduleRequest.value);
+    }
+    for (const entry of parsed.module.staticExports) {
+      for (const { moduleRequest } of entry.entries) {
+        if (moduleRequest !== null) {
+          imports.set(entry.start, moduleRequest.value);
+        }
+      }
+    }
+    const dynamicStarts = new Set(
+      parsed.module.dynamicImports.map(({ start }) => start),
     );
-    for (const { fileName: specifier } of importedFiles) {
+    walk(parsed.program, (node) => {
+      if (
+        node.type === "TSImportEqualsDeclaration" &&
+        node.moduleReference.type === "TSExternalModuleReference"
+      ) {
+        imports.set(node.start, node.moduleReference.expression.value);
+      }
+      if (node.type === "TSImportType") {
+        imports.set(node.start, node.source.value);
+      }
+      if (
+        (node.type === "ImportExpression" && dynamicStarts.has(node.start)) ||
+        (node.type === "CallExpression" &&
+          node.callee.type === "Identifier" &&
+          node.callee.name === "require")
+      ) {
+        const argument =
+          node.type === "ImportExpression" ? node.source : node.arguments.at(0);
+        if (
+          argument?.type === "Literal" &&
+          typeof argument.value === "string"
+        ) {
+          imports.set(node.start, argument.value);
+        } else if (
+          argument?.type === "TemplateLiteral" &&
+          argument.expressions.length === 0
+        ) {
+          imports.set(
+            node.start,
+            argument.quasis
+              .map(({ value }) => value.cooked ?? value.raw)
+              .join(""),
+          );
+        }
+      }
+    });
+    for (const [, specifier] of [...imports].toSorted(
+      ([left], [right]) => left - right,
+    )) {
       if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
         continue;
       }

@@ -41,8 +41,7 @@ export const recordTemplateUse = async ({
  *  that produces a document or text, `DOWNLOAD` for a stored template filled
  *  straight into a download. */
 type TemplateFillAuditAction =
-  | typeof AUDIT_ACTION.EXECUTE
-  | typeof AUDIT_ACTION.DOWNLOAD;
+  typeof AUDIT_ACTION.EXECUTE | typeof AUDIT_ACTION.DOWNLOAD;
 
 type RecordedFill = {
   tx: Transaction;

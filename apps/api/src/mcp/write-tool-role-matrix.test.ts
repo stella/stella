@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
@@ -29,15 +30,16 @@ import {
 } from "@/api/lib/permission-authorization";
 import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { MCP_MODES, type McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { CAPABILITY_FEATURE_BINDINGS } from "@/api/mcp/generated/capability-feature-bindings";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
+  type AuthorizedMcpRequestContext,
   isMemberAuthorizedForMcpTool,
   isMemberAuthorizedForMcpToolInput,
   type McpToolAuthorityDeclaration,
@@ -107,6 +109,13 @@ const capability = (id: string): RestEndpointRef => ({
 const ADDITIONAL_REST_OPERATIONS: Readonly<
   Record<string, readonly RestOperation[]>
 > = {
+  create_organization: [
+    {
+      endpoints: [capability("organizations.create")],
+      reason:
+        "Creates an organization through the account-scoped session capability.",
+    },
+  ],
   configure_template_fields: [
     {
       endpoints: [capability("templates.update")],
@@ -182,6 +191,8 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
 
 /** Write tools with no REST or UI counterpart, each with the reason. */
 const NO_REST_COUNTERPART = {
+  [MCP_WEB_HANDOFF_TOOL_NAME]:
+    "App-only link refresh verifies current OAuth consent and its live user grant; no REST endpoint mints the credential.",
   write_capability:
     "Dispatches a catalog capability chosen at call time; that capability's own REST permissions are checked before dispatch.",
 } as const satisfies Readonly<Record<string, string>>;
@@ -199,6 +210,7 @@ const catalogEntrySchema = v.object({
     v.object({ type: v.literal("capability"), reason: v.string() }),
   ]),
   permissions: v.optional(v.unknown()),
+  handlerKind: v.string(),
 });
 const rawCatalog = v.parse(
   v.array(catalogEntrySchema),
@@ -242,15 +254,24 @@ for (const entry of rawCatalog) {
  */
 const restDeclarationOf = async (
   endpoint: RestEndpointRef,
-): Promise<{ permissions: PermissionInput; accountAccess: AccountAccess }> => {
+): Promise<{
+  permissions: PermissionInput | undefined;
+  accountAccess: AccountAccess;
+}> => {
   const config =
     endpoint.type === "handler"
       ? endpoint.config
       : (await loadCapabilityEndpoint(endpoint.id))?.config;
   const name = endpoint.type === "handler" ? endpoint.name : endpoint.id;
-  if (config?.permissions === undefined || config.accountAccess === undefined) {
-    // A write endpoint always declares both; one without is not a
-    // counterpart this matrix can derive from.
+  const sessionScoped =
+    endpoint.type === "capability" &&
+    rawCatalog.find(({ id }) => id === endpoint.id)?.handlerKind === "session";
+  if (
+    config?.accountAccess === undefined ||
+    (config.permissions === undefined && !sessionScoped)
+  ) {
+    // Organization-scoped writes declare a member grant; session writes
+    // authorize the account independently of organization membership.
     throw new Error(`REST endpoint ${name} declares no permissions`);
   }
   return {
@@ -263,12 +284,15 @@ const restDeclarationOf = async (
 
 type WriteTool = McpToolDefinition & McpToolAuthorityDeclaration;
 
-/** Every static write tool, once per name, with the modes it is served on. */
+/** Every model-visible static write tool, once per name, with served modes. */
 const writeTools = (() => {
   const byName = new Map<string, { definition: WriteTool; modes: McpMode[] }>();
   for (const mode of MCP_MODES) {
     for (const definition of listStaticMcpToolDefinitions(mode)) {
       if (definition.access !== "write") {
+        continue;
+      }
+      if (!isMcpToolVisibleTo(definition, "model")) {
         continue;
       }
       const current = byName.get(definition.name);
@@ -285,7 +309,7 @@ const writeTools = (() => {
 
 type ResolvedOperation = {
   endpoints: string[];
-  permissions: PermissionInput[];
+  permissions: (PermissionInput | undefined)[];
   accountAccess: AccountAccess[];
 };
 
@@ -298,7 +322,7 @@ for (const { definition } of writeTools) {
   ];
   const resolved: ResolvedOperation[] = [];
   for (const operation of operations) {
-    const permissions: PermissionInput[] = [];
+    const permissions: (PermissionInput | undefined)[] = [];
     const accountAccess: AccountAccess[] = [];
     for (const endpoint of operation.endpoints) {
       // db-await-in-loop: no database; each dispatch thunk loads one module.
@@ -319,8 +343,10 @@ for (const { definition } of writeTools) {
 
 /** REST: may this role perform the operation (every endpoint it needs)? */
 const restAllows = (role: MemberRole, operation: ResolvedOperation): boolean =>
-  operation.permissions.every((permissions) =>
-    hasMemberPermission(sessionMemberRole(role), permissions),
+  operation.permissions.every(
+    (permissions) =>
+      permissions === undefined ||
+      hasMemberPermission(sessionMemberRole(role), permissions),
   );
 
 /**
@@ -338,11 +364,18 @@ const restExpectation = (tool: string, role: MemberRole): boolean | null => {
 /** Union of several permission sets, as sorted `resource:action` pairs. */
 type PermissionSet = Readonly<Record<string, readonly string[] | undefined>>;
 
-const permissionInputSchema = v.record(v.string(), v.array(v.string()));
+const permissionInputSchema = v.optional(
+  v.record(v.string(), v.array(v.string())),
+);
 
-const permissionPairs = (sets: readonly PermissionSet[]): string[] => {
+const permissionPairs = (
+  sets: readonly (PermissionSet | undefined)[],
+): string[] => {
   const pairs = new Set<string>();
   for (const set of sets) {
+    if (set === undefined) {
+      continue;
+    }
     for (const [resource, actions] of Object.entries(set)) {
       for (const action of actions ?? []) {
         pairs.add(`${resource}:${action}`);
@@ -370,7 +403,7 @@ const declaredGrantSets = (definition: WriteTool): string[][] => {
         permissionPairs([alternative]),
       );
     case "delegated":
-      return [];
+      return [[]];
     default:
       permissions satisfies never;
       return [];
@@ -398,7 +431,7 @@ const REST_ENDPOINTS_BY_OPERATION: Readonly<
   },
   save_clause: { create: ["clauses.create"], update: ["clauses.update"] },
   save_contact: {
-    create: ["contacts.create", "contacts.import"],
+    create: ["contacts.create"],
     update: ["contacts.update"],
   },
   save_matter: {
@@ -584,6 +617,9 @@ const OPERATION_MATRIX: readonly OperationRow[] = writeTools.flatMap(
  * applies its own.
  */
 const expectedAccountAccess = (tool: string): AccountAccess => {
+  if (tool === MCP_WEB_HANDOFF_TOOL_NAME) {
+    return "standard";
+  }
   const declared = (restOperationsByTool.get(tool) ?? []).flatMap(
     (operation) => operation.accountAccess,
   );
@@ -608,8 +644,8 @@ const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
 
 // --- Surfaces -----------------------------------------------------------------
 
-const mcpContextFor = (role: MemberRole): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     grantedScopes: [],
     accessibleWorkspaceIds: ["workspace_1"],
     memberRole: role,
@@ -644,7 +680,9 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
     }),
   });
 
-const unenrolledMcpContextFor = (role: MemberRole): McpRequestContext => {
+const unenrolledMcpContextFor = (
+  role: MemberRole,
+): AuthorizedMcpRequestContext => {
   const context = mcpContextFor(role);
   return {
     ...context,
@@ -665,11 +703,19 @@ const offeredOn = (role: MemberRole, mode: McpMode): ReadonlySet<string> =>
     listOfferedStaticMcpToolDefinitions({
       context: mcpContextFor(role),
       mode,
+      enabledRegistrySlugs: undefined,
     }).map((definition) => definition.name),
   );
 
 const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set(
   writeTools.map(({ definition }) => definition.name),
+);
+const ALL_STATIC_WRITE_TOOL_NAMES: ReadonlySet<string> = new Set(
+  MCP_MODES.flatMap((mode) =>
+    listStaticMcpToolDefinitions(mode)
+      .filter((definition) => definition.access === "write")
+      .map(({ name }) => name),
+  ),
 );
 
 /** An argument no tool declares: dispatch stops at input validation, after the gate. */
@@ -806,8 +852,8 @@ const MATRIX: readonly MatrixRow[] = writeTools.flatMap(
     MEMBER_ROLES.map((role) => ({ tool: definition.name, role, modes })),
 );
 
-describe("write tool role matrix", () => {
-  test("every write tool has a REST counterpart or a stated reason it has none", () => {
+describe("model-visible write tool role matrix", () => {
+  test("every model-visible write tool has a REST counterpart or a stated reason it has none", () => {
     const unaccounted = writeTools
       .map(({ definition }) => definition.name)
       .filter(
@@ -822,7 +868,7 @@ describe("write tool role matrix", () => {
       ...Object.keys(ADDITIONAL_REST_OPERATIONS),
       ...Object.keys(NO_REST_COUNTERPART),
     ]) {
-      expect({ name, write: WRITE_TOOL_NAMES.has(name) }).toEqual({
+      expect({ name, write: ALL_STATIC_WRITE_TOOL_NAMES.has(name) }).toEqual({
         name,
         write: true,
       });
@@ -835,7 +881,7 @@ describe("write tool role matrix", () => {
     }
   });
 
-  test("the matrix covers every write tool for every role", () => {
+  test("the matrix covers every model-visible write tool for every role", () => {
     expect(MEMBER_ROLES.length).toBe(5);
     expect(MATRIX.length).toBe(writeTools.length * MEMBER_ROLES.length);
   });
@@ -882,8 +928,8 @@ describe("write tool role matrix", () => {
     }
     const expected =
       restExpectation(tool, role) ??
-      // No REST counterpart: the declaration is delegated, so the tool is
-      // offered and its target is checked at dispatch.
+      // No REST counterpart: the declaration determines discovery, and
+      // delegated authority is checked at dispatch.
       isMemberAuthorizedForMcpTool(sessionMemberRole(role), definition);
 
     for (const mode of modes) {
@@ -1082,7 +1128,10 @@ describe("CLI and MCP write tool parity", () => {
       curatedLeaves(cliTreeFor(null)).map((leaf) => leaf.toolName),
     );
     const defaultWriteTools = writeTools
-      .filter(({ modes }) => modes.includes("default"))
+      .filter(
+        ({ modes, definition }) =>
+          modes.includes("default") && isMcpToolVisibleTo(definition, "model"),
+      )
       .map(({ definition }) => definition.name);
     expect(defaultWriteTools.filter((name) => !cliTools.has(name))).toEqual(
       defaultWriteTools.filter(isCliExcluded),
@@ -1198,6 +1247,7 @@ describe("static feature tool enrolment boundary", () => {
         const offered = listOfferedStaticMcpToolDefinitions({
           context: principal,
           mode,
+          enabledRegistrySlugs: undefined,
         }).some(({ name }) => name === definition.name);
         expect({ tool: definition.name, mode, enrolled, offered }).toEqual({
           tool: definition.name,

@@ -53,6 +53,7 @@ for (const text of [
     const now = 1_800_000_000_000;
     const expiresAt = now + FEEDBACK_APPROVAL_TTL_MS;
     const secret = "sha256-parity-fixture-secret";
+    // oxlint-disable-next-line no-raw-sha256/no-raw-sha256 -- an independent Node HMAC checks the Bun one the approval signs with
     const signature = createHmac("sha256", secret)
       .update(
         [

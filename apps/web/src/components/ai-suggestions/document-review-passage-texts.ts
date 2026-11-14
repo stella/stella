@@ -20,7 +20,7 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 /** The endpoint's cap on one body. A surface holding more ids than this is
@@ -58,7 +58,7 @@ const fetchPassageTexts = async (
   const batches = chunkItems(ids, PASSAGE_READ_BATCH);
   const pages = await Promise.all(
     batches.map(async (batch) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["document-reviews"].passages.post(
           {
             ids: batch.map((id) =>

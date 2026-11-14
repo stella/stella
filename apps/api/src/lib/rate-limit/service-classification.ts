@@ -5,14 +5,12 @@ export type ValidatedServiceInput = {
 };
 
 export type ServiceClassification =
-  | boolean
-  | ((input: ValidatedServiceInput) => boolean);
+  boolean | ((input: ValidatedServiceInput) => boolean);
 
 export const VALIDATED_INPUT_SERVICE_CLASSIFICATION = "validated_input";
 
 export type CatalogServiceClassification =
-  | boolean
-  | typeof VALIDATED_INPUT_SERVICE_CLASSIFICATION;
+  boolean | typeof VALIDATED_INPUT_SERVICE_CLASSIFICATION;
 
 export const isServiceClassification = (
   value: unknown,

@@ -5,33 +5,48 @@ import {
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
-import type { Static } from "elysia";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { withModelPlaceholdersOmitted } from "@stll/agent-input";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
-  CHAT_EDIT_APPLY_MODE,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_EXTENSION_STATUS,
+  type BrowserExtensionCapability,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_EDIT_APPLY_MODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
-  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type ChatEditApplyMode,
+  type ChatRunMode,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   DOCX_EDIT_REPRESENTATION,
+  type DocxEditRepresentation,
   isSafeIdValue,
   parseResourceRef,
-  resourceRef,
   RESOURCE_TYPE,
-  type BrowserClientCapability,
-  type ChatEditApplyMode,
-  type ChatRunMode,
-  type DocxEditRepresentation,
+  resourceRef,
 } from "@stll/api-contract";
 import {
+  isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
+  isDeclinedChatToolCall,
+  isHarnessChatToolCall,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
+import {
+  askUserAnswersRefusal,
+  askUserInputSchema,
+  askUserOutputSchema,
+} from "@stll/api-contract/chat-ask-user";
+import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
+import {
+  type ChatRunTarget,
+  chatRunTargetSchema,
+} from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -40,17 +55,24 @@ import {
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
 import {
+  BROWSER_EXTENSION_LOCAL_RUN,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
+import {
   chatMessageFromPersisted,
+  continueStoredChatPart,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
   isApprovedClientCallAwaitingResult,
   isChatPart,
-  isIncomingChatPart,
   isChatTextPart,
+  isIncomingChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
@@ -65,14 +87,19 @@ import type {
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  registeredChatTool,
   type ChatTool,
   type ChatToolMap,
+  registeredChatTool,
 } from "@/api/lib/chat/chat-tool-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import {
+  questionInterruptOf,
+  questionReplyOf,
+} from "@/api/lib/desktop-runner/chunk";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { withNullsOmitted } from "@/api/lib/json-value";
+import { LIMITS } from "@/api/lib/limits";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 import {
   brandPersistedEntityId,
@@ -90,57 +117,47 @@ export {
 export type { ChatEditApplyMode, ChatRunMode, DocxEditRepresentation };
 
 const rawMessageProperties = {
-  id: tSafeId("chatMessage"),
-  metadata: t.Optional(t.Unknown()),
-  parts: t.Array(t.Unknown()),
+  id: resourceIdSchema("chatMessage"),
+  metadata: v.exactOptional(v.unknown()),
+  parts: v.array(v.unknown()),
 };
 
-const rawMessageSchema = t.Object(
-  {
-    ...rawMessageProperties,
-    role: t.Union([
-      t.Literal("system"),
-      t.Literal("user"),
-      t.Literal("assistant"),
-    ]),
-  },
-  { additionalProperties: true },
-);
-
-const rawAssistantContinuationMessageSchema = t.Object(
-  { ...rawMessageProperties, role: t.Literal("assistant") },
-  { additionalProperties: true },
-);
-
-const userContextSchema = t.Object({
-  userName: t.String(),
-  locale: t.String(),
-  timezone: t.String(),
-  wordEditAuthorName: t.Optional(t.String()),
-  wordEditShortcut: t.Optional(t.String()),
+const rawMessageSchema = v.looseObject({
+  ...rawMessageProperties,
+  role: v.picklist(["system", "user", "assistant"]),
 });
 
-const docxEditSnapshotSchema = t.Object({
-  canApplyEdits: t.Optional(t.Boolean()),
-  blocks: t.Array(
-    t.Object({
-      id: t.String(),
-      kind: t.Union([
-        t.Literal("heading"),
-        t.Literal("listItem"),
-        t.Literal("paragraph"),
-      ]),
-      text: t.String(),
-      displayLabel: t.Optional(t.String()),
-      styleId: t.Optional(t.String()),
-      /**
-       * Folio's normalized text hash of the block at snapshot time. Shown to
-       * the model so it can echo it as `precondition.blockTextHash` on a
-       * `suggest_changes` operation, which makes an edit against a block that
-       * changed since this snapshot skip instead of landing on the wrong text.
-       */
-      blockTextHash: t.Optional(t.String()),
-    }),
+const rawAssistantContinuationMessageSchema = v.looseObject({
+  ...rawMessageProperties,
+  role: v.literal("assistant"),
+});
+
+const boundedText = (maxChars: number) =>
+  v.pipe(v.string(), v.maxLength(maxChars));
+
+const userContextSchema = v.object({
+  userName: boundedText(256),
+  // A BCP 47 tag and an IANA zone name.
+  locale: boundedText(35),
+  timezone: boundedText(64),
+  wordEditAuthorName: v.exactOptional(boundedText(256)),
+  wordEditShortcut: v.exactOptional(boundedText(64)),
+});
+
+const docxEditSnapshotSchema = v.object({
+  canApplyEdits: v.exactOptional(v.boolean()),
+  blocks: v.pipe(
+    v.array(
+      v.object({
+        id: boundedText(128),
+        kind: v.picklist(["heading", "listItem", "paragraph"]),
+        text: boundedText(LIMITS.chatDocxSnapshotBlockTextMaxChars),
+        displayLabel: v.exactOptional(boundedText(256)),
+        styleId: v.exactOptional(boundedText(256)),
+        blockTextHash: v.exactOptional(boundedText(128)),
+      }),
+    ),
+    v.maxLength(LIMITS.chatDocxSnapshotBlocksMax),
   ),
 });
 
@@ -153,23 +170,23 @@ const docxEditSnapshotSchema = t.Object({
  * an act does not have. Going through this constructor is what makes a new
  * kind closed by construction instead of by remembering the option.
  */
-const activeContextSchema = <TShape extends Parameters<typeof t.Object>[0]>(
+const activeContextSchema = <TShape extends v.ObjectEntries>(
   properties: TShape,
-) => t.Object(properties, { additionalProperties: false });
+) => v.strictObject(properties);
 
 export const activeFileSchema = activeContextSchema({
-  entityId: tSafeId("entity"),
-  fileFieldId: t.Optional(tSafeId("field")),
-  fileName: t.String(),
-  supportsDocxEdits: t.Optional(t.Boolean()),
-  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+  entityId: resourceIdSchema("entity"),
+  fileFieldId: v.exactOptional(resourceIdSchema("field")),
+  fileName: v.string(),
+  supportsDocxEdits: v.exactOptional(v.boolean()),
+  docxEditSnapshot: v.exactOptional(docxEditSnapshotSchema),
 });
 
 export const activeDraftSchema = activeContextSchema({
-  originChatMessageId: tSafeId("chatMessage"),
-  originChatThreadId: tSafeId("chatThread"),
-  toolCallId: t.String(),
-  fileName: t.String(),
+  originChatMessageId: resourceIdSchema("chatMessage"),
+  originChatThreadId: resourceIdSchema("chatThread"),
+  toolCallId: v.string(),
+  fileName: v.string(),
   docxEditSnapshot: docxEditSnapshotSchema,
 });
 
@@ -181,13 +198,13 @@ export const activeDraftSchema = activeContextSchema({
  * in-document suggestions.
  */
 export const activeTemplateSchema = activeContextSchema({
-  templateId: tSafeId("template"),
-  fileName: t.String(),
-  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+  templateId: resourceIdSchema("template"),
+  fileName: v.string(),
+  docxEditSnapshot: v.exactOptional(docxEditSnapshotSchema),
 });
 
 export const activeDecisionSchema = activeContextSchema({
-  decisionId: tSafeId("caseLawDecision"),
+  decisionId: resourceIdSchema("caseLawDecision"),
 });
 
 /**
@@ -197,76 +214,82 @@ export const activeDecisionSchema = activeContextSchema({
  * told an act says.
  */
 export const activeStatuteSchema = activeContextSchema({
-  documentId: tSafeId("legislationDocument"),
+  documentId: resourceIdSchema("legislationDocument"),
 });
 
 export const activeExternalSchema = activeContextSchema({
-  connectorSlug: t.Optional(t.String()),
-  provider: t.Optional(t.String()),
-  snippet: t.Optional(t.String()),
-  sourceToolName: t.Optional(t.String()),
-  text: t.Optional(t.String()),
-  title: t.String(),
-  url: t.String(),
+  connectorSlug: v.exactOptional(v.string()),
+  provider: v.exactOptional(v.string()),
+  snippet: v.exactOptional(v.string()),
+  sourceToolName: v.exactOptional(v.string()),
+  text: v.exactOptional(v.string()),
+  title: v.string(),
+  url: v.string(),
 });
 
-// Any version parses so a tab running an older or newer web build can still
-// chat; `resolveBrowserClientCapability` decides whether the tool registers.
-// `t.Integer` would also admit numeric strings, so this is a whole number.
-const browserClientSchema = t.Object(
-  {
-    protocolVersion: t.Number({ minimum: 1, multipleOf: 1 }),
-  },
-  { additionalProperties: false },
-);
+// Accept version skew so chat can continue; the capability policy disables
+// browser tools and supplies recovery guidance. Unknown statuses stay invalid.
+const browserExtensionSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  status: v.picklist(Object.values(BROWSER_EXTENSION_STATUS)),
+});
+
+/** Non-web chat clients have no local Chrome-extension executor. */
+export const resolveBrowserExtensionCapability = (
+  browserExtension: v.InferOutput<typeof browserExtensionSchema> | undefined,
+): BrowserExtensionCapability =>
+  browserExtension ?? {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
+  };
 
 /**
- * The browser tool is offered only to a client speaking this server's
- * extension protocol; another version chats without it.
+ * The browser a turn can reach. A turn that runs on the member's computer
+ * cannot reach the extension the web tab reports, whatever its state.
  */
-export const resolveBrowserClientCapability = (
-  browserClient: Static<typeof browserClientSchema> | undefined,
-): BrowserClientCapability | undefined =>
-  browserClient?.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
-    ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
-    : undefined;
+export const resolveTurnBrowserExtension = ({
+  reported,
+  runsLocally,
+}: {
+  reported: v.InferOutput<typeof browserExtensionSchema> | undefined;
+  runsLocally: boolean;
+}): TurnBrowserExtension =>
+  runsLocally
+    ? BROWSER_EXTENSION_LOCAL_RUN
+    : resolveBrowserExtensionCapability(reported);
 
 export const activeSkillSchema = activeContextSchema({
   // A built-in skill has no row: `skillName` alone names it.
-  skillId: t.Optional(tSafeId("agentSkill")),
-  skillName: t.String({ minLength: 1, maxLength: 64 }),
+  skillId: v.exactOptional(resourceIdSchema("agentSkill")),
+  skillName: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
 
-const agUiRunIdSchema = t.String({ minLength: 1, maxLength: 256 });
-const agUiResumeSchema = t.Array(
-  t.Union([
-    t.Object(
-      {
-        interruptId: t.String({ minLength: 1, maxLength: 512 }),
-        status: t.Literal("resolved"),
-        // AG-UI intentionally defines resume payloads as application-owned JSON.
-        payload: t.Optional(t.Unknown()),
-      },
-      { additionalProperties: false },
-    ),
-    t.Object(
-      {
-        interruptId: t.String({ minLength: 1, maxLength: 512 }),
-        status: t.Literal("cancelled"),
-      },
-      { additionalProperties: false },
-    ),
-  ]),
-  { minItems: 1, maxItems: 128 },
+const agUiRunIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(256));
+const agUiResumeSchema = v.pipe(
+  v.array(
+    v.union([
+      v.strictObject({
+        interruptId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+        status: v.literal("resolved"),
+        payload: v.exactOptional(v.unknown()),
+      }),
+      v.strictObject({
+        interruptId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+        status: v.literal("cancelled"),
+      }),
+    ]),
+  ),
+  v.minLength(1),
+  v.maxLength(128),
 );
 
 const sendMessageCommonProperties = {
-  threadId: tSafeId("chatThread"),
+  threadId: resourceIdSchema("chatThread"),
   runId: agUiRunIdSchema,
-  workspaceId: t.Optional(tSafeId("workspace")),
-  sendMode: t.Union([
-    t.Literal(CHAT_SEND_MODE.anonymized),
-    t.Literal(CHAT_SEND_MODE.rawOverride),
+  workspaceId: v.exactOptional(resourceIdSchema("workspace")),
+  sendMode: v.union([
+    v.literal(CHAT_SEND_MODE.anonymized),
+    v.literal(CHAT_SEND_MODE.rawOverride),
   ]),
   /**
    * Matters the chat draws context from. Empty (or omitted) means
@@ -276,40 +299,51 @@ const sendMessageCommonProperties = {
    * persisted on the chat thread so subsequent turns reuse it
    * without re-sending.
    */
-  contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
-  truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
-  turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
+  contextMatterIds: v.exactOptional(v.array(resourceIdSchema("workspace"))),
+  truncateAfterMessageId: v.exactOptional(resourceIdSchema("chatMessage")),
+  turnIntent: v.exactOptional(
+    v.union([
+      v.literal(CHAT_TURN_INTENT.edit),
+      v.literal(CHAT_TURN_INTENT.regenerate),
+    ]),
+  ),
   /**
    * Optional named tool scope for this turn. Only server-defined
    * scope names validate; the server maps the name to a fixed tool
    * allowlist (see `tools/tool-scope.ts`), so a client can narrow
    * but never widen the turn's tool surface.
    */
-  toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
+  toolScope: v.exactOptional(v.literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
   /**
    * Execution mode for this turn. Absent runs normal server-side chat;
    * `"agent"` explicitly requests the configured agent sandbox.
    */
-  runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
-  userContext: t.Optional(userContextSchema),
-  activeDraft: t.Optional(activeDraftSchema),
-  activeFile: t.Optional(activeFileSchema),
-  activeTemplate: t.Optional(activeTemplateSchema),
-  activeDecision: t.Optional(activeDecisionSchema),
-  activeExternal: t.Optional(activeExternalSchema),
-  activeSkill: t.Optional(activeSkillSchema),
-  activeStatute: t.Optional(activeStatuteSchema),
-  browserClient: t.Optional(browserClientSchema),
+  runMode: v.exactOptional(v.literal(CHAT_RUN_MODE.agent)),
+  /**
+   * Where this turn runs. Absent or `cloud` keeps stella's own model path;
+   * `local` hands the turn to a harness on one of the member's computers and
+   * is refused, never rerouted, when no computer can take it.
+   */
+  runTarget: v.exactOptional(chatRunTargetSchema),
+  userContext: v.exactOptional(userContextSchema),
+  activeDraft: v.exactOptional(activeDraftSchema),
+  activeFile: v.exactOptional(activeFileSchema),
+  activeTemplate: v.exactOptional(activeTemplateSchema),
+  activeDecision: v.exactOptional(activeDecisionSchema),
+  activeExternal: v.exactOptional(activeExternalSchema),
+  activeSkill: v.exactOptional(activeSkillSchema),
+  activeStatute: v.exactOptional(activeStatuteSchema),
+  browserExtension: v.exactOptional(browserExtensionSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
    * registers exactly one `suggest_changes` variant accordingly: the
    * client-executed queue (manual) or the server-executed apply (auto).
    */
-  editApplyMode: t.Optional(
-    t.Union([
-      t.Literal(CHAT_EDIT_APPLY_MODE.manual),
-      t.Literal(CHAT_EDIT_APPLY_MODE.auto),
+  editApplyMode: v.exactOptional(
+    v.union([
+      v.literal(CHAT_EDIT_APPLY_MODE.manual),
+      v.literal(CHAT_EDIT_APPLY_MODE.auto),
     ]),
   ),
   /**
@@ -317,66 +351,94 @@ const sendMessageCommonProperties = {
    * `DEFAULT_DOCX_EDIT_REPRESENTATION`. Ignored in `manual` mode, where the
    * human picks the representation at accept time.
    */
-  docxEditRepresentation: t.Optional(
-    t.Union([
-      t.Literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
-      t.Literal(DOCX_EDIT_REPRESENTATION.direct),
+  docxEditRepresentation: v.exactOptional(
+    v.union([
+      v.literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
+      v.literal(DOCX_EDIT_REPRESENTATION.direct),
     ]),
   ),
-  devModelId: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 160,
-      pattern: "^[A-Za-z0-9._:/-]+$",
-    }),
+  devModelId: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(160),
+      v.regex(/^[A-Za-z0-9._:/-]+$/u),
+    ),
   ),
 };
 
-const noResumeBodySchema = t.Object(
-  {
-    ...sendMessageCommonProperties,
-    message: rawMessageSchema,
-  },
-  { additionalProperties: false },
-);
+const noResumeBodySchema = v.strictObject({
+  ...sendMessageCommonProperties,
+  message: rawMessageSchema,
+});
 
-const nativeAssistantContinuationBodySchema = t.Object(
-  {
-    ...sendMessageCommonProperties,
-    message: rawAssistantContinuationMessageSchema,
-    parentRunId: agUiRunIdSchema,
-    resume: agUiResumeSchema,
-  },
-  { additionalProperties: false },
-);
+const nativeAssistantContinuationBodySchema = v.strictObject({
+  ...sendMessageCommonProperties,
+  message: rawAssistantContinuationMessageSchema,
+  parentRunId: agUiRunIdSchema,
+  resume: agUiResumeSchema,
+});
 
-export const sendMessageBodySchema = t.Union([
+export const sendMessageBodySchema = v.union([
   noResumeBodySchema,
   nativeAssistantContinuationBodySchema,
 ]);
 
-export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
+export type ChatSendRequest = v.InferOutput<typeof sendMessageBodySchema>;
 
-const agUiMessageEnvelopeSchema = t.Object(
-  {
-    id: t.String({ minLength: 1, maxLength: 512 }),
-    role: t.Union([
-      t.Literal("developer"),
-      t.Literal("system"),
-      t.Literal("assistant"),
-      t.Literal("user"),
-      t.Literal("tool"),
-      t.Literal("activity"),
-      t.Literal("reasoning"),
-    ]),
-  },
-  {
-    // Message bodies are the upstream AG-UI discriminated union plus
-    // TanStack's `parts` extension. Stella does not consume this mirrored
-    // history: `forwardedProps.message` below is the strict mutation input.
-    additionalProperties: true,
-  },
-);
+/**
+ * The stored user message a request edits, or null for any other request.
+ * An edit names the incoming user message itself as its truncation target;
+ * a user message that cuts stored history without the edit intent is refused,
+ * so every such request passes the edit authorization
+ * (`authorizeChatUserMessageEdit`).
+ */
+export const resolveEditedUserMessageId = (
+  body: Pick<
+    ChatSendRequest,
+    "message" | "truncateAfterMessageId" | "turnIntent"
+  >,
+): Result<SafeId<"chatMessage"> | null, HandlerError<400>> => {
+  if (body.turnIntent === CHAT_TURN_INTENT.edit) {
+    return body.message.role === "user" &&
+      body.truncateAfterMessageId !== undefined &&
+      body.truncateAfterMessageId === body.message.id
+      ? Result.ok(body.truncateAfterMessageId)
+      : Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "An edit must name the incoming user message as its truncation target",
+          }),
+        );
+  }
+  if (
+    body.message.role === "user" &&
+    body.truncateAfterMessageId !== undefined &&
+    body.turnIntent === undefined
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Replacing a stored user message requires the edit intent",
+      }),
+    );
+  }
+  return Result.ok(null);
+};
+
+const agUiMessageEnvelopeSchema = v.looseObject({
+  id: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  role: v.picklist([
+    "developer",
+    "system",
+    "assistant",
+    "user",
+    "tool",
+    "activity",
+    "reasoning",
+  ]),
+});
 
 /**
  * Canonical AG-UI RunAgentInput envelope emitted by TanStack's connection
@@ -384,66 +446,56 @@ const agUiMessageEnvelopeSchema = t.Object(
  * correlation and resume fields stay protocol-native at the top level.
  */
 const agUiEnvelopeCommonProperties = {
-  threadId: tSafeId("chatThread"),
+  threadId: resourceIdSchema("chatThread"),
   runId: agUiRunIdSchema,
-  state: t.Object({}, { additionalProperties: true }),
-  messages: t.Array(agUiMessageEnvelopeSchema, { maxItems: 4096 }),
-  tools: t.Array(
-    t.Object(
-      {
-        name: t.String({ minLength: 1, maxLength: 512 }),
-        description: t.String({ maxLength: 16_384 }),
-        parameters: t.Optional(t.Unknown()),
-        metadata: t.Optional(t.Record(t.String(), t.Unknown())),
-      },
-      { additionalProperties: false },
+  state: v.looseObject({}),
+  messages: v.pipe(v.array(agUiMessageEnvelopeSchema), v.maxLength(4096)),
+  tools: v.pipe(
+    v.array(
+      v.strictObject({
+        name: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+        description: v.pipe(v.string(), v.maxLength(16_384)),
+        parameters: v.exactOptional(v.unknown()),
+        metadata: v.exactOptional(v.record(v.string(), v.unknown())),
+      }),
     ),
-    { maxItems: 512 },
+    v.maxLength(512),
   ),
-  context: t.Array(
-    t.Object(
-      {
-        description: t.String({ maxLength: 16_384 }),
-        value: t.String({ maxLength: 1_000_000 }),
-      },
-      { additionalProperties: false },
+  context: v.pipe(
+    v.array(
+      v.strictObject({
+        description: v.pipe(v.string(), v.maxLength(16_384)),
+        value: v.pipe(v.string(), v.maxLength(1_000_000)),
+      }),
     ),
-    { maxItems: 512 },
+    v.maxLength(512),
   ),
 };
 
-export const agUiSendMessageBodySchema = t.Union([
-  t.Object(
-    {
-      ...agUiEnvelopeCommonProperties,
-      forwardedProps: noResumeBodySchema,
-      // TanStack mirrors forwardedProps under legacy `data`; validating both
-      // prevents an untyped shadow payload from crossing the route boundary.
-      data: noResumeBodySchema,
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      ...agUiEnvelopeCommonProperties,
-      forwardedProps: nativeAssistantContinuationBodySchema,
-      data: nativeAssistantContinuationBodySchema,
-      parentRunId: agUiRunIdSchema,
-      resume: agUiResumeSchema,
-    },
-    { additionalProperties: false },
-  ),
+export const agUiSendMessageBodySchema = v.union([
+  v.strictObject({
+    ...agUiEnvelopeCommonProperties,
+    forwardedProps: noResumeBodySchema,
+    data: noResumeBodySchema,
+  }),
+  v.strictObject({
+    ...agUiEnvelopeCommonProperties,
+    forwardedProps: nativeAssistantContinuationBodySchema,
+    data: nativeAssistantContinuationBodySchema,
+    parentRunId: agUiRunIdSchema,
+    resume: agUiResumeSchema,
+  }),
 ]);
 
-type RawIncomingMessage = Static<typeof rawMessageSchema>;
-type AgUiResume = Static<typeof agUiResumeSchema>;
-export type IncomingUserContext = Static<typeof userContextSchema>;
-export type IncomingActiveFile = Static<typeof activeFileSchema>;
-export type IncomingActiveDraft = Static<typeof activeDraftSchema>;
-export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
-export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
-export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
-export type IncomingActiveStatute = Static<typeof activeStatuteSchema>;
+type RawIncomingMessage = v.InferOutput<typeof rawMessageSchema>;
+type AgUiResume = v.InferOutput<typeof agUiResumeSchema>;
+export type IncomingUserContext = v.InferOutput<typeof userContextSchema>;
+export type IncomingActiveFile = v.InferOutput<typeof activeFileSchema>;
+export type IncomingActiveDraft = v.InferOutput<typeof activeDraftSchema>;
+export type IncomingActiveTemplate = v.InferOutput<typeof activeTemplateSchema>;
+export type IncomingActiveDecision = v.InferOutput<typeof activeDecisionSchema>;
+export type IncomingActiveExternal = v.InferOutput<typeof activeExternalSchema>;
+export type IncomingActiveStatute = v.InferOutput<typeof activeStatuteSchema>;
 
 /**
  * Every active document a turn may carry, by the body field that carries it.
@@ -480,12 +532,42 @@ type UnusedActiveContextSchema = Exclude<
 true satisfies UndeclaredActiveContextKey extends never ? true : never;
 true satisfies UnusedActiveContextSchema extends never ? true : never;
 
+/**
+ * Whose tool calls a message may carry. `cloud`: a turn stella's own models
+ * run, whose calls the chat tool registry validates and the API or the
+ * browser executes. `harness`: a turn a coding-agent harness on the member's
+ * computer ran, whose calls only that harness executes; the registry does not
+ * describe them, so they are checked for shape, never run by the API, and
+ * never accepted from a cloud turn. A message never mixes the two.
+ */
+export type ChatToolCallOwnership = "cloud" | "harness";
+
+/** Whose tool calls a turn sent to `runTarget` carries. */
+export const toolCallOwnershipOf = (
+  runTarget: ChatRunTarget | undefined,
+): ChatToolCallOwnership => {
+  const kind = runTarget?.kind;
+  switch (kind) {
+    case undefined:
+    case "cloud":
+      return "cloud";
+    case "local":
+      return "harness";
+    default:
+      kind satisfies never;
+      return panic(`Unknown chat run target: ${String(kind)}`);
+  }
+};
+
 type ValidateMessageInput = {
   message: RawIncomingMessage;
+  /** Who runs the turn this message continues or starts. */
+  toolCallOwnership: ChatToolCallOwnership;
   persistedMessage: {
     content: PersistedChatMessageContent;
     role: ChatMessageRole;
   } | null;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   tools: ChatToolMap;
@@ -572,7 +654,9 @@ type ValidatedToolCallPart =
       name: string;
       output: { type: "absent" } | { type: "present"; value: unknown };
       part: ChatToolCallPart;
-    };
+    }
+  /** A call a member's computer ran; see `validateOwnedToolCallPart`. */
+  | { type: "harness"; name: string; part: ChatToolCallPart };
 
 type ValidatedToolPayload =
   | { type: "input-only"; input: unknown }
@@ -607,9 +691,11 @@ const withValidatedToolPayload = ({
 export const validateMessage = async ({
   message,
   persistedMessage,
+  refRegistry,
   resume,
   safeDb,
   threadId,
+  toolCallOwnership,
   tools,
   userId,
 }: ValidateMessageInput): Promise<ValidateMessageResult> =>
@@ -617,7 +703,9 @@ export const validateMessage = async ({
     const partsResult = validateIncomingChatParts({
       message,
       persistedMessage,
+      refRegistry,
       resume,
+      toolCallOwnership,
       tools,
     });
     if (Result.isError(partsResult)) {
@@ -649,9 +737,14 @@ export const validateMessage = async ({
       parts: partsResult.value.parts,
       ...(metadata === undefined ? {} : { metadata }),
     });
+    const { clientAuthoredCallIds } = partsResult.value;
     const toolValidationResult = validateToolCallParts({
-      clientAuthoredCallIds: partsResult.value.clientAuthoredCallIds,
+      clientAuthoredCallIds,
       message: candidateMessage,
+      // A harness call reaches the API only from the computer that ran it: a
+      // client may answer one the server stored, never write a new one.
+      ownership:
+        clientAuthoredCallIds === undefined ? "cloud" : toolCallOwnership,
       tools,
     });
 
@@ -758,12 +851,16 @@ type ValidatedIncomingChatParts = {
 const validateIncomingChatParts = ({
   message,
   persistedMessage,
+  refRegistry,
   resume,
+  toolCallOwnership,
   tools,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
+  refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
+  toolCallOwnership: ChatToolCallOwnership;
   tools: ChatToolMap;
 }): Result<ValidatedIncomingChatParts, HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
@@ -799,7 +896,9 @@ const validateIncomingChatParts = ({
     const continuationResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
       persistedMessage: canonicalMessage,
+      refRegistry,
       resume,
+      toolCallOwnership,
       tools,
     });
     if (Result.isError(continuationResult)) {
@@ -839,12 +938,12 @@ const applyValidatedContinuationTransitions = ({
     }
     const validatedCall = validatedCallsById.get(part.id);
     if (validatedCall === undefined) {
-      return canonicalizeToolCall(part);
+      return continueStoredChatPart(part, canonicalizeToolCall(part));
     }
     if (validatedCall.type === "transitioned") {
       transitionedCallIds.add(part.id);
     }
-    return validatedCall.call;
+    return continueStoredChatPart(part, validatedCall.call);
   });
   const resultCallIds = new Set(
     persistedParts.flatMap((part) =>
@@ -888,14 +987,18 @@ const applyValidatedContinuationTransitions = ({
  * A client continuation may supply the result of an awaited interaction, but it
  * must not change which call was made or with what input: id, name, and input
  * value stay server-authored, and only output, state, and the approval response
- * may move.
+ * may move. A harness question's call never moves: its answer is the resume
+ * payload, checked against the questions its interrupt asked. Every awaited
+ * call is answered only by a turn of its own executor: a call a harness on the
+ * member's computer holds is answered only on that computer, a cloud call only
+ * by a cloud turn.
  *
  * How the input is spelled is not part of that property. The persisted v3 part
  * keeps only the adapter-normalized input and recomputes `arguments` from it,
  * while the client echoes the raw provider text, which strict tool schemas widen
  * with nulls for absent optionals. Both are the same call, so `input` is
- * compared by value with that null-widening folded on both sides, and the server
- * copy is restored onto the accepted call.
+ * compared after applying the tool schema and resolving declared chat refs on
+ * both sides. The server copy is restored onto the accepted call.
  */
 type ValidatedContinuationToolCall =
   | { type: "transitioned"; call: ChatToolCallPart }
@@ -904,12 +1007,16 @@ type ValidatedContinuationToolCall =
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedMessage,
+  refRegistry,
   resume,
+  toolCallOwnership,
   tools,
 }: {
   incomingParts: readonly ChatPart[];
   persistedMessage: ChatMessage;
+  refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
+  toolCallOwnership: ChatToolCallOwnership;
   tools: ChatToolMap;
 }): Result<
   ReadonlyMap<string, ValidatedContinuationToolCall>,
@@ -936,7 +1043,11 @@ const validateContinuationToolCallIntegrity = ({
     const validatedCallResult = validateContinuationToolCallTransition({
       canonicalCall,
       incomingCall,
-      tool: registeredChatTool(tools, canonicalCall.name),
+      refRegistry,
+      // A harness call is not the registry tool its name may match.
+      tool: isHarnessChatToolCall(canonicalCall)
+        ? undefined
+        : registeredChatTool(tools, canonicalCall.name),
     });
     if (Result.isError(validatedCallResult)) {
       return Result.err(validatedCallResult.error);
@@ -959,16 +1070,56 @@ const validateContinuationToolCallIntegrity = ({
   ) {
     return invalidContinuationToolCall();
   }
+  if (
+    awaitedInteractions.some(({ toolCallId }) => {
+      const call = canonicalCallsById.get(toolCallId);
+      return (
+        call === undefined ||
+        (isHarnessChatToolCall(call) ? "harness" : "cloud") !==
+          toolCallOwnership
+      );
+    }) ||
+    // A harness question is answered only through its interrupt.
+    (resume === undefined &&
+      awaitedInteractions.some(({ type }) => type === "harness-question"))
+  ) {
+    return invalidContinuationToolCall();
+  }
   if (resume !== undefined) {
+    const pendingInterrupts =
+      persistedMessage.metadata?.resumeSnapshot?.pendingInterrupts;
     const awaitedInterrupts: {
       interaction: (typeof awaitedInteractions)[number];
       interruptId: string;
     }[] = [];
+    const harnessQuestions = new Map<
+      string,
+      Parameters<typeof questionReplyOf>[1]
+    >();
     for (const awaited of awaitedInteractions) {
       const call = canonicalCalls.find(
         (candidate) => candidate.id === awaited.toolCallId,
       );
       if (call === undefined) {
+        continue;
+      }
+      if (awaited.type === "harness-question") {
+        // The question the stored turn paused on, from its server-owned
+        // resume snapshot: the request id an answer names and the questions
+        // the answer is checked against.
+        // A turn stored without a resume snapshot paused on no question.
+        const pause =
+          pendingInterrupts === undefined
+            ? ({ type: "none" } as const)
+            : questionInterruptOf(pendingInterrupts);
+        if (pause.type !== "question" || pause.toolCallId !== call.id) {
+          continue;
+        }
+        awaitedInterrupts.push({
+          interaction: awaited,
+          interruptId: pause.requestId,
+        });
+        harnessQuestions.set(pause.requestId, pause.questions);
         continue;
       }
       if (awaited.type === "approval") {
@@ -1017,6 +1168,14 @@ const validateContinuationToolCallIntegrity = ({
         );
         if (resolution.status === "cancelled") {
           return transition !== undefined;
+        }
+        if (awaited.interaction.type === "harness-question") {
+          const questions = harnessQuestions.get(resolution.interruptId);
+          return (
+            transition !== undefined ||
+            questions === undefined ||
+            questionReplyOf(resolution.payload, questions).type === "refused"
+          );
         }
         if (transition === undefined) {
           return true;
@@ -1103,26 +1262,53 @@ const canonicalToolCallBase = (
 };
 
 /**
- * The continuation's input compared under the placeholder rule of the tool's
- * own schema, so a `null` a nullable field admits is a value, not absence.
+ * The continuation's input under the same schema that validated the stored
+ * call. The browser echoes provider arguments before defaults were applied.
+ * Fold placeholders before parsing, so nullable values remain values while
+ * absent optional fields receive the same defaults as the stored input. Resolve
+ * declared ref fields through the persistence owner so raw provider refs and
+ * stored ids name the same resources without rewriting opaque input values.
  * A call with no known schema (a tool this request does not register, or one
  * without an input schema) keeps the schema-blind fold of every `null`.
  */
-const withContinuationInputFolded = (
-  tool: ChatTool | undefined,
-  value: unknown,
-): unknown =>
-  tool?.inputSchema === undefined
-    ? withNullsOmitted(value)
-    : withToolInputPlaceholdersOmitted(tool.inputSchema, value);
+type NormalizeContinuationInputOptions = {
+  refRegistry: ChatRefRegistry;
+  tool: ChatTool | undefined;
+  toolName: string;
+  value: unknown;
+};
+
+const normalizeContinuationInput = ({
+  refRegistry,
+  tool,
+  toolName,
+  value,
+}: NormalizeContinuationInputOptions): Result<unknown, HandlerError<400>> => {
+  const input = resolveRegistryToolInputRefs({
+    input: value,
+    refRegistry,
+    toolName,
+  });
+  if (tool?.inputSchema !== undefined) {
+    return validateToolPayload({
+      payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
+      payloadName: "input",
+      schema: tool.inputSchema,
+      toolName: tool.name,
+    });
+  }
+  return Result.ok(withNullsOmitted(input));
+};
 
 const validateContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
+  refRegistry,
   tool,
 }: {
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
+  refRegistry: ChatRefRegistry;
   tool: ChatTool | undefined;
 }): Result<ValidatedContinuationToolCall, HandlerError<400>> => {
   if (incomingCall.state === canonicalCall.state) {
@@ -1131,12 +1317,23 @@ const validateContinuationToolCallTransition = ({
       call: canonicalizeToolCall(canonicalCall),
     });
   }
+  const incomingInput = normalizeContinuationInput({
+    refRegistry,
+    tool,
+    toolName: canonicalCall.name,
+    value: incomingCall.input,
+  });
+  const canonicalInput = normalizeContinuationInput({
+    refRegistry,
+    tool,
+    toolName: canonicalCall.name,
+    value: canonicalCall.input,
+  });
   if (
     incomingCall.name !== canonicalCall.name ||
-    !deepEquals(
-      withContinuationInputFolded(tool, incomingCall.input),
-      withContinuationInputFolded(tool, canonicalCall.input),
-    )
+    Result.isError(incomingInput) ||
+    Result.isError(canonicalInput) ||
+    !deepEquals(incomingInput.value, canonicalInput.value)
   ) {
     return invalidContinuationToolCall();
   }
@@ -1175,7 +1372,7 @@ const validateContinuationToolCallTransition = ({
     }
     case "input-complete": {
       if (
-        isServerChatToolCall(canonicalCall) ||
+        !isBrowserResolvedChatToolCall(canonicalCall) ||
         (incomingCall.state !== "complete" && incomingCall.state !== "error")
       ) {
         return invalidContinuationToolCall();
@@ -1469,6 +1666,7 @@ const parseUsageMetadata = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
   metadata.docxEditPreferences === undefined &&
   metadata.mentions === undefined &&
@@ -1486,6 +1684,7 @@ export const validateToolCallParts = ({
   allowDeferredServerInput = false,
   clientAuthoredCallIds,
   message,
+  ownership,
   tools,
 }: {
   allowPartialInput?: boolean;
@@ -1493,6 +1692,8 @@ export const validateToolCallParts = ({
   /** See `ValidatedIncomingChatParts`; `undefined` validates every call. */
   clientAuthoredCallIds?: ReadonlySet<string> | undefined;
   message: ChatMessage;
+  /** Whose calls the validated ones must be; see `ChatToolCallOwnership`. */
+  ownership: ChatToolCallOwnership;
   tools: ChatToolMap;
 }): Result<ChatPart[], HandlerError<400>> => {
   const toolCallsById = new Map<string, ValidatedToolCallPart>();
@@ -1525,14 +1726,19 @@ export const validateToolCallParts = ({
         continue;
       }
 
-      const toolCallResult = validateToolCallPart({
-        allowPartialInput,
-        allowDeferredServerInput:
-          allowDeferredServerInput &&
-          firstAwaitedIndex !== -1 &&
-          index > firstAwaitedIndex,
+      const toolCallResult = validateOwnedToolCallPart({
+        ownership,
         part,
-        tools,
+        validateCloudCall: () =>
+          validateToolCallPart({
+            allowPartialInput,
+            allowDeferredServerInput:
+              allowDeferredServerInput &&
+              firstAwaitedIndex !== -1 &&
+              index > firstAwaitedIndex,
+            part,
+            tools,
+          }),
       });
       if (Result.isError(toolCallResult)) {
         return Result.err(toolCallResult.error);
@@ -1562,6 +1768,52 @@ export const validateToolCallParts = ({
     parts.push(part);
   }
   return Result.ok(parts);
+};
+
+/**
+ * A call checked as its owner's. A harness call in a cloud turn, or a cloud
+ * call in a harness turn, is refused: the first would store work the API
+ * never ran under a name the registry trusts, the second would send an
+ * answer to an executor that does not hold the call.
+ */
+const validateOwnedToolCallPart = ({
+  ownership,
+  part,
+  validateCloudCall,
+}: {
+  ownership: ChatToolCallOwnership;
+  part: ChatToolCallPart;
+  validateCloudCall: () => Result<ValidatedToolCallPart, HandlerError<400>>;
+}): Result<ValidatedToolCallPart, HandlerError<400>> => {
+  const harnessCall = isHarnessChatToolCall(part);
+  switch (ownership) {
+    case "cloud":
+      return harnessCall
+        ? Result.err(
+            new HandlerError({
+              code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+              status: 400,
+              message: `Chat tool call ran on a computer, not in this turn: ${part.id}`,
+            }),
+          )
+        : validateCloudCall();
+    case "harness":
+      // Nothing in the chat tool registry describes a harness call, whatever
+      // its name, and the API never runs one: it is stored as the harness
+      // reported it, and storing proves its input and output are JSON.
+      return harnessCall
+        ? Result.ok({ type: "harness", name: part.name, part })
+        : Result.err(
+            new HandlerError({
+              code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+              status: 400,
+              message: `Chat tool call is not one the computer ran: ${part.id}`,
+            }),
+          );
+    default:
+      ownership satisfies never;
+      return panic(`Unknown chat tool call ownership: ${String(ownership)}`);
+  }
 };
 
 const validateToolCallPart = ({
@@ -1646,6 +1898,15 @@ const validateToolCallPart = ({
   if (Result.isError(outputResult)) {
     return Result.err(outputResult.error);
   }
+  if (part.name === ASK_USER_TOOL_NAME) {
+    const agreement = validateAskUserAnswers({
+      input: validatedInput,
+      output: outputResult.value,
+    });
+    if (Result.isError(agreement)) {
+      return Result.err(agreement.error);
+    }
+  }
   return Result.ok({
     type: "schema",
     name: part.name,
@@ -1659,6 +1920,33 @@ const validateToolCallPart = ({
       },
     }),
   });
+};
+
+/** Answers the schema accepts can still tick values a question never
+ *  offered; the check needs the call's questions beside its answers. */
+const validateAskUserAnswers = ({
+  input,
+  output,
+}: {
+  input: unknown;
+  output: unknown;
+}): Result<void, HandlerError<400>> => {
+  if (!v.is(askUserInputSchema, input) || !v.is(askUserOutputSchema, output)) {
+    return panic(
+      "ask-user payload passed its tool schema but not its contract",
+    );
+  }
+  const refusal = askUserAnswersRefusal(input.questions, output.answers);
+  if (refusal === null) {
+    return Result.ok();
+  }
+  return Result.err(
+    new HandlerError({
+      code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+      status: 400,
+      message: `Invalid answers for ${ASK_USER_TOOL_NAME}: ${refusal}`,
+    }),
+  );
 };
 
 /** A call's input in the form its tool's schema gives it, or why not
@@ -1775,11 +2063,7 @@ const validateToolCallErrorOutput = (
   }
   // Denial is an approval decision, not a failed server execution. The SDK
   // preserves its decision payload on the call and the paired result.
-  if (
-    "approval" in part &&
-    part.approval.approved === false &&
-    isDeniedToolOutput(output)
-  ) {
+  if (isDeclinedChatToolCall(part) && isDeniedToolOutput(output)) {
     return Result.ok({ type: "denied", output });
   }
   if (
@@ -1826,6 +2110,10 @@ const validateToolResultPart = ({
         message: `Chat tool result has no matching call: ${part.toolCallId}`,
       }),
     );
+  }
+  if (toolCall.type === "harness") {
+    // What the harness reported, success or failure, is the result.
+    return Result.ok();
   }
 
   if (validation === "error") {
@@ -1923,8 +2211,7 @@ const validateToolErrorResult = (
   const content = contentResult.value;
   if (
     part.outcome === "denied" &&
-    "approval" in toolCall.part &&
-    toolCall.part.approval.approved === false &&
+    isDeclinedChatToolCall(toolCall.part) &&
     isDeniedToolOutput(content) &&
     part.error === undefined
   ) {
@@ -2187,4 +2474,31 @@ export const parseMessage = ({
     },
     mentions,
   };
+};
+
+/**
+ * Refuses a user message that would reach the provider with nothing to read:
+ * its text normalizes to whitespace (an empty paragraph, a lone line break, a
+ * reference chip the sender may not see) and it carries no attachment. Run on
+ * the normalized message, before the turn creates or changes anything, so
+ * the refusal stores nothing and calls no provider.
+ */
+export const requireUserMessageContent = (
+  message: Pick<PersistableChatMessage, "parts" | "role">,
+): Result<void, HandlerError<422>> => {
+  if (
+    message.role !== "user" ||
+    v.is(chatUserMessageContentSchema, message.parts)
+  ) {
+    return Result.ok();
+  }
+  return Result.err(
+    new HandlerError({
+      code: CHAT_MESSAGE_EMPTY_ERROR_CODE,
+      status: 422,
+      message: "Chat message has no text or attachment",
+      hint: "Send text or attach a file.",
+      retryable: false,
+    }),
+  );
 };

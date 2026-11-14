@@ -11,18 +11,18 @@ import {
   type ActionServiceCredentials,
 } from "@/api/lib/rate-limit/action-kinds";
 import {
-  PER_KIND_PERIOD_SCOPE,
   type ActionPeriodPolicy,
   type ActionPeriodScope,
+  PER_KIND_PERIOD_SCOPE,
 } from "@/api/lib/rate-limit/action-period-budget";
 import {
-  readFreeTier,
   type FreeTier,
   type OrganizationAccess,
+  readFreeTier,
 } from "@/api/lib/usage/organization-access";
 import {
-  readOrganizationAccessSnapshot,
   type OrganizationAccessSnapshot,
+  readOrganizationAccessSnapshot,
 } from "@/api/lib/usage/organization-access-snapshot";
 
 /** Whose model key serves the organization's model dispatch. */
@@ -89,6 +89,8 @@ export const actionDrawsServiceBudget = ({
  * pooled free budget (background kinds through their counted parent).
  */
 export const FREE_WITHOUT_OWN_KEY = {
+  "dictation.transcribe": "counts",
+  "dictation.cleanup": "counts",
   "chat.send": "counts",
   "chat.span-edit": "counts",
   // The automatic title of a counted chat send rides on that send.
@@ -113,12 +115,16 @@ export const FREE_WITHOUT_OWN_KEY = {
   "skills.generate-draft": "counts",
   "skills.propose-from-comments": "counts",
   "time-entries.polish-narrative": "counts",
+  "billing.activity-drafts": "counts",
   "entities.suggest-placements": "off",
   "versions.summarize": "counts",
   "properties.suggest-prompt": "off",
   "properties.preview": "counts",
   "search.refine": "counts",
   "search.summarize": "counts",
+  "email.summarize": "counts",
+  "email.draft-reply": "counts",
+  "email.ask": "counts",
   "playbooks.derive-ask": "counts",
   "case-law.analysis": "counts",
   "case-law.search-refine": "counts",
@@ -137,6 +143,9 @@ export const FREE_WITHOUT_OWN_KEY = {
   "bilingual.background": "counts",
   "list-verification.start": "counts",
   "list-verification.background": "counts",
+  "list-verification.recheck": "counts",
+  "list-fact-extraction.start": "counts",
+  "list-fact-extraction.background": "counts",
   "report-export.start": "counts",
   "report-export.background": "counts",
   "mcp.services/call": "counts",

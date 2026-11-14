@@ -1,15 +1,17 @@
 import type { ComponentType } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { EyeOffIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PinProperty } from "@/components/workspaces/properties/pin-property";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
-import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import type { ColumnSortOffer } from "@/components/workspaces/properties/sort-property.logic";
 import type {
   TableColumn,
   TableRowData,
@@ -20,14 +22,15 @@ type MetadataPopoverProps<TRow extends TableRowData> = {
   column: TableColumn<TRow>;
   icon: ComponentType<{ className?: string }>;
   label: string;
-  sortHint?: SortHint | undefined;
+  /** What the sort items offer for this column, if it orders the rows at all. */
+  sort: ColumnSortOffer;
 };
 
 export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
   column,
   icon: Icon,
   label,
-  sortHint,
+  sort,
 }: MetadataPopoverProps<TRow>) => {
   const t = useTranslations();
 
@@ -43,7 +46,7 @@ export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
         }
       >
         <Icon className="size-3.5 shrink-0" />
-        <span className="w-0 flex-1 truncate">{label}</span>
+        <TruncatedText className="w-0 flex-1">{label}</TruncatedText>
       </PopoverTrigger>
       <PopoverPopup
         align="start"
@@ -51,8 +54,7 @@ export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
         initialFocus={false}
         padding="none"
       >
-        <SortProperty column={column} sortHint={sortHint} />
-        <Separator />
+        <ColumnSortItems column={column} sort={sort} />
         <div className="flex flex-col p-1">
           <PinProperty column={column} />
           <Button
@@ -68,4 +70,31 @@ export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
       </PopoverPopup>
     </Popover>
   );
+};
+
+const ColumnSortItems = <TRow extends TableRowData>({
+  column,
+  sort,
+}: {
+  column: TableColumn<TRow>;
+  sort: ColumnSortOffer;
+}) => {
+  switch (sort.type) {
+    case "unordered":
+      return null;
+    case "ordered":
+      return (
+        <>
+          <SortProperty
+            column={column}
+            directions={sort.directions}
+            kind={sort.kind}
+          />
+          <Separator />
+        </>
+      );
+    default:
+      sort satisfies never;
+      return panic(`Unhandled column sort offer: ${String(sort)}`);
+  }
 };

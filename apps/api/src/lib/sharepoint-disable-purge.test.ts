@@ -16,6 +16,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -171,7 +172,7 @@ describe("disconnect is never gated on org enablement", () => {
         request: new Request(
           "https://api.example.test/v1/sharepoint/connection",
         ),
-        route: "/v1/sharepoint/connection",
+        route: "/v1/sharepoint/connection" satisfies ApiRoutePath,
       }),
     );
 

@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import { taskAssignees, workspaceMembers, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -81,18 +82,31 @@ type WriteTaskAssignmentsOptions = {
   assignments: readonly {
     entityId: SafeId<"entity">;
     userId: string;
-    role: "assignee" | "reviewer";
+    role: TaskAssigneeRole;
   }[];
+};
+
+/**
+ * One assignment row this write actually changed: inserted, or moved to a
+ * different role. `id` is the row's identity, which a repeat of the same
+ * assignment keeps and a remove-then-add replaces, so it names the assignment
+ * event rather than the moment it was written.
+ */
+export type WrittenTaskAssignment = {
+  id: SafeId<"taskAssignee">;
+  entityId: SafeId<"entity">;
+  userId: string;
+  role: TaskAssigneeRole;
 };
 
 export const writeTaskAssignments = async ({
   tx,
   workspaceId,
   assignments,
-}: WriteTaskAssignmentsOptions) => {
+}: WriteTaskAssignmentsOptions): Promise<WrittenTaskAssignment[]> => {
   // audit: skip - createTaskEntityHandler, addAssigneeHandler and moveAssigneeHandler record task events in the same transaction.
   if (assignments.length === 0) {
-    return;
+    return [];
   }
   const members = await lockTaskAssignmentMembers({
     tx,
@@ -107,12 +121,21 @@ export const writeTaskAssignments = async ({
       }),
     );
   }
-  await tx
+  // A repeat of an existing assignment leaves the row untouched and returns
+  // nothing, so callers see only the assignments this write changed.
+  return await tx
     .insert(taskAssignees)
     .values(assignments.map((assignment) => ({ ...assignment, workspaceId })))
     .onConflictDoUpdate({
       target: [taskAssignees.entityId, taskAssignees.userId],
       set: { role: sql`excluded.role` },
+      setWhere: sql`${taskAssignees.role} IS DISTINCT FROM excluded.role`,
+    })
+    .returning({
+      id: taskAssignees.id,
+      entityId: taskAssignees.entityId,
+      userId: taskAssignees.userId,
+      role: taskAssignees.role,
     });
 };
 

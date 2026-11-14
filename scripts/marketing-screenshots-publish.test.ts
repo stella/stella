@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -13,6 +13,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const read = (name: string) =>
@@ -153,7 +154,7 @@ describe("screenshot regeneration trust boundary", () => {
     // The dispatch on main runs no branch code: it only starts the capture.
     for (const step of stepsOf(updateWorkflow, "update")) {
       expect(step.uses?.startsWith("./") ?? false).toBe(false);
-      expect(step.uses?.startsWith("actions/checkout@") ?? false).toBe(false);
+      expect(isRepositoryCheckoutAction(step.uses)).toBe(false);
     }
     // The comparison workflow no longer regenerates anything.
     expect(Object.keys(jobsOf(reusable))).toEqual(["check"]);
@@ -175,16 +176,16 @@ describe("screenshot regeneration trust boundary", () => {
       ],
       [
         "Download regenerated baselines",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
       ],
       ["Stage validated baselines", "run"],
       [
         "Mint App token",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+        "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
       ],
       [
         "Push regenerated baselines",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+        "stella/.github/.github/actions/signed-commit@fc5f380b18234429cb60682ccfe1537561311e61",
       ],
     ]);
     for (const step of publish) {
@@ -197,7 +198,7 @@ describe("screenshot regeneration trust boundary", () => {
       }
     }
     const checkout = publish.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(step.uses),
     );
     expect(checkout?.with?.["persist-credentials"]).toBe(false);
     expect(checkout?.with?.["submodules"]).toBeUndefined();

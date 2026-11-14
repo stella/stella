@@ -6,8 +6,8 @@ import type { GroupDirectiveKind } from "@/features/knowledge/views/templates/di
 import type { TemplateRecipeDefinition } from "@/lib/api-contract";
 import type { ReplacementSpec } from "@/routes/knowledge/-components/template-studio-suggestions";
 import {
-  templateValueSourceTransition,
   type TemplateEditableField,
+  templateValueSourceTransition,
 } from "@/routes/knowledge/-components/template-value-source";
 
 // The Studio's editable manifest data + live document selection. Lives in a

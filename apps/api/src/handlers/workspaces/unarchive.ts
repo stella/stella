@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -20,6 +22,8 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "covered", by: "save_matter" },
+  // The one operation an archived matter admits.
+  workspaceStatus: "active-or-archived",
 } satisfies WorkspaceHandlerConfig;
 
 export type UnarchiveWorkspaceHandlerProps = {
@@ -39,11 +43,11 @@ export const unarchiveWorkspaceHandler = async function* ({
     safeDb(async (tx) => {
       const updated = await tx
         .update(workspaces)
-        .set({ status: "active" })
+        .set({ status: WORKSPACE_STATUS.active })
         .where(
           and(
             eq(workspaces.id, workspaceId),
-            eq(workspaces.status, "archived"),
+            eq(workspaces.status, WORKSPACE_STATUS.archived),
           ),
         )
         .returning({ id: workspaces.id });
@@ -54,7 +58,10 @@ export const unarchiveWorkspaceHandler = async function* ({
           resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
           resourceId: workspaceId,
           changes: {
-            status: { old: "archived", new: "active" },
+            status: {
+              old: WORKSPACE_STATUS.archived,
+              new: WORKSPACE_STATUS.active,
+            },
           },
         });
       }

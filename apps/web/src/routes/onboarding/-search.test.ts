@@ -42,5 +42,10 @@ describe("onboarding search params", () => {
 
   test("keeps the dev preview flag", () => {
     expect(parse({ preview: true })).toEqual({ preview: true });
+    expect(parse({ preview: "true" })).toEqual({ preview: true });
+  });
+
+  test("a tracking tag on a sign-up link does not fail the page", () => {
+    expect(parse({ utm_source: "newsletter" })).toEqual({});
   });
 });

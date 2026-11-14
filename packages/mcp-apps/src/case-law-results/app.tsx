@@ -23,4 +23,4 @@ createRoot(root).render(
     <CaseLawApp bridge={bridge} />
   </TooltipProvider>,
 );
-bridge.detached(bridge.connect(), "connect case-law app");
+bridge.detached(bridge.connect(), "caseLawResults.connect");

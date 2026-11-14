@@ -163,11 +163,14 @@ test("a budget that is not a multiple of the retry pause is honoured exactly", a
   expect(refused.attempts.filter((step) => step === "begin")).toHaveLength(3);
 });
 
-test("the exclusive wait runs with the statement timeout off and restores it once held", () => {
-  const [lift, lock, restore] = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
-  expect(lift).toBe("SET statement_timeout = '0'");
+test("the exclusive wait runs with both timeouts off and restores them once held", () => {
+  const { lift, lock, restore } = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+  expect(lift).toEqual([
+    "SET statement_timeout = '0'",
+    "SET lock_timeout = '0'",
+  ]);
   expect(lock).toBe(CORPUS_SCHEMA_LANE_LOCK_SQL);
-  expect(restore).toBe("RESET statement_timeout");
+  expect(restore).toEqual(["RESET statement_timeout", "RESET lock_timeout"]);
 });
 
 // The entrypoint delegates to the runner, which owns migration SQL and the
@@ -177,26 +180,39 @@ test("the migration runner takes the lane before SQL and releases it in finally"
     nodePath.resolve(import.meta.dir, "migration-runner.ts"),
     "utf-8",
   );
-  const positions = [
+  const expectSourceOrder = (needles: readonly string[]) => {
+    const positions = needles.map((needle) => {
+      const at = source.indexOf(needle);
+      expect(at, needle).toBeGreaterThan(-1);
+      return at;
+    });
+    expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
+  };
+
+  expectSourceOrder([
     "CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;",
-    "await connection.unsafe(liftTimeout);",
-    "await connection.unsafe(takeLane);",
-    "laneHeld = true;",
-    "await connection.unsafe(restoreTimeout);",
-    "await pgCoreMigrate(migrations, database",
-  ].map((needle) => {
-    const at = source.indexOf(needle);
-    expect(at, needle).toBeGreaterThan(-1);
-    return at;
-  });
-  expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
+    "for (const statement of lift) {",
+    "await connection.unsafe(lock);",
+    "onLaneAcquired();",
+    "for (const statement of restore) {",
+  ]);
+  expectSourceOrder(["onLaneAcquired: () => {", "laneHeld = true;"]);
   expect(source).not.toContain("CORPUS_SCHEMA_LANE_LOCK_SQL");
 
   const migrationAt = source.indexOf(
-    "await pgCoreMigrate(migrations, database",
+    "await reportSchemaStep({",
+    source.indexOf("laneHeld = true;"),
   );
-  const finallyAt = source.indexOf("} finally {");
+  expect(migrationAt).toBeGreaterThan(-1);
+  const errorRethrowAt = source.indexOf("throw error;", migrationAt);
+  const finallyAt = source.indexOf("} finally {", errorRethrowAt);
+  expect(errorRethrowAt).toBeGreaterThan(migrationAt);
+
   expect(finallyAt).toBeGreaterThan(migrationAt);
+  expect(finallyAt).toBeGreaterThan(errorRethrowAt);
+  expect(source.slice(finallyAt)).toContain(
+    "if (migrationSessionCanUnlock(laneHeld, session.state)) {",
+  );
   expect(source.slice(finallyAt)).toContain(
     "await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);",
   );

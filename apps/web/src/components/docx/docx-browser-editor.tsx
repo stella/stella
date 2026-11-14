@@ -32,6 +32,7 @@ import {
   SelectTrigger as StSelectTrigger,
   SelectValue as StSelectValue,
 } from "@stll/ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import "@stll/folio-react/editor.css";
 
 import { useDocxWheelZoom } from "@/components/docx-preview-zoom";
@@ -53,6 +54,8 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import "@/components/pdf/peek/peek-docx.css";
+
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   editSessionErrorDescriptionKey,
@@ -110,11 +113,9 @@ type DocxBrowserEditorBaseProps = {
   isEditing?: boolean | undefined;
   onClose: () => void;
   onCompatibilityChange?:
-    | ((compatibility: DocxCompatibility) => void)
-    | undefined;
+    ((compatibility: DocxCompatibility) => void) | undefined;
   onCollaborationPublishableChange?:
-    | ((publishable: boolean) => void)
-    | undefined;
+    ((publishable: boolean) => void) | undefined;
   canUnlock: boolean;
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;
@@ -823,18 +824,23 @@ const CollaborationPresence = ({
   return (
     <ul className="flex min-h-11 items-center -space-x-2 px-2">
       {users.map((user) => (
-        <li
-          aria-label={user.name}
-          className="border-background rounded-full border-2"
-          key={user.id}
-          title={user.name}
-        >
-          <UserIdentityAvatar
-            className="text-3xs size-7"
-            image={user.image}
-            name={user.name}
-          />
-        </li>
+        <Tooltip key={user.id}>
+          <TooltipTrigger
+            render={
+              <li
+                aria-label={user.name}
+                className="border-background rounded-full border-2"
+              />
+            }
+          >
+            <UserIdentityAvatar
+              className="text-3xs size-7"
+              image={user.image}
+              name={user.name}
+            />
+          </TooltipTrigger>
+          <TooltipPopup>{user.name}</TooltipPopup>
+        </Tooltip>
       ))}
     </ul>
   );
@@ -956,7 +962,7 @@ const DocxLoadingPriorityExtra = () => {
         variant="ghost"
       >
         <PenLineIcon className="size-3.5" />
-        <span className="truncate">{t("trackingOff")}</span>
+        <TruncatedText>{t("trackingOff")}</TruncatedText>
       </Button>
       <StSelect value="all-markup" onValueChange={noop}>
         <StSelectTrigger

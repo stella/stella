@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import { DATE_FORMAT_SPEC_HINT } from "@stll/agent-input";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   classifyMarker,
   filtersFromFieldConfig,
@@ -15,7 +14,7 @@ import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { deriveManifest } from "./derived-manifest";
 import { discoverTemplate } from "./discover-template";
-import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
+import { FIELD_META_FILTERS, fieldMetaFromFilters } from "./field-filters";
 import type { FieldMeta } from "./types";
 
 const WRAP = (body: string) =>
@@ -28,9 +27,9 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const makeDocx = async (
   paragraphs: readonly string[],
 ): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", WRAP(paragraphs.map(P).join("")));
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", WRAP(paragraphs.map(P).join("")));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const filtersOf = (marker: string): readonly FilterCall[] => {

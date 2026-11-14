@@ -1,7 +1,7 @@
-import { useLayoutEffect, type RefObject } from "react";
+import { type RefObject, useLayoutEffect } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -53,7 +53,7 @@ export const useFindModalBoundary = (open: boolean): void => {
  * surface: one shortcut matched in one place is what stops a rebind from
  * leaving the panes listening for different keys.
  */
-let findHotkey: Hotkey = HOTKEYS.FIND;
+let findHotkey: HotkeyChord = HOTKEYS.FIND;
 
 /**
  * `offsetParent` is null while an inspector tab is CSS-hidden, which is how

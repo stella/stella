@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import {
   generateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
@@ -36,7 +37,6 @@ import {
   removeOrganizationFilesBytes,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
-import { createUserFileKey } from "@/api/lib/files/utils";
 import {
   deleteS3ObjectWithSignal,
   readS3ArrayBuffer,
@@ -199,20 +199,16 @@ const backfillChatFilePage = async (
       continue;
     }
     const thumbnailFileId = Bun.randomUUIDv7();
-    const thumbnailKey = createUserFileKey({
-      fileId: thumbnailFileId,
-      mimeType: THUMBNAIL_MIME_TYPE,
-      userId: brandPersistedUserId(row.userId),
+    const organizationId = brandPersistedOrganizationId(row.organizationId);
+    const thumbnailKey = createUserFileThumbnailKey({
+      sourceKey: row.s3Key,
+      thumbnailFileId,
+      organizationId,
+      uploaderUserId: brandPersistedUserId(row.userId),
     });
-    let organizationId: SafeId<"organization"> | null = null;
-    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-      if (
-        !("organizationId" in row) ||
-        typeof row.organizationId !== "string"
-      ) {
-        return panic("Tracked chat thumbnail query omitted organization id");
-      }
-      organizationId = brandPersistedOrganizationId(row.organizationId);
+    if (thumbnailKey === null) {
+      console.warn(`  chat: skip ${row.id} (stored key owner mismatch)`);
+      continue;
     }
     prepared.push({
       rowId: row.id,

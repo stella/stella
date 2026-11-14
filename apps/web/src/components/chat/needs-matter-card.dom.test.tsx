@@ -1,29 +1,44 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const fetch = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(async () => Response.json({}), {
-    preconnect: globalThis.fetch.preconnect,
-  }),
-);
+let fetch: Mock<typeof globalThis.fetch>;
 const { act } = await import("react");
 const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { ChatMattersContext } = await import("./chat-matters-context");
 const { NeedsMatterCard } = await import("./needs-matter-card");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  fetch = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(async () => Response.json({}), {
+      preconnect: globalThis.fetch.preconnect,
+    }),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients) {
     client.clear();
@@ -67,7 +82,7 @@ const mountPicker = (
   const Picker = () => {
     const query = useQuery({ queryKey, queryFn });
     const value = {
-      createDocumentMattersView: useQueryView(query),
+      createDocumentMattersView: queryView(query),
     };
     return (
       <ChatMattersContext value={value}>
@@ -97,7 +112,7 @@ test("failed matter reads show retry instead of the empty matter message, then r
   });
   expect(view.getByText(messages.common.loading)).toBeDefined();
   await act(async () => pending.reject(new Error("matter read failed")));
-  await waitFor(() => expect(view.queryByRole("alert")).not.toBeNull());
+  await waitFor(() => expect(view.queryByRole("alert") === null).toBe(false));
   expect(view.queryByText(messages.inspector.matterPicker.empty)).toBeNull();
   fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
   await waitFor(() =>
@@ -112,7 +127,7 @@ test("failed matter refetches keep cached choices and a retry notice", async () 
   const view = mountPicker(async () => pending.promise, [matter]);
   expect(view.getByRole("button", { name: matter.name })).toBeDefined();
   await act(async () => pending.reject(new Error("matter refetch failed")));
-  await waitFor(() => expect(view.queryByRole("alert")).not.toBeNull());
+  await waitFor(() => expect(view.queryByRole("alert") === null).toBe(false));
   expect(view.getByRole("button", { name: matter.name })).toBeDefined();
   expect(
     view.getByRole("button", { name: messages.common.retry }),
@@ -124,8 +139,8 @@ test("a successful zero-matter read shows the empty matter message", async () =>
   const view = mountPicker(async () => []);
   await waitFor(() =>
     expect(
-      view.queryByText(messages.inspector.matterPicker.empty),
-    ).not.toBeNull(),
+      view.queryByText(messages.inspector.matterPicker.empty) === null,
+    ).toBe(false),
   );
   expect(view.queryByRole("alert")).toBeNull();
 });
@@ -137,7 +152,7 @@ test("a failed refetch of a cached empty matter list still shows retry", async (
   await act(async () =>
     pending.reject(new Error("empty matter refetch failed")),
   );
-  await waitFor(() => expect(view.queryByRole("alert")).not.toBeNull());
+  await waitFor(() => expect(view.queryByRole("alert") === null).toBe(false));
   expect(view.queryByText(messages.inspector.matterPicker.empty)).toBeNull();
   expect(
     view.getByRole("button", { name: messages.common.retry }),

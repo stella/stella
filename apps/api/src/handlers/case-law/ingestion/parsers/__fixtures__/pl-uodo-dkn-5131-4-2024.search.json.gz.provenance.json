@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "89d4a3b1c2966e9afd4548fcd8ae9add2b416a6a1c5ff4a75afcba3a7eb069d8",
+  "sourceUrl": "https://orzeczenia.uodo.gov.pl/api/documents/events/PublicDocument-20250117-000000-000-22665f04117c4148a5858bee40cd1f2e/search.json",
+  "capturedAt": "2026-10-25T20:00:54Z",
+  "note": "gzip -n of the portal's own text rendition of the same body"
+}

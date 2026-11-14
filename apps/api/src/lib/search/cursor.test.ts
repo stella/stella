@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { decodeCursor, encodeCursor } from "./cursor";
 
@@ -16,9 +16,9 @@ describe("search cursor encoding", () => {
   });
 
   test("rejects malformed cursors", () => {
-    const malformed = Buffer.from("not-a-number:ent_123").toString("base64");
-    const missingId = Buffer.from("0.5:").toString("base64");
-    const infiniteScore = Buffer.from("Infinity:ent_123").toString("base64");
+    const malformed = Buffer.from("not-a-number:ent_123").toBase64();
+    const missingId = Buffer.from("0.5:").toBase64();
+    const infiniteScore = Buffer.from("Infinity:ent_123").toBase64();
 
     expect(decodeCursor("not base64")).toBeNull();
     expect(decodeCursor(malformed)).toBeNull();
@@ -35,16 +35,18 @@ describe("search cursor encoding — properties", () => {
     .filter((n) => !Object.is(n, -0));
 
   test("encode → decode round-trips finite score + id pairs", () => {
-    fc.assert(
+    assertProperty(
+      "encode → decode round-trips finite score + id pairs",
       fc.property(arbScore, arbId, (score, id) => {
         expect(decodeCursor(encodeCursor(score, id))).toEqual({ score, id });
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("decode is total — never throws on arbitrary strings", () => {
-    fc.assert(
+    assertProperty(
+      "decode is total — never throws on arbitrary strings",
       fc.property(fc.string(), (input) => {
         const result = decodeCursor(input);
         const ok =
@@ -54,7 +56,7 @@ describe("search cursor encoding — properties", () => {
             result.id.length > 0);
         expect(ok).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

@@ -14,9 +14,9 @@ import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-rankin
 import {
   CORPUS_CURSOR_GROUP_TOKEN_CHARS,
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
+  type CorpusSearchCursor,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
-  type CorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import { CORPUS_INDEX_GENERATION_MAX_LENGTH } from "@/api/lib/legal-search/index-naming";
@@ -26,6 +26,11 @@ import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
+import { encodeCourtCursor } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import {
@@ -33,15 +38,11 @@ import {
   readerVersion,
 } from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
-import {
-  isProvisionTextCursor,
-  windowProvisionText,
-} from "@/api/mcp/provision-text-window";
+import { cursorInput } from "@/api/mcp/input-schemas";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
-import { cursorInput } from "@/api/mcp/tool-utils";
 
 const UUID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const TIMESTAMP = "9999-12-31T23:59:59.999999Z";
@@ -116,7 +117,7 @@ const readerCursor = encodeReaderCursor({
 // These use the same encoders as the handlers: tuple shapes come from the
 // owning cursorForItem call, while nested envelopes pass through their codec.
 // A registry addition has no fixture by default and fails the census below.
-const provisionCursorWindow = windowProvisionText({
+const provisionCursorWindow = windowBoundText({
   limit: 1,
   subject: JSON.stringify([
     "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
@@ -144,6 +145,7 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "law.fetch.nextCursor": offsetCursor,
   "advanced.list_matters.nextCursor": idCursor,
   "advanced.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+    tier: 2,
     score: SCORE,
     id: `case-law:${UUID}`,
     seen: GLOBAL_SEARCH_RESULT_LIMIT - 1,
@@ -156,9 +158,15 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   ),
   "advanced.read_content_across_matters.nextCursor": offsetCursor,
   "advanced.read_case_law_citations.nextCursor": idCursor,
+  // The longest stored court name, every character escaped by JSON.
+  "advanced.list_case_law_courts.nextCursor": encodeCourtCursor(
+    "\u0001".repeat(512),
+  ),
   "advanced.read_case_law_decision_blocks.content.nextCursor": readerCursor,
   "advanced.search_legislation.nextCursor": statuteCursor,
   "advanced.read_statute.nextCursor": offsetCursor,
+  "advanced.search_guidance.nextCursor": offsetCursor,
+  "advanced.read_guidance.nextCursor": offsetCursor,
   "advanced.read_provision_history.nextCursor": encodePaginationCursor([
     DATE,
     UUID,
@@ -325,7 +333,7 @@ describe("every registered pagination envelope fits its own next-call input", ()
               v.object({
                 text_cursor: cursorInput({
                   description: "Provision fixture cursor",
-                  issuedBy: isProvisionTextCursor,
+                  issuedBy: isBoundTextCursor,
                   maxLength,
                 }),
               }),

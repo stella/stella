@@ -1,5 +1,14 @@
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, GlobeIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -33,45 +42,49 @@ type WebSearchSourcesProps = {
  */
 export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
   const t = useTranslations();
+  const [open, setOpen] = useState(false);
   const answers = collectAnswers(parts);
   if (answers.length === 0) {
     return null;
   }
   return (
-    <details className="bg-muted/30 group/web-summary mt-3 rounded-md border">
-      <summary
-        className={cn(
-          "flex cursor-pointer list-none items-center gap-1.5",
-          "px-2.5 py-1.5 text-xs",
-          "[&::-webkit-details-marker]:hidden",
-          "hover:bg-muted/40 rounded-md",
-        )}
-      >
-        <ChevronRightIcon
-          className={cn(
-            "text-muted-foreground size-3.5 shrink-0 transition-transform",
-            "group-open/web-summary:rotate-90",
-          )}
-        />
-        <GlobeIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <span className="text-muted-foreground text-2xs font-medium tracking-wide uppercase">
-          {t("chat.webSearch.answer")}
-        </span>
-      </summary>
-      <div className="space-y-1 px-2.5 pb-2.5">
-        {answers.map((answer, index) => (
-          <p
-            className="text-foreground text-sm leading-relaxed whitespace-pre-line"
-            // oxlint-disable-next-line react/no-array-index-key -- answers is a read-only, immutable tool-result array from a persisted chat message; never edited/reordered by the user.
-            key={`${index}-${answer.slice(0, 16)}`}
-          >
-            {answer}
-          </p>
-        ))}
-        <p className="text-muted-foreground text-2xs italic">
-          {t("chat.webSearch.answerDisclaimer")}
-        </p>
-      </div>
-    </details>
+    <div className="bg-muted/30 mt-3 rounded-md border">
+      <Collapsible onOpenChange={setOpen} open={open}>
+        <CollapsibleTrigger
+          render={<Button className="flex w-full" variant="plain" />}
+        >
+          <span className="hover:bg-muted/40 flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs">
+            <DirectionalIcon
+              className={cn(
+                "text-muted-foreground size-3.5 shrink-0 transition-transform",
+                open && "rotate-90",
+              )}
+              flip={!open}
+              icon={ChevronRightIcon}
+            />
+            <GlobeIcon className="text-muted-foreground size-3.5 shrink-0" />
+            <span className="text-muted-foreground text-2xs font-medium tracking-wide uppercase">
+              {t("chat.webSearch.answer")}
+            </span>
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <div className="space-y-1 px-2.5 pb-2.5">
+            {answers.map((answer, index) => (
+              <p
+                className="text-foreground text-sm leading-relaxed whitespace-pre-line"
+                // oxlint-disable-next-line react/no-array-index-key -- answers is a read-only, immutable tool-result array from a persisted chat message; never edited/reordered by the user.
+                key={`${index}-${answer.slice(0, 16)}`}
+              >
+                {answer}
+              </p>
+            ))}
+            <p className="text-muted-foreground text-2xs italic">
+              {t("chat.webSearch.answerDisclaimer")}
+            </p>
+          </div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };

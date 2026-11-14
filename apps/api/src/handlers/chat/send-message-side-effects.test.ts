@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { envBase } from "@/api/env-base";
@@ -36,6 +36,7 @@ const selectNoChatMessages = () => ({
 const threadData: ChatThreadState["data"] = {
   chatModel: null,
   chatReasoningEffort: null,
+  chatLocalRunTarget: null,
   contextMatterIds: [],
   dataWorkspaceIds: [workspaceId],
   historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,

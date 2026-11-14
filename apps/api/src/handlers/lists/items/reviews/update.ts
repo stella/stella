@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   LEGAL_LIST_REVIEW_DECISIONS,
@@ -12,16 +12,16 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { includes } from "@/api/lib/type-guards";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
-  decision: t.String({ minLength: 1, maxLength: 32 }),
-  note: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
+  decision: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+  note: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
 });
 const config = {
   contract: "patch",

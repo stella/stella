@@ -9,6 +9,7 @@ import type {
   SEARCH_CASE_LAW_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "../apps/api/src/lib/chat/projections";
+import { DAY_SECONDS } from "./check-npm-publish-lag";
 
 type FoundDecision = Extract<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>["items"][number],
@@ -72,7 +73,10 @@ type Scenario = {
     | "sse"
     | "auth-error"
     | "invalid-hit"
-    | "absent-decision";
+    | "absent-decision"
+    | "stale-coverage";
+  promotionVersion?: string;
+  promotionAgeSeconds?: number;
   cliVersion?: string;
   cliExit?: string;
   cliDiagnostic?: string;
@@ -93,6 +97,11 @@ type Scenario = {
   firstAssetStatus?: number;
   session?: "required" | "notification-error";
   redirect?: "once" | "chain";
+  searchSlot?: string;
+  probeSlot?: string;
+  probeError?: string;
+  probeRunning?: "once" | "always";
+  probeRunSeconds?: string;
 };
 
 type WorkflowRun = {
@@ -102,8 +111,29 @@ type WorkflowRun = {
   display_title?: string;
 };
 
+const coverageFixture = (status: string) => ({
+  asOf: "2026-11-01T10:00:00.000Z",
+  freshness: { status, ageSeconds: 60 },
+  countries: [
+    {
+      country: "CZE",
+      availability: "searchable",
+      sources: [{ adapterKey: "fixture" }],
+    },
+    { country: "USA", availability: "in-preparation", sources: [] },
+  ],
+});
+
 type McpPayloadOptions = { name: string; rpc: Scenario["rpc"] };
 const mcpPayload = ({ name, rpc }: McpPayloadOptions) => {
+  if (name === "case_law_coverage") {
+    if (rpc === "empty") {
+      return { ...coverageFixture("current"), countries: [] };
+    }
+    return coverageFixture(
+      rpc === "stale-coverage" ? "refresh_pending" : "current",
+    );
+  }
   if (name !== "read_case_law_decision") {
     if (rpc === "empty") {
       return { results: [] };
@@ -126,6 +156,46 @@ const mcpPayload = ({ name, rpc }: McpPayloadOptions) => {
     return readFixture(undefined);
   }
   return readFixture(SENTINEL);
+};
+
+type ToolResultOptions = {
+  scenario: Scenario;
+  args: unknown;
+  payload: unknown;
+};
+const toolResult = ({ scenario, args, payload }: ToolResultOptions) => {
+  if (scenario.probeError !== undefined) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ error: { code: scenario.probeError } }),
+        },
+      ],
+    };
+  }
+  const continued =
+    typeof args === "object" && args !== null && "continuation_token" in args;
+  const running =
+    scenario.probeRunning === "always" ||
+    (scenario.probeRunning === "once" && !continued);
+  const wrongShape = scenario.rpc === "wrong-shape";
+  let text = JSON.stringify(payload);
+  if (wrongShape) {
+    text = JSON.stringify({ unrelated: SENTINEL });
+  }
+  if (running) {
+    text = JSON.stringify({
+      status: "running",
+      continuationToken: "fixture-continuation",
+      retryAfterMs: 1,
+    });
+  }
+  return {
+    isError: scenario.rpc === "tool-error",
+    content: [{ type: "text", text }],
+  };
 };
 
 type RedirectFixtureOptions = { pathname: string; mode: Scenario["redirect"] };
@@ -188,18 +258,27 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
   }
   if (pathname === "/desktop/release-workflow") {
     return Response.json({
-      workflow_runs: scenario.releaseWorkflowRuns ?? [
-        {
-          status: scenario.releaseWorkflowStatus ?? "completed",
-          conclusion: scenario.releaseWorkflowConclusion ?? "success",
-          created_at: "2026-10-09T09:00:00Z",
-        },
-      ],
+      workflow_runs: (
+        scenario.releaseWorkflowRuns ?? [
+          {
+            status: scenario.releaseWorkflowStatus ?? "completed",
+            conclusion: scenario.releaseWorkflowConclusion ?? "success",
+            created_at: "2026-10-09T09:00:00Z",
+          },
+        ]
+      ).map((run) => ({
+        ...run,
+        display_title: run.display_title ?? "Release Artifacts v10.0.0",
+      })),
     });
   }
-  // GitHub lists a workflow_run-triggered run under the default branch, so a
-  // branch-filtered query for the tag finds none of the desktop runs.
-  if (pathname === "/desktop/desktop-workflow-by-branch") {
+  // GitHub lists a dispatched release run and every workflow_run-triggered
+  // run under the default branch, so a branch-filtered query for the tag
+  // finds none of them.
+  if (
+    pathname === "/desktop/release-workflow-by-branch" ||
+    pathname === "/desktop/desktop-workflow-by-branch"
+  ) {
     return Response.json({ workflow_runs: [] });
   }
   if (pathname === "/desktop/desktop-workflow") {
@@ -214,7 +293,7 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
         ]
       ).map((run) => ({
         ...run,
-        display_title: run.display_title ?? "Release Desktop App v10.0.0",
+        display_title: run.display_title ?? "Desktop Release Artifacts v10.0.0",
       })),
     });
   }
@@ -228,7 +307,7 @@ const assetStatusFor = (scenario: Scenario, attempt: number | undefined) =>
 
 type RunOptions = {
   scenario?: Scenario;
-  mode?: "web" | "cli" | "desktop";
+  mode?: "web" | "cli" | "desktop" | "search-probe";
   token?: string;
 };
 const run = async ({
@@ -239,12 +318,29 @@ const run = async ({
   const work = await mkdtemp(path.join(tmpdir(), "journey-test-"));
   const counts = new Map<string, number>();
   const calls: { name: string; args: unknown }[] = [];
+  const searchUrls: string[] = [];
   let initialized = false;
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
-      const pathname = new URL(req.url).pathname;
+      const url = new URL(req.url);
+      const { pathname } = url;
       counts.set(pathname, (counts.get(pathname) ?? 0) + 1);
+      if (pathname === "/law/cases") {
+        searchUrls.push(`${pathname}${url.search}`);
+      }
+      if (pathname === "/releases") {
+        return Response.json([
+          {
+            tag_name: "v1.0.0",
+            draft: false,
+            prerelease: false,
+            published_at: new Date(
+              Date.now() - (scenario.promotionAgeSeconds ?? 3600) * 1000,
+            ).toISOString(),
+          },
+        ]);
+      }
       const desktop = desktopFixture({ pathname, scenario });
       if (desktop !== null) {
         return desktop;
@@ -346,23 +442,14 @@ const run = async ({
           return new Response(null, { status: 400 });
         }
         calls.push({ name: body.params.name, args: body.params.arguments });
-        const payload = mcpPayload({
-          name: body.params.name,
-          rpc: scenario.rpc,
+        result = toolResult({
+          scenario,
+          args: body.params.arguments,
+          payload: mcpPayload({
+            name: body.params.name,
+            rpc: scenario.rpc,
+          }),
         });
-        result = {
-          isError: scenario.rpc === "tool-error",
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                scenario.rpc === "wrong-shape"
-                  ? { unrelated: SENTINEL }
-                  : payload,
-              ),
-            },
-          ],
-        };
       }
       const envelope = {
         jsonrpc: "2.0",
@@ -386,7 +473,7 @@ const run = async ({
     await Bun.write(path.join(work, "cli-calls"), "");
     await Bun.write(
       path.join(work, "npm"),
-      `#!/usr/bin/env bash\nif [[ -n "\${MCP_CANARY_TOKEN:-}" || -n "\${STELLA_API_KEY:-}" || " $* " != *" --ignore-scripts "* ]]; then exit 1; fi\necho clean > "$INSTALL_CHECK"\necho '${SENTINEL}' >&2\nif [[ "$INSTALL_EXIT" != 0 ]]; then exit "$INSTALL_EXIT"; fi\nwhile [[ "$1" != --prefix ]]; do shift; done\nmkdir -p "$2/bin"\ncp "$CLI_FIXTURE" "$2/bin/stella"\n`,
+      `#!/usr/bin/env bash\nif [[ -n "\${MCP_CANARY_TOKEN:-}" || -n "\${STELLA_API_KEY:-}" || " $* " != *" --ignore-scripts "* ]]; then exit 1; fi\necho clean > "$INSTALL_CHECK"\necho 'npm fixture failure' >&2\nif [[ "$INSTALL_EXIT" != 0 ]]; then exit "$INSTALL_EXIT"; fi\nwhile [[ "$1" != --prefix ]]; do shift; done\nmkdir -p "$2/bin"\ncp "$CLI_FIXTURE" "$2/bin/stella"\n`,
     );
     await Bun.write(
       path.join(work, "stella"),
@@ -394,7 +481,7 @@ const run = async ({
     );
     await Bun.write(
       path.join(work, "git"),
-      `#!/usr/bin/env bash\nif [[ "$*" != "tag --list @stll/cli@*" ]]; then exit 1; fi\nprintf '%s\\n' '@stll/cli@2.0.0' '@stll/cli@10.0.0' '@stll/cli@11.0.0-beta.1'\n`,
+      `#!/usr/bin/env bash\nif [[ "$*" == "show v1.0.0:packages/cli/package.json" ]]; then printf '{"name":"@stll/cli","version":"%s"}\\n' "$PROMOTION_VERSION"; else exit 1; fi\n`,
     );
     await Bun.write(
       path.join(work, "gh"),
@@ -405,6 +492,7 @@ case "$*" in
   *releases/tags*) route=release ;;
   *release-desktop.yml*branch=*) route=desktop-workflow-by-branch ;;
   *release-desktop.yml*) route=desktop-workflow ;;
+  *release.yml*branch=*) route=release-workflow-by-branch ;;
   *release.yml*) route=release-workflow ;;
   *) route=latest ;;
 esac
@@ -431,6 +519,7 @@ rm -f "$response"
           ? "scripts/check-desktop-release-policy.sh"
           : "scripts/check-journeys.sh",
         ...(mode === "cli" ? ["--cli"] : []),
+        ...(mode === "search-probe" ? ["--search-probe"] : []),
       ],
       {
         cwd: ROOT,
@@ -442,10 +531,16 @@ rm -f "$response"
           JOURNEY_MCP_URL: `${server.url.toString()}mcp`,
           JOURNEY_CLI_URL: server.url.toString().replace(/\/$/u, ""),
           JOURNEY_RETRY_PAUSE_SECONDS: "0",
+          JOURNEY_SEARCH_SLOT: scenario.searchSlot ?? "0",
+          JOURNEY_PROBE_SLOT: scenario.probeSlot ?? "0",
+          JOURNEY_PROBE_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
+          JOURNEY_PROBE_RUN_SECONDS: scenario.probeRunSeconds ?? "240",
           STELLA_DESKTOP_RETRY_PAUSE_SECONDS: "0",
           STELLA_DESKTOP_NOW_EPOCH: "1791536400",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
           CLI_FIXTURE: path.join(work, "stella"),
+          JOURNEY_RELEASES_API_URL: `${server.url.toString()}releases`,
+          PROMOTION_VERSION: scenario.promotionVersion ?? "10.0.0",
           CLI_VERSION: scenario.cliVersion ?? "10.0.0",
           CLI_EXIT: scenario.cliExit ?? "0",
           CLI_DIAGNOSTIC: scenario.cliDiagnostic ?? "",
@@ -471,9 +566,26 @@ rm -f "$response"
     expect(stdout + stderr).not.toContain(token || "absent-token");
     if (mode !== "desktop") {
       expect(stderr).toBe("");
-      for (const line of stdout.trim().split("\n")) {
+      const lines = stdout.trim().split("\n");
+      const failures = lines.filter((line) =>
+        /^journey (cli_|mcp_)\S+ failed /u.test(line),
+      );
+      for (const failure of failures) {
+        const name = failure.split(" ").at(1);
+        expect(name).toBeDefined();
+        expect(
+          lines.filter((line) =>
+            line.startsWith(`journey-detail ${name ?? ""} `),
+          ),
+        ).toHaveLength(1);
+      }
+      for (const line of lines.filter(
+        (entry) =>
+          !entry.startsWith("journey-detail ") &&
+          !entry.startsWith("journey-timing "),
+      )) {
         expect(line).toMatch(
-          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|version_mismatch|registry_rejected|no_credential|auth_rejected|ok)$/u,
+          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|stale_result|contract_error|publish_lagging|pending_release|promotion_unavailable|registry_rejected|no_credential|auth_rejected|network_error|run_budget|ok)$/u,
         );
       }
     }
@@ -483,7 +595,16 @@ rm -f "$response"
     const installClean = await Bun.file(
       path.join(work, "install-check"),
     ).exists();
-    return { stdout, stderr, exit, counts, calls, cliCalls, installClean };
+    return {
+      stdout,
+      stderr,
+      exit,
+      counts,
+      calls,
+      searchUrls,
+      cliCalls,
+      installClean,
+    };
   } finally {
     await server.stop(true);
     await rm(work, { recursive: true, force: true });
@@ -494,11 +615,12 @@ describe("scheduled read journeys", () => {
   test("reports each public and authenticated probe", async () => {
     const result = await run();
     expect(result.exit).toBe(0);
-    expect(result.stdout.match(/ passed /gu)).toHaveLength(7);
+    expect(result.stdout.match(/ passed /gu)).toHaveLength(8);
     expect(result.calls.map(({ name }) => name)).toEqual([
       "search_case_law",
       "read_case_law_decision",
       "search_legislation",
+      "case_law_coverage",
     ]);
     expect(result.calls.at(0)?.args).toEqual({
       queries: ["smlouva"],
@@ -512,12 +634,12 @@ describe("scheduled read journeys", () => {
     });
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBe(7);
+    ).toBe(8);
   });
   test("names all skips without credentials", async () => {
     const result = await run({ token: "" });
     expect(result.exit).toBe(0);
-    expect(result.stdout.match(/ skipped no_credential/gu)).toHaveLength(4);
+    expect(result.stdout.match(/ skipped no_credential/gu)).toHaveLength(5);
     expect(result.counts.get("/mcp")).toBeUndefined();
   });
   test("retries a request once and bounds the request budget", async () => {
@@ -530,20 +652,33 @@ describe("scheduled read journeys", () => {
     expect(result.stdout).not.toContain("web_search passed ok");
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBe(10);
+    ).toBe(11);
+  });
+  test("keeps every retry within the budget of a session run", async () => {
+    const result = await run({
+      scenario: { firstStatus: 503, session: "required" },
+    });
+    expect(result.exit).toBe(0);
+    expect(
+      result.stdout.match(/passed_after_retry http_status/gu),
+    ).toHaveLength(3);
+    expect(result.stdout).toContain("mcp_coverage passed ok");
+    expect(
+      [...result.counts.values()].reduce((sum, value) => sum + value, 0),
+    ).toBe(12);
   });
   test("counts a bounded public redirect", async () => {
     const result = await run({ scenario: { redirect: "once" } });
     expect(result.exit).toBe(0);
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBe(8);
+    ).toBe(9);
     const chain = await run({ scenario: { redirect: "chain" } });
     expect(chain.exit).toBe(1);
     expect(chain.stdout).toContain("web_statutes failed http_status");
     expect(
       [...chain.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBeLessThanOrEqual(10);
+    ).toBeLessThanOrEqual(12);
   });
   test("retains the first failure reason after recovery", async () => {
     const result = await run({ scenario: { firstHtml: "<h1>Fixture</h1>" } });
@@ -589,14 +724,14 @@ describe("scheduled read journeys", () => {
       expect(result.stdout).toContain(`failed ${reason}`);
       expect(
         [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-      ).toBeLessThanOrEqual(10);
+      ).toBeLessThanOrEqual(12);
     });
   }
   test("negotiates a session and initializes it before tools", async () => {
     const result = await run({ scenario: { session: "required" } });
     expect(result.exit).toBe(0);
     expect(result.stdout).not.toContain("fixture-session");
-    expect(result.counts.get("/mcp")).toBe(5);
+    expect(result.counts.get("/mcp")).toBe(6);
   });
   test("reports initialization notification failures", async () => {
     const result = await run({ scenario: { session: "notification-error" } });
@@ -604,12 +739,35 @@ describe("scheduled read journeys", () => {
     expect(result.stdout).toContain("mcp_initialize failed http_status");
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBeLessThanOrEqual(10);
+    ).toBeLessThanOrEqual(12);
+  });
+  test("fails coverage whose refreshes stopped landing", async () => {
+    const result = await run({ scenario: { rpc: "stale-coverage" } });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("journey mcp_coverage failed stale_result");
+    expect(result.stdout).toContain("journey mcp_search passed ok");
+  });
+  test("rotates the searched country by slot on the web and MCP", async () => {
+    const result = await run({
+      scenario: {
+        searchSlot: "8",
+        html: '<h1>Fixture</h1><a href="/law/hun/cases/fixture">case</a><a href="/law/cze/statutes/fixture">statute</a><article>text</article>',
+      },
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls.at(0)?.args).toEqual({
+      queries: ["szerződés"],
+      country: "HUN",
+      limit: 1,
+    });
+    expect(result.searchUrls).toEqual([
+      "/law/cases?q=szerz%C5%91d%C3%A9s&country=hun",
+    ]);
   });
   test("accepts SSE envelopes", async () => {
     expect((await run({ scenario: { rpc: "sse" } })).exit).toBe(0);
   });
-  test("uses the newest stable CLI publication tag", async () => {
+  test("runs journeys when the installed CLI meets the promoted target", async () => {
     const result = await run({ mode: "cli" });
     expect(result.exit).toBe(0);
     expect(result.stdout.match(/ passed ok/gu)).toHaveLength(3);
@@ -624,14 +782,65 @@ describe("scheduled read journeys", () => {
       ),
     ).toBe(true);
   });
-  test("classifies CLI version disagreement", async () => {
+  test("fails all CLI journeys after the publication deadline", async () => {
     const result = await run({
-      scenario: { cliVersion: "2.0.0" },
+      // A full grace period past the deadline: the checker reads the clock
+      // when it starts and the fake release is stamped later, so a margin of
+      // seconds would depend on how slowly the runner starts the checker.
+      scenario: { cliVersion: "2.0.0", promotionAgeSeconds: 2 * DAY_SECONDS },
       mode: "cli",
     });
     expect(result.exit).toBe(1);
-    expect(result.stdout).toContain("cli_version failed version_mismatch");
+    expect(result.stdout).toContain("cli_version failed publish_lagging");
     expect(result.counts.get("/cli/search")).toBeUndefined();
+  });
+  test("skips all CLI journeys during promotion grace with target and deadline", async () => {
+    const result = await run({
+      mode: "cli",
+      scenario: { cliVersion: "2.0.0" },
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout.match(/skipped pending_release/gu)).toHaveLength(3);
+    expect(
+      result.stdout.match(/target 10\.0\.0; publication deadline /gu),
+    ).toHaveLength(3);
+    expect(result.counts.get("/cli/search")).toBeUndefined();
+  });
+  test("redacts credentials before bounding the first diagnostic line", async () => {
+    const token = "secret.[+](literal)";
+    const result = await run({
+      mode: "cli",
+      token,
+      scenario: {
+        cliExit: "1",
+        cliDiagnostic: `failure ${token} Bearer unknown-bearer api_key=unknown-key token="unknown-token" ${"x".repeat(500)}\nsecond-private-line`,
+      },
+    });
+    expect(result.stdout).toContain(
+      "journey-detail cli_search failure [REDACTED]",
+    );
+    for (const secret of [
+      token,
+      "unknown-bearer",
+      "unknown-key",
+      "unknown-token",
+      "second-private-line",
+    ]) {
+      expect(result.stdout).not.toContain(secret);
+    }
+    for (const line of result.stdout
+      .split("\n")
+      .filter((entry) => entry.startsWith("journey-detail "))) {
+      expect(line.length).toBeLessThanOrEqual(440);
+    }
+  });
+  test("identifies the failing payload check for CLI and MCP", async () => {
+    for (const mode of ["cli", "web"] as const) {
+      const result = await run({ mode, scenario: { rpc: "wrong-shape" } });
+      expect(result.stdout).toContain(
+        `journey-detail ${mode === "cli" ? "cli" : "mcp"}_search payload shape check: .results`,
+      );
+    }
   });
   test("contains install and command diagnostics", async () => {
     for (const scenario of [{ installExit: "1" }, { cliExit: "1" }]) {
@@ -768,7 +977,7 @@ describe("scheduled read journeys", () => {
             status: "in_progress",
             conclusion: null,
             created_at: "2026-10-09T09:00:00Z",
-            display_title: "Release Desktop App v2.0.0",
+            display_title: "Desktop Release Artifacts v2.0.0",
           },
         ],
       },
@@ -777,6 +986,53 @@ describe("scheduled read journeys", () => {
     expect(result.exit).toBe(1);
     expect(result.stderr).toContain(
       "Desktop latest must match the newest stable application tag",
+    );
+  });
+  test("finds a dispatched release run for the tag by its run name", async () => {
+    const releaseRun = (display_title: string): WorkflowRun => ({
+      status: "in_progress",
+      conclusion: null,
+      created_at: "2026-10-09T09:00:00Z",
+      display_title,
+    });
+    const publishing = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [releaseRun("Release Artifacts v10.0.0")],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(publishing.exit).toBe(0);
+    expect(publishing.stdout).toBe("desktop-release-policy: publishing\n");
+
+    const otherTag = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [releaseRun("Release Artifacts v2.0.0")],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(otherTag.exit).toBe(1);
+    expect(otherTag.stderr).toContain(
+      "Desktop latest must match the newest stable application tag",
+    );
+  });
+  test("fails on a failed release run for the tag", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        releaseWorkflowConclusion: "failure",
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(
+      "Desktop release workflow failed for the newest stable application tag",
     );
   });
   test("rejects an old newest release that is not latest", async () => {
@@ -925,6 +1181,172 @@ describe("scheduled read journeys", () => {
   });
 });
 
+describe("case-law search probe", () => {
+  type ProbeArgs = { queries: string[]; country: string; courts?: string[] };
+  const probeArgs = (args: unknown) => {
+    if (
+      typeof args !== "object" ||
+      args === null ||
+      !("queries" in args) ||
+      !Array.isArray(args.queries) ||
+      !("country" in args)
+    ) {
+      throw new TypeError("not probe arguments");
+    }
+    return {
+      queries: args.queries.map(String),
+      country: String(args.country),
+      ...("courts" in args && Array.isArray(args.courts)
+        ? { courts: args.courts.map(String) }
+        : {}),
+    } satisfies ProbeArgs;
+  };
+
+  test("searches every country and two apex courts once, without retries", async () => {
+    const result = await run({ mode: "search-probe" });
+    expect(result.exit).toBe(0);
+    expect(result.calls.map(({ name }) => name)).toEqual(
+      Array.from({ length: 7 }, () => "search_case_law"),
+    );
+    const args = result.calls.map(({ args: call }) => probeArgs(call));
+    expect(args.map(({ country }) => country)).toEqual([
+      "CZE",
+      "SVK",
+      "POL",
+      "HUN",
+      "EU",
+      "CZE",
+      "POL",
+    ]);
+    expect(args.slice(0, 5).every(({ courts }) => courts === undefined)).toBe(
+      true,
+    );
+    expect(args.at(5)?.courts).toEqual(["NS"]);
+    expect(args.at(6)?.courts).toEqual(["SN"]);
+    expect(result.stdout.match(/ passed ok/gu)).toHaveLength(7);
+    expect(result.stdout).not.toContain("passed_after_retry");
+  });
+
+  test("asks something new in every slot of a day", async () => {
+    const queries = new Set<string>();
+    for (const probeSlot of ["0", "1", "20", "287", "288"]) {
+      const result = await run({
+        mode: "search-probe",
+        scenario: { probeSlot },
+      });
+      expect(result.exit).toBe(0);
+      const first = result.calls.at(0);
+      expect(first).toBeDefined();
+      queries.add(probeArgs(first?.args).queries.join(" "));
+    }
+    expect(queries.size).toBe(5);
+  });
+
+  test("fails without a retry when the first hit times out", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeError: "public_read_timeout" },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(7);
+    expect(result.stdout).toContain("journey mcp_probe_cze failed timeout");
+    expect(result.stdout).toContain("tool error public_read_timeout");
+  });
+
+  test("counts the timeout family and tells other tool errors apart", async () => {
+    for (const code of [
+      "upstream_unavailable",
+      "search_index_unavailable",
+      "public_read_unfinished",
+      "continuation_expired",
+    ]) {
+      const result = await run({
+        mode: "search-probe",
+        scenario: { probeError: code },
+      });
+      expect(result.exit).toBe(1);
+      expect(result.stdout).toContain("journey mcp_probe_pol failed timeout");
+    }
+    const other = await run({
+      mode: "search-probe",
+      scenario: { probeError: "internal_error" },
+    });
+    expect(other.exit).toBe(1);
+    expect(other.stdout).toContain(
+      "journey mcp_probe_pol failed contract_error",
+    );
+  });
+
+  test("follows a continuation once with the same arguments", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunning: "once" },
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls).toHaveLength(14);
+    expect(result.calls.at(1)?.args).toEqual({
+      ...probeArgs(result.calls.at(0)?.args),
+      limit: 3,
+      continuation_token: "fixture-continuation",
+    });
+  });
+
+  test("treats a search still running after its continuations as a timeout", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunning: "always" },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("journey mcp_probe_cze failed timeout");
+    expect(result.stdout).toContain("still running after 3 continuations");
+    expect(
+      [...result.counts.values()].reduce((sum, value) => sum + value, 0),
+    ).toBeLessThanOrEqual(30);
+  });
+
+  test("fails on a client-side timeout", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { delay: 500 },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("failed timeout");
+  });
+
+  test("fails without credentials and asks nothing", async () => {
+    const result = await run({ mode: "search-probe", token: "" });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("journey mcp_probe failed no_credential");
+    expect(result.counts.get("/mcp")).toBeUndefined();
+  });
+
+  test("fails on a search the run budget skipped", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunSeconds: "-1" },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(0);
+    expect(result.stdout.match(/ failed run_budget/gu)).toHaveLength(7);
+  });
+
+  test("follows no continuation once the run budget is spent", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunning: "always", probeRunSeconds: "0" },
+    });
+    expect(result.exit).toBe(1);
+    expect(
+      result.calls.every(
+        ({ args }) =>
+          typeof args === "object" &&
+          args !== null &&
+          !("continuation_token" in args),
+      ),
+    ).toBe(true);
+  });
+});
+
 test("schedules bounded journeys and routes alerts", async () => {
   const workflow = await Bun.file(
     new URL("../.github/workflows/journey-canary.yml", import.meta.url),
@@ -938,7 +1360,7 @@ test("schedules bounded journeys and routes alerts", async () => {
   expect(workflow).toContain("cancel-in-progress: false");
   expect(workflow).not.toMatch(/matrix:|bun ci|bun install/u);
   expect(workflow).toContain("persist-credentials: false");
-  expect(workflow).toContain("no-cache: true");
+  expect(workflow).not.toContain("no-cache: true");
   expect(workflow).toContain("&& '0' || '1'");
   expect(workflow).toContain("bun scripts/check-published-versions.ts");
   expect(workflow).toContain("bash scripts/check-journeys.sh --cli");
@@ -953,4 +1375,51 @@ test("schedules bounded journeys and routes alerts", async () => {
   ).text();
   expect(alerts).toContain("- Journey canary");
   expect(alerts).toContain('".github/workflows/journey-canary.yml"');
+  expect(alerts).toContain("- Case-law search probe");
+  expect(alerts).toContain('".github/workflows/case-law-search-probe.yml"');
+  const probe = await Bun.file(
+    new URL("../.github/workflows/case-law-search-probe.yml", import.meta.url),
+  ).text();
+  expect(probe).toContain("vars.CASE_LAW_SEARCH_PROBE_ENABLED == 'true'");
+  expect(probe).toContain("persist-credentials: false");
+  expect(probe).toContain(
+    "bash scripts/retry.sh bash scripts/check-journeys.sh --search-probe",
+  );
+  expect(probe).toContain('RETRY_PASSTHROUGH_EXIT_CODES: "1"');
+  for (const action of probe.matchAll(/uses: (\S+)/gu)) {
+    expect(action[1]).toMatch(/@[0-9a-f]{40}$/u);
+  }
+});
+
+test("redacts known credential values literally and strips terminal controls", async () => {
+  const secrets = {
+    JOURNEY_DETAIL_CREDENTIAL: "canary.[+](secret)",
+    STELLA_API_KEY: "api.[+](secret)",
+    GITHUB_TOKEN: "github.[+](secret)",
+    GH_TOKEN: "gh.[+](secret)",
+    JOURNEY_DETAIL_SESSION: "session.[+](secret)",
+  };
+  const child = Bun.spawn(["jq", "-Rrs", "-f", "scripts/journey-detail.jq"], {
+    cwd: ROOT,
+    env: { ...process.env, ...secrets },
+    stdin: new TextEncoder().encode(
+      `\u001b[31m${Object.values(secrets).join(" ")}\r\nprivate second line`,
+    ),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [output, stderr, exit] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  expect(exit).toBe(0);
+  expect(stderr).toBe("");
+  expect(output.match(/\[REDACTED\]/gu)).toHaveLength(5);
+  for (const secret of Object.values(secrets)) {
+    expect(output).not.toContain(secret);
+  }
+  expect(output).not.toContain("\u001b");
+  expect(output).not.toContain("\r");
+  expect(output).not.toContain("private second line");
 });

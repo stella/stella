@@ -32,6 +32,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import listRows from "@/api/handlers/entity-views/rows/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -110,8 +111,7 @@ type SeedSignalOptions = {
   /** A task proposal due that day, or none. */
   dueAt: string | null;
   proposes?:
-    | typeof SUGGESTION_KIND.CREATE_TASK
-    | typeof SUGGESTION_KIND.CREATE_DEADLINE;
+    typeof SUGGESTION_KIND.CREATE_TASK | typeof SUGGESTION_KIND.CREATE_DEADLINE;
 };
 
 const seedSignal = async ({
@@ -272,7 +272,7 @@ const readWindow = async ({
           : null,
       memberRole: sessionMemberRole(role),
       request: new Request("https://example.test/entity-views/query-window"),
-      route: "/test/entity-views/query-window",
+      route: "/v1/entity-views/query-window" satisfies ApiRoutePath,
       safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
       scopedDb: createScopedDb(testDb, workspaceIds, organizationId, userId),
       session: { activeOrganizationId: organizationId },

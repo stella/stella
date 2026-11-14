@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A reported total for a source whose publisher states none, summed from the
  * publisher's own listing.
@@ -34,18 +35,26 @@
  * take back out) and continues from there; the earlier slices are not listed
  * again.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
+
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { floorSliceWalk } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { listReconciliationSlice } from "@/api/handlers/case-law/ingestion/slice-listing";
+import {
+  listReconciliationSlice,
+  SLICE_LISTING_PROOF,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  replayWrite,
+  replayWriteOutcome,
+} from "@/api/lib/case-law/replay-write";
+import { lockCaseLawReplaySource } from "@/api/lib/db/aggregate-lock";
 import {
   AdapterFetchError,
   ConfigurationError,
@@ -76,7 +85,7 @@ const censusRangeFields = {
   fromSlice: slice,
   toSlice: slice,
   /** The instant the total is stated as of: the census's end. */
-  asOf: v.pipe(v.string(), v.isoTimestamp()),
+  asOf: apiDateTimeSchema,
   slicesCounted: nonNegativeInteger,
 };
 
@@ -372,7 +381,7 @@ type RecordedSlice = "advanced" | "completed" | "nothing-listed" | "superseded";
  * the value this call read, so a checkpoint another call moved in between
  * matches no row and nothing is written.
  */
-const recordSlice = async ({
+export const recordSlice = async ({
   adapterKey,
   asOf,
   next,
@@ -381,20 +390,30 @@ const recordSlice = async ({
   tx,
 }: RecordSliceOptions): Promise<RecordedSlice> => {
   // audit: skip — public case-law corpus bookkeeping, no workspace data
+  const where =
+    and(
+      eq(caseLawSources.id, sourceId),
+      sql`${caseLawSources.config} -> ${LISTING_CENSUS_CONFIG_KEY}::text IS NOT DISTINCT FROM ${observed === null ? null : JSON.stringify(observed)}::text::jsonb`,
+    ) ?? panic("Listing checkpoint writes require a source predicate");
+  const matched = await lockCaseLawReplaySource({ tx, where });
+  const write = replayWrite(caseLawSources, {
+    config: sql`jsonb_set(coalesce(${caseLawSources.config}, '{}'::jsonb), ${`{${LISTING_CENSUS_CONFIG_KEY}}`}::text[], ${JSON.stringify(next)}::text::jsonb)`,
+  });
   const updated = await tx
     .update(caseLawSources)
-    .set({
-      config: sql`jsonb_set(coalesce(${caseLawSources.config}, '{}'::jsonb), ${`{${LISTING_CENSUS_CONFIG_KEY}}`}::text[], ${JSON.stringify(next)}::text::jsonb)`,
-    })
-    .where(
-      and(
-        eq(caseLawSources.id, sourceId),
-        sql`${caseLawSources.config} -> ${LISTING_CENSUS_CONFIG_KEY}::text IS NOT DISTINCT FROM ${observed === null ? null : JSON.stringify(observed)}::text::jsonb`,
-      ),
-    )
+    .set(write.set)
+    .where(and(where, write.setWhere))
     .returning({ id: caseLawSources.id });
-  if (updated.length === 0) {
-    return "superseded";
+  const outcome = replayWriteOutcome(updated, matched);
+  switch (outcome.status) {
+    case "written":
+    case "unchanged":
+      break;
+    case "ownership-lost":
+      return "superseded";
+    default:
+      outcome satisfies never;
+      return panic("Unhandled listing checkpoint write outcome");
   }
   switch (next.status) {
     case LISTING_CENSUS_STATUS.COUNTING:
@@ -404,7 +423,7 @@ const recordSlice = async ({
         return "nothing-listed";
       }
       await setSourceReportedTotal({
-        scopedDb: async (write) => await write(tx),
+        scopedDb: async (record) => await record(tx),
         adapterKey,
         total: next.total,
         asOf,
@@ -433,6 +452,7 @@ const countSlice = async ({
     try: async () =>
       await listReconciliationSlice({
         adapterKey: adapter.key,
+        proof: SLICE_LISTING_PROOF.COUNT,
         listSlicePage: adapter.reconciliation.listSlicePage,
         pageDelayMs: adapter.minRequestIntervalMs,
         pageTimeoutMs: adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE,

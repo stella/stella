@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
+import { readCorpusSubCursors } from "@/api/lib/legal-search/case-law-multi-country";
 import {
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
@@ -18,19 +19,18 @@ import {
 } from "@/api/lib/rate-limit/action-size-limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import {
+  type CompatCorpusCursors,
   EMPTY_CORPUS_CURSORS,
   readCompatDecision,
   readCompatStatute,
-  type CompatCorpusCursors,
-  type CorpusSubCursors,
 } from "@/api/mcp/compat-corpus";
-import { encodeCompatId, type CompatCorpusId } from "@/api/mcp/compat-ids";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { type CompatCorpusId, encodeCompatId } from "@/api/mcp/compat-ids";
+import type { McpRequestResources } from "@/api/mcp/context";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
+  invalidCursorResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   structuredErrorResult,
@@ -42,6 +42,14 @@ import {
  * refusals both spell the same way. The audiences differ only in what they
  * read, never in how they answer.
  */
+
+/**
+ * Host metadata for the pair. Claude Code defers every MCP tool behind its
+ * tool search unless a tool asks to load; the pair is where a turn starts and
+ * weighs a small part of the surface, so it loads up front and every other
+ * tool stays deferred.
+ */
+export const COMPAT_PAIR_HOST_META = { "anthropic/alwaysLoad": true } as const;
 
 export type CompatSearchPosition = {
   /**
@@ -99,21 +107,6 @@ export const COMPAT_SEARCH_CURSOR_MAX_LENGTH = encodeCompatSearchCursor({
   corpus: maximumCorpusCursors,
 }).length;
 
-const readSubCursors = (value: unknown): CorpusSubCursors | null => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
-  }
-  const cursors: Record<string, string | null> = {};
-  const entries: [string, unknown][] = Object.entries(value);
-  for (const [country, cursor] of entries) {
-    if (cursor !== null && typeof cursor !== "string") {
-      return null;
-    }
-    cursors[country] = cursor;
-  }
-  return cursors;
-};
-
 /** The position a cursor names, or null when it is not one this pair issued. */
 export const decodeCompatSearchCursor = (
   cursor: string | undefined,
@@ -129,8 +122,8 @@ export const decodeCompatSearchCursor = (
   if (matter !== null && typeof matter !== "string") {
     return null;
   }
-  const decisionCursors = readSubCursors(decisions);
-  const statuteCursors = readSubCursors(statutes);
+  const decisionCursors = readCorpusSubCursors(decisions);
+  const statuteCursors = readCorpusSubCursors(statutes);
   if (decisionCursors === null || statuteCursors === null) {
     return null;
   }
@@ -175,7 +168,7 @@ export const compatCorpusFetchResponse = async <TData>({
   cursor,
 }: {
   compatId: CompatCorpusId;
-  context: McpRequestContext;
+  context: McpRequestResources;
   cursor: string | undefined;
 }): Promise<McpToolResponse<TData>> => {
   const read = await (compatId.kind === "decision"

@@ -9,6 +9,7 @@ import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SKILL_CONTEXT_NEED } from "@stll/api-contract";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
@@ -24,6 +25,7 @@ import {
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuCheckboxItem,
   MenuGroup,
   MenuGroupLabel,
@@ -35,6 +37,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -68,8 +71,8 @@ import {
 import { chatMentionOptionId } from "@/components/chat-mention-node-attrs";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import {
-  ComposerEditModeSubmenu,
   type ComposerEditModeMenuProps,
+  ComposerEditModeSubmenu,
 } from "@/components/chat/chat-edit-mode-menu";
 import {
   CHAT_MODEL_MENU_POPUP_CLASS_NAME,
@@ -80,24 +83,25 @@ import {
   charBeforeCaret,
   chooseShortcutPopupSide,
   COMPOSER_MENU_SHORTCUT_CHAR,
+  type ComposerMenuShortcut,
   contextMentionSearchKey,
   resolveComposerMenuShortcut,
   SHORTCUT_POPUP_SIDE,
-  shouldDrainSkillPages,
-  type ComposerMenuShortcut,
   type ShortcutPopupSide,
+  shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
 import { ComposerQueryResults } from "@/components/chat/composer-query-results";
 import {
   COMPOSER_LIST_VIEWPORT_CLASS_NAME,
+  type ComposerSearchTrigger,
   ComposerSubmenuSearch,
   pickHighlightedItemOnTab,
   useFocusSearchOnOpen,
-  type ComposerSearchTrigger,
 } from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use-browser-extension-store-url";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -107,7 +111,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import {
@@ -115,18 +119,19 @@ import {
   mcpConnectionsOptions,
   mcpConnectorsOptions,
 } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
+  type ChatSkillRowState,
   chatSkillRowState,
+  type ComposerSkillChatContext,
   oneClickSkillNeeds,
   slashItemSkillId,
-  type ChatSkillRowState,
-  type ComposerSkillChatContext,
 } from "@/lib/prompts/chat-skill-availability.logic";
 import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
+import { queryView } from "@/lib/query-view.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -162,7 +167,7 @@ type ComposerPlusMenuProps = {
    *  (a thread with nothing to leave, or a rotation under way), mirroring
    *  the dock's own new-chat button which keeps the same action. */
   onNewThread?: (() => void) | null | undefined;
-  models?: ComposerModelsMenuProps | undefined;
+  models?: ComposerModelsMenuProps | null | undefined;
   /** Enables the Edit mode submenu (how AI edits land in the open DOCX).
    *  Lives only here, never in the dock; omit on surfaces without a
    *  selectable edit mode. */
@@ -294,6 +299,7 @@ export const ComposerPlusMenu = ({
                 triggerClassName,
               )}
               size={COMPOSER_CONTROL_BUTTON_SIZE}
+              tooltip={t("chat.composerMenu.open")}
               type="button"
               variant="secondary"
             />
@@ -483,6 +489,8 @@ const ComposerModelsSubmenu = ({
     <MenuSub onOpenChange={setOpen} open={open}>
       <MenuSubTrigger
         {...guideAnchor(GUIDE_ANCHORS.chatMenuModels, guideAnchorsEnabled)}
+        // Until the stored choice is known, nothing can be picked on it.
+        disabled={models.state === "loading"}
       >
         <CpuIcon />
         {t("chat.composerMenu.models")}
@@ -546,25 +554,20 @@ const ComposerSkillItemBody = ({
       className={cn("mt-0.5 self-start", blocked && "text-muted-foreground")}
     />
     <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className={cn(
-          "block truncate text-sm",
-          blocked && "text-muted-foreground",
-        )}
+      <TruncatedText
+        className={cn("text-sm", blocked && "text-muted-foreground")}
+        render={<BidiText as="span" />}
       >
         {itemName(item)}
-      </BidiText>
-      <BidiText
-        as="span"
-        className={cn(
-          "text-muted-foreground block text-xs",
-          // The reason is the row's point; let it wrap rather than clip.
-          !blocked && "truncate",
-        )}
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground block text-xs"
+        // The reason is the row's point; let it wrap rather than clip.
+        lines={blocked ? "none" : 1}
+        render={<BidiText as="span" />}
       >
         {secondary}
-      </BidiText>
+      </TruncatedText>
     </span>
   </>
 );
@@ -604,14 +607,17 @@ const WebSearchFixSkillItem = ({
 /**
  * One row of the Skills submenu. A skill this chat cannot run stays listed,
  * disabled, with what the chat lacks; where the composer can meet that need
- * in one click, the row does so and inserts the skill.
+ * in one click, the row does so and inserts the skill. A missing extension
+ * cannot be met in place: the row opens its store listing instead.
  */
 const ComposerSkillMenuItem = ({
+  browserExtensionStoreUrl,
   chat,
   item,
   onSelect,
   state,
 }: {
+  browserExtensionStoreUrl: string | null;
   chat: ComposerSkillChatContext | undefined;
   item: SlashItem;
   onSelect: (item: SlashItem) => void;
@@ -634,6 +640,21 @@ const ComposerSkillMenuItem = ({
     );
   }
   const message = t(state.messageKey);
+  if (
+    state.fixable &&
+    state.need === CHAT_SKILL_CONTEXT_NEED.browserExtension &&
+    browserExtensionStoreUrl !== null
+  ) {
+    return (
+      <MenuItem
+        onClick={() => {
+          openIsolatedWindow(browserExtensionStoreUrl);
+        }}
+      >
+        <ComposerSkillItemBody blocked item={item} secondary={message} />
+      </MenuItem>
+    );
+  }
   if (state.fixable && chat !== undefined) {
     if (state.need === CHAT_SKILL_CONTEXT_NEED.webSearch) {
       return (
@@ -692,7 +713,7 @@ export const ComposerSkillsMenu = ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const skillsView = useQueryView(skillsQuery, {
+  const skillsView = queryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(
         (page) => page.builtIn.length === 0 && page.installed.length === 0,
@@ -710,7 +731,8 @@ export const ComposerSkillsMenu = ({
   // Only skills no chat can run leave the menu; one this chat alone cannot
   // run stays, disabled, with what the chat lacks.
   const unavailableSkillIds = availability?.hidden;
-  const oneClickNeeds = oneClickSkillNeeds(chat);
+  const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
+  const oneClickNeeds = oneClickSkillNeeds(chat, browserExtensionStoreUrl);
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
@@ -726,7 +748,7 @@ export const ComposerSkillsMenu = ({
     [reservedCommands, shortcutRows, data?.pages, unavailableSkillIds],
   );
 
-  const query = search.trim().toLowerCase();
+  const query = search.trim();
   useExternalSyncEffect(() => {
     if (
       skillsQuery.isError ||
@@ -749,9 +771,11 @@ export const ComposerSkillsMenu = ({
     skillsQuery.isError,
   ]);
 
-  const filteredItems = query
-    ? items.filter((item) => itemName(item).toLowerCase().includes(query))
-    : items;
+  const filteredItems = filterBySearchQuery({
+    items,
+    query,
+    fields: (item) => [itemName(item)],
+  });
 
   const handleSelect = (item: SlashItem) => {
     if (!editor || editor.isDestroyed) {
@@ -778,6 +802,7 @@ export const ComposerSkillsMenu = ({
   } else {
     skillItemsContent = filteredItems.map((item) => (
       <ComposerSkillMenuItem
+        browserExtensionStoreUrl={browserExtensionStoreUrl}
         chat={chat}
         item={item}
         key={itemKey(item)}
@@ -886,7 +911,7 @@ export const ComposerSkillsMenu = ({
 };
 
 // The trigger-less Menu a shortcut opens at the caret, following the
-// sr-only-trigger shape of the shell's anchored menus (`useAnchoredMenu`).
+// nonfocusable-anchor shape of the shell's anchored menus (`useAnchoredMenu`).
 const ComposerShortcutPopup = ({
   anchor,
   children,
@@ -905,7 +930,7 @@ const ComposerShortcutPopup = ({
   side: ShortcutPopupSide;
 }) => (
   <Menu onOpenChange={onOpenChange} open={open}>
-    <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+    <MenuAnchor />
     <MenuPopup
       align="start"
       anchor={anchor}
@@ -983,7 +1008,7 @@ const useContextMentionSearch = ({
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const view = useQueryView(mentionQuery, {
+  const view = queryView(mentionQuery, {
     isEmpty: (data) => data.items.length === 0 && data.failures.length === 0,
   });
   return {
@@ -1033,7 +1058,7 @@ export const ComposerContextMenu = ({
     }),
     enabled,
   });
-  const mattersView = useQueryView(mattersQuery, {
+  const mattersView = queryView(mattersQuery, {
     isEmpty: (data) => data.workspaces.length === 0,
   });
   const matters: ContextMatter[] =
@@ -1045,10 +1070,12 @@ export const ComposerContextMenu = ({
     threadRef,
   });
 
-  const query = search.trim().toLowerCase();
-  const filteredMatters = query
-    ? matters.filter((matter) => matter.name.toLowerCase().includes(query))
-    : matters;
+  const query = search.trim();
+  const filteredMatters = filterBySearchQuery({
+    items: matters,
+    query,
+    fields: ({ name }) => [name],
+  });
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (host.kind === "shortcut") {
@@ -1260,9 +1287,9 @@ const ComposerMentionItem = ({
         {...capabilityProps}
       >
         <MentionIcon mention={option} />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {option.label}
-        </BidiText>
+        </TruncatedText>
       </MenuItem>
     )}
   </CapabilityAction>
@@ -1392,9 +1419,9 @@ const ComposerContextMatterSub = ({
           className="size-3.5 shrink-0"
           matter={{ id: matter.id, color: matter.color }}
         />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {matter.name}
-        </BidiText>
+        </TruncatedText>
       </MenuSubTrigger>
       <MenuSubPopup
         className="w-72"
@@ -1424,15 +1451,18 @@ const ComposerContextMatterSub = ({
                   matter={{ id: matter.id, color: matter.color }}
                 />
                 <span className="min-w-0 flex-1">
-                  <BidiText as="span" className="block truncate text-sm">
+                  <TruncatedText
+                    className="text-sm"
+                    render={<BidiText as="span" />}
+                  >
                     {matter.name}
-                  </BidiText>
-                  <BidiText
-                    as="span"
-                    className="text-muted-foreground block truncate text-xs"
+                  </TruncatedText>
+                  <TruncatedText
+                    className="text-muted-foreground text-xs"
+                    render={<BidiText as="span" />}
                   >
                     {t("chat.composerMenu.referenceMatter")}
-                  </BidiText>
+                  </TruncatedText>
                 </span>
               </MenuItem>
             )}
@@ -1471,10 +1501,10 @@ export const ComposerMcpSubmenu = ({
     ...mcpConnectionsOptions(activeOrganizationId, userId),
     enabled,
   });
-  const connectorsView = useQueryView(connectorsQuery, {
+  const connectorsView = queryView(connectorsQuery, {
     isEmpty: (data) => data.connectors.length === 0,
   });
-  const connectionsView = useQueryView(connectionsQuery, {
+  const connectionsView = queryView(connectionsQuery, {
     isEmpty: (data) => data.connections.length === 0,
   });
   const connectorsData =
@@ -1495,13 +1525,12 @@ export const ComposerMcpSubmenu = ({
     return map;
   }, [connectionsData]);
 
-  const query = search.trim().toLowerCase();
   const connectors = connectorsData ? connectorsData.connectors : [];
-  const rows = query
-    ? connectors.filter((connector) =>
-        connector.displayName.toLowerCase().includes(query),
-      )
-    : connectors;
+  const rows = filterBySearchQuery({
+    items: connectors,
+    query: search,
+    fields: ({ displayName }) => [displayName],
+  });
 
   const openMcpSettings = () => {
     detached(
@@ -1517,7 +1546,7 @@ export const ComposerMcpSubmenu = ({
           connectionId: toSafeId<"mcpUserConnection">(connectionId),
         })
         .patch({ enabled: nextEnabled });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     if (Result.isError(result)) {
       notifyUserError(result.error, t("common.somethingWentWrong"));
@@ -1548,9 +1577,9 @@ export const ComposerMcpSubmenu = ({
       if (!connection) {
         return (
           <MenuItem key={connector.id} onClick={openMcpSettings}>
-            <BidiText as="span" className="truncate">
+            <TruncatedText render={<BidiText as="span" />}>
               {connector.displayName}
-            </BidiText>
+            </TruncatedText>
           </MenuItem>
         );
       }
@@ -1566,9 +1595,9 @@ export const ComposerMcpSubmenu = ({
             );
           }}
         >
-          <BidiText as="span" className="truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {connector.displayName}
-          </BidiText>
+          </TruncatedText>
         </MenuCheckboxItem>
       );
     });

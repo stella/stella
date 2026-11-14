@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 
+import { toRegistrableIconSite } from "@/api/handlers/chat/link-icons/origin";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { createLinkIconCache } from "./cache";
 
 const subject = {
-  hostname: "example.com",
+  hostname: toRegistrableIconSite("example.com").unwrap(),
   userId: toSafeId<"user">("user"),
   ip: "192.0.2.1",
 };

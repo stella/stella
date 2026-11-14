@@ -8,6 +8,7 @@ import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import createSeries from "@/api/handlers/number-series/create";
 import setDefault from "@/api/handlers/number-series/default/update";
 import updateSeries from "@/api/handlers/number-series/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   allocateNumber,
   findDefaultNumberSeries,
@@ -25,6 +26,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -58,7 +60,7 @@ if (!databaseUrl || !runPostgresTests) {
               .delete(numberSeries)
               .where(eq(numberSeries.organizationId, orgId)),
         );
-        await db.delete(organization).where(eq(organization.id, orgId));
+        await deleteOrganizationsForTest(db, [orgId]);
         await db.delete(user).where(eq(user.id, userId));
       });
       await db.insert(organization).values({
@@ -104,7 +106,7 @@ if (!databaseUrl || !runPostgresTests) {
         request: new Request("https://example.test/v1/number-series", {
           method: "POST",
         }),
-        route: "/v1/number-series",
+        route: "/v1/number-series" satisfies ApiRoutePath,
         recordAuditEvent: async () => {},
         featureAccessSnapshot: enrolledTimeBillingSnapshot({
           organizationId: orgId,

@@ -4,8 +4,8 @@ import { isUuid } from "@stll/uuid-codec";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  corpusIndexRevisionRetrieval,
   type CorpusIndexManifest,
+  corpusIndexRevisionRetrieval,
   type CorpusRevisionRetrieval,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 

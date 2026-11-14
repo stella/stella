@@ -1,12 +1,26 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   ENTITY_KINDS,
   REVIEW_FLAGS,
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
+import type { AiCellSettlement } from "@stll/api-contract";
+import { apiDateSchema, apiDateTimeSchema } from "@stll/api-contract/api-date";
+import type {
+  ContactAddress as SharedContactAddress,
+  ContactBankAccount,
+  ContactBillingAddress,
+  ContactCustomField as SharedContactCustomField,
+  ContactDataBox as SharedContactDataBox,
+  ContactEmail as SharedContactEmail,
+  ContactMetadata as SharedContactMetadata,
+  ContactPhone as SharedContactPhone,
+} from "@stll/api-contract/contact-write";
+import { recordCellStateSchema } from "@stll/api-contract/record-cell";
+import { recordSchemaSchema } from "@stll/api-contract/record-schema";
 
+import type { JustificationContent } from "@/api/db/schema";
 import type { JsonObject } from "@/api/lib/json-value";
 import {
   positionRuleSchema,
@@ -14,7 +28,7 @@ import {
   resolvedTiersSchema,
 } from "@/api/lib/workflow/playbook-position-facets";
 
-const v1 = t.Literal(1);
+const v1 = v.literal(1);
 
 /**
  * The sixteen preset colours a select option may carry.
@@ -47,24 +61,25 @@ const NAMED_OPTION_COLORS = [
   "gray",
 ] as const;
 
-const namedOptionColor = t.UnionEnum([...NAMED_OPTION_COLORS]);
+const namedOptionColor = v.picklist([...NAMED_OPTION_COLORS]);
 
 /** 6-character hex color (e.g. "FF0000"). */
-const hexColor = t.String({ pattern: "^[0-9A-Fa-f]{6}$" });
+const hexColor = v.pipe(v.string(), v.regex(/^[0-9A-Fa-f]{6}$/u));
 
 /** Named preset or arbitrary hex color. */
-const optionColor = t.Union([namedOptionColor, hexColor]);
+const optionColor = v.union([namedOptionColor, hexColor]);
 
-export type OptionColor = Static<typeof optionColor>;
+export type OptionColor = v.InferOutput<typeof optionColor>;
 
-const fileType = t.Literal("file");
-const textType = t.Literal("text");
-const singleSelectType = t.Literal("single-select");
-const multiSelectType = t.Literal("multi-select");
-const dateType = t.Literal("date");
-const intType = t.Literal("int");
-const moneyType = t.Literal("money");
-const personType = t.Literal("person");
+const fileType = v.literal("file");
+const textType = v.literal("text");
+const singleSelectType = v.literal("single-select");
+const multiSelectType = v.literal("multi-select");
+const dateType = v.literal("date");
+const intType = v.literal("int");
+const moneyType = v.literal("money");
+const personType = v.literal("person");
+const recordType = v.literal("record");
 
 /**
  * ISO 4217 alphabetic code for a workspace money or int field, normalized to
@@ -76,40 +91,35 @@ const personType = t.Literal("person");
  * too.
  *
  * Either case is ACCEPTED, upper case is STORED. Billing's own boundary
- * (`tCurrencyCode`) rejects lower case outright, but that column had a
+ * (`currencyCodeSchema` in `@stll/api-contract/currency-code`) rejects lower case outright, but that column had a
  * migration to bring its rows along and this one is reached by clients that
  * were always free to send either case, so rejecting now would break writes
  * that used to work. Normalizing instead leaves nothing to migrate: display
  * resolves either case through `Intl` already, and every row written from here
  * on groups and compares as one currency rather than two.
  *
- * `Value.Check` sees through a transform to the string underneath, so the
- * modules that validate an already-stored value are unaffected.
+ * The transform only rewrites the output: `v.is` still accepts a stored
+ * lower-case code, so the modules that validate an already-stored value are
+ * unaffected.
  */
 export const currencyCodeSchema = (description?: string) =>
-  t
-    .Transform(
-      t.String({
-        minLength: 3,
-        maxLength: 3,
-        pattern: "^[A-Za-z]{3}$",
-        ...(description === undefined ? {} : { description }),
-      }),
-    )
-    .Decode((code) => code.toUpperCase())
-    .Encode((code) => code);
+  v.pipe(
+    v.string(),
+    v.length(3),
+    v.regex(/^[A-Za-z]{3}$/u),
+    v.transform((code) => code.toUpperCase()),
+    v.metadata(description === undefined ? {} : { description }),
+  );
 
 const currencyCode = currencyCodeSchema();
 
-export const entityKindSchema = t.UnionEnum(ENTITY_KINDS);
+export const entityKindSchema = v.picklist(ENTITY_KINDS);
 export type { EntityKind } from "@stll/api-contract";
 
-// Deliberately a union of literals, not `t.UnionEnum`: Elysia gives a
-// UnionEnum a default of its first member, which would turn a request that
-// omits this required field into a silent "file" instead of a 400.
-// `schema-validators.test.ts` binds the members to `PROPERTY_CONTENT_TYPES`,
+// No default: a request that omits this required field is a 400, never a
+// silent "file". `schema-validators.test.ts` binds the members to `PROPERTY_CONTENT_TYPES`,
 // so a new property type still has to be classified for find.
-export const propertyContentTypeSchema = t.Union([
+const scalarPropertyContentTypes = [
   fileType,
   textType,
   singleSelectType,
@@ -118,80 +128,108 @@ export const propertyContentTypeSchema = t.Union([
   intType,
   moneyType,
   personType,
+] as const;
+
+export const propertyContentTypeSchema = v.union([
+  ...scalarPropertyContentTypes,
+  recordType,
 ]);
 
-export type PropertyContentType = Static<typeof propertyContentTypeSchema>;
+/**
+ * The content types the generic create and update bodies take. A record column
+ * is configured through its data source or declared schema, never as a bare
+ * content type with no shape.
+ */
+export const scalarPropertyContentTypeSchema = v.union(
+  scalarPropertyContentTypes,
+);
 
-const filePropertyContentSchema = t.Object({
+export type PropertyContentType = v.InferOutput<
+  typeof propertyContentTypeSchema
+>;
+
+const filePropertyContentSchema = v.object({ version: v1, type: fileType });
+
+const textPropertyContentSchema = v.object({ version: v1, type: textType });
+
+const selectPropertyContentSchema = v.object({
   version: v1,
-  type: fileType,
-});
-
-const textPropertyContentSchema = t.Object({
-  version: v1,
-  type: textType,
-});
-
-const selectPropertyContentSchema = t.Object({
-  version: v1,
-  type: t.Union([singleSelectType, multiSelectType]),
-
-  options: t.Array(
-    t.Object({
+  type: v.union([singleSelectType, multiSelectType]),
+  options: v.array(
+    v.object({
       color: optionColor,
-      value: t.String({ minLength: 1, maxLength: 1000 }),
+      value: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
     }),
   ),
-  fallback: t.Nullable(t.String({ minLength: 1, maxLength: 1000 })),
+  fallback: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1000))),
 });
 
-const datePropertyContentSchema = t.Object({
-  version: v1,
-  type: dateType,
-});
+const datePropertyContentSchema = v.object({ version: v1, type: dateType });
 
-const intPropertyContentSchema = t.Object({
-  version: v1,
-  type: intType,
-});
+const intPropertyContentSchema = v.object({ version: v1, type: intType });
 
 // Money is not an int with a currency label: it is stored in minor units, so
 // the two cannot share a column without a 100x bug waiting in every sum. The
 // property's currency is the default new values take; null means each value
 // carries its own.
-const moneyPropertyContentSchema = t.Object({
+const moneyPropertyContentSchema = v.object({
   version: v1,
   type: moneyType,
-  currency: t.Nullable(currencyCode),
+  currency: v.nullable(currencyCode),
 });
 
-const personPropertyContentSchema = t.Object({
+const personPropertyContentSchema = v.object({ version: v1, type: personType });
+
+/**
+ * A column of typed records. `tool-output`: the column's `tool-call` tool owns
+ * the schema (its data source's output), so no copy is stored that could drift
+ * from it. `declared`: the column states the shape an AI answer must take.
+ */
+const recordPropertyContentSchema = v.object({
   version: v1,
-  type: personType,
+  type: recordType,
+  shape: v.variant("type", [
+    v.object({ type: v.literal("tool-output") }),
+    v.object({ type: v.literal("declared"), schema: recordSchemaSchema }),
+  ]),
 });
 
 /**
- * Property content an AI tool can produce a value for. A file is uploaded, a
- * money amount needs a currency the model has no way to choose, and a person
- * has to resolve to a workspace member; all three are entered by hand, so the
- * execution plan never schedules them and the prompt/validator switches below
- * have no branch for them.
- *
- * The same subset a case-law question column offers, which is why it is a
- * schema rather than a type-level `Exclude`: both boundaries parse against it.
+ * What a case-law question column may ask of a decision: the extractable kinds
+ * except money. The research answers table pins its kinds with a CHECK
+ * constraint, so widening it is a migration of its own rather than a side
+ * effect of the workspace extractor learning a kind.
  */
-export const aiExtractablePropertyContentSchema = t.Union([
+export const caseLawQuestionContentSchema = v.union([
   textPropertyContentSchema,
   selectPropertyContentSchema,
   datePropertyContentSchema,
   intPropertyContentSchema,
 ]);
 
-export type AiExtractablePropertyContent = Static<
+export type CaseLawQuestionContent = v.InferOutput<
+  typeof caseLawQuestionContentSchema
+>;
+
+/**
+ * Property content an AI tool can produce a value for. A file is uploaded and
+ * a person has to resolve to a workspace member, so both are entered by hand:
+ * the execution plan never schedules them and the prompt/validator switches
+ * below have no branch for them. A money answer carries the currency the
+ * source states, falling back to the column's default currency. A record is
+ * produced by a data-source tool call, never by the scalar extraction these
+ * switches describe.
+ */
+const aiExtractablePropertyContentSchema = v.union([
+  ...caseLawQuestionContentSchema.options,
+  moneyPropertyContentSchema,
+]);
+
+export type AiExtractablePropertyContent = v.InferOutput<
   typeof aiExtractablePropertyContentSchema
 >;
 
-export const propertyContentSchema = t.Union([
+const scalarPropertyContentSchemas = [
   filePropertyContentSchema,
   textPropertyContentSchema,
   selectPropertyContentSchema,
@@ -199,29 +237,43 @@ export const propertyContentSchema = t.Union([
   intPropertyContentSchema,
   moneyPropertyContentSchema,
   personPropertyContentSchema,
+] as const;
+
+export const propertyContentSchema = v.union([
+  ...scalarPropertyContentSchemas,
+  recordPropertyContentSchema,
 ]);
 
-export type PropertyContent = Static<typeof propertyContentSchema>;
+/** See `scalarPropertyContentTypeSchema`. */
+export const scalarPropertyContentSchema = v.union(
+  scalarPropertyContentSchemas,
+);
+
+export type ScalarPropertyContent = v.InferOutput<
+  typeof scalarPropertyContentSchema
+>;
+
+export type PropertyContent = v.InferOutput<typeof propertyContentSchema>;
 
 export const isAiExtractablePropertyContent = (
   content: PropertyContent,
 ): content is AiExtractablePropertyContent =>
   content.type !== "file" &&
-  content.type !== "money" &&
-  content.type !== "person";
+  content.type !== "person" &&
+  content.type !== "record";
 
-export const aiModelToolSchema = t.Object({
+export const aiModelToolSchema = v.object({
   version: v1,
-  type: t.Literal("ai-model"),
-  prompt: t.String({ minLength: 1, maxLength: 1000 }),
+  type: v.literal("ai-model"),
+  prompt: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
 });
-export type AIModelTool = Static<typeof aiModelToolSchema>;
+export type AIModelTool = v.InferOutput<typeof aiModelToolSchema>;
 
-export const manualInputToolSchema = t.Object({
+export const manualInputToolSchema = v.object({
   version: v1,
-  type: t.Literal("manual-input"),
+  type: v.literal("manual-input"),
 });
-export type ManualInputTool = Static<typeof manualInputToolSchema>;
+export type ManualInputTool = v.InferOutput<typeof manualInputToolSchema>;
 
 // A derived property whose value is the GRADE verdict for a playbook position.
 // Computed after its ASK property extracts (it depends on `askPropertyId`):
@@ -229,23 +281,25 @@ export type ManualInputTool = Static<typeof manualInputToolSchema>;
 // or via an LLM tier-match for `positionMatch`. `tiers` is the run-time snapshot
 // of the resolved tiered ladder (ideal, ranked fallbacks, acceptable/red-line
 // rules) the tier-match grading compares against.
-export const playbookVerdictToolSchema = t.Object({
+export const playbookVerdictToolSchema = v.object({
   version: v1,
-  type: t.Literal("playbook-verdict"),
-  askPropertyId: t.String({ format: "uuid" }),
+  type: v.literal("playbook-verdict"),
+  askPropertyId: v.pipe(v.string(), v.uuid()),
   rule: positionRuleSchema,
   severity: positionSeveritySchema,
   tiers: resolvedTiersSchema,
 });
-export type PlaybookVerdictTool = Static<typeof playbookVerdictToolSchema>;
+export type PlaybookVerdictTool = v.InferOutput<
+  typeof playbookVerdictToolSchema
+>;
 
-export const propertyToolSchema = t.Union([
+export const propertyToolSchema = v.union([
   aiModelToolSchema,
   manualInputToolSchema,
   playbookVerdictToolSchema,
 ]);
 
-export type PropertyTool = Static<typeof propertyToolSchema>;
+export type PropertyTool = v.InferOutput<typeof propertyToolSchema>;
 
 /**
  * Why a derivative reached `failed`. `enqueue` means the job never entered the
@@ -266,253 +320,248 @@ export const DERIVATIVE_FAILURE_REASON = {
 export type DerivativeFailureReason =
   (typeof DERIVATIVE_FAILURE_REASON)[keyof typeof DERIVATIVE_FAILURE_REASON];
 
+const conversionRefusalSchema = v.union([
+  v.object({
+    kind: v.literal("unsupported_encoding"),
+    encoding: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  }),
+  v.object({
+    kind: v.literal("unsupported_reference"),
+    format: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    element: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+    attribute: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  }),
+  v.object({
+    kind: v.literal("unsupported_field"),
+    fieldType: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  }),
+  v.object({
+    kind: v.literal("legacy_format"),
+    replacementExtension: v.picklist([".xlsx", ".pptx"]),
+  }),
+]);
+
 /** Shared by both derivatives so their state machines cannot drift apart. */
-const derivativeStateSchema = t.Union([
-  t.Object({
-    status: t.Literal("not-required"),
-  }),
-  t.Object({
-    status: t.Literal("pending"),
-  }),
-  t.Object({
-    status: t.Literal("ready"),
-  }),
-  t.Object({
-    status: t.Literal("failed"),
-    reason: t.Optional(
-      t.Union([
-        t.Literal(DERIVATIVE_FAILURE_REASON.ENQUEUE),
-        t.Literal(DERIVATIVE_FAILURE_REASON.PROCESSING),
-        t.Literal(DERIVATIVE_FAILURE_REASON.TOO_LARGE),
+const derivativeStateSchema = v.union([
+  v.object({ status: v.literal("not-required") }),
+  v.object({ status: v.literal("pending") }),
+  v.object({ status: v.literal("ready") }),
+  v.object({
+    status: v.literal("failed"),
+    conversionRefusal: v.exactOptional(conversionRefusalSchema),
+    reason: v.exactOptional(
+      v.union([
+        v.literal(DERIVATIVE_FAILURE_REASON.ENQUEUE),
+        v.literal(DERIVATIVE_FAILURE_REASON.PROCESSING),
+        v.literal(DERIVATIVE_FAILURE_REASON.TOO_LARGE),
       ]),
     ),
   }),
 ]);
 
-export const fieldContentSchema = t.Union([
-  t.Object({
+/** Why a person replaced a machine value; optional, set after the edit. */
+export const cellOverrideReasonSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(500),
+);
+
+export const fieldContentSchema = v.union([
+  v.object({ version: v1, type: v.literal("error") }),
+  v.object({ version: v1, type: v.literal("pending") }),
+  v.object({ version: v1, type: v.literal("unsupported") }),
+  v.object({
     version: v1,
-    type: t.Literal("error"),
-  }),
-  t.Object({
-    version: v1,
-    type: t.Literal("pending"),
-  }),
-  t.Object({
-    version: v1,
-    type: t.Literal("unsupported"),
-  }),
-  t.Object({
-    version: v1,
-    type: t.Literal("file"),
-    id: t.String({ format: "uuid" }),
-    fileName: t.String({ minLength: 1, maxLength: 256 }),
-    mimeType: t.String({ minLength: 1, maxLength: 255 }),
-    sizeBytes: t.Integer({ minimum: 0 }),
-    encrypted: t.Boolean(),
-    sha256Hex: t.String({ minLength: 64, maxLength: 64 }),
-    pdfFileId: t.Nullable(t.String({ format: "uuid" })),
-    pdfDerivative: t.Optional(derivativeStateSchema),
-    thumbnailFileId: t.Optional(t.Nullable(t.String({ format: "uuid" }))),
+    type: v.literal("file"),
+    id: v.pipe(v.string(), v.uuid()),
+    fileName: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    mimeType: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+    sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    encrypted: v.boolean(),
+    sha256Hex: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
+    pdfFileId: v.nullable(v.pipe(v.string(), v.uuid())),
+    pdfDerivative: v.exactOptional(derivativeStateSchema),
+    thumbnailFileId: v.exactOptional(v.nullable(v.pipe(v.string(), v.uuid()))),
     // ThumbHash-rendered `data:image/png;base64,...` blur of the source
     // image (~400-700 bytes); rendered directly in an <img src>.
-    placeholder: t.Optional(t.String({ maxLength: 2048 })),
-    thumbnailDerivative: t.Optional(derivativeStateSchema),
-    scanWarnings: t.Optional(t.Array(t.String({ maxLength: 256 }))),
+    placeholder: v.exactOptional(v.pipe(v.string(), v.maxLength(2048))),
+    thumbnailDerivative: v.exactOptional(derivativeStateSchema),
+    scanWarnings: v.exactOptional(
+      v.array(v.pipe(v.string(), v.maxLength(256))),
+    ),
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("text"),
-    value: t.String({ minLength: 1 }),
+    type: v.literal("text"),
+    value: v.pipe(v.string(), v.minLength(1)),
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("single-select"),
-    value: t.Nullable(t.String({ minLength: 1 })),
+    type: v.literal("single-select"),
+    value: v.nullable(v.pipe(v.string(), v.minLength(1))),
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("multi-select"),
-    value: t.Array(t.String({ minLength: 1 })),
+    type: v.literal("multi-select"),
+    value: v.array(v.pipe(v.string(), v.minLength(1))),
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("date"),
-    value: t.Nullable(t.String({ format: "date" })),
+    type: v.literal("date"),
+    value: v.nullable(apiDateSchema),
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("int"),
-    value: t.Integer(),
-    currency: t.Nullable(currencyCode),
+    type: v.literal("int"),
+    value: v.pipe(v.number(), v.integer()),
+    currency: v.nullable(currencyCode),
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("money"),
+    type: v.literal("money"),
     // Minor units ("cents"), so arithmetic stays exact.
-    amountCents: t.Integer(),
+    amountCents: v.pipe(v.number(), v.integer()),
     currency: currencyCode,
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("person"),
+    type: v.literal("person"),
     // Null when the person is named but not a workspace member.
-    userId: t.Nullable(t.String({ maxLength: 128 })),
-    name: t.String({ minLength: 1, maxLength: 256 }),
-    image: t.Nullable(t.String({ maxLength: 2048 })),
+    userId: v.nullable(v.pipe(v.string(), v.maxLength(128))),
+    name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    image: v.nullable(v.pipe(v.string(), v.maxLength(2048))),
   }),
-  t.Object({
+  v.object({
     version: v1,
-    type: t.Literal("clip"),
-    url: t.String({ maxLength: 2048 }),
-    snippet: t.Optional(t.String({ maxLength: 10_000 })),
-    citation: t.Optional(t.String({ maxLength: 1000 })),
-    jurisdiction: t.Optional(t.String({ maxLength: 128 })),
-    sourceType: t.Optional(t.String({ maxLength: 64 })),
+    type: v.literal("record"),
+    // The output schema version of the record's source when it was written;
+    // a record from another version is stale, never read as current.
+    schemaVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    state: recordCellStateSchema,
+  }),
+  v.object({
+    version: v1,
+    type: v.literal("clip"),
+    url: v.pipe(v.string(), v.maxLength(2048)),
+    snippet: v.exactOptional(v.pipe(v.string(), v.maxLength(10_000))),
+    citation: v.exactOptional(v.pipe(v.string(), v.maxLength(1000))),
+    jurisdiction: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
+    sourceType: v.exactOptional(v.pipe(v.string(), v.maxLength(64))),
   }),
 ]);
 
-export type FieldContent = Static<typeof fieldContentSchema>;
+export type FieldContent = v.InferOutput<typeof fieldContentSchema>;
 
-const cellLockReasonSchema = t.UnionEnum(["manual-edit", "explicit"]);
+const cellLockReasonSchema = v.picklist(["manual-edit", "explicit"]);
 
-const cellMetadataSchema = t.Object({
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The value a run settled in a cell, kept when a person overwrites it. The
+ * justification row is copied as stored (it cascades away with the field row
+ * the manual write replaces), so the original can be shown with its citations
+ * and restored exactly.
+ */
+const machineCellValueSchema = v.object({
+  content: fieldContentSchema,
+  settlement: v.custom<AiCellSettlement>(
+    (value) => isJsonObject(value) && typeof value["type"] === "string",
+  ),
+  justification: v.nullable(
+    v.object({
+      content: v.custom<JustificationContent>(
+        (value) => isJsonObject(value) && Array.isArray(value["blocks"]),
+      ),
+      boundingBoxes: v.nullable(
+        v.custom<BoundingBoxes>(
+          (value) => isJsonObject(value) && Array.isArray(value["boxes"]),
+        ),
+      ),
+      fileFieldIds: v.array(v.pipe(v.string(), v.uuid())),
+    }),
+  ),
+});
+
+export type MachineCellValue = v.InferOutput<typeof machineCellValueSchema>;
+
+/**
+ * A person's value over a machine one: what the run produced, who replaced
+ * it last and when, and an optional reason. It stays while the cell's current
+ * value is a person's; once a run settles the cell again the record is stale
+ * (see `activeCellOverride`).
+ */
+const cellOverrideSchema = v.object({
+  machine: machineCellValueSchema,
+  editedBy: v.pipe(v.string(), v.minLength(1)),
+  editedAt: apiDateTimeSchema,
+  reason: v.nullable(cellOverrideReasonSchema),
+});
+
+export type CellOverride = v.InferOutput<typeof cellOverrideSchema>;
+
+const cellMetadataSchema = v.object({
   version: v1,
   // One flag vocabulary for every reviewed thing (see `REVIEW_FLAGS`), so a
   // cell and a review finding cannot drift into two sets of the same idea.
-  manualFlags: t.Array(t.UnionEnum([...REVIEW_FLAGS]), {
-    maxItems: REVIEW_FLAGS_MAX_ITEMS,
-  }),
+  manualFlags: v.pipe(
+    v.array(v.picklist([...REVIEW_FLAGS])),
+    v.maxLength(REVIEW_FLAGS_MAX_ITEMS),
+  ),
   // Keyed by flag; only the flags actually set appear, so the key stays a
   // plain string rather than a total record over the vocabulary.
-  flagProvenance: t.Optional(
-    t.Record(
-      t.String({ minLength: 1, maxLength: 64 }),
-      t.Object({
-        addedBy: t.String({ minLength: 1 }),
-        addedAt: t.String({ format: "date-time" }),
+  flagProvenance: v.exactOptional(
+    v.record(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+      v.object({
+        addedBy: v.pipe(v.string(), v.minLength(1)),
+        addedAt: apiDateTimeSchema,
       }),
     ),
   ),
-  locked: t.Optional(t.Boolean()),
-  lockProvenance: t.Optional(
-    t.Object({
-      lockedBy: t.String({ minLength: 1 }),
-      lockedAt: t.String({ format: "date-time" }),
+  locked: v.exactOptional(v.boolean()),
+  lockProvenance: v.exactOptional(
+    v.object({
+      lockedBy: v.pipe(v.string(), v.minLength(1)),
+      lockedAt: apiDateTimeSchema,
       reason: cellLockReasonSchema,
     }),
   ),
+  override: v.exactOptional(cellOverrideSchema),
 });
 
-export type CellMetadata = Static<typeof cellMetadataSchema>;
+export type CellMetadata = v.InferOutput<typeof cellMetadataSchema>;
 
-const boundingBoxesSchema = t.Object({
+const boundingBoxesSchema = v.object({
   version: v1,
-  boxes: t.Array(
-    t.Object({
-      pageNumber: t.Number(),
-      yMin: t.Number(),
-      xMin: t.Number(),
-      yMax: t.Number(),
-      xMax: t.Number(),
-    }),
-    { minItems: 1 },
+  boxes: v.pipe(
+    v.array(
+      v.object({
+        pageNumber: v.number(),
+        yMin: v.number(),
+        xMin: v.number(),
+        yMax: v.number(),
+        xMax: v.number(),
+      }),
+    ),
+    v.minLength(1),
   ),
 });
 
-export type BoundingBoxes = Static<typeof boundingBoxesSchema>;
+export type BoundingBoxes = v.InferOutput<typeof boundingBoxesSchema>;
 export type BoundingBox = BoundingBoxes["boxes"][number];
 
-// -- Billing schemas --
-
-export const bankAccountSchema = t.Object({
-  iban: t.Optional(t.String({ maxLength: 34 })),
-  bic: t.Optional(t.String({ maxLength: 11 })),
-  accountNumber: t.Optional(t.String({ maxLength: 64 })),
-  bankName: t.Optional(t.String({ maxLength: 256 })),
-  currency: t.Optional(currencyCode),
-});
-
-export type BankAccount = Static<typeof bankAccountSchema>;
-
-export const billingAddressSchema = t.Object({
-  line1: t.Optional(t.String({ maxLength: 512 })),
-  line2: t.Optional(t.String({ maxLength: 512 })),
-  city: t.Optional(t.String({ maxLength: 256 })),
-  state: t.Optional(t.String({ maxLength: 256 })),
-  postalCode: t.Optional(t.String({ maxLength: 32 })),
-  country: t.Optional(t.String({ maxLength: 128 })),
-});
-
-export type BillingAddress = Static<typeof billingAddressSchema>;
-
-// -- Contact schemas --
-
-export const contactEmailSchema = t.Object({
-  type: t.UnionEnum(["work", "personal", "other"]),
-  address: t.String({ format: "email", maxLength: 320 }),
-  isPrimary: t.Boolean(),
-  label: t.Optional(t.String({ maxLength: 128 })),
-});
-
-export type ContactEmail = Static<typeof contactEmailSchema>;
-
-export const contactPhoneSchema = t.Object({
-  type: t.UnionEnum(["mobile", "office", "home", "fax", "other"]),
-  number: t.String({ minLength: 1, maxLength: 32 }),
-  isPrimary: t.Boolean(),
-  label: t.Optional(t.String({ maxLength: 128 })),
-});
-
-export type ContactPhone = Static<typeof contactPhoneSchema>;
-
-export const contactDataBoxSchema = t.Object({
-  id: t.String({ pattern: "^[A-Za-z0-9]{7}$" }),
-  isPrimary: t.Boolean(),
-  label: t.Optional(t.String({ maxLength: 128 })),
-});
-
-export type ContactDataBox = Static<typeof contactDataBoxSchema>;
-
-export const contactCustomFieldSchema = t.Object({
-  id: t.String({ minLength: 1, maxLength: 64 }),
-  label: t.String({ minLength: 1, maxLength: 128 }),
-  value: t.String({ maxLength: 2000 }),
-});
-
-export type ContactCustomField = Static<typeof contactCustomFieldSchema>;
-
-const contactMetadataFields = {
-  dataBoxes: t.Optional(t.Array(contactDataBoxSchema, { maxItems: 20 })),
-  customFields: t.Optional(t.Array(contactCustomFieldSchema, { maxItems: 50 })),
-};
-
-export const contactMetadataSchema = t.Object(contactMetadataFields);
-
-export type ContactMetadata = Static<typeof contactMetadataSchema>;
+export type BankAccount = ContactBankAccount;
+export type BillingAddress = ContactBillingAddress;
+export type ContactEmail = SharedContactEmail;
+export type ContactPhone = SharedContactPhone;
+export type ContactDataBox = SharedContactDataBox;
+export type ContactCustomField = SharedContactCustomField;
+export type ContactMetadata = SharedContactMetadata;
+export type ContactAddress = SharedContactAddress;
 
 export type ContactPersistedMetadata = ContactMetadata & {
   version: 1;
   custom?: JsonObject;
 };
-
-export const contactAddressSchema = t.Object({
-  type: t.UnionEnum([
-    "office",
-    "mailing",
-    "billing",
-    "service",
-    "home",
-    "other",
-  ]),
-  line1: t.String({ maxLength: 512 }),
-  line2: t.Optional(t.String({ maxLength: 512 })),
-  city: t.Optional(t.String({ maxLength: 256 })),
-  state: t.Optional(t.String({ maxLength: 256 })),
-  postalCode: t.Optional(t.String({ maxLength: 32 })),
-  country: t.Optional(t.String({ maxLength: 128 })),
-  isPrimary: t.Boolean(),
-  label: t.Optional(t.String({ maxLength: 128 })),
-});
-
-export type ContactAddress = Static<typeof contactAddressSchema>;

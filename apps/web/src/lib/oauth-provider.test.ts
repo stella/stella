@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  getOauthClientDisplayName,
+  getOauthAccountSwitchHref,
+  getOauthContinuationHref,
   getOauthHashFragment,
   getOauthRedirectUrl,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
+  hasOauthPrompt,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 
@@ -37,18 +40,82 @@ describe("getSignedOauthQueryFromHash", () => {
   });
 });
 
-describe("getOauthClientDisplayName", () => {
-  test("prefers OAuth registration metadata names", () => {
+describe("getSignedOauthQuery", () => {
+  const query = "client_id=client-123&prompt=login&sig=abc123";
+
+  test("reads the hash bridge first", () => {
     expect(
-      getOauthClientDisplayName({
-        client_name: "Inspector",
-        name: "Fallback",
+      getSignedOauthQuery({
+        hash: `#${getOauthHashFragment(query)}`,
+        searchStr: "?client_id=other&sig=other",
       }),
-    ).toBe("Inspector");
+    ).toBe(query);
   });
 
-  test("falls back to generic name fields", () => {
-    expect(getOauthClientDisplayName({ name: "CLI" })).toBe("CLI");
+  test("falls back to a signed page query without its question mark", () => {
+    expect(getSignedOauthQuery({ hash: "", searchStr: `?${query}` })).toBe(
+      query,
+    );
+  });
+
+  test("ignores unsigned queries", () => {
+    expect(
+      getSignedOauthQuery({ hash: "", searchStr: "?redirectTo=%2F" }),
+    ).toBe(null);
+  });
+});
+
+describe("hasOauthPrompt", () => {
+  test("finds each prompt value of a space-separated list", () => {
+    const query = "client_id=client-123&prompt=consent+login&sig=abc123";
+    expect(hasOauthPrompt(query, "login")).toBe(true);
+    expect(hasOauthPrompt(query, "select_account")).toBe(false);
+  });
+
+  test("matches whole values only", () => {
+    expect(hasOauthPrompt("prompt=logins&sig=abc123", "login")).toBe(false);
+    expect(
+      hasOauthPrompt("prompt=select_account&sig=abc123", "select_account"),
+    ).toBe(true);
+  });
+
+  test("is false without a signed request or prompt", () => {
+    expect(hasOauthPrompt(null, "login")).toBe(false);
+    expect(hasOauthPrompt("client_id=client-123&sig=abc123", "login")).toBe(
+      false,
+    );
+  });
+});
+
+describe("getOauthAccountSwitchHref", () => {
+  test("returns to sign-in with the exact signed OAuth request from the hash bridge", () => {
+    const query =
+      "client_id=client-123&ba_param=client_id&ba_param=scope&scope=openid%20stella%3Aread&sig=abc%2B123";
+    const href = getOauthAccountSwitchHref({
+      hash: `#${getOauthHashFragment(query)}`,
+      pathname: "/auth/organization",
+      search: "",
+    });
+
+    const target = new URL(href, "https://my.example");
+    expect(target.pathname).toBe("/auth");
+    expect(target.search).toBe("");
+    expect(getSignedOauthQueryFromHash(target.hash)).toBe(query);
+  });
+
+  test("returns to the same page after sign-in when no signed request is bridged", () => {
+    const href = getOauthAccountSwitchHref({
+      hash: "#oauth_query=redirectTo%3D%252F",
+      pathname: "/auth/organization",
+      search: "?client_id=client-123&sig=abc123",
+    });
+
+    const target = new URL(href, "https://my.example");
+    expect(target.pathname).toBe("/auth");
+    expect(target.hash).toBe("");
+    expect(target.searchParams.get("redirectTo")).toBe(
+      "/auth/organization?client_id=client-123&sig=abc123",
+    );
   });
 });
 
@@ -65,5 +132,39 @@ describe("getOauthRedirectUrl", () => {
         redirect_uri: "https://client.example/callback?code=123",
       }),
     ).toBe("https://client.example/callback?code=123");
+  });
+});
+
+describe("getOauthContinuationHref", () => {
+  const signed = "client_id=client-123&scope=openid&sig=abc123";
+
+  test("resumes a destination that carries the signed request", () => {
+    const bridged = `/auth/organization#${getOauthHashFragment(signed)}`;
+    expect(getOauthContinuationHref(bridged)).toBe(bridged);
+    expect(getOauthContinuationHref(`/auth/organization?${signed}`)).toBe(
+      `/auth/organization?${signed}`,
+    );
+  });
+
+  test("leaves ordinary and unsigned destinations alone", () => {
+    expect(getOauthContinuationHref(undefined)).toBeNull();
+    expect(getOauthContinuationHref("/")).toBeNull();
+    expect(getOauthContinuationHref("/workspaces?tab=open")).toBeNull();
+    expect(
+      getOauthContinuationHref(
+        `/auth/organization#${getOauthHashFragment("client_id=client-123")}`,
+      ),
+    ).toBeNull();
+  });
+
+  test("never leaves this site, whatever the destination carries", () => {
+    const fragment = getOauthHashFragment(signed);
+    for (const elsewhere of [
+      `//elsewhere.example/auth/organization#${fragment}`,
+      `https://elsewhere.example/auth/organization#${fragment}`,
+      `https://elsewhere.example/?${signed}`,
+    ]) {
+      expect(getOauthContinuationHref(elsewhere)).toBeNull();
+    }
   });
 });

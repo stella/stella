@@ -22,7 +22,7 @@ import fc from "fast-check";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -57,8 +57,9 @@ import type {
   FillTemplateResult,
   FillTemplateWithDocxResult,
 } from "@/api/lib/templates/template-fill-service";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -371,7 +372,7 @@ const chatVerdict = async (
 const mcpContext = (
   sources: ServiceSources,
   rows: Record<string, unknown>[],
-): McpRequestContext => {
+): AuthorizedMcpRequestContext => {
   const filled = async () =>
     await Promise.resolve({
       templateName: "Template",
@@ -381,7 +382,7 @@ const mcpContext = (
       ...sources,
     });
   const { scopedDb, safeDb } = createScopedDbMock(recordingTx(rows));
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set(),
     accessibleWorkspaceStatusById: new Map(),
@@ -400,7 +401,7 @@ const mcpContext = (
       fillStoredTemplateWithText: filled,
       fillStoredTemplateWithTextStrict: filled,
     },
-  };
+  });
 };
 
 const mcpVerdict = async (
@@ -435,7 +436,8 @@ const mcpVerdict = async (
 
 describe("fill completion parity across surfaces", () => {
   test("every surface reports the owner's verdict", async () => {
-    await fc.assert(
+    await assertProperty(
+      "every surface reports the owner's verdict",
       fc.asyncProperty(
         fillSources,
         unrestoredPaths,
@@ -475,7 +477,7 @@ describe("fill completion parity across surfaces", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   });
 });

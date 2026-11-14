@@ -1,5 +1,5 @@
 import { hasNonModifierKey, normalizeHotkey } from "@tanstack/react-hotkeys";
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { panic, Result } from "better-result";
 
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
@@ -19,7 +19,7 @@ import type {
  * so override values are always hotkey bindings.
  */
 export type ShortcutOverrides = Partial<
-  Record<ShortcutId, { readonly type: "hotkey"; readonly hotkey: Hotkey }>
+  Record<ShortcutId, { readonly type: "hotkey"; readonly hotkey: HotkeyChord }>
 >;
 
 const flattenShortcuts = (groups: readonly ShortcutGroup[]) =>
@@ -207,7 +207,7 @@ export type RebindError =
 
 type ValidateRebindInput = {
   readonly id: ShortcutId;
-  // The raw recorded candidate: it may not yet be a valid `Hotkey` (e.g. a
+  // The raw recorded candidate: it may not yet be a valid `HotkeyChord` (e.g. a
   // modifier-only chord), which is exactly what the guard below rejects.
   readonly hotkey: string;
   readonly groups: readonly ShortcutGroup[];

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import type { ReadsExactly } from "@stll/api-contract/review-decision";
 import type {
   FolioAIEditApplyMode,
   FolioAIEditSeverity,
@@ -19,9 +20,9 @@ import {
   pUuid,
   safeUuid,
   safeWorkspaceId,
+  timestamptz,
   user,
   wsDataScopePolicies,
-  timestamptz,
 } from "./common";
 import { documentReviewFindings } from "./document-reviews";
 import { entities } from "./entities";
@@ -40,6 +41,10 @@ export const DOCX_SUGGESTION_STATUSES = [
   "rejected",
 ] as const;
 export type DocxSuggestionStatus = (typeof DOCX_SUGGESTION_STATUSES)[number];
+
+/** What each status means in the shared vocabulary is the owner's
+ *  (`REVIEW_STATUS_DECISION.docxSuggestion`). */
+true satisfies ReadsExactly<"docxSuggestion", DocxSuggestionStatus>;
 
 /**
  * Severity the AI assigned, plus `unspecified` for the review store's
@@ -115,11 +120,12 @@ export const docxSuggestions = p.pgTable(
     ),
     /**
      * Matters whose content contributed to this suggestion, carried over from
-     * the originating thread's own data scope (or, for a review-staged fix,
-     * the run's reference matters) and narrowed to what the author could read
-     * at the time. Empty means nothing outside this matter fed it. Non-empty
-     * values gate RLS reads the way `chat_threads.data_workspace_ids` does, so
-     * model text restating another matter cannot outlive access to it.
+     * the originating thread's own data scope, narrowed to what the author
+     * could read at the time, or, for a review-staged fix, every other matter
+     * the run's reference text came from. Empty means nothing outside this
+     * matter fed it. Non-empty values gate RLS reads the way
+     * `chat_threads.data_workspace_ids` does, so model text restating another
+     * matter cannot outlive access to it.
      */
     sourceDataWorkspaceIds: safeWorkspaceId("source_data_workspace_ids")
       .array()

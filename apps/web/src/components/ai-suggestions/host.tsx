@@ -39,23 +39,25 @@ import {
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   MessageSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
   ChatInputDraft,
+  ChatSendOutcome,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
@@ -64,7 +66,11 @@ import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-optio
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
-import { DockedChatSurface } from "@/components/chat/docked-chat-stack";
+import {
+  DOCKED_CHAT_COLUMN_SLOT,
+  DockedChatSurface,
+  isPressOutsideDockedChat,
+} from "@/components/chat/docked-chat-stack";
 import {
   DOC_FLOAT_SURFACE_CLASS,
   DockedComposer,
@@ -72,6 +78,7 @@ import {
 } from "@/components/chat/docked-composer";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -159,17 +166,19 @@ type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
+  sendDisabled?: boolean;
   /**
    * Emitted on send. `files` carries any attachments the user added via
    * the shared (+) menu, always an array (empty for preset chips, which
    * never attach); callers thread them into `buildChatRequestMessage`
-   * without a fallback.
+   * without a fallback. The outcome says whether the composer keeps the
+   * draft (see `ChatSendOutcome`); preset sends carry no draft to keep.
    */
   onSubmit: (input: {
     prompt: string;
     presetId?: string;
     files: ChatInputDraft["files"];
-  }) => Promise<void> | void;
+  }) => Promise<ChatSendOutcome>;
   onSubmitError?: ((error: unknown) => void) | undefined;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
@@ -188,6 +197,8 @@ type PromptBarProps = {
    * floating control on top of the bar.
    */
   onStop?: () => void;
+  /** See `ChatComposerActionButton`'s `stopping`. */
+  stopping?: boolean;
   /**
    * Offered after a user-initiated stop: while provided AND the
    * composer is empty, the send arrow becomes a retry button that
@@ -267,8 +278,12 @@ type PromptBarProps = {
    * Only meaningful together with `attachmentsEnabled` (the (+) menu
    * renders inside that block). The Skills/Context submenus are wired to
    * this bar's own editor, so their props omit `editor` (supplied here).
+   *
+   * `models` is required: a bar that starts or continues a thread states its
+   * model menu (with where its turns run), or `null` when the surface pins
+   * the model, so none can drop the Run on choice by leaving a prop out.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * The (+) menu's leading "New chat" row: the same action the dock's
    * new-chat button carries. `null` hides the row (nothing to leave yet).
@@ -299,27 +314,48 @@ type PromptBarProps = {
  * Collapse affordance rendered by `ChatThreadCard` in its top end
  * corner, so the composer bar never carries a thread-visibility
  * control. The card reopens automatically on the next send.
+ *
+ * `cue` lights the control up when a press lands outside the open card,
+ * so a reader who clicks back into the document sees where the card
+ * closes. The flash is a tint fading in and out twice; with reduced
+ * motion it holds still for the same time instead.
  */
 const ThreadCardCollapseButton = ({
+  cue,
   onCollapse,
 }: {
+  cue: { seq: number; shown: boolean };
   onCollapse: () => void;
 }) => {
   const t = useTranslations();
   return (
-    <Button
-      aria-label={t("chat.hideThread")}
-      className="text-muted-foreground hover:text-foreground rounded-full"
-      onClick={onCollapse}
-      size="icon-xs"
-      tooltip={t("chat.hideThread")}
-      type="button"
-      variant="ghost"
-    >
-      <ChevronDownIcon aria-hidden="true" className="size-3.5" />
-    </Button>
+    <span className="relative inline-flex rounded-full">
+      <Button
+        aria-label={t("chat.hideThread")}
+        className="text-muted-foreground hover:text-foreground rounded-full"
+        onClick={onCollapse}
+        size="icon-xs"
+        tooltip={t("chat.hideThread")}
+        type="button"
+        variant="ghost"
+      >
+        <ChevronDownIcon aria-hidden="true" className="size-3.5" />
+      </Button>
+      {cue.shown && (
+        // Keyed on the press, so a second press restarts the flash.
+        <span
+          aria-hidden
+          className="bg-primary/20 animate-attention-flash-twice pointer-events-none absolute inset-0 rounded-full opacity-0 motion-reduce:animate-none motion-reduce:opacity-100"
+          data-collapse-cue=""
+          key={cue.seq}
+        />
+      )}
+    </span>
   );
 };
+
+// `animate-attention-flash-twice`: two 700ms flashes.
+const COLLAPSE_CUE_MS = 1400;
 
 type ChatThreadCardProps = {
   /** Scroll container ref for the transcript inside the card. */
@@ -350,6 +386,41 @@ export const ChatThreadCard = ({
   children,
 }: ChatThreadCardProps) => {
   const t = useTranslations();
+  // A press on the page behind the open card (the document being read)
+  // does not close it, which would lose the conversation mid-read; it
+  // points at the control that does.
+  const [collapseCueSeq, setCollapseCueSeq] = useState(0);
+  const { isPulsing: collapseCueShown, pulse: pulseCollapseCue } =
+    usePulse(COLLAPSE_CUE_MS);
+  const cueCollapse = useLatestCallback(() => {
+    setCollapseCueSeq((seq) => seq + 1);
+    pulseCollapseCue();
+  });
+  const watchOutsidePresses = useCallback(
+    (card: HTMLDivElement | null) => {
+      if (card === null) {
+        return undefined;
+      }
+      const column =
+        card.closest(`[data-slot="${DOCKED_CHAT_COLUMN_SLOT}"]`) ?? card;
+      const onPointerDown = (event: PointerEvent) => {
+        if (
+          event.button === 0 &&
+          isPressOutsideDockedChat({ column, target: event.target })
+        ) {
+          cueCollapse();
+        }
+      };
+      // Capture phase: the reader handles its own presses (selection,
+      // links) and may stop them before they bubble to the document.
+      const owner = card.ownerDocument;
+      owner.addEventListener("pointerdown", onPointerDown, true);
+      return () => {
+        owner.removeEventListener("pointerdown", onPointerDown, true);
+      };
+    },
+    [cueCollapse],
+  );
   return (
     <DockedChatSurface slot="thread">
       <div
@@ -363,6 +434,7 @@ export const ChatThreadCard = ({
           "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
         )}
+        ref={watchOutsidePresses}
         role="dialog"
       >
         {/* The header is its own opaque row with a hairline under it, so the
@@ -374,7 +446,10 @@ export const ChatThreadCard = ({
               {titleSlot}
             </div>
           )}
-          <ThreadCardCollapseButton onCollapse={onCollapse} />
+          <ThreadCardCollapseButton
+            cue={{ seq: collapseCueSeq, shown: collapseCueShown }}
+            onCollapse={onCollapse}
+          />
         </div>
         {/* Plain scroll container — bypasses the legacy Conversation's
           `size-full` chain, which only resolves when the parent has an
@@ -462,12 +537,14 @@ export const PromptBar = (props: PromptBarProps) => {
     status,
     pendingCount,
     canSubmitNow,
+    sendDisabled,
     onSubmit,
     onSubmitError,
     presetScopeChooser,
     presets,
     threadHasMessages = false,
     onStop,
+    stopping = false,
     onRetry,
     editorController,
     emptyPlaceholder,
@@ -512,6 +589,7 @@ export const PromptBar = (props: PromptBarProps) => {
   } = getPromptBarAvailability({
     isEmpty,
     onRetry,
+    sendDisabled,
     onStop,
     queueWhileGenerating,
     sendDisabledReason,
@@ -550,9 +628,8 @@ export const PromptBar = (props: PromptBarProps) => {
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
   const handleComposerSubmit = useCallback(
-    async (draft: ChatInputDraft) => {
-      await onSubmit({ prompt: draft.html, files: draft.files });
-    },
+    async (draft: ChatInputDraft): Promise<ChatSendOutcome> =>
+      await onSubmit({ prompt: draft.html, files: draft.files }),
     [onSubmit],
   );
 
@@ -572,6 +649,7 @@ export const PromptBar = (props: PromptBarProps) => {
   // silently drop the attached file. With attachments present the user sends
   // through the normal composer path instead.
   const presetChipsVisible =
+    !sendDisabled &&
     layout === "floating" &&
     !threadHasMessages &&
     presets !== undefined &&
@@ -844,7 +922,7 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">{t("chat.thinking")}</span>
+            <TruncatedText>{t("chat.thinking")}</TruncatedText>
           </div>
         )}
         {isEmpty && !busy && isSendBlocked && (
@@ -859,11 +937,11 @@ export const PromptBar = (props: PromptBarProps) => {
               size="sm"
               variant="decorative"
             />
-            <span className="truncate">
+            <TruncatedText>
               {sendDisabledReason === "editor-loading"
                 ? t("chat.editorLoading")
                 : t("folio.savingDocument")}
-            </span>
+            </TruncatedText>
           </div>
         )}
         {isEmpty &&
@@ -912,6 +990,7 @@ export const PromptBar = (props: PromptBarProps) => {
                   detached(submitDraft(), "ai-suggestions-host.submit-draft");
                 }}
                 onStop={onStop}
+                stopping={stopping}
               />
             </ComposerControlSlot>
           }
@@ -958,6 +1037,7 @@ const getPromptBarAvailability = ({
   onStop,
   queueWhileGenerating,
   sendDisabledReason,
+  sendDisabled = false,
   status,
 }: {
   isEmpty: boolean;
@@ -965,16 +1045,15 @@ const getPromptBarAvailability = ({
   onStop: PromptBarProps["onStop"];
   queueWhileGenerating: boolean;
   sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  sendDisabled: PromptBarProps["sendDisabled"];
   status: PromptBarProps["status"];
 }) => {
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
   const isSendBlocked = sendDisabledReason !== undefined;
-  const submitDisabled = busy || isSendBlocked;
+  const submitDisabled = busy || isSendBlocked || sendDisabled;
   const retryOffer =
-    onRetry !== undefined && isEmpty && !busy && !isSendBlocked
-      ? onRetry
-      : undefined;
+    onRetry !== undefined && isEmpty && !submitDisabled ? onRetry : undefined;
   return {
     busy,
     composerActionMode: resolveChatComposerAction({
@@ -983,7 +1062,7 @@ const getPromptBarAvailability = ({
       onRetry: retryOffer,
     }),
     composerSubmitDisabled: queueWhileGenerating
-      ? status === "applying" || isSendBlocked
+      ? status === "applying" || isSendBlocked || sendDisabled
       : submitDisabled,
     inputDisabled: isSendBlocked,
     isGenerating,
@@ -1041,46 +1120,48 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >
-      <button
-        type="button"
-        className="text-muted-foreground text-2xs flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-start"
-        onClick={() => onFocus(suggestion.id)}
+      <Button
         aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
+        className="flex w-full"
+        onClick={() => onFocus(suggestion.id)}
+        variant="plain"
       >
-        {display ? (
-          <SuggestionDisplayBadges display={display} />
-        ) : (
-          <>
-            <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                SEVERITY_DOT_CLASS[suggestion.severity],
-              )}
-              aria-hidden="true"
-            />
-            <span className="text-foreground font-medium">
-              {suggestion.topic}
+        <span className="text-muted-foreground text-2xs flex min-w-0 flex-1 items-center gap-1.5">
+          {display ? (
+            <SuggestionDisplayBadges display={display} />
+          ) : (
+            <>
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  SEVERITY_DOT_CLASS[suggestion.severity],
+                )}
+                aria-hidden="true"
+              />
+              <span className="text-foreground font-medium">
+                {suggestion.topic}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
+            </>
+          )}
+          {suggestion.status === "stale" && (
+            <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("common.stale")}
             </span>
-            <span aria-hidden="true">·</span>
-            <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
-          </>
-        )}
-        {suggestion.status === "stale" && (
-          <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("common.stale")}
-          </span>
-        )}
-        {suggestion.status === "accepted" && (
-          <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.accepted")}
-          </span>
-        )}
-        {suggestion.status === "rejected" && (
-          <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.rejected")}
-          </span>
-        )}
-      </button>
+          )}
+          {suggestion.status === "accepted" && (
+            <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.accepted")}
+            </span>
+          )}
+          {suggestion.status === "rejected" && (
+            <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.rejected")}
+            </span>
+          )}
+        </span>
+      </Button>
 
       {display ? (
         <>
@@ -1219,7 +1300,7 @@ const ValueKindChip = ({ valueKind }: { valueKind: string }) => {
   return (
     <span className="text-foreground inline-flex min-w-0 items-center gap-1 font-medium">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };

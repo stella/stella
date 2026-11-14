@@ -13,7 +13,9 @@
  */
 
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
+import { titleHeadsFor } from "./act-titles";
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   ActTitleSpec,
@@ -174,19 +176,17 @@ const HUMAN_RIGHTS_CONVENTION = [
   `${noun} o ochraně lidských práv`,
 ]);
 
+/** `zákon` in every case a citing sentence puts it in, plus the `zák.` shorthand. */
+const TITLE_HEADS = titleHeadsFor("cs");
+const [ACT_HEAD] = TITLE_HEADS;
+
 /**
- * A short title `zákon o …` in every case a citing sentence puts it in, plus
- * the `zák. o …` shorthand. Listing the forms by hand is how one of them goes
- * missing and a citation reads as text.
+ * A short title `zákon o …` in every form `ACT_HEAD` declines it to. Listing
+ * the forms by hand is how one of them goes missing and a citation reads as
+ * text.
  */
-const actTitleForms = (subject: string): readonly string[] => [
-  `zákon ${subject}`,
-  `zákona ${subject}`,
-  `zákonu ${subject}`,
-  `zákonem ${subject}`,
-  `zákoně ${subject}`,
-  `zák. ${subject}`,
-];
+const actTitleForms = (subject: string): readonly string[] =>
+  ACT_HEAD.forms.map((head) => `${head} ${subject}`);
 
 export const CZ_PROFILE = {
   jurisdiction: "CZE",
@@ -217,6 +217,11 @@ export const CZ_PROFILE = {
       { prefix: "ve znění účinném od", relation: "from" },
     ],
     amendmentPrefixes: ["ve znění zákona č.", "ve znění novely č."],
+    currentVersionMarkers: [
+      "ve znění pozdějších předpisů",
+      "v platném znění",
+      "v aktuálním znění",
+    ],
     monthNames: {
       ledna: 1,
       února: 2,
@@ -752,22 +757,14 @@ export const CZ_PROFILE = {
       citedFrom: "1996-07-01",
     },
     ...succession({
-      spellings: [
-        "zákon o zaměstnanosti",
-        "zákona o zaměstnanosti",
-        "zákoně o zaměstnanosti",
-      ],
+      spellings: actTitleForms("o zaměstnanosti"),
       older: sb(1, 1991),
       olderFrom: "1991-02-01",
       newer: sb(435, 2004),
       on: "2004-10-01",
     }),
     ...succession({
-      spellings: [
-        "zákon o soudech a soudcích",
-        "zákona o soudech a soudcích",
-        "zákoně o soudech a soudcích",
-      ],
+      spellings: actTitleForms("o soudech a soudcích"),
       older: sb(335, 1991),
       olderFrom: "1991-09-01",
       newer: sb(6, 2002),
@@ -775,8 +772,7 @@ export const CZ_PROFILE = {
     }),
     ...succession({
       spellings: [
-        "zákon o obcích",
-        "zákona o obcích",
+        ...actTitleForms("o obcích"),
         "obecní zřízení",
         "obecního zřízení",
       ],
@@ -844,10 +840,7 @@ export const CZ_PROFILE = {
       unit: "article",
     },
     {
-      spellings: [
-        "zákon o soudních exekutorech a exekuční činnosti",
-        "zákona o soudních exekutorech a exekuční činnosti",
-      ],
+      spellings: actTitleForms("o soudních exekutorech a exekuční činnosti"),
       identifier: sb(120, 2001),
     },
     {
@@ -901,6 +894,18 @@ export const CZ_PROFILE = {
       on: "1996-07-01",
     }),
   ],
+
+  titleHeads: TITLE_HEADS,
+  amendingClause: {
+    openers: [
+      "a o změně",
+      "a o doplnění",
+      "a o zrušení",
+      "a kterým se mění",
+      "a kterým se ruší",
+    ],
+    amendedActStems: ["zákon", "řád", "předpis"],
+  },
 
   ordinalWords: {
     první: "1",
@@ -981,14 +986,5 @@ export const CZ_PROFILE = {
   earliestYear: 1918,
   maxActGapChars: 60,
 
-  anchor: {
-    join: "-",
-    render: {
-      section: (value) => `par_${value}`,
-      article: (value) => `cl_${value}`,
-      subsection: (value) => `odst_${value}`,
-      letter: (value) => `pism_${value}`,
-      point: (value) => `bod_${value}`,
-    },
-  },
+  anchor: E_SBIRKA_ANCHORS,
 } as const satisfies JurisdictionProfile;

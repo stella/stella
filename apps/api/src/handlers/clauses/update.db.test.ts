@@ -1,36 +1,39 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { Elysia } from "elysia";
 import fc from "fast-check";
-import JSZip from "jszip";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   clauses,
   clauseVersions,
-  templates,
   templateClauses,
+  templates,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
 import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -208,36 +211,47 @@ describe("clause body preconditions", () => {
       },
     ];
     const clauseId = await seedClause(asTestRaw<ClauseBody>(importedBody));
-    const app = new Elysia()
-      .get("/clause", async () => {
-        const result = await Result.gen(() =>
-          getClauseHandler({ safeDb, organizationId: ids.orgA, clauseId }),
-        );
-        return result.unwrap();
-      })
-      .post(
-        "/clause",
-        async ({ body, set }) => {
-          const result = await Result.gen(() =>
-            updateClauseHandler({
-              safeDb,
-              organizationId: ids.orgA,
-              clauseId,
-              body,
-              recordAuditEvent: async () => undefined,
+    await using app = serveForTest(
+      createHttpApp({
+        middleware: [errorBoundary],
+        routes: routes({
+          "/clause": {
+            GET: defineEndpoint.public({}, async () => {
+              const result = await Result.gen(() =>
+                getClauseHandler({
+                  safeDb,
+                  organizationId: ids.orgA,
+                  clauseId,
+                }),
+              );
+              return result.unwrap();
             }),
-          );
-          if (Result.isError(result)) {
-            set.status = HandlerError.is(result.error)
-              ? result.error.status
-              : 500;
-            return { message: result.error.message };
-          }
-          return result.value;
-        },
-        { body: updateClause.config.body },
-      );
-    const readResponse = await app.handle(
+            POST: defineEndpoint.public(
+              { body: updateClause.config.body },
+              async ({ body, set }) => {
+                const result = await Result.gen(() =>
+                  updateClauseHandler({
+                    safeDb,
+                    organizationId: ids.orgA,
+                    clauseId,
+                    body,
+                    recordAuditEvent: async () => undefined,
+                  }),
+                );
+                if (Result.isError(result)) {
+                  set.status = HandlerError.is(result.error)
+                    ? result.error.status
+                    : 500;
+                  return { message: result.error.message };
+                }
+                return result.value;
+              },
+            ),
+          },
+        }),
+      }),
+    );
+    const readResponse = await app.fetch(
       new Request("http://localhost/clause"),
     );
     expect(readResponse.status).toBe(200);
@@ -259,7 +273,7 @@ describe("clause body preconditions", () => {
         runs: [{ text: "{% if party %}" }],
       },
     ]);
-    const rawPreconditionResponse = await app.handle(
+    const rawPreconditionResponse = await app.fetch(
       new Request("http://localhost/clause", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -270,7 +284,7 @@ describe("clause body preconditions", () => {
       }),
     );
     expect(rawPreconditionResponse.status).toBe(200);
-    const invalidBodyResponse = await app.handle(
+    const invalidBodyResponse = await app.fetch(
       new Request("http://localhost/clause", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -281,7 +295,7 @@ describe("clause body preconditions", () => {
       }),
     );
     expect(invalidBodyResponse.status).toBe(422);
-    const savedResponse = await app.handle(
+    const savedResponse = await app.fetch(
       new Request("http://localhost/clause", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -813,7 +827,7 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       organizationId: ids.orgA,
       name: "Legacy template",
       fileName: "legacy.docx",
-      s3Key: "legacy.docx",
+      s3Key: `${ids.orgA}/legacy.docx`,
       sizeBytes: 1,
       createdBy: ids.userA1,
     });
@@ -825,13 +839,12 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       clauseVersionId: versionId,
       slotName: "Terms",
     });
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{ clause("Terms") }}</w:t></w:r></w:p></w:body></w:document>',
     );
-    const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    const file = testDocxFile(await zip.generate({ compression: "store" }));
     const scopedDb = asTestRaw<ScopedDb>(
       createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     );
@@ -861,8 +874,8 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
         clauseId,
       },
     ]);
-    const output = await JSZip.loadAsync(result.file.bytes);
-    const xml = await output.file("word/document.xml")?.async("string");
+    const output = await ZipArchive.read(result.file.bytes);
+    const xml = await output.entry("word/document.xml")?.text();
     for (const paragraph of body) {
       expect(xml).toContain(paragraph.text);
     }
@@ -902,7 +915,7 @@ test("clause resolution scopes relation reads even without the RLS backstop", as
     organizationId: ids.orgA,
     name: "Scoped template",
     fileName: "scoped.docx",
-    s3Key: "scoped.docx",
+    s3Key: `${ids.orgA}/scoped.docx`,
     sizeBytes: 1,
     createdBy: ids.userA1,
   });
@@ -975,7 +988,7 @@ test("resolved clause provenance names latest, pinned and explicit saved version
     organizationId: ids.orgA,
     name: "Versioned",
     fileName: "versioned.docx",
-    s3Key: "versioned.docx",
+    s3Key: `${ids.orgA}/versioned.docx`,
     sizeBytes: 1,
     createdBy: ids.userA1,
   });

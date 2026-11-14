@@ -10,8 +10,9 @@ export const SANCTIONS_SOURCE_CONFIG = {
   eu: {
     allowedRedirectHosts: SANCTIONS_SOURCES.eu.allowedRedirectHosts,
     issuer: "European Union",
-    markerUrl:
-      "https://data.europa.eu/api/hub/repo/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions",
+    // The Commission's feed of its published list files names the current
+    // XML download; the edition itself is the stamp at the start of that XML.
+    markerUrl: "https://webgate.ec.europa.eu/fsd/fsf/public/rss",
     freshnessMs: 48 * HOUR_MS,
   },
   un: {

@@ -52,13 +52,17 @@ const isTreemapHelpers = (value: unknown): value is typeof TreemapHelpers =>
 test.beforeAll(async () => {
   const bundleDir = mkdtempSync(path.join(tmpdir(), "visual-treemap-"));
   const helpersBundle = path.join(bundleDir, "helpers.mjs");
-  execFileSync("bun", [
-    "build",
-    fileURLToPath(new URL("visual-treemap.helpers.ts", import.meta.url)),
-    "--target=node",
-    "--format=esm",
-    `--outfile=${helpersBundle}`,
-  ]);
+  execFileSync(
+    "bun",
+    [
+      "build",
+      fileURLToPath(new URL("visual-treemap.helpers.ts", import.meta.url)),
+      "--target=node",
+      "--format=esm",
+      `--outfile=${helpersBundle}`,
+    ],
+    { maxBuffer: 2 ** 30 },
+  );
   const bundle: unknown = await import(pathToFileURL(helpersBundle).href);
   if (!isTreemapHelpers(bundle)) {
     panic("Treemap helpers bundle is missing an export");
@@ -79,7 +83,7 @@ test.beforeAll(async () => {
       "--target=browser",
       "--format=iife",
     ],
-    { encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, encoding: "utf-8" },
   );
 });
 
@@ -279,7 +283,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       // colour proves which scheme the chart rendered in.
       await expect(svg).toHaveCSS(
         "color",
-        colorScheme === "dark" ? "rgb(245, 245, 245)" : "rgb(38, 38, 38)",
+        colorScheme === "dark" ? "rgb(245, 245, 245)" : "rgb(23, 23, 23)",
       );
       await expect(svg.locator("text")).toContainText([
         "Nejvyšší soud",

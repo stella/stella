@@ -14,17 +14,24 @@ export const organizationSettingsQueryRoot = () =>
 export const billingCodesQueryRoot = (workspaceId: string) =>
   ["billingCodes", workspaceId] as const;
 
+/** Every matter's correspondence, for changes that reach across matters. */
+export const allCorrespondenceQueryRoot = () => ["correspondence"] as const;
+
 export const correspondenceQueryRoot = (workspaceId: string) =>
-  ["correspondence", workspaceId] as const;
+  [...allCorrespondenceQueryRoot(), workspaceId] as const;
+
+export const allExpensesQueryRoot = () => ["expenses"] as const;
 
 export const expensesQueryRoot = (workspaceId: string) =>
-  ["expenses", workspaceId] as const;
+  [...allExpensesQueryRoot(), workspaceId] as const;
 
 export const flowRunsQueryRoot = (workspaceId: string) =>
   ["flow-runs", workspaceId] as const;
 
+export const allInvoicesQueryRoot = () => ["invoices"] as const;
+
 export const invoicesQueryRoot = (workspaceId: string) =>
-  ["invoices", workspaceId] as const;
+  [...allInvoicesQueryRoot(), workspaceId] as const;
 
 export const legalListsQueryRoot = (workspaceId: string) =>
   ["legal-lists", workspaceId] as const;
@@ -38,8 +45,10 @@ export const ratesQueryRoot = (workspaceId: string) =>
 export const tasksQueryRoot = (workspaceId: string) =>
   ["tasks", workspaceId] as const;
 
+export const allTimeEntriesQueryRoot = () => ["timeEntries"] as const;
+
 export const timeEntriesQueryRoot = (workspaceId: string) =>
-  ["timeEntries", workspaceId] as const;
+  [...allTimeEntriesQueryRoot(), workspaceId] as const;
 
 export const anonymizationAllowlistQueryRoot = () =>
   ["anonymization-allowlist"] as const;

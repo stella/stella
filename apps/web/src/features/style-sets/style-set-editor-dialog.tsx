@@ -7,7 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
+  DIALOG_MOBILE_LAYOUT,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
@@ -27,9 +28,9 @@ import type {
 } from "@/features/style-sets/style-set-editor-types";
 import { StyleSetPreview } from "@/features/style-sets/style-set-preview";
 import {
+  stellaStyleEditorOptions,
   styleSetEditorOptions,
   styleSetsKeys,
-  stellaStyleEditorOptions,
 } from "@/features/style-sets/style-set-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -37,6 +38,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 
 type StyleSetEditorDialogProps = {
@@ -56,7 +58,7 @@ export const StyleSetEditorDialog = ({
     <Dialog onOpenChange={onOpenChange} open>
       <DialogPopup
         className="h-[calc(100dvh-2rem)] max-w-6xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
       >
         {target.type === "stella" ? (
           <StellaStyleEditorLoader
@@ -162,6 +164,7 @@ const LoadedStyleSetEditor = ({
   onOpenChange,
   onSaved,
 }: LoadedStyleSetEditorProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [name, setName] = useState(initialName);
@@ -174,7 +177,13 @@ const LoadedStyleSetEditor = ({
       // rejected request, so it has to reach analytics the same way too; the
       // catch in `handleSubmit` only ever sees the rejection.
       const apiError = toAPIError(error);
-      getAnalytics().captureError(apiError);
+      getAnalytics().captureError(apiError, {
+        fingerprintKey: "LoadedStyleSetEditor.finishSave:apiError",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.finishSave:apiError",
+        },
+      });
       setSaving(false);
       notifyUserError(apiError, t("styleSets.editor.saveFailed"));
       return;
@@ -198,9 +207,13 @@ const LoadedStyleSetEditor = ({
     }
     setSaving(true);
     if (saveTarget.type === "stella") {
-      const response = await api["style-sets"].editor.put({
-        name: normalizedName,
-        settings,
+      const response = await idempotentSubmit.run({
+        operation: 'api["style-sets"].editor',
+        body: {
+          name: normalizedName,
+          settings,
+        },
+        send: async (body) => api["style-sets"].editor.put(body),
       });
       await finishSave(response.error);
       return;
@@ -219,24 +232,31 @@ const LoadedStyleSetEditor = ({
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     save().catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "LoadedStyleSetEditor.handleSubmit:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.handleSubmit:failure",
+        },
+      });
       setSaving(false);
       notifyUserError(error, t("styleSets.editor.saveFailed"));
     });
   };
 
   return (
-    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-      <DialogFormState
-        dirty={
-          name !== initialName ||
-          JSON.stringify(settings) !== JSON.stringify(initialSettings)
-        }
-        onDiscard={() => {
-          setName(initialName);
-          setSettings(initialSettings);
-        }}
-      />
+    <Form
+      className="min-h-0 flex-1 gap-0"
+      dirty={
+        name !== initialName ||
+        JSON.stringify(settings) !== JSON.stringify(initialSettings)
+      }
+      onDiscard={() => {
+        setName(initialName);
+        setSettings(initialSettings);
+      }}
+      onSubmit={handleSubmit}
+    >
       <DialogHeader className="border-b pe-14">
         <DialogTitle>
           {saveTarget.type === "stella"
@@ -284,7 +304,7 @@ const LoadedStyleSetEditor = ({
           {saving ? t("common.loading") : t("common.save")}
         </Button>
       </DialogFooter>
-    </form>
+    </Form>
   );
 };
 

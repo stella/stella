@@ -23,16 +23,16 @@ import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/co
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   censusCorpusProjectionRevisions,
-  corpusIndexUnknownAppendBarrierAt,
-  corpusProjectionRevisionsQuery,
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
+  corpusProjectionRevisionsQuery,
   deleteCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
-import { startFakeS3, type FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -103,7 +103,7 @@ const runCycle = async (
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: 1,
-    leaseMs: 600_000,
+    fillWindowMs: 600_000,
     payloadReadConcurrency: 1,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
@@ -127,14 +127,16 @@ beforeAll(
       name: "Multipart test",
       descriptor: null,
     });
-    const written = await writeCorpusDocument({
-      documentId: DOCUMENT_ID,
-      jurisdiction: "CZE",
-      text: TEXT,
-      sections: null,
-      ast: null,
-      stored: null,
-    });
+    const written = (
+      await writeCorpusDocument({
+        documentId: DOCUMENT_ID,
+        jurisdiction: "CZE",
+        text: TEXT,
+        sections: null,
+        ast: null,
+        stored: null,
+      })
+    ).unwrap();
     if (written.type !== "written") {
       panic("Seeded corpus payload was not written");
     }
@@ -323,8 +325,11 @@ test("a later part failure leaves the whole revision pending cleanup", async () 
   expect(intents[0]?.expectedDocumentCount).toBeNull();
   expect(intents[0]?.appendStartedAt).toEqual(partStarts[1]);
   expect(intents[0]?.cleanupNotBefore).toEqual(
-    corpusIndexUnknownAppendBarrierAt(
-      partStarts[1] ?? panic("Missing last part start"),
+    corpusProjectionAppendPublishBarrier(
+      {
+        type: "unknown",
+        appendStartedAt: partStarts[1] ?? panic("Missing last part start"),
+      },
       MANIFEST,
     ),
   );

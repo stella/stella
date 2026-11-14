@@ -31,7 +31,7 @@ const parseTimestamp = (value: string) =>
   parsePgTimestampCursorValue(value) ??
   panic("Stored workflow timestamp cursor is invalid");
 
-export const fetchExplicitWorkflowTargetRows = async ({
+const fetchExplicitWorkflowTargetRows = async ({
   inputEntityIds,
   scopedDb,
   workspaceId,
@@ -64,7 +64,7 @@ export const fetchExplicitWorkflowTargetRows = async ({
   return entityRows;
 };
 
-export const readFullWorkflowSnapshotCursor = async ({
+const readFullWorkflowSnapshotCursor = async ({
   scopedDb,
 }: {
   scopedDb: ScopedDb;
@@ -129,7 +129,7 @@ const fetchFullWorkflowTargetBatch = async ({
   );
 };
 
-export const collectFullWorkflowTargetIds = async ({
+const collectFullWorkflowTargetIds = async ({
   createdAtCutoff,
   scopedDb,
   workspaceId,
@@ -194,6 +194,37 @@ const countFullWorkflowTargets = async ({
   }
 
   return row.value;
+};
+
+type CollectWorkflowTargetIdsOptions = {
+  inputEntityIds: readonly SafeId<"entity">[] | undefined;
+  inputOrder: readonly SafeId<"entity">[] | undefined;
+  scopedDb: ScopedDb;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const collectWorkflowTargetIds = async ({
+  inputEntityIds,
+  inputOrder,
+  scopedDb,
+  workspaceId,
+}: CollectWorkflowTargetIdsOptions) => {
+  if (inputEntityIds !== undefined && inputEntityIds.length > 0) {
+    return resolveWorkflowTargetEntityIds({
+      entityRows: await fetchExplicitWorkflowTargetRows({
+        inputEntityIds,
+        scopedDb,
+        workspaceId,
+      }),
+      inputEntityIds,
+      inputOrder,
+    });
+  }
+  return await collectFullWorkflowTargetIds({
+    createdAtCutoff: await readFullWorkflowSnapshotCursor({ scopedDb }),
+    scopedDb,
+    workspaceId,
+  });
 };
 
 export const countWorkflowTargetEntities = async ({

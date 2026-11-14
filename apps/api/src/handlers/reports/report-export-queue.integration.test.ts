@@ -11,14 +11,14 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { member } from "@/api/db/auth-schema";
@@ -97,13 +97,21 @@ const actor = {
   exportId,
 };
 
-const reportDataSpy = spyOn(reportData, "buildReportData");
-const textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
-const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
-const chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+// Spies typed through spyOn itself, naming each module as a whole: a typed
+// member access here would leave the module's other exports looking unused.
+type SpyOn<T extends object, K extends keyof T> = ReturnType<
+  typeof spyOn<T, K>
+>;
+let reportDataSpy: SpyOn<typeof reportData, "buildReportData">;
+let textModelSpy: SpyOn<typeof modelTransport, "generateTanStackTextForTask">;
+let objectModelSpy: SpyOn<
+  typeof modelTransport,
+  "generateTanStackObjectForTask"
+>;
+let chatObjectSpy: SpyOn<typeof chatRuntime, "generateChatObject">;
 // Every model run resolves its model here, and every AI condition decides here.
-const resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
-const decideSpy = spyOn(decisions, "decide");
+let resolveModelSpy: SpyOn<typeof modelTransport, "resolveTanStackTextModel">;
+let decideSpy: SpyOn<typeof decisions, "decide">;
 
 const readExport = async () =>
   (
@@ -118,6 +126,13 @@ const objectWrites = () =>
   fakeS3.requests.filter((request) => request.method === "PUT");
 
 beforeEach(async () => {
+  reportDataSpy = spyOn(reportData, "buildReportData");
+  textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+  objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
+  chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+  resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
+  decideSpy = spyOn(decisions, "decide");
+
   reportDataSpy.mockClear();
   textModelSpy.mockClear();
   objectModelSpy.mockClear();
@@ -148,6 +163,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb.delete(reportExports).where(eq(reportExports.id, exportId));
   await testDb
     .insert(member)
@@ -234,23 +250,21 @@ describe("report export run", () => {
     conditions: readonly FieldMeta[];
   }) => {
     const templateId = createSafeId<"template">();
-    const s3Key = `report-templates/${templateId}.docx`;
+    const s3Key = `${ids.orgA}/report-templates/${templateId}.docx`;
     const body = paragraphs
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
     const { file } = await writeFieldFilters(
-      testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+      testDocxFile(await zip.generate({ compression: "store" })),
       [],
       conditions.map((condition) => ({
         path: condition.path,

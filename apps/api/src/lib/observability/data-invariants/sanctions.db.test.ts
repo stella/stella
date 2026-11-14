@@ -20,7 +20,7 @@ import {
   sanctionsEditions,
   sanctionsSources,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SANCTIONS_SCREENING_STATUSES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import {

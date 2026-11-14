@@ -22,6 +22,7 @@ type ValidateData = Exclude<
 /** One reviewed contact as the server hands it back; the editable shape. */
 export type ImportCandidate = ValidateData["rows"][number]["contact"];
 export type ImportIssue = ValidateData["rows"][number]["issues"][number];
+export type ImportWarning = ValidateData["rows"][number]["warnings"][number];
 
 /**
  * The same contact as a request body accepts it. It differs from

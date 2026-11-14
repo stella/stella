@@ -33,6 +33,53 @@ describe("withTimeout", () => {
     expect(captured).toMatchObject({ label: "wedged-read", timeoutMs: 10 });
   });
 
+  test("an injected timer decides when the deadline fires", async () => {
+    let fire: (() => void) | undefined;
+    let scheduledMs: number | undefined;
+    const pending = withTimeout(
+      async () =>
+        await new Promise<never>(() => {
+          // Intentionally pending: only the injected deadline may settle it.
+        }),
+      {
+        label: "injected-deadline",
+        timeoutMs: 50,
+        scheduleTimeout: (callback, delayMs) => {
+          fire = callback;
+          scheduledMs = delayMs;
+          return () => undefined;
+        },
+      },
+    );
+
+    expect(scheduledMs).toBe(50);
+    fire?.();
+    const rejection: unknown = await pending.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(TimeoutError);
+    expect(rejection).toMatchObject({
+      label: "injected-deadline",
+      timeoutMs: 50,
+    });
+  });
+
+  test("cancels an injected timer once the operation settles", async () => {
+    let cancelled = false;
+    const result = await withTimeout(async () => "ok", {
+      label: "injected-cancel",
+      timeoutMs: 50,
+      scheduleTimeout: () => () => {
+        cancelled = true;
+      },
+    });
+
+    expect(result).toBe("ok");
+    expect(cancelled).toBe(true);
+  });
+
   test("timeoutMs 0 disables the deadline", async () => {
     const result = await withTimeout(
       async () => {

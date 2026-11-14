@@ -5,7 +5,10 @@ declare const withTimeout: (
   options: { label: string; timeoutMs: number },
 ) => Promise<void>;
 
-const id = "record-1";
+declare const id: string;
+const STATIC_LABEL = "record-static";
+// oxlint-disable-next-line prefer-const -- fixture proves mutable bindings are rejected
+let LET_LABEL = "record-mutable";
 
 const CLOSED_LABELS = {
   read: "record-read",
@@ -74,3 +77,25 @@ void withTimeout(async () => await Promise.resolve(), {
   label: "record-read",
   timeoutMs: 10,
 });
+
+void withTimeout(async () => await Promise.resolve(), {
+  // expect-clean: require-static-timeout-label/require-static-timeout-label
+  label: STATIC_LABEL,
+  timeoutMs: 10,
+});
+
+void withTimeout(async () => await Promise.resolve(), {
+  // oxlint-disable-next-line require-static-timeout-label/require-static-timeout-label -- fixture proves let bindings are rejected
+  label: LET_LABEL,
+  timeoutMs: 10,
+});
+
+const functionLocalConstant = () => {
+  const LOCAL_LABEL = "record-local";
+  void withTimeout(async () => await Promise.resolve(), {
+    // oxlint-disable-next-line require-static-timeout-label/require-static-timeout-label -- fixture proves function-local constants are rejected
+    label: LOCAL_LABEL,
+    timeoutMs: 10,
+  });
+};
+void functionLocalConstant;

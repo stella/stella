@@ -1,18 +1,14 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadFolioCollabSnapshot } from "@/api/lib/folio-collab-rooms";
 import { resolveFolioCollabServiceRoom } from "@/api/lib/folio-collab-service-room";
-import {
-  permissiveBodySchema,
-  validatePostAuth,
-} from "@/api/lib/permissive-route-schema";
 
-import { authorizeFolioCollabService } from "./service-credentials";
+import { verifyFolioCollabServiceCaller } from "./service-credentials";
 
 const config = {
   contract: "patch",
@@ -23,24 +19,17 @@ const config = {
       "Returns collaboration protocol state to the authorized collaboration service.",
   },
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({ keys: ["roomId"] }),
+  body: v.object({
+    roomId: resourceIdSchema("folioCollabRoom"),
+  }),
 } satisfies TokenHandlerConfig;
-
-const strictBodySchema = t.Object({ roomId: tSafeId("folioCollabRoom") });
 
 const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
   config,
-  async function* ({ body, request }) {
-    yield* authorizeFolioCollabService(request.headers.get("authorization"));
-
-    const validatedBody = validatePostAuth(strictBodySchema, body);
-    if (!validatedBody.ok) {
-      return Result.err(
-        new HandlerError({ status: 422, message: validatedBody.message }),
-      );
-    }
+  verifyFolioCollabServiceCaller,
+  async function* ({ body }) {
     const value = yield* Result.await(
-      resolveFolioCollabServiceRoom(validatedBody.value.roomId),
+      resolveFolioCollabServiceRoom(body.roomId),
     );
 
     const snapshot = yield* Result.await(loadFolioCollabSnapshot(value));

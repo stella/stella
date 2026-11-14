@@ -2,15 +2,17 @@ import { Result } from "better-result";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
+import { getDocumentOcrAvailability } from "@/api/lib/document-processing-readiness";
 
 const config = {
   contract: "patch",
   description:
-    "Report whether a document OCR worker is currently ready to accept work.",
-  // Any org member may see whether document OCR can currently accept work.
-  // The response is only an ephemeral availability bit; it exposes no worker
-  // topology or provider configuration.
+    "Report whether this deployment accepts document OCR requests: `live` " +
+    "when a worker is processing now, `batched` when queued requests run in " +
+    "the next recognition batch, `unconfigured` when requests would not run.",
+  // Any org member may see whether document OCR accepts work. The response is
+  // only an ephemeral status; it exposes no worker topology or provider
+  // configuration.
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -22,14 +24,12 @@ const config = {
   access: "read",
 } satisfies HandlerConfig;
 
-const getDocumentOcrAvailability = createSafeRootHandler(
-  config,
-  async function* () {
-    const available = yield* Result.ok(await isDocumentOcrWorkerAvailable());
-    return Result.ok({
-      available,
-    });
-  },
-);
+export const createGetDocumentOcrAvailability = (
+  readAvailability: typeof getDocumentOcrAvailability,
+) =>
+  createSafeRootHandler(config, async function* () {
+    const availability = yield* Result.ok(await readAvailability());
+    return Result.ok(availability);
+  });
 
-export default getDocumentOcrAvailability;
+export default createGetDocumentOcrAvailability(getDocumentOcrAvailability);

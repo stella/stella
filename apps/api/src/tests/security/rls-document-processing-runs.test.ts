@@ -25,9 +25,9 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
   createDryScopedQuery,
   createScopedQuery,
+  TestDatabase,
 } from "@/api/tests/security/test-utils";
 
 // `document_processing_runs` is root-worker owned except for one hole: the

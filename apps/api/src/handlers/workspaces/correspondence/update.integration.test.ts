@@ -4,6 +4,7 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, correspondence } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -95,6 +96,8 @@ describe("correspondence handling audit", () => {
               memberRole: sessionMemberRole("owner"),
               user: { id: ids.userA1 },
               request: new Request("https://api.example.test/correspondence"),
+              route:
+                "/v1/workspaces/:workspaceId/correspondence/:correspondenceId" satisfies ApiRoutePath,
               session: { activeOrganizationId: ids.orgA },
               safeDb: asTestRaw<SafeDb>(
                 createSafeDb(

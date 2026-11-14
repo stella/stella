@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -5,21 +6,23 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
+  AiActionIcon,
   HistoryIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { MenuSection } from "@stll/ui/menu-section";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
@@ -29,6 +32,10 @@ import {
 } from "@/components/search-dialog.shared";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import {
+  DocumentExtractionStatus,
+  readDocumentProcessingStatus,
+} from "@/components/workspaces/document-extraction-status";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { fileHasThumbnail } from "@/components/workspaces/entity-utils";
 import type { ResolvedCommandAction } from "@/features/command-palette/hooks/use-command-actions";
@@ -38,13 +45,14 @@ import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type {
   RecentFileWithIdentity,
   RecentSearch,
 } from "@/lib/search-recents";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SearchSummaryData = NonNullable<
@@ -63,77 +71,42 @@ type SearchSummaryItemProps = {
   onCitationClick: (citationId: string) => void;
 };
 
-export type CommandActionEntry = {
-  type: "command-action";
-  title: string;
-  action: ResolvedCommandAction;
-};
-
 type CommandActionItemProps = {
-  entry: CommandActionEntry;
-  navigation: { type: "button" } | { type: "command"; index: number };
+  action: ResolvedCommandAction;
   onSelect: (actionId: string) => void;
 };
 
+/** An action row on the blank search screen; results never list actions. */
 export const CommandActionItem = ({
-  entry,
-  navigation,
+  action,
   onSelect,
 }: CommandActionItemProps) => {
-  const { action } = entry;
   const Icon = action.icon;
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
-  const content = (
-    <>
-      <Icon className="text-muted-foreground size-4 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{action.title}</span>
-      {action.hotkey && (
-        <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
-          {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
-        </kbd>
+  return (
+    <CapabilityAction action={action} surface="control">
+      {(capabilityProps) => (
+        <Button
+          data-command-action-id={action.id}
+          data-search-empty-row=""
+          onClick={() => onSelect(action.id)}
+          size="row"
+          variant="ghost"
+          {...capabilityProps}
+        >
+          <Icon className="text-muted-foreground size-4 shrink-0" />
+          <TruncatedText className="flex-1">{action.title}</TruncatedText>
+          {/* A shortcut hint means nothing without a keyboard, so a
+              touch-first device drops it. */}
+          {action.hotkey && (
+            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-medium select-none pointer-coarse:hidden">
+              {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
+            </kbd>
+          )}
+        </Button>
       )}
-    </>
+    </CapabilityAction>
   );
-  switch (navigation.type) {
-    case "command":
-      return (
-        <CapabilityAction action={action} surface="control">
-          {(capabilityProps) => (
-            <CommandItem
-              data-command-action-id={action.id}
-              data-command-action-index={navigation.index}
-              index={navigation.index}
-              onClick={() => onSelect(action.id)}
-              size="row"
-              value={entry}
-              {...capabilityProps}
-            >
-              {content}
-            </CommandItem>
-          )}
-        </CapabilityAction>
-      );
-    case "button":
-      return (
-        <CapabilityAction action={action} surface="control">
-          {(capabilityProps) => (
-            <Button
-              data-command-action-id={action.id}
-              data-search-empty-row=""
-              onClick={() => onSelect(action.id)}
-              size="row"
-              variant="ghost"
-              {...capabilityProps}
-            >
-              {content}
-            </Button>
-          )}
-        </CapabilityAction>
-      );
-    default:
-      navigation satisfies never;
-      return panic("Unhandled command action navigation type");
-  }
 };
 
 export const SearchSummaryItem = ({
@@ -160,7 +133,8 @@ export const SearchSummaryItem = ({
       <CapabilityAction action={{ capability: "ai" }} surface="control">
         {(capabilityProps) => (
           <Button
-            className="mb-2 h-auto w-full items-start justify-start gap-3 rounded-md px-2.5 py-2.5 text-start whitespace-normal sm:h-auto"
+            layout="wrap"
+            className="mb-2 w-full gap-3 rounded-md px-2.5 py-2.5"
             disabled={isPending}
             onClick={onClick}
             variant={isError ? "destructive-outline" : "outline"}
@@ -174,12 +148,15 @@ export const SearchSummaryItem = ({
               )}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
+              <TruncatedText className="text-sm font-medium">
                 {title}
-              </span>
-              <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
+              </TruncatedText>
+              <TruncatedText
+                className="text-muted-foreground text-xs font-normal"
+                lines={2}
+              >
                 {body}
-              </span>
+              </TruncatedText>
             </span>
           </Button>
         )}
@@ -194,9 +171,9 @@ export const SearchSummaryItem = ({
           <AiActionIcon className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
+          <TruncatedText className="text-sm font-medium">
             {data.title}
-          </span>
+          </TruncatedText>
           <span className="text-muted-foreground block text-xs font-normal whitespace-pre-line">
             <SummaryBody
               citations={data.citations}
@@ -265,16 +242,18 @@ const SummaryBody = ({
           content={`${citation.title}\n${citation.reason}`}
           key={`${citation.id}-${start}`}
           render={
-            <button
-              className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"
+            <Button
+              className="mx-0.5"
               onClick={(event) => {
                 event.stopPropagation();
                 onCitationClick(citation.id);
               }}
-              type="button"
+              variant="plain"
             >
-              [{citation.number}]
-            </button>
+              <span className="text-foreground hover:bg-muted rounded-sm px-1 font-medium">
+                [{citation.number}]
+              </span>
+            </Button>
           }
         />,
       );
@@ -330,7 +309,7 @@ export const SearchRecents = ({
               variant="ghost"
             >
               <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
-              <span className="truncate">{recent.query}</span>
+              <TruncatedText>{recent.query}</TruncatedText>
             </Button>
           ))}
         </MenuSection>
@@ -357,15 +336,15 @@ export const SearchRecents = ({
             >
               <RecentFileIcon file={file} />
               <span className="min-w-0 flex-1">
-                <BidiText as="span" className="block truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {file.title}
-                </BidiText>
-                <BidiText
-                  as="span"
-                  className="text-muted-foreground block truncate text-xs"
+                </TruncatedText>
+                <TruncatedText
+                  className="text-muted-foreground text-xs"
+                  render={<BidiText as="span" />}
                 >
                   {file.workspaceName}
-                </BidiText>
+                </TruncatedText>
               </span>
             </Button>
           ))}
@@ -404,11 +383,11 @@ export const SearchResultItem = ({
       name: hit.lastEditedByName,
     };
   }
-  let meta: string;
+  let meta: readonly string[];
   if (hit.type === "contact") {
-    meta = t(KIND_TRANSLATION_KEYS[hit.type]);
+    meta = [t(KIND_TRANSLATION_KEYS[hit.type])];
   } else if (hit.type === "case-law") {
-    meta = "";
+    meta = [];
   } else if (hit.type === "matter" || hit.type === "chat") {
     meta = compactMeta([hit.workspaceName, formatted]);
   } else {
@@ -429,13 +408,24 @@ export const SearchResultItem = ({
     >
       <SearchHitIcon hit={hit} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{hit.title || hit.id}</p>
-        {(meta || editorMeta) && (
+        <TruncatedText className="text-sm font-medium" render={<p />}>
+          <BidiText>{hit.title || hit.id}</BidiText>
+        </TruncatedText>
+        {(meta.length > 0 || editorMeta) && (
           <div className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
-            {meta ? <span className="min-w-0 truncate">{meta}</span> : null}
+            {meta.length > 0 ? (
+              <TruncatedText>
+                {meta.map((part, position) => (
+                  <Fragment key={part}>
+                    {position > 0 ? " · " : null}
+                    <BidiText>{part}</BidiText>
+                  </Fragment>
+                ))}
+              </TruncatedText>
+            ) : null}
             {editorMeta ? (
               <>
-                {meta ? <span className="shrink-0">·</span> : null}
+                {meta.length > 0 ? <span className="shrink-0">·</span> : null}
                 <UserIdentity
                   as="span"
                   avatarClassName="size-4 shrink-0 text-[0.5rem]"
@@ -450,18 +440,29 @@ export const SearchResultItem = ({
           </div>
         )}
         {hit.headline && (
-          <p
-            className={cn(
-              "text-muted-foreground mt-0.5 line-clamp-2 text-xs font-normal",
-              SEARCH_HIT_DESCENDANT_MARK_CLASS,
-            )}
+          <TruncatedText
             dangerouslySetInnerHTML={{
               // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the global search mappers
               __html: hit.headline,
             }}
+            hint={false}
+            lines={2}
+            render={
+              <p
+                className={cn(
+                  "text-muted-foreground mt-0.5 text-xs font-normal",
+                  SEARCH_HIT_DESCENDANT_MARK_CLASS,
+                )}
+              />
+            }
           />
         )}
       </div>
+      {isEntityKind(hit.type) ? (
+        <DocumentExtractionStatus
+          processingStatus={readDocumentProcessingStatus(hit)}
+        />
+      ) : null}
       <span className="text-foreground-subtle mt-0.5 shrink-0 px-1 text-xs tabular-nums">
         {resultNumber}
       </span>
@@ -488,8 +489,8 @@ const RecentFileTypeIcon = ({ file }: { file: RecentFileWithIdentity }) => {
     ...entityOptions(file.workspaceId, file.entityId),
     enabled: false,
   });
-  const entityView = useQueryView(entityQuery);
-  useQueryViewError(entityView);
+  const entityView = queryView(entityQuery);
+  useQueryViewError(entityView, "RecentFileTypeIcon:query");
   const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({

@@ -1,16 +1,20 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { fileSchema } from "@/api/lib/custom-schema";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
@@ -27,13 +31,13 @@ import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
-const fillBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
-  values: t.String({ description: "Map of field path to value." }),
+const fillBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  values: v.pipe(v.string(), v.description("Map of field path to value.")),
 });
 
-const fillQuerySchema = t.Object({
-  format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
+const fillQuerySchema = v.object({
+  format: v.exactOptional(v.picklist(["docx", "pdf"])),
 });
 
 type FillProps = {
@@ -45,11 +49,17 @@ type FillProps = {
   query: { format?: "docx" | "pdf" };
 };
 
+const TEMPLATE_FILL_FAILED = failureSink({
+  event: "templates.fill_failed",
+  expected: [],
+});
+
 /** Serialize a preflight `HandlerError` to the same JSON body the framework
  *  preflight returns (message plus the 402 usage detail), for this route's
  *  raw-Response download path. */
 const usageRejectionResponse = (error: HandlerError): Response =>
-  new Response(
+  observedResponse(
+    { sink: TEMPLATE_FILL_FAILED, cause: error },
     JSON.stringify({
       ...(error.code ? { code: error.code } : {}),
       message: error.message,
@@ -178,23 +188,30 @@ export const fillHandler = async ({
   // Best-effort analytics; don't block the download. The template came with
   // the request and is not stored, so the row has no template and no audit
   // event (there is no resource to audit against).
-  scopedDb(
-    async (tx) =>
-      await recordTemplateFill({
-        tx,
-        templateId: null,
-        organizationId,
-        userId,
-        format,
-        diagnostics,
+  detached(
+    async () =>
+      scopedDb(
+        async (tx) =>
+          await recordTemplateFill({
+            tx,
+            templateId: null,
+            organizationId,
+            userId,
+            format,
+            diagnostics,
+          }),
+      ).catch((error: unknown) => {
+        captureError(
+          error,
+          handlerErrorContext("templates.fillHandler", {
+            operation: "template_fill_analytics",
+            organizationId,
+            userId,
+          }),
+        );
       }),
-  ).catch((error: unknown) => {
-    captureError(error, {
-      operation: "template_fill_analytics",
-      organizationId,
-      userId,
-    });
-  });
+    "template-fill.record-analytics",
+  );
 
   const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });
 
@@ -215,10 +232,11 @@ export const fillHandler = async ({
     }
     const pdfResult = await convertToPdf(scannedOutput);
     if (Result.isError(pdfResult)) {
-      return new Response(JSON.stringify({ error: "PDF conversion failed" }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      });
+      return observedResponse(
+        { sink: TEMPLATE_FILL_FAILED, cause: pdfResult.error },
+        JSON.stringify({ error: "PDF conversion failed" }),
+        { status: 502, headers: { "Content-Type": "application/json" } },
+      );
     }
 
     const pdfName = DOCX_EXT_RE.test(sourceName)
@@ -237,9 +255,8 @@ export const fillHandler = async ({
   return secureDocumentResponse({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),
-    // Octet-stream, not the DOCX mime type: the Eden treaty client
-    // text-decodes unrecognized content types, which corrupts the ZIP
-    // container (Word then reports unreadable content).
+    // Octet-stream, not the DOCX mime type: the API client decodes
+    // octet-stream as an `ArrayBuffer`; the DOCX type travels in the filename.
     contentType: OCTET_STREAM_MIME_TYPE,
     disposition: "attachment",
     fileName: sanitizeFilename("filled.docx"),

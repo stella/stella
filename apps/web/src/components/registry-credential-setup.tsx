@@ -8,6 +8,7 @@ import { BUSINESS_REGISTRY_CONFIGURATION } from "@stll/api-contract";
 import type { BusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
 import { companySpecificationRegistryKey } from "@/components/company-specification.logic";
@@ -17,7 +18,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { contactsKeys } from "@/lib/contacts/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type RegistryCredentialSetupProps = {
@@ -58,7 +59,7 @@ export const RegistryCredentialSetup = ({
   const save = useMutation({
     // The secret never enters the mutation variables/cache or a query key.
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"][
           "business-registry-credentials"
         ].post({
@@ -78,7 +79,7 @@ export const RegistryCredentialSetup = ({
   });
   const remove = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"][
           "business-registry-credentials"
         ].delete(
@@ -117,13 +118,13 @@ export const RegistryCredentialSetup = ({
   return (
     <div className="space-y-3 px-3 py-2">
       <div className="space-y-1.5">
-        <label className="text-sm font-medium" htmlFor={inputId}>
+        <Label htmlFor={inputId}>
           {t(
             configuration === "api-key"
               ? "catalogue.setup.apiKey"
               : "search.registryCredentialUserAgent",
           )}
-        </label>
+        </Label>
         {configuration === "api-key" ? (
           <SecretInput {...inputProps} />
         ) : (

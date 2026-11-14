@@ -3,14 +3,85 @@ import { describe, expect, test } from "bun:test";
 import { isRecord } from "./lib/enumerate-safe-handlers";
 import {
   classifyCoverage,
-  computeBaselineDiff,
   enumerateModuleEndpoints,
   findHiddenEndpointMismatches,
+  findPendingEndpoints,
+  findRealtimeMismatches,
   findStaleAllowlistEntries,
   isEndpointModule,
   parseExposure,
   toEndpointIdentifier,
 } from "./mcp-coverage-guard";
+
+describe("findRealtimeMismatches", () => {
+  const entitySet = { scope: "workspace", resourceTypes: "entity" };
+  const route = (
+    id: string,
+    by: string,
+    config: Record<string, unknown>,
+  ): Parameters<typeof findRealtimeMismatches>[0]["endpoints"][number] => ({
+    id,
+    exposure: { type: "covered", by },
+    config,
+  });
+
+  test("accepts a tool that announces what its routes declare", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [route("rename", "save_document", { realtime: entitySet })],
+        toolRealtime: { save_document: [entitySet] },
+      }),
+    ).toEqual([]);
+  });
+
+  test("flags a write route whose tool announces nothing", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [route("rename", "save_document", { realtime: entitySet })],
+        toolRealtime: { save_document: [] },
+      }),
+    ).toEqual(["rename: save_document does not announce workspace:entity"]);
+  });
+
+  test("flags a tool announcing what no route declares", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [],
+        toolRealtime: { save_document: [entitySet] },
+      }),
+    ).toEqual(["save_document: no route declares workspace:entity"]);
+  });
+
+  test("reads a route's every resource type, and skips read routes", () => {
+    const multi = {
+      scope: "workspace",
+      resourceTypes: ["entity", "field"],
+    };
+    expect(
+      findRealtimeMismatches({
+        endpoints: [
+          route("placement", "save_task", { realtime: multi }),
+          route("list", "save_task", {
+            access: "read",
+            realtime: { scope: "workspace", resourceTypes: "contact" },
+          }),
+        ],
+        toolRealtime: { save_task: [entitySet] },
+      }),
+    ).toEqual(["placement: save_task does not announce workspace:field"]);
+  });
+
+  test("treats an explicit no-announcement as nothing to announce", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [
+          route("a", "t", { realtime: { scope: "none", reason: "x" } }),
+        ],
+        toolRealtime: { t: [{ scope: "none" }] },
+      }),
+    ).toEqual([]);
+  });
+});
 
 describe("toEndpointIdentifier", () => {
   test("is the repo-relative path, stable regardless of root trailing slash", () => {
@@ -121,41 +192,23 @@ describe("parseExposure", () => {
   });
 });
 
-describe("computeBaselineDiff (ratchet)", () => {
-  test("flags a newly-added pending endpoint absent from the baseline", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["a", "b"],
-      baseline: ["a"],
-    });
-    expect(diff.newPending).toEqual(["b"]);
-    expect(diff.stalePending).toEqual([]);
+describe("findPendingEndpoints", () => {
+  test("flags every pending endpoint, sorted", () => {
+    expect(
+      findPendingEndpoints([
+        { id: "b", exposure: { type: "pending" } },
+        { id: "closed", exposure: { type: "internal", reason: "webhook" } },
+        { id: "a", exposure: { type: "pending" } },
+      ]),
+    ).toEqual(["a", "b"]);
   });
 
-  test("flags every pending endpoint once the baseline is empty", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["new-gap"],
-      baseline: [],
-    });
-    expect(diff.newPending).toEqual(["new-gap"]);
-    expect(diff.stalePending).toEqual([]);
-  });
-
-  test("flags a stale baseline entry that is no longer pending", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["a"],
-      baseline: ["a", "closed-gap"],
-    });
-    expect(diff.newPending).toEqual([]);
-    expect(diff.stalePending).toEqual(["closed-gap"]);
-  });
-
-  test("clean when current pending exactly equals the baseline", () => {
-    const diff = computeBaselineDiff({
-      currentPending: ["b", "a"],
-      baseline: ["a", "b"],
-    });
-    expect(diff.newPending).toEqual([]);
-    expect(diff.stalePending).toEqual([]);
+  test("is clean when no endpoint is pending", () => {
+    expect(
+      findPendingEndpoints([
+        { id: "a", exposure: { type: "tool", name: "read_document" } },
+      ]),
+    ).toEqual([]);
   });
 });
 
@@ -265,6 +318,7 @@ describe("classifyCoverage", () => {
 
   test("passes when every tool is referenced and every reference is valid", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "read.ts", exposure: { type: "tool", name: "read_contact" } },
         { id: "other.ts", exposure: { type: "pending" } },
@@ -294,8 +348,42 @@ describe("classifyCoverage", () => {
     expect(issues.staleWaivers).toEqual([]);
   });
 
+  test("a capability names its curated wrapper and validates that reference", () => {
+    const classify = (by: string) =>
+      classifyCoverage({
+        appTools: [],
+        endpoints: [
+          {
+            id: "create.ts",
+            exposure: parseExposure({
+              type: "capability",
+              reason: "organization_management",
+              consumesServices: false,
+              confirmation: "required",
+              by,
+            }),
+          },
+        ],
+        registryToolNames: ["create_organization"],
+        waivers: {},
+      });
+    expect(classify("create_organization").orphanTools).toEqual([]);
+    expect(classify("ghost").unknownToolNames).toEqual([
+      { id: "create.ts", name: "ghost" },
+    ]);
+    expect(
+      parseExposure({
+        type: "capability",
+        reason: "organization_management",
+        consumesServices: false,
+        by: 1,
+      }).type,
+    ).toBe("invalid");
+  });
+
   test("flags an orphan tool that no endpoint references and no waiver covers", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "read.ts", exposure: { type: "tool", name: "read_contact" } },
       ],
@@ -307,6 +395,7 @@ describe("classifyCoverage", () => {
 
   test("flags a tool/covered reference that is not in the registry", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "a.ts", exposure: { type: "tool", name: "ghost" } },
         { id: "b.ts", exposure: { type: "covered", by: "phantom" } },
@@ -322,6 +411,7 @@ describe("classifyCoverage", () => {
 
   test("flags a stale waiver naming a tool no longer in the registry", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "a.ts", exposure: { type: "tool", name: "search" } },
         { id: "b.ts", exposure: { type: "tool", name: "read_contact" } },
@@ -334,6 +424,7 @@ describe("classifyCoverage", () => {
 
   test("separates a missing mcp field from a malformed one", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "missing.ts", exposure: { type: "invalid", raw: undefined } },
         { id: "malformed.ts", exposure: { type: "invalid", raw: { x: 1 } } },
@@ -343,5 +434,28 @@ describe("classifyCoverage", () => {
     });
     expect(issues.missingMcp).toEqual(["missing.ts"]);
     expect(issues.invalidExposure).toEqual(["malformed.ts"]);
+  });
+
+  test("an MCP App callable tool is a concrete registry reference", () => {
+    const issues = classifyCoverage({
+      appTools: [{ app: "presentation", name: "open_reader" }],
+      endpoints: [],
+      registryToolNames: ["open_reader"],
+      waivers: {},
+    });
+    expect(issues.orphanTools).toEqual([]);
+    expect(issues.unknownToolNames).toEqual([]);
+  });
+
+  test("an MCP App manifest cannot reference an unknown tool", () => {
+    const issues = classifyCoverage({
+      appTools: [{ app: "presentation", name: "missing_reader" }],
+      endpoints: [],
+      registryToolNames: [],
+      waivers: {},
+    });
+    expect(issues.unknownToolNames).toEqual([
+      { id: "app:presentation", name: "missing_reader" },
+    ]);
   });
 });

@@ -1,26 +1,30 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   identifyOrganizationJurisdictions,
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { publishMcpToolProjectionChange } from "@/api/mcp/tool-freshness";
 
-const practiceJurisdictionSchema = t.Object({
-  countryCode: t.String({
-    minLength: 2,
-    maxLength: 2,
-    pattern: "^[A-Za-z]{2}$",
-    description: "ISO 3166-1 alpha-2 country code",
-  }),
-  isPrimary: t.Boolean({
-    description: "Whether this is the organization's primary jurisdiction",
-  }),
+const practiceJurisdictionSchema = v.object({
+  countryCode: v.pipe(
+    v.string(),
+    v.minLength(2),
+    v.maxLength(2),
+    v.regex(/^[A-Za-z]{2}$/u),
+    v.description("ISO 3166-1 alpha-2 country code"),
+  ),
+  isPrimary: v.pipe(
+    v.boolean(),
+    v.description("Whether this is the organization's primary jurisdiction"),
+  ),
 });
 
 const config = {
@@ -38,14 +42,16 @@ const config = {
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "tool", name: "set_practice_jurisdictions" },
-  body: t.Object({
-    practiceJurisdictions: t.Array(practiceJurisdictionSchema, {
-      maxItems: LIMITS.practiceJurisdictionsPerOrganization,
-      description:
+  body: v.object({
+    practiceJurisdictions: v.pipe(
+      v.array(practiceJurisdictionSchema),
+      v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
+      v.description(
         "Practice jurisdictions for this organization. countryCode is an " +
-        "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
-        "to true.",
-    }),
+          "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
+          "to true.",
+      ),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -83,6 +89,13 @@ const updatePracticeJurisdictions = createSafeRootHandler(
     identifyOrganizationJurisdictions(
       session.activeOrganizationId,
       practiceJurisdictions,
+    );
+    detached(
+      async () =>
+        await publishMcpToolProjectionChange({
+          organizationId: session.activeOrganizationId,
+        }),
+      "mcp.practice-jurisdiction-tool-projection",
     );
 
     return Result.ok({ practiceJurisdictions });

@@ -14,11 +14,11 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   billingArrangements,
-  invoices,
+  featureEnrolments,
   invoiceLines,
+  invoices,
   timeEntries,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -30,9 +30,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
 import {
-  NO_DB,
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -285,6 +285,9 @@ test("mixed-currency approved work remains recordable but cap status is unavaila
     currency: "USD",
     mismatchCount: "1",
     capStatus: "unavailable",
+    billedMinutes: "0",
+    approvedMinutes: "60",
+    totalMinutes: "60",
   });
   const rows = await db
     .select({ metadata: auditLogs.metadata })
@@ -623,7 +626,7 @@ test.each([
 });
 
 test("legacy draft time reservations are counted once before and after line materialization, while covered time and void invoices do not consume the cap", async () => {
-  await set(capped);
+  await set({ ...capped, capMinutes: 100 });
   await seedApproved(8000);
   const invoiceId = createSafeId<"invoice">();
   await db.insert(invoices).values({
@@ -643,6 +646,13 @@ test("legacy draft time reservations are counted once before and after line mate
     approvedAmount: "0",
     remainingInvoiceCapAmount: "2000",
     remainingWipCapAmount: "2000",
+    billedMinutes: "60",
+    remainingInvoiceCapMinutes: "40",
+    remainingWipCapMinutes: "40",
+  });
+  expect(await set({ ...capped, capMinutes: 59 })).toMatchObject({
+    code: 409,
+    response: { code: "billing_cap_below_reserved" },
   });
   expect(await set({ ...capped, capAmount: 7999 })).toMatchObject({
     code: 409,
@@ -667,6 +677,8 @@ test("legacy draft time reservations are counted once before and after line mate
   expect(await summary()).toMatchObject({
     billedAmount: "8000",
     totalAmount: "8000",
+    billedMinutes: "60",
+    totalMinutes: "60",
   });
   await db
     .update(invoices)
@@ -675,8 +687,9 @@ test("legacy draft time reservations are counted once before and after line mate
   expect(await summary()).toMatchObject({
     billedAmount: "0",
     totalAmount: "0",
+    billedMinutes: "0",
+    totalMinutes: "0",
   });
-  await db.delete(invoiceLines).where(eq(invoiceLines.invoiceId, invoiceId));
   await db
     .update(invoices)
     .set({
@@ -689,8 +702,252 @@ test("legacy draft time reservations are counted once before and after line mate
     .update(timeEntries)
     .set({ invoiceAttachment: "covered" })
     .where(eq(timeEntries.id, entryId));
+  expect(
+    await db
+      .select({ id: invoiceLines.id })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, invoiceId)),
+  ).toHaveLength(1);
   expect(await summary()).toMatchObject({
     billedAmount: "0",
     totalAmount: "0",
+    billedMinutes: "0",
+    totalMinutes: "0",
   });
 });
+
+test.each([
+  { minutes: 79, status: "below_threshold", events: 0 },
+  { minutes: 80, status: "threshold_reached", events: 1 },
+  { minutes: 81, status: "threshold_reached", events: 1 },
+  { minutes: 100, status: "cap_reached", events: 2 },
+  { minutes: 101, status: "cap_reached", events: 2 },
+])(
+  "minute caps classify $minutes approved minutes and emit each crossing once",
+  async ({ minutes, status, events }) => {
+    expect(
+      await set({
+        mode: "hourly",
+        currency: "USD",
+        capMinutes: 100,
+        alertThresholdBps: 8000,
+      }),
+    ).toMatchObject({ capMinutes: 100 });
+    await seedApproved(1000);
+    await db
+      .update(timeEntries)
+      .set({ durationMinutes: minutes, billedMinutes: minutes })
+      .where(eq(timeEntries.id, entryId));
+    expect((await refreshCrossings()).isOk()).toBe(true);
+    expect((await refreshCrossings()).isOk()).toBe(true);
+    expect(await summary()).toMatchObject({
+      status,
+      approvedMinutes: minutes.toString(),
+      billedMinutes: "0",
+    });
+    const crossings = await crossingEvents();
+    expect(crossings).toHaveLength(events);
+    expect(crossings.every((row) => row.metadata?.["unit"] === "minutes")).toBe(
+      true,
+    );
+  },
+);
+
+test("minute crossings rearm below the threshold and remain independent of amount crossings", async () => {
+  await set({ ...capped, capMinutes: 100 });
+  await seedApproved(1000);
+  const changeMinutes = async (minutes: number) => {
+    await db
+      .update(timeEntries)
+      .set({ durationMinutes: minutes, billedMinutes: minutes })
+      .where(eq(timeEntries.id, entryId));
+    expect((await refreshCrossings()).isOk()).toBe(true);
+  };
+  await changeMinutes(80);
+  expect(await crossingEvents()).toHaveLength(1);
+  await changeMinutes(79);
+  expect(await crossingEvents()).toHaveLength(1);
+  await changeMinutes(100);
+  expect(await crossingEvents()).toHaveLength(3);
+  await db
+    .update(timeEntries)
+    .set({ rateAtEntry: cents(10_000) })
+    .where(eq(timeEntries.id, entryId));
+  expect((await refreshCrossings()).isOk()).toBe(true);
+  const events = await crossingEvents();
+  expect(events).toHaveLength(5);
+  expect(
+    events.filter((row) => row.metadata?.["unit"] === "minutes"),
+  ).toHaveLength(3);
+  expect(
+    events.filter((row) => row.metadata?.["unit"] === "amount"),
+  ).toHaveLength(2);
+});
+
+test.each([
+  { name: "zero minute cap", mutation: sql`cap_minutes = 0` },
+  { name: "negative minute cap", mutation: sql`cap_minutes = -1` },
+  {
+    name: "flat fee with minute cap",
+    mutation: sql`mode = 'flat_fee', flat_fee_amount = 1000, cap_amount = NULL, alert_threshold_bps = NULL, cap_minutes = 100`,
+  },
+  {
+    name: "minute cap without threshold",
+    mutation: sql`cap_amount = NULL, cap_minutes = 100, alert_threshold_bps = NULL`,
+  },
+  {
+    name: "threshold without any cap",
+    mutation: sql`cap_amount = NULL, cap_minutes = NULL`,
+  },
+  {
+    name: "invalid minute crossing state",
+    mutation: sql`minute_cap_state = 'unknown'`,
+  },
+])("billing arrangement CHECK rejects $name", async ({ mutation }) => {
+  await set(capped);
+  const result = await Result.tryPromise(
+    async () =>
+      await db.execute(
+        sql`UPDATE ${billingArrangements} SET ${mutation} WHERE workspace_id = ${workspaceId}`,
+      ),
+  );
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(isPgError(result.error, "23514")).toBe(true);
+  }
+});
+
+const arrangementCombinations = (["hourly", "flat_fee"] as const).flatMap(
+  (mode) =>
+    [null, 1000].flatMap((flatFeeAmount) =>
+      [null, 10_000].flatMap((capAmount) =>
+        [null, 100].flatMap((capMinutes) =>
+          [null, 8000].map((alertThresholdBps) => ({
+            mode,
+            flatFeeAmount,
+            capAmount,
+            capMinutes,
+            alertThresholdBps,
+          })),
+        ),
+      ),
+    ),
+);
+const validArrangementCombinations = new Set([
+  "flat_fee:1000:null:null:null",
+  "hourly:null:null:null:null",
+  "hourly:null:10000:null:8000",
+  "hourly:null:null:100:8000",
+  "hourly:null:10000:100:8000",
+]);
+
+test.each(arrangementCombinations)(
+  "billing mode matrix accepts exactly valid $mode fee=$flatFeeAmount amount=$capAmount minutes=$capMinutes threshold=$alertThresholdBps",
+  async ({ mode, flatFeeAmount, capAmount, capMinutes, alertThresholdBps }) => {
+    await set(capped);
+    const key = [
+      mode,
+      flatFeeAmount ?? "null",
+      capAmount ?? "null",
+      capMinutes ?? "null",
+      alertThresholdBps ?? "null",
+    ].join(":");
+    const result = await Result.tryPromise(
+      async () =>
+        await db.execute(sql`
+      UPDATE ${billingArrangements}
+      SET mode = ${mode}, flat_fee_amount = ${flatFeeAmount}, cap_amount = ${capAmount},
+        cap_minutes = ${capMinutes}, alert_threshold_bps = ${alertThresholdBps}
+      WHERE workspace_id = ${workspaceId}
+    `),
+    );
+    expect(result.isOk()).toBe(validArrangementCombinations.has(key));
+    if (result.isErr()) {
+      expect(isPgError(result.error, "23514")).toBe(true);
+    }
+  },
+);
+
+test("minute cap alerts remain computable when amount cap currency is mismatched", async () => {
+  await set({ ...capped, capMinutes: 60 });
+  await seedApproved(10_000, "EUR");
+  expect((await refreshCrossings()).isOk()).toBe(true);
+  expect((await refreshCrossings()).isOk()).toBe(true);
+  const events = await crossingEvents();
+  expect(events).toHaveLength(2);
+  expect(events.every((row) => row.metadata?.["unit"] === "minutes")).toBe(
+    true,
+  );
+  const states = await db
+    .select()
+    .from(billingArrangements)
+    .where(eq(billingArrangements.workspaceId, workspaceId));
+  expect(states.at(0)).toMatchObject({
+    currencyState: "mismatch",
+    thresholdState: "below",
+    capState: "below",
+    minuteThresholdState: "above",
+    minuteCapState: "above",
+  });
+  const audits = await db
+    .select({ metadata: auditLogs.metadata })
+    .from(auditLogs)
+    .where(eq(auditLogs.workspaceId, workspaceId));
+  expect(
+    audits.filter(
+      (row) => row.metadata?.["event"] === "billing_currency_mismatch",
+    ),
+  ).toHaveLength(1);
+});
+
+test.each([
+  {
+    name: "uncapped",
+    body: { mode: "hourly", currency: "USD" },
+    status: "uncapped",
+  },
+  { name: "amount-only", body: capped, status: "threshold_reached" },
+] as const)(
+  "$name summaries expose reserved minutes needed to correct a refused minute cap",
+  async ({ body, status }) => {
+    await set(body);
+    await seedApproved(8000);
+    const invoiceId = createSafeId<"invoice">();
+    await db.insert(invoices).values({
+      id: invoiceId,
+      workspaceId,
+      organizationId: ids.orgA,
+      invoiceDate: "2026-10-04",
+      currency: "USD",
+      status: "draft",
+    });
+    await db
+      .update(timeEntries)
+      .set({ invoiceId, status: "billed", invoiceAttachment: "charged" })
+      .where(eq(timeEntries.id, entryId));
+    const before = await summary();
+
+    expect(
+      await set({
+        mode: "hourly",
+        currency: "USD",
+        capMinutes: 59,
+        alertThresholdBps: 8000,
+      }),
+    ).toMatchObject({
+      code: 409,
+      response: { code: "billing_cap_below_reserved" },
+    });
+    const after = await summary();
+    expect(after).toMatchObject({
+      status,
+      billedAmount: "8000",
+      approvedAmount: "0",
+      totalAmount: "8000",
+      billedMinutes: "60",
+      approvedMinutes: "0",
+      totalMinutes: "60",
+    });
+    expect(after).toEqual(before);
+  },
+);

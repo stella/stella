@@ -1,13 +1,14 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { utimesSync } from "node:fs";
 import {
+  mkdir,
   mkdtemp,
+  readdir,
+  readFile,
   rm,
   writeFile,
-  readFile,
-  mkdir,
-  readdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -258,6 +259,60 @@ test("excluded inputs may change during generation while sources may not", async
       run(async () => {
         await writeFile(path.join(root, "packages/a/src/index.ts"), "again");
         await writeOutput();
+      }),
+    );
+    expect(rejected).toMatchObject({ message: "Generation failed: fixture" });
+    expect(Bun.inspect(rejected)).toContain(
+      "Generator fixture changed its source inputs",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("atomic siblings inherit only their generated destination's exclusion", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generated-cache-atomic-"));
+  const source = path.join(root, "packages/source.ts");
+  const output = path.join(root, "generated/value.txt");
+  const temporary = path.join(root, `packages/derived.ts.${randomUUID()}.tmp`);
+  const sourceTemporary = `${source}.${randomUUID()}.tmp`;
+  let generations = 0;
+  const run = async (duringGeneration: () => Promise<void>) =>
+    withGeneratedOutputCache({
+      root,
+      name: "fixture",
+      environment: "test",
+      inputs: ["packages/**", "!packages/derived.ts"],
+      outputs: ["generated/*.txt"],
+      generate: async () => {
+        generations += 1;
+        await duringGeneration();
+        await mkdir(path.dirname(output), { recursive: true });
+        await writeFile(output, await readFile(source));
+      },
+    });
+  try {
+    await mkdir(path.dirname(source), { recursive: true });
+    await writeFile(source, "source");
+    await writeFile(temporary, "pending derived output");
+    // A concurrent writer removes its sibling through rename. Neither the
+    // initial identity nor the post-generation identity may include it.
+    await run(async () => {
+      await rm(temporary);
+    });
+    expect(await readFile(output, "utf-8")).toBe("source");
+    await writeFile(temporary, "another pending derived output");
+    await run(async () => {
+      panic("An excluded sibling must not invalidate the cache");
+    });
+    expect(generations).toBe(1);
+
+    // A UUID suffix alone does not make a real input disposable: only an
+    // already-excluded destination gives its sibling that disposition.
+    await writeFile(sourceTemporary, "real input");
+    const rejected = await rejectionOf(
+      run(async () => {
+        await rm(sourceTemporary);
       }),
     );
     expect(rejected).toMatchObject({ message: "Generation failed: fixture" });

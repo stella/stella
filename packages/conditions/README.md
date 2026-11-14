@@ -11,7 +11,7 @@ adapter that turns a non-literal operand into a concrete value; the evaluator
 handles operators, boolean combination, and negation.
 
 ```ts
-import { evaluateCondition, type Condition } from "@stll/conditions";
+import { type Condition, evaluateCondition } from "@stll/conditions";
 
 const condition: Condition = {
   type: "group",

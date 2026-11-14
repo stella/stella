@@ -15,11 +15,11 @@ import {
   PUBLIC_LEGISLATION_PAGE_COUNTRIES,
 } from "./legislation-publication";
 import {
-  publicCountriesFor,
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
   PUBLIC_LAW_DOMAINS,
+  publicCountriesFor,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
@@ -38,13 +38,17 @@ describe("public country availability contract", () => {
       publicCountriesFor("legislation", "search"),
     );
     expect(PUBLIC_COUNTRY_CAPABILITIES.EU).toEqual({
-      caseLaw: "identity_public",
+      caseLaw: "admitted",
       legislation: "pending_public",
     });
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE.caseLaw).toBe("admitted");
+    expect(PUBLIC_COUNTRY_CAPABILITIES.HUN).toEqual({
+      caseLaw: "admitted",
+      legislation: "pending_public",
+    });
     expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toEqual({
-      caseLaw: "pages_public",
-      legislation: "pages_public",
+      caseLaw: "admitted",
+      legislation: "admitted",
     });
     for (const country of PUBLIC_COUNTRIES) {
       const unavailable = publicCountryUnavailable(country, {
@@ -67,20 +71,12 @@ describe("public country availability contract", () => {
     }
   });
 
-  test("EU case law is open only for exact identity reads", () => {
-    expect(publicCountriesFor("caseLaw", "identity")).toContain("EU");
-    expect(publicCountriesFor("caseLaw", "pages")).not.toContain("EU");
-    expect(publicCountriesFor("caseLaw", "search")).not.toContain("EU");
+  test("EU case law is open on every surface while EU legislation stays closed", () => {
     for (const surface of ["identity", "pages", "search"] as const) {
-      const response = publicCountryUnavailable("EU", {
-        domain: "caseLaw",
-        surface,
-      });
-      if (surface === "identity") {
-        expect(response).toBeNull();
-      } else {
-        expect(response).toMatchObject({ reason: "identity_public" });
-      }
+      expect(publicCountriesFor("caseLaw", surface)).toContain("EU");
+      expect(
+        publicCountryUnavailable("EU", { domain: "caseLaw", surface }),
+      ).toBeNull();
       expect(
         publicCountryUnavailable("EU", {
           domain: "legislation",
@@ -160,7 +156,7 @@ describe("public country availability contract", () => {
       domain: "legislation",
       country: "EU",
       message: "Legislation for this country is not available.",
-      hint: "Choose a country with available legislation: CZE.",
+      hint: "Choose a country with available legislation: CZE, SVK.",
     });
   });
 

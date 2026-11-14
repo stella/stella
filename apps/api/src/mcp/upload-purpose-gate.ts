@@ -4,31 +4,15 @@ import type { PermissionInput } from "@stll/permissions";
 import { isUuid } from "@stll/uuid-codec";
 
 import { pendingUploads } from "@/api/db/schema";
-import { UPLOAD_PURPOSE_PERMISSION } from "@/api/handlers/uploads/permissions";
+import {
+  UPLOAD_PURPOSE_PERMISSION,
+  UPLOAD_PURPOSE_SCOPE,
+} from "@/api/handlers/uploads/permissions";
 import type { UploadPurpose } from "@/api/handlers/uploads/permissions";
 import { brandPersistedPendingUploadId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 import type { McpOAuthScope } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
-
-/**
- * The consent an upload purpose spends.
- *
- * `uploads.*` takes one domain scope in the capability catalog, but its
- * purposes do not finalize into the same resource: `agent_skill` installs a
- * skill, which is what `stella:skills` is the consent for, while the document
- * purposes create a document or a document version, the consent the named
- * document tools spend (`WRITE_PRIMITIVE_SCOPES`). Without this the domain
- * scope would let a matters-write consent install a skill or write a document.
- *
- * Total over the purpose union, so a new purpose cannot be added without
- * deciding which consent covers it.
- */
-export const UPLOAD_PURPOSE_SCOPE = {
-  entity_create: "stella:documents_write",
-  entity_version: "stella:documents_write",
-  agent_skill: "stella:skills",
-} as const satisfies Record<UploadPurpose, McpOAuthScope>;
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type UploadPurposeGate = {
   /**
@@ -84,7 +68,7 @@ const readStoredPurpose = async ({
   context,
   params,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   params: unknown;
 }): Promise<UploadPurpose | null> => {
   if (!isRecord(params)) {
@@ -116,7 +100,7 @@ const readStoredPurpose = async ({
 type UploadPurposeRequirementInput = {
   body: unknown;
   capabilityId: string;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   params: unknown;
 };
 

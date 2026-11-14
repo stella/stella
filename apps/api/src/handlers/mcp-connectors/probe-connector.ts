@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { probeMcpServer } from "@/api/handlers/mcp-connectors/probe";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -7,8 +7,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const requestBody = t.Object({
-  url: t.String({ minLength: 1, maxLength: 2048 }),
+const requestBody = v.object({
+  url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
 });
 
 const config = {

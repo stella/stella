@@ -13,9 +13,8 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/analytics-config",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/analytics-config",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint": "cd ../.. && bun scripts/lint.ts packages/analytics-config",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/analytics-config"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

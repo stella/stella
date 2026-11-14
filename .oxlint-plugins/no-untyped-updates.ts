@@ -8,8 +8,8 @@
 // cannot launder the update bag before `.set(...)`.
 
 import {
-  eslintCompatPlugin,
   type Definition,
+  eslintCompatPlugin,
   type ESTree,
   type Variable,
 } from "@oxlint/plugins";

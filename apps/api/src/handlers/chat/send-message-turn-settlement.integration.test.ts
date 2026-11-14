@@ -1,8 +1,15 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { sleep } from "@stll/concurrency/sleep";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
@@ -21,6 +28,7 @@ import {
 import { ChatTurnFailureResponse } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -36,6 +44,11 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+beforeEach(() => {
+  streamChatMock.mockReset();
+  streamChatMock.mockImplementation(streamChatDefault);
+});
 
 type StreamResponse = NonNullable<
   Parameters<typeof createSendMessage>[0]
@@ -58,8 +71,8 @@ const invalidAskUserInput = {
  * later tick and hands the test what `onFinish` threw.
  */
 let finishFailure: Promise<unknown> = Promise.resolve(undefined);
-const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
-  finishFailure = sleep(0)
+const streamChatDefault: StreamResponse = async ({ onFinish }) => {
+  finishFailure = Promise.resolve()
     .then(async () => {
       await onFinish({
         outcome: { type: "completed" },
@@ -90,7 +103,8 @@ const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
       headers: { "Content-Type": "text/event-stream" },
     }),
   };
-});
+};
+const streamChatMock = mock<StreamResponse>(streamChatDefault);
 const loadExternalMcpToolsForTest = async () => {
   const close = async () => undefined;
   return {
@@ -207,8 +221,8 @@ const createContext = ({
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
-    route: "/v1/chat/send",
+    request: new Request("http://localhost/v1/chat"),
+    route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     session: { activeOrganizationId: ids.orgA },

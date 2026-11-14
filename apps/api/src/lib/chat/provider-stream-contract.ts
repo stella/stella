@@ -4,8 +4,9 @@ import {
   toRunErrorPayload,
   toRunErrorRawEvent,
 } from "@tanstack/ai/adapter-internals";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { withModelPlaceholdersOmitted } from "@stll/agent-input";
 import type { ReasoningProvenance, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
@@ -26,15 +27,14 @@ import {
 import {
   recordedStopReasonOf,
   refuseTurnPausingRequest,
-  UNRECOGNIZED_STOP_REASON,
   unfinishedStopMessage,
+  UNRECOGNIZED_STOP_REASON,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
 import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import type { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { isRecord } from "@/api/lib/type-guards";
 
 // One owner for what every provider adapter's stream promises the rest of

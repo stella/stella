@@ -13,7 +13,7 @@
  * policy; only this module legitimately writes to it.
  */
 
-import { eq } from "drizzle-orm";
+import { panic } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -24,20 +24,22 @@ import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
-  createBackgroundAuditRecorder,
   type AuditAction,
   type AuditEvent,
+  createBackgroundAuditRecorder,
   type NonChatAuditResourceType,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type { HostedUsageWebhookEvent } from "@/api/lib/hosted-usage-provider/event-schemas";
 import type {
-  ProviderEventReplayAudit,
   ProviderEventReplayAttempt,
+  ProviderEventReplayAudit,
   ProviderEventReplayPerformer,
 } from "@/api/lib/hosted-usage-provider/replay-audit";
 import { minimalWebhookRecord } from "@/api/lib/hosted-usage-provider/webhook-record";
+import { PROVIDER_WEBHOOK_RESULT_TRANSITIONS } from "@/api/lib/hosted-usage-provider/webhook-result-transitions";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -129,28 +131,33 @@ export const insertWebhookEventInTx = async ({
   return { kind: "fresh" };
 };
 
-type UpdateWebhookEventInput = {
+type MarkWebhookEventIgnoredInput = {
   tx: Transaction;
   eventId: string;
-  result: UsageProviderWebhookResult;
-  errorMessage?: string | null;
+  errorMessage: string;
 };
 
 /**
- * Update the row's `result` column to the final dispatch outcome.
- * Runs inside the same transaction as the dispatch so the audit
- * status and the mutations commit together.
+ * Record that dispatch ignored the event this transaction received. Runs
+ * inside the dispatch transaction so the audit status and the mutations
+ * commit together.
  */
-export const updateWebhookEventResultInTx = async ({
+export const markWebhookEventIgnoredInTx = async ({
   tx,
   eventId,
-  result,
-  errorMessage = null,
-}: UpdateWebhookEventInput): Promise<void> => {
-  await tx
-    .update(hostedUsageWebhookEvents)
-    .set({ result, errorMessage })
-    .where(eq(hostedUsageWebhookEvents.eventId, eventId));
+  errorMessage,
+}: MarkWebhookEventIgnoredInput): Promise<void> => {
+  const changed = await transitionScopedBatch({
+    tx,
+    spec: PROVIDER_WEBHOOK_RESULT_TRANSITIONS,
+    identities: [{ eventId }],
+    options: { from: ["ok", "ignored"], to: "ignored", set: { errorMessage } },
+    // The receipt is the provider event's system audit; dispatch audits the organization.
+    recordTransitionAuditEvent: () => undefined,
+  });
+  if (changed.length !== 1) {
+    panic("A webhook event is ignored in the transaction that received it");
+  }
 };
 
 /**
@@ -290,8 +297,19 @@ export const recordProviderEventReplayAuditInTx = async ({
   } as const satisfies ProviderEventReplayAttempt;
   const replayAudit =
     previousAttempts === null ? [attempt] : [...previousAttempts, attempt];
-  await tx
-    .update(hostedUsageWebhookEvents)
-    .set({ result: newResult, errorMessage: dispatchReason, replayAudit })
-    .where(eq(hostedUsageWebhookEvents.eventId, eventId));
+  const changed = await transitionScopedBatch({
+    tx,
+    spec: PROVIDER_WEBHOOK_RESULT_TRANSITIONS,
+    identities: [{ eventId }],
+    options: {
+      from: ["ignored"],
+      to: newResult,
+      set: { errorMessage: dispatchReason, replayAudit },
+    },
+    // `replayAudit` on the receipt is this move's audit record.
+    recordTransitionAuditEvent: () => undefined,
+  });
+  if (changed.length !== 1) {
+    panic("A replay moves the ignored receipt it locked");
+  }
 };

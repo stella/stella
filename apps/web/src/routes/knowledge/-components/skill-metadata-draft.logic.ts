@@ -1,15 +1,19 @@
-import { stripUnicodeMarks } from "@stll/text-normalize";
+import { slugify } from "@stll/text-normalize";
 
 // A skill is invoked in chat via /its-command; suggest the skill's name as that
 // command by default (lowercase, hyphenated) so the field reads as /skill-name.
-// Diacritics are decomposed and stripped first so a name like "Česká dovednost"
-// suggests "ceska-dovednost" rather than dropping the accented letters.
+// slugify transliterates, so "Česká dovednost" suggests "ceska-dovednost"
+// rather than dropping the accented letters. 49 characters is the API's
+// command limit.
+const COMMAND_MAX_LENGTH = 49;
+
 const slugifyCommand = (name: string): string =>
-  stripUnicodeMarks(name, { form: "NFD", markClass: "basic-combining" })
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replace(/^-/u, "")
-    .replace(/-$/u, "");
+  slugify(name, {
+    charset: "ascii",
+    fallback: "",
+    maxLength: COMMAND_MAX_LENGTH,
+    separator: "-",
+  });
 
 /** Whether the assistant may pick the skill by itself or waits to be asked. */
 export type SkillInvocation = "auto" | "manual";

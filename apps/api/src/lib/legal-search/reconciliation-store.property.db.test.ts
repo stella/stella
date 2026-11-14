@@ -11,9 +11,9 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawReconciliationItems,
   caseLawSources,
-  relations,
   RECONCILIATION_ITEM_STATUS,
   RECONCILIATION_MAX_REVIVALS,
+  relations,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

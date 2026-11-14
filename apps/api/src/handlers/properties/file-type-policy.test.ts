@@ -7,10 +7,12 @@ import { assertProperty } from "@stll/property-testing";
 
 import { fields, properties } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
-import { createScopedDb, createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { validateEntityCreate } from "@/api/lib/uploads/entity-create";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -46,6 +48,7 @@ const contents = {
   int: { version: 1, type: "int" },
   money: { version: 1, type: "money", currency: null },
   person: { version: 1, type: "person" },
+  record: { version: 1, type: "record", shape: { type: "tool-output" } },
   "single-select": {
     version: 1,
     type: "single-select",
@@ -77,7 +80,8 @@ const runUpdate = async ({
       safeDb,
       scopedDb: async () => {},
       request: new Request("https://example.test/v1/properties"),
-      route: "/v1/properties/:workspaceId/:propertyId",
+      route:
+        "/v1/properties/:workspaceId/property/:propertyId" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -235,7 +239,12 @@ test("file column updates preserve document references", async () => {
         const after = await db.query.properties.findFirst({
           where: { id: { eq: propertyId } },
         });
-        if (
+        // An AI money column is the table-analysis feature, which this caller
+        // was not granted: admission refuses it before the file policy runs.
+        if (content.type === "money" && ai) {
+          expect(response).toMatchObject({ code: 404 });
+          expect(after).toEqual(before);
+        } else if (
           file !== (content.type === "file") ||
           (content.type === "file" && ai)
         ) {
@@ -315,6 +324,8 @@ test("renaming a file column retains its scope and generated document creation",
         enqueueImageThumbnailOrMarkFailed: async () => {},
         enqueuePdfDerivativeOrMarkFailed: async () => {},
         requestNativeExtractionRun: async () => null,
+        enqueueEntitySearchRepairs,
+        flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
       },
     });
     expect(created.isOk()).toBe(true);

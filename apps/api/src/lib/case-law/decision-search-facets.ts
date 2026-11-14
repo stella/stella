@@ -7,8 +7,8 @@ import {
 } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import {
-  isDecisionTypeKind,
   type DecisionTypeKind,
+  isDecisionTypeKind,
 } from "@stll/api-contract/case-law-decision-types";
 import {
   FACET_COUNT_TYPE,

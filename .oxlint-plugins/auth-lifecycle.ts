@@ -4,9 +4,9 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   type AstNode,
-  type ImportedFromOptions,
   everyNode,
   getPropertyName,
+  type ImportedFromOptions,
   invokedCallee,
   isAstNode,
   isFileIn,

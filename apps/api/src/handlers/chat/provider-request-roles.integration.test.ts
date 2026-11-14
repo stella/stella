@@ -46,8 +46,8 @@ import {
 } from "@/api/tests/helpers/agent-skill-db";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import {
   testModelAdmission,
@@ -75,7 +75,7 @@ import {
   wireOrgAIConfig,
   wireTool,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -118,6 +118,12 @@ let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+});
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -127,11 +133,9 @@ beforeAll(async () => {
   previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay();
 });
 
 afterAll(async () => {
-  replay.restore();
   env.USE_MOCK_AI = previousMockAI;
   if (previousBedrockEndpoint === undefined) {
     delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
@@ -391,7 +395,6 @@ const TASK_REQUESTS = {
     run: async (run) => {
       await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TASK_REQUEST_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
@@ -400,6 +403,8 @@ const TASK_REQUESTS = {
         safeDb: safeDbOf(),
         threadId: await seedThread(),
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
     },
   },
@@ -554,6 +559,7 @@ const ROLE_REQUEST_NAMES = Object.keys(TASK_REQUESTS).filter(
  * fails the scan below.
  */
 const OUTSIDE_THE_CHAT_SURFACE: Readonly<Record<string, string>> = {
+  "handlers/ai/email-generation.ts": "Outlook add-in email summary and reply",
   "handlers/ai-autocomplete/stream.ts": "editor autocomplete",
   "handlers/case-law/analysis/generate.ts": "case-law analysis",
   "handlers/case-law/analysis/significance-run.ts": "case-law analysis",

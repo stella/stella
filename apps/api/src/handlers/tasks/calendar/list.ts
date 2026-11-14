@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { Temporal } from "@stll/time";
 
 import { entities, fields } from "@/api/db/schema";
@@ -17,6 +18,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandValidatedPropertyId } from "@/api/lib/safe-id-boundaries";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
@@ -24,19 +26,20 @@ const TASK_DATE_IDS = ["_due-date", "_start-date"] as const;
 const BUILT_IN_DATE_IDS = [...INTERNAL_DATE_IDS, ...TASK_DATE_IDS] as const;
 const BUILT_IN_DATE_ID_SET: ReadonlySet<string> = new Set(BUILT_IN_DATE_IDS);
 
-const calendarTasksBodySchema = t.Object({
-  dateFrom: t.String({ format: "date-time" }),
-  dateTo: t.String({ format: "date-time" }),
-  datePropertyIds: t.Array(t.String({ minLength: 1 }), {
-    minItems: 1,
-    maxItems: LIMITS.propertiesCount + BUILT_IN_DATE_IDS.length,
-  }),
-  endDatePropertyId: t.Optional(t.String({ minLength: 1 })),
-  filters: t.Optional(
-    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+const calendarTasksBodySchema = v.object({
+  dateFrom: apiDateTimeSchema,
+  dateTo: apiDateTimeSchema,
+  datePropertyIds: v.pipe(
+    v.array(v.pipe(v.string(), v.minLength(1))),
+    v.minLength(1),
+    v.maxLength(LIMITS.propertiesCount + BUILT_IN_DATE_IDS.length),
   ),
-  sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
+  endDatePropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  filters: v.optional(
+    v.pipe(v.array(tConditionNode), v.maxLength(LIMITS.viewFiltersCount)),
+  ),
+  sorts: v.optional(
+    v.pipe(v.array(tViewSortSchema), v.maxLength(LIMITS.viewSortsCount)),
   ),
 });
 
@@ -289,7 +292,7 @@ const calendarTasks = createSafeHandler(
 
     const whereClause = and(
       eq(entities.workspaceId, workspaceId),
-      eq(entities.kind, "task"),
+      workTask(entities),
       ...buildFilterConditions(arrayOrEmpty(body.filters)),
       dateClause,
     );

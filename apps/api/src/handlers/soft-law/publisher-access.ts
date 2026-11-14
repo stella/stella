@@ -7,10 +7,10 @@ import {
   reservePublisherGateSlot,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type {
-  SoftLawFetch,
   SoftLawBlockReason,
-  SoftLawResponse,
+  SoftLawFetch,
   SoftLawFetchError,
+  SoftLawResponse,
 } from "@/api/lib/legal-search/soft-law-access-types";
 import {
   SoftLawAccessError,

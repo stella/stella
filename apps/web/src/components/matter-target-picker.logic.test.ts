@@ -4,8 +4,8 @@ import { describe, expect, test } from "bun:test";
 import {
   canMoveMatterFolder,
   discardPendingMatterFolder,
-  matterFolderPath,
   matterFolderMoveDestinations,
+  matterFolderPath,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,

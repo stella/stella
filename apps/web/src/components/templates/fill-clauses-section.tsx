@@ -4,16 +4,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { ClauseBody } from "@/components/templates/clause-editor-types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ClauseSlot = { patchKey: string; name: string; body: ClauseBody };
 
@@ -41,11 +43,11 @@ export const FillClausesSection = ({
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         ["clause-slots"].get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "FillClausesSection:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const slots = data ? data.slots : [];
@@ -135,11 +137,11 @@ const ClauseFillItem = ({
     <li className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText className="text-sm font-medium" dir="auto">
             {slot.name}
-          </span>
+          </TruncatedText>
           {edited && (
-            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5 font-medium">
+            <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-medium">
               {t("common.edited")}
             </span>
           )}
@@ -161,9 +163,13 @@ const ClauseFillItem = ({
           />
         </div>
       </div>
-      <p className="text-muted-foreground mt-2 line-clamp-4 text-xs whitespace-pre-wrap">
+      <TruncatedText
+        className="text-muted-foreground mt-2 text-xs whitespace-pre-wrap"
+        lines={4}
+        render={<p />}
+      >
         {bodyToText(body)}
-      </p>
+      </TruncatedText>
     </li>
   );
 };

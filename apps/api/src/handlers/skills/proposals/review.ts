@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkills } from "@/api/db/schema";
@@ -17,19 +17,17 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const reviewSkillProposalParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
-  proposalId: tSafeId("agentSkillProposal"),
+const reviewSkillProposalParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
+  proposalId: resourceIdSchema("agentSkillProposal"),
 });
 
-const reviewSkillProposalBodySchema = t.Object({
-  decision: t.UnionEnum(["accepted", "rejected"]),
-  // Accepting a proposal whose base is no longer the current revision
-  // discards every edit made since; the reviewer must say so explicitly.
-  allowStale: t.Optional(t.Boolean()),
+const reviewSkillProposalBodySchema = v.object({
+  decision: v.picklist(["accepted", "rejected"]),
+  allowStale: v.optional(v.boolean()),
 });
 
 const config = {

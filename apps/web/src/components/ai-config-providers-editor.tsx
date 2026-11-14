@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   createProviderCredentialDraft,
@@ -35,11 +36,7 @@ const API_KEY_PLACEHOLDER = {
 } as const satisfies Record<ProviderValue, string>;
 
 export type ProviderRowStatus =
-  | "idle"
-  | "checking"
-  | "valid"
-  | "invalid"
-  | "saved";
+  "idle" | "checking" | "valid" | "invalid" | "saved";
 
 type AIConfigProvidersEditorProps = {
   compact?: boolean;
@@ -197,9 +194,9 @@ export const AIConfigProvidersEditor = ({
                     />
                   ) : (
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="bg-muted text-muted-foreground min-w-0 flex-1 truncate rounded border px-2 py-1 font-mono text-xs">
+                      <TruncatedText className="bg-muted text-muted-foreground flex-1 rounded-sm border px-2 py-1 font-mono text-xs">
                         {t("aiConfig.apiKeySaved", { key: savedKey })}
-                      </span>
+                      </TruncatedText>
                       <Button
                         disabled={disabled}
                         onClick={() =>
@@ -289,11 +286,11 @@ export const AIConfigProvidersEditor = ({
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:pt-6">
                   {hasSavedKey && !providerDraft.replacingKey && (
                     <>
-                      <span className="bg-muted text-muted-foreground min-w-0 truncate rounded border px-2 py-1 font-mono text-xs">
+                      <TruncatedText className="bg-muted text-muted-foreground rounded-sm border px-2 py-1 font-mono text-xs">
                         {t("aiConfig.apiKeySaved", {
                           key: savedKey,
                         })}
-                      </span>
+                      </TruncatedText>
                       <Button
                         disabled={disabled}
                         onClick={() =>

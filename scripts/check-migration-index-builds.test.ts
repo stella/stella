@@ -1,14 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import {
-  readFileSync,
-  readdirSync,
-  mkdtempSync,
   mkdirSync,
-  writeFileSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 import { checkMigrationIndexBuilds } from "./check-migration-safety";
@@ -544,9 +546,12 @@ describe("high-volume index-build migration rule", () => {
       );
     };
     try {
+      // The expand-only rules refuse this historical file outside the
+      // baseline; this case pins only the high-volume grandfathering.
       const unchanged = run(file, original);
-      expect(new TextDecoder().decode(unchanged.stderr)).toBe("");
-      expect(unchanged.exitCode).toBe(0);
+      expect(new TextDecoder().decode(unchanged.stderr)).not.toContain(
+        `[${RULE_ID}]`,
+      );
       for (const [target, sql] of [
         [
           file,
@@ -741,17 +746,20 @@ describe("high-volume index-build migration rule", () => {
     );
     expect(corpusFindings).toEqual(findingsSnapshot);
 
+    const baseRevision = treeBaseRevision({
+      repoRoot: path.resolve(import.meta.dir, ".."),
+    });
     const previous = Bun.spawnSync([
       "git",
       "show",
-      "origin/main:scripts/migration-index-findings.json",
+      `${baseRevision}:scripts/migration-index-findings.json`,
     ]);
     if (previous.exitCode !== 0) {
       // The first snapshot has no predecessor. Other Git failures must not
       // silently disable the shrink-only check.
       expect(previous.exitCode).toBe(128);
       expect(new TextDecoder().decode(previous.stderr)).toContain(
-        "not in 'origin/main'",
+        `not in '${baseRevision}'`,
       );
       return;
     }

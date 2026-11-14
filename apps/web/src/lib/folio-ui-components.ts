@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import type { ComponentProps } from "react";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -9,7 +9,6 @@ import type { FolioUIComponents } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ColorPicker } from "@stll/ui/color-picker";
-import type { ColorPickerProps } from "@stll/ui/color-picker";
 import {
   Dialog,
   DialogBackdrop,
@@ -44,13 +43,21 @@ import {
 } from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { retainOutlinePageNumbers } from "@/components/docx/folio-outline-items.logic";
 
-const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
+const LocalizedColorPicker = ({
+  children,
+  ...props
+}: ComponentProps<FolioUIComponents["ColorPicker"]>) => {
   const t = useTranslations();
 
+  // Folio's contract types the trigger as any node and its toolbar button
+  // does not forward trigger props, so the trigger stays a wrapper here.
   return createElement(ColorPicker, {
     ...props,
     moreLabel: t("common.showMore"),
+    nativeButton: false,
+    trigger: createElement("span", { className: "inline-flex" }, children),
   });
 };
 
@@ -71,12 +78,21 @@ const FolioInput = ({ type, ...props }: FolioInputProps) => {
 };
 
 // Folio reserves docked chrome on its outline host for both default and injected rails.
-const FolioOutlineRail = (
-  props: ComponentProps<FolioUIComponents["OutlineRail"]>,
-) => {
+const FolioOutlineRail = ({
+  items,
+  ...props
+}: ComponentProps<FolioUIComponents["OutlineRail"]>) => {
   const t = useTranslations();
+  const [retained, setRetained] = useState({ source: items, shown: items });
+  if (retained.source !== items) {
+    setRetained({
+      source: items,
+      shown: retainOutlinePageNumbers(retained.shown, items),
+    });
+  }
   return createElement(OutlineRail, {
     ...props,
+    items: retained.shown,
     bottomInset: 0,
     formatMetaLabel: (page) => t("common.page", { page }),
   });

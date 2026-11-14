@@ -13,6 +13,8 @@ import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 import { docxSuggestions, entities } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import rejectPendingDocxSuggestions from "@/api/handlers/docx-suggestions/reject-pending";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -34,7 +36,7 @@ setDefaultTimeout(120_000);
 type WorkspaceTestContext = {
   memberRole: AuthorizedMemberRole;
   request: Request;
-  route: string;
+  route: ApiRoutePath;
   recordAuditEvent: () => Promise<void>;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
@@ -223,7 +225,7 @@ const createWorkspaceContext = ({
     request: new Request(
       `https://example.test/docx-suggestions/${workspaceId}`,
     ),
-    route: "/security/docx-suggestions-reject-pending",
+    route: "/v1/docx-suggestions/:workspaceId/entity/:entityId/reject-pending",
     recordAuditEvent: async () => {},
     safeDb: createSafeDb(testDb, activeWorkspaceIds, organizationId, userId),
     scopedDb: createScopedDb(
@@ -238,14 +240,23 @@ const createWorkspaceContext = ({
   };
 };
 
-const runHandler = async <TContext>(
+const runHandler = async <TContext extends SafeHandlerLogContext>(
   endpoint: { handler: (context: TContext) => Promise<unknown> },
   context: WorkspaceTestContext,
   requestShape: Partial<TContext> & Record<string, unknown>,
 ): Promise<unknown> => {
+  // Spread the context without its route: spreading both typed routes makes
+  // TypeScript intersect two route-path unions, which exceeds its union limit.
+  const { route: contextRoute, ...contextFields } = context;
   try {
     return await endpoint.handler(
-      asTestRaw<TContext>({ ...context, ...requestShape }),
+      asTestRaw<TContext>({
+        ...contextFields,
+        ...requestShape,
+        request: requestShape.request ?? context.request,
+        route: requestShape.route ?? contextRoute,
+        set: requestShape.set ?? { headers: {}, status: 200 },
+      }),
     );
   } catch (error) {
     return error;

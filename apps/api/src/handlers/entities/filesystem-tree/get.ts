@@ -1,38 +1,22 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import { sql } from "drizzle-orm";
 
 import { entities } from "@/api/db/schema";
-import { collectMissingAncestorIds } from "@/api/handlers/entities/filesystem-tree/get.logic";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { arrayOrEmpty } from "@/api/lib/array";
-import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
-import { queryEntities } from "@/api/lib/entities/query-entities";
+import {
+  queryEntities,
+  queryMatterEntityCursorPage,
+} from "@/api/lib/entities/query-entities";
+import { entityReadPageBodySchema } from "@/api/lib/entities/query-window-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { tViewSortSchema } from "@/api/lib/views-schema";
-
-const readFilesystemTreeBodySchema = t.Object({
-  filters: t.Optional(
-    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
-  ),
-  sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
-  ),
-  search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
-  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
-  fieldIds: t.Optional(
-    t.Array(tSafeId("property"), {
-      maxItems: LIMITS.propertiesCount,
-    }),
-  ),
-});
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   contract: "patch",
   description:
-    "Read a matter's folders and documents as one unpaginated tree, using " +
+    "Read a cursor page of a matter's folders and documents, using " +
     "the same filters, sorts, and search as the table listings; tasks are " +
     "excluded. When a filter or search hides intermediate folders, their " +
     "parent links come back separately as ancestorLinks, so a matched row's " +
@@ -42,7 +26,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
-  body: readFilesystemTreeBodySchema,
+  body: entityReadPageBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
 type QueryEntities = typeof queryEntities;
@@ -59,62 +43,83 @@ export const createReadFilesystemTreeHandler = (
       body,
       user: currentUser,
     }) {
-      const result = yield* Result.await(
-        queryEntitiesImpl({
+      const page = yield* Result.await(
+        queryMatterEntityCursorPage({
+          body,
+          workspaceId,
           safeDb,
-          scope: { type: "matter", workspaceId },
           currentUserId: currentUser.id,
           currentOrganizationId: session.activeOrganizationId,
-          filters: arrayOrEmpty(body.filters),
-          sorts: arrayOrEmpty(body.sorts),
-          ...(body.search !== undefined && { search: body.search }),
-          limit: LIMITS.entitiesCount,
-          fieldMode: body.fieldMode ?? "full",
-          fieldIds: arrayOrEmpty(body.fieldIds),
+          queryEntitiesImpl,
           excludedKinds: ["task"],
           previewableForAi: false,
         }),
       );
 
-      const isFiltered =
-        (body.filters?.length ?? 0) > 0 ||
-        (body.search?.trim().length ?? 0) > 0;
-
-      // An unfiltered query already returns the whole subtree, so ancestor
-      // backfill only matters when a filter or search can hide intermediates.
-      if (!isFiltered || result.entities.length === 0) {
-        return Result.ok({ entities: result.entities, ancestorLinks: [] });
+      const parentIds = [
+        ...new Set(
+          page.items.flatMap((item) =>
+            item.parentId === null ? [] : [item.parentId],
+          ),
+        ),
+      ];
+      if (parentIds.length === 0) {
+        return Result.ok({ ...page, ancestorLinks: [] });
       }
 
-      const folderSkeleton = yield* Result.await(
+      // Traverse only this page's parent chains. A complete matter skeleton
+      // makes even a small filtered page scan every unrelated folder.
+      const ancestors = yield* Result.await(
         safeDb((tx) =>
-          tx
-            .select({ entityId: entities.id, parentId: entities.parentId })
-            .from(entities)
-            .where(
-              and(
-                eq(entities.workspaceId, workspaceId),
-                eq(entities.kind, "folder"),
-              ),
-            ),
+          tx.execute<{
+            entityId: string;
+            parentId: string | null;
+            depth: number;
+          }>(sql`
+          WITH RECURSIVE ancestors AS (
+            SELECT id, parent_id, 1 AS depth
+            FROM ${entities}
+            WHERE workspace_id = ${workspaceId}
+              AND id IN (${sql.join(
+                parentIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})
+              AND kind = 'folder'
+            UNION
+            SELECT e.id, e.parent_id, a.depth + 1
+            FROM ${entities} e
+            INNER JOIN ancestors a ON e.id = a.parent_id
+            WHERE e.workspace_id = ${workspaceId}
+              AND e.kind = 'folder'
+              AND a.depth < ${LIMITS.entityAncestorWalkDepthMax}
+          )
+          SELECT id AS "entityId", parent_id AS "parentId", max(depth)::integer AS depth
+          FROM ancestors GROUP BY id, parent_id
+        `),
         ),
       );
-      const parentById = new Map(
-        folderSkeleton.map((folder) => [folder.entityId, folder.parentId]),
-      );
-      const missingIds = new Set(
-        collectMissingAncestorIds(result.entities, parentById),
-      );
-
-      // Just the parent links of the folders the filter/search hid, so the
-      // client can resolve a matched row's full ancestor chain (for
-      // cross-matter copy/move dedup) without these folders ever entering the
-      // rendered or selectable tree.
-      const ancestorLinks = folderSkeleton.filter((folder) =>
-        missingIds.has(folder.entityId),
-      );
-
-      return Result.ok({ entities: result.entities, ancestorLinks });
+      if (
+        ancestors.some(
+          (ancestor) =>
+            ancestor.depth >= LIMITS.entityAncestorWalkDepthMax &&
+            ancestor.parentId !== null,
+        )
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Folder ancestry exceeds the supported depth",
+          }),
+        );
+      }
+      const presentIds = new Set(page.items.map((item) => item.entityId));
+      const ancestorLinks = ancestors
+        .filter((ancestor) => !presentIds.has(ancestor.entityId))
+        .map(({ entityId, parentId }) => ({
+          entityId: brandPersistedEntityId(entityId),
+          parentId: parentId === null ? null : brandPersistedEntityId(parentId),
+        }));
+      return Result.ok({ ...page, ancestorLinks });
     },
   );
 

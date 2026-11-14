@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { isPublicLawMiss, unwrapPublicLawEden } from "@/lib/public-law-api";
+import { isPublicLawMiss, unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -70,7 +70,7 @@ const readProvisionPreview = async (
     return null;
   }
 
-  return unwrapPublicLawEden(response, PROVISION_PREVIEW_ACTION);
+  return unwrapPublicLawResponse(response, PROVISION_PREVIEW_ACTION);
 };
 
 export const provisionPreviewOptions = (key: ProvisionPreviewKey) =>

@@ -84,7 +84,11 @@ export const responseSchemaByteBound = (schema: unknown): number => {
     }
     case "object": {
       const properties = schema["properties"];
-      if (!isRecord(properties) || schema["additionalProperties"] !== false) {
+      // A strict object renders `additionalProperties: false`; a stripping
+      // one renders none, and the response encoder sends only its declared
+      // keys. A loose object passes undeclared keys through.
+      const rest = schema["additionalProperties"];
+      if (!isRecord(properties) || (rest !== undefined && rest !== false)) {
         return panic("A response object needs closed declared properties");
       }
       const fields = Object.entries(properties);

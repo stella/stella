@@ -27,7 +27,10 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
-import { CHAT_DECISION_PASSAGE_HREF_PREFIX } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  CHAT_DECISION_PASSAGE_HREF_PREFIX,
+} from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -37,20 +40,27 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+} from "@stll/api-contract/chat";
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+} from "@stll/api-contract/chat-run-target";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
-  visualPreviewToolOutputSchema,
   type VisualPreviewOutput,
+  visualPreviewToolOutputSchema,
 } from "@stll/api-contract/visual-preview";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  toPersistableChatMessage,
+  createChatAttachmentPart,
   normalizePersistedChatMessageContent,
+  toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -129,6 +139,7 @@ import {
 } from "@/api/tests/helpers/chat-fixtures";
 import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-invariants";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
@@ -140,13 +151,13 @@ import {
   collectInitialRestorationPlaceholders,
   createChatAttemptState,
   hydrateMessages,
+  prepareResumeForThirdParty,
   processServerChatStream,
   pruneOrphanedToolParts,
-  prepareResumeForThirdParty,
   recordChatAttemptFinish,
-  toChatMessage,
   resolveAgentRunBoundaryError,
   shouldAttemptChatFallback,
+  toChatMessage,
   transformClientVisibleStream,
   transformOutgoingStream,
   transformPersistenceVisibleStream,
@@ -467,8 +478,7 @@ type TurnSignals = {
   runSignal?: AbortSignal;
   teardownAfterSourceChunks?: number;
   getRestorableCheckpoint?: () =>
-    | ReturnType<typeof toPersistableChatMessage>
-    | undefined;
+    ReturnType<typeof toPersistableChatMessage> | undefined;
 };
 
 const uncutTurnSignals = (): TurnSignals => {
@@ -1500,6 +1510,7 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
     v.safeParse(visualPreviewToolOutputSchema, previewCall.output).success,
   ).toBe(true);
   validateToolCallParts({
+    ownership: "cloud",
     message: settledMessage,
     tools: { [VISUAL_PREVIEW_TOOL_NAME]: visualTool },
   }).unwrap();
@@ -1894,10 +1905,7 @@ describe("a turn cut while the model was thinking", () => {
 
 type AdmissionExit = "drain" | "throw" | "teardown" | "adapter-error";
 type AdmissionCheckpoint =
-  | "approval"
-  | "client-tool"
-  | "ask-user"
-  | "incomplete";
+  "approval" | "client-tool" | "ask-user" | "incomplete";
 
 const persistAdmissionLoss = async ({
   exit,
@@ -1958,14 +1966,18 @@ const persistAdmissionLoss = async ({
     admission.abort(
       new ActionAdmissionError({
         message: "Admission lease lost",
-        reason: "unavailable",
+        reason: "lease_lost",
       }),
     );
     if (controlReason !== undefined) {
       control.abort(controlReason);
     }
     if (exit === "throw") {
-      throw new HandlerError({ status: 503, message: "Provider aborted" });
+      throw new HandlerError({
+        status: 503,
+        code: "internal_error",
+        message: "Provider aborted",
+      });
     }
     if (exit === "adapter-error") {
       yield {
@@ -2000,12 +2012,16 @@ describe("admission loss before message production identifies the persisted assi
       const source = async function* (): AsyncIterable<StreamChunk> {
         admission.abort(
           new ActionAdmissionError({
-            reason: "unavailable",
+            reason: "lease_lost",
             message: "Admission lost",
           }),
         );
         if (exit === "throw") {
-          throw new HandlerError({ status: 503, message: "Provider aborted" });
+          throw new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: "Provider aborted",
+          });
         }
         if (exit === "adapter-error") {
           yield {
@@ -2052,7 +2068,7 @@ describe("admission loss before message production identifies the persisted assi
       expect(emitted.at(1)).toEqual(
         expect.objectContaining({
           type: EventType.RUN_ERROR,
-          code: ACTION_ADMISSION_CODES.admissionUnavailable,
+          code: ACTION_ADMISSION_CODES.leaseLost,
         }),
       );
       expect(finish.responseMessage.metadata.turnOutcome).toEqual(
@@ -2081,9 +2097,9 @@ describe("admission loss preserves complete interaction checkpoints", () => {
                 type: "failed",
                 error: "provider_unavailable",
                 refusal: {
-                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  code: ACTION_ADMISSION_CODES.leaseLost,
                   ...ACTION_ADMISSION_REFUSALS[
-                    ACTION_ADMISSION_CODES.admissionUnavailable
+                    ACTION_ADMISSION_CODES.leaseLost
                   ],
                 },
               }
@@ -2142,7 +2158,7 @@ describe("late admission loss retains a completed and charged response", () => {
       charges += 1;
       admission.abort(
         new ActionAdmissionError({
-          reason: "unavailable",
+          reason: "lease_lost",
           message: "Lease lost after empty completion",
         }),
       );
@@ -2186,13 +2202,14 @@ describe("late admission loss retains a completed and charged response", () => {
           }
           admission.abort(
             new ActionAdmissionError({
-              reason: "unavailable",
+              reason: "lease_lost",
               message: "Lease lost during upstream cleanup",
             }),
           );
           if (exit === "throw") {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Upstream cleanup aborted",
             });
           }
@@ -2222,9 +2239,9 @@ describe("late admission loss retains a completed and charged response", () => {
                 type: "failed",
                 error: "provider_unavailable",
                 refusal: {
-                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  code: ACTION_ADMISSION_CODES.leaseLost,
                   ...ACTION_ADMISSION_REFUSALS[
-                    ACTION_ADMISSION_CODES.admissionUnavailable
+                    ACTION_ADMISSION_CODES.leaseLost
                   ],
                 },
               },
@@ -2268,7 +2285,7 @@ describe("admission lost before continuation production retains the original che
       const admission = new AbortController();
       admission.abort(
         new ActionAdmissionError({
-          reason: "unavailable",
+          reason: "lease_lost",
           message: "Lease lost before dispatch",
         }),
       );
@@ -2276,6 +2293,7 @@ describe("admission lost before continuation production retains the original che
         if (exit === "throw") {
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Already aborted provider",
           });
         }
@@ -2634,6 +2652,7 @@ describe("native interrupt boundary persistence", () => {
       },
     ]);
     const validated = validateToolCallParts({
+      ownership: "cloud",
       message: finish.responseMessage,
       tools: { [SPAWN_SUBAGENTS_TOOL_NAME]: spawnSubagents },
     });
@@ -3037,6 +3056,13 @@ describe("approved client tool with an output schema", () => {
       elements: [],
       revision: "revision-1",
       tabId: 1,
+      tabs: [
+        {
+          active: true,
+          tabId: 1,
+          url: "https://example.com/",
+        },
+      ],
       text: "Example Domain",
       textOffset: 0,
       textTotalChars: 14,
@@ -3182,6 +3208,7 @@ describe("approved client tool with an output schema", () => {
     expect(
       Result.isOk(
         validateToolCallParts({
+          ownership: "cloud",
           allowPartialInput: false,
           allowDeferredServerInput: true,
           message: stored,
@@ -3205,6 +3232,7 @@ describe("approved client tool with an output schema", () => {
       approved.browser.getMessages().find(({ id }) => id === owningMessageId) ??
       panic("The browser lost the answered message");
     const continuation = await validateMessage({
+      toolCallOwnership: "cloud",
       message: {
         id: owningMessageId,
         role: "assistant",
@@ -3222,6 +3250,7 @@ describe("approved client tool with an output schema", () => {
         },
       ],
       safeDb: noDbReads,
+      refRegistry: createChatRefRegistry(),
       threadId: toSafeId<"chatThread">("thread-1"),
       tools: browserTools,
       userId: toSafeId<"user">("user-1"),
@@ -5909,6 +5938,54 @@ describe("chat stream refs", () => {
     expect(JSON.stringify(assistant)).toContain(resolved);
   });
 
+  test("the outgoing stream removes an unknown stored part's raw payload", async () => {
+    const messageId = createSafeId<"chatMessage">();
+    const marker = {
+      type: "activity" as const,
+      activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+      content: { part: { type: "citation", secret: "future-private-value" } },
+    };
+    const stored = {
+      createdAt: "2026-01-01T00:00:00Z",
+      edited: false,
+      id: messageId,
+      parts: [marker],
+      revision: 0,
+      role: "assistant" as const,
+    };
+    const sourceSnapshot = buildWireSnapshot([
+      { id: messageId, role: "assistant", parts: [] },
+    ]);
+    const chunks = await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks([sourceSnapshot]),
+        storedHistory: {
+          loadServed: async () => Result.ok(new Map([[messageId, stored]])),
+          // Acceptance rewrote the message, so the stream opens with it as
+          // stored and every later snapshot carries it the same way.
+          rewrittenOnAcceptance: [stored],
+        },
+      }),
+    );
+    expect(JSON.stringify(chunks)).not.toContain("future-private-value");
+    const snapshots = chunks.flatMap((chunk) =>
+      chunk.type === EventType.MESSAGES_SNAPSHOT ? [chunk.messages] : [],
+    );
+    const asStored = [
+      {
+        id: messageId,
+        parts: [
+          {
+            type: "activity",
+            activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+            content: {},
+          },
+        ],
+      },
+    ];
+    expect(snapshots).toMatchObject([asStored, asStored]);
+  });
+
   test("reports a failed served-history read as a terminal stream error", async () => {
     const chunks = await collectChunks(
       transformClientVisibleStream({
@@ -6332,6 +6409,7 @@ describe("chat message hydration", () => {
     });
 
     const result = await hydrateMessages({
+      copiesFilesToComputer: false,
       messages: [
         {
           id: "msg_1",
@@ -6360,6 +6438,60 @@ describe("chat message hydration", () => {
     }
 
     expect(result.error.status).toBe(422);
+  });
+
+  test("a PDF for the computer stays out of the messages: the agent reads the copy", async () => {
+    const userFileId = toSafeId<"userFile">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const threadId = toSafeId<"chatThread">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    const userId = toSafeId<"user">("33333333-3333-4333-8333-333333333333");
+    const { safeDb } = createScopedDbMock({
+      query: {
+        userFiles: {
+          findMany: async () => [
+            {
+              extractedText: null,
+              id: userFileId,
+              userId,
+              threadId,
+              fileName: "draft.pdf",
+              mimeType: PDF_MIME_TYPE,
+              s3Key: "user/file",
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await hydrateMessages({
+      copiesFilesToComputer: true,
+      messages: [
+        {
+          id: "msg_1",
+          role: "user",
+          parts: [
+            createChatAttachmentPart({
+              filename: "draft.pdf",
+              mimeType: PDF_MIME_TYPE,
+              url: toUserFileUrl(userFileId),
+            }),
+          ],
+        },
+      ],
+      safeDb,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      userId,
+    });
+
+    const parts = result.unwrap().flatMap((message) => message.parts);
+    expect(parts).toHaveLength(1);
+    expect(JSON.stringify(parts)).toContain(
+      `attachments/${userFileId}/draft.pdf`,
+    );
+    expect(parts.some((part) => part.type === "document")).toBe(false);
   });
 });
 
@@ -7032,6 +7164,104 @@ test("provider diagnostic matches the wire and persisted terminal outcome", asyn
   expect(reloaded.metadata.turnOutcome).toEqual(response.metadata.turnOutcome);
 });
 
+test("a local run's usage limit reset is streamed, stored and reloaded, and only for that failure", async () => {
+  const limit = { resetsAt: "2026-11-08T09:30:00.000Z" };
+  const failedWith = async (code: string) => {
+    const chunks = async function* (): AsyncIterable<StreamChunk> {
+      yield {
+        type: EventType.RUN_ERROR,
+        message: "The harness on the computer reached its usage limit.",
+        code,
+        metadata: { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit },
+      };
+    };
+    const result = await persistNativeInterruptTurn(chunks());
+    const response =
+      result.finish?.responseMessage ?? panic("Expected terminal response");
+    return {
+      streamed: result.emitted.find(
+        (chunk) => chunk.type === EventType.RUN_ERROR,
+      )?.metadata,
+      stored: response.metadata.turnOutcome,
+      reloaded: normalizePersistedChatMessageContent(
+        toPersistedChatMessageContentV3({
+          data: response.parts,
+          metadata: response.metadata,
+        }),
+      ).metadata.turnOutcome,
+    };
+  };
+
+  const limited = await failedWith(AI_FAILURE_CODES.local_runner_limit_reached);
+  expect(limited.streamed?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]).toEqual(limit);
+  expect(limited.stored).toEqual({
+    type: "failed",
+    error: "local_runner_limit_reached",
+    limitResetsAt: limit.resetsAt,
+  });
+  expect(limited.reloaded).toEqual(limited.stored);
+
+  // Another failure keeps no reset time, whatever its chunk carried.
+  const other = await failedWith(AI_FAILURE_CODES.local_runner_unavailable);
+  expect(other.streamed?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]).toBeUndefined();
+  expect(other.stored).toEqual({
+    type: "failed",
+    error: "local_runner_unavailable",
+  });
+});
+
+test("a local turn's context report is stored with its answer and reloaded, and a malformed one is not", async () => {
+  const finishedWith = async (reported: unknown) => {
+    const chunks = async function* (): AsyncIterable<StreamChunk> {
+      yield { type: EventType.RUN_STARTED, runId: "run-1", threadId: "t-1" };
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "m-1",
+        role: "assistant",
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "m-1",
+        delta: "Done.",
+      };
+      yield { type: EventType.TEXT_MESSAGE_END, messageId: "m-1" };
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: "run-1",
+        threadId: "t-1",
+        finishReason: "stop",
+        metadata: { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reported },
+      };
+    };
+    const result = await persistNativeInterruptTurn(chunks());
+    const response =
+      result.finish?.responseMessage ?? panic("Expected terminal response");
+    return {
+      stored: response.metadata.localRunContext,
+      reloaded: normalizePersistedChatMessageContent(
+        toPersistedChatMessageContentV3({
+          data: response.parts,
+          metadata: response.metadata,
+        }),
+      ).metadata.localRunContext,
+    };
+  };
+
+  const report = { usedTokens: 48_200, windowTokens: 200_000 };
+  const reported = await finishedWith(report);
+  expect(reported.stored).toEqual(report);
+  expect(reported.reloaded).toEqual(report);
+
+  for (const malformed of [
+    { usedTokens: -1, windowTokens: 200_000 },
+    { usedTokens: 10, windowTokens: 0 },
+    { ...report, note: "extra" },
+    "48200/200000",
+  ]) {
+    expect((await finishedWith(malformed)).stored).toBeUndefined();
+  }
+});
+
 describe("decision passage court numbers", () => {
   const OPEN_ID = toSafeId<"caseLawDecision">(
     "019a0000-0000-7000-8000-000000000301",
@@ -7373,4 +7603,52 @@ describe("decision passage court numbers", () => {
       `[as held](${passage(EARLIER_ID, "p-4")})`,
     );
   });
+});
+
+test("an event type outside the engine's types reaches the client between answer chunks", async () => {
+  const source = async function* (): AsyncIterable<StreamChunk> {
+    yield* [
+      asTestRaw<StreamChunk>({
+        type: EventType.RUN_STARTED,
+        runId: "run-1",
+        threadId: "thread-1",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "message-1",
+        role: "assistant",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "message-1",
+        delta: "The answer ",
+      }),
+      asTestRaw<StreamChunk>({ type: "FUTURE_EVENT" }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "message-1",
+        delta: "continues.",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: "message-1",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.RUN_FINISHED,
+        runId: "run-1",
+        threadId: "thread-1",
+      }),
+    ];
+  };
+
+  const visible = await collectChunks(
+    transformClientVisibleStream({
+      source: source(),
+      storedHistory: NOTHING_REWRITTEN,
+    }),
+  );
+
+  expect(collectText(visible)).toBe("The answer continues.");
+  expect(visible.map(({ type }): string => type)).toContain("FUTURE_EVENT");
+  expect(visible.at(-1)?.type).toBe(EventType.RUN_FINISHED);
 });

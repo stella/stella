@@ -57,7 +57,9 @@ describe("registered visual fixtures", () => {
     test(`chat history renders every anchored state in ${locale}`, () => {
       const html = renderToStaticMarkup(
         <IntlProvider locale={locale} messages={messages} timeZone="UTC">
-          <ChatHistoryDecisionPlayground />
+          <FormattingProvider locale={locale} timeZone="UTC">
+            <ChatHistoryDecisionPlayground />
+          </FormattingProvider>
         </IntlProvider>,
       );
       expect(html).toContain('data-playground-section="chat-history-decision"');
@@ -124,9 +126,9 @@ describe("registered visual fixtures", () => {
     expect(playbookEditorStates).toEqual(["rejected", "editing", "parked"]);
   });
 
-  test("rejects unknown names and inherited object keys", () => {
+  test("drops unknown names and inherited object keys", () => {
     for (const visual of ["unknown", "toString", "__proto__", 1, null]) {
-      expect(v.safeParse(visualSearchSchema, { visual }).success).toBe(false);
+      expect(v.parse(visualSearchSchema, { visual })).toEqual({});
     }
     expect(v.parse(visualSearchSchema, {})).toEqual({});
   });

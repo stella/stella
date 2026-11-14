@@ -23,4 +23,5 @@ export type {
   PDFDocumentProxy,
   PDFPageProxy,
   PageViewport,
+  RenderTask,
 } from "pdfjs-dist";

@@ -17,13 +17,15 @@ import type {
   SourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
 import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
+import { emitRawSourceStoredMetric } from "@/api/lib/observability/request-metrics";
 import {
-  createS3ObjectIfAbsent,
   copyReplayS3Object,
+  createS3ObjectIfAbsent,
   deleteS3ObjectWithSignal,
-  listS3ObjectKeys,
   headS3ObjectWithSignal,
+  listS3ObjectKeys,
   readS3ObjectBoundedIfPresent,
+  S3_OBJECT_CREATE_STATUS,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import { copyObject, S3PresignError } from "@/api/lib/s3-presign";
@@ -189,6 +191,7 @@ export type WriteCaseLawRawPayloadOptions = RawSourcePayloadWrite & {
 
 /** PUT one payload under its key, unless the key already holds it. */
 const putRawSourcePayload = async ({
+  owner,
   key,
   data,
   contentType,
@@ -196,29 +199,45 @@ const putRawSourcePayload = async ({
   signal,
   s3Policy,
 }: Omit<RawSourcePayloadWrite, "storedContentType"> & {
+  owner: RawSourcePayloadOwner;
   key: string;
 }): Promise<void> => {
   signal?.throwIfAborted();
   if (key !== storedKey) {
-    await createS3ObjectIfAbsent({
+    const status = await createS3ObjectIfAbsent({
       contentType,
       data,
       key,
       ...(signal === undefined ? {} : { signal }),
       ...(s3Policy === undefined ? {} : { s3Policy }),
     });
-    return;
+    switch (status) {
+      case S3_OBJECT_CREATE_STATUS.EXISTING:
+        return;
+      case S3_OBJECT_CREATE_STATUS.WRITTEN:
+        break;
+      default:
+        status satisfies never;
+        return panic(`Unhandled raw object write status: ${String(status)}`);
+    }
+  } else {
+    await writeS3ObjectWithRetry(
+      {
+        contentType,
+        data,
+        key,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+      },
+      { type: "public-corpus" },
+    );
   }
-  await writeS3ObjectWithRetry(
-    {
-      contentType,
-      data,
-      key,
-      ...(signal === undefined ? {} : { signal }),
-      ...(s3Policy === undefined ? {} : { s3Policy }),
-    },
-    { type: "public-corpus" },
-  );
+  emitRawSourceStoredMetric({
+    family: owner.family,
+    sourceId: owner.sourceId,
+    kind: "payload",
+    bytes: typeof data === "string" ? Buffer.byteLength(data) : data.byteLength,
+  });
 };
 
 /**
@@ -245,6 +264,7 @@ export const writeRawSourcePayload = async ({
   const key = rawSourcePayloadKey({ owner, data });
   if (key !== storedKey || contentType !== storedContentType) {
     await putRawSourcePayload({
+      owner,
       key,
       data,
       contentType,
@@ -286,6 +306,7 @@ export const writeCaseLawRawPayload = async ({
     return open;
   }
   await putRawSourcePayload({
+    owner,
     key,
     data,
     contentType,
@@ -360,13 +381,28 @@ export const writeSourceBinary = async ({
   if (Result.isError(open)) {
     return open;
   }
-  await createS3ObjectIfAbsent({
+  const status = await createS3ObjectIfAbsent({
     contentType: input.contentType,
     data: input.bytes,
     key: location.key,
     ...(signal === undefined ? {} : { signal }),
     ...(s3Policy === undefined ? {} : { s3Policy }),
   });
+  switch (status) {
+    case S3_OBJECT_CREATE_STATUS.WRITTEN:
+      emitRawSourceStoredMetric({
+        family: input.family,
+        sourceId: input.sourceId,
+        kind: "document",
+        bytes: input.bytes.byteLength,
+      });
+      break;
+    case S3_OBJECT_CREATE_STATUS.EXISTING:
+      break;
+    default:
+      status satisfies never;
+      return panic(`Unhandled raw object write status: ${String(status)}`);
+  }
   return Result.ok(ref);
 };
 
@@ -508,14 +544,11 @@ export const isUnmovableRawObjectError = (error: unknown): boolean =>
  * server-side copy failed. A failed read or check of the source throws.
  */
 export type RawObjectCopyFailure =
-  | RawSourceObjectCopyError
-  | RawSourceWriteWindowClosedError
-  | S3PresignError;
+  RawSourceObjectCopyError | RawSourceWriteWindowClosedError | S3PresignError;
 
 /** Why storing a decision's raw payload and its files did not happen. */
 export type RawSourceWriteFailure =
-  | RawSourceObjectUnhomeableError
-  | RawObjectCopyFailure;
+  RawSourceObjectUnhomeableError | RawObjectCopyFailure;
 
 /** Largest object a copy reads to check its bytes against its digest. */
 const RAW_COPY_VERIFY_MAX_BYTES = 64 * 1024 * 1024;

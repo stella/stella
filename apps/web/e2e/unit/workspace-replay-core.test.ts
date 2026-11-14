@@ -4,14 +4,14 @@ import * as v from "valibot";
 import {
   BoundedEventTrail,
   MAX_EVENT_TRAIL_LENGTH,
-  REPLAY_FIXTURE_NAME,
   parseReplayArtifact,
-  serializeReplayArtifact,
+  REPLAY_FIXTURE_NAME,
   type ReplayArtifact,
+  serializeReplayArtifact,
 } from "../soak/replay-artifact";
 import {
-  SeededRandom,
   hasWorkspaceAction,
+  SeededRandom,
   selectWeightedAction,
   type WeightedWorkspaceAction,
   type WorkspaceAction,

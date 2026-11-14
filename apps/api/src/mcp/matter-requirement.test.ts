@@ -51,6 +51,21 @@ describe("write tool scope classification", () => {
     }
   });
 
+  test("account-level creation requires no matter or active organization", () => {
+    expect(WRITE_TOOL_SCOPES.create_organization).toBe(
+      WRITE_TOOL_SCOPE.account,
+    );
+    expect(writeCallNeedsMatter("create_organization", {})).toBe(false);
+    expect(
+      matterRequiredResult({
+        args: { name: "New organization" },
+        context: { accessibleWorkspaceIds: [], memberRole: "member" },
+        saveMatterCallable: false,
+        toolName: "create_organization",
+      }),
+    ).toBeNull();
+  });
+
   test("membership operations need a matter and organization settings do not", () => {
     expect(writeCallNeedsMatter("add_matter_member", {})).toBe(true);
     expect(writeCallNeedsMatter("remove_matter_member", {})).toBe(true);
@@ -73,7 +88,7 @@ describe("write tool scope classification", () => {
     }
   });
 
-  test("keeps creating a matter and the organization library matter-free", () => {
+  test("keeps organization-scoped writes matter-free", () => {
     for (const name of [
       "save_matter",
       "save_playbook",
@@ -83,6 +98,7 @@ describe("write tool scope classification", () => {
       "configure_template_fields",
       "save_contact",
       "set_practice_jurisdictions",
+      "mint_web_handoff",
     ] as const) {
       expect(writeCallNeedsMatter(name, {}), name).toBe(false);
     }

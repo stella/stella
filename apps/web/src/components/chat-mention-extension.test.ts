@@ -4,8 +4,8 @@ import { describe, expect, test } from "bun:test";
 import {
   isBusinessRegistrySlug,
   parseChatCorpusId,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -129,6 +129,21 @@ describe("chat mention suggestions", () => {
 
     expect(result.map((item) => chatMentionOptionId(item))).toEqual([
       "decision-1",
+    ]);
+  });
+
+  test("filters local cached mentions by label regardless of case and accents", () => {
+    const result = selectChatSuggestionItems({
+      localItems: [
+        option({ id: "entity-1", label: "Smlouva Dvořák" }),
+        option({ id: "entity-2", label: "Faktura" }),
+      ],
+      query: "DVORAK",
+      searchedItems: [],
+    });
+
+    expect(result.map((item) => chatMentionOptionId(item))).toEqual([
+      "entity-1",
     ]);
   });
 

@@ -14,6 +14,7 @@
 "use client";
 
 import {
+  memo,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -30,9 +31,15 @@ import { Temporal } from "temporal-polyfill/full";
 import { ChevronRightIcon as ChevronRight } from "../icons";
 import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
+import { ReviewAuthorAvatar } from "../review/review-author-avatar";
 import { DirectionalIcon } from "./directional-icon";
+import {
+  reconcileOutlineItems,
+  retainOutlineIdSet,
+} from "./outline-rail.logic";
 import { ScrollArea } from "./scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * How prominently an entry reads next to the entries around it. A caller
@@ -63,6 +70,18 @@ export type OutlineItem = {
   color?: string;
   /** How prominently the row reads. Defaults to `primary`. */
   emphasis?: OutlineEmphasis;
+  /** The people the entry is about. Its tick stays a tick and shows them on
+   *  hover or focus; an entry with people stays on the rail however dense the
+   *  outline gets. */
+  portraits?: readonly OutlinePortrait[];
+  /** Where the portraits come from, said under them in the tick's card. */
+  portraitCredit?: string;
+};
+
+/** A person an entry is about; `image` null draws their initials. */
+export type OutlinePortrait = {
+  image: string | null;
+  name: string;
 };
 
 export type OutlineRailProps = {
@@ -124,6 +143,73 @@ const ACTIVE_ROW_ATTRIBUTE = "data-outline-active";
 /** The entry as one line of text: label, then its title when it has one. */
 export const outlineEntryText = (item: OutlineItem): string =>
   item.title === undefined ? item.label : `${item.label} ${item.title}`;
+
+// A bench can write separately together. A panel row is one line, so it stands
+// for them with a few faces; its text and the tick's card name everyone.
+const MAX_ROW_PORTRAITS = 3;
+// A portrait is published head and shoulders or fuller, so a small circle of
+// its centre is clothing. Frame the top of the image, zoomed to the head.
+const HEAD_FRAME_CLASS =
+  "[&_img]:origin-[50%_26%] [&_img]:scale-200 [&_img]:object-top";
+
+/** A row's faces, decorative: the row's text carries the names. */
+const OutlineRowPortraits = ({
+  portraits,
+}: {
+  portraits: readonly OutlinePortrait[];
+}) => (
+  <span
+    aria-hidden
+    className="me-1.5 flex shrink-0 -space-x-1.5 rtl:space-x-reverse"
+  >
+    {portraits.slice(0, MAX_ROW_PORTRAITS).map((portrait) => (
+      <ReviewAuthorAvatar
+        className={cn("ring-background size-6 ring-2", HEAD_FRAME_CLASS)}
+        fallbackClassName="text-[10px]"
+        image={portrait.image}
+        key={portrait.name}
+        name={portrait.name}
+      />
+    ))}
+  </span>
+);
+
+/** What a tick with people opens: each of them, face and name. The tick's
+ *  accessible name already says all this, so the card adds only the faces. */
+const OutlinePeopleCard = ({
+  credit,
+  portraits,
+  title,
+}: {
+  credit: string | undefined;
+  portraits: readonly OutlinePortrait[];
+  title: string | undefined;
+}) => (
+  <span className="flex max-w-64 flex-col gap-2 py-1">
+    {title !== undefined && (
+      <span className="text-muted-foreground">{title}</span>
+    )}
+    <span className="flex flex-col gap-2">
+      {portraits.map((portrait) => (
+        <span
+          className="flex items-center gap-2 font-medium"
+          key={portrait.name}
+        >
+          <ReviewAuthorAvatar
+            aria-hidden
+            className={cn("size-10", HEAD_FRAME_CLASS)}
+            image={portrait.image}
+            name={portrait.name}
+          />
+          {portrait.name}
+        </span>
+      ))}
+    </span>
+    {credit !== undefined && (
+      <span className="text-muted-foreground text-2xs">{credit}</span>
+    )}
+  </span>
+);
 
 const tickWidth = (level: number): number => {
   const clamped = Math.min(Math.max(level, 0), TICK_MAX_LEVEL);
@@ -199,8 +285,204 @@ const Chevron = ({ open }: { open: boolean }) => (
   />
 );
 
+type OutlineRowProps = {
+  item: OutlineItem;
+  hasChildren: boolean;
+  isCollapsed: boolean;
+  isActive: boolean;
+  isHovered: boolean;
+  indent: number;
+  /** The formatted meta label, so a caller's inline formatter cannot defeat
+   *  the row's memo; absent, the meta renders as plain text. */
+  metaLabel: string | undefined;
+  onJump: (id: string) => void;
+  onToggle: (id: string, rowEl: HTMLElement | null) => void;
+  onHover: (id: string | null) => void;
+};
+
+const OutlineRowView = ({
+  item,
+  hasChildren,
+  isCollapsed,
+  isActive,
+  isHovered,
+  indent,
+  metaLabel,
+  onJump,
+  onToggle,
+  onHover,
+}: OutlineRowProps) => (
+  <div
+    className={cn(
+      "flex items-center rounded-md pe-2.5",
+      (isActive || isHovered) && "bg-accent",
+    )}
+    {...(isActive ? { [ACTIVE_ROW_ATTRIBUTE]: "" } : {})}
+    onMouseEnter={() => onHover(item.id)}
+    onMouseLeave={() => onHover(null)}
+  >
+    {hasChildren ? (
+      <button
+        aria-expanded={!isCollapsed}
+        aria-label={isCollapsed ? "Expand" : "Collapse"}
+        className={cn(
+          "text-muted-foreground hover:text-foreground flex shrink-0 items-center justify-center",
+          OUTLINE_CONTROL_TARGET_CLASS,
+        )}
+        style={{
+          minWidth: OUTLINE_CONTROL_MIN_SIZE,
+          minHeight: OUTLINE_CONTROL_MIN_SIZE,
+          marginInlineStart: indent - 4,
+        }}
+        onClick={(event) =>
+          onToggle(item.id, event.currentTarget.parentElement)
+        }
+        type="button"
+      >
+        <Chevron open={!isCollapsed} />
+      </button>
+    ) : (
+      <span aria-hidden className="shrink-0" style={{ width: indent + 4 }} />
+    )}
+    {item.color && (
+      <span
+        aria-hidden
+        className="me-1.5 size-1.5 shrink-0 rounded-full"
+        style={{ background: `var(${item.color})` }}
+      />
+    )}
+    {item.portraits !== undefined && (
+      <OutlineRowPortraits portraits={item.portraits} />
+    )}
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            aria-current={isActive ? "true" : undefined}
+            className={cn(
+              "flex min-w-0 flex-1 items-baseline gap-1.5 py-1.5 text-start text-[13px] leading-snug",
+              rowTextClass(isActive, item.emphasis ?? OUTLINE_EMPHASIS.primary),
+            )}
+            onClick={() => onJump(item.id)}
+            type="button"
+          />
+        }
+      >
+        {item.title === undefined ? (
+          <TruncatedText hint={false}>{item.label}</TruncatedText>
+        ) : (
+          <>
+            <span className="shrink-0 font-medium">{item.label}</span>
+            <TruncatedText className="font-normal" hint={false}>
+              {item.title}
+            </TruncatedText>
+          </>
+        )}
+      </TooltipTrigger>
+      <TooltipPopup>{outlineEntryText(item)}</TooltipPopup>
+    </Tooltip>
+    {item.meta !== undefined &&
+      (metaLabel !== undefined ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                aria-label={metaLabel}
+                className={cn(
+                  "text-foreground-placeholder text-2xs shrink-0 tabular-nums",
+                  OUTLINE_CONTROL_TARGET_CLASS,
+                )}
+                style={{
+                  minWidth: OUTLINE_CONTROL_MIN_SIZE,
+                  minHeight: OUTLINE_CONTROL_MIN_SIZE,
+                }}
+                onClick={() => onJump(item.id)}
+                type="button"
+              />
+            }
+          >
+            {item.meta}
+          </TooltipTrigger>
+          <TooltipPopup>{metaLabel}</TooltipPopup>
+        </Tooltip>
+      ) : (
+        <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
+          {item.meta}
+        </span>
+      ))}
+  </div>
+);
+
+// One row of the panel tree, memoized on its own props: a change to one entry
+// (its page number, the active or hovered entry) re-renders that row alone,
+// while the tree around it is plain markup and stays cheap to rebuild.
+const OutlineRow = memo(OutlineRowView);
+
+type OutlineTreeProps = {
+  tree: TreeNode[];
+  collapsed: ReadonlySet<string>;
+  toggled: ReadonlySet<string>;
+  activeAncestorIds: ReadonlySet<string>;
+  activeId: string | null;
+  hoveredId: string | null;
+  maxLevel: number;
+  formatMetaLabel: ((meta: string) => string) | undefined;
+  onJump: (id: string) => void;
+  onToggle: (id: string, rowEl: HTMLElement | null) => void;
+  onHover: (id: string | null) => void;
+};
+
+const OutlineTreeView = ({
+  tree,
+  collapsed,
+  toggled,
+  activeAncestorIds,
+  activeId,
+  hoveredId,
+  maxLevel,
+  formatMetaLabel,
+  onJump,
+  onToggle,
+  onHover,
+}: OutlineTreeProps) => {
+  const renderNode = (node: TreeNode): ReactNode => {
+    const hasChildren = node.children.length > 0;
+    const isCollapsed =
+      collapsed.has(node.item.id) &&
+      !(activeAncestorIds.has(node.item.id) && !toggled.has(node.item.id));
+    return (
+      <li key={`${node.item.id}-${node.index}`}>
+        <OutlineRow
+          hasChildren={hasChildren}
+          indent={8 + Math.min(node.item.level, maxLevel) * 12}
+          isActive={activeId === node.item.id}
+          isCollapsed={isCollapsed}
+          isHovered={hoveredId === node.item.id}
+          item={node.item}
+          metaLabel={
+            node.item.meta === undefined
+              ? undefined
+              : formatMetaLabel?.(node.item.meta)
+          }
+          onHover={onHover}
+          onJump={onJump}
+          onToggle={onToggle}
+        />
+        {hasChildren && !isCollapsed && (
+          <ul className="m-0 list-none p-0">{node.children.map(renderNode)}</ul>
+        )}
+      </li>
+    );
+  };
+  return <ul className="m-0 list-none p-0 pb-2">{tree.map(renderNode)}</ul>;
+};
+
+// The panel tree, memoized apart from the rail: the rail also re-renders when
+// its host does and when tick positions move, none of which the tree shows.
+const OutlineTree = memo(OutlineTreeView);
+
 export const OutlineRail = ({
-  items,
+  items: itemsProp,
   scrollContainerRef,
   resolvePct,
   onJump,
@@ -214,6 +496,15 @@ export const OutlineRail = ({
   panelWidth = 300,
   ariaLabel = "Outline",
 }: OutlineRailProps) => {
+  // Callers rebuild their items on every change (an editor re-collects its
+  // headings after each edit). Entries whose content is unchanged keep their
+  // identity, so an update re-renders only the rows that changed, and one
+  // that changed nothing renders no row at all.
+  const [stableItems, setStableItems] = useState(itemsProp);
+  const items = reconcileOutlineItems(stableItems, itemsProp);
+  if (items !== stableItems) {
+    setStableItems(items);
+  }
   const [pctById, setPctById] = useState<ReadonlyMap<string, number>>(
     new Map(),
   );
@@ -243,21 +534,31 @@ export const OutlineRail = ({
 
   const tree = useMemo(() => buildTree(items), [items]);
 
-  // Seed the default-collapsed set from the items, and reset it when the
-  // items change (a different document). Adjusting state during render rather
-  // than in an effect keeps the first paint correct.
-  const [seededItems, setSeededItems] = useState<OutlineItem[] | null>(null);
+  // Seed the default-collapsed state for entries seen for the first time and
+  // keep the reader's state for entries that stay: a page number moving under
+  // an unchanged heading must not reopen the branch they closed. A different
+  // document brings different ids, so it starts from the defaults. Adjusting
+  // state during render rather than in an effect keeps the first paint correct.
+  const [seededItems, setSeededItems] = useState<OutlineItem[]>([]);
   if (seededItems !== items) {
+    const knownIds = new Set(seededItems.map((item) => item.id));
     setSeededItems(items);
-    setToggled(new Set());
-    setCollapsed(
-      collapsedFromLevel === undefined
-        ? new Set()
-        : new Set(
-            items
-              .filter((item) => item.level >= collapsedFromLevel)
-              .map((item) => item.id),
-          ),
+    setToggled((previous) =>
+      retainOutlineIdSet({
+        ids: previous,
+        knownIds,
+        seed: () => false,
+        items,
+      }),
+    );
+    setCollapsed((previous) =>
+      retainOutlineIdSet({
+        ids: previous,
+        knownIds,
+        seed: (item) =>
+          collapsedFromLevel !== undefined && item.level >= collapsedFromLevel,
+        items,
+      }),
     );
   }
 
@@ -398,20 +699,23 @@ export const OutlineRail = ({
     return ancestors;
   }, [active, items]);
 
+  // Keyed on whether the active id is controlled, not on its value: every row
+  // holds this handler, and a new one per active change would re-render all.
+  const activeControlled = activeId !== undefined;
   const jumpTo = useCallback(
     (id: string) => {
       const container = scrollContainerRef.current;
       if (!container) {
         return;
       }
-      if (activeId === undefined) {
+      if (!activeControlled) {
         setDerivedActive(id);
         manualLockUntil.current =
           Temporal.Now.instant().epochMilliseconds + 900;
       }
       onJumpRef.current(id, container);
     },
-    [activeId, scrollContainerRef],
+    [activeControlled, scrollContainerRef],
   );
 
   const toggleCollapse = useCallback(
@@ -525,132 +829,10 @@ export const OutlineRail = ({
     [],
   );
 
-  const renderNode = (node: TreeNode): ReactNode => {
-    const hasChildren = node.children.length > 0;
-    const isCollapsed =
-      collapsed.has(node.item.id) &&
-      !(activeAncestorIds.has(node.item.id) && !toggled.has(node.item.id));
-    const isActive = active === node.item.id;
-    const isHovered = hoveredId === node.item.id;
-    const highlighted = isActive || isHovered;
-    const indent = 8 + Math.min(node.item.level, maxLevel) * 12;
-    return (
-      <li key={`${node.item.id}-${node.index}`}>
-        <div
-          className={cn(
-            "flex items-center rounded-md pe-2.5",
-            highlighted && "bg-accent",
-          )}
-          {...(isActive ? { [ACTIVE_ROW_ATTRIBUTE]: "" } : {})}
-          onMouseEnter={() => setHoveredId(node.item.id)}
-          onMouseLeave={() => setHoveredId(null)}
-        >
-          {hasChildren ? (
-            <button
-              aria-expanded={!isCollapsed}
-              aria-label={isCollapsed ? "Expand" : "Collapse"}
-              className={cn(
-                "text-muted-foreground hover:text-foreground flex shrink-0 items-center justify-center",
-                OUTLINE_CONTROL_TARGET_CLASS,
-              )}
-              style={{
-                minWidth: OUTLINE_CONTROL_MIN_SIZE,
-                minHeight: OUTLINE_CONTROL_MIN_SIZE,
-                marginInlineStart: indent - 4,
-              }}
-              onClick={(event) =>
-                toggleCollapse(node.item.id, event.currentTarget.parentElement)
-              }
-              type="button"
-            >
-              <Chevron open={!isCollapsed} />
-            </button>
-          ) : (
-            <span
-              aria-hidden
-              className="shrink-0"
-              style={{ width: indent + 4 }}
-            />
-          )}
-          {node.item.color && (
-            <span
-              aria-hidden
-              className="me-1.5 size-1.5 shrink-0 rounded-full"
-              style={{ background: `var(${node.item.color})` }}
-            />
-          )}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  aria-current={isActive ? "true" : undefined}
-                  className={cn(
-                    "flex min-w-0 flex-1 items-baseline gap-1.5 py-1.5 text-start text-[13px] leading-snug",
-                    rowTextClass(
-                      isActive,
-                      node.item.emphasis ?? OUTLINE_EMPHASIS.primary,
-                    ),
-                  )}
-                  onClick={() => jumpTo(node.item.id)}
-                  type="button"
-                />
-              }
-            >
-              {node.item.title === undefined ? (
-                <span className="min-w-0 truncate">{node.item.label}</span>
-              ) : (
-                <>
-                  <span className="shrink-0 font-medium">
-                    {node.item.label}
-                  </span>
-                  <span className="min-w-0 truncate font-normal">
-                    {node.item.title}
-                  </span>
-                </>
-              )}
-            </TooltipTrigger>
-            <TooltipPopup>{outlineEntryText(node.item)}</TooltipPopup>
-          </Tooltip>
-          {node.item.meta !== undefined &&
-            (formatMetaLabel ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      aria-label={formatMetaLabel(node.item.meta)}
-                      className={cn(
-                        "text-foreground-placeholder text-2xs shrink-0 tabular-nums",
-                        OUTLINE_CONTROL_TARGET_CLASS,
-                      )}
-                      style={{
-                        minWidth: OUTLINE_CONTROL_MIN_SIZE,
-                        minHeight: OUTLINE_CONTROL_MIN_SIZE,
-                      }}
-                      onClick={() => jumpTo(node.item.id)}
-                      type="button"
-                    />
-                  }
-                >
-                  {node.item.meta}
-                </TooltipTrigger>
-                <TooltipPopup>{formatMetaLabel(node.item.meta)}</TooltipPopup>
-              </Tooltip>
-            ) : (
-              <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
-                {node.item.meta}
-              </span>
-            ))}
-        </div>
-        {hasChildren && !isCollapsed && (
-          <ul className="m-0 list-none p-0">{node.children.map(renderNode)}</ul>
-        )}
-      </li>
-    );
-  };
-
   const visibleTicks = items.flatMap((item) => {
     const pct = pctById.get(item.id);
-    return pct !== undefined && item.level <= railLevelCap
+    return pct !== undefined &&
+      (item.portraits !== undefined || item.level <= railLevelCap)
       ? [{ item, pct }]
       : [];
   });
@@ -659,8 +841,11 @@ export const OutlineRail = ({
   // outline with one shallow heading and many deeper ones leaves <2 ticks but
   // still has a full, navigable popover, so only hide when there is no outline.
   // A header keeps the panel: `items` is then the caller's filtered view, and
-  // a filter matching nothing must still leave the field that set it.
-  if (items.length < 2 && header === undefined) {
+  // a filter matching nothing must still leave the field that set it. An entry
+  // with people is worth a tick on its own: it says whose text is further down,
+  // and its card says all a list of one would.
+  const hasPanel = items.length >= 2 || header !== undefined;
+  if (!hasPanel && !items.some((item) => item.portraits !== undefined)) {
     return null;
   }
 
@@ -705,24 +890,31 @@ export const OutlineRail = ({
           {visibleTicks.map(({ item, pct }) => {
             const isActive = active === item.id;
             const isHovered = hoveredId === item.id;
+            const portraits = item.portraits;
+            const tickLabel =
+              portraits === undefined ? item.label : outlineEntryText(item);
             return (
               <Tooltip key={item.id}>
                 <TooltipTrigger
                   render={
                     <button
-                      {...(presentation === "popover"
+                      {...(presentation === "popover" && hasPanel
                         ? {
                             "aria-controls": panelId,
                             "aria-expanded": panelOpen,
                           }
                         : {})}
                       aria-current={isActive ? "true" : undefined}
-                      aria-label={item.label}
+                      aria-label={tickLabel}
                       className={cn(
                         "absolute end-0 rounded-full transition-[width,height,opacity] duration-150",
                         isHovered || isActive
                           ? "opacity-100"
                           : "opacity-45 hover:opacity-90",
+                        // Its card is reached by resting on the tick, so the
+                        // tick is a target a pointer can stop on, not 2px.
+                        portraits !== undefined &&
+                          "focus-visible:outline-ring z-10 after:absolute after:-inset-x-2 after:-inset-y-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 pointer-coarse:after:-inset-x-3.5 pointer-coarse:after:-inset-y-5",
                       )}
                       onBlur={(event) => {
                         // Focus moving to another tick or into the panel keeps
@@ -759,7 +951,29 @@ export const OutlineRail = ({
                     />
                   }
                 />
-                <TooltipPopup>{item.label}</TooltipPopup>
+                {portraits === undefined ? (
+                  <TooltipPopup>{item.label}</TooltipPopup>
+                ) : (
+                  <TooltipPopup
+                    side="inline-start"
+                    // The panel opens with the card, and its rows are what the
+                    // reader came to the rail for: the card stands beside them.
+                    sideOffset={
+                      presentation === "popover" && hasPanel
+                        ? RAIL_WIDTH +
+                          PANEL_GAP * 2 +
+                          panelWidth -
+                          tickWidth(item.level)
+                        : undefined
+                    }
+                  >
+                    <OutlinePeopleCard
+                      credit={item.portraitCredit}
+                      portraits={portraits}
+                      title={item.title}
+                    />
+                  </TooltipPopup>
+                )}
               </Tooltip>
             );
           })}
@@ -781,7 +995,7 @@ export const OutlineRail = ({
         </div>
       )}
 
-      {presentation !== "rail" && (
+      {presentation !== "rail" && hasPanel && (
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; panel visibility gated by inert/aria-hidden
         <nav
           aria-label={ariaLabel}
@@ -876,7 +1090,19 @@ export const OutlineRail = ({
             className="min-h-0 flex-1"
             viewportRef={panelRef}
           >
-            <ul className="m-0 list-none p-0 pb-2">{tree.map(renderNode)}</ul>
+            <OutlineTree
+              activeAncestorIds={activeAncestorIds}
+              activeId={active}
+              collapsed={collapsed}
+              formatMetaLabel={formatMetaLabel}
+              hoveredId={hoveredId}
+              maxLevel={maxLevel}
+              onHover={setHoveredId}
+              onJump={jumpTo}
+              onToggle={toggleCollapse}
+              toggled={toggled}
+              tree={tree}
+            />
           </ScrollArea>
         </nav>
       )}

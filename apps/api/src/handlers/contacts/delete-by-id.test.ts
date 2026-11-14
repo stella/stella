@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -23,7 +24,7 @@ const createContext = ({
     request: new Request(`https://example.test/v1/contacts/${contactId}`, {
       method: "DELETE",
     }),
-    route: "/v1/contacts/:contactId",
+    route: "/v1/contacts/:contactId" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     memberRole: sessionMemberRole("owner"),
@@ -38,6 +39,7 @@ describe("deleteContactById", () => {
   test("blocks deleting a contact assigned as a matter client", async () => {
     let deleteCalled = false;
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      execute: async () => [{ key1: 1, key2: 2 }],
       select: () => ({
         from: () => ({
           where: () => ({
@@ -78,6 +80,7 @@ describe("deleteContactById", () => {
     let deleteCalled = false;
     let updateCalled = false;
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      execute: async () => [{ key1: 1, key2: 2 }],
       select: () => ({
         from: () => ({
           where: () => ({
@@ -127,6 +130,7 @@ describe("deleteContactById", () => {
 
   test("returns 404 when the contact does not exist", async () => {
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      execute: async () => [{ key1: 1, key2: 2 }],
       select: () => ({
         from: () => ({
           where: () => ({

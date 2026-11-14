@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import uploadSkill from "@/api/handlers/skills/upload";
 import fillTemplate from "@/api/handlers/templates/fill";
@@ -11,8 +10,8 @@ import { DocxArchiveError, validateDocxArchive } from "@/api/lib/docx-archive";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -75,14 +74,9 @@ test("archive entry validation returns a client response before parsing", async 
 });
 
 test("archive validation applies configured limits", async () => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", "<document/>", {
-    createFolders: false,
-  });
-  const bytes = await zip.generateAsync({
-    type: "uint8array",
-    compression: "STORE",
-  });
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", "<document/>");
+  const bytes = await zip.generate({ compression: "store" });
   const accepted = await validateDocxArchive(bytes, {
     maxEntries: 1,
     maxEntryBytes: 16,

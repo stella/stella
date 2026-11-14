@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   entities,
@@ -13,25 +13,27 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 
-const sourceSchema = t.Object({
-  entityId: tSafeId("entity"),
-  entityVersionId: tSafeId("entityVersion"),
+const sourceSchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  entityVersionId: resourceIdSchema("entityVersion"),
 });
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  instruction: t.String({ minLength: 1, maxLength: 4000 }),
-  sources: t.Array(sourceSchema, {
-    minItems: 1,
-    maxItems: LIMITS.legalListGenerationSourcesMax,
-  }),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  instruction: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+  sources: v.pipe(
+    v.array(sourceSchema),
+    v.minLength(1),
+    v.maxLength(LIMITS.legalListGenerationSourcesMax),
+  ),
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Start a generation run over a list: an instruction plus the document " +
@@ -52,7 +54,14 @@ const config = {
 
 const createGeneration = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    user,
+    session,
+    body,
+    recordAuditEvent,
+  }) {
     const distinctVersionIds = [
       ...new Set(body.sources.map((source) => source.entityVersionId)),
     ];
@@ -118,8 +127,11 @@ const createGeneration = createSafeHandler(
           workspaceId,
           listId: body.listId,
           status: "running",
+          producer: "external",
+          organizationId: session.activeOrganizationId,
           instruction: body.instruction,
           requestedBy: user.id,
+          startedAt: new Date(),
         });
         await tx.insert(legalListGenerationSources).values(
           body.sources.map((source) => ({

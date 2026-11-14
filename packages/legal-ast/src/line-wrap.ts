@@ -1,31 +1,59 @@
+// parser-output-unchanged: declares how the new opening-formula role wraps (never reflowed); no paragraph carried that role before, so every reader that does not emit it keeps its output.
+// parser-output-unchanged: the wrapped-date rule and the point openings moved unchanged into the printed-label grammar, which this planner reads them from.
 /**
- * Hard-wrapped source text, recognised for display.
+ * Hard-wrapped source text: the one classifier, and a display fallback.
  *
  * Some publishers serve a decision as fixed-width lines: a newline every
- * 60-80 characters, mid-sentence, each one stored as its own paragraph. The
- * stored text stays exactly as published; this module only says which line
- * boundaries a reader may draw as a continuation of the same paragraph.
+ * 60-80 characters, mid-sentence, each one a paragraph of its own.
  *
- * Nothing here rewrites text. A plan names, per boundary, what a reader draws
- * between two lines: a paragraph break, a space, or nothing (after a line-end
- * hyphen). Every line keeps its own characters and offsets, so search ranges,
- * annotation offsets and block anchors are untouched by construction.
+ * Paragraphs are rebuilt at ingestion. A parser joins a wrapped source's
+ * lines into real paragraphs and stores those; the raw payload stays the
+ * verbatim published record. `classifyLineWrap` is the single decision of
+ * whether a text is fixed-width wrapped and at which column, and
+ * `lineJoinOf` reads one line boundary of such a text: whether the line
+ * continues the one before it. Parsers call them (see
+ * `apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts` and the
+ * Slovak general courts' PDF parser) rather than detecting wrapping
+ * themselves.
  *
- * A line-end hyphen is never dropped. Czech, Slovak and Polish print real
- * hyphens in compounds ("sociálně-právní", "česko-slovenský") and a hyphen
- * the wrapper added is indistinguishable from one without a lexicon, so the
- * hyphen stays and the two lines are drawn without a space between them:
- * exact for a compound, readable for a soft break.
+ * The planning below (`planLineWrap`, `planBlockLineWrap`) is a fallback for
+ * rows stored before their parser rebuilt paragraphs: a reader draws such a
+ * row's wrapped lines joined without changing what is stored. It is deleted
+ * once the corpus is re-parsed, that is when no stored decision of a source
+ * whose parser rebuilds paragraphs carries a parser version below the one
+ * that began to (for the Czech Constitutional Court, version 28). A row
+ * parsed since holds real paragraphs, which the classifier reads as
+ * unwrapped, so the fallback leaves it as stored.
+ *
+ * The fallback rewrites no text. A plan names, per boundary, what a reader
+ * draws between two lines: a paragraph break, a space, or nothing (after a
+ * line-end hyphen). Every line keeps its own characters and offsets, so
+ * search ranges, annotation offsets and block anchors are untouched by
+ * construction.
+ *
+ * The fallback never drops a line-end hyphen. Czech, Slovak and Polish print
+ * real hyphens in compounds ("sociálně-právní", "česko-slovenský") and a
+ * hyphen the wrapper added is indistinguishable from one without evidence,
+ * so the hyphen stays and the two lines are drawn without a space between
+ * them: exact for a compound, readable for a soft break. At ingestion the
+ * whole document is that evidence: a hyphen goes only where the source
+ * marks it soft or spells the joined word elsewhere.
  */
 
+// parser-output-unchanged: [cz-us] that parser reads only `classifyLineWrap`, which is unchanged; the date rule is in `lineJoinOf`, which it does not call.
 import type { Block, ParagraphBlock, ParagraphRole } from "./document-ast.js";
+import {
+  NUMERIC_DATE_START_RE,
+  splitsDate,
+  WRAPPED_LINE_POINT_STARTS,
+} from "./printed-paragraph-labels.js";
 
 export const LINE_WRAP_TYPE = {
   FIXED_WIDTH_WRAPPED: "fixed-width-wrapped",
   UNWRAPPED: "unwrapped",
 } as const;
 
-type LineWrapClassification =
+export type LineWrapClassification =
   | {
       type: typeof LINE_WRAP_TYPE.FIXED_WIDTH_WRAPPED;
       /** The wrap column: the longest line that is not an outlier. */
@@ -85,28 +113,13 @@ const ABBREVIATION_END_RE = /(?:^|[\s(])\p{L}\p{Ll}{0,4}\.$/u;
  * A pre-nominal academic title ending a line: it always precedes a name, so
  * it never ends a sentence. Post-nominal ones ("Ph.D.") can, and are absent.
  */
-const TITLE_END_RE =
+export const PRENOMINAL_TITLE_END_RE =
   /(?:^|\s)(?:JUDr|Mgr|MgA|Ing|MUDr|MVDr|PhDr|RNDr|PaedDr|ThDr|doc|prof|Bc|Dr|Mr|Mrs|Ms)\.$/u;
 /** A letter followed by a hyphen at the line end: no space before it. */
 const HYPHEN_END_RE = /\p{L}-$/u;
 const LOWERCASE_START_RE = /^\p{Ll}/u;
 const LETTER_START_RE = /^\p{L}/u;
 const DIGIT_START_RE = /^\d/u;
-
-/**
- * Line openings that start a new unit whatever came before: numbered points
- * ("1. Stěžovatel", "2) ", "(3) "; "4. listopadu" is a date, not a point),
- * Roman points ("II. ", "IV."), letter items ("a) ", "(b) "), bullets and
- * dashes, and an indented line.
- */
-const STRUCTURAL_START_RES = [
-  /^\(?\d{1,3}\.(?:\s+(?!\p{Ll})|$)/u,
-  /^\(?\d{1,3}\)(?:\s|$)/u,
-  /^\(?[IVXLC]{1,6}[.)](?:\s|$)/u,
-  /^\(?\p{L}\)(?:\s|$)/u,
-  /^[-–—•*·](?:\s|$)/u,
-  /^\s/u,
-] as const;
 
 /** Every letter uppercase, at least two of them: "N Á L E Z", "ODŮVODNĚNÍ". */
 const isAllCaps = (line: string): boolean => {
@@ -188,7 +201,7 @@ const wrapEvidence = (lines: readonly WrapLine[]) => {
  * paragraphs are merely short fails the second; one with a few short lines
  * fails the first.
  */
-const classifyLineWrap = (
+export const classifyLineWrap = (
   lines: readonly WrapLine[],
 ): LineWrapClassification => {
   const evidence = wrapEvidence(lines);
@@ -215,12 +228,9 @@ const isHeadingLike = (line: string, width: number): boolean =>
   line.length <= width * SHORT_LINE_SHARE &&
   (isAllCaps(line) || line.trimEnd().endsWith(":"));
 
-/** A numeric date ("12. 3. 1998", "1.2.1999") continues a sentence. */
-const NUMERIC_DATE_START_RE = /^\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}\b/u;
-
 const startsStructurally = (line: string): boolean =>
   !NUMERIC_DATE_START_RE.test(line) &&
-  STRUCTURAL_START_RES.some((pattern) => pattern.test(line));
+  WRAPPED_LINE_POINT_STARTS.some((pattern) => pattern.test(line));
 
 /**
  * What a reader draws between two adjacent prose lines of a wrapped document.
@@ -237,17 +247,23 @@ const startsStructurally = (line: string): boolean =>
  *   sentence-final punctuation, or the next starts lowercase, or the
  *   previous ends with a short abbreviation ("č.", "odst.") and the next
  *   with a digit, or with an academic title ("JUDr.") and the next with a
- *   letter.
+ *   letter, or the previous ends with a day number and the next opens with
+ *   the month and year of that date.
+ * A line opening with an academic title ("JUDr. A. B.") inside a sentence
+ * continues it like any other capitalised word: only a line the author
+ * ended (short of the column, or after a full stop) puts a signature on a
+ * line of its own.
  * A letter-hyphen line end followed by a letter joins without a space and
  * keeps the hyphen.
  */
 const joinAt = (previous: string, next: string, width: number): LineJoin => {
+  const dateGoesOn = splitsDate(previous, next);
   if (
     previous.length > width ||
     next.length > width ||
     isHeadingLike(previous, width) ||
     isHeadingLike(next, width) ||
-    startsStructurally(next)
+    (!dateGoesOn && startsStructurally(next))
   ) {
     return LINE_JOIN.BREAK;
   }
@@ -272,11 +288,29 @@ const joinAt = (previous: string, next: string, width: number): LineJoin => {
     return LINE_JOIN.HYPHEN;
   }
   const continues =
+    dateGoesOn ||
     isMidSentence(previous, next) ||
     (ABBREVIATION_END_RE.test(previous) && DIGIT_START_RE.test(next)) ||
-    (TITLE_END_RE.test(previous) && LETTER_START_RE.test(next));
+    (PRENOMINAL_TITLE_END_RE.test(previous) && LETTER_START_RE.test(next));
   return continues ? LINE_JOIN.SPACE : LINE_JOIN.BREAK;
 };
+
+/**
+ * How `next` follows `previous`, two adjacent lines of a document
+ * `classifyLineWrap` read: a break unless the document is fixed-width
+ * wrapped and the wrapper, not the author, ended `previous` (see `joinAt`).
+ * A null or blank line always breaks.
+ */
+export const lineJoinOf = (
+  classification: LineWrapClassification,
+  previous: WrapLine,
+  next: WrapLine,
+): LineJoin =>
+  classification.type === LINE_WRAP_TYPE.UNWRAPPED ||
+  isBlank(previous) ||
+  isBlank(next)
+    ? LINE_JOIN.BREAK
+    : joinAt(previous, next, classification.width);
 
 /**
  * The display plan for a sequence of lines: every boundary a break unless
@@ -287,14 +321,12 @@ export const planLineWrap = (lines: readonly WrapLine[]): LineWrapPlan => {
   const classification = classifyLineWrap(lines);
   const joins: LineJoin[] = [];
   for (let index = 0; index + 1 < lines.length; index += 1) {
-    const previous = lines[index] ?? null;
-    const next = lines[index + 1] ?? null;
     joins.push(
-      classification.type === LINE_WRAP_TYPE.UNWRAPPED ||
-        isBlank(previous) ||
-        isBlank(next)
-        ? LINE_JOIN.BREAK
-        : joinAt(previous, next, classification.width),
+      lineJoinOf(
+        classification,
+        lines[index] ?? null,
+        lines[index + 1] ?? null,
+      ),
     );
   }
   return { classification, joins };
@@ -310,6 +342,7 @@ type WrapRoleDisposition = "reflow" | "fixed";
  */
 const WRAP_ROLE_DISPOSITION = {
   "case-number": "fixed",
+  "opening-formula": "fixed",
   intro: "reflow",
   history: "reflow",
   argumentation: "reflow",
@@ -321,6 +354,7 @@ const WRAP_ROLE_DISPOSITION = {
   parties: "fixed",
   "front-matter": "fixed",
   apparatus: "fixed",
+  "publisher-note": "fixed",
   syllabus: "fixed",
   headnotes: "fixed",
   summary: "fixed",

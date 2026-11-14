@@ -4,6 +4,7 @@ import type { ErrorInfo, PropsWithChildren, ReactNode } from "react";
 import { CancelledError, QueryErrorResetBoundary } from "@tanstack/react-query";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { leaveErrorToBoundary } from "@/lib/analytics/reported-error";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 type QuerySuspenseBoundaryProps = PropsWithChildren<{
@@ -40,6 +41,7 @@ class QueryErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, _info: ErrorInfo) {
+    leaveErrorToBoundary(error);
     if (error instanceof CancelledError) {
       queueMicrotask(this.reset);
       return;
@@ -51,6 +53,13 @@ class QueryErrorBoundary extends Component<
         message: `[${this.props.area}] ${error.message}`,
         cause: error,
       }),
+      {
+        fingerprintKey: `QueryErrorBoundary:${this.props.area}`,
+        scope: {
+          type: "handler",
+          handlerId: `QueryErrorBoundary:${this.props.area}`,
+        },
+      },
     );
     this.props.onError?.(error);
   }

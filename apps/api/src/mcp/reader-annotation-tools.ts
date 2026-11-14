@@ -18,34 +18,46 @@ import {
   READER_ANNOTATION_MAX_SPANS,
   READER_ANNOTATION_QUOTE_MAX_LENGTH,
   READER_ANNOTATION_STYLES,
-  READER_ANNOTATION_TARGET_TYPES,
   READER_ANNOTATION_VISIBILITIES,
+  READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
-import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  createReaderTextQuoteLocator,
+  type ReaderTextPiece,
+} from "@stll/legal-ast/reader-text-quote";
 import { createSha256 } from "@stll/sha256/bun";
 
-import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
-import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
 import { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
-import { listReaderAnnotationsHandler } from "@/api/handlers/legal-reader/annotations/list";
 import { locatePassages } from "@/api/handlers/legal-reader/annotations/locate.logic";
-import type {
-  CreateAnnotationBody,
-  UpdateAnnotationBody,
-} from "@/api/handlers/legal-reader/annotations/schema";
-import { updateReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/update";
 import {
   CREATE_READER_ANNOTATION_PROJECTION,
   DELETED_TRUE_PROJECTION,
   LIST_READER_ANNOTATIONS_PROJECTION,
   UPDATE_READER_ANNOTATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
+import { deleteReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/delete";
+import { listReaderAnnotationsHandler } from "@/api/lib/legal-search/reader-annotations/list";
+import type {
+  CreateAnnotationBody,
+  UpdateAnnotationBody,
+} from "@/api/lib/legal-search/reader-annotations/schema";
+import {
+  DOCUMENT_ANNOTATION_REACH,
+  PUBLIC_LAW_ANNOTATION_PLACEMENT,
+} from "@/api/lib/legal-search/reader-annotations/target";
+import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -60,21 +72,19 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  cursorInput,
   errorResult,
   internalFailureResult,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 const TARGET_ID_DESCRIPTION =
   "The document: for a decision, its decisionId (read_case_law_decision, " +
@@ -83,7 +93,7 @@ const TARGET_ID_DESCRIPTION =
 
 const targetArgs = {
   target_type: v.pipe(
-    v.picklist(READER_ANNOTATION_TARGET_TYPES),
+    v.picklist(READER_DOCUMENT_TARGET_TYPES),
     v.description("decision (case law) or statute (legislation)."),
   ),
   target_id: uuidInputSchema(TARGET_ID_DESCRIPTION),
@@ -121,7 +131,15 @@ const TARGET_REFUSAL_HINT =
   "Tell the user; they can highlight or comment on it in the reader themselves.";
 
 type TargetAccessResult =
-  | { status: "available"; readBlocks: () => Promise<readonly Block[]> }
+  | {
+      status: "available";
+      loadBlocks: () => Promise<readonly Block[]>;
+      loadTextPieces: () => Promise<readonly ReaderTextPiece[]>;
+      resolveHeldAnchors: (
+        anchors: readonly string[],
+        currentAnchors: ReadonlySet<string>,
+      ) => Promise<ReadonlyMap<string, string>>;
+    }
   | { status: "refused"; result: InternalToolErrorResult };
 
 /**
@@ -134,9 +152,9 @@ const resolveTargetForAgent = async ({
   targetId,
   targetType,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   targetId: string;
-  targetType: ReaderAnnotationTargetType;
+  targetType: ReaderDocumentTargetType;
 }): Promise<TargetAccessResult> => {
   const resolve =
     context.testDependencies?.resolveAnnotationTarget ??
@@ -145,11 +163,22 @@ const resolveTargetForAgent = async ({
     async () => await resolve({ targetId, targetType }),
   );
   if (Result.isError(access)) {
-    return { status: "refused", result: internalFailureResult(access.error) };
+    return {
+      status: "refused",
+      result: internalFailureResult(
+        access.error,
+        "mcp.resolveTargetForAgent.access_error",
+      ),
+    };
   }
   switch (access.value.status) {
     case "available":
-      return access.value;
+      return {
+        status: "available",
+        loadBlocks: access.value.readBlocks,
+        loadTextPieces: access.value.readTextPieces,
+        resolveHeldAnchors: access.value.resolveHeldAnchors,
+      };
     case "not_found":
       return {
         status: "refused",
@@ -202,6 +231,10 @@ const listArgsSchema = nullAsAbsent(
 type ListedMark = v.InferInput<
   typeof LIST_READER_ANNOTATIONS_PROJECTION
 >["annotations"][number];
+
+type ListedPassage = ListedMark["passages"][number];
+
+const NO_PIECES: readonly ReaderTextPiece[] = [];
 
 type ListedMarks = { annotations: readonly ListedMark[] };
 
@@ -275,19 +308,61 @@ const handleListTool: TypedMcpToolHandler<
         ...(limit === undefined ? {} : { limit }),
       },
       safeDb: context.safeDb,
+      readCopies: context.testDependencies?.readWithdrawnCopies,
       userId: context.userId,
     }),
   );
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListTool.listed_error",
+    );
   }
+
+  // A stored anchor names a position in the text the mark was made on; a
+  // re-parse since can have moved it onto other words. Each passage is
+  // placed by its quote in the text the reader draws marks in now (the
+  // publisher's headnote and abstract as well as the body), or reported
+  // orphaned, never handed back at a position that names other words.
+  const pieces = await Result.tryPromise(async () =>
+    listed.value.items.length === 0 ? NO_PIECES : await target.loadTextPieces(),
+  );
+  if (Result.isError(pieces)) {
+    return internalFailureResult(
+      pieces.error,
+      "mcp.handleListTool.blocks_error",
+    );
+  }
+  const locate = createReaderTextQuoteLocator(pieces.value);
+  const passageOf = (
+    row: (typeof listed.value.items)[number],
+  ): ListedPassage => {
+    const placement = locate(row);
+    switch (placement.status) {
+      case "placed":
+        return {
+          placement: "placed",
+          anchor: placement.blockAnchorId,
+          quote: row.quote,
+        };
+      case "orphaned":
+        return {
+          placement: "orphaned",
+          reason: placement.reason,
+          quote: row.quote,
+        };
+      default:
+        placement satisfies never;
+        return panic("Unhandled reader mark placement");
+    }
+  };
 
   // One entry per mark, as the reader shows it: the rows of a passage over
   // several paragraphs share a group and read as one.
   const marks = new Map<string, ListedMark>();
   for (const row of listed.value.items) {
     const key = row.groupId ?? row.id;
-    const passage = { anchor: row.blockAnchorId, quote: row.quote };
+    const passage = passageOf(row);
     const existing = marks.get(key);
     if (existing !== undefined) {
       existing.passages.push(passage);
@@ -434,9 +509,12 @@ const handleCreateTool: TypedMcpToolHandler<
   if (target.status === "refused") {
     return target.result;
   }
-  const blocks = await Result.tryPromise(target.readBlocks);
+  const blocks = await Result.tryPromise(target.loadBlocks);
   if (Result.isError(blocks)) {
-    return internalFailureResult(blocks.error);
+    return internalFailureResult(
+      blocks.error,
+      "mcp.handleCreateTool.blocks_error",
+    );
   }
   if (blocks.value.length === 0) {
     return structuredErrorResult({
@@ -447,7 +525,34 @@ const handleCreateTool: TypedMcpToolHandler<
     });
   }
 
-  const located = locatePassages(blocks.value, passages);
+  // An anchor an agent read before the document's last reparse names the
+  // block now holding its text; one the redirects do not know is located as
+  // given, and the miss names the candidates.
+  const moved = await Result.tryPromise(
+    async () =>
+      await target.resolveHeldAnchors(
+        passages.flatMap(({ anchor }) =>
+          anchor === undefined ? [] : [anchor],
+        ),
+        new Set(blocks.value.map(({ anchorId }) => anchorId)),
+      ),
+  );
+  if (Result.isError(moved)) {
+    return internalFailureResult(
+      moved.error,
+      "mcp.handleCreateTool.anchor_redirects_error",
+    );
+  }
+  const located = locatePassages(
+    blocks.value,
+    passages.map((passage) => {
+      const current =
+        passage.anchor === undefined
+          ? undefined
+          : moved.value.get(passage.anchor);
+      return current === undefined ? passage : { ...passage, anchor: current };
+    }),
+  );
   if (located.status === "rejected") {
     return structuredErrorResult({
       code: "validation_error",
@@ -465,14 +570,17 @@ const handleCreateTool: TypedMcpToolHandler<
 
   // The id is the primary key, unique across organizations, so the
   // organization is part of it; visibility is hashed as stored, so an omitted
-  // one and "private" name the same mark.
+  // one and "private" name the same mark. It hashes the call as the agent
+  // made it, not where its passages were placed: a re-parse between a call
+  // and its retry moves the positions and their context, and the retry must
+  // still name the mark the first call made.
   const storedVisibility = visibility ?? "private";
   const shared = {
     requestId: createRequestIdFor({
       organizationId: context.organizationId,
       request: {
         mark,
-        spans: located.spans,
+        passages,
         target_id,
         target_type,
         visibility: storedVisibility,
@@ -493,13 +601,20 @@ const handleCreateTool: TypedMcpToolHandler<
     createReaderAnnotationHandler({
       body,
       organizationId: context.organizationId,
+      placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
       recordAuditEvent: context.recordAuditEvent,
+      // A retry may find the passages elsewhere after a re-parse; the words
+      // are the request, and the mark keeps its first placement.
+      replayIdentity: "words",
       safeDb: context.safeDb,
       userId: context.userId,
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.handleCreateTool.created_error",
+    );
   }
 
   return toolDataResult(
@@ -578,13 +693,17 @@ const handleUpdateTool: TypedMcpToolHandler<
       annotationId,
       change: toHandlerChange(parsed.output.change),
       organizationId: context.organizationId,
+      reach: DOCUMENT_ANNOTATION_REACH,
       recordAuditEvent: context.recordAuditEvent,
       safeDb: context.safeDb,
       userId: context.userId,
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleUpdateTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(UPDATE_READER_ANNOTATION_PROJECTION, {
@@ -630,13 +749,17 @@ const handleDeleteTool: TypedMcpToolHandler<
         parsed.output.annotation_id,
       ),
       organizationId: context.organizationId,
+      reach: DOCUMENT_ANNOTATION_REACH,
       recordAuditEvent: context.recordAuditEvent,
       safeDb: context.safeDb,
       userId: context.userId,
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -660,12 +783,13 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     description:
-      "List the highlights and comments on one case-law decision or one " +
-      "statute version that the user can see: their own, and those " +
-      "colleagues shared. Each mark lists the passages it covers by block " +
-      "anchor and quote, oldest first.",
+      "List visible highlights and comments on a decision or statute version, " +
+      "oldest first. Passages give quoted words and their current block anchor " +
+      "when placed; orphaned passages have quote_not_found or quote_ambiguous. " +
+      "Report orphaned passages by quote, never at an anchor.",
     inputSchema: listArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

@@ -6,6 +6,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { templateDeletionCleanupRequests } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { deleteS3Keys } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const CLEAN_TEMPLATE_DELETION_OBJECTS_TASK =
@@ -108,7 +109,12 @@ const processCleanup = async (
     error = deletion.value.error;
   }
   if (error !== null) {
-    captureError(error, { cleanupRequestId: claim.id });
+    captureError(
+      error,
+      handlerErrorContext("tasks.processCleanup", {
+        cleanupRequestId: claim.id,
+      }),
+    );
     const failedAt = new Date();
     await db
       .update(templateDeletionCleanupRequests)

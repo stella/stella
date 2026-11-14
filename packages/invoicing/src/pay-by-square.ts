@@ -2,13 +2,13 @@ import { Result } from "better-result";
 import { compress } from "lzma1";
 
 import type { CentsAmount } from "@stll/money";
-import { stripUnicodeMarks } from "@stll/text-normalize";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { invalidInput, type InvoicingResult } from "./errors";
 import {
   compactPaymentDate,
   parsePaymentAccount,
-  validateVariableSymbol,
+  validatePaymentSymbol,
 } from "./payment-fields";
 import type { InvoiceDocumentType } from "./types";
 
@@ -71,7 +71,7 @@ export const buildPayBySquarePayload = ({
 
   let symbol = "";
   if (variableSymbol !== undefined) {
-    const validSymbol = validateVariableSymbol(variableSymbol);
+    const validSymbol = validatePaymentSymbol(variableSymbol, "Variable");
     if (validSymbol.isErr()) {
       return Result.err(validSymbol.error);
     }
@@ -145,13 +145,9 @@ const base32hex = (bytes: Uint8Array): string => {
   return output;
 };
 
-/**
- * Free text the banking apps accept: no diacritics (many apps reject them),
- * no tabs (the field separator), collapsed whitespace, within the field limit.
- */
+/** PAY 1.2 section 3.8 keeps UTF-8 text and replaces field separators. */
 const fieldText = (value: string, maxLength: number): string =>
-  stripUnicodeMarks(value, { form: "NFKD", markClass: "combining" })
-    .replaceAll(/\s+/gu, " ")
-    .trim()
+  Array.from(normalizeUnicode(value, "NFC").replaceAll(/\s+/gu, " ").trim())
     .slice(0, maxLength)
+    .join("")
     .trim();

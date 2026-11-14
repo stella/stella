@@ -1,12 +1,12 @@
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import {
   caseLawDecisions,
-  caseLawSources,
   caseLawProvisionCitations,
+  caseLawSources,
 } from "@/api/db/schema";
+import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -45,23 +45,25 @@ if (!databaseUrl || !runPostgresTests) {
             _stellaPartialObservation: { isListingOnly: true },
           };
           const writeCitation = async (client: SQL) => {
-            await drizzle({ client }).insert(caseLawProvisionCitations).values({
-              id: createSafeId<"caseLawProvisionCitation">(),
-              decisionId,
-              jurisdiction: "CZE",
-              workIdentifier: "89/2012 Sb.",
-              workNumber: 89,
-              workYear: 2012,
-              workCollection: "Sb.",
-              unit: "section",
-              section: 1,
-              workEli: "/eli/cz/sb/2012/89",
-              anchor: "s1",
-              spanStart: 0,
-              spanEnd: 5,
-              sentenceText: "Citation",
-              confidence: 1,
-            });
+            await createDatabase({ client })
+              .insert(caseLawProvisionCitations)
+              .values({
+                id: createSafeId<"caseLawProvisionCitation">(),
+                decisionId,
+                jurisdiction: "CZE",
+                workIdentifier: "89/2012 Sb.",
+                workNumber: 89,
+                workYear: 2012,
+                workCollection: "Sb.",
+                unit: "section",
+                section: 1,
+                workEli: "/eli/cz/sb/2012/89",
+                anchor: "s1",
+                spanStart: 0,
+                spanEnd: 5,
+                sentenceText: "Citation",
+                confidence: 1,
+              });
           };
           const applyTransition = async (client: SQL) => {
             switch (transition) {

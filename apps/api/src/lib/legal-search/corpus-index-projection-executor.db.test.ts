@@ -11,7 +11,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -185,11 +185,11 @@ const runLegislationCycle = async ({
     ...LEGISLATION_TARGET,
     scope: { type: "subjects", entityIds },
     limit: entityIds.length,
-    leaseMs: 600_000,
+    fillWindowMs: 600_000,
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
-    payloadReader: async () => ({ text, ast: null }),
+    payloadReader: async () => Result.ok({ text, ast: null }),
   });
 };
 
@@ -246,7 +246,7 @@ const runCycle = async (
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: 8,
-    leaseMs: 60_000,
+    fillWindowMs: 60_000,
     payloadReadConcurrency: 4,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,

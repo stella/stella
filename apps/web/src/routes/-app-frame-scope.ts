@@ -1,7 +1,6 @@
 export const APP_FRAME_SCOPE = {
   none: "none",
   member: "member",
-  admin: "admin",
   knowledge: "knowledge",
 } as const;
 

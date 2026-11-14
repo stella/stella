@@ -10,19 +10,22 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
   callGatewayExternalMcpTool,
   listGatewayExternalMcpTools,
 } from "@/api/mcp/gateway/external-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const loadActiveMcpConnectionsForUserMock = mock();
 const refreshCachedMcpToolsForConnectionMock = mock(async () => undefined);
 const proxyMcpToolCallMock = mock();
+const consumeMcpGatewayRateLimitMock = mock(async () => true);
 
 const dependencies = {
+  consumeMcpGatewayRateLimit: consumeMcpGatewayRateLimitMock,
   loadActiveMcpConnectionsForUser: loadActiveMcpConnectionsForUserMock,
   proxyMcpToolCall: proxyMcpToolCallMock,
   refreshCachedMcpToolsForConnection: refreshCachedMcpToolsForConnectionMock,
@@ -83,17 +86,17 @@ const createSelectBuilder = (rowBatches: GatewayConnectionToolRow[][]) => {
 
 const createContext = (
   rowBatches: GatewayConnectionToolRow[][],
-): McpRequestContext => {
+): AuthorizedMcpRequestContext => {
   const tx = {
     select: () => createSelectBuilder(rowBatches),
   };
   const scopedDb: ScopedDb = async <T>(
     callback: (transaction: Transaction) => Promise<T>,
   ) => await callback(asTestRaw<Transaction>(tx));
-  const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
     Result.ok(await callback(asTestRaw<Transaction>(tx)));
 
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set(),
     accessibleWorkspaceStatusById: new Map(),
@@ -107,13 +110,13 @@ const createContext = (
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 /** Context whose backing-store read always fails (transient DB outage). */
-const createFailingContext = (): McpRequestContext => {
+const createFailingContext = (): AuthorizedMcpRequestContext => {
   const base = createContext([]);
-  const safeDb: McpRequestContext["safeDb"] = async () =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async () =>
     Result.err(new DatabaseError({ message: "connection refused" }));
   return { ...base, safeDb };
 };
@@ -125,6 +128,8 @@ describe("external MCP gateway tools", () => {
     proxyMcpToolCallMock.mockReset();
     refreshCachedMcpToolsForConnectionMock.mockReset();
     refreshCachedMcpToolsForConnectionMock.mockResolvedValue(undefined);
+    consumeMcpGatewayRateLimitMock.mockReset();
+    consumeMcpGatewayRateLimitMock.mockResolvedValue(true);
   });
 
   test("refreshes missing cached tools before exposing existing connections", async () => {
@@ -193,5 +198,51 @@ describe("external MCP gateway tools", () => {
     expect(parsed.error.retryable).toBe(true);
     expect(parsed.error.code).not.toBe("unknown_tool");
     expect(result.isError).toBe(true);
+  });
+
+  test("charges the user and connector budget before proxying a call", async () => {
+    const callOrder: string[] = [];
+    consumeMcpGatewayRateLimitMock.mockImplementation(async () => {
+      callOrder.push("consume");
+      return true;
+    });
+    proxyMcpToolCallMock.mockImplementation(async () => {
+      callOrder.push("proxy");
+      return { content: [] };
+    });
+    const context = createContext([[row({ cachedTools: [cachedTool] })]]);
+
+    await callGatewayExternalMcpTool({
+      args: {},
+      context,
+      toolName: "mcp__registry__lookup",
+      dependencies,
+    });
+
+    expect(consumeMcpGatewayRateLimitMock).toHaveBeenCalledWith({
+      connectorSlug: "registry",
+      userId: context.userId,
+    });
+    expect(proxyMcpToolCallMock).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["consume", "proxy"]);
+  });
+
+  test("refuses a call over the gateway budget without reaching the connector", async () => {
+    consumeMcpGatewayRateLimitMock.mockResolvedValue(false);
+    const context = createContext([[row({ cachedTools: [cachedTool] })]]);
+
+    const result = await callGatewayExternalMcpTool({
+      args: {},
+      context,
+      toolName: "mcp__registry__lookup",
+      dependencies,
+    });
+
+    const item = result.content.at(0);
+    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
+    expect(parsed.error.code).toBe("rate_limited");
+    expect(parsed.error.retryable).toBe(true);
+    expect(result.isError).toBe(true);
+    expect(proxyMcpToolCallMock).not.toHaveBeenCalled();
   });
 });

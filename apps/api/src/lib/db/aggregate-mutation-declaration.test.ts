@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
+
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 
 import {
   collectUndeclaredAggregateMutations,
@@ -7,38 +9,37 @@ import {
 } from "./aggregate-mutation-declaration";
 
 describe("aggregate mutation ownership", () => {
-  test("enumerates actual Elysia handlers without changing their identity", () => {
-    const handler = () => "ok";
-    const declared = declareAggregateMutation(handler, {
+  test("enumerates mounted route definitions without changing their identity", () => {
+    const definition = defineEndpoint.public({}, () => "ok");
+    const declared = declareAggregateMutation(definition, {
       type: "independent",
       reason: "Responds without persistent mutation.",
     });
-    expect(declared).toBe(handler);
-    const api = new Elysia()
-      .post("/declared", declared)
-      .get("/read", () => "read")
-      .delete("/planted", () => "undeclared")
-      .all("/transport", () => "transport");
-    expect(collectUndeclaredAggregateMutations(api.routes)).toEqual([
+    expect(declared).toBe(definition);
+    const entries = routes({
+      "/declared": { POST: declared },
+      "/read": { GET: defineEndpoint.public({}, () => "read") },
+      "/planted": { DELETE: defineEndpoint.public({}, () => "undeclared") },
+    });
+    expect(collectUndeclaredAggregateMutations(entries)).toEqual([
       "DELETE /planted",
-      "ALL /transport",
     ]);
   });
 
   test("rejects missing reasons and repeated ownership", () => {
     expect(() =>
-      declareAggregateMutation(() => "ok", {
-        type: "independent",
-        reason: " ",
-      }),
+      declareAggregateMutation(
+        defineEndpoint.public({}, () => "ok"),
+        { type: "independent", reason: " " },
+      ),
     ).toThrow("requires a reason");
-    const handler = () => "ok";
-    declareAggregateMutation(handler, {
+    const definition = defineEndpoint.public({}, () => "ok");
+    declareAggregateMutation(definition, {
       type: "independent",
       reason: "No persistence.",
     });
     expect(() =>
-      declareAggregateMutation(handler, {
+      declareAggregateMutation(definition, {
         type: "independent",
         reason: "Other ownership.",
       }),

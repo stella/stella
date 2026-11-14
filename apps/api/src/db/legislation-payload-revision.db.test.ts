@@ -6,7 +6,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { asc, eq, isNotNull, sql, TransactionRollbackError } from "drizzle-orm";
+import { asc, eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -314,7 +314,7 @@ describe("trigger definitions", () => {
     );
   });
 
-  test("the row path fires before the column paths, and all before the epoch guard", async () => {
+  test("row guards precede the payload paths, which precede the epoch guard", async () => {
     const triggers = await db.execute<{ tgname: string }>(sql`
       SELECT tgname FROM pg_trigger
       WHERE tgrelid = 'legislation_documents'::regclass
@@ -324,13 +324,18 @@ describe("trigger definitions", () => {
       ORDER BY tgname COLLATE "C"
     `);
     expect(triggers.rows.map(({ tgname }) => tgname)).toEqual([
+      // Derive and validate the source-owned mode before any other row guard
+      // or payload trigger observes the proposed document identity.
+      "legislation_documents_derive_identity_mode",
       // Reads and writes none of the payload inputs; it only refuses an id
-      // change, so running first changes nothing the others see.
+      // change, so running before the payload paths changes nothing they see.
       "legislation_documents_expression_id_guard",
       "legislation_documents_payload_revision",
       "legislation_documents_payload_revision_ast",
       "legislation_documents_payload_revision_fulltext",
       "legislation_documents_projection_epoch_monotonic",
+      // This fence must observe the identity mode derived above.
+      "legislation_documents_publisher_writer_guard",
     ]);
   });
 });
@@ -559,7 +564,8 @@ describe("upsert", () => {
           legislationDocuments.versionValidFrom,
           legislationDocuments.language,
         ],
-        targetWhere: isNotNull(legislationDocuments.versionValidFrom),
+        targetWhere: sql`${legislationDocuments.identityMode} = 'legacy-window'
+          AND ${legislationDocuments.versionValidFrom} IS NOT NULL`,
         set,
       });
 

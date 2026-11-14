@@ -1,30 +1,30 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const createMatterLinksBatchBodySchema = t.Object(
-  {
-    items: t.Array(
-      t.Object(
-        {
-          decisionId: tSafeId("caseLawDecision"),
-          note: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-        },
-        { additionalProperties: false },
-      ),
-      { minItems: 1, maxItems: LIMITS.caseLawMatterLinksPerWorkspace },
+export const createMatterLinksBatchBodySchema = v.strictObject({
+  items: v.pipe(
+    v.array(
+      v.strictObject({
+        decisionId: resourceIdSchema("caseLawDecision"),
+        note: v.exactOptional(
+          v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+        ),
+      }),
     ),
-  },
-  { additionalProperties: false },
-);
+    v.minLength(1),
+    v.maxLength(LIMITS.caseLawMatterLinksPerWorkspace),
+  ),
+});
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Link a selection of case-law decisions to the current matter in one " +
     "call, each with an optional note. Best effort and idempotent: the " +

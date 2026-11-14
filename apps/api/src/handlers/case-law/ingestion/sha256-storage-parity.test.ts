@@ -3,8 +3,8 @@ import { expect, test } from "bun:test";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   createSha256 as legacyHasher,
-  sha256Hex as legacyHex,
   sha256Bytes as legacyBytes,
+  sha256Hex as legacyHex,
 } from "@stll/sha256/node";
 
 import { graphFingerprintOf } from "@/api/handlers/case-law/analysis/significance";
@@ -12,8 +12,8 @@ import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/deci
 import { citationScopeAstHash } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
-  sourceStoredTotalNextRefreshAt,
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  sourceStoredTotalNextRefreshAt,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { toSafeId } from "@/api/lib/branded-types";
 import { analysisInputOf } from "@/api/lib/case-law/analysis-prompt";

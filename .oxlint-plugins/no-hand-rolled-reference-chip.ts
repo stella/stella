@@ -30,6 +30,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   filenameForContext,
   getImportedName,
   getImportLocalName,
@@ -37,7 +38,6 @@ import {
   isStringLiteral,
   isTestFile,
   jsxName,
-  type AstNode,
 } from "./utils.ts";
 
 const REFERENCES_MODULE = "apps/web/src/components/references/";

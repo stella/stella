@@ -25,8 +25,8 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  PROVIDER_PROMPT_CACHING,
   promptCachingUsesBreakpoints,
+  PROVIDER_PROMPT_CACHING,
 } from "@/api/lib/tanstack-ai-caching";
 import type { ProviderPromptCaching } from "@/api/lib/tanstack-ai-caching";
 import { isRecord } from "@/api/lib/type-guards";
@@ -70,7 +70,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -137,6 +137,13 @@ let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ passThroughOrigins: [fakeS3.endpoint] }),
+});
+
 /** A member of the organization, as the send path sees them. */
 type Member = {
   /** The profile their page sends with each message; none by default. */
@@ -181,11 +188,9 @@ beforeAll(async () => {
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
   fakeS3 = startFakeS3();
-  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
 });
 
 afterAll(async () => {
-  replay.restore();
   fakeS3.stop();
   env.USE_MOCK_AI = previousMockAI;
   if (previousBedrockEndpoint === undefined) {

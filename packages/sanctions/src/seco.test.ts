@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { checkListReplacement } from "./replacement";
-import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "./screening";
+import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
 import { parseSecoList, readSecoListVersion } from "./seco";
 
 const FILE = path.join(import.meta.dir, "fixtures", "seco.xml");

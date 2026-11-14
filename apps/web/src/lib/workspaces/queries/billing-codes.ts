@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { billingCodesQueryRoot } from "@/lib/resource-query-roots.logic";
 
 const BILLING_CODE_QUERY_MODE = {
@@ -35,7 +35,7 @@ const codeListOptions = ({ workspaceId, type, mode }: BillingCodesListParams) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response).items;
+      return unwrapApiResponse(response).items;
     },
   });
 

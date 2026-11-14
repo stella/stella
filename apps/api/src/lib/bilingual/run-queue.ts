@@ -14,7 +14,7 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -22,7 +22,7 @@ import {
   bilingualTranslationRuns,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { translateBatch } from "@/api/lib/bilingual/ai";
 import type {
@@ -55,6 +55,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
@@ -265,18 +266,34 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 
   worker.on("failed", (job, error) => {
     if (job) {
-      setRunFailed(brandActor(job.data), "internal").catch(
-        (markError: unknown) => {
-          captureError(markError, {
-            runId: job.data.runId,
-            workspaceId: job.data.workspaceId,
-          });
-        },
+      detached(
+        async () =>
+          setRunFailed(brandActor(job.data), "internal").catch(
+            (markError: unknown) => {
+              captureError(
+                markError,
+                handlerErrorContext(
+                  "bilingual.initBilingualRunWorker.markError",
+                  {
+                    runId: job.data.runId,
+                    workspaceId: job.data.workspaceId,
+                  },
+                ),
+              );
+            },
+          ),
+        "bilingual-run.set-run-failed",
       );
     }
     const runId = job ? job.data.runId : "";
     const workspaceId = job ? job.data.workspaceId : "";
-    captureError(error, { runId, workspaceId });
+    captureError(
+      error,
+      handlerErrorContext("bilingual.initBilingualRunWorker", {
+        runId,
+        workspaceId,
+      }),
+    );
     logger.error("bilingual_run.failed", {
       runId,
       "error.type": errorTag(error),
@@ -300,7 +317,12 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
       }
     },
     onError: (error) => {
-      captureError(error, { operation: "bilingual_run.reconcile" });
+      captureError(
+        error,
+        handlerErrorContext("bilingual.closeReconcile", {
+          operation: "bilingual_run.reconcile",
+        }),
+      );
     },
   });
 
@@ -376,10 +398,13 @@ export const processBilingualRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
-    captureError(outcome.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      outcome.error,
+      handlerErrorContext("bilingual.processBilingualRun.outcome_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     await setRunFailed(actor, "internal");
     return;
   }
@@ -448,10 +473,13 @@ const executeRun = async ({
     }),
   );
   if (Result.isError(config)) {
-    captureError(config.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      config.error,
+      handlerErrorContext("bilingual.executeRun.config_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "ai_unavailable";
   }
 
@@ -524,10 +552,13 @@ const executeRun = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
-      captureError(result.error, {
-        runId: actor.runId,
-        workspaceId: actor.workspaceId,
-      });
+      captureError(
+        result.error,
+        handlerErrorContext("bilingual.translateFrom.result_error", {
+          runId: actor.runId,
+          workspaceId: actor.workspaceId,
+        }),
+      );
       return "translation_failed";
     }
 
@@ -600,10 +631,13 @@ const executeRun = async ({
   const operations = buildOperations(rows, translated);
   const applied = await applyAiEditsToDocx(loaded.value.scanned, operations);
   if (Result.isError(applied)) {
-    captureError(applied.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      applied.error,
+      handlerErrorContext("bilingual.executeRun.applied_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "apply_failed";
   }
   if (applied.value.skipped.length > 0) {
@@ -616,10 +650,13 @@ const executeRun = async ({
 
   const validation = await validateDocxBuffer(applied.value.buffer);
   if (!validation.valid) {
-    captureError(new Error(validation.error), {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      new Error(validation.error),
+      handlerErrorContext("bilingual.executeRun", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "apply_failed";
   }
   const scanResult = await scanFile({
@@ -671,10 +708,13 @@ const executeRun = async ({
     scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
   });
   if (Result.isError(written)) {
-    captureError(written.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      written.error,
+      handlerErrorContext("bilingual.executeRun.written_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "apply_failed";
   }
 

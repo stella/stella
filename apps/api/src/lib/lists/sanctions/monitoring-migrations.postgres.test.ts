@@ -4,6 +4,8 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 
 import type { Transaction } from "@/api/db/root";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -69,6 +71,30 @@ const withCommittedMonitoring = async (
         await tx.execute(
           sql`DROP TABLE public.sanctions_edition_fanouts, public.sanctions_monitoring_backfills, public.sanctions_contact_marks, public.sanctions_organization_marks, public.sanctions_screening_events, public.sanctions_contact_matches, public.sanctions_contact_screenings`,
         );
+        // Other features may also reference the shared contact key. Detach and
+        // restore their foreign keys while replaying the monitoring prerequisite.
+        const contactForeignKeys = await tx.execute<{
+          schema: string;
+          table: string;
+          name: string;
+          definition: string;
+        }>(sql`
+          SELECT namespace.nspname AS schema, relation.relname AS table,
+            dependent.conname AS name,
+            pg_get_constraintdef(dependent.oid) AS definition
+          FROM pg_constraint dependent
+          JOIN pg_constraint referenced ON referenced.conindid = dependent.conindid
+          JOIN pg_class relation ON relation.oid = dependent.conrelid
+          JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+          WHERE dependent.contype = 'f'
+            AND referenced.conrelid = 'public.contacts'::regclass
+            AND referenced.conname = 'contacts_org_id_unique'
+        `);
+        for (const foreignKey of contactForeignKeys) {
+          await tx.execute(
+            sql`ALTER TABLE ${sql.identifier(foreignKey.schema)}.${sql.identifier(foreignKey.table)} DROP CONSTRAINT ${sql.identifier(foreignKey.name)}`,
+          );
+        }
         await tx.execute(
           sql`ALTER TABLE public.contacts DROP COLUMN sanctions_monitoring_mode, DROP CONSTRAINT contacts_org_id_unique`,
         );
@@ -81,6 +107,11 @@ const withCommittedMonitoring = async (
           sql`CREATE UNIQUE INDEX contacts_org_id_unique ON public.contacts (organization_id, id)`,
         );
         await applyMigration(tx, "20261003122800_sanctions_monitoring");
+        for (const foreignKey of contactForeignKeys) {
+          await tx.execute(
+            sql`ALTER TABLE ${sql.identifier(foreignKey.schema)}.${sql.identifier(foreignKey.table)} ADD CONSTRAINT ${sql.identifier(foreignKey.name)} ${sql.raw(foreignKey.definition)}`,
+          );
+        }
         await tx.execute(
           sql.raw(`CREATE ROLE ${OWNER} NOLOGIN NOSUPERUSER NOBYPASSRLS`),
         );
@@ -98,9 +129,19 @@ const withCommittedMonitoring = async (
         await tx.execute(
           sql`INSERT INTO public.organization (id, name, slug, created_at) VALUES (${ORG_A}, 'Monitoring A', ${ORG_A}, now()), (${ORG_B}, 'Monitoring B', ${ORG_B}, now())`,
         );
-        await tx.execute(
-          sql`INSERT INTO public.contacts (id, organization_id, type, display_name) VALUES (${CONTACT_A}, ${ORG_A}, 'person', 'Jan Novák'), (${CONTACT_B}, ${ORG_B}, 'person', 'Ján Novák')`,
-        );
+        for (const [organizationId, contactId, displayName] of [
+          [ORG_A, CONTACT_A, "Jan Novák"],
+          [ORG_B, CONTACT_B, "Ján Novák"],
+        ] as const) {
+          await withOwnerOrganizationScope(
+            tx,
+            brandPersistedOrganizationId(organizationId),
+            async (scoped) =>
+              await scoped.execute(
+                sql`INSERT INTO public.contacts (id, organization_id, type, display_name) VALUES (${contactId}, ${organizationId}, 'person', ${displayName})`,
+              ),
+          );
+        }
         await tx.execute(
           sql`INSERT INTO public.sanctions_sources (id, issuer, marker_url) VALUES (${SOURCE}, 'EU', 'https://example.test/list') ON CONFLICT DO NOTHING`,
         );

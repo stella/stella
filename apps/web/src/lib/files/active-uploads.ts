@@ -1,5 +1,10 @@
 import { create } from "zustand";
 
+import { sha256Hex } from "@stll/sha256/browser";
+
+import { readQueryResult } from "@/lib/errors/query-result";
+import { validateUploadFileSize } from "@/lib/files/upload-file-validation";
+
 type ActiveUploadState = {
   count: number;
 };
@@ -46,6 +51,17 @@ export const withActiveUpload = async <T>(
     release();
   }
 };
+
+/**
+ * Hash one file in bounded chunks while the reload guard counts the read.
+ * Every upload hashes here first, so a size the API refuses fails without
+ * reading the file.
+ */
+export const hashActiveUploadFile = async (file: Blob): Promise<string> =>
+  await withActiveUpload(async () => {
+    readQueryResult(validateUploadFileSize(file.size));
+    return await sha256Hex(file);
+  });
 
 /** Test seam. Production batches release themselves. */
 export const resetActiveUploadsForTests = (): void => {

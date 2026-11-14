@@ -3,8 +3,8 @@
  * record, its severity, whether it is captured, and what it counts.
  *
  * A sink passes a handle, never a severity. The handle's `legacy` pin keeps a
- * migrated site's output exactly as it was until data backs a change; without
- * one, the grade's policy decides. The record is composed here, owned fields
+ * migrated site's log severity until data backs a change; the grade always
+ * decides exception capture. The record is composed here, owned fields
  * last, so a context key can override neither the grade nor the identity.
  *
  * Returns nothing: retry, park and exit decisions keep their own predicates.
@@ -12,7 +12,13 @@
 
 import { Result } from "better-result";
 
-import { sanitizeQueryErrorText, type FailureGrade } from "@stll/errors";
+import {
+  type ExceptionScope,
+  type FailureGrade,
+  type HandlerExceptionScope,
+  type RequestExceptionScope,
+  sanitizeQueryErrorText,
+} from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {
@@ -27,6 +33,7 @@ import {
   gradeFailure,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import {
   countFailureObservation,
   legacyChannelOf,
@@ -34,24 +41,15 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
+import { ownedMessageOf } from "@/api/lib/observability/owned-message";
 import { releaseFailureIdentity } from "@/api/lib/observability/release-failures";
 import {
+  getActiveRequest,
   getRequestContext,
   recordRequestFailure,
+  requireRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
-
-type GradePolicy = OutputPolicy & {
-  /** A sustained episode, as a queue adapter judges it, raises the severity. */
-  readonly escalation?: "sustained";
-};
-
-const GRADE_POLICY = {
-  anticipated: { severity: "WARN", capture: false },
-  transient: { severity: "WARN", capture: false, escalation: "sustained" },
-  client: { severity: "WARN", capture: false },
-  defect: { severity: "ERROR", capture: true },
-} as const satisfies Record<FailureGrade, GradePolicy>;
 
 /**
  * Context keys a failure record may carry: correlation ids and reviewed,
@@ -64,6 +62,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "decisionId",
   "documentId",
   "entityId",
+  "eventId",
   "feature",
   "jobId",
   // Public corpus jurisdiction code.
@@ -73,6 +72,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "modelId",
   "operation",
   "organizationId",
+  "parameterStoreReason",
   "phase",
   "queue",
   "requestId",
@@ -90,7 +90,7 @@ export const FAILURE_CONTEXT_KEYS = [
 
 type FailureContextKey = (typeof FAILURE_CONTEXT_KEYS)[number];
 
-type FailureContext = Partial<Record<FailureContextKey, string>>;
+export type FailureContext = Partial<Record<FailureContextKey, string>>;
 
 const MAX_CONTEXT_VALUE_LENGTH = 128;
 
@@ -129,10 +129,14 @@ const resolvePolicy = (
   grade: FailureGrade,
   escalation: "sustained" | undefined,
 ): ResolvedPolicy => {
+  const policy = failureOutputPolicy(grade);
   if (sink.legacy !== undefined) {
-    return { ...sink.legacy, source: "legacy" };
+    return {
+      severity: sink.legacy.severity,
+      capture: policy.capture && sink.legacy.capture,
+      source: "legacy",
+    };
   }
-  const policy: GradePolicy = GRADE_POLICY[grade];
   const escalated =
     escalation !== undefined && policy.escalation === escalation;
   return {
@@ -145,30 +149,64 @@ const resolvePolicy = (
 type ObserveFailureOptions = {
   readonly sink: FailureSink;
   readonly ctx?: FailureContext | undefined;
-  readonly request?: Request | undefined;
   readonly escalation?: "sustained" | undefined;
-};
+} & (
+  | {
+      readonly request: Request;
+      readonly scope: RequestExceptionScope | HandlerExceptionScope;
+    }
+  | { readonly request?: undefined; readonly scope?: ExceptionScope }
+);
 
-const requestFields = (request: Request | undefined): LoggerAttributes => {
-  const requestId =
-    request === undefined ? undefined : getRequestContext(request)?.requestId;
+const requestFields = (onRequest: boolean): LoggerAttributes => {
+  const requestId = onRequest ? getRequestContext()?.requestId : undefined;
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
+const observedStoreRequests = new WeakSet<object>();
+
+const captureFailure = (
+  error: unknown,
+  options: Parameters<typeof captureObservedError>[1],
+): void => {
+  captureObservedError(error, options);
+};
+
+/**
+ * `onRequest`: the failure belongs to the request in flight, so its record
+ * carries the request id and the request keeps the observation for its
+ * completion record. A request handle implies it.
+ */
 const observe = (
   error: unknown,
-  { sink, ctx, request, escalation }: ObserveFailureOptions,
+  options: ObserveFailureOptions,
+  onRequest: boolean,
 ): void => {
+  const { sink, ctx, request, escalation } = options;
   const evidence = readEvidence(error);
   const grading: FailureGrading = gradeFailure(evidence, sink, {
     requestAborted: request?.signal.aborted,
   });
+  const requestContext = getRequestContext();
+  if (
+    grading.reason === "limiter_store_unavailable" &&
+    requestContext !== undefined
+  ) {
+    if (observedStoreRequests.has(requestContext)) {
+      return;
+    }
+    observedStoreRequests.add(requestContext);
+  }
   const policy = resolvePolicy(sink, grading.grade, escalation);
   const context = acceptFailureContext(ctx);
+  const summary = ownedMessageOf(error);
   const attributes: LoggerAttributes = {
     ...context.accepted,
-    ...requestFields(request),
+    ...requestFields(onRequest),
     ...errorFields(evidence),
+    ...(summary === undefined
+      ? {}
+      : { "cause.summary": sanitizeQueryErrorText(summary) }),
     ...failureFields(grading, sink),
     "failure.policy": sanitizeQueryErrorText(policy.source),
     ...(context.rejected > 0
@@ -176,8 +214,8 @@ const observe = (
       : {}),
   };
 
-  if (request !== undefined) {
-    recordRequestFailure(request, {
+  if (onRequest || grading.reason === "limiter_store_unavailable") {
+    recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,
       sink: sink.event,
@@ -201,11 +239,20 @@ const observe = (
     logger.warn(sink.event, attributes);
   }
   if (policy.capture) {
-    captureObservedError(error, {
+    const capture = {
+      scope: { type: "handler", handlerId: sink.event },
+      fingerprintKey: `observe.${sink.event}`,
       context: context.accepted,
-      request,
       observation: grading,
-    });
+    } as const;
+    const captureOptions =
+      options.request !== undefined
+        ? { ...capture, request: options.request, scope: options.scope }
+        : {
+            ...capture,
+            scope: options.scope ?? capture.scope,
+          };
+    captureFailure(error, captureOptions);
   }
 };
 
@@ -219,7 +266,67 @@ export const observeFailure = (
   options: ObserveFailureOptions,
 ): void => {
   const observed = Result.try(() => {
-    observe(error, options);
+    observe(error, options, options.request !== undefined);
+  });
+  if (Result.isError(observed)) {
+    reportEmitFailure("observe", observed.error);
+  }
+};
+
+/** Capture an already-counted unobserved answer through the failure owner. */
+export const captureUnobservedAnswerFailure = (
+  error: unknown,
+  {
+    context,
+    observation,
+    request,
+    scope,
+  }: {
+    readonly context: Record<string, string>;
+    readonly observation: FailureGrading;
+    readonly request: Request;
+    readonly scope: RequestExceptionScope | HandlerExceptionScope;
+  },
+): void => {
+  captureFailure(error, {
+    scope,
+    fingerprintKey: "observability.unobservedServerError",
+    request,
+    context,
+    observation,
+  });
+};
+
+/**
+ * Observe the cause of the answer the request in flight is about to send,
+ * reading the request from its async scope instead of a handle. The record
+ * carries the request id, and the completion record grades the answer by
+ * this observation. Never throws, like {@link observeFailure}.
+ *
+ * Only the answer owner (`server-error-answer.ts`) calls this: the failure
+ * an answer reports is the one it was chosen from.
+ */
+export const observeAnswerFailure = (
+  error: unknown,
+  {
+    sink,
+    ctx,
+  }: { readonly sink: FailureSink; readonly ctx?: FailureContext | undefined },
+): void => {
+  const observed = Result.try(() => {
+    const request = getActiveRequest();
+    observe(
+      error,
+      request === undefined
+        ? { sink, ctx }
+        : {
+            sink,
+            ctx,
+            request,
+            scope: requireRequestExceptionScope(request),
+          },
+      true,
+    );
   });
   if (Result.isError(observed)) {
     reportEmitFailure("observe", observed.error);

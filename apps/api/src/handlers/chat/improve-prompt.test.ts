@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
@@ -14,7 +14,7 @@ describe("prompt improvement request", () => {
   test("accepts every shared strategy", () => {
     for (const strategy of CHAT_PROMPT_IMPROVEMENT_STRATEGIES) {
       expect(
-        Value.Check(improvePrompt.config.body, {
+        v.is(improvePrompt.config.body, {
           prompt: "Review this agreement",
           sendMode: CHAT_SEND_MODE.rawOverride,
           strategy,
@@ -29,9 +29,9 @@ describe("prompt improvement request", () => {
       sendMode: CHAT_SEND_MODE.rawOverride,
     };
 
-    expect(Value.Check(improvePrompt.config.body, request)).toBe(false);
+    expect(v.is(improvePrompt.config.body, request)).toBe(false);
     expect(
-      Value.Check(improvePrompt.config.body, {
+      v.is(improvePrompt.config.body, {
         ...request,
         strategy: "make-formal",
       }),

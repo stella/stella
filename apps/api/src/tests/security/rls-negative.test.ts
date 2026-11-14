@@ -68,10 +68,10 @@ import type {
   TestIds,
 } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
-  TestDatabaseTransaction,
   createDryScopedQuery,
   createScopedQuery,
+  TestDatabase,
+  TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
 const testId = <T extends SafeIdType>() => toSafeId<T>(Bun.randomUUIDv7());
@@ -715,7 +715,7 @@ describe("organization INSERT — wrong scope", () => {
           organizationId: ids.orgB,
           name: "Bad",
           fileName: "bad.docx",
-          s3Key: "test/bad.docx",
+          s3Key: `${ids.orgB}/test/bad.docx`,
           sizeBytes: 1024,
           createdBy: ids.userA1,
         }),
@@ -728,7 +728,7 @@ describe("organization INSERT — wrong scope", () => {
           organizationId: ids.orgB,
           templateId: ids.templateB,
           version: 99,
-          s3Key: "test/bad-v99.docx",
+          s3Key: `${ids.orgB}/test/bad-v99.docx`,
           createdBy: ids.userA1,
         }),
     },

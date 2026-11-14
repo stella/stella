@@ -14,3 +14,23 @@
 export const stringCursorSeed = (): string | undefined => undefined;
 
 export const nullableStringCursorSeed = (): string | null => null;
+
+type VisitCursorPagesOptions<TPage extends { nextCursor: string | null }> = {
+  getPage: (cursor: string | undefined) => Promise<TPage>;
+  visit: (page: TPage) => void;
+};
+
+// A page owns the only cursor that can select its successor.
+export const visitCursorPages = async <
+  TPage extends { nextCursor: string | null },
+>({
+  getPage,
+  visit,
+}: VisitCursorPagesOptions<TPage>) => {
+  let cursor: string | undefined;
+  do {
+    const page = await getPage(cursor);
+    visit(page);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor !== undefined);
+};

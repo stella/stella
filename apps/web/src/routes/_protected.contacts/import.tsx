@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -32,6 +32,7 @@ import {
   FileSpreadsheetIcon,
   UploadIcon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import {
   Select,
@@ -40,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Step, Steps } from "@stll/ui/steps";
 import {
   Table,
   TableBody,
@@ -48,28 +50,43 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
-import { useFormatter } from "@/i18n/formatting-context";
+import {
+  useFormatter,
+  useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/routes/-route-presentation";
+import { ImportDoneStep } from "@/routes/_protected.contacts/-components/import-done-step";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
 import {
   IMPORT_FIELD_LABELS,
   ImportCandidateCard,
-  ImportResultsList,
   useImportReview,
 } from "@/routes/_protected.contacts/-import-review";
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const Route = createFileRoute("/_protected/contacts/import")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "contacts.importStudio.title",
+      to: "/contacts/import",
+    }),
+  },
   head: () => ({
     meta: [{ title: pageTitle("contacts.importStudio.title") }],
   }),
@@ -185,7 +202,11 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
 
 function ContactImportStudio() {
   const t = useTranslations();
-  const format = useFormatter();
+  const formattingLocale = useFormattingLocale();
+  const markerStyle = useStepsMarkerStyle();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (context) => context.user.activeOrganizationId,
+  });
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
   });
@@ -204,14 +225,14 @@ function ContactImportStudio() {
 
   const inspectFile = async (file: File) => {
     if (!isSupportedFile(file)) {
-      notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+      notifyUserProblem(t("contacts.importStudio.fileInvalid"));
       return;
     }
 
     setBusy("inspecting");
     const result = await Result.tryPromise(async () => {
       const response = await api.contacts.import.inspect.post({ file });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setBusy("idle");
 
@@ -251,7 +272,7 @@ function ContactImportStudio() {
         file: state.file,
         mapping: JSON.stringify(state.mapping),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setBusy("idle");
 
@@ -262,11 +283,14 @@ function ContactImportStudio() {
 
     review.seed({
       taxIdScheme: state.mapping.taxIdScheme,
-      rows: result.value.rows.map(({ contact, issues, rowNumber }) => ({
-        candidate: contact,
-        issues,
-        rowNumber,
-      })),
+      rows: result.value.rows.map(
+        ({ contact, issues, rowNumber, warnings }) => ({
+          candidate: contact,
+          issues,
+          rowNumber,
+          warnings,
+        }),
+      ),
     });
     setState({
       status: "review",
@@ -313,27 +337,30 @@ function ContactImportStudio() {
               {t("contacts.importStudio.description")}
             </p>
           </div>
-          <ol
+          <Steps
+            lang={formattingLocale}
+            markerStyle={markerStyle}
             aria-label={t("contacts.importStudio.title")}
-            className="grid grid-cols-4 gap-2"
+            variant="progress"
           >
-            {STEP_KEYS.map((key, index) => (
-              <li
-                aria-current={index === step ? "step" : undefined}
-                className={cn(
-                  "border-muted border-t-2 pt-2 text-sm",
-                  index <= step && "border-foreground font-medium",
-                  index !== step && "text-muted-foreground",
-                )}
-                key={key}
-              >
-                <span className="me-1 tabular-nums">
-                  {format.number(index + 1)}.
-                </span>
-                {t(key)}
-              </li>
-            ))}
-          </ol>
+            {STEP_KEYS.map((key, index) => {
+              let status: "completed" | "current" | "upcoming" = "upcoming";
+              if (index === step) {
+                status = "current";
+              } else if (index < step) {
+                status = "completed";
+              }
+              return (
+                <Step
+                  aria-current={index === step ? "step" : undefined}
+                  key={key}
+                  status={status}
+                >
+                  {t(key)}
+                </Step>
+              );
+            })}
+          </Steps>
         </div>
       </header>
 
@@ -366,6 +393,7 @@ function ContactImportStudio() {
         {state.status === "review" && (
           <div className="mx-auto max-w-6xl">
             <ReviewStep
+              activeOrganizationId={activeOrganizationId}
               fields={editableFieldsForMapping(state.mapping)}
               onRestart={restart}
               review={review}
@@ -427,10 +455,14 @@ const UploadStep = ({
   const t = useTranslations();
   const isInspecting = busy === "inspecting";
   const { ref, isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "UploadStep.useExternalFileDrop",
+    },
     onDrop: (files) => {
       const file = files.at(0);
       if (files.length !== 1 || !file) {
-        notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+        notifyUserProblem(t("contacts.importStudio.fileInvalid"));
         return;
       }
       onFile(file);
@@ -445,40 +477,53 @@ const UploadStep = ({
       <h2 className="sr-only" ref={stepHeadingRef} tabIndex={-1}>
         {t("contacts.importStudio.stepUpload")}
       </h2>
-      <button
+      {/* Not `disabled` while a file is inspected: the zone keeps its full
+          colour behind the loader (a disabled Button dims) and shows a busy
+          cursor; the click is ignored instead. */}
+      <Button
         aria-busy={isInspecting}
-        className={cn(
-          "focus-visible:ring-ring flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center focus-visible:ring-2 focus-visible:outline-none",
-          isDropTarget &&
-            "bg-primary/5 outline-primary/40 outline-2 -outline-offset-8 outline-dashed",
-          isInspecting && "cursor-progress",
-        )}
-        disabled={isInspecting}
+        aria-disabled={isInspecting || undefined}
+        tabIndex={isInspecting ? -1 : undefined}
+        className="flex w-full flex-1 items-stretch"
         onClick={() => {
+          if (isInspecting) {
+            return;
+          }
           openFilePicker({
             accept:
               ".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain",
             onPick: ([selected]) => onFile(selected),
           });
         }}
-        type="button"
+        variant="plain"
       >
-        {isInspecting ? (
-          <Loader className="size-10" size="sm" variant="decorative" />
-        ) : (
-          <FileSpreadsheetIcon className="text-muted-foreground size-10" />
-        )}
-        <span className="font-medium">
-          {t("contacts.importStudio.dropFile")}
+        {/* The drop surface: it fills the step and lights up while a file is
+            dragged over the screen. */}
+        <span
+          className={cn(
+            "flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center",
+            isDropTarget &&
+              "bg-primary/5 outline-primary/40 outline-2 -outline-offset-8 outline-dashed",
+            isInspecting && "cursor-progress",
+          )}
+        >
+          {isInspecting ? (
+            <Loader className="size-10" size="sm" variant="decorative" />
+          ) : (
+            <FileSpreadsheetIcon className="text-muted-foreground size-10" />
+          )}
+          <span className="font-medium">
+            {t("contacts.importStudio.dropFile")}
+          </span>
+          <span className="text-muted-foreground text-sm">
+            {t("contacts.importStudio.supportedFiles")}
+          </span>
+          <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
+            <UploadIcon className="size-4" />
+            {t("common.chooseFile")}
+          </span>
         </span>
-        <span className="text-muted-foreground text-sm">
-          {t("contacts.importStudio.supportedFiles")}
-        </span>
-        <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
-          <UploadIcon className="size-4" />
-          {t("common.chooseFile")}
-        </span>
-      </button>
+      </Button>
     </section>
   );
 };
@@ -572,9 +617,9 @@ const MappingStep = ({
                 <TableCell className="text-muted-foreground max-w-96">
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
                     {column.samples.map((sample) => (
-                      <BidiText className="truncate" key={sample}>
+                      <TruncatedText key={sample} render={<BidiText />}>
                         {sample}
-                      </BidiText>
+                      </TruncatedText>
                     ))}
                   </div>
                 </TableCell>
@@ -624,12 +669,9 @@ const MappingStep = ({
       </Table>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label
-            className="text-sm font-medium"
-            htmlFor="contact-import-default-type"
-          >
+          <Label htmlFor="contact-import-default-type">
             {t("contacts.importStudio.defaultType")}
-          </label>
+          </Label>
           <Select
             disabled={busy !== "idle"}
             onValueChange={(value) => {
@@ -652,12 +694,9 @@ const MappingStep = ({
           </Select>
         </div>
         <div className="space-y-2">
-          <label
-            className="text-sm font-medium"
-            htmlFor="contact-import-tax-id-scheme"
-          >
+          <Label htmlFor="contact-import-tax-id-scheme">
             {t("contacts.importStudio.taxIdScheme")}
-          </label>
+          </Label>
           <Select
             disabled={busy !== "idle"}
             onValueChange={(value) => {
@@ -680,7 +719,7 @@ const MappingStep = ({
           </Select>
         </div>
       </div>
-      <label className="flex min-h-11 items-center gap-3 text-sm">
+      <Label variant="choice">
         <Checkbox
           checked={mapping.generateDisplayName}
           disabled={busy !== "idle"}
@@ -689,17 +728,19 @@ const MappingStep = ({
           }
         />
         {t("contacts.importStudio.generateDisplayName")}
-      </label>
+      </Label>
     </section>
   );
 };
 
 const ReviewStep = ({
+  activeOrganizationId,
   fields,
   onRestart,
   review,
   stepHeadingRef,
 }: {
+  activeOrganizationId: string;
   fields: readonly ImportEditableField[];
   onRestart: () => void;
   review: ImportReview;
@@ -710,34 +751,12 @@ const ReviewStep = ({
 
   if (results) {
     return (
-      <section className="space-y-4">
-        <div>
-          <h2
-            className="text-lg font-semibold outline-none"
-            ref={stepHeadingRef}
-            tabIndex={-1}
-          >
-            {t("common.done")}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            {t("contacts.import.resultsSummary", {
-              created: results.filter(({ status }) => status === "created")
-                .length,
-              skipped: results.filter(({ status }) => status === "skipped")
-                .length,
-            })}
-          </p>
-        </div>
-        <ImportResultsList results={results} />
-        <div className="flex flex-wrap gap-2 pt-2">
-          <Button render={<Link to="/contacts" />}>
-            {t("contacts.importStudio.openContacts")}
-          </Button>
-          <Button onClick={onRestart} variant="outline">
-            {t("contacts.importStudio.importAnother")}
-          </Button>
-        </div>
-      </section>
+      <ImportDoneStep
+        activeOrganizationId={activeOrganizationId}
+        onRestart={onRestart}
+        results={results}
+        stepHeadingRef={stepHeadingRef}
+      />
     );
   }
 
@@ -757,13 +776,12 @@ const ReviewStep = ({
       </div>
       <ImportReviewSummary review={review} />
       <div className="space-y-3">
-        {review.rows.map((row, index) => (
+        {review.rows.map((row) => (
           <ImportCandidateCard
             fields={fields}
             key={row.id}
             onChange={(candidate) => review.updateRow(row.id, candidate)}
             onRemove={() => review.removeRow(row.id)}
-            ordinal={index + 1}
             row={row}
           />
         ))}

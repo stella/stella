@@ -16,8 +16,8 @@
  * The input file is one record, or a list of them:
  *
  *   { "decisionId": "...", "fingerprint": "...", "contentHash": "...",
- *     "model": "...", "output": { "headings": [...], "holding": {...},
- *     "abstract": "...", "topics": [...] } }
+ *     "model": "...", "output": { "headings": [...], "holding": [...],
+ *     "abstract": [...], "topics": [...] } }
  *
  * One line per record on stdout: `<decisionId> saved | unchanged |
  * rejected:<reason>`. Re-running the same file once it is stored reports

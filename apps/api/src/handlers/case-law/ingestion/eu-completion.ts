@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import type { Verdict } from "@stll/db-load-gate/health";
+import { declareFingerprintFields } from "@stll/errors";
 
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -28,7 +29,11 @@ type CompletionStopReason =
 export class EuCompletionStop extends TaggedError("EuCompletionStop")<{
   message: string;
   reason: CompletionStopReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export type EuCompletionRowOutcome =
   | {

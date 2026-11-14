@@ -39,11 +39,18 @@ test("reader scale reads an injected storage once and preserves its bounds", () 
   expect(readKeys).toEqual([READER_TEXT_SCALE_STORAGE_KEY]);
 });
 
-test("reader scale keeps its default when injected storage cannot be read", () => {
+test("reader scale keeps its default and reports the read when storage is blocked", () => {
+  const failures: { error: unknown; operation: string }[] = [];
+  const cause = new DOMException("Storage blocked", "SecurityError");
   const options = {
+    analytics: {
+      captureError: (error, operation) => {
+        failures.push({ error, operation });
+      },
+    },
     storage: {
       getItem: () => {
-        throw new DOMException("Storage blocked", "SecurityError");
+        throw cause;
       },
       setItem: () => undefined,
     },
@@ -51,6 +58,11 @@ test("reader scale keeps its default when injected storage cannot be read", () =
   expect(renderToStaticMarkup(<ScaleRoot options={options} />)).toBe(
     '<article data-slot="reader-text-root" style="--reader-text-scale:1">1:false:false</article>',
   );
+  expect(failures).toHaveLength(1);
+  expect(failures.at(0)).toMatchObject({
+    operation: "read",
+    error: { action: "read-reader-text-scale", cause },
+  });
 });
 
 test("reader scale keeps its default for malformed or unsupported stored sizes", () => {
@@ -82,6 +94,7 @@ test("a refused storage write keeps the selected scale visible and reports one f
   const root = createRoot(container);
   const cause = new DOMException("Storage full", "QuotaExceededError");
   const failures: unknown[] = [];
+  const operations: string[] = [];
   const writes: { key: string; value: string }[] = [];
   const options = {
     storage: {
@@ -92,8 +105,9 @@ test("a refused storage write keeps the selected scale visible and reports one f
       },
     },
     analytics: {
-      captureError: (error) => {
+      captureError: (error, operation) => {
         failures.push(error);
+        operations.push(operation);
       },
     },
   } satisfies ReaderTextScaleOptions;
@@ -128,6 +142,7 @@ test("a refused storage write keeps the selected scale visible and reports one f
       { key: READER_TEXT_SCALE_STORAGE_KEY, value: "1.1" },
     ]);
     expect(failures).toHaveLength(1);
+    expect(operations).toEqual(["write"]);
     expect(failures.at(0)).toMatchObject({
       action: "write-reader-text-scale",
       cause,

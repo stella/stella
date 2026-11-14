@@ -4,7 +4,7 @@ import {
   isToggleableNativeToolBackendSlug,
   loadRecommended,
 } from "@stll/catalogue";
-import { isCountryCode, type CountryCode } from "@stll/country-codes";
+import { type CountryCode, isCountryCode } from "@stll/country-codes";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
 
@@ -148,8 +148,7 @@ const isNativeToolDefaultEnabledForCodes = (
  * tool's jurisdiction to the org's practice jurisdictions.
  */
 type NativeToolDisabledReason =
-  | "disabled_by_override"
-  | "jurisdiction_mismatch";
+  "disabled_by_override" | "jurisdiction_mismatch";
 
 const nativeToolDisabledReasonForCodes = (
   slug: string,

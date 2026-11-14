@@ -1,13 +1,73 @@
-import { describe, expect, mock, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import {
+  newNotificationRealtimeEvent,
+  RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
-  RESOURCE_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
+import type {
+  announceMcpToolProjectionChange as AnnounceMcpToolProjectionChange,
+  broadcast as Broadcast,
+  broadcastToUser as BroadcastToUser,
+  registerMcpToolProjectionDelivery as RegisterMcpToolProjectionDelivery,
+  revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
+  SseSessionLivenessReader,
+  startSse as StartSse,
+  stopSse as StopSse,
+  subscribe as Subscribe,
+  subscribeUser as SubscribeUser,
+} from "@/api/lib/sse";
+import {
+  createSseBroadcastPublisher,
+  INSTANCE_ID,
+  SSEBroadcastError,
+  type SseBroadcastPublisher,
+} from "@/api/lib/sse-broadcast";
+
+beforeEach(async () => {
+  setIntervalSpy = spyOn(globalThis, "setInterval");
+  clearIntervalSpy = spyOn(globalThis, "clearInterval");
+
+  createRedisClientMock.mockClear();
+  const clientsBeforeImport = createdClients.length;
+  const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
+  const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
+  ({
+    announceMcpToolProjectionChange,
+    broadcast,
+    broadcastToUser,
+    registerMcpToolProjectionDelivery,
+    revokeWorkspaceSseAccess,
+    startSse,
+    stopSse,
+    subscribe,
+    subscribeUser,
+  } = await import("@/api/lib/sse"));
+  clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
+  redisClientsCreatedDuringImport =
+    createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
+  intervalsStartedDuringImport =
+    setIntervalSpy.mock.calls.length - intervalCallsBeforeImport;
+});
 
 type MessageHandler = (message: string) => void;
 
@@ -114,23 +174,25 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 // still schedule and clear a real timer; the spies only let the tests
 // observe whether the module called them, matching how sse.ts calls the
 // global functions directly.
-const setIntervalSpy = spyOn(globalThis, "setInterval");
-const clearIntervalSpy = spyOn(globalThis, "clearInterval");
+let setIntervalSpy: Mock<typeof globalThis.setInterval>;
+let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
-const clientsBeforeImport = createdClients.length;
-const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
-const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
-const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
-  await import("@/api/lib/sse");
+let announceMcpToolProjectionChange: typeof AnnounceMcpToolProjectionChange;
+let broadcast: typeof Broadcast;
+let broadcastToUser: typeof BroadcastToUser;
+let registerMcpToolProjectionDelivery: typeof RegisterMcpToolProjectionDelivery;
+let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
+let startSse: typeof StartSse;
+let stopSse: typeof StopSse;
+let subscribe: typeof Subscribe;
+let subscribeUser: typeof SubscribeUser;
 
 // Measure the import itself. Bun's --rerun-each retains mock history between
 // iterations, so absolute call counts include lifecycle calls from earlier
 // runs even though importing (or retrieving) the module performed no work.
-const clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
-const redisClientsCreatedDuringImport =
-  createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
-const intervalsStartedDuringImport =
-  setIntervalSpy.mock.calls.length - intervalCallsBeforeImport;
+let clientsCreatedDuringImport = 0;
+let redisClientsCreatedDuringImport = 0;
+let intervalsStartedDuringImport = 0;
 
 // Let the fire-and-forget subscribe promise inside startSse settle. A timer
 // turn drains the whole pending microtask queue, so this does not depend on
@@ -183,6 +245,16 @@ const publishWorkspaceEventMock = async (
   }
 };
 const publishWorkspaceAccessRevokedMock = async (): Promise<void> => {};
+// Workspace publishes loop back through the fake Redis above; the remaining
+// scopes publish to a client that accepts and drops, so no test reaches a real
+// connection.
+const testPublisher: SseBroadcastPublisher = {
+  ...createSseBroadcastPublisher({
+    createClient: () => ({ publish: async () => 0 }),
+  }),
+  publishWorkspaceAccessRevoked: publishWorkspaceAccessRevokedMock,
+  publishWorkspaceEvent: publishWorkspaceEventMock,
+};
 const authorizeAllWorkspaceConnections = async ({
   sessionIds,
 }: {
@@ -192,17 +264,19 @@ const authorizeAllUserConnections = async ({
   sessionIds,
 }: {
   sessionIds: readonly string[];
-}) => new Set(sessionIds);
+}) => ({ member: true, liveSessionIds: new Set(sessionIds) });
+const holdAllSessions: SseSessionLivenessReader = async (sessions) =>
+  await Promise.resolve(new Set(sessions.map((session) => session.sessionId)));
 const startTestSse = (): void => {
   startSse(
     {
+      sessions: holdAllSessions,
       user: authorizeAllUserConnections,
       workspace: authorizeAllWorkspaceConnections,
     },
     {
       createClient: createRedisClientMock,
-      publishAccessRevoked: publishWorkspaceAccessRevokedMock,
-      publishWorkspace: publishWorkspaceEventMock,
+      publisher: testPublisher,
     },
   );
 };
@@ -234,6 +308,10 @@ const broadcastTestEvent = (
   });
 };
 
+afterEach(() => {
+  mock.restore();
+});
+
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {
     expect(clientsCreatedDuringImport).toBe(0);
@@ -258,14 +336,147 @@ describe("sse module import", () => {
   });
 });
 
+/** The intervals `startSse` runs: the registry keep-alive and the sweep that
+ *  ends streams whose credential no longer holds. */
+const ascending = (a: number, b: number): number => a - b;
+
+const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
+  ascending,
+);
+
+/** The delays of the intervals started since the spy was cleared, ascending.
+ *  An omitted delay is 0, as the timer itself reads it. */
+const startedIntervals = () =>
+  setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
+
+describe("MCP tool projection changes", () => {
+  test("a change from another replica reaches this replica and its own echo does not", async () => {
+    createdClients.length = 0;
+    const delivered: unknown[] = [];
+    registerMcpToolProjectionDelivery((change) => {
+      delivered.push(change);
+    });
+    startTestSse();
+    await settlePendingWork();
+    try {
+      const deliver = createdClients[0]?.messageHandler;
+      expect(deliver).toBeFunction();
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: "api:another-replica",
+          scope: "mcp-tool-projection",
+          userId: "user_1",
+        }),
+      );
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: INSTANCE_ID,
+          scope: "mcp-tool-projection",
+        }),
+      );
+      expect(delivered).toEqual([
+        { organizationId: "org_1", userId: "user_1" },
+      ]);
+    } finally {
+      stopSse();
+      await settlePendingWork();
+    }
+  });
+
+  /**
+   * Announces one change through a publisher whose first `failures` publishes
+   * fail, recording the backoff each retry asked for and each failure the
+   * announcement reported.
+   */
+  const announceThroughFailingPublisher = async (failures: number) => {
+    let failuresRemaining = failures;
+    const published: unknown[] = [];
+    const delays: number[] = [];
+    const publishMcpToolProjectionChange = mock(async (change: unknown) => {
+      if (failuresRemaining > 0) {
+        failuresRemaining -= 1;
+        throw new Error("redis unavailable");
+      }
+      published.push(change);
+    });
+    createdClients.length = 0;
+    startSse(
+      {
+        sessions: holdAllSessions,
+        user: authorizeAllUserConnections,
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      {
+        createClient: createRedisClientMock,
+        publisher: { ...testPublisher, publishMcpToolProjectionChange },
+        retryWait: async (delayMs) => {
+          delays.push(delayMs);
+          await Promise.resolve();
+        },
+      },
+    );
+    await settlePendingWork();
+    const reported: { phase: unknown; step: unknown }[] = [];
+    setLogSinkForTesting(({ attributes, message }) => {
+      if (message === "sse.mcp_tool_projection_publish_failed") {
+        reported.push({
+          phase: attributes?.["phase"],
+          step: attributes?.["step"],
+        });
+      }
+    });
+    try {
+      await announceMcpToolProjectionChange({ organizationId, userId });
+    } finally {
+      resetLogSinkForTesting();
+      resetFailureObservationsForTesting();
+      stopSse();
+      await settlePendingWork();
+    }
+    return {
+      attempts: publishMcpToolProjectionChange.mock.calls.length,
+      delays,
+      published,
+      reported,
+    };
+  };
+
+  test("a failed cross-replica announcement is retried with backoff until it lands", async () => {
+    const { attempts, delays, published, reported } =
+      await announceThroughFailingPublisher(2);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([{ organizationId, userId }]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+    ]);
+  });
+
+  test("an announcement that keeps failing stops after its last attempt and never rejects", async () => {
+    const { attempts, delays, published, reported } =
+      await announceThroughFailingPublisher(Number.POSITIVE_INFINITY);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+      { phase: "abandoned", step: "attempt_3_of_3" },
+    ]);
+  });
+});
+
 describe("startSse / stopSse lifecycle", () => {
-  test("startSse starts the keep-alive timer and connects the Redis subscriber", async () => {
+  test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
     startTestSse();
 
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 
@@ -276,7 +487,7 @@ describe("startSse / stopSse lifecycle", () => {
     await settlePendingWork();
   });
 
-  test("startSse is idempotent: repeated calls create only one timer and one subscriber", async () => {
+  test("startSse is idempotent: repeated calls create its timers and one subscriber once", async () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
@@ -284,7 +495,7 @@ describe("startSse / stopSse lifecycle", () => {
     startTestSse();
     startTestSse();
 
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 
@@ -294,7 +505,7 @@ describe("startSse / stopSse lifecycle", () => {
     await settlePendingWork();
   });
 
-  test("stopSse clears the interval and closes the subscriber", async () => {
+  test("stopSse clears both intervals and closes the subscriber", async () => {
     clearIntervalSpy.mockClear();
     createdClients.length = 0;
 
@@ -306,7 +517,9 @@ describe("startSse / stopSse lifecycle", () => {
 
     stopSse();
 
-    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(
+      LIFECYCLE_INTERVALS_MS.length,
+    );
     expect(client?.close).toHaveBeenCalledTimes(1);
 
     await settlePendingWork();
@@ -422,6 +635,106 @@ describe("subscribe: already-aborted signal", () => {
   });
 });
 
+describe("subscribe: streams per session", () => {
+  test("a session keeps at most the limit of streams on one workspace, newest first", async () => {
+    startTestSse();
+    stopSse();
+    await settlePendingWork();
+
+    const opened = Array.from(
+      { length: LIMITS.sseStreamsPerSession + 2 },
+      () => {
+        const controller = new AbortController();
+        return {
+          controller,
+          reader: subscribeToWorkspace(controller.signal).getReader(),
+        };
+      },
+    );
+    const otherSession = new AbortController();
+    const otherReader = subscribeToWorkspace(
+      otherSession.signal,
+      toSafeId<"user">("user_other_session"),
+    ).getReader();
+
+    broadcastTestEvent(workspaceId, testEvent("within-limit"));
+
+    const results = await Promise.all(
+      opened.map(async ({ reader }) => await reader.read()),
+    );
+    expect(results.slice(0, 2).every(({ done }) => done)).toBe(true);
+    for (const { done, value } of results.slice(2)) {
+      expect(done).toBe(false);
+      expect(new TextDecoder().decode(value)).toContain("within-limit");
+    }
+    const other = await otherReader.read();
+    expect(new TextDecoder().decode(other.value)).toContain("within-limit");
+
+    for (const { controller } of opened) {
+      controller.abort();
+    }
+    otherSession.abort();
+    await settlePendingWork();
+  });
+});
+
+describe("subscribeUser: what each delivery re-checks", () => {
+  test("an app credential's stream holds by membership, a browser session's by its live session", async () => {
+    let member = true;
+    const sessionChecks: (readonly string[])[] = [];
+    startSse(
+      {
+        sessions: holdAllSessions,
+        // A member whose browser sessions have all ended.
+        user: async ({ sessionIds }) => {
+          sessionChecks.push(sessionIds);
+          return await Promise.resolve({ member, liveSessionIds: new Set() });
+        },
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      { createClient: createRedisClientMock, publisher: testPublisher },
+    );
+    stopSse();
+    await settlePendingWork();
+
+    // Both holders share an id, so neither kind can stand in for the other.
+    const holderId = "oauth-client:app";
+    const credential = new AbortController();
+    const credentialReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "credential" },
+      signal: credential.signal,
+      userId,
+    }).getReader();
+    const session = new AbortController();
+    const sessionReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "session" },
+      signal: session.signal,
+      userId,
+    }).getReader();
+
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+
+    const delivered = await credentialReader.read();
+    expect(new TextDecoder().decode(delivered.value)).toContain(
+      newNotificationRealtimeEvent().type,
+    );
+    expect((await sessionReader.read()).done).toBe(true);
+    // Only the browser session's id is asked about as a session.
+    expect(sessionChecks).toEqual([[holderId]]);
+
+    member = false;
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+    expect((await credentialReader.read()).done).toBe(true);
+    expect(sessionChecks.at(-1)).toEqual([]);
+
+    credential.abort();
+    session.abort();
+    await settlePendingWork();
+  });
+});
+
 describe("broadcast: local delivery without an attached subscriber", () => {
   test("broadcast delivers locally when no Redis subscriber is attached", async () => {
     // With no attached subscriber, a published event never loops back.
@@ -474,6 +787,7 @@ describe("workspace access revocation", () => {
     const retainedUserId = toSafeId<"user">("user_2");
     startSse(
       {
+        sessions: holdAllSessions,
         user: authorizeAllUserConnections,
         workspace: async ({ sessionIds }) =>
           new Set(
@@ -484,7 +798,7 @@ describe("workspace access revocation", () => {
       },
       {
         createClient: createRedisClientMock,
-        publishWorkspace: publishWorkspaceEventMock,
+        publisher: testPublisher,
       },
     );
     stopSse();
@@ -575,6 +889,53 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
   const decode = (value: Uint8Array | undefined): string =>
     new TextDecoder().decode(value);
 
+  test("a pending publish never blocks the caller and its rejection delivers locally", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+    startTestSse();
+    await settlePendingWork();
+
+    const controller = new AbortController();
+    const stream = subscribeToWorkspace(controller.signal);
+    const pendingPublish = Promise.withResolvers<undefined>();
+    const publish = mock(
+      async (
+        _workspaceId: SafeId<"workspace">,
+        _event: WorkspaceRealtimeEvent,
+        _options: Parameters<SseBroadcastPublisher["publishWorkspaceEvent"]>[2],
+      ) => await pendingPublish.promise,
+    );
+
+    try {
+      broadcast(workspaceId, testEvent("publish-rejected"), {
+        publishWorkspace: publish,
+      });
+      expect(publish).toHaveBeenCalledTimes(1);
+      expect(publish.mock.calls.at(0)?.at(2)).toMatchObject({
+        deliveredInline: false,
+      });
+
+      pendingPublish.reject(
+        new SSEBroadcastError({
+          message: "publisher unavailable",
+          cause: new Error("Redis connection closed"),
+          scope: "workspace",
+        }),
+      );
+      const received = await observeStreamRead(stream);
+      expect(received).not.toBe("test-deadline");
+      if (received === "test-deadline") {
+        return;
+      }
+      expect(decode(received.value)).toContain("publish-rejected");
+    } finally {
+      controller.abort();
+      stopSse();
+      await settlePendingWork();
+    }
+  });
+
   test("delivers each event to local clients exactly once via loopback while subscribed", async () => {
     createdClients.length = 0;
     subscribeFailuresRemaining = 0;
@@ -610,6 +971,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     let authorizationCalls = 0;
     startSse(
       {
+        sessions: holdAllSessions,
         user: authorizeAllUserConnections,
         workspace: async ({ sessionIds }) => {
           authorizationCalls += 1;
@@ -621,7 +983,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
       },
       {
         createClient: createRedisClientMock,
-        publishWorkspace: publishWorkspaceEventMock,
+        publisher: testPublisher,
       },
     );
     await settlePendingWork();
@@ -904,8 +1266,8 @@ describe("startSse: subscriber attach retry", () => {
     const realSetTimeout = globalThis.setTimeout;
     // A timer stub that fires the callback promptly, ignoring the delay. Matching
     // Bun's full overloaded setTimeout type adds no test value, so assert it.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
     const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
       realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
     const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
       immediateSetTimeout,
@@ -951,8 +1313,8 @@ describe("startSse: subscriber attach retry", () => {
     closeFailuresRemaining = 3;
 
     const realSetTimeout = globalThis.setTimeout;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
     const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
       realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
     const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
       immediateSetTimeout,

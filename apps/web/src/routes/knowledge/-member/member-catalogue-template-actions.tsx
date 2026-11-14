@@ -21,11 +21,12 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import type { TemplateIntent } from "@/lib/knowledge/catalogue-intent";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { UseTemplateDialog } from "@/routes/knowledge/-components/use-template-dialog";
 
 type MemberCatalogueTemplateActionsProps = {
@@ -64,8 +65,8 @@ export const MemberCatalogueTemplateActions = ({
   const t = useTranslations();
   const { id: userId } = useAuthenticatedUser();
   const organizationsQuery = useQuery(organizationListOptions(userId));
-  const organizationsView = useQueryView(organizationsQuery);
-  useQueryViewError(organizationsView);
+  const organizationsView = queryView(organizationsQuery);
+  useQueryViewError(organizationsView, "MemberCatalogueTemplateActions:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
   const organizationName =
@@ -109,7 +110,7 @@ export const MemberCatalogueTemplateActions = ({
         ? response.data.items.find(({ slug }) => slug === templateSlug)
         : undefined;
     if (installed === undefined) {
-      notifyUserError(undefined, t("knowledge.catalogue.installFailed"));
+      notifyUserProblem(t("knowledge.catalogue.installFailed"));
       return null;
     }
     templateActions.invalidateTemplates();
@@ -137,7 +138,7 @@ export const MemberCatalogueTemplateActions = ({
       case "download": {
         const sourceUrl = await templateActions.readSourceUrl(templateId);
         if (sourceUrl === null) {
-          notifyUserError(undefined, t("common.unexpectedError"));
+          notifyUserProblem(t("common.unexpectedError"));
           return;
         }
         openIsolatedWindow(sourceUrl);

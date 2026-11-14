@@ -3,6 +3,7 @@ import {
   BanknoteIcon,
   CalendarIcon,
   CircleDotIcon,
+  DatabaseIcon,
   FileIcon,
   FileQuestionIcon,
   HashIcon,
@@ -26,7 +27,8 @@ type PropertyContentType =
   | "date"
   | "int"
   | "money"
-  | "person";
+  | "person"
+  | "record";
 
 export type PropertyIconType = FieldTypeWithoutPending | PropertyContentType;
 
@@ -36,8 +38,8 @@ type PropertyHelperProps = {
 };
 
 // Labels are English-only identifiers for programmatic use
-// (debugging, logging, fallback display). For user-facing UI,
-// use the <PropertyName> component which renders via useLocale().
+// (debugging, logging, fallback display). User-facing UI shows the
+// host's translated property-type name instead.
 const propertyMap: Record<
   PropertyIconType,
   {
@@ -56,6 +58,10 @@ const propertyMap: Record<
   person: {
     icon: UserIcon,
     label: "Person",
+  },
+  record: {
+    icon: DatabaseIcon,
+    label: "Record",
   },
   file: {
     icon: FileIcon,

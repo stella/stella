@@ -35,8 +35,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/raw";
 import { admitCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/record";
 import {
-  isCsvRow,
   CLUSTER_COLUMNS,
+  isCsvRow,
   OPINION_COLUMNS,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
 import { isOpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";

@@ -1,15 +1,17 @@
 import { panic } from "better-result";
 
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
-  STATUTE_ALIASES,
   resolveStatuteAlias,
+  STATUTE_ALIASES,
   type StatuteAliasTarget,
 } from "./statute-aliases";
 import {
   CZE_CASE_LAW_REPORTER_TAIL_RE,
   STATUTE_GAZETTES,
+  statuteGazetteAbbreviation,
 } from "./statute-gazette";
 import {
   STATUTE_QUERY_CAPABILITIES,
@@ -134,6 +136,22 @@ const actFromNumber = (
       return null;
     }
     collection = collections[abbreviation] ?? null;
+    const spelling =
+      collection === null
+        ? null
+        : statuteGazetteAbbreviation(
+            collection,
+            parseIntegerToken(year, { sign: "unsigned" }).unwrap(
+              "Act number grammar captures a four-digit year",
+            ),
+          );
+    if (
+      spelling === null ||
+      canonicalCollectionAbbreviation(foldStatuteQuery(spelling)) !==
+        abbreviation
+    ) {
+      return null;
+    }
   }
 
   return {
@@ -274,9 +292,7 @@ const EMBEDDED_ALIAS_POLICY = {
 } as const satisfies {
   [Country in StatuteQueryCountry]: {
     [Alias in keyof (typeof STATUTE_ALIASES)[Country]]:
-      | "whole-query"
-      | "title"
-      | readonly string[];
+      "whole-query" | "title" | readonly string[];
   };
 };
 

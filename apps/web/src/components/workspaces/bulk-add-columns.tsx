@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
@@ -85,6 +85,7 @@ import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSingleFlight } from "@/hooks/use-single-flight";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -97,6 +98,7 @@ import {
   useCreatePropertiesBatch,
 } from "@/lib/workspaces/mutations/properties";
 import type { CreatePropertySpec } from "@/lib/workspaces/mutations/properties";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 // Sentinel for the "every document type" (ungated) scope; a Select value can't
@@ -234,19 +236,19 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
         render={
           <DialogTrigger
             render={
-              <button
+              <Button
                 aria-label={t("workspaces.properties.newColumn")}
-                className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                className="flex h-full w-full items-center justify-center"
                 data-add-property-trigger
                 data-row-expansion-ignore
                 onClick={(event) => event.currentTarget.blur()}
-                type="button"
+                variant="plain"
               />
             }
           />
         }
       >
-        <PlusIcon className="size-4" />
+        <PlusIcon className="text-muted-foreground size-4" />
       </Tooltip>
     );
   }
@@ -257,13 +259,13 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
         render={
           <DialogTrigger
             render={
-              <button
+              <Button
                 aria-label={t("workspaces.properties.newColumn")}
-                className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                className="group/add-column-rail absolute inset-0 z-10"
                 data-add-property-trigger
                 data-row-expansion-ignore
                 onClick={(event) => event.currentTarget.blur()}
-                type="button"
+                variant="plain"
               />
             }
           />
@@ -463,7 +465,10 @@ const useColumnsSubmit = (onClose: () => void) => {
   }) => {
     const created = await run();
     if (Result.isError(created)) {
-      getAnalytics().captureError(created.error);
+      getAnalytics().captureError(created.error, {
+        fingerprintKey: "useColumnsSubmit:failure",
+        scope: { type: "handler", handlerId: "useColumnsSubmit:failure" },
+      });
       notifyUserError(
         created.error,
         t("workspaces.properties.bulk.createFailed"),
@@ -474,9 +479,7 @@ const useColumnsSubmit = (onClose: () => void) => {
       title:
         count === 1
           ? t("workspaces.properties.bulk.createdOne")
-          : t("workspaces.properties.bulk.createdMany", {
-              count: String(count),
-            }),
+          : t("workspaces.properties.bulk.createdMany", { count }),
       type: "success",
     });
     onClose();
@@ -497,17 +500,18 @@ const PropertyColumnsBody = ({
   const submitOnce = useSingleFlight();
   const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const displayName = usePropertyDisplayName();
 
   const fileProperties = useMemo<FileChip[]>(
     () =>
       properties.flatMap((p) =>
-        p.content.type === "file" ? [{ id: p.id, name: p.name }] : [],
+        p.content.type === "file" ? [{ id: p.id, name: displayName(p) }] : [],
       ),
-    [properties],
+    [displayName, properties],
   );
   const allProperties = useMemo<FileChip[]>(
-    () => properties.map((p) => ({ id: p.id, name: p.name })),
-    [properties],
+    () => properties.map((p) => ({ id: p.id, name: displayName(p) })),
+    [displayName, properties],
   );
   const defaultFileIds = useMemo(
     () => fileProperties.map((p) => p.id),
@@ -867,7 +871,10 @@ const DraftCard = ({
             scope: target.suggestion,
           }),
     onError: (error) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "DraftCard:failure",
+        scope: { type: "handler", handlerId: "DraftCard:failure" },
+      });
       notifyUserError(error, t("workspaces.properties.autoPromptFailed"));
     },
   });
@@ -928,7 +935,7 @@ const DraftCard = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full text-[15px] font-semibold tracking-tight"
           // A workspace draft becomes a column name; a research draft is a
           // question with its own bound.
           maxLength={isWorkspace ? DEFAULT_VARCHAR_MAX_LENGTH : undefined}

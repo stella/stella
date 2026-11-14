@@ -8,9 +8,8 @@ import {
   mock,
   test,
 } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -26,15 +25,26 @@ import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+const storedZip = async (
+  entries: Readonly<Record<string, string>>,
+): Promise<Uint8Array> => {
+  const zip = new ZipArchive();
+  for (const [path, value] of Object.entries(entries)) {
+    zip.set(path, value);
+  }
+  return await zip.generate({ compression: "store" });
+};
 
 const describeStoredTemplateMock = mock();
 const fillStoredTemplateDocxMock = mock();
@@ -206,7 +216,7 @@ const createScopedDb = (
   entityTargets: Record<string, SeededEntityTarget> = {},
   entityCount = 0,
 ) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
       // list_templates now uses the core query builder; the chain ignores its
       // column/where/order arguments and resolves to the seeded rows.
@@ -256,54 +266,55 @@ const createContext = ({
   scopedDb = createScopedDb(),
   workspaceStatus = "active",
 }: {
-  memberRole?: McpRequestContext["memberRole"];
-  scopedDb?: McpRequestContext["scopedDb"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
   workspaceStatus?: "active" | "archived";
-} = {}): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
-  accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
-  accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
-    mock(async () => undefined),
-  ),
-  safeDb: toSafeDbMock(scopedDb),
-  scopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-  testDependencies: {
-    describeStoredTemplate: describeStoredTemplateMock,
-    fillStoredTemplateDocx: fillStoredTemplateDocxMock,
-    fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
-    fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
-    createStoredTemplate: createStoredTemplateMock,
-    renameStoredTemplate: renameStoredTemplateMock,
-    writeStoredTemplate: writeStoredTemplateMock,
-    safeOutboundFetchBytes: safeOutboundFetchBytesMock,
-    recordTemplateFill: recordTemplateFillMock,
-    recordTemplateUse: recordTemplateUseMock,
-    claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
-    fingerprintTemplatePersistenceRequest:
-      fingerprintTemplatePersistenceRequestMock,
-    persistFilledTemplateDocument: createEntityFromBufferMock,
-    persistFilledTemplateVersion: createEntityVersionFromBufferMock,
-    recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
-    releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
-    configureTemplateFields: configureTemplateFieldsMock,
-    templateDecideConditionsLogic: templateDecideConditionsLogicMock,
-    decideTemplateConditions: decideTemplateConditionsMock,
-    loadOrgAIConfig: loadOrgAIConfigMock,
-    loadManagedAIResidency: async () => "eu",
-    anonymizeTextFields: anonymizeTextFieldsMock,
-    loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
-    loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
-  },
-});
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+    accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+    accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
+      mock(async () => undefined),
+    ),
+    safeDb: toSafeDbMock(scopedDb),
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+    testDependencies: {
+      describeStoredTemplate: describeStoredTemplateMock,
+      fillStoredTemplateDocx: fillStoredTemplateDocxMock,
+      fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
+      fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
+      createStoredTemplate: createStoredTemplateMock,
+      renameStoredTemplate: renameStoredTemplateMock,
+      writeStoredTemplate: writeStoredTemplateMock,
+      safeOutboundFetchBytes: safeOutboundFetchBytesMock,
+      recordTemplateFill: recordTemplateFillMock,
+      recordTemplateUse: recordTemplateUseMock,
+      claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
+      fingerprintTemplatePersistenceRequest:
+        fingerprintTemplatePersistenceRequestMock,
+      persistFilledTemplateDocument: createEntityFromBufferMock,
+      persistFilledTemplateVersion: createEntityVersionFromBufferMock,
+      recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
+      releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
+      configureTemplateFields: configureTemplateFieldsMock,
+      templateDecideConditionsLogic: templateDecideConditionsLogicMock,
+      decideTemplateConditions: decideTemplateConditionsMock,
+      loadOrgAIConfig: loadOrgAIConfigMock,
+      loadManagedAIResidency: async () => "eu",
+      anonymizeTextFields: anonymizeTextFieldsMock,
+      loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
+      loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
+    },
+  });
 
-const createOutboundContext = (): McpRequestContext => ({
+const createOutboundContext = (): AuthorizedMcpRequestContext => ({
   ...createContext(),
   thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
 });
@@ -329,30 +340,28 @@ const fakeTransaction = asTestRaw<Transaction>({});
 const makeValidDocxBytes = async (
   paragraphs: readonly string[] = ["{{name}}"],
 ): Promise<Uint8Array> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const body = paragraphs
     .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
     .join("");
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
   );
-  return await zip.generateAsync({ type: "uint8array" });
+  return await zip.generate({ compression: "store" });
 };
 
 const makeValidDocxBase64 = async (
   paragraphs: readonly string[] = ["{{name}}"],
 ): Promise<string> =>
-  Buffer.from(await makeValidDocxBytes(paragraphs)).toString("base64");
+  Buffer.from(await makeValidDocxBytes(paragraphs)).toBase64();
 
 /** A well-formed DOCX that links an external Word template, which the upload
  *  scan rejects. */
 const makeAttachedTemplateDocxBase64 = async (): Promise<string> => {
-  const zip = await JSZip.loadAsync(await makeValidDocxBytes());
-  writeZipEntry(
-    zip,
+  const zip = await ZipArchive.read(await makeValidDocxBytes());
+  zip.set(
     "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -361,9 +370,7 @@ const makeAttachedTemplateDocxBase64 = async (): Promise<string> => {
       'Target="https://templates.example/remote.dotm" TargetMode="External"/>' +
       "</Relationships>",
   );
-  return Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString(
-    "base64",
-  );
+  return Buffer.from(await zip.generate({ compression: "store" })).toBase64();
 };
 
 /**
@@ -414,13 +421,12 @@ const makeDocxFile = async (paragraphs: string[]): Promise<ScannedFile> => {
   const body = paragraphs
     .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
     .join("");
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 describe("MCP template tools", () => {
@@ -677,6 +683,42 @@ describe("MCP template tools", () => {
     });
     expect(parseToolPayload(result)).toEqual({
       templates: rows,
+      nextCursor: null,
+    });
+  });
+
+  test("list_templates accepts its full precision continuation cursor without exposing its timestamp", async () => {
+    const rows = [TEMPLATE_ID, "018f4ad2-3a6d-7000-8b1d-44f76f5df002"].map(
+      (id) => ({
+        id,
+        cursorCreatedAt: "2026-10-30T12:34:56.123456Z",
+        name: "NDA",
+        fieldCount: 4,
+        tags: null,
+        whenToUse: null,
+        whenNotToUse: null,
+      }),
+    );
+    const first = await handleMcpToolCall({
+      args: { limit: 1 },
+      context: createContext({ scopedDb: createScopedDb(rows) }),
+      toolName: "list_templates",
+    });
+    const payload = parseToolPayload(first);
+    if (!isRecord(payload) || typeof payload["nextCursor"] !== "string") {
+      throw new TypeError("Expected a continuation cursor");
+    }
+    expect(payload["templates"]).toEqual(
+      rows.slice(0, 1).map(({ cursorCreatedAt, ...item }) => item),
+    );
+    const second = await handleMcpToolCall({
+      args: { limit: 1, cursor: payload["nextCursor"] },
+      context: createContext({ scopedDb: createScopedDb(rows.slice(1)) }),
+      toolName: "list_templates",
+    });
+    expect(second.isError).toBeFalsy();
+    expect(parseToolPayload(second)).toEqual({
+      templates: rows.slice(1).map(({ cursorCreatedAt, ...item }) => item),
       nextCursor: null,
     });
   });
@@ -1083,7 +1125,7 @@ describe("MCP template tools", () => {
       completionStatus: "partial",
       text: "Lease between ACME and Tenant.",
       truncated: false,
-      docxBase64: docxBytes.toString("base64"),
+      docxBase64: docxBytes.toBase64(),
       unmatchedPlaceholders: [],
       unusedValues: [],
       clauseWarnings: [],
@@ -1569,7 +1611,9 @@ describe("MCP template tools", () => {
       toolName: "preview_template_conditions",
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: { code: "permission_denied" },
+    });
     expect(templateDecideConditionsLogicMock).not.toHaveBeenCalled();
     expect(loadOrgAIConfigMock).not.toHaveBeenCalled();
   });
@@ -1582,6 +1626,7 @@ describe("MCP template tools", () => {
       Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Organization AI configuration unavailable",
         }),
       ),
@@ -1637,7 +1682,7 @@ describe("MCP template tools", () => {
 
   test.each([
     { reason: "busy", code: "action_concurrency_busy" },
-    { reason: "unavailable", code: "action_admission_unavailable" },
+    { reason: "store_unavailable", code: "limiter_store_unavailable" },
   ] as const)(
     "preview_template_conditions maps action admission %s to its canonical envelope",
     async ({ reason, code }) => {
@@ -2165,6 +2210,7 @@ describe("MCP template tools", () => {
       error: "Scanner unavailable.",
       storedTemplateError: new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Scanner unavailable.",
         hint: "Retry the request.",
       }),
@@ -3468,7 +3514,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: Buffer.from("not a docx").toString("base64"),
+        docx_base64: Buffer.from("not a docx").toBase64(),
       },
       context: createContext(),
       toolName: "create_template",
@@ -3522,15 +3568,13 @@ describe("MCP template tools", () => {
     // well-formed base64 but decodes to bytes that are no longer a readable
     // archive.
     const truncated = Buffer.from(
-      await writeZipEntry(
-        new JSZip(),
-        "word/document.xml",
-        `<w:document xmlns:w="${W_NS}"/>`,
-      ).generateAsync({ type: "uint8array" }),
+      await storedZip({
+        "word/document.xml": `<w:document xmlns:w="${W_NS}"/>`,
+      }),
     ).subarray(0, 24);
 
     const result = await handleMcpToolCall({
-      args: { name: "NDA", docx_base64: truncated.toString("base64") },
+      args: { name: "NDA", docx_base64: truncated.toBase64() },
       context: createContext(),
       toolName: "create_template",
     });
@@ -3551,17 +3595,13 @@ describe("MCP template tools", () => {
 
   test("create_template hints per failure: a readable archive missing the main part is not an encoding problem", async () => {
     const withoutDocumentXml = Buffer.from(
-      await writeZipEntry(
-        new JSZip(),
-        "word/styles.xml",
-        "<styles/>",
-      ).generateAsync({ type: "uint8array" }),
+      await storedZip({ "word/styles.xml": "<styles/>" }),
     );
 
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: withoutDocumentXml.toString("base64"),
+        docx_base64: withoutDocumentXml.toBase64(),
       },
       context: createContext(),
       toolName: "create_template",
@@ -3574,15 +3614,15 @@ describe("MCP template tools", () => {
   });
 
   test("create_template hints per failure: an archive past the unpack bounds is not an encoding problem", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
+    const zip = new ZipArchive();
+    zip.set("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
-      writeZipEntry(zip, `word/media/${String(index)}.bin`, "x");
+      zip.set(`word/media/${String(index)}.bin`, "x");
     }
     // Thousands of entries outgrow the inline base64 frame, so this archive
     // arrives the way a large template does: as a host file reference.
     safeOutboundFetchBytesMock.mockResolvedValue(
-      hostFileResponse(await zip.generateAsync({ type: "uint8array" })),
+      hostFileResponse(await zip.generate({ compression: "store" })),
     );
 
     const result = await handleMcpToolCall({
@@ -3602,15 +3642,13 @@ describe("MCP template tools", () => {
 
   test("create_template hints per failure: unparseable document XML is not an encoding problem", async () => {
     const malformed = Buffer.from(
-      await writeZipEntry(
-        new JSZip(),
-        "word/document.xml",
-        `<w:document xmlns:w="${W_NS}"><w:body><w:p></w:document>`,
-      ).generateAsync({ type: "uint8array" }),
+      await storedZip({
+        "word/document.xml": `<w:document xmlns:w="${W_NS}"><w:body><w:p></w:document>`,
+      }),
     );
 
     const result = await handleMcpToolCall({
-      args: { name: "NDA", docx_base64: malformed.toString("base64") },
+      args: { name: "NDA", docx_base64: malformed.toBase64() },
       context: createContext(),
       toolName: "create_template",
     });
@@ -3811,7 +3849,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: Buffer.from("PK").toString("base64"),
+        docx_base64: Buffer.from("PK").toBase64(),
       },
       context: createContext({ memberRole: "intern" }),
       toolName: "create_template",
@@ -4802,30 +4840,36 @@ describe("MCP template tools", () => {
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
   });
 
-  test("list_templates (detail) rejects template_id combined with a cursor", async () => {
-    const result = await handleMcpToolCall({
-      // Base64 of readable text: a cursor this surface could have issued, so
-      // the contradiction with template_id is what the call is refused for.
-      args: { template_id: TEMPLATE_ID, cursor: "YWJj" },
-      context: createContext(),
-      toolName: "list_templates",
-    });
+  test.each([
+    { paging: { cursor: "YWJj" }, paths: ["cursor"] },
+    { paging: { limit: 10 }, paths: ["limit"] },
+    { paging: { cursor: "YWJj", limit: 10 }, paths: ["cursor", "limit"] },
+  ])(
+    "list_templates detail rejects paging $paths",
+    async ({ paging, paths }) => {
+      const result = await handleMcpToolCall({
+        // Base64 of readable text: a cursor this surface could have issued, so
+        // the contradiction with template_id is what the call is refused for.
+        args: { template_id: TEMPLATE_ID, ...paging },
+        context: createContext(),
+        toolName: "list_templates",
+      });
 
-    expect(result.isError).toBe(true);
-    const error = validationEnvelope(result);
-    expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe(
-      "cursor applies when listing templates; omit template_id to list",
-    );
-    expect(error["issues"]).toEqual([
-      {
-        path: "cursor",
-        message:
-          "cursor applies when listing templates; omit template_id to list",
-      },
-    ]);
-    expect(describeStoredTemplateMock).not.toHaveBeenCalled();
-  });
+      expect(result.isError).toBe(true);
+      const error = validationEnvelope(result);
+      expect(error["code"]).toBe("validation_error");
+      expect(error["message"]).toBe(
+        "Paging applies when listing templates; omit template_id to list",
+      );
+      expect(error["issues"]).toEqual(
+        paths.map((path) => ({
+          path,
+          message: `${path} applies when listing templates; omit template_id to list`,
+        })),
+      );
+      expect(describeStoredTemplateMock).not.toHaveBeenCalled();
+    },
+  );
 
   test("create_template rejects a request with no document source", async () => {
     const result = await handleMcpToolCall({
@@ -4860,7 +4904,7 @@ describe("MCP template tools", () => {
         name: "NDA",
         // Not a DOCX at all: if these bytes were decoded the call would fail
         // structural validation, so passing proves they never were.
-        docx_base64: Buffer.from("not a docx").toString("base64"),
+        docx_base64: Buffer.from("not a docx").toBase64(),
         file: HOST_FILE_REFERENCE,
       },
       context: createOutboundContext(),

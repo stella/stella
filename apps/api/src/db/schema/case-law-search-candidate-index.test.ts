@@ -2,7 +2,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { isNotNull } from "drizzle-orm";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -16,6 +17,7 @@ import {
   CASE_LAW_SEARCH_CANDIDATE_ROW_BOUND_CONSTRAINT,
   searchCandidateRowWithinBoundsSql,
 } from "@/api/lib/case-law/search-candidate-row-bound-sql";
+import { installPgliteDecisionDocketFilingYear } from "@/api/tests/pglite-schema";
 
 import { ONLINE_MIGRATION_INDEXES } from "../online-migrations";
 
@@ -151,7 +153,11 @@ test("public case-law index replacements all use the publication gate", () => {
       queryPredicate,
     );
     expect(onlineIndex.createSql).toContain(indexPredicate);
-    expect(onlineIndex.definitionBody).toContain(indexDefinitionPredicate);
+    // PostgreSQL flattens conjunctions when another gate follows publication.
+    // The catalog test below checks the complete normalized expression.
+    expect(onlineIndex.definitionBody).toContain(
+      indexDefinitionPredicate.slice(1, -1),
+    );
   }
 });
 
@@ -175,14 +181,13 @@ test("the citation resolver keeps an all-row candidate index", () => {
 
 test("public case-law online index definitions match PostgreSQL's catalog", async () => {
   await using database = new PGlite();
+  const columns = getTableConfig(caseLawDecisions).columns;
   await database.exec(`
     CREATE TABLE case_law_decisions (
-      id uuid, country text, source_id uuid, court text, decision_date date,
-      decision_type text, language text, citation_authority text,
-      language_group_key text, redacted_at timestamptz, metadata jsonb,
-      citation_key text, created_at timestamptz, updated_at timestamptz
+      ${columns.map((column) => `"${column.name}" ${column.getSQLType()}`).join(",\n")}
     );
   `);
+  await installPgliteDecisionDocketFilingYear(drizzle({ client: database }));
 
   for (const name of publishedIndexNames()) {
     const index =

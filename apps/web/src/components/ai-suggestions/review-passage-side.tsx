@@ -14,6 +14,7 @@ import { Fragment, useCallback, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { TextMark } from "@stll/ui/text-mark";
 import type { TextMarkOptions } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
@@ -78,8 +79,7 @@ export const REVIEW_SIDE_RULE_CLASS = {
 
 /** A clause number in the hanging margin, or any other numeric caption beside
  *  a passage. */
-export const REVIEW_CLAUSE_LABEL_CLASS =
-  "text-muted-foreground text-xs tabular-nums";
+const REVIEW_CLAUSE_LABEL_CLASS = "text-muted-foreground text-xs tabular-nums";
 
 /** The passage measure: one scale, one leading, everywhere a passage renders.
  *  The pane's own width is the measure, so nothing caps it at a column.
@@ -174,17 +174,20 @@ export const ReviewPassageSide = ({
             ))}
           </div>
           {overflows && (
-            <button
-              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs font-medium"
+            <Button
+              className="flex"
               onClick={() => {
                 setExpanded(!expanded);
               }}
-              type="button"
+              size="inline"
+              variant="muted"
             >
-              {expanded
-                ? t("common.showLess")
-                : (expandLabel ?? t("common.showMore"))}
-            </button>
+              <span className="inline-flex min-h-11 items-center text-xs font-medium">
+                {expanded
+                  ? t("common.showLess")
+                  : (expandLabel ?? t("common.showMore"))}
+              </span>
+            </Button>
           )}
         </>
       )}
@@ -292,16 +295,18 @@ const PassageParagraph = ({
   }
 
   return (
-    <button
+    <Button
       aria-label={t("inspector.review.showInDocument")}
-      className={cn(PASSAGE_PROSE_CLASS, "hover:bg-muted/60 rounded-sm")}
+      className="flex w-full"
       onClick={() => {
         onActivate(paragraph.blockId);
       }}
-      type="button"
+      variant="plain"
     >
-      {body}
-    </button>
+      <span className={cn(PASSAGE_PROSE_CLASS, "hover:bg-muted/60 rounded-sm")}>
+        {body}
+      </span>
+    </Button>
   );
 };
 

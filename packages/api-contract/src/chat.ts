@@ -1,5 +1,9 @@
+import { panic } from "better-result";
+
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import type { BrowserExtensionStatus } from "./browser-control";
+import type { ChatRunTarget } from "./chat-run-target";
 import type { SafeId } from "./safe-id";
 
 export type ChatTurnTiming =
@@ -56,11 +60,59 @@ export const isChatPastedTextPart = (
 export const ASK_USER_TOOL_NAME = "ask-user";
 export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
 
+/**
+ * The activity a stored message part of a type this release does not know
+ * reads as. A newer release may store part types an older one has never seen;
+ * the older one carries the stored part whole (`content.part`) so that saving
+ * the message writes it back unchanged, never shows it to the model, and the
+ * page shows a neutral row in its place.
+ */
+export const UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE = "stella.unsupported-part";
+
+/** A stored part carried whole because this release cannot read it. */
+export type UnsupportedChatPart = {
+  type: "activity";
+  activityType: typeof UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE;
+  content: { part: unknown };
+};
+
+/** Whether `part` is a stored part this release carries without reading. */
+export const isUnsupportedChatPart = (
+  part: unknown,
+): part is UnsupportedChatPart => {
+  if (typeof part !== "object" || part === null) {
+    return false;
+  }
+  const content: unknown = Reflect.get(part, "content");
+  return (
+    Reflect.get(part, "type") === "activity" &&
+    Reflect.get(part, "activityType") === UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE &&
+    typeof content === "object" &&
+    content !== null &&
+    Object.hasOwn(content, "part")
+  );
+};
+
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 
+/**
+ * Who runs a tool call. `server`: the API runs it during the turn. `client`:
+ * the browser resolves it (a client tool, or a question the user answers).
+ * `harness`: a coding-agent harness on the member's computer ran it during a
+ * turn routed there. The API never runs a harness call; it stores what the
+ * harness reported and forwards approval answers to the computer.
+ */
+export const CHAT_TOOL_EXECUTOR = {
+  server: "server",
+  client: "client",
+  harness: "harness",
+} as const;
+export type ChatToolExecutor =
+  (typeof CHAT_TOOL_EXECUTOR)[keyof typeof CHAT_TOOL_EXECUTOR];
+
 /** Ownership is recorded by the runtime and does not depend on later tool sets. */
-export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
+export const chatToolExecutor = (part: unknown): ChatToolExecutor | null => {
   if (
     typeof part !== "object" ||
     part === null ||
@@ -80,6 +132,8 @@ export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
         return "server";
       case "client":
         return "client";
+      case "harness":
+        return "harness";
       default:
         break;
     }
@@ -89,6 +143,57 @@ export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
 
 export const isServerChatToolCall = (part: unknown): boolean =>
   chatToolExecutor(part) === "server";
+
+/** Whether a member's computer ran the call; see `CHAT_TOOL_EXECUTOR`. */
+export const isHarnessChatToolCall = (part: unknown): boolean =>
+  chatToolExecutor(part) === "harness";
+
+/**
+ * Whether the browser resolves the call. A server or harness call is run by
+ * the API or by the member's computer, so the browser never answers it with
+ * an output; a call stored before ownership was recorded reads as the
+ * browser's, as it always has.
+ */
+export const isBrowserResolvedChatToolCall = (part: unknown): boolean => {
+  const executor = chatToolExecutor(part);
+  switch (executor) {
+    case "server":
+    case "harness":
+      return false;
+    case "client":
+    case null:
+      return true;
+    default:
+      executor satisfies never;
+      return panic(`Unknown chat tool executor: ${String(executor)}`);
+  }
+};
+
+/**
+ * The error a declined call stores, as the chat engine writes it when the
+ * user denies an approval: on the call's `output.error` and on its
+ * `tool-result`, whose `outcome` is `denied`. Every writer of a denial stores
+ * this shape (see `isDeclinedChatToolCall`).
+ */
+export const CHAT_TOOL_DECLINED_ERROR = "User declined tool execution";
+
+/** The parts of a tool call that decide whether it was declined. */
+type DecidedChatToolCall = {
+  type: string;
+  approval?: { approved?: boolean | undefined } | undefined;
+};
+
+/**
+ * Whether the user declined a tool call's approval. The decision is
+ * `approval.approved === false`, whatever state the call is in: a declined
+ * call is stored settled as an `error` with the engine's denial
+ * (`CHAT_TOOL_DECLINED_ERROR`), threads stored before that keep it
+ * `approval-responded` with no result, and a client posts its answer as
+ * `approval-responded`. All of them are the same decision, so every reader
+ * asks this predicate rather than reading a state.
+ */
+export const isDeclinedChatToolCall = (part: DecidedChatToolCall): boolean =>
+  part.type === "tool-call" && part.approval?.approved === false;
 
 /**
  * Title a thread is persisted with until its first message generates a real
@@ -105,13 +210,81 @@ export const CHAT_THREAD_ORIGIN = {
 export type ChatThreadOrigin =
   (typeof CHAT_THREAD_ORIGIN)[keyof typeof CHAT_THREAD_ORIGIN];
 
+/**
+ * Where one of the caller's unfinished chat runs stands: the assistant is
+ * `working` on it, or it `needs-you` to answer before it can go on.
+ */
+export const CHAT_ACTIVE_RUN_STATE = {
+  needsYou: "needs-you",
+  working: "working",
+} as const;
+export type ChatActiveRunState =
+  (typeof CHAT_ACTIVE_RUN_STATE)[keyof typeof CHAT_ACTIVE_RUN_STATE];
+
+/**
+ * What a turn that `needs-you` waits on: an answer to the assistant's
+ * question, an approval, a step the app runs itself once the chat is open
+ * again, or a question from a harness on the member's computer.
+ */
+export const CHAT_TURN_INTERACTION_TYPES = [
+  "ask-user",
+  "approval",
+  "client-tool",
+  "harness-question",
+] as const;
+export type ChatTurnInteractionType =
+  (typeof CHAT_TURN_INTERACTION_TYPES)[number];
+
+/**
+ * Whether the reader has seen a chat's latest answer: `unread` once an answer
+ * settles after they last had the chat open, or after they marked it unread.
+ */
+export const CHAT_THREAD_READ_STATE = {
+  read: "read",
+  unread: "unread",
+} as const;
+export type ChatThreadReadState =
+  (typeof CHAT_THREAD_READ_STATE)[keyof typeof CHAT_THREAD_READ_STATE];
+
+/** Whether the reader pinned a chat to the top of their list. */
+export const CHAT_THREAD_PIN_STATE = {
+  pinned: "pinned",
+  unpinned: "unpinned",
+} as const;
+export type ChatThreadPinState =
+  (typeof CHAT_THREAD_PIN_STATE)[keyof typeof CHAT_THREAD_PIN_STATE];
+
+/** One unfinished chat run of the caller, as the active-runs read lists it. */
+export type ChatActiveRun = {
+  threadId: string;
+  threadTitle: string;
+  workspaceId: string | null;
+  /** ISO instant the run entered its current state. */
+  since: string;
+} & (
+  | { state: typeof CHAT_ACTIVE_RUN_STATE.working }
+  | {
+      state: typeof CHAT_ACTIVE_RUN_STATE.needsYou;
+      interaction: ChatTurnInteractionType;
+    }
+);
+
 export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;
 
+/**
+ * What a turn that rewrites stored history asks for: `regenerate` answers the
+ * latest user message again; `edit` replaces one of the user's own messages
+ * (named by `truncateAfterMessageId`) and drops every later turn.
+ */
 export const CHAT_TURN_INTENT = {
+  edit: "edit",
   regenerate: "regenerate",
 } as const;
+
+export type ChatTurnIntent =
+  (typeof CHAT_TURN_INTENT)[keyof typeof CHAT_TURN_INTENT];
 
 /**
  * Response header naming the server turn a chat request runs, so the page can
@@ -197,7 +370,7 @@ type ChatNativeContinuation = {
 
 export type ChatContinuation = ChatInitialTurn | ChatNativeContinuation;
 
-/** Portable projection of the Elysia chat-stream request schema. */
+/** Portable projection of the chat-stream route's valibot request schema. */
 type ChatSendRequestBase = {
   activeDecision?: {
     decisionId: SafeId<"caseLawDecision">;
@@ -239,21 +412,26 @@ type ChatSendRequestBase = {
     templateId: SafeId<"template">;
   };
   /**
-   * The extension protocol the client speaks. Any version is accepted so a
-   * stale tab can still chat; the server offers the browser tool only when it
-   * matches its own `BROWSER_CONTROL_PROTOCOL_VERSION`.
+   * Any positive integer protocol version is accepted so a stale tab can still
+   * chat; the server offers the browser tool only for its own
+   * `BROWSER_CONTROL_PROTOCOL_VERSION`. Status must be known.
    */
-  browserClient?: { protocolVersion: number };
+  browserExtension?: {
+    protocolVersion: number;
+    status: BrowserExtensionStatus;
+  };
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";
   editApplyMode?: "manual" | "auto";
   runMode?: ChatRunMode;
+  /** Where the turn runs; absent runs it on stella's own models. */
+  runTarget?: ChatRunTarget;
   /** AG-UI run correlation minted by TanStack ChatClient. */
   runId: string;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];
+  turnIntent?: ChatTurnIntent;
   toolScope?: (typeof CHAT_TOOL_SCOPE)["suggestTemplateFields"];
   truncateAfterMessageId?: SafeId<"chatMessage">;
   userContext?: {

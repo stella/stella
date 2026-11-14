@@ -1,9 +1,10 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
@@ -12,11 +13,17 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 import type { AnswerEditProposal } from "./answer-edit-api";
-import { AnswerEditPanel, AnswerEditNotice } from "./answer-edit-panel";
+import {
+  AnswerEditFrame,
+  AnswerEditNotice,
+  AnswerEditPanel,
+} from "./answer-edit-panel";
 import type { AnswerFormatPanelProps } from "./answer-format-panel";
 import { formatAnswerSpan } from "./markdown-format.logic";
 import type { AnswerFormatAction } from "./markdown-format.logic";
@@ -41,7 +48,13 @@ export const AnswerFormatProposal = ({
           catch: (error) => error,
         });
         if (Result.isError(refreshed)) {
-          getAnalytics().captureError(refreshed.error);
+          getAnalytics().captureError(refreshed.error, {
+            fingerprintKey: "AnswerFormatProposal.refresh:failure",
+            scope: {
+              type: "handler",
+              handlerId: "AnswerFormatProposal.refresh:failure",
+            },
+          });
           setRefreshError(true);
           return;
         }
@@ -50,10 +63,8 @@ export const AnswerFormatProposal = ({
       "answer-format.refresh",
     );
   const staleNotice = (
-    <div
-      role="dialog"
+    <AnswerEditFrame
       aria-label={t("chat.answerEdit.textStyle")}
-      tabIndex={-1}
       ref={(node) => {
         if (node === null) {
           return undefined;
@@ -71,7 +82,7 @@ export const AnswerFormatProposal = ({
       }}
     >
       <AnswerEditNotice status="stale" onCancel={cancelStale} />
-    </div>
+    </AnswerEditFrame>
   );
   const focusCancelablePanel = (node: HTMLDivElement | null) => {
     if (node === null) {
@@ -94,40 +105,46 @@ export const AnswerFormatProposal = ({
     end: selection.end,
     action,
   });
-  const query = useQuery({
-    queryKey: chatKeys.answerSnapshot({
-      activeOrganizationId: user.activeOrganizationId,
-      userId: user.id,
-      threadId,
-      messageId: anchor.messageId,
-      revision: anchor.baseRevision,
-    }),
-    queryFn: async ({ signal }) =>
-      unwrapEden(
-        await api.chat
-          .threads({ threadId })
-          .messages({ messageId: anchor.messageId })
-          .get({ fetch: { signal } }),
-      ),
-    enabled: result.status === "proposal",
-    retry: false,
-  });
-  const view = useQueryView(query);
-  useQueryViewError(view);
+  const query = useQuery(
+    resourceQueryOptions(
+      queryOptions({
+        queryKey: chatKeys.answerSnapshot({
+          activeOrganizationId: user.activeOrganizationId,
+          userId: user.id,
+          threadId,
+          messageId: anchor.messageId,
+          revision: anchor.baseRevision,
+        }),
+        queryFn: async ({ signal }) =>
+          unwrapApiResponse(
+            await api.chat
+              .threads({ threadId })
+              .messages({ messageId: anchor.messageId })
+              .get({ fetch: { signal } }),
+          ),
+        enabled: result.status === "proposal",
+        retry: false,
+      }),
+      {
+        resources: [RESOURCE_TYPE.CHAT_MESSAGE],
+        scope: { type: "organization" },
+      },
+    ),
+  );
+  const view = queryView(query);
+  useQueryViewError(view, "AnswerFormatProposal:snapshot");
   if (refreshError) {
     return (
-      <div
+      <AnswerEditFrame
         className="w-80 p-2"
         ref={focusCancelablePanel}
-        role="dialog"
         aria-label={t("chat.answerEdit.textStyle")}
-        tabIndex={-1}
       >
         <p role="alert">{t("errors.actionFailed")}</p>
         <Button size="sm" onClick={cancelStale}>
           {t("common.retry")}
         </Button>
-      </div>
+      </AnswerEditFrame>
     );
   }
   if (result.status === "unchanged") {
@@ -135,44 +152,38 @@ export const AnswerFormatProposal = ({
   }
   if (result.status === "unsupported") {
     return (
-      <div
+      <AnswerEditFrame
         className="w-80 space-y-2 p-2"
         ref={focusCancelablePanel}
-        role="dialog"
         aria-label={t("chat.answerEdit.textStyle")}
-        tabIndex={-1}
       >
         <p role="alert">{t(UNSUPPORTED_FORMAT_LABEL_KEYS[result.reason])}</p>
         <Button size="sm" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-      </div>
+      </AnswerEditFrame>
     );
   }
   switch (view.type) {
     case "pending":
       return (
-        <div
+        <AnswerEditFrame
           className="w-80 p-2"
           ref={focusCancelablePanel}
-          role="dialog"
           aria-label={t("chat.answerEdit.textStyle")}
-          tabIndex={-1}
         >
           <p role="status">{t("common.loading")}</p>
           <Button size="sm" variant="ghost" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-        </div>
+        </AnswerEditFrame>
       );
     case "error":
       return (
-        <div
+        <AnswerEditFrame
           className="w-80 space-y-2 p-2"
           ref={focusCancelablePanel}
-          role="dialog"
           aria-label={t("chat.answerEdit.textStyle")}
-          tabIndex={-1}
         >
           <p role="alert">{t("errors.actionFailed")}</p>
           <Button
@@ -185,7 +196,7 @@ export const AnswerFormatProposal = ({
           <Button size="sm" variant="ghost" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-        </div>
+        </AnswerEditFrame>
       );
     case "empty":
       return staleNotice;

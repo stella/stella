@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -15,9 +16,9 @@ import {
   fetchSkillPackageFromUrl,
 } from "@/api/lib/skills/skill-package";
 
-const importSkillBodySchema = t.Object({
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  url: t.String({ minLength: 1, maxLength: 2048 }),
+const importSkillBodySchema = v.object({
+  scope: v.picklist(AGENT_SKILL_SCOPES),
+  url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
 });
 
 const config = {
@@ -68,6 +69,7 @@ const importSkillFromUrl = createSafeRootHandler(
         body.url,
         createSkillPackageFetchContext({
           permit: grantThirdPartyOutboundPermit(),
+          publicGithubToken: env.SKILL_IMPORT_GITHUB_TOKEN,
         }),
       ),
     );

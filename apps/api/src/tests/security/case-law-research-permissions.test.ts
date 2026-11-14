@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
@@ -56,7 +57,7 @@ const refusingDb: SafeDb = async <T>() =>
     new DatabaseError({ message: "a denied call must not reach the database" }),
   );
 
-const contextForRole = (role: MemberRole): unknown => ({
+const contextForRole = (role: MemberRole) => ({
   request: new Request("https://example.test/case/research"),
   route: "/case/research",
   body: {},
@@ -206,15 +207,15 @@ describe("an answer run is priced before it claims cells", () => {
     try {
       let transactions = 0;
       const unentitledDb: SafeDb = async <T>(
-        fn: (tx: never) => Promise<T>,
+        fn: (tx: Transaction) => Promise<T>,
       ): Promise<Result<T, SafeDbError>> => {
         transactions += 1;
-        return Result.ok(await fn(asTestRaw(noEntitlementTx)));
+        return Result.ok(await fn(asTestRaw<Transaction>(noEntitlementTx)));
       };
 
       const result = await runResearchAnswers.handler(
         asTestRaw({
-          ...asTestRaw<Record<string, unknown>>(contextForRole("owner")),
+          ...contextForRole("owner"),
           body: {
             decisionIds: [
               toSafeId<"caseLawDecision">(

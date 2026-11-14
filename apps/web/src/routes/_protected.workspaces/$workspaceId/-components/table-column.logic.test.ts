@@ -8,9 +8,9 @@ import type {
 } from "@/lib/types";
 
 import {
+  type AIExtractionProperty,
   isAIExtractionProperty,
   resolveAiCellTargets,
-  type AIExtractionProperty,
 } from "./table-column.logic";
 
 const entity = (

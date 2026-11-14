@@ -6,7 +6,7 @@
 //
 // Lines without a disable directive must continue to pass — they cover
 // the allow-list (full formatting locale via getFormattingLocale(), or a
-// resolved `locale` variable from use-intl's useLocale()).
+// resolved `locale` variable from useFormattingLocale()).
 
 declare const getFormattingLocale: () => string;
 declare const someDate: Date;

@@ -5,13 +5,13 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import {
+  type CatalogInput,
+  type ChangesetPolicy,
   decideChangesetGate,
   findCatalogInputs,
   isChangesetEntry,
   loadChangesetPolicy,
   parseWorkspaceCatalogs,
-  type CatalogInput,
-  type ChangesetPolicy,
 } from "./changeset-guard";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");

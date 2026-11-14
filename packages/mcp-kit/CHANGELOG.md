@@ -1,5 +1,26 @@
 # @stll/mcp-kit
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/agent-input@0.4.0
+
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [[`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75)]:
+  - @stll/agent-input@0.3.0
+
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [[`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9)]:
+  - @stll/agent-input@0.2.0
+
 ## 0.2.3
 
 ### Patch Changes

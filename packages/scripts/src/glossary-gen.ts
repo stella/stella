@@ -98,6 +98,9 @@ export type Term = {
   id: string;
   en: string;
   note?: string;
+  // Actionable copy guidance printed when this term's ban fires. Keep the
+  // policy beside its glossary rule rather than duplicating it in the linter.
+  guidance?: string;
   // Renderings banned wherever the concept is mentioned (English source
   // contains the trigger word, or a key matches `keyTriggers`).
   forbidden?: Record<string, string[]>;
@@ -215,6 +218,13 @@ const parseTerm = (value: unknown, where: string): Term => {
   const note = value["note"];
   if (typeof note === "string") {
     term.note = note;
+  }
+  const guidance = value["guidance"];
+  if (guidance !== undefined && typeof guidance !== "string") {
+    return panic(`${where} (${id}): \`guidance\` must be a string`);
+  }
+  if (guidance) {
+    term.guidance = guidance;
   }
   const forbidden = parseForbidden(value["forbidden"], "forbidden", where, id);
   if (forbidden) {

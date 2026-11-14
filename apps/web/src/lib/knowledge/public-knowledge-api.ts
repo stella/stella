@@ -1,4 +1,4 @@
-import { type EdenResponse, unwrapEden } from "@/lib/errors/api";
+import { type ApiResponse, unwrapApiResponse } from "@/lib/errors/api";
 
 const DISABLED_MARKER = "Not Found";
 const NOT_FOUND_STATUS = 404;
@@ -25,7 +25,7 @@ export type PublicKnowledgeData<
 > = Exclude<NonNullable<Awaited<ReturnType<TRead>>["data"]>, DisabledData>;
 
 /** A failed read, raised the way every other API read is. */
-const failedRead = (error: ErrorInput): EdenResponse<never> => ({
+const failedRead = (error: ErrorInput): ApiResponse<never> => ({
   data: null,
   error,
 });
@@ -42,22 +42,25 @@ const catalogueOff = (action: string): ErrorInput => ({
  * every other failure are raised as API errors.
  */
 export function unwrapPublicKnowledge<T>(
-  response: EdenResponse<T>,
+  response: ApiResponse<T>,
   action: string,
 ): Exclude<T, DisabledData> | null {
   if (response.error) {
+    if (response.error.kind !== undefined) {
+      return unwrapApiResponse(response);
+    }
     const { status, value } = response.error;
     if (isDisabledData(value)) {
-      return unwrapEden(failedRead(catalogueOff(action)));
+      return unwrapApiResponse(failedRead(catalogueOff(action)));
     }
     if (status === NOT_FOUND_STATUS) {
       return null;
     }
-    return unwrapEden(failedRead(response.error));
+    return unwrapApiResponse(failedRead(response.error));
   }
   const { data } = response;
   if (!isCatalogueData(data)) {
-    return unwrapEden(failedRead(catalogueOff(action)));
+    return unwrapApiResponse(failedRead(catalogueOff(action)));
   }
   return data;
 }

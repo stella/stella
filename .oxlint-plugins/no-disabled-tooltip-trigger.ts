@@ -5,8 +5,8 @@
 // the trigger receives no hover and no focus: the popup explaining *why* the
 // action is unavailable is unreachable exactly when it is needed.
 //
-// `Button` closes the hole for the tooltip it owns — given `tooltip`,
-// `aria-label`, or `title` it switches a disabled button to the ARIA
+// `Button` closes the hole for the tooltip it owns — given `tooltip`, or at an
+// icon size `aria-label` or `title`, it switches a disabled button to the ARIA
 // accessible-disabled pattern (`aria-disabled`, focusable, activation blocked).
 // It cannot see a tooltip a caller wraps around it from the outside, which is
 // the pattern this rule flags.

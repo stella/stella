@@ -11,12 +11,13 @@ import path from "node:path";
 
 import { GENERATORS } from "./generated-files";
 import {
+  buildRootInputs,
   decide,
-  landingBuildRootInputs,
-  landingClosure,
-  parseLockfile,
+  LANDING_PACKAGE,
   type Lockfile,
+  parseLockfile,
   type Revision,
+  workspaceClosure,
 } from "./landing-deploy-scope";
 
 const lockfile = (
@@ -75,10 +76,17 @@ const decideFor = (
   changedFiles: readonly string[],
   head: Revision = revision(lockfile()),
   base: Revision = revision(lockfile()),
-) => decide({ changedFiles, rootInputs: ROOT_INPUTS, base, head }).affected;
+) =>
+  decide({
+    packageName: LANDING_PACKAGE,
+    changedFiles,
+    rootInputs: ROOT_INPUTS,
+    base,
+    head,
+  }).affected;
 
 test("the closure follows workspace links, including ones a published package makes", () => {
-  const closure = landingClosure(lockfile());
+  const closure = workspaceClosure(lockfile(), LANDING_PACKAGE);
   expect(closure?.workspaceDirectories).toEqual(
     new Set(["apps/landing", "packages/ui", "packages/editor-utils"]),
   );
@@ -154,15 +162,45 @@ test("a patch or runtime change counts only for the landing's packages", () => {
   ).toBe(true);
 });
 
+test("the decision follows the named package's own graph", () => {
+  const decideForWeb = (changedFiles: readonly string[], head = lockfile()) =>
+    decide({
+      packageName: "@stll/web",
+      changedFiles,
+      rootInputs: [],
+      base: revision(lockfile()),
+      head: revision(head),
+    }).affected;
+  expect(decideForWeb(["apps/web/src/main.tsx"])).toBe(true);
+  expect(decideForWeb(["apps/landing/src/pages/index.astro"])).toBe(false);
+  expect(decideForWeb(["packages/ui/src/button.tsx"])).toBe(false);
+  expect(
+    decideForWeb(
+      ["bun.lock"],
+      lockfile({ shared: ["shared@1.1.0", "", {}, "sha512-shared-1.1"] }),
+    ),
+  ).toBe(true);
+  expect(
+    decide({
+      packageName: "@stll/missing",
+      changedFiles: ["docs/plans/next.md"],
+      rootInputs: [],
+      base: revision(lockfile()),
+      head: revision(lockfile()),
+    }).affected,
+  ).toBe(true);
+});
+
 test("an unreadable lockfile fails towards a deploy", () => {
   expect(decideFor(["apps/web/src/main.tsx"], revision(undefined))).toBe(true);
 });
 
 test("the repository declares the landing build's outside reads", () => {
-  const inputs = landingBuildRootInputs(
+  const inputs = buildRootInputs(
     Bun.JSONC.parse(
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
+    LANDING_PACKAGE,
   );
   expect(inputs).toContain("docs/changelog/**");
   const lock = parseLockfile(
@@ -170,16 +208,17 @@ test("the repository declares the landing build's outside reads", () => {
       readFileSync(new URL("../bun.lock", import.meta.url), "utf-8"),
     ),
   );
-  expect(lock && landingClosure(lock)?.workspaceDirectories).toContain(
-    "apps/landing",
-  );
+  expect(
+    lock && workspaceClosure(lock, LANDING_PACKAGE)?.workspaceDirectories,
+  ).toContain("apps/landing");
 });
 
 test("CLI runtime generator inputs trigger deployment through the real build declarations", () => {
-  const rootInputs = landingBuildRootInputs(
+  const rootInputs = buildRootInputs(
     Bun.JSONC.parse(
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
+    LANDING_PACKAGE,
   );
   const runtime = GENERATORS.find(({ id }) => id === "cli-runtime");
   if (runtime === undefined) {
@@ -194,11 +233,23 @@ test("CLI runtime generator inputs trigger deployment through the real build dec
   for (const file of cliInputs) {
     const changedFiles = [file];
     expect(
-      decide({ changedFiles, rootInputs: [], base, head }).affected,
+      decide({
+        packageName: LANDING_PACKAGE,
+        changedFiles,
+        rootInputs: [],
+        base,
+        head,
+      }).affected,
       file,
     ).toBe(false);
     expect(
-      decide({ changedFiles, rootInputs, base, head }).affected,
+      decide({
+        packageName: LANDING_PACKAGE,
+        changedFiles,
+        rootInputs,
+        base,
+        head,
+      }).affected,
       file,
     ).toBe(true);
   }
@@ -227,8 +278,17 @@ test("the command compares two commits and fails towards a deploy", () => {
     run(["git", "commit", "--quiet", "--no-verify", "--message", file]);
     return run(["git", "rev-parse", "HEAD"]).stdout.toString().trim();
   };
-  const scope = (base: string, head: string): string =>
-    run(["bun", script, "--base", base, "--head", head])
+  const scope = (base: string, head: string, packageName = LANDING_PACKAGE) =>
+    run([
+      "bun",
+      script,
+      "--package",
+      packageName,
+      "--base",
+      base,
+      "--head",
+      head,
+    ])
       .stdout.toString()
       .trim();
 
@@ -253,6 +313,11 @@ test("the command compares two commits and fails towards a deploy", () => {
     expect(scope(changelog, landing)).toBe("true");
     expect(scope("0".repeat(40), landing)).toBe("true");
     expect(scope("f".repeat(40), landing)).toBe("true");
+    expect(scope(changelog, landing, "@stll/web")).toBe("false");
+    expect(scope(base, unrelated, "@stll/web")).toBe("true");
+    const missing = run(["bun", script, "--base", base, "--head", landing]);
+    expect(missing.exitCode).toBe(2);
+    expect(missing.stdout.toString()).toBe("");
   } finally {
     rmSync(repo, { force: true, recursive: true });
   }

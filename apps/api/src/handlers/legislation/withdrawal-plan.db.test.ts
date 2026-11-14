@@ -17,13 +17,14 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { Transaction } from "@/api/db/root";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import {
-  withdrawalTargetQuery,
   type LegislationWithdrawal,
+  withdrawalTargetQuery,
 } from "@/api/handlers/legislation/withdrawal";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import {
@@ -148,9 +149,7 @@ const expectWorkSeek = async () => {
   );
   expect(scans).toHaveLength(1);
   const [scan] = scans;
-  expect(["Index Scan", "Index Only Scan", "Bitmap Heap Scan"]).toContain(
-    scan?.nodeType ?? "missing",
-  );
+  expect(indexedAccessPaths(root, TABLE)).toHaveLength(1);
   expect(WORK_INDEXES).toContain(scan?.index ?? "missing");
   expect(scan?.indexCond ?? "").toContain("eli");
 };

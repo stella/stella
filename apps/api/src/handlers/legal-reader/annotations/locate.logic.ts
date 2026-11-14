@@ -11,8 +11,18 @@
 import { panic } from "better-result";
 
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
-import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
+import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  readerTextQuoteContext,
+  readerTextQuoteOccurrences,
+} from "@stll/legal-ast/reader-text-quote";
+
+import {
+  servedNoteLabel,
+  servedParagraphQuoteOf,
+} from "@/api/lib/case-law/served-paragraph-number";
 
 type AnnotationPassage = {
   /**
@@ -29,6 +39,8 @@ type LocatedSpan = {
   startOffset: number;
   endOffset: number;
   quote: string;
+  quotePrefix: string;
+  quoteSuffix: string;
 };
 
 export const ANNOTATION_LOCATE_ISSUE = {
@@ -53,92 +65,11 @@ type LocatePassagesResult =
   | { status: "located"; spans: LocatedSpan[] }
   | { status: "rejected"; issues: AnnotationLocateIssue[] };
 
-type CompactText = {
-  text: string;
-  /** UTF-16 offset in the raw text of every compact code unit. */
-  rawIndex: number[];
-};
-
-const WHITESPACE = /\s/u;
-
-/**
- * The text with every whitespace character dropped, one entry per UTF-16
- * code unit (the unit a browser selection measures, and the unit `indexOf`
- * returns). Matching here finds a quote however its spaces were typed: a
- * plain space for a non-breaking one or a line break, and the collapsed
- * form of a letter-spaced heading ("R O Z S U D E K" as "ROZSUDEK"), which
- * is how the agent-facing text prints it. Every whitespace character is in
- * the BMP, so dropping one never splits a surrogate pair.
- */
-const compact = (raw: string): CompactText => {
-  let text = "";
-  const rawIndex: number[] = [];
-  for (let index = 0; index < raw.length; index += 1) {
-    const unit = raw.charAt(index);
-    if (WHITESPACE.test(unit)) {
-      continue;
-    }
-    text += unit;
-    rawIndex.push(index);
-  }
-  return { text, rawIndex };
-};
-
-type Occurrence = { startOffset: number; endOffset: number };
-
-const findOccurrences = (raw: string, quote: string): Occurrence[] => {
-  const haystack = compact(raw);
-  const needle = compact(quote).text;
-  if (needle.length === 0) {
-    return [];
-  }
-  const occurrences: Occurrence[] = [];
-  let from = 0;
-  for (;;) {
-    const at = haystack.text.indexOf(needle, from);
-    if (at === -1) {
-      return occurrences;
-    }
-    const startOffset = haystack.rawIndex[at];
-    const last = haystack.rawIndex[at + needle.length - 1];
-    if (startOffset === undefined || last === undefined) {
-      return panic("A compact match lies outside its own text");
-    }
-    occurrences.push({ startOffset, endOffset: last + 1 });
-    from = at + 1;
-  }
-};
-
-/** The places a block's words are rendered, each under its own anchor. */
-type TextPiece = { anchorId: string; text: string };
-
-const piecesOf = (block: Block): TextPiece[] => {
-  switch (block.type) {
-    case "heading":
-    case "paragraph":
-      return [{ anchorId: block.anchorId, text: plainTextOf(block.inlines) }];
-    case "table":
-      return block.rows.flatMap((row, rowIndex) =>
-        row.map((cell, columnIndex) => ({
-          anchorId: tableCellPieceId({
-            blockId: block.id,
-            columnIndex,
-            rowIndex,
-          }),
-          text: plainTextOf(cell.inlines),
-        })),
-      );
-    case "image":
-      return [];
-    default:
-      block satisfies never;
-      return panic(`Unhandled block type: ${String(block)}`);
-  }
-};
-
 type LocateContext = {
   blocks: readonly Block[];
   blocksByAnchor: ReadonlyMap<string, Block>;
+  /** The note mark the served text prints before a block, by its anchor. */
+  noteLabelsByAnchor: ReadonlyMap<string, string>;
 };
 
 type LocateOneResult =
@@ -162,25 +93,88 @@ const quoteNotFoundMessage = (block: Block | undefined): string => {
 /** How many candidate anchors an ambiguity issue names. */
 const AMBIGUITY_ANCHORS_SHOWN = 8;
 
-// Both sides are matched as Unicode scalar values: an isolated surrogate
-// becomes U+FFFD (one UTF-16 unit, so offsets are unchanged) and can never
-// match half of a surrogate pair.
-const matchesIn = (blocks: readonly Block[], rawQuote: string) => {
-  const quote = rawQuote.toWellFormed();
-  return blocks.flatMap((block) =>
-    piecesOf(block).flatMap((rawPiece) => {
-      const piece = { ...rawPiece, text: rawPiece.text.toWellFormed() };
-      return findOccurrences(piece.text, quote).map((occurrence) => ({
+// Matched the way a stored mark is found again (`reader-text-quote`), so a
+// mark an agent places is one the reader can place again after a re-parse.
+const matchesIn = (blocks: readonly Block[], quote: string) =>
+  blocks.flatMap((block) =>
+    readerAnchorPiecesOf(block).flatMap((piece) =>
+      readerTextQuoteOccurrences(piece.text, quote).map((occurrence) => ({
         block,
         occurrence,
         piece,
-      }));
-    }),
+      })),
+    ),
+  );
+
+/**
+ * A quote copied with the court's paragraph number the served text prints
+ * in front of a paragraph (`¶ 48 The applicant…`). The number is structure,
+ * not the paragraph's text, so the words are matched at the start of the
+ * paragraph the court numbered so.
+ */
+const servedParagraphMatches = (blocks: readonly Block[], rawQuote: string) => {
+  const served = servedParagraphQuoteOf(rawQuote);
+  if (served === null) {
+    return [];
+  }
+  return matchesIn(
+    blocks.filter((block) => courtParagraphNumber(block) === served.number),
+    served.words,
+  ).filter(
+    ({ occurrence, piece }) =>
+      piece.text.slice(0, occurrence.startOffset).trim() === "",
   );
 };
 
+/**
+ * A quote copied with the mark the served text prints in front of a
+ * footnote (`[3] Zob.…`). The mark is the note's label, not its text, so the
+ * words are matched at the start of the note printed with that mark.
+ */
+const servedNoteMatches = (
+  blocks: readonly Block[],
+  noteLabelsByAnchor: ReadonlyMap<string, string>,
+  rawQuote: string,
+) => {
+  const quote = rawQuote.trimStart();
+  return blocks.flatMap((block) => {
+    const label = noteLabelsByAnchor.get(block.anchorId);
+    if (
+      label === undefined ||
+      !quote.startsWith(label) ||
+      !/^\s/u.test(quote.slice(label.length))
+    ) {
+      return [];
+    }
+    return matchesIn([block], quote.slice(label.length).trimStart()).filter(
+      ({ occurrence, piece }) =>
+        piece.text.slice(0, occurrence.startOffset).trim() === "",
+    );
+  });
+};
+
+/**
+ * The quote as the reader's text holds it, else as the served text prints it
+ * with a paragraph number or a note mark in front.
+ */
+const quoteMatches = (
+  candidates: readonly Block[],
+  noteLabelsByAnchor: ReadonlyMap<string, string>,
+  quote: string,
+) => {
+  const literal = matchesIn(candidates, quote);
+  if (literal.length > 0) {
+    return literal;
+  }
+  const paragraph = servedParagraphMatches(candidates, quote);
+  if (paragraph.length > 0) {
+    return paragraph;
+  }
+  return servedNoteMatches(candidates, noteLabelsByAnchor, quote);
+};
+
 const locateOne = (
-  { blocks, blocksByAnchor }: LocateContext,
+  { blocks, blocksByAnchor, noteLabelsByAnchor }: LocateContext,
   { anchor, quote }: AnnotationPassage,
   passageIndex: number,
 ): LocateOneResult => {
@@ -201,7 +195,8 @@ const locateOne = (
       message: `Block "${block.anchorId}" is an image and has no text to mark.`,
     });
   }
-  const matches = matchesIn(block === undefined ? blocks : [block], quote);
+  const candidates = block === undefined ? blocks : [block];
+  const matches = quoteMatches(candidates, noteLabelsByAnchor, quote);
   const [match, ...others] = matches;
   if (match === undefined) {
     return issue({
@@ -229,7 +224,11 @@ const locateOne = (
     });
   }
   const { occurrence, piece } = match;
-  const stored = piece.text.slice(occurrence.startOffset, occurrence.endOffset);
+  // Stored as Unicode scalar values: an isolated surrogate the database
+  // cannot hold becomes U+FFFD, one UTF-16 unit, so offsets are unchanged.
+  const stored = piece.text
+    .slice(occurrence.startOffset, occurrence.endOffset)
+    .toWellFormed();
   if (stored.length > READER_ANNOTATION_QUOTE_MAX_LENGTH) {
     return issue({
       code: ANNOTATION_LOCATE_ISSUE.quoteTooLong,
@@ -244,6 +243,7 @@ const locateOne = (
       startOffset: occurrence.startOffset,
       endOffset: occurrence.endOffset,
       quote: stored,
+      ...readerTextQuoteContext(piece.text, occurrence),
     },
   };
 };
@@ -261,6 +261,12 @@ export const locatePassages = (
     blocks,
     blocksByAnchor: new Map(
       blocks.map((block) => [block.anchorId, block] as const),
+    ),
+    noteLabelsByAnchor: new Map(
+      blocks.flatMap((block, index) => {
+        const label = servedNoteLabel(block, blocks[index - 1]);
+        return label === null ? [] : [[block.anchorId, label] as const];
+      }),
     ),
   };
   const spans: LocatedSpan[] = [];

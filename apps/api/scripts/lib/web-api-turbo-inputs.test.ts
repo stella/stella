@@ -14,14 +14,13 @@ const stamp = (files: readonly string[]): CompilerInputStamp => ({
   files: { present: [], absent: [] },
   directories: { present: [], absent: [] },
   realpaths: {},
-  subdirectories: {},
-  listings: [],
+  entries: {},
 });
 
 test("Turbo inputs cover every repository file read by the compiler", () => {
   const root = "/repo";
   const recorded = stamp([
-    `${root}/apps/api/src/eden-contract.ts`,
+    `${root}/apps/api/src/web-contract.ts`,
     `${root}/packages/money/src/money.ts`,
     `${root}/node_modules/typescript/lib/lib.esnext.d.ts`,
     "/outside/repo/package.json",
@@ -33,14 +32,14 @@ test("Turbo inputs cover every repository file read by the compiler", () => {
 
   expect(uncoveredCompilerInputs(recorded, root, inputs, [])).toEqual([]);
   expect(uncoveredCompilerInputs(recorded, root, inputs.slice(1), [])).toEqual([
-    "apps/api/src/eden-contract.ts",
+    "apps/api/src/web-contract.ts",
   ]);
 });
 
 test("an excluded compiler input is uncovered even inside an included directory", () => {
   const root = "/repo";
   const recorded = stamp([
-    `${root}/apps/api/src/eden-contract.ts`,
+    `${root}/apps/api/src/web-contract.ts`,
     `${root}/apps/api/src/routes.ts`,
   ]);
   expect(

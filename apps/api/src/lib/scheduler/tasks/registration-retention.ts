@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { DAY_IN_MS } from "@stll/time";
 
 import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -84,7 +85,7 @@ export const sweepRegistrations = async ({
   now,
   retentionDays,
 }: SweepRegistrationsOptions) =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     // Ceremony locks hold claim transitions; client locks serialize usage writes.
     const selectedRegistrations = await tx.execute<{
       id: string;
@@ -120,6 +121,12 @@ export const sweepRegistrations = async ({
         SELECT id FROM oauth_client_assertion WHERE expires_at < ${now.toISOString()}::timestamptz
         ORDER BY expires_at, id LIMIT ${REGISTRATION_RETENTION_BATCH_SIZE}
         FOR UPDATE SKIP LOCKED
+      ) RETURNING id
+    `);
+    const handoffs = await tx.execute(sql`
+      DELETE FROM mcp_web_handoff WHERE id IN (
+        SELECT id FROM mcp_web_handoff WHERE expires_at < ${now.toISOString()}::timestamptz
+        ORDER BY expires_at, id LIMIT ${REGISTRATION_RETENTION_BATCH_SIZE}
       ) RETURNING id
     `);
     const replayCutoff = new Date(
@@ -169,6 +176,7 @@ export const sweepRegistrations = async ({
     return {
       verificationsDeleted: verifications.length,
       assertionsDeleted: assertions.length,
+      handoffsDeleted: handoffs.length,
       replaysDeleted: replays.length,
       registrationsDeleted: registrations.length,
       clientsDeleted: deletedClients.length,
@@ -178,6 +186,7 @@ export const sweepRegistrations = async ({
         replays.length === REGISTRATION_RETENTION_BATCH_SIZE ||
         verifications.length === REGISTRATION_RETENTION_BATCH_SIZE ||
         assertions.length === REGISTRATION_RETENTION_BATCH_SIZE ||
+        handoffs.length === REGISTRATION_RETENTION_BATCH_SIZE ||
         clients.length === REGISTRATION_RETENTION_BATCH_SIZE ||
         registrations.length === REGISTRATION_RETENTION_BATCH_SIZE ||
         budgets.length === REGISTRATION_RETENTION_BATCH_SIZE,
@@ -203,6 +212,7 @@ export const sweepRegistrationRecords: SchedulerTask = async ({
     counts: {
       verifications: result.verificationsDeleted,
       assertions: result.assertionsDeleted,
+      handoffs: result.handoffsDeleted,
       replays: result.replaysDeleted,
       registrations: result.registrationsDeleted,
       clients: result.clientsDeleted,

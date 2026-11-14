@@ -1,5 +1,3 @@
-import Elysia from "elysia";
-
 import createColumn from "@/api/handlers/lists/columns/create";
 import createList from "@/api/handlers/lists/create";
 import acceptGenerationCandidate from "@/api/handlers/lists/generation-candidates/acceptance/create";
@@ -20,102 +18,36 @@ import readLists from "@/api/handlers/lists/list";
 import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
 import { createListVerificationRoutes } from "@/api/handlers/lists/verification-routes";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { mount, routes } from "@/api/http/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
-export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
-  .use(
-    deploymentFeatureGate(() =>
-      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
-    ),
-  )
-  .use(workspaceAccessMacro)
-  .use(permissionMacro)
-  .guard({ validateWorkspaceAccess: true })
-  .use(createListVerificationRoutes())
-  .get("/", readLists.handler, {
-    permissions: readLists.config.permissions,
-    query: readLists.config.query,
-  })
-  .put("/", createList.handler, {
-    body: createList.config.body,
-    permissions: createList.config.permissions,
-  })
-  .patch("/", updateList.handler, {
-    body: updateList.config.body,
-    permissions: updateList.config.permissions,
-  })
-  .post("/sections", createSection.handler, {
-    body: createSection.config.body,
-    permissions: createSection.config.permissions,
-  })
-  .post("/columns", createColumn.handler, {
-    body: createColumn.config.body,
-    permissions: createColumn.config.permissions,
-  })
-  .post("/generations", createGeneration.handler, {
-    body: createGeneration.config.body,
-    permissions: createGeneration.config.permissions,
-  })
-  .post("/generation-candidates", submitGenerationCandidates.handler, {
-    body: submitGenerationCandidates.config.body,
-    permissions: submitGenerationCandidates.config.permissions,
-  })
-  .post("/generation-candidates/accept", acceptGenerationCandidate.handler, {
-    body: acceptGenerationCandidate.config.body,
-    permissions: acceptGenerationCandidate.config.permissions,
-  })
-  .post("/generation-candidates/reject", rejectGenerationCandidate.handler, {
-    body: rejectGenerationCandidate.config.body,
-    permissions: rejectGenerationCandidate.config.permissions,
-  })
-  .post("/item-sources", createItemSource.handler, {
-    body: createItemSource.config.body,
-    permissions: createItemSource.config.permissions,
-  })
-  .post("/item-comments", createItemComment.handler, {
-    body: createItemComment.config.body,
-    permissions: createItemComment.config.permissions,
-  })
-  .post("/item-reviews", reviewItem.handler, {
-    body: reviewItem.config.body,
-    permissions: reviewItem.config.permissions,
-  })
-  .patch("/items", updateItem.handler, {
-    body: updateItem.config.body,
-    permissions: updateItem.config.permissions,
-  })
-  .get(
-    "/:listId/generations/:runId/candidates",
-    readGenerationCandidates.handler,
-    {
-      params: readGenerationCandidates.config.params,
-      permissions: readGenerationCandidates.config.permissions,
-      query: readGenerationCandidates.config.query,
-    },
-  )
-  .get("/:listId/generations", readGenerations.handler, {
-    params: readGenerations.config.params,
-    permissions: readGenerations.config.permissions,
-    query: readGenerations.config.query,
-  })
-  .get("/:listId", readListById.handler, {
-    params: readListById.config.params,
-    permissions: readListById.config.permissions,
-  })
-  .get("/:listId/items", readListItems.handler, {
-    params: readListItems.config.params,
-    permissions: readListItems.config.permissions,
-    query: readListItems.config.query,
-  })
-  .get("/:listId/items/:itemEntityId/activity", readItemActivity.handler, {
-    params: readItemActivity.config.params,
-    permissions: readItemActivity.config.permissions,
-    query: readItemActivity.config.query,
-  })
-  .get("/:listId/items/:itemEntityId/sources", readItemSources.handler, {
-    params: readItemSources.config.params,
-    permissions: readItemSources.config.permissions,
-    query: readItemSources.config.query,
-  });
+export const listsRoute = mount(
+  [
+    createListVerificationRoutes(),
+    routes({
+      "/": { GET: readLists, PUT: createList, PATCH: updateList },
+      "/sections": { POST: createSection },
+      "/columns": { POST: createColumn },
+      "/generations": { POST: createGeneration },
+      "/generation-candidates": { POST: submitGenerationCandidates },
+      "/generation-candidates/accept": { POST: acceptGenerationCandidate },
+      "/generation-candidates/reject": { POST: rejectGenerationCandidate },
+      "/item-sources": { POST: createItemSource },
+      "/item-comments": { POST: createItemComment },
+      "/item-reviews": { POST: reviewItem },
+      "/items": { PATCH: updateItem },
+      "/:listId/generations/:runId/candidates": {
+        GET: readGenerationCandidates,
+      },
+      "/:listId/generations": { GET: readGenerations },
+      "/:listId": { GET: readListById },
+      "/:listId/items": { GET: readListItems },
+      "/:listId/items/:itemEntityId/activity": { GET: readItemActivity },
+      "/:listId/items/:itemEntityId/sources": { GET: readItemSources },
+    }),
+  ],
+  {
+    prefix: "/lists/:workspaceId",
+    middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
+  },
+);

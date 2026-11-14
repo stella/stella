@@ -1,17 +1,17 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   filenameForContext,
   getPropertyName,
+  type ImportedFromOptions,
+  invokedCallee,
   isAstNode,
   isIdentifierReference,
   isImportedFrom,
-  invokedCallee,
   isSingleAssignment,
   isTestFile,
   resolveVariable,
-  type AstNode,
-  type ImportedFromOptions,
 } from "./utils.ts";
 
 type RuleContext = ImportedFromOptions["context"];

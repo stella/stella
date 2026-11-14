@@ -65,7 +65,9 @@ test("nested SQL belongs once to its closest phase while the shared counter rema
         profile.logger.logQuery("BEGIN", []);
       });
     });
-    expect(currentQueryCount()).toBe(5);
+    // The shared counter excludes transaction-control statements; the
+    // harness profile records every logger event, including BEGIN.
+    expect(currentQueryCount()).toBe(4);
   });
   const summary = profile.summary();
   expect(summary.statements).toBe(5);

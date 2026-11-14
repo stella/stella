@@ -10,9 +10,11 @@ import {
   registerKanbanCardDrag,
   selectKanbanCardFieldIds,
 } from "@stll/ui/kanban";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
+import { renderMultiDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -30,7 +32,12 @@ import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-f
 import {
   getKanbanCardMetadataVisibility,
   getKanbanCardRenameInitialValue,
+  toKanbanCardDragItem,
 } from "@/components/workspaces/kanban/kanban-card.logic";
+import { useIsKanbanCardSelected } from "@/components/workspaces/kanban/kanban-selection";
+import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
+import { buildKanbanCardDragData } from "@/components/workspaces/kanban/kanban-selection.logic";
+import type { KanbanCardDragItem } from "@/components/workspaces/kanban/kanban-selection.logic";
 import { RowActions } from "@/components/workspaces/row-actions";
 import { TaskBadges } from "@/components/workspaces/tasks/task-badges";
 import {
@@ -43,6 +50,7 @@ import {
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -53,7 +61,10 @@ import type {
   WorkspaceFieldContent,
   WorkspaceProperty,
 } from "@/lib/types";
-import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import {
+  SELECTION_GESTURE,
+  selectionGestureForModifiers,
+} from "@/lib/workspaces/multi-selection.logic";
 
 type KanbanCardProps = {
   context?: ReactNode;
@@ -70,6 +81,15 @@ type KanbanCardProps = {
    * a board with no subgroup (a flat column).
    */
   dragSubgroupValue?: string | null | undefined;
+  /** Omit on a board without multi-selection: every click then opens. */
+  selection?: KanbanCardSelection | undefined;
+};
+
+/** The board's selection, and the cards a Shift-click range may span. */
+type KanbanCardSelection = {
+  owner: KanbanSelection;
+  /** The card's own column or subgroup cell, in display order. */
+  scope: readonly WorkspaceEntity[];
 };
 
 export const KanbanCard = ({
@@ -81,14 +101,16 @@ export const KanbanCard = ({
   properties,
   onRename,
   dragSubgroupValue,
+  selection,
 }: KanbanCardProps) => {
+  const t = useTranslations();
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
   const isActivePeek = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return false;
     }
-    const tab = s.tabs.find((t) => t.id === s.activeId);
+    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
     return tab?.type === "pdf" && tab.entityId === entity.entityId;
   });
   const rename = useInlineRename({
@@ -99,6 +121,35 @@ export const KanbanCard = ({
   });
 
   const dragRef = useRef<HTMLDivElement>(null);
+  const selectionOwner = selection?.owner;
+  const isSelected = useIsKanbanCardSelected(selectionOwner, entity.entityId);
+  const getDragItem = useLatestCallback(() =>
+    toKanbanCardDragItem(entity, dragSubgroupValue),
+  );
+  const getSelectionScope = useLatestCallback(() =>
+    selection === undefined
+      ? []
+      : selection.scope.map((scoped) =>
+          toKanbanCardDragItem(scoped, dragSubgroupValue),
+        ),
+  );
+  const getDragItems = useLatestCallback((primary: KanbanCardDragItem) =>
+    selectionOwner ? selectionOwner.getDragItems(primary) : [primary],
+  );
+  const describeDraggedItems = useLatestCallback(
+    (items: readonly KanbanCardDragItem[]) =>
+      items.length > 1
+        ? t("common.dragAndDrop.selectedItems", { count: items.length })
+        : name,
+  );
+
+  useExternalSyncEffect(() => {
+    const element = dragRef.current;
+    if (!element || !selectionOwner) {
+      return undefined;
+    }
+    return selectionOwner.registerCard({ element, getItem: getDragItem });
+  }, [getDragItem, selectionOwner]);
 
   useExternalSyncEffect(() => {
     const el = dragRef.current;
@@ -107,37 +158,33 @@ export const KanbanCard = ({
     }
     return registerKanbanCardDrag({
       element: el,
-      getInitialData: () =>
-        withDragAnnouncementData(
-          {
-            type: ENTITY_DRAG_TYPE,
-            entityId: entity.entityId,
-            entityIds: [entity.entityId],
-            entities: [
-              {
-                entityId: entity.entityId,
-                name,
-                kind: entity.kind,
-                mimeType: file?.mimeType ?? null,
-                parentId: entity.parentId ?? null,
-              },
-            ],
-            name,
-            kind: entity.kind,
-            mimeType: file?.mimeType ?? null,
-            subgroupValue: dragSubgroupValue,
-          },
-          name,
-        ),
+      getInitialData: () => {
+        const primary = getDragItem();
+        const items = getDragItems(primary);
+        return withDragAnnouncementData(
+          buildKanbanCardDragData({ primary, items }),
+          describeDraggedItems(items),
+          items.length,
+        );
+      },
+      getDragPreview: () => {
+        const items = getDragItems(getDragItem());
+        if (items.length < 2) {
+          return { type: "card" };
+        }
+        return {
+          type: "custom",
+          render: (container) => renderMultiDragPreview(container, items),
+        };
+      },
+      onDragStart: () => selectionOwner?.selectForDrag(getDragItem()),
     });
   }, [
+    describeDraggedItems,
     draggable,
-    entity.entityId,
-    name,
-    entity.kind,
-    file?.mimeType,
-    entity.parentId,
-    dragSubgroupValue,
+    getDragItem,
+    getDragItems,
+    selectionOwner,
   ]);
 
   const startEditing = () => {
@@ -174,9 +221,7 @@ export const KanbanCard = ({
         value={rename.state.draft}
       />
     ) : (
-      <span className="overflow-hidden text-ellipsis whitespace-pre">
-        {name}
-      </span>
+      <TruncatedText className="whitespace-pre">{name}</TruncatedText>
     );
 
   const isTask = entity.kind === "task";
@@ -268,7 +313,7 @@ export const KanbanCard = ({
   );
 
   const actionsButton = onRename ? (
-    <div className="absolute end-1.5 top-1.5 opacity-0 transition-opacity group-hover/card:opacity-100">
+    <div className="absolute end-1.5 top-1.5 opacity-0 transition-opacity group-hover/card:opacity-100 pointer-coarse:opacity-100">
       <RowActions
         entity={entity}
         onRename={startEditing}
@@ -282,7 +327,7 @@ export const KanbanCard = ({
     if (!s.activeId) {
       return false;
     }
-    const tab = s.tabs.find((t) => t.id === s.activeId);
+    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
     return tab?.type === "task" && tab.id === entity.entityId;
   });
 
@@ -301,9 +346,31 @@ export const KanbanCard = ({
       active={isTask ? isActiveTask : isActivePeek}
       bodyRef={cardRef}
       dragRef={dragRef}
-      onOpen={openCard}
+      onOpen={() => {
+        selectionOwner?.selectCard({
+          gesture: SELECTION_GESTURE.replace,
+          item: getDragItem(),
+          getScope: getSelectionScope,
+        });
+        openCard?.();
+      }}
+      onSelectionClick={
+        selectionOwner
+          ? (modifiers) =>
+              selectionOwner.selectCard({
+                gesture: selectionGestureForModifiers(
+                  modifiers,
+                  SELECTION_GESTURE.replace,
+                ),
+                item: getDragItem(),
+                getScope: getSelectionScope,
+              })
+          : undefined
+      }
+      selected={isSelected}
     >
       {content}
+      {isSelected && <span className="sr-only">{t("common.selected")}</span>}
     </KanbanCardShell>
   );
 };
@@ -385,7 +452,7 @@ const KanbanEntityMetadataBadges = ({
   return (
     <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-xs leading-none">
       {status && (
-        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
+        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5">
           {StatusIcon && (
             <StatusIcon
               className={cn(
@@ -394,11 +461,11 @@ const KanbanEntityMetadataBadges = ({
               )}
             />
           )}
-          <span className="truncate">{statusLabel}</span>
+          <TruncatedText>{statusLabel}</TruncatedText>
         </span>
       )}
       {priority && priority !== "none" && (
-        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
+        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5">
           {PriorityIcon && (
             <PriorityIcon
               className={cn(
@@ -407,13 +474,13 @@ const KanbanEntityMetadataBadges = ({
               )}
             />
           )}
-          <span className="truncate">{priorityLabel}</span>
+          <TruncatedText>{priorityLabel}</TruncatedText>
         </span>
       )}
       {dueDate && (
-        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
+        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5">
           <CalendarIcon className="size-3 shrink-0" />
-          <span className="truncate">
+          <TruncatedText>
             {format.dateTime(
               Temporal.PlainDate.from(dueDate).toZonedDateTime({
                 plainTime: Temporal.PlainTime.from("00:00"),
@@ -426,7 +493,7 @@ const KanbanEntityMetadataBadges = ({
                 timeZone: "UTC",
               },
             )}
-          </span>
+          </TruncatedText>
         </span>
       )}
     </div>

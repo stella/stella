@@ -5,8 +5,14 @@ import type {
   ReactNode,
 } from "react";
 
+import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import {
+  CHIP_HEIGHT_CLASS,
+  CHIP_TOUCH_TARGET_CLASS,
+} from "@/components/chip-scale";
 import Tooltip from "@/components/tooltip";
 
 /**
@@ -43,9 +49,9 @@ type InlinePillProps = {
   leadingIcon?: ReactNode;
   tooltip?: ReactNode;
   /**
-   * Clamp the pill to ~14rem and ellipsis the label inside. The
-   * mention chips set this; anonymized values do not (their text
-   * is the actual prose word being annotated).
+   * Clamp the pill to 14rem or its line, whichever is narrower, and
+   * ellipsis the label inside. The mention chips set this; anonymized
+   * values do not (their text is the actual prose word being annotated).
    */
   truncate?: boolean;
   onActivate?: MouseEventHandler<HTMLElement> | undefined;
@@ -58,7 +64,7 @@ type InlinePillProps = {
   ariaLabel?: string;
   className?: string;
   children: ReactNode;
-} & Pick<HTMLAttributes<HTMLElement>, "style"> &
+} & Pick<HTMLAttributes<HTMLElement>, "style" | "title"> &
   Record<`data-${string}`, string | undefined>;
 
 const TONE_BASE: Record<InlinePillTone, string> = {
@@ -73,22 +79,14 @@ const TONE_INTERACTIVE: Record<InlinePillTone, string> = {
   success: "hover:bg-success/20",
 };
 
-const TONE_FOCUS_RING: Record<InlinePillTone, string> = {
-  accent: "focus-visible:ring-accent/50",
-  info: "focus-visible:ring-info/50",
-  success: "focus-visible:ring-success/50",
-};
-
+// A chip takes its height from the chip scale it shares with every
+// attachment chip; an inherit pill follows the line it sits in.
 const SIZE: Record<InlinePillSize, string> = {
-  chip: "text-xs font-medium",
-  inherit: "font-[inherit] text-[inherit] leading-[inherit]",
+  chip: cn("text-xs font-medium", CHIP_HEIGHT_CLASS, CHIP_TOUCH_TARGET_CLASS),
+  inherit: "font-[inherit] text-[inherit] leading-[inherit] py-0.5",
 };
 
-const BASE =
-  "inline-flex items-center gap-0.5 align-middle rounded px-1 py-0.5";
-
-const INTERACTIVE_RESET =
-  "appearance-none border-0 bg-clip-padding cursor-pointer focus-visible:outline-none focus-visible:ring-2";
+const BASE = "inline-flex items-center gap-0.5 align-middle rounded-sm px-1";
 
 export const InlinePill = ({
   tone = "accent",
@@ -101,9 +99,11 @@ export const InlinePill = ({
   className,
   children,
   style,
+  title,
   ...dataAttrs
 }: InlinePillProps): ReactElement => {
   const clickable = onActivate !== undefined;
+  const chipKind = size === "chip" ? "reference" : undefined;
   // A tooltip-bearing pill must be keyboard-focusable so screen-
   // reader users (and tab users) can pop the placeholder content,
   // even when the pill itself doesn't trigger an action. Base UI's
@@ -112,15 +112,17 @@ export const InlinePill = ({
   // the focus path entirely.
   const renderAsButton = clickable || tooltip !== undefined;
 
-  // The inner label span owns truncation. Without `min-w-0` flex
-  // children refuse to shrink below their content width and
-  // `truncate` becomes a no-op.
-  const labelClass = truncate ? "min-w-0 truncate" : undefined;
-
+  // The inner label owns truncation; TruncatedText lets it shrink inside
+  // the flex pill and shows the cut label unless the pill's own tooltip
+  // already answers the pointer.
   const body = (
     <>
       {leadingIcon}
-      <span className={cn(labelClass)}>{children}</span>
+      {truncate ? (
+        <TruncatedText>{children}</TruncatedText>
+      ) : (
+        <span>{children}</span>
+      )}
     </>
   );
 
@@ -128,13 +130,11 @@ export const InlinePill = ({
     BASE,
     TONE_BASE[tone],
     SIZE[size],
-    truncate && "max-w-56",
-    renderAsButton &&
-      cn(INTERACTIVE_RESET, TONE_INTERACTIVE[tone], TONE_FOCUS_RING[tone]),
-    // Annotation-only pills (no click handler) signal "this is
-    // informational, hover to see more" rather than "click to
-    // activate". `cursor-help` is the standard cue.
-    renderAsButton && !clickable && "cursor-help",
+    // The line bound keeps a long label inside a narrow composer or bubble;
+    // the 1ch it leaves free holds the space and caret after the chip, which
+    // would otherwise wrap onto a line of their own.
+    truncate && !renderAsButton && "max-w-[min(14rem,calc(100%-1ch))]",
+    renderAsButton && cn("max-w-full", TONE_INTERACTIVE[tone]),
     className,
   );
 
@@ -142,22 +142,38 @@ export const InlinePill = ({
   // into a single `render` element — splitting span vs button
   // lets us pin the right semantics without a runtime cast.
   const element = renderAsButton ? (
-    <button
+    // A plain Button draws no box of its own: the pill inside it keeps its
+    // height from the chip scale (or the line, for an inherit pill), and the
+    // button adds only the focus ring and the line bound.
+    <Button
       aria-label={ariaLabel}
-      className={sharedClass}
+      className={cn(
+        "inline-flex max-w-full min-w-0",
+        size === "inherit" ? "align-baseline" : "align-middle",
+        truncate && "max-w-[min(14rem,calc(100%-1ch))]",
+        // Annotation-only pills (no click handler) signal "this is
+        // informational, hover to see more" rather than "click to
+        // activate". `cursor-help` is the standard cue.
+        !clickable && "cursor-help",
+      )}
+      data-chip-kind={chipKind}
       onClick={onActivate}
-      style={style}
-      type="button"
+      title={title}
+      variant="plain"
       {...dataAttrs}
     >
-      {body}
-    </button>
+      <span className={sharedClass} style={style}>
+        {body}
+      </span>
+    </Button>
   ) : (
     <span
       aria-label={ariaLabel}
       className={sharedClass}
+      data-chip-kind={chipKind}
       role="group"
       style={style}
+      title={title}
       {...dataAttrs}
     >
       {body}

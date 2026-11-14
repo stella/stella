@@ -3,7 +3,15 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+} from "@stll/api-contract";
+import {
+  isChatFileMimeType,
+  isRunOutputMimeType,
+} from "@stll/api-contract/chat-file-types";
+import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -44,7 +52,7 @@ import {
 } from "@/api/lib/data-url";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { FileKey } from "@/api/lib/file-key";
+import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import {
   FileScanRejectedError,
@@ -70,7 +78,8 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
-import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
+import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -90,6 +99,7 @@ const CHAT_ATTACHMENT_DELETE_TIMEOUT_MS = 10_000;
 type UploadMessageFilesProps = {
   dependencies?: UploadUserFileDependencies;
   message: PersistableChatMessage;
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -98,8 +108,7 @@ type UploadMessageFilesProps = {
 };
 
 export type UploadMessageFilesError =
-  | HandlerError<400 | 409 | 413 | 422 | 500 | 503>
-  | SafeDbError;
+  HandlerError<400 | 409 | 413 | 422 | 500 | 503> | SafeDbError;
 
 type UploadMessageFilesReturn = Result<
   UploadedChatMessage,
@@ -120,6 +129,7 @@ type UploadedChatMessage = {
 export const uploadMessageFiles = async ({
   dependencies,
   message,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -152,7 +162,7 @@ export const uploadMessageFiles = async ({
       return Result.err(error);
     }
 
-    captureError(error, { threadId });
+    captureError(error, handlerErrorContext("chat.fail", { threadId }));
     return Result.err(rollbackResult.error);
   };
 
@@ -174,6 +184,7 @@ export const uploadMessageFiles = async ({
     const uploadedFile = await uploadUserFile({
       ...(dependencies === undefined ? {} : { dependencies }),
       file: parsedPart.value,
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -302,9 +313,7 @@ const DIRECT_TEXT_MIME_TYPES = [
 
 type DirectTextMimeType = (typeof DIRECT_TEXT_MIME_TYPES)[number];
 type PlainTextHydratableMimeType =
-  | DirectTextMimeType
-  | typeof DOCX_MIME_TYPE
-  | typeof XLSX_MIME_TYPE;
+  DirectTextMimeType | typeof DOCX_MIME_TYPE | typeof XLSX_MIME_TYPE;
 
 const isDirectTextMimeType = (
   mimeType: string,
@@ -360,7 +369,7 @@ export const createRawChatFilePart = ({
     type: "document",
     source: {
       type: "data",
-      value: Buffer.from(bytes).toString("base64"),
+      value: Buffer.from(bytes).toBase64(),
       mimeType,
     },
     metadata,
@@ -491,6 +500,7 @@ export const hydrateFilePart = async ({
         }
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
             status: 422,
             message: "Chat DOCX attachment did not contain extractable text",
           }),
@@ -524,6 +534,7 @@ export const hydrateFilePart = async ({
         }
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
             status: 422,
             message: "Chat XLSX attachment did not contain extractable text",
           }),
@@ -563,7 +574,7 @@ type ReserveChatObjectCleanupIntent = (options: {
   Result<SafeId<"pendingUpload">[], SafeDbError | HandlerError<400>>
 >;
 
-type UploadUserFileDependencies = {
+export type UploadUserFileDependencies = {
   generateImageThumbnail?: typeof generateImageThumbnail;
   organizationFileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
   putS3ObjectWithSignal?: typeof putS3ObjectWithSignal;
@@ -680,6 +691,13 @@ type UploadUserFileInput = {
     fileName: string;
     mimeType: string;
   };
+  /**
+   * A file a local run handed back rather than one a member attached. It may
+   * also be of a type a chat never accepts, which its readers only ever deliver
+   * as a forced download (`isDownloadOnlyFileMimeType`).
+   */
+  isRunOutput?: boolean;
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -690,6 +708,8 @@ type UploadUserFileInput = {
 export const uploadUserFile = async ({
   dependencies,
   file,
+  isRunOutput = false,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -714,10 +734,16 @@ export const uploadUserFile = async ({
     // validateChatFileParts at message-send: user files are later served
     // inline (Content-Disposition without a filename), so a stored
     // text/html or image/svg+xml would render in the bucket origin. Any
-    // caller reaching this function must be held to the same allowlist.
-    if (!isChatFileMimeType(file.mimeType)) {
+    // caller reaching this function must be held to the same allowlist; a
+    // run's output adds only the types every reader forces to a download.
+    if (
+      !(isRunOutput
+        ? isRunOutputMimeType(file.mimeType)
+        : isChatFileMimeType(file.mimeType))
+    ) {
       return Result.err(
         new HandlerError({
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported,
           status: 422,
           message: "Unsupported file type",
         }),
@@ -731,33 +757,8 @@ export const uploadUserFile = async ({
     const s3Key = createUserFileKey({
       fileId: id,
       mimeType: file.mimeType,
-      userId,
+      organizationId,
     });
-
-    let organizationId: SafeId<"organization"> | undefined;
-    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-      const thread = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await tx.query.chatThreads.findFirst({
-              where: {
-                id: { eq: threadId },
-                userId: { eq: userId },
-              },
-              columns: { organizationId: true },
-            }),
-        ),
-      );
-      if (!thread) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Chat thread no longer exists",
-          }),
-        );
-      }
-      organizationId = thread.organizationId;
-    }
 
     const scanResult = await scanUpload({
       bytes: file.bytes,
@@ -770,6 +771,7 @@ export const uploadUserFile = async ({
       return Result.err(
         FileScanRejectedError.is(scanResult.error)
           ? new HandlerError({
+              code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
               status: 422,
               message: "Chat attachment was rejected by the security scan",
             })
@@ -804,6 +806,7 @@ export const uploadUserFile = async ({
     if (file.mimeType === XLSX_MIME_TYPE && extractedText === null) {
       return Result.err(
         new HandlerError({
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
           status: 422,
           message: "Chat XLSX attachment did not contain extractable text",
         }),
@@ -823,17 +826,23 @@ export const uploadUserFile = async ({
     if (isThumbnailableMimeType(file.mimeType)) {
       const thumbnailResult = await generateThumbnail(file.bytes);
       if (Result.isError(thumbnailResult)) {
-        captureError(thumbnailResult.error, {
-          stage: "chat-thumbnail-generate",
-          userFileId: id,
-        });
+        captureError(
+          thumbnailResult.error,
+          handlerErrorContext("chat.uploadUserFile.thumbnailResult_error", {
+            stage: "chat-thumbnail-generate",
+            userFileId: id,
+          }),
+        );
       } else {
         const generatedThumbnailId = Bun.randomUUIDv7();
-        const key = createUserFileKey({
-          fileId: generatedThumbnailId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId,
-        });
+        const key =
+          createUserFileThumbnailKey({
+            sourceKey: s3Key,
+            thumbnailFileId: generatedThumbnailId,
+            organizationId,
+            uploaderUserId: userId,
+          }) ??
+          panic("The freshly created attachment key must have a valid owner");
         preparedThumbnail = {
           bytes: thumbnailResult.value.webp,
           fileId: generatedThumbnailId,
@@ -863,10 +872,16 @@ export const uploadUserFile = async ({
         threadId,
       });
       if (Result.isError(thumbnailCleanupIntent)) {
-        captureError(thumbnailCleanupIntent.error, {
-          stage: "chat-thumbnail-cleanup-reserve",
-          userFileId: id,
-        });
+        captureError(
+          thumbnailCleanupIntent.error,
+          handlerErrorContext(
+            "chat.uploadUserFile.thumbnailCleanupIntent_error",
+            {
+              stage: "chat-thumbnail-cleanup-reserve",
+              userFileId: id,
+            },
+          ),
+        );
         preparedThumbnail = null;
       } else {
         thumbnailCleanupIntentIds = thumbnailCleanupIntent.value;
@@ -893,7 +908,7 @@ export const uploadUserFile = async ({
       "FEATURE_FILE_USAGE_LIMITS",
     )
       ? await writeOrganizationFile({
-          organizationId: organizationId ?? panic("Missing chat organization"),
+          organizationId,
           objectKey: s3Key,
           sizeBytes: file.bytes.byteLength,
           content: file.bytes,
@@ -922,11 +937,14 @@ export const uploadUserFile = async ({
         }),
       );
       if (Result.isError(cleanupResult)) {
-        captureError(cleanupResult.error, {
-          s3Key,
-          stage: "chat-attachment-write-cleanup",
-          userFileId: id,
-        });
+        captureError(
+          cleanupResult.error,
+          handlerErrorContext("chat.upload.cleanupAttachment", {
+            s3Key,
+            stage: "chat-attachment-write-cleanup",
+            userFileId: id,
+          }),
+        );
       }
       const sourceSettlement = await settleCleanupIntents({
         intentIds: sourceCleanupIntentIds,
@@ -934,11 +952,14 @@ export const uploadUserFile = async ({
         safeDb,
       });
       if (Result.isError(sourceSettlement)) {
-        captureError(sourceSettlement.error, {
-          s3Key,
-          stage: "chat-attachment-write-settle",
-          userFileId: id,
-        });
+        captureError(
+          sourceSettlement.error,
+          handlerErrorContext("chat.upload.settleAttachmentWrite", {
+            s3Key,
+            stage: "chat-attachment-write-settle",
+            userFileId: id,
+          }),
+        );
       }
       const thumbnailSettlement = await settleCleanupIntents({
         intentIds: thumbnailCleanupIntentIds,
@@ -946,10 +967,13 @@ export const uploadUserFile = async ({
         safeDb,
       });
       if (Result.isError(thumbnailSettlement)) {
-        captureError(thumbnailSettlement.error, {
-          stage: "chat-thumbnail-unwritten-settle",
-          userFileId: id,
-        });
+        captureError(
+          thumbnailSettlement.error,
+          handlerErrorContext("chat.uploadUserFile.thumbnailSettlement_error", {
+            stage: "chat-thumbnail-unwritten-settle",
+            userFileId: id,
+          }),
+        );
       }
       return Result.err(chatAttachmentStoreError(writeSourceResult.error));
     }
@@ -971,8 +995,7 @@ export const uploadUserFile = async ({
         "FEATURE_FILE_USAGE_LIMITS",
       )
         ? await writeOrganizationFile({
-            organizationId:
-              organizationId ?? panic("Missing chat organization"),
+            organizationId,
             objectKey: preparedThumbnail.key,
             sizeBytes: preparedThumbnail.bytes.byteLength,
             content: preparedThumbnail.bytes,
@@ -989,10 +1012,16 @@ export const uploadUserFile = async ({
             catch: (cause) => cause,
           });
       if (Result.isError(writeThumbnailResult)) {
-        captureError(writeThumbnailResult.error, {
-          stage: "chat-thumbnail-write",
-          userFileId: id,
-        });
+        captureError(
+          writeThumbnailResult.error,
+          handlerErrorContext(
+            "chat.uploadUserFile.writeThumbnailResult_error",
+            {
+              stage: "chat-thumbnail-write",
+              userFileId: id,
+            },
+          ),
+        );
         const cleanupResult = Result.flatten(
           await Result.tryPromise({
             try: async () =>
@@ -1005,10 +1034,13 @@ export const uploadUserFile = async ({
           }),
         );
         if (Result.isError(cleanupResult)) {
-          captureError(cleanupResult.error, {
-            stage: "chat-thumbnail-write-cleanup",
-            userFileId: id,
-          });
+          captureError(
+            cleanupResult.error,
+            handlerErrorContext("chat.upload.cleanupThumbnail", {
+              stage: "chat-thumbnail-write-cleanup",
+              userFileId: id,
+            }),
+          );
         }
         const settlement = await settleCleanupIntents({
           intentIds: thumbnailCleanupIntentIds,
@@ -1035,18 +1067,24 @@ export const uploadUserFile = async ({
             safeDb,
           });
           if (Result.isError(sourceCleanup)) {
-            captureError(sourceCleanup.error, {
-              s3Key,
-              stage: "chat-attachment-thumbnail-settle-cleanup",
-              userFileId: id,
-            });
+            captureError(
+              sourceCleanup.error,
+              handlerErrorContext("chat.uploadUserFile.sourceCleanup_error", {
+                s3Key,
+                stage: "chat-attachment-thumbnail-settle-cleanup",
+                userFileId: id,
+              }),
+            );
           }
           if (Result.isError(sourceSettlement)) {
-            captureError(sourceSettlement.error, {
-              s3Key,
-              stage: "chat-attachment-thumbnail-settle",
-              userFileId: id,
-            });
+            captureError(
+              sourceSettlement.error,
+              handlerErrorContext("chat.upload.settleThumbnailAttachment", {
+                s3Key,
+                stage: "chat-attachment-thumbnail-settle",
+                userFileId: id,
+              }),
+            );
           }
           return Result.err(settlement.error);
         }
@@ -1173,7 +1211,14 @@ export const uploadUserFile = async ({
       return Result.err(saveResult.error);
     }
 
-    captureError(saveResult.error, { s3Key, threadId, userFileId: id });
+    captureError(
+      saveResult.error,
+      handlerErrorContext("chat.uploadUserFile.saveResult_error", {
+        s3Key,
+        threadId,
+        userFileId: id,
+      }),
+    );
     let cleanupError: unknown = saveResult.error;
     if (Result.isError(sourceCleanupResult)) {
       cleanupError = sourceCleanupResult.error;
@@ -1210,7 +1255,7 @@ const parseMessageFileDataUrl = ({ part }: ParseMessageFileDataUrlProps) => {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: `Chat attachment exceeds the ${FILE_SIZE_LIMITS.chatContextFile} size limit`,
+          message: `Chat attachment exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB size limit`,
           cause: parseResult.error,
         }),
       );

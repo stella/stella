@@ -9,7 +9,7 @@ type UsAbbreviatedCourt = {
 };
 
 /** Each abbreviated court and the canonical name its decisions are under. */
-// oxfmt-ignore
+// prettier-ignore
 export const US_ABBREVIATED_COURTS: readonly UsAbbreviatedCourt[] = [
   { id: "scotus", canonicalName: "Supreme Court of the United States" },
 ];

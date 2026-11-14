@@ -3,17 +3,17 @@ import type { PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -32,7 +32,9 @@ import {
   UploadIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { StyleSetEditorDialog } from "@/features/style-sets/style-set-editor-dialog";
 import type { StyleSetEditorTarget } from "@/features/style-sets/style-set-editor-types";
@@ -41,6 +43,7 @@ import {
   styleSetsOptions,
 } from "@/features/style-sets/style-set-queries";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -48,10 +51,13 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { pageTitle } from "@/lib/page-title";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 const UNEXPECTED_ERROR_TRANSLATION_KEY = "common.unexpectedError";
@@ -92,7 +98,7 @@ const StyleSetsPage = () => {
 
   const replace = async (target: StyleSetItem, file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     setBusy(true);
@@ -354,7 +360,14 @@ export const Route = createFileRoute("/knowledge/styles")({
     }
     const organizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "knowledge.styles.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/knowledge/styles",
+        },
+      });
     };
 
     detached(
@@ -366,6 +379,14 @@ export const Route = createFileRoute("/knowledge/styles")({
       "knowledge-styles.prefetch",
     );
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "styleSets.title",
+      to: "/knowledge/styles",
+    }),
+  },
+  head: () => ({ meta: [{ title: pageTitle("styleSets.title") }] }),
   component: GuardedStyleSetsPage,
 });
 
@@ -383,8 +404,12 @@ const StyleSetRow = ({
       <FileTextIcon className="text-muted-foreground size-5" />
     </div>
     <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium">{name}</p>
-      <p className="text-muted-foreground truncate text-xs">{description}</p>
+      <TruncatedText className="text-sm font-medium" render={<p />}>
+        {name}
+      </TruncatedText>
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
+        {description}
+      </TruncatedText>
     </div>
     {trailing}
   </li>
@@ -409,8 +434,10 @@ const StyleSetFormDialog = ({
   onSaved,
   styleSet,
 }: StyleSetDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const sourceLabelId = useId();
+  const nameInputId = useId();
   const [name, setName] = useState(styleSet?.name ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -431,9 +458,13 @@ const StyleSetFormDialog = ({
         setSaving(false);
         return;
       }
-      response = await api["style-sets"].put({
-        name: normalizedName,
-        styleSource: file,
+      response = await idempotentSubmit.run({
+        operation: JSON.stringify(['api["style-sets"]']),
+        body: {
+          name: normalizedName,
+          styleSource: file,
+        },
+        send: async (body) => api["style-sets"].put(body),
       });
     }
     setSaving(false);
@@ -481,15 +512,16 @@ const StyleSetFormDialog = ({
           )}
         </DialogHeader>
         <DialogPanel className="space-y-4">
-          <label className="space-y-1.5">
-            <span className="text-sm font-medium">{t("common.name")}</span>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={nameInputId}>{t("common.name")}</Label>
             <Input
               autoFocus
+              id={nameInputId}
               maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
               onChange={(event) => setName(event.target.value)}
               value={name}
             />
-          </label>
+          </div>
           {!styleSet && (
             <div className="space-y-1.5">
               <span className="text-sm font-medium" id={sourceLabelId}>

@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import type { SignalSuggestion } from "@stll/api-contract/signals";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { AlarmClockIcon, MessageSquareIcon, XIcon } from "@stll/ui/icons";
@@ -27,24 +28,18 @@ import {
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
-  acceptSignal,
-  assignSignal,
   type ClientSignalAcceptanceResult,
-  dismissSignal,
   openSignalChat,
-  snoozeSignal,
+  openSignalEvidence,
+  useIdempotentSignalActions,
 } from "@/components/inbox/signal-actions";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
-import {
-  INBOX_SIGNAL_VIEW,
-  inboxSignalTabId,
-} from "@/features/inbox/signal-inspector.logic";
 import {
   ORIGIN_LABEL_KEY,
   scoutLabelKey,
@@ -63,12 +58,20 @@ import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { organizationOptions } from "@/lib/organization/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
+
+const ERROR_CAPTURE = {
+  run: {
+    fingerprintKey: "SignalCard.run:failure",
+    scope: { type: "handler", handlerId: "SignalCard.run:failure" },
+  },
+} as const;
 
 type SignalCardProps = {
   signal: InboxSignal;
@@ -77,12 +80,19 @@ type SignalCardProps = {
   onChanged?: () => Promise<void>;
 };
 
+type RunSignalOptions = {
+  scope: HandlerExceptionScope;
+  successMessage: string | null;
+  invalidateMyWork?: boolean;
+};
+
 export const SignalCard = ({
   signal,
   organizationId,
   presentation = "card",
   onChanged,
 }: SignalCardProps) => {
+  const signalActions = useIdempotentSignalActions();
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
@@ -97,14 +107,13 @@ export const SignalCard = ({
 
   const run = async (
     operation: () => Promise<Result<unknown, unknown>>,
-    successMessage: string | null,
-    invalidateMyWork = false,
+    { scope, successMessage, invalidateMyWork = false }: RunSignalOptions,
   ) => {
     setBusy(true);
     const result = await operation();
     if (Result.isError(result)) {
       setBusy(false);
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, { ...ERROR_CAPTURE.run, scope });
       notifyUserError(result.error, t("common.unexpectedError"));
       return false;
     }
@@ -130,14 +139,7 @@ export const SignalCard = ({
 
   const mutationArgs = { signalId: signal.id };
 
-  const openEvidence = () => {
-    useInspectorTabsStore.getState().openView({
-      type: INBOX_SIGNAL_VIEW,
-      id: inboxSignalTabId(signal.id),
-      label: signal.title,
-      payload: { signalId: signal.id },
-    });
-  };
+  const openEvidence = () => openSignalEvidence(signal);
 
   const askAboutThis = () => {
     openSignalChat(
@@ -152,34 +154,60 @@ export const SignalCard = ({
   ) =>
     await run(
       async () =>
-        await acceptSignal({
+        await signalActions.acceptSignal({
           ...mutationArgs,
           suggestionKind,
           ...(result ? { result } : {}),
         }),
-      t("inspector.review.decisions.accepted"),
-      true,
+      {
+        scope: { type: "handler", handlerId: `inbox.accept.${suggestionKind}` },
+        successMessage: t("inspector.review.decisions.accepted"),
+        invalidateMyWork: true,
+      },
     );
 
   const assign = async (assigneeUserId: string) =>
-    await run(async () => {
-      const assigned = await assignSignal({
-        ...mutationArgs,
-        assigneeUserId,
-      });
-      if (Result.isError(assigned)) {
-        return assigned;
-      }
-      return acceptSignal({
-        ...mutationArgs,
-        suggestionKind: SUGGESTION_KIND.ASSIGN,
-      });
-    }, t("inspector.review.decisions.accepted"));
+    await run(
+      async () => {
+        const assigned = await signalActions.assignSignal({
+          ...mutationArgs,
+          assigneeUserId,
+        });
+        if (Result.isError(assigned)) {
+          return assigned;
+        }
+        return signalActions.acceptSignal({
+          ...mutationArgs,
+          suggestionKind: SUGGESTION_KIND.ASSIGN,
+        });
+      },
+      {
+        scope: { type: "handler", handlerId: "inbox.assign" },
+        successMessage: t("inspector.review.decisions.accepted"),
+      },
+    );
 
   const dismiss = async (reason: string | null) =>
     await run(
-      async () => await dismissSignal({ ...mutationArgs, reason }),
-      null,
+      async () =>
+        await signalActions.dismissSignal({ ...mutationArgs, reason }),
+      {
+        scope: { type: "handler", handlerId: "inbox.dismiss" },
+        successMessage: null,
+      },
+    );
+
+  const snooze = async (period: "tomorrow" | "next-week") =>
+    await run(
+      async () =>
+        await signalActions.snoozeSignal({
+          ...mutationArgs,
+          until: snoozeUntil(period),
+        }),
+      {
+        scope: { type: "handler", handlerId: `inbox.snooze.${period}` },
+        successMessage: null,
+      },
     );
 
   const scoutKey = scoutLabelKey(signal.scoutKey);
@@ -243,6 +271,7 @@ export const SignalCard = ({
                   aria-label={t("inbox.snooze")}
                   disabled={busy}
                   size="sm"
+                  tooltip={t("inbox.snooze")}
                   variant="muted"
                 />
               }
@@ -253,36 +282,12 @@ export const SignalCard = ({
               <MenuGroup>
                 <MenuGroupLabel>{t("inbox.snooze")}</MenuGroupLabel>
                 <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("tomorrow"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
+                  onClick={() => detached(snooze("tomorrow"), "inbox.snooze")}
                 >
                   {t("inbox.snoozeTomorrow")}
                 </MenuItem>
                 <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("next-week"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
+                  onClick={() => detached(snooze("next-week"), "inbox.snooze")}
                 >
                   {t("inbox.snoozeNextWeek")}
                 </MenuItem>
@@ -319,19 +324,18 @@ export const SignalCard = ({
           role="img"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <button
-            className="text-start text-sm leading-5 font-medium text-balance wrap-anywhere hover:underline"
-            onClick={openEvidence}
-            type="button"
-          >
-            <UserText>{signal.title}</UserText>
-          </button>
-          <UserText
-            as="p"
-            className="text-muted-foreground line-clamp-3 text-xs leading-5 text-pretty wrap-anywhere"
+          <Button onClick={openEvidence} variant="plain">
+            <span className="text-sm leading-5 font-medium text-balance wrap-anywhere hover:underline">
+              <UserText>{signal.title}</UserText>
+            </span>
+          </Button>
+          <TruncatedText
+            className="text-muted-foreground text-xs leading-5 text-pretty wrap-anywhere"
+            lines={3}
+            render={<UserText as="p" />}
           >
             {signal.summary}
-          </UserText>
+          </TruncatedText>
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <OriginChip
               createdByUserId={signal.createdByUserId}
@@ -409,8 +413,8 @@ const OriginChip = ({
     ...organizationOptions(organizationId),
     enabled: origin === "manual" && createdByUserId !== null,
   });
-  const organizationView = useQueryView(organizationQuery);
-  useQueryViewError(organizationView);
+  const organizationView = queryView(organizationQuery);
+  useQueryViewError(organizationView, "OriginChip:query");
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
   const author =
@@ -445,16 +449,16 @@ const WorkspaceName = ({
   const dataQuery = useQuery(
     workspacesNavigationOptions({ organizationId, userId }),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "WorkspaceName:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
   return (
     <MatterRefLink
-      className="hover:text-foreground truncate underline-offset-2 hover:underline"
+      className="hover:text-foreground min-w-0 underline-offset-2 hover:underline"
       workspaceId={workspaceId}
     >
-      <UserText>{name ?? workspaceId}</UserText>
+      <TruncatedText render={<UserText />}>{name ?? workspaceId}</TruncatedText>
     </MatterRefLink>
   );
 };
@@ -511,12 +515,15 @@ const SuggestionButton = ({
       return (
         <Button
           disabled={disabled}
-          onClick={() => {
-            openCreateMatter(undefined, async (workspaceId) => {
-              await onAccept(suggestion.kind, {
-                type: "workspace",
-                workspaceId,
-              });
+          onClick={(event) => {
+            openCreateMatter({
+              opener: event.currentTarget,
+              onCreated: async (workspaceId) => {
+                await onAccept(suggestion.kind, {
+                  type: "workspace",
+                  workspaceId,
+                });
+              },
             });
           }}
           size="sm"
@@ -566,8 +573,8 @@ const AssignMenu = ({
 }: AssignMenuProps) => {
   const t = useTranslations();
   const organizationQuery = useQuery(organizationOptions(organizationId));
-  const organizationView = useQueryView(organizationQuery);
-  useQueryViewError(organizationView);
+  const organizationView = queryView(organizationQuery);
+  useQueryViewError(organizationView, "AssignMenu:query");
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
   const members = organization ? organization.members : [];
@@ -615,6 +622,7 @@ const DismissPopover = ({ disabled, onDismiss }: DismissPopoverProps) => {
             aria-label={t("common.dismiss")}
             disabled={disabled}
             size="sm"
+            tooltip={t("common.dismiss")}
             variant="muted"
           />
         }

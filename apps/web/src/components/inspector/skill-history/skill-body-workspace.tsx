@@ -18,7 +18,8 @@ import {
   skillRevisionsOptions,
 } from "@/lib/knowledge/queries";
 import { organizationOptions } from "@/lib/organization/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import { CommentList } from "./comment-list";
 import { ProposalReview } from "./proposal-review";
@@ -95,24 +96,24 @@ export const SkillBodyWorkspace = ({
   const [editorGeneration, setEditorGeneration] = useState(0);
 
   const detail = useQuery(skillDetailOptions(organizationId, user.id, skillId));
-  const detailView = useQueryView(detail);
-  useQueryViewError(detailView);
+  const detailView = queryView(detail);
+  useQueryViewError(detailView, "SkillBodyWorkspace:query");
   const role = useQuery(roleOptions);
-  const roleView = useQueryView(role);
-  useQueryViewError(roleView);
+  const roleView = queryView(role);
+  useQueryViewError(roleView, "SkillBodyWorkspace:query-2");
   const organization = useQuery(organizationOptions(organizationId));
-  const organizationView = useQueryView(organization);
-  useQueryViewError(organizationView);
+  const organizationView = queryView(organization);
+  useQueryViewError(organizationView, "SkillBodyWorkspace:query-3");
   const revisions = useQuery(
     skillRevisionsOptions(organizationId, user.id, skillId),
   );
-  const revisionsView = useQueryView(revisions);
-  useQueryViewError(revisionsView);
+  const revisionsView = queryView(revisions);
+  useQueryViewError(revisionsView, "SkillBodyWorkspace:query-4");
   const proposals = useQuery(
     skillProposalsOptions(organizationId, user.id, skillId),
   );
-  const proposalsView = useQueryView(proposals);
-  useQueryViewError(proposalsView);
+  const proposalsView = queryView(proposals);
+  useQueryViewError(proposalsView, "SkillBodyWorkspace:query-5");
 
   const compareRevisionId =
     mode.type === "live" ? mode.compareRevisionId : null;
@@ -120,7 +121,7 @@ export const SkillBodyWorkspace = ({
     skillRevisionOptions(organizationId, user.id, skillId, compareRevisionId),
   );
 
-  const comparedRevisionView = useQueryView(comparedRevision);
+  const comparedRevisionView = queryView(comparedRevision);
 
   const openProposalId = mode.type === "proposal" ? mode.proposalId : null;
 
@@ -129,8 +130,8 @@ export const SkillBodyWorkspace = ({
     ...skillCommentsOptions(organizationId, user.id, skillId),
     enabled: commenting,
   });
-  const commentsView = useQueryView(comments);
-  useQueryViewError(commentsView);
+  const commentsView = queryView(comments);
+  useQueryViewError(commentsView, "SkillBodyWorkspace:query-6");
 
   const actions = useSkillHistoryActions({
     organizationId,

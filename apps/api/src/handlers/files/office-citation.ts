@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { findOfficeEvidenceBlock } from "@/api/lib/files/office-evidence";
 
@@ -14,12 +14,13 @@ const config = {
   mcp: { type: "internal", reason: "upload_mechanics" },
   access: "read",
   params: workspaceParams({
-    blockId: t.String({
-      maxLength: 64,
-      pattern: "^(?:pptx|xlsx)-[0-9a-f]{16}$",
-    }),
-    entityId: tSafeId("entity"),
-    fieldId: tSafeId("field"),
+    blockId: v.pipe(
+      v.string(),
+      v.maxLength(64),
+      v.regex(/^(?:pptx|xlsx)-[0-9a-f]{16}$/u),
+    ),
+    entityId: resourceIdSchema("entity"),
+    fieldId: resourceIdSchema("field"),
   }),
 } satisfies WorkspaceHandlerConfig;
 

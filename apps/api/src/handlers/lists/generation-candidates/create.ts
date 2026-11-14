@@ -1,13 +1,17 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
+import { spotTargetSchema } from "@stll/api-contract/spot";
 
 import {
-  LIST_ITEM_TYPES,
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
+  LIST_ITEM_TYPES,
 } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -15,64 +19,78 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  candidateFactDetailColumns,
+  candidateFactDetailsSchema,
+  NO_CANDIDATE_FACT_DETAILS,
+} from "@/api/lib/lists/generation/candidate-fact-details";
+import type { CandidateFactDetailColumns } from "@/api/lib/lists/generation/candidate-fact-details";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
+import { TASK_NAME_MAX_LENGTH } from "@/api/lib/tasks/create-task-entity";
 import { includes } from "@/api/lib/type-guards";
 
-const sourceSchema = t.Object({
-  entityId: tSafeId("entity"),
-  entityVersionId: tSafeId("entityVersion"),
-  locator: t.Union([
-    t.Object({ type: t.Literal("document") }),
-    t.Object({
-      type: t.Literal("docx-block"),
-      blockId: t.String({ minLength: 1, maxLength: 512 }),
-    }),
-    t.Object({
-      type: t.Literal("pdf-page"),
-      pageNumber: t.Integer({ minimum: 1 }),
-    }),
-  ]),
-  quote: t.Optional(t.Nullable(t.String({ maxLength: 5000 }))),
-});
-const candidateSchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 2000 }),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  itemType: t.String({ minLength: 1, maxLength: 32 }),
-  status: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  priority: t.Optional(t.Nullable(t.String({ maxLength: 16 }))),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  suggestedAssigneeUserIds: t.Optional(
-    t.Array(tSafeId("user"), { maxItems: LIMITS.workspaceMembersCount }),
+const sourceSchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  entityVersionId: resourceIdSchema("entityVersion"),
+  locator: spotTargetSchema,
+  quote: v.optional(
+    v.nullable(
+      v.pipe(v.string(), v.maxLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH)),
+    ),
   ),
-  sources: t.Array(sourceSchema, {
-    minItems: 1,
-    maxItems: LIMITS.legalListGenerationCandidateSourcesMax,
-  }),
 });
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  runId: tSafeId("legalListGenerationRun"),
-  candidates: t.Array(candidateSchema, {
-    minItems: 1,
-    maxItems: LIMITS.legalListGenerationCandidatesMax,
-  }),
+const candidateSchema = v.object({
+  // Accepting a candidate creates a task under this name, so it is held to
+  // the task name bound here rather than failing at acceptance.
+  name: displayNameSchema({ maxLength: TASK_NAME_MAX_LENGTH }),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
+  itemType: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+  status: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
+  priority: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(16)))),
+  dueDate: v.optional(v.nullable(apiDateSchema)),
+  suggestedAssigneeUserIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("user")),
+      v.maxLength(LIMITS.workspaceMembersCount),
+    ),
+  ),
+  // Only a `fact` candidate may carry fact details.
+  factDetails: v.optional(candidateFactDetailsSchema),
+  sources: v.pipe(
+    v.array(sourceSchema),
+    v.minLength(1),
+    v.maxLength(LIMITS.legalListGenerationCandidateSourcesMax),
+  ),
+});
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  runId: resourceIdSchema("legalListGenerationRun"),
+  candidates: v.pipe(
+    v.array(candidateSchema),
+    v.minLength(1),
+    v.maxLength(LIMITS.legalListGenerationCandidatesMax),
+  ),
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Submit the candidates a generation run produced: per candidate a name, " +
     "description, item type, status, priority, due date, suggested " +
-    "assignees, and the sources it was drawn from, each naming a document " +
-    "version with a locator and optional quote. Every source must be one of " +
-    "the run's own source versions. The run moves from running to review; " +
-    "candidates stay proposals until they are accepted or rejected.",
+    "assignees, fact details for a fact (when it happened, evidence kind, " +
+    "medium, confidence, interpretation note, scoring), and the sources it " +
+    "was drawn from, each naming a document version with a locator and " +
+    "optional quote. Every source must be one of the run's own source " +
+    "versions. Only a run started with lists.generations.create accepts " +
+    "candidates. The run moves from running to review; candidates stay " +
+    "proposals until they are accepted or rejected.",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: legalListRealtimeUpdates,
@@ -93,6 +111,7 @@ type ValidCandidate = {
   dueDate: string | null;
   // Omitted lets the column default (no suggested assignees) apply.
   suggestedAssigneeUserIds: SafeId<"user">[] | undefined;
+  factDetails: CandidateFactDetailColumns;
   sources: {
     entityId: SafeId<"entity">;
     entityVersionId: SafeId<"entityVersion">;
@@ -102,7 +121,7 @@ type ValidCandidate = {
 };
 
 const validateCandidates = (
-  candidates: Static<typeof bodySchema>["candidates"],
+  candidates: v.InferOutput<typeof bodySchema>["candidates"],
 ): ValidCandidate[] | null => {
   const validated: ValidCandidate[] = [];
   for (const candidate of candidates) {
@@ -113,7 +132,9 @@ const validateCandidates = (
         !includes(TASK_STATUSES, candidate.status)) ||
       (candidate.priority !== undefined &&
         candidate.priority !== null &&
-        !includes(ENTITY_PRIORITIES, candidate.priority))
+        !includes(ENTITY_PRIORITIES, candidate.priority)) ||
+      (candidate.factDetails !== undefined &&
+        candidate.itemType !== LIST_ITEM_TYPE.FACT)
     ) {
       return null;
     }
@@ -138,6 +159,9 @@ const validateCandidates = (
       priority: candidate.priority ?? null,
       dueDate: candidate.dueDate ?? null,
       suggestedAssigneeUserIds: candidate.suggestedAssigneeUserIds,
+      factDetails: candidate.factDetails
+        ? candidateFactDetailColumns(candidate.factDetails)
+        : NO_CANDIDATE_FACT_DETAILS,
       sources,
     });
   }
@@ -164,6 +188,8 @@ const submitGenerationCandidates = createSafeHandler(
             listId: { eq: body.listId },
             workspaceId: { eq: workspaceId },
             status: { eq: "running" },
+            // A run stella produces is written by its own worker.
+            producer: { eq: "external" },
           },
           with: { sources: true },
         });
@@ -198,6 +224,7 @@ const submitGenerationCandidates = createSafeHandler(
               eq(legalListGenerationRuns.id, body.runId),
               eq(legalListGenerationRuns.workspaceId, workspaceId),
               eq(legalListGenerationRuns.status, "running"),
+              eq(legalListGenerationRuns.producer, "external"),
             ),
           )
           .returning({ id: legalListGenerationRuns.id });
@@ -226,6 +253,7 @@ const submitGenerationCandidates = createSafeHandler(
             priority: candidate.priority,
             dueDate: candidate.dueDate,
             suggestedAssigneeUserIds: candidate.suggestedAssigneeUserIds,
+            ...candidate.factDetails,
           });
           for (const source of candidate.sources) {
             sourceValues.push({

@@ -13,9 +13,7 @@ import { isStaleDeploymentLoadError } from "@/lib/preload-error-recovery";
  *   access, wrong password, a corrupt file); retrying repeats the answer.
  */
 export type ViewerErrorRecovery =
-  | { type: "reload-app" }
-  | { type: "retry" }
-  | { type: "final" };
+  { type: "reload-app" } | { type: "retry" } | { type: "final" };
 
 const RETRYABLE_API_STATUSES: ReadonlySet<number> = new Set([0, 408, 429]);
 const SERVER_ERROR_STATUS = 500;

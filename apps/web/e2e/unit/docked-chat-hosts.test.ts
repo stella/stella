@@ -1,44 +1,83 @@
 import { expect, test } from "bun:test";
-import ts from "typescript6";
+
+import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 import {
   declaredAppFrameScope,
+  isServerEndpoint,
   readDockedChatHosts,
+  renderedImports,
 } from "../helpers/docked-chat-hosts";
+
+test.each(["component", "component: component"])(
+  "follows imported route components declared with %s",
+  (options) => {
+    expect(
+      renderedImports(
+        parseSource(
+          "route.tsx",
+          `import { ChatPage as component } from "./chat-page";
+export const Route = createFileRoute("/chat")({ ${options} });`,
+        ),
+      ),
+    ).toEqual(["./chat-page"]);
+  },
+);
+
+test.each([
+  "handlers",
+  "handlers: {}",
+  "handlers() { return {}; }",
+  "get handlers() { return {}; }",
+])("identifies server endpoints with %s metadata", (handlers) => {
+  expect(
+    isServerEndpoint(
+      parseSource(
+        "endpoint.tsx",
+        `const handlers = {};
+export const Route = createFileRoute("/endpoint")({ server: { ${handlers} } });`,
+      ),
+    ),
+  ).toBe(true);
+});
+
+test.each([
+  "appFrame",
+  "appFrame() { return scope.member; }",
+  "get appFrame() { return scope.member; }",
+])("rejects unreadable %s frame metadata", (metadata) => {
+  expect(() =>
+    declaredAppFrameScope(
+      parseSource(
+        "route.tsx",
+        `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
+export const Route = createFileRoute("/feature")({ staticData: { ${metadata} } });`,
+      ),
+      "route.tsx",
+    ),
+  ).toThrow("Unsupported appFrame metadata");
+});
 
 test.each(["member", "knowledge", "none"])(
   "reads declared %s scope independently of route names",
   (scope) => {
-    const source = ts.createSourceFile(
+    const source = parseSource(
       "renamed-route.tsx",
       `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
 export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${scope} } });`,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
     );
-    expect(declaredAppFrameScope(source)).toBe(scope);
+    expect(declaredAppFrameScope(source, "renamed-route.tsx")).toBe(scope);
   },
 );
 
 test("absent metadata inherits while unsupported metadata fails", () => {
-  const parse = (source: string) =>
-    ts.createSourceFile(
-      "route.tsx",
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    );
+  const scopeOf = (source: string) =>
+    declaredAppFrameScope(parseSource("route.tsx", source), "route.tsx");
   expect(
-    declaredAppFrameScope(
-      parse('export const Route = createFileRoute("/_protected")({});'),
-    ),
+    scopeOf('export const Route = createFileRoute("/_protected")({});'),
   ).toBeUndefined();
   expect(() =>
-    declaredAppFrameScope(
-      parse("const value = { staticData: { appFrame: arbitrary } };"),
-    ),
+    scopeOf("const value = { staticData: { appFrame: arbitrary } };"),
   ).toThrow("Unsupported appFrame metadata");
 });
 
@@ -78,16 +117,28 @@ test("docked chat census includes reader and inspector hosts but excludes non-pa
 
 test("docked chat census follows the frame a route's parent layout selects", () => {
   const { hosts } = readDockedChatHosts();
-  // The admin console mounts its own frame without the docked inspector.
-  expect(
-    hosts.some(
-      ({ template, surfaces }) =>
-        (template === "/admin" || template.startsWith("/admin/")) &&
-        surfaces.includes("inspector"),
-    ),
-  ).toBe(false);
-  expect(
-    hosts.find((host) => host.template === "/settings/account/profile")
-      ?.surfaces,
-  ).toContain("inspector");
+  // Account settings and organization admin share the app frame, and with it
+  // the docked inspector.
+  for (const template of [
+    "/settings/account/profile",
+    "/admin/general",
+    "/admin/members",
+  ]) {
+    expect(
+      hosts.find((host) => host.template === template)?.surfaces,
+    ).toContain("inspector");
+  }
+});
+
+test("a preview-only PDF viewer is not followed into its docked chat reader", () => {
+  const imports = (mode: string) =>
+    renderedImports(
+      parseSource(
+        "preview.tsx",
+        `import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+export const Preview = () => <PeekPdfViewer interactionMode="${mode}" />;`,
+      ),
+    );
+  expect(imports("preview-only")).toEqual([]);
+  expect(imports("with-ai")).toEqual(["@/components/pdf/peek/peek-pdf-viewer"]);
 });

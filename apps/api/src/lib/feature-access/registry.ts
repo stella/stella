@@ -1,6 +1,13 @@
 // parser-output-unchanged: registering desktop activity access leaves existing ingestion features and parsed records unchanged.
 // parser-output-unchanged: assigning the sample case handlers to list verification leaves parsed records unchanged.
+// parser-output-unchanged: assigning the client invoice handlers to time billing leaves parsed records unchanged.
 // parser-output-unchanged: registering AI memory access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: registering desktop local agent access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: requiring time billing for the desktop activity timeline leaves parsed records unchanged.
+// parser-output-unchanged: registering desktop dictation access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: registering conflict-check access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: gating desktop dictation cleanup on its access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: registering desktop cloud dictation access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -38,9 +45,12 @@ export const REMEMBER_TOOL_NAME = "remember";
 
 export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
 
-export const SELF_SERVE_FEATURE_IDS = ["time-billing"] as const;
+export const CONFLICT_CHECK_FEATURE_ID = "conflict-check";
+
+export const SELF_SERVE_FEATURE_IDS = ["time-billing", "local-agents"] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
+export const TABLE_ANALYSIS_FEATURE_ID = "table-analysis";
 
 export const FEATURE_REGISTRY = defineFeatureRegistry({
   [AI_MEMORY_FEATURE_ID]: {
@@ -87,6 +97,28 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
       ],
     },
   },
+  // Internal conflict-of-interest checks: dark-launched behind the
+  // deployment flag, then opened per organization by an operator grant.
+  [CONFLICT_CHECK_FEATURE_ID]: {
+    enrolment: "invitation",
+    deploymentFeature: "FEATURE_CONFLICT_CHECK",
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/conflict-checks"],
+      // The tables stay unowned: organization reset, account export and the
+      // status inventory name them, and none of those reads a check.
+      tableSchemaFiles: [],
+      coreModules: [
+        "apps/api/src/lib/conflict-check/decision.ts",
+        "apps/api/src/lib/conflict-check/identifiers.ts",
+        "apps/api/src/lib/conflict-check/links.ts",
+        "apps/api/src/lib/conflict-check/operation.ts",
+        "apps/api/src/lib/conflict-check/outcome.ts",
+        "apps/api/src/lib/conflict-check/party-index.ts",
+        "apps/api/src/lib/conflict-check/project.ts",
+        "apps/api/src/lib/conflict-check/screen.ts",
+      ],
+    },
+  },
   [LEGAL_LISTS_FEATURE_ID]: {
     enrolment: "invitation",
     deploymentFeature: "FEATURE_LEGAL_LISTS",
@@ -98,9 +130,46 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   },
 
   // The desktop client gates this feature from its desktop feature access
-  // decision; no API source belongs to it.
+  // decision; no API source belongs to it. The timeline records time for
+  // billing, so it is never enabled without time billing.
   "activity-timeline": {
+    prerequisites: ["time-billing"],
     enrolment: "invitation",
+  },
+  // A member turns this on under Beta Features. The desktop installs and runs
+  // agent CLIs only while this decision is enabled; the chat offers a computer
+  // and the runner gateway keeps sockets open only for those it enables.
+  "local-agents": {
+    enrolment: "self-serve",
+  },
+  // Desktop-gated too: the desktop offers dictation only while this decision
+  // is enabled. It covers transcription on the computer plus the optional
+  // text cleanup, the only part that reaches the API:
+  // `handlers/dictation/cleanup.ts` refuses it without this decision.
+  "desktop-dictation": {
+    enrolment: "invitation",
+  },
+  // Transcription by stella AI, a grant of its own because the audio leaves
+  // the computer. The desktop offers it, and uploads audio, only while this
+  // decision is enabled; `handlers/dictation/desktop-transcription.ts`
+  // refuses both of its routes without it.
+  "desktop-dictation-cloud": {
+    prerequisites: ["desktop-dictation"],
+    enrolment: "invitation",
+  },
+  // Table columns that carry a legal analysis end to end (money extraction,
+  // more as they land). Each entry point admits it where its input uses it;
+  // the columns already in a matter keep running for every member.
+  [TABLE_ANALYSIS_FEATURE_ID]: {
+    enrolment: "invitation",
+    ownership: {
+      handlerDirectories: [],
+      tableSchemaFiles: [],
+      coreModules: [],
+      conditionalModules: [
+        "apps/api/src/lib/properties/table-analysis-access.ts",
+      ],
+    },
   },
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "general-availability",
@@ -124,6 +193,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/billing-codes",
+        "apps/api/src/handlers/client-invoices",
         "apps/api/src/handlers/expenses",
         "apps/api/src/handlers/invoices",
         "apps/api/src/handlers/number-series",
@@ -173,12 +243,15 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/lists/verifications",
+        "apps/api/src/handlers/lists/fact-extractions",
         "apps/api/src/handlers/lists/sample-case",
         "apps/api/src/handlers/lists/items/fact-details",
         "apps/api/src/handlers/lists/items/sources/verification",
       ],
       tableSchemaFiles: ["apps/api/src/db/schema/lists-verification.ts"],
       coreModules: [
+        "apps/api/src/lib/lists/generation/fact-extract.ts",
+        "apps/api/src/lib/lists/generation/run-queue.ts",
         "apps/api/src/lib/lists/verification/access-context.ts",
         "apps/api/src/lib/lists/verification/claim-extract.ts",
         "apps/api/src/lib/lists/verification/claim-grade.ts",

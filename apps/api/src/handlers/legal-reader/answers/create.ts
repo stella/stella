@@ -28,7 +28,7 @@ const createReaderAnswer = createSafeRootHandler(config, async function* (ctx) {
   );
   return Result.ok(request.stream(prepared));
 });
-declareAggregateMutation(createReaderAnswer.handler, {
+declareAggregateMutation(createReaderAnswer, {
   type: "aggregate",
   aggregates: ["readerAnswer"],
 });

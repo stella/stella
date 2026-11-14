@@ -1,43 +1,42 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
 import type {
   SafeHandlerGenerator,
   TokenHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { permissiveRouteSchema } from "@/api/lib/permissive-route-schema";
+import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 
-import { authorizeLegalResolveRequestOnce } from "./authorization";
 import { resolveLawCitation } from "./law";
-import {
-  type GetLegalResolveAuthorization,
-  legalResolveBaseConfig,
-  type LegalResolveRouteResponse,
-  prepareLegalResolveRequest,
+import type {
+  GetLegalResolveAuthorization,
+  LegalResolveResolved,
 } from "./route-handler";
-
-const strictQuery = t.Object({
-  citation: t.Optional(t.String({ maxLength: 512 })),
-  collection: t.Optional(t.String({ maxLength: 32 })),
-  year: t.Optional(tDefaultVarchar),
-  number: t.Optional(t.String({ maxLength: 16 })),
-  section: t.Optional(t.String({ maxLength: 32 })),
-  asOf: t.Optional(t.String({ format: "date" })),
-});
+import {
+  legalResolveBaseConfig,
+  verifyLegalResolveCaller,
+} from "./route-handler";
 
 type LawRouteHandlerOptions = {
   getAuthorization: GetLegalResolveAuthorization;
   resolve?: typeof resolveLawCitation;
+  onResolved?: LegalResolveResolved;
 };
 
 const lawConfig = {
   ...legalResolveBaseConfig,
   contract: "patch",
-  query: permissiveRouteSchema({
-    keys: ["citation", "collection", "year", "number", "section", "asOf"],
+  query: v.object({
+    citation: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    collection: v.optional(v.pipe(v.string(), v.maxLength(32))),
+    year: v.optional(defaultVarcharSchema),
+    number: v.optional(v.pipe(v.string(), v.maxLength(16))),
+    section: v.optional(v.pipe(v.string(), v.maxLength(32))),
+    asOf: v.optional(apiDateSchema),
   }),
 } satisfies TokenHandlerConfig;
 
@@ -45,44 +44,27 @@ const lawConfig = {
 const createLawEndpoint = ({
   getAuthorization,
   resolve = resolveLawCitation,
+  onResolved,
 }: LawRouteHandlerOptions) =>
   createSafeTokenHandler(
     lawConfig,
+    verifyLegalResolveCaller(getAuthorization),
     async function* ({
+      caller,
       params,
       query,
       request,
-      set,
-    }): SafeHandlerGenerator<LegalResolveRouteResponse> {
-      const prepared = await prepareLegalResolveRequest({
-        getAuthorization,
-        params,
-        query,
-        querySchema: strictQuery,
-        request,
-        set,
-      });
-      if (prepared.status === "rejected") {
-        return Result.ok(prepared.body);
-      }
-      if (prepared.status === "invalid") {
-        return Result.err(
-          new HandlerError({ status: 422, message: prepared.message }),
-        );
-      }
+    }): SafeHandlerGenerator<LegalResolveResponse> {
       const response = yield* Result.ok(
         await resolve({
-          admission: prepared.authorization.admission,
-          country: prepared.params.country,
-          input: prepared.query,
+          admission: caller.admission,
+          country: params.country,
+          input: query,
         }),
       );
+      onResolved?.(request, response);
       return Result.ok(response);
     },
   );
-
-export const legalResolveLawEndpoint = createLawEndpoint({
-  getAuthorization: authorizeLegalResolveRequestOnce,
-});
 
 export const createLegalResolveLawHandler = createLawEndpoint;

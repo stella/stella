@@ -5,10 +5,10 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   ChatEditorController,
@@ -23,7 +23,7 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
-const { ChatEditorProvider, useChatEditor } =
+const { CHAT_SEND_SENT, ChatEditorProvider, useChatEditor } =
   await import("./chat-editor-provider");
 const { composerText } = await import("./chat-editor-source");
 const { PromptEditorContent } = await import("./prompt-editor");
@@ -194,6 +194,7 @@ for (const editAfterExpand of [false, true]) {
     await act(async () =>
       controller().submit((draft) => {
         sent.push(draft);
+        return CHAT_SEND_SENT;
       }),
     );
     expect(sent).toHaveLength(1);
@@ -203,7 +204,7 @@ for (const editAfterExpand of [false, true]) {
     }
     expect(draft.html).toBe("");
     expect(draft.files).toEqual(originalAttachments);
-    expect((await buildChatRequestMessage(draft)).content).toEqual([
+    expect((await buildChatRequestMessage(draft)).unwrap().content).toEqual([
       { type: "text", content: text, metadata: { type: "pasted_text" } },
     ]);
     client.clear();
@@ -313,13 +314,14 @@ test("sending keeps typed content and exact pasted attachment text in the reques
   await act(async () =>
     controller().submit((draft) => {
       sent.push(draft);
+      return CHAT_SEND_SENT;
     }),
   );
   const draft = sent.at(0);
   if (draft === undefined) {
     throw new Error("Expected the composer to submit its draft");
   }
-  expect(await buildChatRequestMessage(draft)).toMatchObject({
+  expect((await buildChatRequestMessage(draft)).unwrap()).toMatchObject({
     content: [
       { type: "text", content: "<p>Review this passage</p>" },
       { type: "text", content: text, metadata: { type: "pasted_text" } },
@@ -339,6 +341,7 @@ test("a pasted chip alone submits without an empty prompt part", async () => {
   await act(async () =>
     controller().submit((draft) => {
       sent.push(draft);
+      return CHAT_SEND_SENT;
     }),
   );
   const draft = sent.at(0);
@@ -346,7 +349,7 @@ test("a pasted chip alone submits without an empty prompt part", async () => {
     throw new Error("Expected an attachment-only draft to submit");
   }
   expect(draft.html).toBe("");
-  expect(await buildChatRequestMessage(draft)).toMatchObject({
+  expect((await buildChatRequestMessage(draft)).unwrap()).toMatchObject({
     content: [
       { type: "text", content: text, metadata: { type: "pasted_text" } },
     ],
@@ -383,6 +386,7 @@ test("a failed send restores typed text and pasted chips for an identical retry"
   await act(async () =>
     controller().submit((draft) => {
       sent.push(draft);
+      return CHAT_SEND_SENT;
     }),
   );
   expect(sent).toHaveLength(2);

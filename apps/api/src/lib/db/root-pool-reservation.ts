@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import type { SQL } from "bun";
 
+import { runCountedTransaction } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import type { RootPoolWindow } from "@/api/lib/observability/root-pool-window";
 
@@ -48,27 +49,33 @@ export const instrumentRootPoolTransactions = (
     callback?: SQL.TransactionContextCallback<T>,
   ): Promise<SQL.ContextCallbackResult<T>> => {
     if (typeof optionsOrCallback !== "string") {
-      return await withRootPoolReservation({
-        reserve,
-        window,
-        work: async (session) =>
-          await runTransactionsInCallerContext(session).begin(
-            optionsOrCallback,
-          ),
-      });
+      return await runCountedTransaction(
+        async () =>
+          await withRootPoolReservation({
+            reserve,
+            window,
+            work: async (session) =>
+              await runTransactionsInCallerContext(session).begin(
+                optionsOrCallback,
+              ),
+          }),
+      );
     }
     if (callback === undefined) {
       return panic("begin(options) needs a transaction callback");
     }
-    return await withRootPoolReservation({
-      reserve,
-      window,
-      work: async (session) =>
-        await runTransactionsInCallerContext(session).begin(
-          optionsOrCallback,
-          callback,
-        ),
-    });
+    return await runCountedTransaction(
+      async () =>
+        await withRootPoolReservation({
+          reserve,
+          window,
+          work: async (session) =>
+            await runTransactionsInCallerContext(session).begin(
+              optionsOrCallback,
+              callback,
+            ),
+        }),
+    );
   };
   Object.defineProperties(client, {
     begin: { configurable: true, value: begin },

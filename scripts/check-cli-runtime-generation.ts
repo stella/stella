@@ -15,7 +15,7 @@ const generate = () => {
   const result = spawnSync(
     process.execPath,
     ["packages/cli/src/codegen.ts", "--runtime-only"],
-    { cwd: REPO_ROOT, stdio: "inherit" },
+    { maxBuffer: 2 ** 30, cwd: REPO_ROOT, stdio: "inherit" },
   );
   if (result.error !== undefined || result.status !== 0) {
     panic(

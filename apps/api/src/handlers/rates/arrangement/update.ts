@@ -1,5 +1,8 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { BILLING_CAP_MINUTES_MAX } from "@stll/api-contract/billing";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { billingArrangements } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -7,11 +10,12 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   billingArrangementResponse,
-  lockBillingArrangement,
   readBillingUsage,
   recordBillingCapCrossings,
 } from "@/api/lib/billing/arrangements";
-import { tCurrencyCode, tMinorUnitAmount } from "@/api/lib/custom-schema";
+import { exceedsBillingCaps } from "@/api/lib/billing/arrangements.logic";
+import { minorUnitAmountSchema } from "@/api/lib/custom-schema";
+import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 
@@ -23,7 +27,7 @@ const updateBillingArrangement = createSafeHandler(
       baselineId: "apps/api/src/handlers/rates/arrangement/update.ts",
     },
     description:
-      "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
+      "Set the matter's current billing arrangement in integer minor currency units. Hourly supports optional positive amount and minute caps with an alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
     permissions: { rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -33,34 +37,48 @@ const updateBillingArrangement = createSafeHandler(
       reason: "billing_admin",
       consumesServices: false,
     },
-    body: t.Union([
-      t.Object(
-        {
-          mode: t.Literal("hourly"),
-          currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
-        },
-        { additionalProperties: false },
-      ),
-      t.Object(
-        {
-          mode: t.Literal("hourly"),
-          currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
-          capAmount: tMinorUnitAmount(1),
-          alertThresholdBps: t.Integer({ minimum: 1, maximum: 10_000 }),
-        },
-        { additionalProperties: false },
-      ),
-      t.Object(
-        {
-          mode: t.Literal("flat_fee"),
-          currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
-          flatFeeAmount: tMinorUnitAmount(0),
-        },
-        { additionalProperties: false },
-      ),
+    body: v.union([
+      v.strictObject({
+        mode: v.literal("hourly"),
+        currency: currencyCodeSchema,
+        revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      }),
+      v.strictObject({
+        mode: v.literal("hourly"),
+        currency: currencyCodeSchema,
+        revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+        capAmount: minorUnitAmountSchema(1),
+        alertThresholdBps: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(10_000),
+        ),
+      }),
+      v.strictObject({
+        mode: v.literal("hourly"),
+        currency: currencyCodeSchema,
+        revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+        capAmount: v.optional(minorUnitAmountSchema(1)),
+        capMinutes: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(BILLING_CAP_MINUTES_MAX),
+        ),
+        alertThresholdBps: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(10_000),
+        ),
+      }),
+      v.strictObject({
+        mode: v.literal("flat_fee"),
+        currency: currencyCodeSchema,
+        revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+        flatFeeAmount: minorUnitAmountSchema(0),
+      }),
     ]),
   },
   async function* ({ body, safeDb, workspaceId, session, recordAuditEvent }) {
@@ -107,15 +125,28 @@ const updateBillingArrangement = createSafeHandler(
           );
         }
         const capAmount =
-          body.mode === "hourly" && "capAmount" in body
+          body.mode === "hourly" &&
+          "capAmount" in body &&
+          body.capAmount !== undefined
             ? cents(body.capAmount)
             : null;
-        if (capAmount !== null && usage.billedAmount > BigInt(capAmount)) {
+        const capMinutes =
+          body.mode === "hourly" && "capMinutes" in body
+            ? body.capMinutes
+            : null;
+        if (
+          exceedsBillingCaps({
+            totalAmount: usage.billedAmount,
+            totalMinutes: usage.billedMinutes,
+            capAmount,
+            capMinutes,
+          })
+        ) {
           return Result.err(
             new HandlerError({
               status: 409,
               code: "billing_cap_below_reserved",
-              hint: "Call rates.arrangement.summary.get, then retry rates.arrangement.update with a cap at least as large as summary.billedAmount.",
+              hint: "Call rates.arrangement.summary.get, then retry rates.arrangement.update with amount and minute caps at least as large as summary.billedAmount and summary.billedMinutes respectively.",
               message: "Billing cap is below reserved invoice time",
             }),
           );
@@ -128,12 +159,15 @@ const updateBillingArrangement = createSafeHandler(
           flatFeeAmount:
             body.mode === "flat_fee" ? cents(body.flatFeeAmount) : null,
           capAmount,
+          capMinutes,
           alertThresholdBps:
             body.mode === "hourly" && "alertThresholdBps" in body
               ? body.alertThresholdBps
               : null,
           thresholdState: "below",
           capState: "below",
+          minuteThresholdState: "below",
+          minuteCapState: "below",
           currencyState: "matched",
           crossingSequence: previous?.crossingSequence ?? 0,
           revision: (previous?.revision ?? 0) + 1,
@@ -145,6 +179,7 @@ const updateBillingArrangement = createSafeHandler(
           previous.currency === values.currency &&
           previous.flatFeeAmount === values.flatFeeAmount &&
           previous.capAmount === values.capAmount &&
+          previous.capMinutes === values.capMinutes &&
           previous.alertThresholdBps === values.alertThresholdBps
         ) {
           return Result.ok(billingArrangementResponse(previous));
@@ -161,6 +196,7 @@ const updateBillingArrangement = createSafeHandler(
             currency: billingArrangements.currency,
             flatFeeAmount: billingArrangements.flatFeeAmount,
             capAmount: billingArrangements.capAmount,
+            capMinutes: billingArrangements.capMinutes,
             alertThresholdBps: billingArrangements.alertThresholdBps,
             revision: billingArrangements.revision,
           });
@@ -180,6 +216,7 @@ const updateBillingArrangement = createSafeHandler(
                       currency: previous.currency,
                       flatFeeAmount: previous.flatFeeAmount,
                       capAmount: previous.capAmount,
+                      capMinutes: previous.capMinutes,
                       alertThresholdBps: previous.alertThresholdBps,
                       revision: previous.revision,
                     }

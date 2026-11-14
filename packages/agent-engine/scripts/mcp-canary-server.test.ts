@@ -15,6 +15,7 @@ import {
   CANARY_SCOPE,
   CANARY_USER_ID,
   CANARY_WRITE_MARKER,
+  type CanaryCredentialClaims,
   canaryFailureDiagnostic,
   canaryStateDiagnostic,
   createCanaryState,
@@ -22,7 +23,6 @@ import {
   signCanaryCredential,
   startCanaryServer,
   verifyCanaryCredential,
-  type CanaryCredentialClaims,
 } from "./mcp-canary-server";
 
 const NOW_SECONDS = 10_000;

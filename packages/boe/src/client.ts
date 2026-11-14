@@ -63,6 +63,13 @@ const isBoeSearchHit = (value: unknown): value is BoeSearchHit =>
   hasOptionalString(value, "titulo") &&
   hasOptionalString(value, "fecha_publicacion") &&
   hasOptionalString(value, "fecha_disposicion") &&
+  hasOptionalString(value, "fecha_actualizacion") &&
+  hasOptionalString(value, "fecha_vigencia") &&
+  hasOptionalString(value, "numero_oficial") &&
+  hasOptionalString(value, "diario") &&
+  hasOptionalString(value, "diario_numero") &&
+  hasOptionalString(value, "vigencia_agotada") &&
+  (value["ambito"] === undefined || isBoeSearchMetadata(value["ambito"])) &&
   (value["departamento"] === undefined ||
     isBoeSearchMetadata(value["departamento"])) &&
   (value["rango"] === undefined || isBoeSearchMetadata(value["rango"])) &&

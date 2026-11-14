@@ -2,18 +2,15 @@ import { EventType, StreamProcessor } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 
 import { getOutputTokenLimit } from "@stll/ai-catalog";
-import {
-  propertyConfig,
-  propertySeed,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { chatThreads, chatToolGrants, mcpConnectors } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import { createForkThread } from "@/api/handlers/chat/fork/create";
@@ -22,6 +19,7 @@ import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -70,6 +68,9 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
+/** The installed connector the approval tool comes from, which a stored
+ *  grant covers. */
+const APPROVAL_CONNECTOR_ID = toSafeId<"mcpConnector">(Bun.randomUUIDv7());
 
 beforeAll(
   async () =>
@@ -81,6 +82,15 @@ beforeAll(
         createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
       );
       safeDb = toSafeDbMock(scopedDb);
+      await testDb.insert(mcpConnectors).values({
+        id: APPROVAL_CONNECTOR_ID,
+        organizationId: ids.orgA,
+        slug: `external-${APPROVAL_CONNECTOR_ID}`,
+        displayName: "External",
+        description: "",
+        url: "https://external.example.test/mcp",
+        authType: "bearer",
+      });
     }),
 );
 
@@ -92,6 +102,10 @@ afterAll(async () => {
           .delete(chatThreads)
           .where(inArray(chatThreads.id, seededThreadIds));
       }
+      // Its grants go with it.
+      await testDb
+        .delete(mcpConnectors)
+        .where(eq(mcpConnectors.id, APPROVAL_CONNECTOR_ID));
       await releaseRlsFixture();
     });
   } finally {
@@ -177,9 +191,19 @@ const scriptedFailure = (shape: FailureShape): ScriptedTurn => {
 /**
  * How the user answers an approval card. `approve-all` approves it and then
  * every approval card that appears later in the conversation, each one
- * clicked on the page like any other approval.
+ * clicked on the page like any other approval. `allow-in-conversation` and
+ * `always-allow` first store a grant of that scope on the tool, as the
+ * page's buttons do, and then approve: the server runs the tool's later calls
+ * without asking, and the page answers every card of it that still appears
+ * on its own, which the harness clicks as `approve-all` does.
  */
-type Decision = "approve" | "approve-all" | "deny";
+type GrantDecision = "allow-in-conversation" | "always-allow";
+type Decision = GrantDecision | "approve" | "approve-all" | "deny";
+
+const GRANT_SCOPE_OF = {
+  "allow-in-conversation": "conversation",
+  "always-allow": "always",
+} as const satisfies Record<GrantDecision, ChatToolGrantScope>;
 
 const isInteraction = (kind: CallKind): boolean =>
   kind !== "plain" && kind !== "rejected";
@@ -208,6 +232,8 @@ type Ledger = {
   /** Provider failures planned so far; each one is an error the page shows. */
   failures: number;
   approvesAll: boolean;
+  /** The widest grant that covers the approval tool in this thread. */
+  grant: ChatToolGrantScope | "none";
   /** How the latest turn ended; `cancelled` when the user stopped it
    *  or a fork settled what it awaited. */
   latest: "awaiting" | "cancelled" | "failed" | "none" | "text";
@@ -227,6 +253,7 @@ const newLedger = (): Ledger => ({
   effects: [],
   failures: 0,
   approvesAll: false,
+  grant: "none",
   latest: "none",
   outcomes: new Map(),
   pending: [],
@@ -300,6 +327,15 @@ const planRun = (
   nextId: () => string,
   origin: RequestOrigin,
 ): ScriptedTurn[] => {
+  // Until a grant covers it, the approval tool asks; after, it still asks on
+  // a request that answers one of its approvals, which resumes on its gate.
+  // Otherwise its calls run at once.
+  const approvalAsks =
+    ledger.grant === "none" ||
+    (origin === "continuation" &&
+      ledger.pending.some((id) => kindOf(ledger, id) === "approval"));
+  const waitsOnUser = (kind: CallKind): boolean =>
+    isInteraction(kind) && (kind !== "approval" || approvalAsks);
   if (shape === "empty" && origin === "message") {
     ledger.pending = [];
     ledger.latest = "text";
@@ -317,6 +353,9 @@ const planRun = (
     const toolCalls = step.calls.map((kind) => {
       const toolCallId = nextId();
       ledger.calls.push({ id: toolCallId, kind, turn: ledger.turn });
+      if (kind === "approval" && !approvalAsks) {
+        ledger.effects.push(toolCallId);
+      }
       return scriptedCall(kind, toolCallId);
     });
     const answers = toolCalls.length === 0;
@@ -327,9 +366,9 @@ const planRun = (
       ...(answers && step.cutOff ? { finishReason: "length" } : {}),
       toolCalls,
     });
-    if (step.calls.some(isInteraction)) {
+    if (step.calls.some(waitsOnUser)) {
       ledger.pending = toolCalls.flatMap(({ toolCallId }, index) =>
-        isInteraction(step.calls[index] ?? "plain") ? [toolCallId] : [],
+        waitsOnUser(step.calls[index] ?? "plain") ? [toolCallId] : [],
       );
       ledger.latest = "awaiting";
       return steps;
@@ -351,13 +390,12 @@ const kindOf = (ledger: Ledger, id: string): CallKind =>
   expect.unreachable(`The ledger has no call ${id}`);
 
 /**
- * Whether, after `approve-all`, the user approves every open card at once,
- * which sends the next request: when every open card is an approval. A page
- * that also waits on an ask-user is completed by the next resolve step. This
- * models the user's clicks, not the conversation grant
- * (`onAllowInConversation` and `AutomaticApprovalResponse` in the web
- * approval card): that runs in the React layer this harness does not render,
- * and the planned render-layer test covers it.
+ * Whether, after `approve-all` or a grant, the user approves every open card
+ * at once, which sends the next request: when every open card is an approval.
+ * A page that also waits on an ask-user is completed by the next resolve
+ * step. Under a grant these clicks stand in for the page's own answers to a
+ * granted tool's cards (`AutomaticApprovalResponse` in the web approval
+ * card), which run in the React layer this harness does not render.
  */
 const approvesAllOpen = (ledger: Ledger): boolean =>
   ledger.approvesAll &&
@@ -657,15 +695,38 @@ const decideBatch = (ledger: Ledger, decisions: readonly Decision[]) =>
     if (decision === "approve-all") {
       ledger.approvesAll = true;
     }
+    if (decision === "allow-in-conversation" || decision === "always-allow") {
+      ledger.approvesAll = true;
+      ledger.grant =
+        ledger.grant === "always" ? "always" : GRANT_SCOPE_OF[decision];
+    }
     if (decision !== "deny") {
       ledger.effects.push(id);
     }
     return { decision, id };
   });
 
-/** Answers every open card on `page` as `batch` decided. */
+/** Stores a grant on the approval tool, as the page's grant buttons do
+ *  before they approve the card. */
+const storeApprovalGrant = async (
+  threadId: SafeId<"chatThread">,
+  scope: ChatToolGrantScope,
+) => {
+  await testDb.insert(chatToolGrants).values({
+    id: toSafeId<"chatToolGrant">(Bun.randomUUIDv7()),
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    scope,
+    chatThreadId: scope === "conversation" ? threadId : null,
+    toolName: null,
+    mcpConnectorId: APPROVAL_CONNECTOR_ID,
+  });
+};
+
+/** Answers every open card on `page` of `threadId` as `batch` decided. */
 const answerBatch = async (
   page: WebChatClient,
+  threadId: SafeId<"chatThread">,
   batch: ReturnType<typeof decideBatch>,
 ) => {
   for (const { decision, id } of batch) {
@@ -676,6 +737,12 @@ const answerBatch = async (
       }
       case "run": {
         await page.runClientTool(id, CREATE_DOCUMENT_TOOL_NAME, DRAFT_RESULT);
+        break;
+      }
+      case "allow-in-conversation":
+      case "always-allow": {
+        await storeApprovalGrant(threadId, GRANT_SCOPE_OF[decision]);
+        await page.approve(id, true);
         break;
       }
       case "approve":
@@ -702,7 +769,7 @@ const resolveOnFirstTab = async (
     real.threadId,
     ...planRequests(real.ledger, continuations, real.nextId, "continuation"),
   );
-  await answerBatch(real.client, batch);
+  await answerBatch(real.client, real.threadId, batch);
   await approveCardsOnScreen(real);
   return batch;
 };
@@ -775,6 +842,54 @@ const answerIdsOf = async (real: Real): Promise<SafeId<"chatMessage">[]> =>
       role === "assistant" ? [toSafeId<"chatMessage">(id)] : [],
   );
 
+/** Forks the thread at the answer of `turn` and continues on the fork. */
+const forkFrom = async (turn: number, model: Model, real: Real) => {
+  const { ledger } = real;
+  const failuresBefore = ledger.failures;
+  const answers = await answerIdsOf(real);
+  // The fixture must reach the fault: one answer per turn.
+  expect(answers).toHaveLength(ledger.turn);
+  const upToMessageId =
+    answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
+  const forkThreadId = newThread();
+  const forked = await createForkThread({
+    indexChatThread: async () => undefined,
+  }).handler(
+    asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
+      body: { newThreadId: forkThreadId, upToMessageId },
+      getWorkspaceAccess: async () => null,
+      memberRole: sessionMemberRole("owner"),
+      params: { threadId: real.threadId },
+      query: {},
+      recordAuditEvent: async () => undefined,
+      request: new Request("http://localhost/v1/chat/threads/fork"),
+      route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
+      safeDb,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+    }),
+  );
+  expect(forked).toMatchObject({ threadId: forkThreadId });
+  const outcome =
+    turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
+  ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
+  for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
+    ledger.waiting.delete(later);
+  }
+  ledger.pending = [];
+  ledger.latest =
+    outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
+  ledger.turn = turn;
+  // A conversation grant stays with the thread it was given in.
+  if (ledger.grant === "conversation") {
+    ledger.grant = "none";
+  }
+  real.client.dispose();
+  real.threadId = forkThreadId;
+  real.client = await real.harness.openWebClient(forkThreadId);
+  await verify(model, real, { failuresBefore });
+};
+
 /**
  * "Fork from here" on an answer, which the page offers on every answer but
  * a running latest one. The fork holds the thread up to that answer, with
@@ -792,46 +907,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
   targetTurn = (model: Readonly<Model>): number =>
     (this.pick % (isBusy(model) ? model.turn - 1 : model.turn)) + 1;
   run = async (model: Model, real: Real) => {
-    const { ledger } = real;
-    const failuresBefore = ledger.failures;
-    const turn = this.targetTurn(model);
-    const answers = await answerIdsOf(real);
-    // The fixture must reach the fault: one answer per turn.
-    expect(answers).toHaveLength(ledger.turn);
-    const upToMessageId =
-      answers.at(turn - 1) ?? expect.unreachable(`No answer for turn ${turn}`);
-    const forkThreadId = newThread();
-    const forked = await createForkThread({
-      indexChatThread: async () => undefined,
-    }).handler(
-      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
-        body: { newThreadId: forkThreadId, upToMessageId },
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        params: { threadId: real.threadId },
-        query: {},
-        recordAuditEvent: async () => undefined,
-        request: new Request("http://localhost/v1/chat/threads/fork"),
-        safeDb,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-      }),
-    );
-    expect(forked).toMatchObject({ threadId: forkThreadId });
-    const outcome =
-      turn === ledger.turn ? ledger.latest : ledger.outcomes.get(turn);
-    ledger.calls = ledger.calls.filter((call) => call.turn <= turn);
-    for (const later of [...ledger.waiting.keys()].filter((t) => t > turn)) {
-      ledger.waiting.delete(later);
-    }
-    ledger.pending = [];
-    ledger.latest =
-      outcome === undefined || outcome === "awaiting" ? "cancelled" : outcome;
-    ledger.turn = turn;
-    real.client.dispose();
-    real.threadId = forkThreadId;
-    real.client = await real.harness.openWebClient(forkThreadId);
-    await verify(model, real, { failuresBefore });
+    await forkFrom(this.targetTurn(model), model, real);
   };
   toString = () => `ForkFrom(${String(this.pick)})`;
 }
@@ -1113,15 +1189,19 @@ const PAGE_STATE = notModelled(
 
 const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "allow-in-conversation": byCommands(
-    "ResolveCards (approve-all), AnswerOnStaleTab, RaceApprovals",
+    "ResolveCards (allow-in-conversation), AnswerOnStaleTab",
     ResolveCards.allows,
   ),
   "allow-once": byCommands(
     "ResolveCards, AnswerOnStaleTab, RaceApprovals",
     ResolveCards.allows,
   ),
-  "always-allow": notModelled(
-    "A grant kept in the browser's storage; the conversation sees the approval it answers with, as allow-once.",
+  "always-allow": byCommands(
+    "ResolveCards (always-allow), AnswerOnStaleTab",
+    ResolveCards.allows,
+  ),
+  "answer-local-question": notModelled(
+    "Only a run on the member's computer asks it, and the harness runs cloud turns only; local-run-question-card.dom.test.tsx drives it through the page.",
   ),
   "answer-question": byCommands(
     "ResolveCards, AnswerOnStaleTab",
@@ -1135,6 +1215,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
+  "continue-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
+  ),
   copy: READS_ONLY,
   "delete-thread": notModelled(
     "Deleting the thread ends the conversation; nothing is left to check.",
@@ -1143,14 +1226,23 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "edit-answer": notModelled(
     "Edit and rerun lives in the session hook, which the harness does not render.",
   ),
+  "edit-message": notModelled(
+    "Editing a sent message lives in the session hook, which the harness does not render; edit-user-message.postgres.test.ts covers the stored history and its reload.",
+  ),
   export: READS_ONLY,
   fork: byCommands("ForkFrom", ForkFrom.allows),
+  "hold-queue-for-message-edit": notModelled(
+    "Holding queued prompts while a message editor is open lives in the session queue, which the harness does not render; user-message-edit-session.dom.test.tsx covers it.",
+  ),
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
   "move-to-side": PAGE_STATE,
   "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
+  "open-message-editor": notModelled(
+    "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
+  ),
   "open-playbook": READS_ONLY,
   "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": notModelled(
@@ -1178,6 +1270,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
       SupersedeCards.allows(model) ||
       isBusy(model),
   ),
+  "submit-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
+  ),
   "submit-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
@@ -1199,7 +1294,8 @@ const findUncoveredActions = async (
 ): Promise<OracleViolation[]> => {
   const web = await loadWebChat();
   const messages = real.client.messages();
-  const { hasError, requestActive, stopStatus } = real.client.runtimeState();
+  const { error, hasError, requestActive, stopStatus } =
+    real.client.runtimeState();
   const isGenerating = web.isChatTurnGenerating({
     hasError:
       hasError ||
@@ -1211,11 +1307,14 @@ const findUncoveredActions = async (
   });
   const answers = messages.filter(({ role }) => role === "assistant");
   const offeredOnAnswer = (gate: typeof web.canForkAssistantMessage): boolean =>
-    answers.some(({ id }) => gate({ isGenerating, messageId: id, messages }));
+    answers.some(({ id }) =>
+      gate({ error, isGenerating, messageId: id, messages }),
+    );
   const cards = real.client.cards();
   const offered: Record<string, boolean> = {
     "allow-in-conversation": cards.some(({ kind }) => kind === "approval"),
     "allow-once": cards.some(({ kind }) => kind === "approval"),
+    "always-allow": cards.some(({ kind }) => kind === "approval"),
     "answer-question": cards.some(({ kind }) => kind === "answer"),
     deny: cards.some(({ kind }) => kind === "approval"),
     fork: offeredOnAnswer(web.canForkAssistantMessage),
@@ -1282,7 +1381,13 @@ const runsOf = (calls: fc.Arbitrary<CallKind[]>): fc.Arbitrary<RunShape[]> => {
   return fc.array(runArb, { maxLength: 3, minLength: 1 });
 };
 const decisionsArb = fc.array(
-  fc.constantFrom<Decision>("approve", "approve-all", "deny"),
+  fc.constantFrom<Decision>(
+    "allow-in-conversation",
+    "always-allow",
+    "approve",
+    "approve-all",
+    "deny",
+  ),
   { maxLength: 4, minLength: 4 },
 );
 
@@ -1353,7 +1458,12 @@ const supersedeCommand = fc
   .map(([runs, text]) => new SupersedeCards(runs, text));
 
 const openConversation = async () => {
+  // An `always` grant an earlier conversation stored would cover this one.
+  await testDb
+    .delete(chatToolGrants)
+    .where(eq(chatToolGrants.mcpConnectorId, APPROVAL_CONNECTOR_ID));
   const harness = createApprovalHarness({
+    grantableApprovalConnectorId: APPROVAL_CONNECTOR_ID,
     ids,
     profile,
     safeDb,
@@ -1386,21 +1496,17 @@ const closeConversation = async ({ real }: { real: Real }) => {
   await real.harness.close();
 };
 
-const runConversations = async (
+const conversationsProperty = (
   commands: fc.Arbitrary<Iterable<fc.AsyncCommand<Model, Real>>>,
-) => {
-  await fc.assert(
-    fc.asyncProperty(commands, async (sequence) => {
-      const conversation = await openConversation();
-      try {
-        await fc.asyncModelRun(() => conversation, sequence);
-      } finally {
-        await closeConversation(conversation);
-      }
-    }),
-    propertyConfig({ numRuns: 25, seed: propertySeed() }),
-  );
-};
+) =>
+  fc.asyncProperty(commands, async (sequence) => {
+    const conversation = await openConversation();
+    try {
+      await fc.asyncModelRun(() => conversation, sequence);
+    } finally {
+      await closeConversation(conversation);
+    }
+  });
 
 // --- Example cases----------------------------------------------------------
 
@@ -1690,6 +1796,42 @@ describe("a conversation's live view", () => {
       } finally {
         await closeConversation(conversation);
       }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.each(["allow-in-conversation", "always-allow"] as const)(
+    "runs the approved calls once their tool is granted while the cards wait (%s)",
+    async (decision) => {
+      await inConversation(async (model, real) => {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["approval", "approval"] }]],
+          "Delete the drafts",
+        ).run(model, real);
+        // The fixture must reach the fault: both cards wait when the first
+        // one stores the grant, and the second is answered under it.
+        expect(real.ledger.pending).toHaveLength(2);
+        await new ResolveCards(
+          [decision],
+          [[{ ...STEP, calls: ["approval"], text: true }]],
+        ).run(model, real);
+        expect(real.ledger.grant).toBe(GRANT_SCOPE_OF[decision]);
+        expect(real.harness.executions).toHaveLength(3);
+        // The next message runs the tool without asking.
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["approval"] }]],
+          "Delete the last one",
+        ).run(model, real);
+        expect(real.harness.executions).toHaveLength(4);
+        // A fork keeps an `always` grant, and leaves a conversation grant
+        // behind.
+        await new ForkFrom(0).run(model, real);
+        await new SendUserMessage(
+          [[{ ...STEP, calls: ["approval"] }]],
+          "Delete it in the copy",
+        ).run(model, real);
+        await new ReloadPage().run(model, real);
+      });
     },
     propertyTestTimeout(30_000),
   );
@@ -2344,8 +2486,12 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every step of any conversation",
     async () => {
-      await runConversations(
-        fc.commands(conversationCommands, { maxCommands: 6 }),
+      await assertProperty(
+        "matches a reload and the ledger after every step of any conversation",
+        conversationsProperty(
+          fc.commands(conversationCommands, { maxCommands: 6 }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2602,10 +2748,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every action the page offers",
     async () => {
-      await runConversations(
-        fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger after every action the page offers",
+        conversationsProperty(
+          fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2614,10 +2764,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger when a new message replaces waiting cards",
     async () => {
-      await runConversations(
-        fc.commands([...conversationCommands, supersedeCommand], {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger when a new message replaces waiting cards",
+        conversationsProperty(
+          fc.commands([...conversationCommands, supersedeCommand], {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),

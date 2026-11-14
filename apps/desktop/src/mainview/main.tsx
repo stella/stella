@@ -9,6 +9,7 @@ import { panic } from "better-result";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
 import ClipboardApp from "../clipboard/ClipboardApp";
+import { installClipsCopyRouting } from "../clipboard/clips-copy-routing";
 import {
   applyDocumentLanguage,
   defaultMessages,
@@ -22,11 +23,12 @@ import {
 import type { DesktopMessages } from "../i18n";
 import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
-  describeError,
   desktopTelemetryWindowFromLabel,
   installDesktopErrorTelemetry,
   reportDesktopError,
@@ -40,6 +42,10 @@ const ClipboardEditorWindow = lazy(
 );
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
 const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
+
+const AccessibilityGuideApp = lazy(
+  async () => import("../onboarding/AccessibilityGuideApp"),
+);
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
@@ -131,6 +137,12 @@ const Root = () => {
         <ActivityApp />
       </Suspense>
     );
+  } else if (windowLabel === "accessibility-guide") {
+    content = (
+      <Suspense fallback={null}>
+        <AccessibilityGuideApp />
+      </Suspense>
+    );
   } else if (windowLabel === "onboarding") {
     content = (
       <Suspense fallback={<main className="bg-background min-h-dvh" />}>
@@ -185,6 +197,21 @@ const removeAccountActivity = installAccountActivity({
   },
 });
 
+// Every window renders from this entry: none shows the webview's browser menu.
+const removeNativeContextMenuPolicy = installNativeContextMenuPolicy(document);
+const removeClipsCopyRouting = installClipsCopyRouting({
+  document,
+  windowLabel: getCurrentWindow().label,
+  onFailure: (error) => {
+    reportDesktopError({
+      code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+      detail: describeError(error),
+      operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
+      window: telemetryWindow,
+    });
+  },
+});
+
 const existingRoot: unknown = Reflect.get(rootElement, REACT_ROOT_KEY);
 const reactRoot = isReactRoot(existingRoot)
   ? existingRoot
@@ -220,6 +247,8 @@ reactRoot.render(<Root />);
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     removeAccountActivity();
+    removeClipsCopyRouting();
     removeDesktopErrorTelemetry();
+    removeNativeContextMenuPolicy();
   });
 }

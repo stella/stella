@@ -5,6 +5,7 @@ export const MCP_CAPABILITY_EXECUTORS = {
   write: "write_capability",
 } as const;
 export const MCP_HTTP_PATH = "/mcp/advanced" as const;
+export const MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version" as const;
 export const MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource/mcp/advanced" as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = 71;
@@ -23,10 +24,14 @@ export const CLI_KNOWN_SCOPES = [
   "stella:matters_write",
   "stella:contacts_write",
   "stella:chat",
+  "stella:memory_write",
   "stella:knowledge_write",
   "stella:billing_write",
   "stella:admin_read",
   "stella:admin_write",
+  "stella:account_export_read",
+  "stella:account_export_write",
+  "stella:organization_create",
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
@@ -41,10 +46,14 @@ export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:matters_write",
   "stella:contacts_write",
   "stella:chat",
+  "stella:memory_write",
   "stella:knowledge_write",
   "stella:billing_write",
   "stella:admin_read",
   "stella:admin_write",
+  "stella:account_export_read",
+  "stella:account_export_write",
+  "stella:organization_create",
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
@@ -54,9 +63,13 @@ export const MCP_ERROR_CODES = [
   "action_period_exhausted",
   "action_concurrency_busy",
   "action_not_enabled",
-  "action_admission_unavailable",
-  "verification_active_limit_reached",
-  "verification_daily_limit_reached",
+  "limiter_store_unavailable",
+  "action_admission_configuration_incomplete",
+  "action_admission_org_state_unreadable",
+  "action_admission_lease_lost",
+  "action_feature_disabled",
+  "run_active_limit_reached",
+  "run_daily_limit_reached",
   "validation_error",
   "result_too_large",
   "missing_scope",
@@ -68,17 +81,20 @@ export const MCP_ERROR_CODES = [
   "conflict",
   "rate_limited",
   "upstream_unavailable",
+  "public_read_timeout",
   "search_index_unavailable",
+  "continuation_expired",
+  "public_read_unfinished",
   "unknown_tool",
   "internal_error",
 ] as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
-export const VERIFICATION_RUN_CAP_CODES = {
-  active: "verification_active_limit_reached",
-  daily: "verification_daily_limit_reached",
+export const MODEL_RUN_CAP_CODES = {
+  active: "run_active_limit_reached",
+  daily: "run_daily_limit_reached",
 } as const;
-export type VerificationRunCapCode =
-  (typeof VERIFICATION_RUN_CAP_CODES)[keyof typeof VERIFICATION_RUN_CAP_CODES];
+export type ModelRunCapCode =
+  (typeof MODEL_RUN_CAP_CODES)[keyof typeof MODEL_RUN_CAP_CODES];
 export const ACTION_ADMISSION_REFUSALS = {
   action_period_exhausted: {
     status: 403,
@@ -98,11 +114,35 @@ export const ACTION_ADMISSION_REFUSALS = {
     hint: "Contact your administrator to enable this action before retrying.",
     retryable: false,
   },
-  action_admission_unavailable: {
+  limiter_store_unavailable: {
     status: 503,
-    message: "This action is temporarily paused. Please try again shortly.",
+    message: "Limiter/admission store is unavailable. Retry later.",
     hint: "Wait for the service to recover, then retry this call.",
     retryable: true,
+  },
+  action_admission_configuration_incomplete: {
+    status: 503,
+    message: "Action admission configuration is incomplete.",
+    hint: "Contact the service administrator to complete the configuration.",
+    retryable: false,
+  },
+  action_admission_org_state_unreadable: {
+    status: 503,
+    message: "Organization access state could not be read.",
+    hint: "Wait for the service to recover, then retry this call.",
+    retryable: true,
+  },
+  action_admission_lease_lost: {
+    status: 503,
+    message: "The action reservation expired.",
+    hint: "Retry this call to reserve capacity again.",
+    retryable: true,
+  },
+  action_feature_disabled: {
+    status: 503,
+    message: "This feature is temporarily turned off.",
+    hint: "Do not retry this call until the feature is turned back on.",
+    retryable: false,
   },
 } as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
@@ -112,6 +152,7 @@ export const MCP_CLI_TOOL_SCOPES = [
   "contacts_write",
   "matters_write",
   "chat",
+  "memory_write",
   "documents_write",
   "knowledge_write",
   "search",
@@ -120,6 +161,7 @@ export const MCP_CLI_TOOL_SCOPES = [
   "billing_write",
   "admin_read",
   "admin_write",
+  "organization_create",
   "feedback",
 ] as const;
 export const MCP_SCOPE_IMPLICATIONS = [

@@ -18,15 +18,24 @@ import {
 import {
   dispatchEvent,
   handleHostedAllocation,
-  handleUsageEntitlementStatusChange,
   handleHostedEntitlementUpsert,
+  handleUsageEntitlementStatusChange,
 } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  IGNORED_EVENT_REASONS,
+  renderIgnoredEventReason,
+} from "@/api/lib/hosted-usage-provider/dispatch-outcome";
+import type {
+  IgnoredEventDisposition,
+  IgnoredEventReason,
+} from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type {
   HostedUsageAllocationPayload,
   HostedUsageWebhookEvent,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   assertUsageAvailable,
   getRemainingUsageUnits,
@@ -56,6 +65,114 @@ const PERIOD_END = new Date("2026-08-01T00:00:00.000Z");
 const NEXT_PERIOD_START = PERIOD_END;
 const NEXT_PERIOD_END = new Date("2026-09-01T00:00:00.000Z");
 
+const ignoredReasonCases = {
+  reconciliation_owner_unresolved: [
+    "cannot resolve reconciliation audit owner",
+    "needs_operator",
+  ],
+  reconciliation_organization_not_found: [
+    "reconciliation organization does not exist",
+    "needs_operator",
+  ],
+  provider_migration: ["provider_migration", "expected"],
+  unrecognized_status: ["unrecognized_status", "reported_at_source"],
+  missing_organization_metadata: [
+    "missing metadata.organization_id",
+    "needs_operator",
+  ],
+  invalid_organization_metadata: [
+    "invalid metadata.organization_id",
+    "needs_operator",
+  ],
+  organization_not_found: ["organization does not exist", "needs_operator"],
+  account_reference_conflict: [
+    "hosted account reference already maps to another entitlement",
+    "needs_operator",
+  ],
+  invalid_period_dates: ["invalid period dates", "needs_operator"],
+  subscription_policy_not_found: [
+    "no subscription usage_policy matches hosted policy reference policy_fixture",
+    "needs_operator",
+  ],
+  matching_entitlement_manual: [
+    "matching entitlement is manually managed",
+    "needs_operator",
+  ],
+  stale_provider_event: [
+    "stale provider event (does not supersede current state)",
+    "expected",
+  ],
+  organization_mapping_conflict: [
+    "metadata organization_id mismatches local mapping",
+    "needs_operator",
+  ],
+  organization_manual_entitlement: [
+    "org has manual entitlement; refuse hosted overwrite",
+    "needs_operator",
+  ],
+  account_organization_mapping_conflict: [
+    "metadata organization_id mismatches local account mapping",
+    "needs_operator",
+  ],
+  superseded_terminal_event: [
+    "terminal event for a superseded external entitlement",
+    "expected",
+  ],
+  entitlement_manual: ["entitlement is manually managed", "needs_operator"],
+  non_addon_allocation: [
+    "allocation_reason policy_fixture is not an addon allocation",
+    "expected",
+  ],
+  addon_policy_not_found: [
+    "no add-on usage_policy matches hosted policy reference policy_fixture",
+    "needs_operator",
+  ],
+  addon_without_entitlement: [
+    "add-on has no associated entitlement",
+    "needs_operator",
+  ],
+  entitlement_row_vanished: ["entitlement row vanished", "needs_operator"],
+  zero_addon_units: ["policy grants zero add-on units", "needs_operator"],
+} as const satisfies Record<
+  IgnoredEventReason,
+  readonly [receiptText: string, disposition: IgnoredEventDisposition]
+>;
+
+test("ignored reason codes preserve receipt text and disposition", () => {
+  const reasons = [
+    "reconciliation_owner_unresolved",
+    "reconciliation_organization_not_found",
+    "provider_migration",
+    "unrecognized_status",
+    "missing_organization_metadata",
+    "invalid_organization_metadata",
+    "organization_not_found",
+    "account_reference_conflict",
+    "invalid_period_dates",
+    "subscription_policy_not_found",
+    "matching_entitlement_manual",
+    "stale_provider_event",
+    "organization_mapping_conflict",
+    "organization_manual_entitlement",
+    "account_organization_mapping_conflict",
+    "superseded_terminal_event",
+    "entitlement_manual",
+    "non_addon_allocation",
+    "addon_policy_not_found",
+    "addon_without_entitlement",
+    "entitlement_row_vanished",
+    "zero_addon_units",
+  ] as const satisfies readonly IgnoredEventReason[];
+  expect(Object.keys(ignoredReasonCases)).toHaveLength(reasons.length);
+  for (const reason of reasons) {
+    const [receiptText, disposition] = ignoredReasonCases[reason];
+    expect(renderIgnoredEventReason(reason, "policy_fixture")).toBe(
+      receiptText,
+    );
+    expect(IGNORED_EVENT_REASONS[reason].disposition).toBe(disposition);
+  }
+});
+
 type Fixture = {
   organizationId: SafeId<"organization">;
   /** A member of the fixture organization: a valid seat_user_id. */
@@ -78,6 +195,10 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
     name: "Test Org",
     slug: organizationId,
     createdAt: PERIOD_START,
+  });
+  await recordNewOrganizationAccessState(tx, {
+    organizationId,
+    now: PERIOD_START,
   });
   await tx.insert(user).values({
     id: userId,
@@ -447,7 +568,9 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("organization_id");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("organization_id");
       }
     });
   });
@@ -504,7 +627,9 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("hosted policy reference");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("hosted policy reference");
       }
     });
   });
@@ -522,7 +647,8 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
 
       expect(outcome).toEqual({
         kind: "ignored",
-        reason: `no subscription usage_policy matches hosted policy reference ${fx.hostedAddonPolicyRef}`,
+        reason: "subscription_policy_not_found",
+        detail: fx.hostedAddonPolicyRef,
       });
       const rows = await tx
         .select({ id: usageEntitlements.id })
@@ -552,7 +678,9 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("manual");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("manual");
       }
     });
   });
@@ -579,7 +707,9 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("mismatch");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("mismatch");
       }
       // The original org's balance must NOT be touched.
       const balance = await getRemainingUsageUnits({
@@ -1040,7 +1170,9 @@ describe("dispatch — handleHostedAllocation", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("allocation_reason");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("allocation_reason");
       }
 
       const balanceAfter = await getRemainingUsageUnits({
@@ -1077,7 +1209,8 @@ describe("dispatch — handleHostedAllocation", () => {
 
       expect(outcome).toEqual({
         kind: "ignored",
-        reason: `no add-on usage_policy matches hosted policy reference ${fx.hostedPolicyRef}`,
+        reason: "addon_policy_not_found",
+        detail: fx.hostedPolicyRef,
       });
       expect(
         await getRemainingUsageUnits({
@@ -1099,7 +1232,9 @@ describe("dispatch — handleHostedAllocation", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("no associated entitlement");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("no associated entitlement");
       }
     });
   });
@@ -1124,7 +1259,9 @@ describe("dispatch — handleHostedAllocation", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("mismatch");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("mismatch");
       }
     });
   });
@@ -1144,7 +1281,9 @@ describe("dispatch — handleHostedAllocation", () => {
       });
       expect(outcome.kind).toBe("ignored");
       if (outcome.kind === "ignored") {
-        expect(outcome.reason).toContain("organization_id");
+        expect(
+          renderIgnoredEventReason(outcome.reason, outcome.detail),
+        ).toContain("organization_id");
       }
     });
   });

@@ -1,3 +1,5 @@
+import { DOCUMENT_PANEL_BOTTOM_INSET } from "@stll/ui/panel-inset";
+
 /** Gap between the selected line and its actions. */
 export const SELECTION_TOOLBAR_OFFSET_PX = 8;
 /** The least the bar keeps between itself and a clipping edge. */
@@ -11,6 +13,24 @@ export type SelectionToolbarAnchor = {
 };
 
 const clips = (overflow: string): boolean => overflow !== "visible";
+
+/**
+ * Whether a scroll can have moved the selected words under the bar. A host
+ * listens for scroll across the whole document to keep the bar on its words,
+ * and re-reading the selection closes an open menu. A scroll inside the
+ * bar's own surfaces (a copy menu's preview) moves none of the words, so it
+ * must not close the menu being read.
+ */
+export const scrollMovesSelection = (
+  event: Event,
+  surfaces: readonly (Node | null)[],
+): boolean => {
+  const { target } = event;
+  return !(
+    target instanceof Node &&
+    surfaces.some((surface) => surface?.contains(target) === true)
+  );
+};
 
 /** The reader's visible scroll area, in the selection document's coordinates. */
 export const selectionToolbarBounds = (root: HTMLElement): DOMRect | null => {
@@ -39,6 +59,14 @@ export const selectionToolbarBounds = (root: HTMLElement): DOMRect | null => {
       top = Math.max(top, rect.top);
       bottom = Math.min(bottom, rect.bottom);
       clippedVertically = true;
+    }
+    // Docked chrome (the floating composer) publishes the strip it covers on
+    // its host; read it inline, because descendants inherit the property.
+    const inset = Number.parseFloat(
+      element.style.getPropertyValue(DOCUMENT_PANEL_BOTTOM_INSET),
+    );
+    if (inset > 0) {
+      bottom = Math.min(bottom, rect.bottom - inset);
     }
   }
   // A reader without its own scroller still starts below the page chrome.

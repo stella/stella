@@ -9,10 +9,10 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
 
 import { declareFailureClass } from "@stll/errors";
 
+import { createSqlClient } from "@/api/db/sql-client";
 import { forceClosePool } from "@/api/db/sql-close";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -42,7 +42,7 @@ export type FreshLoginClient = {
 
 /** A dedicated one-connection client; nothing else shares its connection. */
 export const openFreshLoginClient = (url: string): FreshLoginClient => {
-  const client = new SQL({
+  const client = createSqlClient({
     url,
     max: 1,
     connectionTimeout: CONNECTION_TIMEOUT_S,

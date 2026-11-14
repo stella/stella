@@ -24,8 +24,10 @@ import type {
 } from "@stricli/core";
 
 import packageJson from "../package.json" with { type: "json" };
+import { bulkIdsFlag } from "./batch/bulk.js";
 import { determineCommandExitCode } from "./cli-exit-code.js";
 import { authRoute } from "./commands/auth.js";
+import { buildBatchCommand } from "./commands/batch.js";
 import { compatibilityRoute } from "./commands/compatibility.js";
 import { uploadCommand } from "./commands/upload.js";
 import type { Context } from "./context.js";
@@ -329,9 +331,9 @@ const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
 /**
  * The command's `--help` brief. The catalog's authored description is the whole
  * point of the single-registry design, so it wins outright; the id-derived line
- * survives only as the fallback for a capability that has not been given a
- * description yet (a shrinking set, listed by id in
- * apps/api/capability-description-ledger.json).
+ * survives only as the fallback for a catalog entry without one, which
+ * apps/api/scripts/capability-description-guard.ts rejects in the committed
+ * catalog.
  */
 const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
   const hint = capabilityInputHint(spec);
@@ -396,6 +398,12 @@ const buildCapabilityLeafCommand = (
   spec: CapabilityLeafSpec,
 ): RoutingTarget => {
   const flags = buildCapabilityLeafFlags(spec);
+  const ids = bulkIdsFlag(spec);
+  if (ids !== undefined && flagKey(ids) !== "ids") {
+    flags["ids"] = variadicFlag(
+      "IDs as a comma-separated list or @file (one ID per line)",
+    );
+  }
   const brief = capabilityLeafBrief(spec);
   const description = fullDescription({
     brief,
@@ -605,6 +613,7 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
     },
     routes: {
       auth: authRoute,
+      batch: buildBatchCommand(tree),
       compatibility: compatibilityRoute,
       upload: uploadCommand,
       update: updateCommand,

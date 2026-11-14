@@ -5,8 +5,8 @@ import type { ESTree } from "@oxlint/plugins";
 //
 // `createSafeHandler` mounts under a `:workspaceId` prefix and its parameter
 // type is `WorkspaceHandlerConfig`, whose `params` slot rejects a schema that
-// omits `workspaceId`. A route-level params schema that omits it fails Elysia's
-// validation for every request, before authentication.
+// omits `workspaceId`. A route-level params schema that omits it fails the
+// route's validation for every request, before authentication.
 //
 // `satisfies` does not widen, so `satisfies HandlerConfig` on a workspace
 // config still typechecks: the constraint is only checked at the
@@ -16,7 +16,7 @@ import type { ESTree } from "@oxlint/plugins";
 // narrow type at the declaration keeps the error where the mistake is.
 //
 // Flagged:
-//   const config = { params: t.Object({ listId }) } satisfies HandlerConfig;
+//   const config = { params: v.object({ listId }) } satisfies HandlerConfig;
 //   export default createSafeHandler(config, handler);
 //
 // Allowed:

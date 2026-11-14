@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -10,14 +10,16 @@ import {
   CONTACT_IMPORT_MAX_COLUMNS,
   CONTACT_IMPORT_MAX_ROWS,
   CONTACT_IMPORT_VOCABULARIES,
-  parseContactImportMapping,
+  CONTACT_IMPORT_WARNING_CODE,
   type ContactImportField,
   type ContactImportIssueCode,
   type ContactImportLabeledField,
   type ContactImportMapping,
   type ContactImportTargetField,
   type ContactImportTaxIdScheme,
+  type ContactImportWarningCode,
   type ContactType,
+  parseContactImportMapping,
 } from "@stll/api-contract";
 import { isCountryCode } from "@stll/country-codes";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -31,8 +33,13 @@ import type {
 } from "@/api/db/schema-validators";
 import { classifyBrazilianTaxId } from "@/api/handlers/contacts/contact-import-receipt";
 import { isValidDateOfBirth } from "@/api/handlers/contacts/person-details";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
-import { CSV_DELIMITERS, CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
+import {
+  CSV_DELIMITERS,
+  CSV_PARSE_STATUS,
+  parseCSVWithMetadata,
+} from "@/api/lib/csv";
 import type { CSVDelimiter } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -71,6 +78,7 @@ type ContactImportDelimiter =
 
 export type ContactImportIssue = {
   code: ContactImportIssueCode;
+  duplicateOfRowNumber?: number | undefined;
   field: ContactImportField | null;
   rowNumber: number;
 };
@@ -99,6 +107,14 @@ export type ContactImportCandidate = {
 export type ContactImportPreviewRow = {
   contact: ContactImportCandidate;
   issues: ContactImportIssue[];
+  rowNumber: number;
+  warnings: ContactImportWarning[];
+};
+
+type ContactImportWarning = {
+  code: ContactImportWarningCode;
+  column?: string | undefined;
+  duplicateOfRowNumber?: number | undefined;
   rowNumber: number;
 };
 
@@ -133,6 +149,8 @@ type ContactImportDocument = {
     | { kind: typeof CONTACT_IMPORT_LABELED_SOURCE };
   headers: string[];
   rows: string[][];
+  rowNumbers: number[];
+  skippedBlankRowCount: number;
 };
 
 const emailSchema = v.pipe(v.string(), v.email(), v.maxLength(320));
@@ -143,79 +161,177 @@ const normalizeToken = (value: string): string =>
     .toLowerCase()
     .replace(/[^\p{Letter}\p{Number}]+/gu, "");
 
-const FIELD_ALIASES = {
-  type: ["type", "kind", "contacttype", "typ", "druh"],
-  display_name: [
-    "displayname",
-    "fullname",
-    "name",
-    "nazev",
-    "jmeno",
-    "meno",
-    "nome",
-  ],
-  prefix: ["prefix", "title", "salutation", "titul"],
-  first_name: ["firstname", "givenname", "forename", "jmeno", "meno"],
-  middle_name: ["middlename", "secondname"],
-  last_name: ["lastname", "surname", "familyname", "prijmeni", "priezvisko"],
-  suffix: ["suffix", "namesuffix"],
-  organization_name: [
-    "organizationname",
-    "organisationname",
-    "company",
-    "companyname",
-    "firm",
-    "firma",
-    "spolecnost",
-  ],
-  primary_email: [
-    "email",
-    "emailaddress",
-    "primaryemail",
-    "mail",
-    "emailovaadresa",
-  ],
-  primary_phone: [
-    "phone",
-    "phonenumber",
-    "telephone",
-    "mobile",
-    "telefon",
-    "mobil",
-  ],
-  address_line_1: [
-    "address",
-    "addressline1",
-    "street",
-    "ulice",
-    "adresa",
-    "endereco",
-  ],
-  address_line_2: ["addressline2", "street2"],
-  city: ["city", "town", "mesto", "obec"],
-  state: ["state", "province", "region", "kraj"],
-  postal_code: ["postalcode", "postcode", "zipcode", "zip", "psc"],
-  country: ["country", "countryname", "zeme", "stat"],
-  notes: ["notes", "note", "comment", "poznamka"],
-  tags: ["tags", "labels", "categories", "stitky"],
-  registration_number: [
-    "registrationnumber",
-    "companynumber",
-    "businessid",
-    "ico",
-  ],
-  tax_id: ["taxid", "vatid", "vatnumber", "dic", "cpf", "cnpj", "cpfcnpj"],
-  date_of_birth: ["dateofbirth", "birthdate", "dob"],
-  nationality_codes: ["nationalitycodes", "nationalities"],
-} as const satisfies Record<ContactImportField, readonly string[]>;
+const CONTACT_IMPORT_HEADER_VOCABULARIES = {
+  en: {
+    type: ["type", "kind", "contact type"],
+    display_name: ["displayname", "fullname", "name", "contact name"],
+    prefix: ["prefix", "title", "salutation", "titul"],
+    first_name: ["first name", "given name", "forename"],
+    middle_name: ["middlename", "secondname"],
+    last_name: ["last name", "surname", "family name"],
+    suffix: ["suffix", "namesuffix"],
+    organization_name: [
+      "organizationname",
+      "organisationname",
+      "company",
+      "companyname",
+      "firm",
+    ],
+    primary_email: ["email", "emailaddress", "primaryemail", "mail"],
+    primary_phone: ["phone", "phonenumber", "telephone", "mobile"],
+    address_line_1: ["address", "addressline1", "street"],
+    address_line_2: ["addressline2", "street2"],
+    city: ["city", "town"],
+    state: ["state", "province", "region"],
+    postal_code: ["postal code", "postcode", "zip code", "zip"],
+    country: ["country", "country name"],
+    notes: ["notes", "note", "comment"],
+    tags: ["tags", "labels", "categories"],
+    registration_number: ["registrationnumber", "companynumber", "businessid"],
+    tax_id: ["tax id", "vat id", "vat number", "cpf", "cnpj", "cpf/cnpj"],
+    date_of_birth: ["date of birth", "birth date", "dob"],
+    nationality_codes: ["nationality codes", "nationalities"],
+  },
+  cs: {
+    type: ["Typ", "Druh"],
+    display_name: ["Celé jméno", "Název"],
+    first_name: ["Jméno"],
+    last_name: ["Příjmení"],
+    organization_name: [
+      "Organizace",
+      "Název organizace",
+      "Společnost",
+      "Firma",
+    ],
+    primary_email: ["E-mail", "E-mailová adresa"],
+    primary_phone: ["Telefon", "Telefonní číslo", "Mobil"],
+    address_line_1: ["Adresa", "Ulice"],
+    city: ["Město", "Obec"],
+    state: ["Kraj"],
+    postal_code: ["PSČ"],
+    country: ["Země", "Stát"],
+    notes: ["Poznámka"],
+    tags: ["Štítky"],
+    registration_number: ["IČO"],
+    tax_id: ["DIČ"],
+  },
+  sk: {
+    type: ["Typ", "Druh"],
+    display_name: ["Celé meno", "Názov"],
+    first_name: ["Meno"],
+    last_name: ["Priezvisko"],
+    organization_name: [
+      "Organizácia",
+      "Názov organizácie",
+      "Spoločnosť",
+      "Firma",
+    ],
+    primary_email: ["E-mail", "E-mailová adresa"],
+    primary_phone: ["Telefón", "Telefónne číslo", "Mobil"],
+    address_line_1: ["Adresa", "Ulica"],
+    city: ["Mesto", "Obec"],
+    state: ["Kraj"],
+    postal_code: ["PSČ"],
+    country: ["Krajina", "Štát"],
+    notes: ["Poznámka"],
+    tags: ["Štítky"],
+    registration_number: ["IČO"],
+    tax_id: ["DIČ"],
+  },
+  de: {
+    display_name: ["Anzeigename", "Vollständiger Name"],
+    first_name: ["Vorname"],
+    last_name: ["Nachname", "Familienname"],
+    organization_name: ["Organisation", "Unternehmen", "Firma"],
+    primary_email: ["E-Mail", "E-Mail-Adresse"],
+    primary_phone: ["Telefon", "Telefonnummer", "Mobiltelefon"],
+    address_line_1: ["Adresse", "Straße"],
+    city: ["Stadt", "Ort"],
+    state: ["Bundesland"],
+    postal_code: ["Postleitzahl", "PLZ"],
+    country: ["Land"],
+    notes: ["Notizen"],
+    tax_id: ["Steuernummer", "USt-IdNr."],
+  },
+  pl: {
+    display_name: ["Nazwa wyświetlana", "Pełna nazwa"],
+    first_name: ["Imię"],
+    last_name: ["Nazwisko"],
+    organization_name: ["Organizacja", "Nazwa organizacji", "Firma"],
+    primary_email: ["E-mail", "Adres e-mail"],
+    primary_phone: ["Telefon", "Numer telefonu", "Komórka"],
+    address_line_1: ["Adres", "Ulica"],
+    city: ["Miasto", "Miejscowość"],
+    state: ["Województwo"],
+    postal_code: ["Kod pocztowy"],
+    country: ["Państwo"],
+    notes: ["Notatki", "Uwagi"],
+    tax_id: ["NIP"],
+    registration_number: ["REGON"],
+  },
+  pt: {
+    display_name: ["Nome"],
+    address_line_1: ["Endereço"],
+  },
+} as const satisfies Record<
+  string,
+  Partial<Record<ContactImportField, readonly string[]>>
+>;
+
+/** Every (field, alias) pair the vocabularies declare, field by field. */
+const collectHeaderAliases = (
+  vocabularies: readonly Partial<
+    Record<ContactImportField, readonly string[]>
+  >[],
+) => {
+  const aliases: { field: ContactImportField; alias: string }[] = [];
+  for (const field of CONTACT_IMPORT_FIELDS) {
+    for (const vocabulary of vocabularies) {
+      const labels = vocabulary[field];
+      if (labels === undefined) {
+        continue;
+      }
+      for (const alias of labels) {
+        aliases.push({ field, alias });
+      }
+    }
+  }
+  return aliases;
+};
+
+const headerAliases = collectHeaderAliases(
+  Object.values(CONTACT_IMPORT_HEADER_VOCABULARIES),
+);
+
+export const assertContactImportHeaderAliases = (
+  vocabularies: readonly Partial<
+    Record<ContactImportField, readonly string[]>
+  >[],
+): void => {
+  const destinationByToken = new Map<string, ContactImportField>();
+  for (const field of CONTACT_IMPORT_FIELDS) {
+    destinationByToken.set(normalizeToken(field), field);
+  }
+  for (const { field, alias } of collectHeaderAliases(vocabularies)) {
+    const token = normalizeToken(alias);
+    const previous = destinationByToken.get(token);
+    if (previous !== undefined && previous !== field) {
+      panic("Contact import header aliases must map to one field");
+    }
+    destinationByToken.set(token, field);
+  }
+};
+
+assertContactImportHeaderAliases(
+  Object.values(CONTACT_IMPORT_HEADER_VOCABULARIES),
+);
 
 /**
  * What a column header can suggest. `ignore` is absent on purpose: it is the
  * fallback for a header nothing recognizes, never something an alias declares.
  */
 export type ContactImportSuggestedTarget =
-  | ContactImportField
-  | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
+  ContactImportField | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
 
 /**
  * Where each label of a `Label: value` vocabulary lands. The five identity
@@ -246,13 +362,18 @@ const BRAZILIAN_TAX_ID_TOKENS = new Set(
   ),
 );
 
-const TARGET_FOR_ALIAS = new Map<string, ContactImportSuggestedTarget>();
-for (const field of CONTACT_IMPORT_FIELDS) {
-  for (const alias of FIELD_ALIASES[field]) {
-    if (!TARGET_FOR_ALIAS.has(alias)) {
-      TARGET_FOR_ALIAS.set(alias, field);
-    }
+// Each field's own name is seeded first, so the export's header row (exactly
+// `CONTACT_IMPORT_FIELDS`) maps back to itself whatever the aliases list.
+const TARGET_FOR_ALIAS = new Map<string, ContactImportSuggestedTarget>(
+  CONTACT_IMPORT_FIELDS.map((field) => [normalizeToken(field), field]),
+);
+for (const { field, alias } of headerAliases) {
+  const token = normalizeToken(alias);
+  const previous = TARGET_FOR_ALIAS.get(token);
+  if (previous !== undefined && previous !== field) {
+    panic("Contact import header aliases must map to one field");
   }
+  TARGET_FOR_ALIAS.set(token, field);
 }
 // Vocabulary labels are the source of truth for the labeled-text format; the
 // loop above already covers the ones that reach a first-class field, so this
@@ -261,9 +382,12 @@ for (const vocabulary of Object.values(CONTACT_IMPORT_VOCABULARIES)) {
   for (const labeledField of CONTACT_IMPORT_LABELED_FIELDS) {
     for (const label of vocabulary.fields[labeledField].labels) {
       const token = normalizeToken(label);
-      if (!TARGET_FOR_ALIAS.has(token)) {
-        TARGET_FOR_ALIAS.set(token, LABELED_FIELD_DESTINATION[labeledField]);
+      const destination = LABELED_FIELD_DESTINATION[labeledField];
+      const previous = TARGET_FOR_ALIAS.get(token);
+      if (previous !== undefined && previous !== destination) {
+        panic("Contact import header aliases must map to one field");
       }
+      TARGET_FOR_ALIAS.set(token, destination);
     }
   }
 }
@@ -392,7 +516,13 @@ const parseLabeledDocument = (text: string): ContactImportDocument => {
     return row;
   });
 
-  return { source: { kind: CONTACT_IMPORT_LABELED_SOURCE }, headers, rows };
+  return {
+    source: { kind: CONTACT_IMPORT_LABELED_SOURCE },
+    headers,
+    rows,
+    rowNumbers: rows.map((_, index) => index + 1),
+    skippedBlankRowCount: 0,
+  };
 };
 
 const boundedDocument = (
@@ -442,13 +572,15 @@ export const parseContactImportDocument = (
   const candidates: {
     delimiter: CSVDelimiter;
     rows: string[][];
+    rowNumbers: number[];
+    skippedBlankRowCount: number;
     score: number;
     status:
       | typeof CSV_PARSE_STATUS.SUCCESS
       | typeof CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED;
   }[] = [];
   for (const delimiter of CSV_DELIMITERS) {
-    const parsed = parseCSV(normalizedText, {
+    const parsed = parseCSVWithMetadata(normalizedText, {
       delimiter,
       maxRows: CONTACT_IMPORT_MAX_ROWS + 1,
     });
@@ -458,6 +590,8 @@ export const parseContactImportDocument = (
     candidates.push({
       delimiter,
       rows: parsed.rows,
+      rowNumbers: parsed.rowNumbers,
+      skippedBlankRowCount: parsed.skippedBlankRowCount,
       score: delimiterScore(parsed.rows),
       status: parsed.status,
     });
@@ -510,12 +644,22 @@ export const parseContactImportDocument = (
     );
   }
 
+  // The parser keeps whitespace as data; for contacts a record of only
+  // whitespace carries nothing to import, so it counts as a blank row.
+  const dataRows = selected.rows.slice(1);
+  const dataRowNumbers = selected.rowNumbers.slice(1);
+  const keep = dataRows.map((row) =>
+    row.some((value) => value.trim().length > 0),
+  );
   return boundedDocument({
     source: { kind: "delimited", delimiter: selected.delimiter },
     headers: firstRow.map((header, index) =>
       (index === 0 ? header.replace(/^\uFEFF/u, "") : header).trim(),
     ),
-    rows: selected.rows.slice(1),
+    rows: dataRows.filter((_, index) => keep[index] === true),
+    rowNumbers: dataRowNumbers.filter((_, index) => keep[index] === true),
+    skippedBlankRowCount:
+      selected.skippedBlankRowCount + keep.filter((kept) => !kept).length,
   });
 };
 
@@ -523,6 +667,7 @@ export const inspectContactImportDocument = ({
   source,
   headers,
   rows,
+  skippedBlankRowCount,
 }: ContactImportDocument) => {
   const assigned = new Set<ContactImportField>();
   const columns = headers.map((name, sourceIndex) => {
@@ -585,6 +730,7 @@ export const inspectContactImportDocument = ({
         ]) satisfies ContactImportDelimiter,
     generateDisplayName: !assigned.has("display_name"),
     rowCount: rows.length,
+    skippedBlankRowCount,
     taxIdScheme: hasBrazilianTaxId ? "br_cpf_cnpj" : "none",
   } as const;
 };
@@ -879,6 +1025,233 @@ export const validateContactImportCandidate = ({
   return { contact: { ...candidate, taxId: classified.digits }, issues };
 };
 
+type DuplicateEvidence =
+  | "email"
+  | "registrationId"
+  | "taxId"
+  | "contactId"
+  | "nameAndBirthDate"
+  | "nameAndPhone";
+
+type InFileDuplicateDecision<Row> =
+  | { kind: "duplicate"; of: Row; by: DuplicateEvidence }
+  | { kind: "possibleDuplicate"; of: Row; by: "nameOnly" }
+  | { kind: "distinct" };
+
+// Structured parts are the name only when they are complete (first and last);
+// a partial set ("John") would make different people look alike, so the full
+// display name decides then.
+const normalizedName = (candidate: ContactImportCandidate): string =>
+  normalizeToken(
+    candidate.firstName && candidate.lastName
+      ? [candidate.firstName, candidate.middleName, candidate.lastName]
+          .filter(Boolean)
+          .join(" ")
+      : candidate.displayName,
+  );
+
+const normalizedValue = (value: string | undefined): string | undefined => {
+  const normalized = normalizeToken(value ?? "");
+  return normalized || undefined;
+};
+
+const conflicting = (left: string | undefined, right: string | undefined) =>
+  Boolean(left && right && left !== right);
+
+// Every entry counts as identity evidence, not only the first one listed.
+const emailSet = (contact: ContactImportCandidate): ReadonlySet<string> =>
+  new Set(
+    contact.emails
+      ?.map(({ address }) => address.trim().toLocaleLowerCase())
+      .filter((address) => address !== ""),
+  );
+
+const phoneSet = (contact: ContactImportCandidate): ReadonlySet<string> =>
+  new Set(
+    contact.phones?.flatMap(({ number }) => {
+      const normalized = normalizedValue(number);
+      return normalized === undefined ? [] : [normalized];
+    }),
+  );
+
+const shares = (left: ReadonlySet<string>, right: ReadonlySet<string>) =>
+  [...left].some((value) => right.has(value));
+
+/** The sole owner of the evidence grade used for in-file duplicate review. */
+export const decideInFileDuplicate = <Row extends ContactImportPreviewRow>(
+  earlier: Row,
+  later: ContactImportPreviewRow,
+): InFileDuplicateDecision<Row> => {
+  const left = earlier.contact;
+  const right = later.contact;
+  const leftEmails = emailSet(left);
+  const rightEmails = emailSet(right);
+  const sharedEmail = shares(leftEmails, rightEmails);
+  const conflictingEmails =
+    leftEmails.size > 0 && rightEmails.size > 0 && !sharedEmail;
+  const leftRegistration = normalizedValue(left.registrationNumber);
+  const rightRegistration = normalizedValue(right.registrationNumber);
+  const leftTaxId = normalizedValue(left.taxId);
+  const rightTaxId = normalizedValue(right.taxId);
+  const leftBirthDate = left.dateOfBirth
+    ? JSON.stringify(left.dateOfBirth)
+    : undefined;
+  const rightBirthDate = right.dateOfBirth
+    ? JSON.stringify(right.dateOfBirth)
+    : undefined;
+
+  if (
+    conflictingEmails ||
+    conflicting(leftRegistration, rightRegistration) ||
+    conflicting(leftTaxId, rightTaxId) ||
+    conflicting(leftBirthDate, rightBirthDate)
+  ) {
+    return { kind: "distinct" };
+  }
+  if (sharedEmail) {
+    return { kind: "duplicate", of: earlier, by: "email" };
+  }
+  if (leftRegistration && leftRegistration === rightRegistration) {
+    return { kind: "duplicate", of: earlier, by: "registrationId" };
+  }
+  if (leftTaxId && leftTaxId === rightTaxId) {
+    return { kind: "duplicate", of: earlier, by: "taxId" };
+  }
+
+  const leftName = normalizedName(left);
+  const rightName = normalizedName(right);
+  if (!leftName || leftName !== rightName) {
+    return { kind: "distinct" };
+  }
+  if (leftBirthDate && leftBirthDate === rightBirthDate) {
+    return { kind: "duplicate", of: earlier, by: "nameAndBirthDate" };
+  }
+  const leftPhones = phoneSet(left);
+  const rightPhones = phoneSet(right);
+  if (shares(leftPhones, rightPhones)) {
+    return { kind: "duplicate", of: earlier, by: "nameAndPhone" };
+  }
+
+  const leftHasIdentifier = Boolean(
+    leftEmails.size > 0 ||
+    leftRegistration ||
+    leftTaxId ||
+    leftBirthDate ||
+    leftPhones.size > 0,
+  );
+  const rightHasIdentifier = Boolean(
+    rightEmails.size > 0 ||
+    rightRegistration ||
+    rightTaxId ||
+    rightBirthDate ||
+    rightPhones.size > 0,
+  );
+  return leftHasIdentifier || rightHasIdentifier
+    ? { kind: "distinct" }
+    : { kind: "possibleDuplicate", of: earlier, by: "nameOnly" };
+};
+
+export const validateContactImportCandidates = ({
+  candidates,
+  rowNumbers,
+  taxIdScheme,
+}: {
+  candidates: ContactImportCandidate[];
+  rowNumbers: number[];
+  taxIdScheme: ContactImportTaxIdScheme;
+}): ContactImportPreviewRow[] => {
+  const validatedRows = candidates.map((candidate, index) => {
+    const rowNumber = rowNumbers.at(index) ?? index + 1;
+    const validated = validateContactImportCandidate({
+      candidate,
+      taxIdScheme,
+      rowNumber,
+    });
+    return {
+      contact: validated.contact,
+      issues: validated.issues,
+      rowNumber,
+      warnings: [],
+    };
+  });
+  return markInFileDuplicates(validatedRows);
+};
+
+const TAX_ID_ISSUE_CODES: ReadonlySet<ContactImportIssueCode> = new Set([
+  CONTACT_IMPORT_ISSUE_CODE.INVALID_TAX_ID,
+  CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED,
+]);
+
+/**
+ * Why a row the validator rejects is skipped (it is never partially stored).
+ * Tax-id problems and repeats of an earlier row keep their own reason so the
+ * receipt says which rule failed; a repeat found by its tax id stays
+ * `duplicate_tax_id`, and a repeat that also breaks another rule is
+ * `invalid_row`.
+ */
+export const contactImportSkipReason = (
+  issues: readonly ContactImportIssue[],
+):
+  | "duplicate_tax_id"
+  | "in_file_duplicate"
+  | "invalid_row"
+  | "invalid_tax_id" => {
+  if (issues.some(({ code }) => TAX_ID_ISSUE_CODES.has(code))) {
+    return "invalid_tax_id";
+  }
+  const repeats = issues.filter(
+    ({ code }) => code === CONTACT_IMPORT_ISSUE_CODE.IN_FILE_DUPLICATE,
+  );
+  if (repeats.length === 0 || repeats.length < issues.length) {
+    return "invalid_row";
+  }
+  return repeats.some(({ field }) => field === "tax_id")
+    ? "duplicate_tax_id"
+    : "in_file_duplicate";
+};
+
+const markInFileDuplicates = (
+  rows: ContactImportPreviewRow[],
+): ContactImportPreviewRow[] => {
+  const earlierRows: ContactImportPreviewRow[] = [];
+  return rows.map((row) => {
+    const decision = earlierRows
+      .map((earlier) => decideInFileDuplicate(earlier, row))
+      .find(({ kind }) => kind !== "distinct");
+    const validatedRow: ContactImportPreviewRow = {
+      contact: row.contact,
+      issues:
+        decision?.kind !== "duplicate"
+          ? row.issues
+          : [
+              ...row.issues,
+              {
+                code: CONTACT_IMPORT_ISSUE_CODE.IN_FILE_DUPLICATE,
+                field: decision.by === "taxId" ? "tax_id" : null,
+                rowNumber: row.rowNumber,
+                duplicateOfRowNumber: decision.of.rowNumber,
+              },
+            ],
+      rowNumber: row.rowNumber,
+      warnings:
+        decision?.kind === "possibleDuplicate"
+          ? [
+              ...row.warnings,
+              {
+                code: CONTACT_IMPORT_WARNING_CODE.POSSIBLE_IN_FILE_DUPLICATE,
+                rowNumber: row.rowNumber,
+                duplicateOfRowNumber: decision.of.rowNumber,
+              },
+            ]
+          : row.warnings,
+    };
+    if (validatedRow.issues.length === 0) {
+      earlierRows.push(validatedRow);
+    }
+    return validatedRow;
+  });
+};
+
 type CustomFieldColumn = {
   id: string;
   label: string;
@@ -967,14 +1340,10 @@ export const previewContactImport = ({
     );
   }
 
-  // Row numbers point back into the source: a delimited file's first data
-  // row sits under the header on line 2, a labeled document's first block is
-  // block 1.
-  const firstRowNumber =
-    document.source.kind === CONTACT_IMPORT_LABELED_SOURCE ? 1 : 2;
   const rows = document.rows.map((row, rowIndex): ContactImportPreviewRow => {
-    const rowNumber = rowIndex + firstRowNumber;
+    const rowNumber = document.rowNumbers.at(rowIndex) ?? rowIndex + 1;
     const issues: ContactImportIssue[] = [];
+    const warnings: ContactImportWarning[] = [];
     const values = new Map<ContactImportField, string>();
     if (row.length !== document.headers.length) {
       issues.push({
@@ -984,6 +1353,17 @@ export const previewContactImport = ({
       });
     }
     for (const { sourceIndex, targetField } of mapping.columns) {
+      if (
+        targetField === CONTACT_IMPORT_IGNORE_DESTINATION &&
+        valueOrUndefined(row.at(sourceIndex))
+      ) {
+        warnings.push({
+          code: CONTACT_IMPORT_WARNING_CODE.IGNORED_POPULATED_COLUMN,
+          column:
+            document.headers.at(sourceIndex) ?? `Column ${sourceIndex + 1}`,
+          rowNumber,
+        });
+      }
       if (
         targetField !== CONTACT_IMPORT_IGNORE_DESTINATION &&
         targetField !== CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION
@@ -1153,12 +1533,31 @@ export const previewContactImport = ({
       contact: validated.contact,
       issues: [...issues, ...validated.issues],
       rowNumber,
+      warnings,
     };
   });
 
+  const deduplicatedRows = markInFileDuplicates(rows);
   return Result.ok({
-    errorCount: rows.reduce((total, row) => total + row.issues.length, 0),
-    rows,
-    validCount: rows.filter(({ issues }) => issues.length === 0).length,
+    errorCount: deduplicatedRows.reduce(
+      (total, row) => total + row.issues.length,
+      0,
+    ),
+    rows: deduplicatedRows,
+    validCount: deduplicatedRows.filter(({ issues }) => issues.length === 0)
+      .length,
   });
 };
+
+/**
+ * An import's single tax column holds a national tax number or an EU VAT
+ * number; it is stored the way every contact writer stores the pair
+ * (`contactTaxIdentifiers`). Brazilian tax ids stay tax ids.
+ */
+export const importedTaxIdentifiers = (
+  taxId: string | undefined,
+  taxIdScheme: ContactImportTaxIdScheme,
+) =>
+  taxIdScheme === "none"
+    ? contactTaxIdentifiers({ taxId: taxId ?? null, vatId: null })
+    : { taxId: taxId ?? null, vatId: null };

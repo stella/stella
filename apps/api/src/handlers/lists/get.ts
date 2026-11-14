@@ -4,14 +4,14 @@ import { and, asc, eq } from "drizzle-orm";
 import { legalListColumns, legalListItems, properties } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { LIST_COLUMN_OVERFLOW_ERROR_CODE } from "@/api/lib/lists/column-error-codes";
 
-const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
+const paramsSchema = workspaceParams({ listId: resourceIdSchema("legalList") });
 
 const config = {
   contract: "patch",

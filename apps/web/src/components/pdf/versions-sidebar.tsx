@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
@@ -16,6 +16,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { Form } from "@stll/ui/form";
 import {
   CheckIcon,
   DownloadIcon,
@@ -24,10 +25,11 @@ import {
   PlusIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { useContentDir } from "@stll/ui/use-content-dir";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -39,7 +41,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys } from "@/lib/files/queries";
 import {
@@ -52,6 +54,30 @@ import {
   type EntityVersion as Version,
   entityVersionsKeys,
 } from "@/lib/workspaces/queries/entity-versions";
+
+const ERROR_CAPTURE = {
+  handleDeleteVersion: {
+    fingerprintKey: "VersionsSidebar.handleDeleteVersion:failure",
+    scope: {
+      type: "handler",
+      handlerId: "VersionsSidebar.handleDeleteVersion:failure",
+    },
+  },
+  handleSetLabel: {
+    fingerprintKey: "VersionsSidebar.handleSetLabel:failure",
+    scope: {
+      type: "handler",
+      handlerId: "VersionsSidebar.handleSetLabel:failure",
+    },
+  },
+  handleRestore: {
+    fingerprintKey: "VersionsSidebar.handleRestore:failure",
+    scope: {
+      type: "handler",
+      handlerId: "VersionsSidebar.handleRestore:failure",
+    },
+  },
+} as const;
 
 export type { EntityVersion as Version } from "@/lib/workspaces/queries/entity-versions";
 
@@ -73,6 +99,8 @@ type VersionsSidebarProps = {
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   /** Open document comparison within the version-history facet. */
   onCompareVersions?: (() => void) | undefined;
+  /** Two or more versions exist, but not two DOCX files to compare. */
+  compareNeedsDocx?: boolean | undefined;
 };
 
 type LabelPreset = {
@@ -102,6 +130,7 @@ export const VersionsSidebar = ({
   loadOlderError = false,
   onLoadOlder,
   onCompareVersions,
+  compareNeedsDocx = false,
 }: VersionsSidebarProps) => {
   const t = useTranslations();
 
@@ -109,49 +138,15 @@ export const VersionsSidebar = ({
   const [isUploading, setIsUploading] = useState(false);
 
   // The viewport is the scrollable element of the Base UI ScrollArea
-  // (forwarded via `viewportRef`); it is both the IntersectionObserver
-  // root and the element whose scrollTop we adjust to anchor a prepend.
+  // (forwarded via `viewportRef`), which is the IntersectionObserver root.
   const viewportRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const canLoadOlder = hasOlderVersions && onLoadOlder !== undefined;
-  // The list renders oldest → newest, so loading an older page adds rows at
-  // the TOP. `versions` is kept newest-first, so the displayed-top is the
-  // OLDEST version (min versionNumber); track its id to detect a genuine
-  // older-page load in the layout effect below (vs. a bottom-append upload
-  // or an entity switch).
-  let topVersionId: string | null = null;
-  let oldestVersionNumber = Number.POSITIVE_INFINITY;
-  let newestVersionId: string | null = null;
-  let newestVersionNumber = Number.NEGATIVE_INFINITY;
-  for (const version of versions) {
-    if (version.versionNumber < oldestVersionNumber) {
-      oldestVersionNumber = version.versionNumber;
-      topVersionId = version.id;
-    }
-    if (version.versionNumber > newestVersionNumber) {
-      newestVersionNumber = version.versionNumber;
-      newestVersionId = version.id;
-    }
-  }
-  const prevTopVersionIdRef = useRef(topVersionId);
-  // scrollHeight captured the instant a load-older request fires,
-  // before the prepend grows the container above the viewport. Reset
-  // to null once consumed so only a real prepend restores scroll.
-  const anchorScrollHeightRef = useRef<number | null>(null);
-  // Newest (bottom) version id last positioned at, so the scroll-to-bottom
-  // below re-runs on a re-seed (entity switch or a new upload/restore changes
-  // the newest id) but not on an older-page append (newest id unchanged).
-  const prevNewestVersionIdRef = useRef<string | null>(null);
-
   const triggerLoadOlder = useLatestCallback(() => {
-    const container = viewportRef.current;
-    if (container) {
-      anchorScrollHeightRef.current = container.scrollHeight;
-    }
     detached(onLoadOlder?.(), "versions-sidebar.load-older");
   });
 
-  // Drive the trigger from a top sentinel: when it scrolls into view
+  // Drive the trigger from an end-of-list sentinel: when it scrolls into view
   // (with a buffer) and an older page exists, fetch it. The observer
   // re-arms each render so it tracks the latest `canLoadOlder` /
   // `isLoadingOlder` without firing while a fetch is in flight.
@@ -172,7 +167,7 @@ export const VersionsSidebar = ({
         }
         triggerLoadOlder();
       },
-      { root, rootMargin: "240px 0px 0px 0px" },
+      { root, rootMargin: "0px 0px 240px 0px" },
     );
 
     observer.observe(target);
@@ -182,47 +177,6 @@ export const VersionsSidebar = ({
     // from fetching the previous entity's older page into the current
     // list.
   }, [canLoadOlder, isLoadingOlder, loadOlderError, triggerLoadOlder]);
-
-  // Scroll anchoring: loading an older page changes the displayed-top
-  // (oldest) version id and grows scrollHeight above the viewport. Restore the
-  // previous offset before paint so the version under the user's eye stays
-  // put. Bottom-appends (uploads) keep the oldest id and skip this; an entity
-  // switch changes the id too but has no captured anchor, so it is also
-  // skipped.
-  useLayoutEffect(() => {
-    const previousTopId = prevTopVersionIdRef.current;
-    prevTopVersionIdRef.current = topVersionId;
-    const previousScrollHeight = anchorScrollHeightRef.current;
-    anchorScrollHeightRef.current = null;
-    if (previousTopId === topVersionId || previousScrollHeight === null) {
-      return;
-    }
-    const container = viewportRef.current;
-    if (!container) {
-      return;
-    }
-    container.scrollTop += container.scrollHeight - previousScrollHeight;
-  }, [topVersionId]);
-
-  // Open the list at the bottom (newest) whenever it is (re-)seeded: on first
-  // load and on every entity switch or upload/restore the newest id changes.
-  // The list is chronological (oldest at the top, just below the load-older
-  // sentinel), so without this the viewport starts at the top with the sentinel
-  // on screen and the IntersectionObserver pages the whole history on open.
-  // Keying on the newest id (not a one-shot flag) re-positions a newly selected
-  // entity's list too; an older-page append leaves the newest id unchanged and
-  // is handled by the anchoring effect above so the scroll position is kept.
-  useLayoutEffect(() => {
-    if (prevNewestVersionIdRef.current === newestVersionId) {
-      return;
-    }
-    prevNewestVersionIdRef.current = newestVersionId;
-    const container = viewportRef.current;
-    if (!container || newestVersionId === null) {
-      return;
-    }
-    container.scrollTop = container.scrollHeight;
-  }, [newestVersionId]);
 
   const invalidateVersions = async () => {
     await Promise.all([
@@ -262,7 +216,7 @@ export const VersionsSidebar = ({
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
@@ -271,7 +225,10 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(
+        requested.error,
+        ERROR_CAPTURE.handleDeleteVersion,
+      );
       notifyUserError(requested.error, t("errors.actionFailed"));
       await invalidateVersions();
       return;
@@ -289,7 +246,7 @@ export const VersionsSidebar = ({
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
@@ -300,7 +257,10 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(
+        requested.error,
+        ERROR_CAPTURE.handleSetLabel,
+      );
       notifyUserError(requested.error, t("errors.actionFailed"));
     }
 
@@ -309,7 +269,7 @@ export const VersionsSidebar = ({
 
   const handleRestore = async (versionId: string) => {
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
@@ -318,7 +278,7 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(requested.error, ERROR_CAPTURE.handleRestore);
       notifyUserError(requested.error, t("errors.actionFailed"));
     }
 
@@ -344,7 +304,7 @@ export const VersionsSidebar = ({
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
         .diff.get();
-      return unwrapEden(response).segments;
+      return unwrapApiResponse(response).segments;
     };
 
   const buildSummarize =
@@ -354,16 +314,15 @@ export const VersionsSidebar = ({
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
         .summarize.post({});
-      return unwrapEden(response).summary;
+      return unwrapApiResponse(response).summary;
     };
 
-  // Render oldest → newest top-to-bottom so the timeline reads
-  // naturally (v1 at the top, latest at the bottom). The upload
-  // sits in the same bottom-row slot as "Extract entity type" on
-  // the metadata facet so the two facets share the same footer
-  // pattern.
+  // Newest first, so the current version opens at the top and older pages
+  // extend the list downward. The upload sits in the same bottom-row slot as
+  // "Extract entity type" on the metadata facet so the two facets share the
+  // same footer pattern.
   const orderedVersions = [...versions].toSorted(
-    (a, b) => a.versionNumber - b.versionNumber,
+    (a, b) => b.versionNumber - a.versionNumber,
   );
 
   return (
@@ -371,14 +330,6 @@ export const VersionsSidebar = ({
       {/* Version list */}
       <ScrollArea className="flex-1" viewportRef={viewportRef}>
         <VersionList>
-          {canLoadOlder && (
-            <LoadOlderVersions
-              isLoadingOlder={isLoadingOlder}
-              loadOlderError={loadOlderError}
-              onLoadOlder={triggerLoadOlder}
-              ref={sentinelRef}
-            />
-          )}
           {orderedVersions.map((version, idx) => {
             const isDocx = version.file?.mimeType === DOCX_MIME;
             return (
@@ -392,7 +343,7 @@ export const VersionsSidebar = ({
                   idx > 0 &&
                   version.label !== orderedVersions[idx - 1]?.label &&
                   (version.label !== null ||
-                    orderedVersions[idx - 1]?.label !== null)
+                    (orderedVersions[idx - 1]?.label ?? null) !== null)
                 }
                 summarize={isDocx ? buildSummarize(version.id) : null}
                 version={version}
@@ -408,6 +359,14 @@ export const VersionsSidebar = ({
               />
             );
           })}
+          {canLoadOlder && (
+            <LoadOlderVersions
+              isLoadingOlder={isLoadingOlder}
+              loadOlderError={loadOlderError}
+              onLoadOlder={triggerLoadOlder}
+              ref={sentinelRef}
+            />
+          )}
         </VersionList>
       </ScrollArea>
 
@@ -419,15 +378,22 @@ export const VersionsSidebar = ({
        *  width, so hovering the empty right portion of the row
        *  doesn't register. */}
       <div className={cn("flex shrink-0 border-t", TOOLBAR_ROW_HEIGHT)}>
-        {onCompareVersions && (
+        {(onCompareVersions !== undefined || compareNeedsDocx) && (
           <Button
             className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 border-e px-3 font-normal before:rounded-none"
+            disabled={onCompareVersions === undefined}
             onClick={onCompareVersions}
             type="button"
             variant="ghost"
           >
             <FileDiffIcon className="size-4 shrink-0" />
-            <span className="truncate">{t("fileDetail.compare")}</span>
+            <TruncatedText>
+              {t(
+                onCompareVersions === undefined
+                  ? "fileDetail.compareDocxOnly"
+                  : "fileDetail.compare",
+              )}
+            </TruncatedText>
           </Button>
         )}
         <Button
@@ -448,7 +414,7 @@ export const VersionsSidebar = ({
           variant="ghost"
         >
           <PlusIcon className="size-4" />
-          <span className="truncate">{t("fileDetail.uploadNewVersion")}</span>
+          <TruncatedText>{t("fileDetail.uploadNewVersion")}</TruncatedText>
         </Button>
       </div>
     </div>
@@ -465,7 +431,7 @@ type LoadOlderVersionsProps = {
 };
 
 /**
- * Top-of-list paging affordance. The `div` is the IntersectionObserver
+ * End-of-list paging affordance. The `div` is the IntersectionObserver
  * target that auto-loads when scrolled near; the button is the manual,
  * keyboard-accessible fallback. While a page is in flight it shows a
  * spinner instead so the observer (re-armed only when idle) cannot
@@ -579,6 +545,9 @@ const VersionItem = ({
       {showPhaseDivider && <div className="border-border my-1 border-t" />}
       <VersionRow
         author={version.author}
+        diffLabel={
+          version.versionNumber === 1 ? t("fileDetail.showText") : undefined
+        }
         createdAt={version.createdAt}
         isCurrent={isCurrent}
         isSelected={isSelected}
@@ -591,21 +560,23 @@ const VersionItem = ({
                 <Tooltip
                   content={t("common.documentReference")}
                   render={
-                    <span className="text-muted-foreground text-3xs truncate font-mono" />
+                    <span className="text-muted-foreground text-3xs min-w-0 font-mono" />
                   }
                 >
-                  <BidiText direction="ltr">{version.stamp}</BidiText>
+                  <TruncatedText render={<BidiText direction="ltr" />}>
+                    {version.stamp}
+                  </TruncatedText>
                 </Tooltip>
               )}
               {version.label !== null && (
-                <span className="text-accent-foreground text-3xs inline-flex w-fit items-center gap-1.5 truncate font-medium">
+                <span className="text-accent-foreground text-3xs inline-flex w-fit min-w-0 items-center gap-1.5 font-medium">
                   <span
                     className={cn(
                       "size-2 shrink-0 rounded-full",
                       labelDotColor,
                     )}
                   />
-                  {version.label}
+                  <TruncatedText>{version.label}</TruncatedText>
                 </span>
               )}
             </div>
@@ -662,7 +633,7 @@ const VersionItem = ({
               settles; we just close the menu after the action
               finishes. */}
           <div className="px-2 py-1.5">
-            <form
+            <Form
               action={async (formData) => {
                 const raw = formData.get("customLabel");
                 const value = typeof raw === "string" ? raw.trim() : "";
@@ -674,7 +645,7 @@ const VersionItem = ({
               }}
             >
               <VersionLabelInput placeholder={t("fileDetail.label")} />
-            </form>
+            </Form>
           </div>
 
           <MenuSeparator />
@@ -757,28 +728,19 @@ const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";
 const MENU_OWNED_KEYS = ["Escape", "ArrowDown", "ArrowUp"] as const;
 
 // Uncontrolled custom-label field (the form action reads it via FormData). It
-// is free text in any language, so resolve direction from the typed content
-// (empty inherits the UI direction; first character sets LTR vs RTL).
-const VersionLabelInput = ({ placeholder }: { placeholder: string }) => {
-  const labelDir = useContentDir({
-    dir: undefined,
-    value: undefined,
-    defaultValue: undefined,
-  });
-  return (
-    <input
-      autoComplete="off"
-      className="border-input bg-background placeholder:text-muted-foreground focus:ring-ring w-full rounded-md border px-2 py-1 text-xs outline-none focus:ring-1"
-      dir={labelDir.dir}
-      maxLength={128}
-      name="customLabel"
-      onChange={(event) => labelDir.trackValue(event.currentTarget.value)}
-      onKeyDown={(event) => {
-        if (!MENU_OWNED_KEYS.some((key) => key === event.key)) {
-          event.stopPropagation();
-        }
-      }}
-      placeholder={placeholder}
-    />
-  );
-};
+// is free text in any language; `Input` resolves its direction from the typed
+// content (empty inherits the UI direction; first character sets LTR vs RTL).
+const VersionLabelInput = ({ placeholder }: { placeholder: string }) => (
+  <Input
+    autoComplete="off"
+    maxLength={128}
+    name="customLabel"
+    onKeyDown={(event) => {
+      if (!MENU_OWNED_KEYS.some((key) => key === event.key)) {
+        event.stopPropagation();
+      }
+    }}
+    placeholder={placeholder}
+    size="sm"
+  />
+);

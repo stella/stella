@@ -8,11 +8,11 @@ import path from "node:path";
 
 import { isChangesetEntry } from "./changeset-guard";
 import {
-  CLI_CONTRACT_SURFACE_PATHS,
   canonicalJson,
   canonicalSurfacePart,
-  compareStableVersions,
   changesetNamesCli,
+  CLI_CONTRACT_SURFACE_PATHS,
+  compareStableVersions,
 } from "./check-cli-release-coupling";
 
 const DEFAULT_ROOT = path.resolve(import.meta.dirname, "..");
@@ -155,12 +155,22 @@ const readBaseCliVersion = (base: string, root: string): string => {
   return manifest.version;
 };
 
-const readCliChangesets = (root: string): readonly string[] =>
+/**
+ * CLI changesets this change itself carries. One already on the base branch
+ * says nothing about this change: a release branch consumes changesets when it
+ * is cut, while `main` keeps them until the release pull request merges, so an
+ * entry whose CLI is already published still looks pending here.
+ */
+const readCliChangesets = (
+  root: string,
+  changedFiles: readonly string[],
+): readonly string[] =>
   gitPaths(
     ["ls-tree", "-r", "-z", "--name-only", "HEAD", "--", CHANGESET_DIRECTORY],
     root,
   )
     .filter(isChangesetEntry)
+    .filter((entry) => changedFiles.includes(entry))
     .filter((entry) =>
       changesetNamesCli(readCommittedFile(root, "HEAD", entry)),
     )
@@ -284,7 +294,7 @@ export const runCliContractGuard = ({ root, base }: GuardOptions): number => {
         changedFiles,
         contractPaths,
       ),
-      cliChangesets: readCliChangesets(root),
+      cliChangesets: readCliChangesets(root, changedFiles),
       baseCliVersion: readBaseCliVersion(mergeBase, root),
       headCliVersion: readHeadCliVersion(root),
     }),

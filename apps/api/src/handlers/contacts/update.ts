@@ -1,81 +1,38 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { updateContactBodySchema } from "@stll/api-contract/contact-write";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
-import {
-  bankAccountSchema,
-  billingAddressSchema,
-  contactAddressSchema,
-  contactEmailSchema,
-  contactMetadataSchema,
-  contactPhoneSchema,
-} from "@/api/db/schema-validators";
 import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthFromColumns,
   dateOfBirthToColumns,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
-import { contactTypeSchema } from "@/api/handlers/contacts/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { patchContactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
-import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
-import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
-const updateContactBodySchema = t.Object({
-  type: t.Optional(contactTypeSchema),
-  prefix: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  firstName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  middleName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  lastName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  suffix: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  dateOfBirth: t.Optional(t.Nullable(dateOfBirthSchema)),
-  nationalityCodes: t.Optional(t.Nullable(nationalityCodesSchema)),
-  organizationName: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
-  displayName: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
-  notes: t.Optional(t.Nullable(t.String())),
-  emails: t.Optional(t.Nullable(t.Array(contactEmailSchema, { maxItems: 20 }))),
-  phones: t.Optional(t.Nullable(t.Array(contactPhoneSchema, { maxItems: 20 }))),
-  addresses: t.Optional(
-    t.Nullable(t.Array(contactAddressSchema, { maxItems: 10 })),
-  ),
-  metadata: t.Optional(t.Nullable(contactMetadataSchema)),
-  tags: t.Optional(t.Nullable(t.Array(t.String(), { maxItems: 50 }))),
-  color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  registrationNumber: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  taxId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  bankAccounts: t.Optional(
-    t.Nullable(t.Array(bankAccountSchema, { maxItems: 10 })),
-  ),
-  billingAddress: t.Optional(t.Nullable(billingAddressSchema)),
-  defaultHourlyRate: t.Optional(t.Nullable(tMinorUnitAmount(0))),
-  currency: t.Optional(t.Nullable(t.String({ minLength: 3, maxLength: 3 }))),
-  paymentTermDays: t.Optional(
-    t.Nullable(t.Integer({ minimum: 0, maximum: 365 })),
-  ),
-  originatingAttorneyId: t.Optional(t.Nullable(tUserId)),
-  responsibleAttorneyId: t.Optional(t.Nullable(tUserId)),
-});
-
-const updateContactParamsSchema = t.Object({
-  contactId: tSafeId("contact"),
+const updateContactParamsSchema = v.object({
+  contactId: resourceIdSchema("contact"),
 });
 
 export type UpdateContactHandlerProps = {
@@ -83,7 +40,7 @@ export type UpdateContactHandlerProps = {
   organizationId: SafeId<"organization">;
   contactId: SafeId<"contact">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof updateContactBodySchema>;
+  body: v.InferOutput<typeof updateContactBodySchema>;
 };
 
 type ContactRateUpdatesOptions = {
@@ -152,9 +109,47 @@ const contactRateUpdates = async ({
   });
 };
 
+/** Lock the contact row and read what the update validates against. */
+const lockExistingContact = async ({
+  tx,
+  contactId,
+  organizationId,
+}: {
+  tx: Transaction;
+  contactId: UpdateContactHandlerProps["contactId"];
+  organizationId: UpdateContactHandlerProps["organizationId"];
+}) => {
+  const rows = await tx
+    .select({
+      id: contacts.id,
+      type: contacts.type,
+      metadata: contacts.metadata,
+      currency: contacts.currency,
+      defaultHourlyRate: contacts.defaultHourlyRate,
+      dateOfBirthYear: contacts.dateOfBirthYear,
+      dateOfBirthMonth: contacts.dateOfBirthMonth,
+      dateOfBirthDay: contacts.dateOfBirthDay,
+      nationalityCodes: contacts.nationalityCodes,
+      taxId: contacts.taxId,
+      vatId: contacts.vatId,
+    })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.id, contactId),
+        eq(contacts.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
+const CONTACT_REPAIR_KEY = "updateContactHandler.flushContactSearchRepairs";
+
 export const updateContactHandler = async function* ({
   safeDb,
   organizationId,
@@ -190,28 +185,11 @@ export const updateContactHandler = async function* ({
           }),
         };
       }
-      const existingRows = await tx
-        .select({
-          id: contacts.id,
-          type: contacts.type,
-          metadata: contacts.metadata,
-          currency: contacts.currency,
-          defaultHourlyRate: contacts.defaultHourlyRate,
-          dateOfBirthYear: contacts.dateOfBirthYear,
-          dateOfBirthMonth: contacts.dateOfBirthMonth,
-          dateOfBirthDay: contacts.dateOfBirthDay,
-          nationalityCodes: contacts.nationalityCodes,
-        })
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.id, contactId),
-            eq(contacts.organizationId, organizationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const existing = existingRows.at(0);
+      const existing = await lockExistingContact({
+        tx,
+        contactId,
+        organizationId,
+      });
       if (!existing) {
         return { kind: "not_found" as const };
       }
@@ -261,11 +239,12 @@ export const updateContactHandler = async function* ({
           "color",
           "tags",
           "registrationNumber",
-          "taxId",
+          "vatPayer",
           "bankAccounts",
           "billingAddress",
           "currency",
           "paymentTermDays",
+          "invoiceLanguage",
           "originatingAttorneyId",
           "responsibleAttorneyId",
         ]),
@@ -281,6 +260,13 @@ export const updateContactHandler = async function* ({
                 : [],
             }),
         ...pickDefined(rateUpdates.value, ["defaultHourlyRate"]),
+        ...(rest.taxId === undefined && rest.vatId === undefined
+          ? {}
+          : patchContactTaxIdentifiers({
+              stored: { taxId: existing.taxId, vatId: existing.vatId },
+              taxId: rest.taxId,
+              vatId: rest.vatId,
+            })),
       };
       if (Object.keys(updates).length === 0) {
         return {
@@ -309,10 +295,13 @@ export const updateContactHandler = async function* ({
           tags: updates.tags,
           registrationNumber: updates.registrationNumber,
           taxId: updates.taxId,
+          vatId: updates.vatId,
+          vatPayer: updates.vatPayer,
           bankAccounts: updates.bankAccounts,
           billingAddress: updates.billingAddress,
           currency: updates.currency,
           paymentTermDays: updates.paymentTermDays,
+          invoiceLanguage: updates.invoiceLanguage,
           originatingAttorneyId: updates.originatingAttorneyId,
           responsibleAttorneyId: updates.responsibleAttorneyId,
           metadata: updates.metadata,
@@ -358,8 +347,15 @@ export const updateContactHandler = async function* ({
     return Result.ok(outcome.row);
   }
 
-  flushContactSearchRepairs([contactId]).catch(captureError);
+  detached(
+    async () =>
+      flushContactSearchRepairs([contactId]).catch(
+        createErrorCapture(handlerErrorContext(CONTACT_REPAIR_KEY)),
+      ),
+    "contacts-update.flush-contact-search-repairs",
+  );
 
+  announceContactSetChanged(organizationId);
   return Result.ok(outcome.row);
 };
 

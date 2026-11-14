@@ -1,7 +1,8 @@
-import { Result, panic } from "better-result";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import {
@@ -14,48 +15,57 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
+  canonicalFactDate,
   FACT_CONFIDENCES,
   FACT_DATE_PRECISIONS,
   FACT_DETAIL_LIMITS,
   FACT_SCORING,
 } from "@/api/lib/lists/fact-details";
-import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
-// `t.UnionEnum` over the const tuples keeps the literal unions in the
+// `v.picklist` over the const tuples keeps the literal unions in the
 // inferred body type, which the web client reads its types from.
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
-  occurredOn: t.Nullable(
-    t.Object({
-      date: t.String({ format: "date" }),
-      precision: t.UnionEnum(FACT_DATE_PRECISIONS),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
+  occurredOn: v.nullable(
+    v.object({
+      date: apiDateSchema,
+      precision: v.picklist(FACT_DATE_PRECISIONS),
     }),
   ),
-  evidenceKind: t.Nullable(
-    t.String({ minLength: 1, maxLength: FACT_DETAIL_LIMITS.EVIDENCE_KIND_MAX }),
+  evidenceKind: v.nullable(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FACT_DETAIL_LIMITS.EVIDENCE_KIND_MAX),
+    ),
   ),
-  medium: t.Nullable(
-    t.String({ minLength: 1, maxLength: FACT_DETAIL_LIMITS.MEDIUM_MAX }),
+  medium: v.nullable(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FACT_DETAIL_LIMITS.MEDIUM_MAX),
+    ),
   ),
-  confidence: t.Nullable(t.UnionEnum(FACT_CONFIDENCES)),
-  interpretationNote: t.Nullable(
-    t.String({
-      minLength: 1,
-      maxLength: FACT_DETAIL_LIMITS.INTERPRETATION_NOTE_MAX,
-    }),
+  confidence: v.nullable(v.picklist(FACT_CONFIDENCES)),
+  interpretationNote: v.nullable(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FACT_DETAIL_LIMITS.INTERPRETATION_NOTE_MAX),
+    ),
   ),
-  scoring: t.UnionEnum(FACT_SCORING),
+  scoring: v.picklist(FACT_SCORING),
 });
 
 const config = {
@@ -93,25 +103,6 @@ const FACT_DETAIL_FIELDS = [
   "scoring",
 ] as const satisfies readonly (keyof typeof legalListFactDetails.$inferSelect)[];
 
-/** A partial date has one spelling: its first day. */
-const canonicalDate = (date: string, precision: FactDatePrecision): string => {
-  switch (precision) {
-    case "day": {
-      return date;
-    }
-    case "month": {
-      return `${date.slice(0, 7)}-01`;
-    }
-    case "year": {
-      return `${date.slice(0, 4)}-01-01`;
-    }
-    default: {
-      precision satisfies never;
-      return panic(`Unhandled date precision: ${String(precision)}`);
-    }
-  }
-};
-
 const updateFactDetails = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
@@ -121,7 +112,10 @@ const updateFactDetails = createSafeHandler(
       ...(occurredOn === null
         ? { occurredOn: null, occurredOnPrecision: null }
         : {
-            occurredOn: canonicalDate(occurredOn.date, occurredOn.precision),
+            occurredOn: canonicalFactDate(
+              occurredOn.date,
+              occurredOn.precision,
+            ),
             occurredOnPrecision: occurredOn.precision,
           }),
     };

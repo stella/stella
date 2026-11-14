@@ -7,23 +7,24 @@ import {
   recordFolioCollabContribution,
   refreshFolioCollabToken as refreshStoredFolioCollabToken,
 } from "@/api/lib/folio-collab-rooms";
-import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 
-import { authorizeFolioCollabCredentials } from "./room-credentials";
+import {
+  folioCollabRoomCredentialsSchema,
+  verifyFolioCollabRoomCaller,
+} from "./room-credentials";
 
 const config = {
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({ keys: ["roomId", "token"] }),
+  body: folioCollabRoomCredentialsSchema,
 } satisfies TokenHandlerConfig;
 
 const refreshFolioCollabToken = createSafeTokenHandler(
   config,
-  async function* ({ body }) {
-    const { room: value, token } = yield* Result.await(
-      authorizeFolioCollabCredentials(body),
-    );
+  verifyFolioCollabRoomCaller,
+  async function* ({ caller }) {
+    const { room: value, token } = yield* Result.ok(caller);
     const refreshed = await value.scopedDb(async (tx) => {
       const tokenRefresh = await refreshStoredFolioCollabToken({
         tokenId: value.tokenId,

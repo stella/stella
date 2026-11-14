@@ -105,6 +105,18 @@ test("numeric suffixes remain part of the requested name", () => {
   }
 });
 
+test("the requested name loses format characters before the collision check", () => {
+  expect(
+    String(
+      resolveSiblingName({
+        name: "a\u202Eb.txt",
+        kind: "document",
+        siblingNames: new Set(["ab.txt"]),
+      }),
+    ),
+  ).toBe("ab_1.txt");
+});
+
 test("folder dots remain part of the complete name", () => {
   expect(
     String(

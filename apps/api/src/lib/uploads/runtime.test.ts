@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import { sha256Base64ToHex, sha256HexToBase64 } from "@stll/sha256";
 import {
-  sha256Hex as hashSha256Hex,
   createSha256,
   sha256Base64 as hashSha256Base64,
+  sha256Hex as hashSha256Hex,
 } from "@stll/sha256/bun";
 
 import { toSafeId } from "@/api/lib/branded-types";

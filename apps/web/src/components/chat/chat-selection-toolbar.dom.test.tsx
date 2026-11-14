@@ -1,16 +1,17 @@
 import { createRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
 testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
-const { act, cleanup, fireEvent, render } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { QueryClientProvider } = await import("@tanstack/react-query");
@@ -48,6 +49,7 @@ Object.defineProperty(Range.prototype, "getClientRects", {
 afterEach(async () => {
   document.getSelection()?.removeAllRanges();
   await act(async () => cleanup());
+  mock.restore();
 });
 afterAll(async () => {
   if (originalRects) {
@@ -74,7 +76,7 @@ const mountSelection = async ({
     role: "member",
     ai,
     deepl: false,
-    ocr: false,
+    ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
     desktop: "none",
     settings: undefined,
   });
@@ -177,6 +179,111 @@ test("a member without AI receives no AI selection actions", async () => {
   const view = await mountSelection({ ai: false });
   expect(view.queryByRole("button", { name: "Request edits" })).toBeNull();
   expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
+});
+
+test("copying a selection confirms in place", async () => {
+  const write = spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const view = await mountSelection();
+
+  fireEvent.click(view.getByRole("button", { name: messages.common.copy }));
+
+  await waitFor(() =>
+    expect(
+      view.getByRole("button", { name: messages.common.copied }),
+    ).toBeDefined(),
+  );
+  expect(write).toHaveBeenCalledWith(SELECTED_TEXT);
+});
+
+const nativeCopy = async () => {
+  await act(async () => {
+    document.dispatchEvent(new Event("copy", { bubbles: true }));
+  });
+};
+
+test("the reader's own copy of words selected in a sent message confirms Copy", async () => {
+  const view = await mountSelection();
+
+  await nativeCopy();
+
+  expect(
+    view.getByRole("button", { name: messages.common.copied }),
+  ).toBeDefined();
+});
+
+test("a native copy of words outside the transcript leaves Copy unconfirmed", async () => {
+  const view = await mountSelection();
+  const outside = document.createElement("p");
+  outside.textContent = "Composer draft";
+  document.body.append(outside);
+  const range = document.createRange();
+  range.selectNodeContents(outside);
+  document.getSelection()?.removeAllRanges();
+  document.getSelection()?.addRange(range);
+
+  await nativeCopy();
+  outside.remove();
+  expect(
+    view.queryByRole("button", { name: messages.common.copied }),
+  ).toBeNull();
+
+  // Back on the message's words, the bar carries no confirmation over.
+  const leaf = view.getByText(SELECTED_TEXT);
+  if (leaf.firstChild === null) {
+    throw new TypeError("Selection fixture is missing");
+  }
+  range.setStart(leaf.firstChild, 0);
+  range.setEnd(leaf.firstChild, SELECTED_TEXT.length);
+  document.getSelection()?.removeAllRanges();
+  document.getSelection()?.addRange(range);
+  await act(async () =>
+    fireEvent.pointerUp(leaf, { clientX: 60, clientY: 50 }),
+  );
+
+  expect(
+    await view.findByRole("button", { name: messages.common.copy }),
+  ).toBeDefined();
+  expect(
+    view.queryByRole("button", { name: messages.common.copied }),
+  ).toBeNull();
+});
+
+test("a new selection clears a native copy's confirmation", async () => {
+  const view = await mountSelection();
+  await nativeCopy();
+  expect(
+    view.getByRole("button", { name: messages.common.copied }),
+  ).toBeDefined();
+
+  await act(async () => {
+    document.dispatchEvent(new Event("selectionchange"));
+  });
+
+  expect(
+    view.getByRole("button", { name: messages.common.copy }),
+  ).toBeDefined();
+  expect(
+    view.queryByRole("button", { name: messages.common.copied }),
+  ).toBeNull();
+});
+
+test("a Copy that settles after the selection changed does not confirm", async () => {
+  const pending = Promise.withResolvers<undefined>();
+  spyOn(navigator.clipboard, "writeText").mockReturnValue(pending.promise);
+  const view = await mountSelection();
+
+  fireEvent.click(view.getByRole("button", { name: messages.common.copy }));
+  await act(async () => {
+    document.dispatchEvent(new Event("selectionchange"));
+  });
+  await act(async () => {
+    pending.resolve(undefined);
+    await pending.promise;
+  });
+
+  expect(
+    view.queryByRole("button", { name: messages.common.copied }),
+  ).toBeNull();
 });
 
 test("streaming prevents opening an edit from the selection toolbar", async () => {

@@ -6,8 +6,8 @@ import { assertProperty } from "@stll/property-testing";
 
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import {
@@ -46,7 +46,7 @@ const normalizationProperty = (
     (characters) => {
       const value = characters.join("");
       const result = Result.try({
-        try: () => sanitizeResult({ ...decision, [field]: value }),
+        try: () => sanitizeResult({ ...decision, [field]: value }).unwrap(),
         catch: (error: unknown) => error,
       });
       const input = {
@@ -125,7 +125,7 @@ test("generated decision candidates normalize intact and are judged against the 
           Buffer.byteLength(court) +
           Buffer.byteLength(languageGroupKey) +
           Buffer.byteLength(decisionType);
-        const normalized = sanitizeResult(input);
+        const normalized = sanitizeResult(input).unwrap();
         expect(normalized.court === court).toBe(true);
         expect(fitsDecisionSearchCandidateRow(normalized)).toBe(
           bytes <= CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES,
@@ -136,7 +136,7 @@ test("generated decision candidates normalize intact and are judged against the 
             court: normalized.court,
             ecli: normalized.ecli,
             decisionType: normalized.decisionType,
-          }),
+          }).unwrap(),
         ).toEqual(normalized);
       },
     ),

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -58,7 +59,7 @@ const runUpdate = async (amountCents: number) => {
             method: "PATCH",
           },
         ),
-        route: "/v1/expenses/:workspaceId",
+        route: "/v1/expenses/:workspaceId" satisfies ApiRoutePath,
         safeDb,
         workspaceId: toSafeId<"workspace">("workspace_test"),
         memberRole: sessionMemberRole("owner"),

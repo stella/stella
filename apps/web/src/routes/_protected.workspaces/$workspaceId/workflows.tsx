@@ -8,8 +8,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { detached } from "@/lib/detached";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
+import { routeSearchSchema } from "@/route-search-params";
 import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail";
 import { RunLauncher } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher";
 import { RunsList } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list";
@@ -20,7 +21,7 @@ import { RunsList } from "@/routes/_protected.workspaces/$workspaceId/-component
  * and the back button all move by changing it, so history and a later link
  * agree on what is shown.
  */
-const workflowsSearchSchema = v.object({
+const workflowsSearchSchema = routeSearchSchema({
   run: v.optional(v.string()),
 });
 
@@ -97,7 +98,7 @@ function WorkflowsView({
 
   const dataQuery = useQuery(flowRunsOptions({ workspaceId }));
   const { isPending } = dataQuery;
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => "items" in data && data.items.length === 0,
   });
   const data = dataView.type === "items" ? dataView.items : undefined;

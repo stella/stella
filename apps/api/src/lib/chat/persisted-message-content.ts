@@ -2,16 +2,15 @@ import type { ToolResultOutcome } from "@tanstack/ai";
 import type { ToolCallState, ToolResultState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  type CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  type ChatToolExecutor,
+  chatToolExecutor,
+} from "@stll/api-contract/chat";
 
 /** JSON values are the only values that can survive the chat JSONB boundary. */
 export type PersistedJsonValue =
-  | boolean
-  | null
-  | number
-  | PersistedJsonObject
-  | PersistedJsonValue[]
-  | string;
+  boolean | null | number | PersistedJsonObject | PersistedJsonValue[] | string;
 
 export type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
@@ -28,7 +27,7 @@ export type PersistedToolProviderMetadata = {
 };
 
 type PersistedToolCallMetadata = PersistedJsonObject & {
-  [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" | "server";
+  [CHAT_TOOL_EXECUTOR_METADATA_KEY]: ChatToolExecutor;
 };
 
 const isPersistedToolCallMetadata = (
@@ -38,8 +37,7 @@ const isPersistedToolCallMetadata = (
   typeof value === "object" &&
   value !== null &&
   !Array.isArray(value) &&
-  (value[CHAT_TOOL_EXECUTOR_METADATA_KEY] === "server" ||
-    value[CHAT_TOOL_EXECUTOR_METADATA_KEY] === "client");
+  chatToolExecutor({ type: "tool-call", metadata: value }) !== null;
 
 export const provePersistedToolCallMetadata = (
   value: unknown,
@@ -66,8 +64,7 @@ export type ParsedToolOutput = {
 };
 
 export type PersistedToolInput =
-  | ParsedToolInput
-  | { rawArguments: string; status: "raw" };
+  ParsedToolInput | { rawArguments: string; status: "raw" };
 
 export type PersistedToolCallPart = {
   approval?: {

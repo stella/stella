@@ -5,6 +5,7 @@ import type {
   DesktopMatter,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import {
   ACTIVITY_CHANGED_EVENT,
@@ -14,6 +15,16 @@ import type { ActivityDaySnapshot } from "../../src/activity/activity-types";
 import previewApps from "../../src/activity/preview-apps.json" with { type: "json" };
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
+import { detectDesktopPlatform } from "../../src/shared/shortcut-keys";
+import { DESKTOP_WINDOW_SIZES } from "../desktop-window-sizes";
+import {
+  ACCOUNT,
+  APP_STATE,
+  PERMISSIONS,
+  SHORTCUT,
+} from "./fixtures/desktop-window-snapshots";
+import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
+import type { TauriInvocation } from "./tauri-ipc";
 
 const SNAPSHOT = {
   date: "2026-10-07",
@@ -21,7 +32,6 @@ const SNAPSHOT = {
   manualAssignments: [],
   pendingBatch: null,
   deletionStatus: "available",
-  timeBillingEnabled: true,
   earliestDate: "2026-10-01",
   latestDate: "2026-10-07",
   excludedApps: [],
@@ -72,11 +82,99 @@ type InstallNativeBoundaryOptions = {
   batchValidation?: "accept" | "reject-first" | "hold-first";
   batchReceipt?: "save" | "fail-first" | "keep-pending";
   historyDeletion?:
-    | "available"
-    | "keyMissing"
-    | "unreadable"
-    | "mixed"
-    | "incompatible";
+    "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
+  /** How long the first paint may take; the default suits small fixtures. */
+  firstRenderTimeoutMs?: number;
+  /**
+   * The activity window, or the Settings window on its Activity tab. Both
+   * read the same native state, so a change in one shows in the other.
+   */
+  view?: "activity" | "settings";
+  /** Whether the account has the activity feature. */
+  activityEnabled?: boolean;
+  /** The firm's AI drafting mode, the user's consent on the server, and how
+   * a drafting request settles. */
+  drafting?: DraftingFixture;
+  /** Whether the matters a day is matched against answer at once, or wait
+   * until the test calls `releaseCandidates`. */
+  candidates?: "answer" | "held";
+};
+
+type DraftingFixture = {
+  mode: "off" | "plain" | "guided";
+  consent: "granted" | "revoked";
+  generation: "write" | "fail";
+  /** Drafting requests wait until the test calls `releaseDraft`. */
+  held?: boolean;
+  /** The remembered drafting instruction the server starts with. */
+  preference?: string;
+  /** What a guided draft proposes beyond its text, as the contract spells
+   * it, and whether its guideline note is fixed by a split. */
+  operations?: unknown[];
+  flagFix?: "split";
+};
+
+const RELEASE_DRAFT = "__STELLA_TEST_RELEASE_DRAFT__";
+const RELEASE_CANDIDATES = "__STELLA_TEST_RELEASE_CANDIDATES__";
+
+/** Lets the held read of the matters a day is matched against answer. */
+const releaseCandidates = async (page: Page) => {
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        (key) => typeof Reflect.get(window, key) === "function",
+        RELEASE_CANDIDATES,
+      ),
+    )
+    .toBe(true);
+  await page.evaluate((key) => {
+    const release: unknown = Reflect.get(window, key);
+    if (typeof release !== "function") {
+      throw new TypeError("No matters read is held");
+    }
+    release();
+  }, RELEASE_CANDIDATES);
+};
+
+const heldDrafts = async (page: Page) =>
+  page.evaluate((key) => {
+    const held: unknown = Reflect.get(window, key);
+    return Array.isArray(held) ? held.length : 0;
+  }, RELEASE_DRAFT);
+
+/** Waits for a drafting request to be held, then lets every held one settle. */
+const releaseDraft = async (page: Page) => {
+  await expect.poll(async () => heldDrafts(page)).toBeGreaterThan(0);
+  await page.evaluate((key) => {
+    const held: unknown = Reflect.get(window, key);
+    if (!Array.isArray(held)) {
+      throw new TypeError("No drafting request is held");
+    }
+    for (const release of held.splice(0)) {
+      if (typeof release === "function") {
+        release();
+      }
+    }
+  }, RELEASE_DRAFT);
+};
+
+const DRAFTING: DraftingFixture = {
+  mode: "plain",
+  consent: "revoked",
+  generation: "write",
+};
+
+/** What the mocked stella AI writes for a drafted suggestion. */
+const GENERATED_NARRATIVE = "Reviewed the lease draft and its annexes.";
+/** What it writes when asked to adjust a draft. */
+const REFINED_NARRATIVE = "Reviewed the lease draft.";
+
+/** The user's earlier entry the mocked draft follows. */
+const EARLIER_ENTRY = {
+  id: "00000000-0000-4000-8000-0000000000e1",
+  dateWorked: "2026-10-02",
+  durationMinutes: 42,
+  narrative: "Reviewed the lease annex.",
 };
 
 const installNativeBoundary = async ({
@@ -87,46 +185,75 @@ const installNativeBoundary = async ({
   batchValidation = "accept",
   batchReceipt = "save",
   historyDeletion = "available",
+  firstRenderTimeoutMs,
+  view = "activity",
+  activityEnabled = true,
+  drafting = DRAFTING,
+  candidates = "answer",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
-  await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
-  await page.addInitScript(
-    ({
-      snapshot: initialSnapshot,
-      additionalSnapshots: otherDays,
-      changedEvent,
-      language: desktopLanguage,
-      batchValidation: validation,
-      batchReceipt: receipt,
-      historyDeletion: historyState,
-    }) => {
-      // Playwright's Date clock does not change native Temporal's clock.
-      const nativeTemporal: unknown = Reflect.get(window, "Temporal");
-      if (typeof nativeTemporal === "object" && nativeTemporal !== null) {
-        const now = Reflect.get(nativeTemporal, "Now");
-        const instant = Reflect.get(nativeTemporal, "Instant");
-        Reflect.set(now, "instant", () =>
-          Reflect.get(instant, "fromEpochMilliseconds")(Date.now()),
-        );
-      }
-      const callbacks = new Map<number, (data: unknown) => unknown>();
-      const invocations: { args: Record<string, unknown>; command: string }[] =
-        [];
-      let nextCallbackId = 1;
+  await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
+  await installTauriIpc(page, {
+    windowLabel: view === "settings" ? "main" : "activity",
+    unhandled: "resolveUndefined",
+    arg: {
+      snapshot,
+      additionalSnapshots,
+      changedEvent: ACTIVITY_CHANGED_EVENT,
+      language,
+      batchValidation,
+      batchReceipt,
+      historyDeletion,
+      drafting,
+      generatedNarrative: GENERATED_NARRATIVE,
+      refinedNarrative: REFINED_NARRATIVE,
+      earlierEntry: EARLIER_ENTRY,
+      releaseDraftKey: RELEASE_DRAFT,
+      candidates,
+      releaseCandidatesKey: RELEASE_CANDIDATES,
+      settingsWindow: {
+        account: ACCOUNT,
+        activityEnabled,
+        appState: APP_STATE,
+        permissions: PERMISSIONS,
+        shortcut: SHORTCUT,
+      },
+    },
+    handlers: (
+      {
+        snapshot: initialSnapshot,
+        additionalSnapshots: otherDays,
+        changedEvent,
+        language: desktopLanguage,
+        batchValidation: validation,
+        batchReceipt: receipt,
+        historyDeletion: historyState,
+        drafting: draftingFixture,
+        generatedNarrative,
+        refinedNarrative,
+        earlierEntry,
+        releaseDraftKey,
+        candidates: candidatesFixture,
+        releaseCandidatesKey,
+        settingsWindow,
+      },
+      { emit },
+    ) => {
       let batchAttempts = 0;
       let activitySnapshot = initialSnapshot;
-      Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
-      const emitActivityChanged = () => {
-        const subscription = invocations.findLast(
-          ({ args, command }) =>
-            command === "plugin:event|listen" && args["event"] === changedEvent,
-        );
-        const id = subscription?.args["handler"];
-        if (typeof id !== "number") {
-          throw new TypeError("Activity listener is not installed");
-        }
-        callbacks.get(id)?.({ event: changedEvent, id, payload: null });
-      };
+      let draftConsent = draftingFixture.consent;
+      let draftPreference = draftingFixture.preference ?? null;
+      let draftRevision = 1;
+      const scopedDraftSettings = () => ({
+        scopeKey: '["org_fixture","user_fixture"]',
+        settings: {
+          revision: `revision-${String(draftRevision)}`,
+          effectiveMode: draftingFixture.mode,
+          consent: draftConsent,
+          preference: draftPreference,
+        },
+      });
+      const emitActivityChanged = () => emit(changedEvent, null);
       Reflect.set(
         window,
         "__STELLA_TEST_ACTIVITY_CHANGED__",
@@ -140,25 +267,81 @@ const installNativeBoundary = async ({
           emitActivityChanged();
         },
       );
-      Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
-        unregisterListener: () => undefined,
-      });
-      Reflect.set(window, "__TAURI_INTERNALS__", {
-        callbacks,
-        convertFileSrc: (path: string) => path,
-        invoke: async (command: string, args: Record<string, unknown> = {}) => {
-          invocations.push({ args, command });
-          if (command === "activity_get_day") {
-            const daySnapshot =
-              otherDays.find((day) => day.date === args["date"]) ??
-              activitySnapshot;
-            return {
-              ...daySnapshot,
-              date: args["date"] ?? activitySnapshot.date,
-            };
+      return {
+        activity_get_day: (args) => {
+          const daySnapshot =
+            otherDays.find((day) => day.date === args["date"]) ??
+            activitySnapshot;
+          return {
+            ...daySnapshot,
+            date: args["date"] ?? activitySnapshot.date,
+          };
+        },
+        // The native settings read: the day's settings and deletion state
+        // with the names of its apps, longest first, never its segments.
+        activity_get_settings: (args) => {
+          const day =
+            otherDays.find((candidate) => candidate.date === args["date"]) ??
+            activitySnapshot;
+          const totals = new Map<
+            string,
+            { identifier: string; name: string; durationMs: number }
+          >();
+          for (const segment of day.segments) {
+            const durationMs =
+              Date.parse(segment.end) - Date.parse(segment.start);
+            const total = totals.get(segment.appIdentifier);
+            if (total) {
+              total.durationMs += durationMs;
+              continue;
+            }
+            totals.set(segment.appIdentifier, {
+              identifier: segment.appIdentifier,
+              name: segment.appName,
+              durationMs,
+            });
           }
+          return {
+            date: args["date"] ?? activitySnapshot.date,
+            today: day.today,
+            earliestDate: day.earliestDate,
+            latestDate: day.latestDate,
+            deletionStatus: day.deletionStatus,
+            persistence: day.persistence,
+            retention: day.retention,
+            excludedApps: day.excludedApps,
+            otherAccountHistoryDays: day.otherAccountHistoryDays,
+            captureDetails: day.captureDetails,
+            detectCalls: day.detectCalls,
+            appNameOnlyApps: day.appNameOnlyApps,
+            detailsAccess: day.detailsAccess,
+            browserApps: day.browserApps,
+            browserTitleApps: day.browserTitleApps,
+            sourceAppVisuals: day.sourceAppVisuals,
+            apps: [...totals.values()]
+              .toSorted(
+                (left, right) =>
+                  right.durationMs - left.durationMs ||
+                  left.name.localeCompare(right.name),
+              )
+              .map(({ identifier, name }) => ({ identifier, name })),
+          };
+        },
+        is_activity_enabled: () => settingsWindow.activityEnabled,
+        get_state: () => settingsWindow.appState,
+        account_get_state: () => settingsWindow.account,
+        get_desktop_telemetry_enabled: () => true,
+        permissions_get_snapshot: () => settingsWindow.permissions,
+        shortcut_get_snapshot: () => settingsWindow.shortcut,
+        dictation_get_snapshot: () => ({ available: false }),
+        chatgpt_auth_get_status: () => null,
+        claude_code_auth_get_status: () => null,
+        // No install status either, read the same as the refusal with local agents off.
+        harness_get_status: () => null,
+        local_skill_folders_get: () => null,
+        local_linked_folders_get: () => null,
+        activity_delete_all: (args) => {
           if (
-            command === "activity_delete_all" &&
             args["recovery"] === "discardUnreadable" &&
             activitySnapshot.unreadable
           ) {
@@ -170,239 +353,362 @@ const installNativeBoundary = async ({
               deletionStatus: "available",
             };
             emitActivityChanged();
-            return undefined;
           }
-          if (command === "activity_delete_other_account_history") {
-            if (
-              args["recovery"] !== "preserve" &&
-              args["recovery"] !== "discardUnrecoverable"
-            ) {
-              throw new TypeError("Unsupported history recovery mode");
-            }
-            if (
-              historyState !== "available" &&
-              args["recovery"] === "preserve"
-            ) {
-              throw Object.assign(
-                new Error("Activity history key is missing"),
-                {
-                  type: historyState === "mixed" ? "keyMissing" : historyState,
-                },
-              );
-            }
-            activitySnapshot = {
-              ...activitySnapshot,
-              otherAccountHistoryDays: 0,
-            };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_capture_details") {
-            const enabled = args["enabled"];
-            if (typeof enabled !== "boolean") {
-              throw new TypeError("Capture choice must be explicit");
-            }
-            let detailsAccess = activitySnapshot.detailsAccess;
-            if (!enabled) {
-              detailsAccess = "disabled";
-            } else if (detailsAccess !== "accessibilityRequired") {
-              detailsAccess = "ready";
-            }
-            activitySnapshot = {
-              ...activitySnapshot,
-              captureDetails: enabled,
-              detailsAccess,
-            };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_detect_calls") {
-            const enabled = args["enabled"];
-            if (typeof enabled !== "boolean") {
-              throw new TypeError("Call choice must be explicit");
-            }
-            activitySnapshot = { ...activitySnapshot, detectCalls: enabled };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_app_detail_capture") {
-            const identifier = args["identifier"];
-            const name = args["name"];
-            if (typeof identifier !== "string" || typeof name !== "string") {
-              throw new TypeError("App identity is missing");
-            }
-            const appNameOnlyApps = activitySnapshot.appNameOnlyApps.filter(
-              (app) => app.identifier !== identifier,
-            );
-            if (args["mode"] === "appNameOnly") {
-              appNameOnlyApps.push({ identifier, name });
-            }
-            activitySnapshot = { ...activitySnapshot, appNameOnlyApps };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_browser_title_capture") {
-            const identifier = args["identifier"];
-            const name = args["name"];
-            const enabled = args["enabled"];
-            if (
-              typeof identifier !== "string" ||
-              typeof name !== "string" ||
-              typeof enabled !== "boolean"
-            ) {
-              throw new TypeError("Browser choice must be explicit");
-            }
-            const browserTitleApps = activitySnapshot.browserTitleApps.filter(
-              (browser) => browser.identifier !== identifier,
-            );
-            if (enabled) {
-              browserTitleApps.push({ identifier, name });
-            }
-            activitySnapshot = { ...activitySnapshot, browserTitleApps };
-            emitActivityChanged();
-          }
+          return undefined;
+        },
+        activity_delete_other_account_history: (args) => {
           if (
-            command === "activity_set_recording_status" &&
-            args["status"] === "recording"
+            args["recovery"] !== "preserve" &&
+            args["recovery"] !== "discardUnrecoverable"
           ) {
+            throw new TypeError("Unsupported history recovery mode");
+          }
+          if (historyState !== "available" && args["recovery"] === "preserve") {
+            throw Object.assign(new Error("Activity history key is missing"), {
+              type: historyState === "mixed" ? "keyMissing" : historyState,
+            });
+          }
+          activitySnapshot = {
+            ...activitySnapshot,
+            otherAccountHistoryDays: 0,
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_capture_details: (args) => {
+          const enabled = args["enabled"];
+          if (typeof enabled !== "boolean") {
+            throw new TypeError("Capture choice must be explicit");
+          }
+          let detailsAccess = activitySnapshot.detailsAccess;
+          if (!enabled) {
+            detailsAccess = "disabled";
+          } else if (detailsAccess !== "accessibilityRequired") {
+            detailsAccess = "ready";
+          }
+          activitySnapshot = {
+            ...activitySnapshot,
+            captureDetails: enabled,
+            detailsAccess,
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_detect_calls: (args) => {
+          const enabled = args["enabled"];
+          if (typeof enabled !== "boolean") {
+            throw new TypeError("Call choice must be explicit");
+          }
+          activitySnapshot = { ...activitySnapshot, detectCalls: enabled };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_app_detail_capture: (args) => {
+          const identifier = args["identifier"];
+          const name = args["name"];
+          if (typeof identifier !== "string" || typeof name !== "string") {
+            throw new TypeError("App identity is missing");
+          }
+          const appNameOnlyApps = activitySnapshot.appNameOnlyApps.filter(
+            (app) => app.identifier !== identifier,
+          );
+          if (args["mode"] === "appNameOnly") {
+            appNameOnlyApps.push({ identifier, name });
+          }
+          activitySnapshot = { ...activitySnapshot, appNameOnlyApps };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_exclude_app: (args) => {
+          const identifier = args["identifier"];
+          const name = args["name"];
+          if (typeof identifier !== "string" || typeof name !== "string") {
+            throw new TypeError("App identity is missing");
+          }
+          activitySnapshot = {
+            ...activitySnapshot,
+            excludedApps: [
+              ...activitySnapshot.excludedApps.filter(
+                (app) => app.identifier !== identifier,
+              ),
+              { identifier, name },
+            ],
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_remove_app_exclusion: (args) => {
+          activitySnapshot = {
+            ...activitySnapshot,
+            excludedApps: activitySnapshot.excludedApps.filter(
+              (app) => app.identifier !== args["identifier"],
+            ),
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_browser_title_capture: (args) => {
+          const identifier = args["identifier"];
+          const name = args["name"];
+          const enabled = args["enabled"];
+          if (
+            typeof identifier !== "string" ||
+            typeof name !== "string" ||
+            typeof enabled !== "boolean"
+          ) {
+            throw new TypeError("Browser choice must be explicit");
+          }
+          const browserTitleApps = activitySnapshot.browserTitleApps.filter(
+            (browser) => browser.identifier !== identifier,
+          );
+          if (enabled) {
+            browserTitleApps.push({ identifier, name });
+          }
+          activitySnapshot = { ...activitySnapshot, browserTitleApps };
+          emitActivityChanged();
+          return undefined;
+        },
+        billing_draft_get_settings: () => scopedDraftSettings(),
+        billing_draft_grant_consent: (args) => {
+          if (args["revision"] !== `revision-${String(draftRevision)}`) {
+            throw new Error("billing draft request failed");
+          }
+          draftConsent = "granted";
+          draftRevision += 1;
+          return scopedDraftSettings();
+        },
+        billing_draft_set_preference: (args) => {
+          if (args["revision"] !== `revision-${String(draftRevision)}`) {
+            throw new Error("billing draft request failed");
+          }
+          const preference = args["preference"];
+          draftPreference = typeof preference === "string" ? preference : null;
+          draftRevision += 1;
+          return scopedDraftSettings();
+        },
+        billing_draft_withdraw_consent: () => {
+          draftConsent = "revoked";
+          draftRevision += 1;
+          return scopedDraftSettings();
+        },
+        billing_draft_create_confirmed: async (args) => {
+          if (draftingFixture.held === true) {
+            const held = Promise.withResolvers<undefined>();
+            const queue: unknown = Reflect.get(window, releaseDraftKey);
+            const releases = Array.isArray(queue) ? queue : [];
+            releases.push(() => {
+              held.resolve(undefined);
+            });
+            Reflect.set(window, releaseDraftKey, releases);
+            await held.promise;
+          }
+          const request = args["request"];
+          if (
+            typeof request !== "object" ||
+            request === null ||
+            !("entries" in request) ||
+            !Array.isArray(request.entries)
+          ) {
+            throw new TypeError("Drafting request is missing");
+          }
+          if (draftConsent !== "granted") {
+            // The native boundary rejects with its typed failure.
+            throw Object.assign(new Error("billing draft request failed"), {
+              type: "consentRequired",
+            });
+          }
+          if (draftingFixture.generation === "fail") {
+            // The native boundary rejects with its typed failure.
+            throw Object.assign(new Error("billing draft request failed"), {
+              type: "failed",
+            });
+          }
+          if (draftingFixture.mode === "guided") {
+            return {
+              result: {
+                mode: "guided",
+                drafts: request.entries.map((entry: { entryId: string }) => ({
+                  entryId: entry.entryId,
+                  narrative:
+                    "steer" in request ? refinedNarrative : generatedNarrative,
+                  classification: {
+                    type: "ledes",
+                    taskCode: "L120",
+                    activityCode: "A104",
+                  },
+                  flags: [
+                    {
+                      text: "List each task separately.",
+                      ruleRef: {
+                        fileId: "guideline-1",
+                        fileName: "Outside counsel guidelines.pdf",
+                        section: "4.2",
+                      },
+                      ...(draftingFixture.flagFix === undefined
+                        ? {}
+                        : { fix: draftingFixture.flagFix }),
+                    },
+                  ],
+                  matchedEarlierEntryIds: [earlierEntry.id],
+                  operations: draftingFixture.operations ?? [],
+                })),
+                checkedGuidelines: [
+                  {
+                    fileId: "guideline-1",
+                    fileName: "Outside counsel guidelines.pdf",
+                  },
+                ],
+              },
+              earlierEntries: [earlierEntry],
+            };
+          }
+          return {
+            result: {
+              mode: "plain",
+              drafts: request.entries.map((entry: { entryId: string }) => ({
+                entryId: entry.entryId,
+                narrative:
+                  "steer" in request ? refinedNarrative : generatedNarrative,
+                matchedEarlierEntryIds: [earlierEntry.id],
+              })),
+            },
+            earlierEntries: [earlierEntry],
+          };
+        },
+        activity_set_recording_status: (args) => {
+          if (args["status"] === "recording") {
             activitySnapshot = {
               ...activitySnapshot,
               recordingStatus: "recording",
             };
             emitActivityChanged();
           }
-          if (command === "time_entry_search_matters") {
-            return [
-              {
-                id: "matter-1",
-                name: "Example matter",
-                reference: "M-001",
-                color: "--option-emerald",
-              },
-            ] satisfies DesktopMatter[];
+          return undefined;
+        },
+        time_entry_search_matters: () =>
+          [
+            {
+              id: "matter-1",
+              name: "Example matter",
+              reference: "M-001",
+              color: "--option-emerald",
+            },
+          ] satisfies DesktopMatter[],
+        time_entry_candidates: async () => {
+          if (candidatesFixture === "held") {
+            const held = Promise.withResolvers<undefined>();
+            Reflect.set(window, releaseCandidatesKey, () => {
+              held.resolve(undefined);
+            });
+            await held.promise;
           }
-          if (command === "time_entry_candidates") {
-            return [
-              {
-                id: "matter-1",
-                name: "Example matter",
-                reference: "M-001",
-                color: "--option-emerald",
+          return [
+            {
+              id: "matter-1",
+              name: "Example matter",
+              color: "--option-emerald",
+            },
+            { id: "matter-2", name: "Second matter", color: "--option-violet" },
+            { id: "matter-3", name: "Third matter", color: null },
+            { id: "matter-4", name: "Fourth matter", color: null },
+          ].map(
+            ({ id, name, color }, index) =>
+              ({
+                id,
+                name,
+                reference: `M-00${String(index + 1)}`,
+                color,
                 clientName: "Example client",
                 signals: {
                   lastWorkedAt: "2026-10-06",
                   newlyAssignedAt: null,
                   upcomingDeadline: null,
                 },
-              },
-            ] satisfies DesktopTimeEntryMatterCandidate[];
+              }) satisfies DesktopTimeEntryMatterCandidate,
+          );
+        },
+        time_entry_submit_batch_confirmed: async (args) => {
+          batchAttempts += 1;
+          if (validation === "hold-first" && batchAttempts === 1) {
+            return await new Promise((_resolve, reject) => {
+              Reflect.set(window, "__STELLA_TEST_REJECT_BATCH__", () =>
+                reject(
+                  Object.assign(new Error("Response unavailable"), {
+                    type: "uncertain",
+                  }),
+                ),
+              );
+            });
           }
-          if (command === "time_entry_discard_pending_batch_confirmed") {
-            if (
-              activitySnapshot.timeBillingEnabled ||
-              activitySnapshot.pendingBatch?.idempotencyKey !==
-                args["idempotencyKey"]
-            ) {
-              throw new TypeError("Pending discard is unavailable");
-            }
+          if (validation === "reject-first" && batchAttempts === 1) {
+            throw Object.assign(new Error("Activity range validation failed"), {
+              type: "rejected",
+            });
+          }
+          const markerSaved = receipt !== "fail-first" || batchAttempts !== 1;
+          if (
+            markerSaved &&
+            receipt !== "keep-pending" &&
+            activitySnapshot.pendingBatch !== null
+          ) {
             activitySnapshot = {
               ...activitySnapshot,
               pendingBatch: null,
               deletionStatus: "available",
             };
             emitActivityChanged();
-            return undefined;
           }
-          if (command === "time_entry_submit_batch_confirmed") {
-            batchAttempts += 1;
-            if (validation === "hold-first" && batchAttempts === 1) {
-              return new Promise((_resolve, reject) => {
-                Reflect.set(window, "__STELLA_TEST_REJECT_BATCH__", () =>
-                  reject(
-                    Object.assign(new Error("Response unavailable"), {
-                      type: "uncertain",
-                    }),
-                  ),
-                );
-              });
-            }
-            if (validation === "reject-first" && batchAttempts === 1) {
-              throw Object.assign(
-                new Error("Activity range validation failed"),
-                {
-                  type: "rejected",
-                },
-              );
-            }
-            const markerSaved = receipt !== "fail-first" || batchAttempts !== 1;
-            if (
-              markerSaved &&
-              receipt !== "keep-pending" &&
-              activitySnapshot.pendingBatch !== null
-            ) {
-              activitySnapshot = {
-                ...activitySnapshot,
-                pendingBatch: null,
-                deletionStatus: "available",
-              };
-              emitActivityChanged();
-            }
-            return {
-              entries: [{ id: "draft-1", matterId: "matter-1" }],
-              markerSaved,
-            };
-          }
-          if (command === "get_desktop_language") {
-            return desktopLanguage;
-          }
-          if (command === "plugin:event|listen") {
-            return args["handler"];
-          }
-          return undefined;
+          const request = args["request"];
+          const items =
+            typeof request === "object" &&
+            request !== null &&
+            "items" in request &&
+            Array.isArray(request.items)
+              ? request.items
+              : [];
+          return {
+            entries: items.map((_item: unknown, index: number) => ({
+              id: `draft-${String(batchAttempts)}-${String(index)}`,
+              matterId: "matter-1",
+            })),
+            markerSaved,
+          };
         },
-        metadata: {
-          currentWebview: { label: "activity", windowLabel: "activity" },
-          currentWindow: { label: "activity" },
-        },
-        runCallback: (id: number, data: unknown) => callbacks.get(id)?.(data),
-        transformCallback: (
-          callback: ((data: unknown) => unknown) | undefined,
-          once = false,
-        ) => {
-          const id = nextCallbackId;
-          nextCallbackId += 1;
-          callbacks.set(id, (data) => {
-            if (once) {
-              callbacks.delete(id);
-            }
-            return callback?.(data);
-          });
-          return id;
-        },
-        unregisterCallback: (id: number) => callbacks.delete(id),
-      });
+        get_desktop_language: () => desktopLanguage,
+      };
     },
-    {
-      snapshot,
-      additionalSnapshots,
-      changedEvent: ACTIVITY_CHANGED_EVENT,
-      language,
-      batchValidation,
-      batchReceipt,
-      historyDeletion,
-    },
-  );
-  await page.goto("/");
+  });
   const messages = language === "ar" ? arMessages : enMessages;
-  if (snapshot.persistence === "deletionOnly") {
+  const deletionOnlyNotice = page.getByText(
+    {
+      keyMissing: messages.activity.deletionOnly,
+      unreadable: messages.activity.unreadableEraseNotice,
+      available: messages.activity.errorRead,
+      pending: messages.activity.errorRead,
+      unavailable: messages.activity.errorRead,
+      incompatible: messages.activity.incompatibleActivity,
+    }[snapshot.deletionStatus],
+  );
+  if (view === "settings") {
+    await page.setViewportSize(DESKTOP_WINDOW_SIZES.settings);
+    await page.goto("/#activity");
+    if (!activityEnabled) {
+      await expect(page.getByRole("tabpanel")).toBeVisible();
+      return;
+    }
     await expect(
-      page.getByText(
-        {
-          keyMissing: messages.activity.deletionOnly,
-          unreadable: messages.activity.unreadableEraseNotice,
-          available: messages.activity.errorRead,
-          pending: messages.activity.errorRead,
-          unavailable: messages.activity.errorRead,
-          incompatible: messages.activity.incompatibleActivity,
-        }[snapshot.deletionStatus],
-      ),
+      snapshot.persistence === "deletionOnly"
+        ? deletionOnlyNotice
+        : page.getByRole("heading", {
+            name: messages.activity.captureModesTitle,
+            exact: true,
+          }),
     ).toBeVisible();
+    return;
+  }
+  await page.goto("/");
+  if (snapshot.persistence === "deletionOnly") {
+    await expect(deletionOnlyNotice).toBeVisible();
   } else if (
     snapshot.recordingStatus === "off" &&
     snapshot.pendingBatch === null &&
@@ -415,37 +721,104 @@ const installNativeBoundary = async ({
       }),
     ).toBeVisible();
   } else {
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  }
-  if (
-    (snapshot.recordingStatus !== "off" ||
-      snapshot.pendingBatch !== null ||
-      snapshot.deletionStatus === "pending") &&
-    snapshot.persistence !== "deletionOnly"
-  ) {
-    await page
-      .locator("summary")
-      .filter({ hasText: messages.activity.settings })
-      .click();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible(
+      firstRenderTimeoutMs === undefined
+        ? {}
+        : { timeout: firstRenderTimeoutMs },
+    );
   }
 };
 
-const invocations = async (page: Page) =>
-  page.evaluate(() => {
-    const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
-    return calls;
-  });
+type Messages = typeof enMessages;
+
+const ACTIVITY_BLOCKS =
+  '[data-column-id="activity"] [data-slot="day-calendar-block"]';
+const SUGGESTION_BLOCKS =
+  '[data-column-id="entries"] button[data-state="suggestion"]';
+
+const escapePattern = (text: string) =>
+  text.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+/** The button names carry their shortcut hint after the label. */
+const acceptName = (messages: Messages) =>
+  new RegExp(`^${escapePattern(messages.activity.accept)}`, "u");
+const rejectName = (messages: Messages) =>
+  new RegExp(`^${escapePattern(messages.activity.reject)}`, "u");
+
+const suggestionCard = (page: Page, matter: string) =>
+  page.getByRole("region", { name: matter, exact: true });
+
+/** Presses a card shortcut with the primary modifier the window reads from
+ * its own user agent; Playwright's WebKit reports macOS on every host. */
+const pressCardShortcut = async (page: Page, key: "Backspace" | "Enter") => {
+  const platform = detectDesktopPlatform(
+    await page.evaluate(() => navigator.userAgent),
+  );
+  await page.keyboard.press(
+    `${platform === "mac" ? "Meta" : "Control"}+${key}`,
+  );
+};
+
+// A block shorter than one line draws no text, so blocks are found by the
+// accessible label every block carries.
+const openSuggestion = async (page: Page, matter: string) => {
+  await page
+    .locator(SUGGESTION_BLOCKS)
+    .and(page.locator(`[aria-label*="${matter}"]`))
+    .first()
+    .click();
+  await expect(suggestionCard(page, matter)).toBeFocused();
+};
+
+type CaptureModeLabel =
+  "captureModeAppOnly" | "captureModeNothing" | "captureModeTitles";
+
+/** One choice in an app's row of the Settings list, by its words. */
+const captureMode = (
+  page: Page,
+  app: string,
+  label: CaptureModeLabel,
+  messages: Messages = enMessages,
+) =>
+  page
+    .getByRole("group", {
+      name: messages.activity.captureModeLabel.replace("{name}", () => app),
+      exact: true,
+    })
+    .getByRole("button", { name: messages.activity[label], exact: true });
+
+const batchRequests = (calls: TauriInvocation[]) =>
+  calls.flatMap(({ args, command }) =>
+    command === "time_entry_submit_batch_confirmed" ? [args["request"]] : [],
+  );
+
+/** Four matters, half an hour each, with recorded window titles. */
+const TRIAGE_SNAPSHOT = {
+  ...SNAPSHOT,
+  captureDetails: true,
+  detailsAccess: "ready",
+  segments: [
+    { matterId: "matter-1", windowTitle: "Lease draft.docx", hour: "09" },
+    { matterId: "matter-2", windowTitle: "Service agreement.docx", hour: "10" },
+    { matterId: "matter-3", windowTitle: "Board minutes.docx", hour: "11" },
+    { matterId: "matter-4", windowTitle: "Lease annex.docx", hour: "12" },
+  ].map(({ matterId, windowTitle, hour }) => ({
+    appIdentifier: "com.example.editor",
+    appName: "Example Editor",
+    matterId,
+    windowTitle,
+    start: `2026-10-07T${hour}:00:00Z`,
+    end: `2026-10-07T${hour}:30:00Z`,
+  })),
+} satisfies ActivityDaySnapshot;
 
 for (const history of ["keep", "delete"] as const) {
   test(`excluding an app waits for the ${history} history choice`, async ({
     page,
   }) => {
-    await installNativeBoundary({ page });
-    await page
-      .getByRole("button", { name: "Stop recording Example Editor" })
-      .click();
+    await installNativeBoundary({ page, view: "settings" });
+    await captureMode(page, "Example Editor", "captureModeNothing").click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({ command: "activity_exclude_app" }),
     );
     await page
@@ -457,7 +830,7 @@ for (const history of ["keep", "delete"] as const) {
       })
       .click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_exclude_app",
       args: {
         identifier: "com.example.editor",
@@ -471,394 +844,135 @@ for (const history of ["keep", "delete"] as const) {
 test("canceling exclusion leaves recording and history unchanged", async ({
   page,
 }) => {
-  await installNativeBoundary({ page });
-  await page
-    .getByRole("button", { name: "Stop recording Example Editor" })
-    .click();
+  await installNativeBoundary({ page, view: "settings" });
+  await captureMode(page, "Example Editor", "captureModeNothing").click();
   await page.getByRole("button", { name: enMessages.activity.cancel }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
-  expect(await invocations(page)).not.toContainEqual(
+  // Details are off in this fixture, so the editor records its name only.
+  await expect(
+    captureMode(page, "Example Editor", "captureModeAppOnly"),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_exclude_app" }),
   );
 });
 
-for (const language of ["en", "ar"] as const) {
-  test(`${language}: timeline segment click selects its range without treating jitter as a drag`, async ({
-    page,
-  }) => {
-    await installNativeBoundary({ page, language });
-    const messages = language === "ar" ? arMessages : enMessages;
-    const start = page.getByRole("group", {
-      name: messages.activity.rangeStart,
-      exact: true,
-    });
-    const end = page.getByRole("group", {
-      name: messages.activity.rangeEnd,
-      exact: true,
-    });
-    const segment = page.locator("button[data-activity-segment]").first();
-    const sample = SNAPSHOT.segments.at(0);
-    if (!sample) {
-      throw new TypeError("Timeline fixture must contain a segment");
-    }
-    const expected = await page.evaluate(
-      ({ start: segmentStart, end: segmentEnd }) =>
-        [segmentStart, segmentEnd].map((instant) => {
-          const value = new Date(instant);
-          return [value.getHours(), value.getMinutes()];
-        }),
-      sample,
-    );
-    await expect(start).toHaveCount(0);
-    await segment.click();
-    await expect(start).toBeVisible();
-    await expect(end).toBeVisible();
-    await expect(start.getByRole("spinbutton").nth(0)).toHaveValue(
-      String(expected.at(0)?.at(0)),
-    );
-    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
-      String(expected.at(0)?.at(1)),
-    );
-    await expect(end.getByRole("spinbutton").nth(0)).toHaveValue(
-      String(expected.at(1)?.at(0)),
-    );
-    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
-      String(expected.at(1)?.at(1)),
-    );
-    await page
-      .getByRole("button", { name: messages.activity.cancel, exact: true })
-      .click();
-    await segment.scrollIntoViewIfNeeded();
-    const box = await segment.boundingBox();
-    if (!box) {
-      throw new TypeError("Timeline segment must have bounds");
-    }
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
-    await page.mouse.up();
-    await expect(start).toBeVisible();
-    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
-      String(expected.at(0)?.at(1)),
-    );
-    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
-      String(expected.at(1)?.at(1)),
-    );
-  });
-
-  test(`${language}: timeline segment drag selects a subrange and keeps keyboard selection available`, async ({
-    page,
-  }) => {
-    await installNativeBoundary({ page, language });
-    const messages = language === "ar" ? arMessages : enMessages;
-    const segment = page.locator("button[data-activity-segment]").first();
-    await segment.scrollIntoViewIfNeeded();
-    const box = await segment.boundingBox();
-    if (!box) {
-      throw new TypeError("Timeline segment must have bounds");
-    }
-    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2, {
-      steps: 6,
-    });
-    await page.mouse.up();
-    const start = page.getByRole("group", {
-      name: messages.activity.rangeStart,
-      exact: true,
-    });
-    const end = page.getByRole("group", {
-      name: messages.activity.rangeEnd,
-      exact: true,
-    });
-    await expect(start).toBeVisible();
-    await expect(end).toBeVisible();
-    const selectedStart =
-      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
-      Number(await start.getByRole("spinbutton").nth(1).inputValue());
-    const selectedEnd =
-      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
-      Number(await end.getByRole("spinbutton").nth(1).inputValue());
-    expect(selectedEnd - selectedStart).toBeGreaterThan(0);
-    expect(selectedEnd - selectedStart).toBeLessThan(30);
-    await segment.focus();
-    await segment.press("Enter");
-    const keyboardStart =
-      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
-      Number(await start.getByRole("spinbutton").nth(1).inputValue());
-    const keyboardEnd =
-      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
-      Number(await end.getByRole("spinbutton").nth(1).inputValue());
-    expect(keyboardEnd - keyboardStart).toBe(30);
-  });
-}
-
-test("only explicit batch creation sends the edited billing fields and prevents recreation", async ({
+test("only Accept sends the edited billing fields and the suggestion becomes a draft", async ({
   page,
 }) => {
   await installNativeBoundary({ page });
-  await expect(
-    page.getByText(enMessages.activity.strongMatch, { exact: true }),
-  ).toBeVisible();
-  const narrative = page.getByRole("textbox", {
+  const suggestions = page.locator(SUGGESTION_BLOCKS);
+  await expect(suggestions).toHaveCount(1);
+  // The piece names its own range and minutes and the entry's total.
+  await expect(suggestions).toHaveAttribute(
+    "aria-label",
+    new RegExp(
+      `^${escapePattern(enMessages.activity.suggestionPieceLabel)
+        .replace("\\{matter\\}", "Example matter")
+        .replace("\\{range\\}", ".+")
+        .replace("\\{duration\\}", "30 min")
+        .replace("\\{hours\\}", "0\\.5")}$`,
+      "u",
+    ),
+  );
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const narrative = card.getByRole("textbox", {
     name: enMessages.activity.entryNarrative,
   });
   await expect(narrative).toHaveValue("Work in Example Editor");
-  await expect(
-    page.getByRole("switch", { name: enMessages.activity.entryBillable }),
-  ).toBeChecked();
-  const include = page.getByRole("checkbox", {
-    name: "Include Example matter",
+  const billable = card.getByRole("switch", {
+    name: enMessages.activity.entryBillable,
   });
-  await include.uncheck();
-  await expect(
-    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
-  ).toBeDisabled();
-  await include.check();
+  await expect(billable).toBeChecked();
+  await billable.click();
   await narrative.fill("Draft-only confidential narrative 71f3");
-  const callsBefore = await invocations(page);
-  expect(callsBefore).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
-  );
+  const callsBefore = await tauriInvocations(page);
+  expect(batchRequests(callsBefore)).toEqual([]);
   expect(callsBefore).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
-  await page
-    .getByRole("button", { name: "Create 1 draft", exact: true })
-    .click();
+  await card.getByRole("button", { name: acceptName(enMessages) }).click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
   const timezoneId = await page.evaluate(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
-  const calls = await invocations(page);
-  expect(calls).toContainEqual({
-    command: "time_entry_submit_batch_confirmed",
-    args: {
-      request: {
-        date: "2026-10-07",
-        idempotencyKey: expect.any(String),
-        items: [
-          {
-            entry: {
-              matterId: "matter-1",
-              dateWorked: "2026-10-07",
-              timezoneId,
-              durationMinutes: 30,
-              narrative: "Draft-only confidential narrative 71f3",
-              billable: true,
-            },
-            ranges: [
-              { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
-            ],
+  const calls = await tauriInvocations(page);
+  expect(batchRequests(calls)).toEqual([
+    {
+      date: "2026-10-07",
+      idempotencyKey: expect.any(String),
+      items: [
+        {
+          entry: {
+            matterId: "matter-1",
+            dateWorked: "2026-10-07",
+            timezoneId,
+            durationMinutes: 30,
+            narrative: "Draft-only confidential narrative 71f3",
+            billable: false,
           },
-        ],
-      },
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
     },
-  });
+  ]);
   // The local native boundary receives receipts, without app identities or raw segments.
-  const submissions = Array.isArray(calls)
-    ? calls.filter(
-        (call: unknown) =>
-          typeof call === "object" &&
-          call !== null &&
-          "command" in call &&
-          call.command === "time_entry_submit_batch_confirmed",
-      )
-    : [];
-  expect(submissions).toHaveLength(1);
-  expect(JSON.stringify(submissions)).not.toContain("Example Editor");
-  expect(JSON.stringify(submissions)).not.toContain("appIdentifier");
-  expect(JSON.stringify(submissions)).not.toContain("windowTitle");
-  expect(JSON.stringify(submissions)).not.toContain('"segments"');
+  const submissions = JSON.stringify(batchRequests(calls));
+  expect(submissions).not.toContain("Example Editor");
+  expect(submissions).not.toContain("appIdentifier");
+  expect(submissions).not.toContain("windowTitle");
+  expect(submissions).not.toContain('"segments"');
+  await expect(suggestions).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
-  ).toBeDisabled();
+    page.locator(
+      '[data-column-id="entries"] [data-slot="day-calendar-block"][data-state="final"]',
+    ),
+  ).toHaveCount(1);
 });
 
-test("more than 100 selected matters keep the review editable until the selection is reduced", async ({
+test("a rejected acceptance stays editable and the next acceptance uses a new batch key", async ({
   page,
 }) => {
-  const startMs = Date.parse("2026-10-07T09:00:00Z");
-  const manualAssignments = Array.from({ length: 101 }, (_, index) => ({
-    start: new Date(startMs + index * 60_000).toISOString(),
-    end: new Date(startMs + (index + 1) * 60_000).toISOString(),
-    matterId: `manual-matter-${index}`,
-    matter: {
-      id: `manual-matter-${index}`,
-      name: `Manual matter ${index}`,
-      reference: null,
-      color: null,
-      clientName: null,
-    },
-  }));
-  await installNativeBoundary({
-    page,
-    snapshot: {
-      ...SNAPSHOT,
-      manualAssignments,
-      segments: [
-        {
-          appIdentifier: "com.example.editor",
-          appName: "Example Editor",
-          start: "2026-10-07T09:00:00Z",
-          end: "2026-10-07T10:41:00Z",
-        },
-      ],
-    },
-  });
-  const includes = page.getByRole("checkbox", {
-    name: /^Include Manual matter /u,
-  });
-  await expect(includes).toHaveCount(101);
-  await expect(
-    page.getByRole("button", { name: "Create 101 drafts", exact: true }),
-  ).toBeDisabled();
-  await expect(page.getByRole("alert")).toContainText(
-    enMessages.activity.batchLimitExceeded.replace("{limit}", "100"),
-  );
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
-  );
-  const include = page.getByRole("checkbox", {
-    name: "Include Manual matter 0",
-    exact: true,
-  });
-  await expect(include).toBeEnabled();
-  await expect(
-    page
-      .getByRole("textbox", { name: enMessages.activity.entryNarrative })
-      .first(),
-  ).toBeEnabled();
-  await include.uncheck();
-  await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Create 100 drafts", exact: true }),
-  ).toBeEnabled();
-  await include.check();
-  await expect(
-    page.getByRole("button", { name: "Create 101 drafts", exact: true }),
-  ).toBeDisabled();
-});
-
-test("native validation rejection leaves the review editable and a corrected selection uses a new batch key", async ({
-  page,
-}) => {
-  const finalStart = "2026-10-07T09:30:00Z";
-  const finalEnd = "2026-10-07T09:36:00Z";
-  await installNativeBoundary({
-    page,
-    batchValidation: "reject-first",
-    snapshot: {
-      ...SNAPSHOT,
-      segments: [
-        ...SNAPSHOT.segments,
-        {
-          appIdentifier: "com.example.editor",
-          appName: "Example Editor",
-          matterId: "corrected-matter",
-          start: finalStart,
-          end: finalEnd,
-        },
-      ],
-      manualAssignments: [
-        {
-          start: finalStart,
-          end: finalEnd,
-          matterId: "corrected-matter",
-          matter: {
-            id: "corrected-matter",
-            name: "Corrected matter",
-            reference: null,
-            color: null,
-            clientName: null,
-          },
-        },
-      ],
-    },
-  });
-  await page
-    .getByRole("button", { name: "Create 2 drafts", exact: true })
-    .click();
+  await installNativeBoundary({ page, batchValidation: "reject-first" });
+  await openSuggestion(page, "Example matter");
+  const accept = page.getByRole("button", { name: acceptName(enMessages) });
+  await accept.click();
   await expect(page.getByRole("alert")).toContainText(
     enMessages.activity.batchFailed,
   );
-  const include = page.getByRole("checkbox", {
-    name: "Include Example matter",
-    exact: true,
-  });
-  await expect(include).toBeEnabled();
-  await expect(
-    page
-      .getByRole("textbox", { name: enMessages.activity.entryNarrative })
-      .first(),
-  ).toBeEnabled();
   await expect(
     page.getByRole("button", {
       name: enMessages.activity.pendingRetry,
       exact: true,
     }),
   ).toHaveCount(0);
-  await include.uncheck();
-  await page
-    .getByRole("button", { name: "Create 1 draft", exact: true })
-    .click();
+  await expect(accept).toBeEnabled();
+  await accept.click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
-  const submitted = await page.evaluate(() => {
-    const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
-    if (!Array.isArray(calls)) {
-      throw new TypeError("Native invocations are missing");
-    }
-    return calls.flatMap((call: unknown) => {
-      if (
-        typeof call !== "object" ||
-        call === null ||
-        !("command" in call) ||
-        call.command !== "time_entry_submit_batch_confirmed"
-      ) {
-        return [];
-      }
-      if (
-        !("args" in call) ||
-        typeof call.args !== "object" ||
-        call.args === null ||
-        !("request" in call.args) ||
-        typeof call.args.request !== "object" ||
-        call.args.request === null ||
-        !("idempotencyKey" in call.args.request) ||
-        typeof call.args.request.idempotencyKey !== "string" ||
-        !("items" in call.args.request) ||
-        !Array.isArray(call.args.request.items)
-      ) {
-        throw new TypeError("Batch request is missing");
-      }
-      return [
-        {
-          key: call.args.request.idempotencyKey,
-          matterIds: call.args.request.items.map((item: unknown) => {
-            if (
-              typeof item !== "object" ||
-              item === null ||
-              !("entry" in item) ||
-              typeof item.entry !== "object" ||
-              item.entry === null ||
-              !("matterId" in item.entry) ||
-              typeof item.entry.matterId !== "string"
-            ) {
-              throw new TypeError("Batch entry is missing");
-            }
-            return item.entry.matterId;
-          }),
-        },
-      ];
+  const requests = batchRequests(await tauriInvocations(page));
+  const entryFor = (matterId: string) =>
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          entry: expect.objectContaining({ matterId }),
+        }),
+      ],
     });
-  });
-  expect(submitted).toHaveLength(2);
-  expect(submitted.at(0)?.matterIds).toEqual(["matter-1", "corrected-matter"]);
-  expect(submitted.at(1)?.matterIds).toEqual(["corrected-matter"]);
-  expect(submitted.at(1)?.key).not.toBe(submitted.at(0)?.key);
+  expect(requests).toEqual([entryFor("matter-1"), entryFor("matter-1")]);
+  const keys = requests.map((request) =>
+    typeof request === "object" &&
+    request !== null &&
+    "idempotencyKey" in request
+      ? request.idempotencyKey
+      : null,
+  );
+  expect(new Set(keys).size).toBe(2);
 });
 
-test("unresolved draft creation protects activity deletion and retains its batch key", async ({
+test("unresolved draft creation offers no deletion and retains its batch key", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -866,25 +980,22 @@ test("unresolved draft creation protects activity deletion and retains its batch
     batchValidation: "hold-first",
     snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 1 },
   });
-  await page
-    .getByRole("button", { name: "Create 1 draft", exact: true })
-    .click();
+  await openSuggestion(page, "Example matter");
+  await page.getByRole("button", { name: acceptName(enMessages) }).click();
+  // Deletion lives in the Settings window, which the native pending state
+  // blocks (see the pending settings test below).
   for (const name of [
     enMessages.activity.deleteDay,
     enMessages.activity.deleteAll,
     enMessages.activity.deleteOtherAccountHistory,
+    enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
   ]) {
-    await expect(
-      page.getByRole("button", { name, exact: true }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
+      0,
+    );
   }
   await expect(
     page.getByRole("button", { name: enMessages.activity.previousDay }),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
-    }),
   ).toBeDisabled();
   await page.evaluate(() => {
     const changed = Reflect.get(window, "__STELLA_TEST_ACTIVITY_CHANGED__");
@@ -900,28 +1011,14 @@ test("unresolved draft creation protects activity deletion and retains its batch
     exact: true,
   });
   await expect(retry).toBeEnabled();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.deleteDay,
-      exact: true,
-    }),
-  ).toBeDisabled();
-  const before = await invocations(page);
+  const before = await tauriInvocations(page);
   await retry.click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
-  const after = await invocations(page);
-  const submissions = (calls: unknown) => {
-    if (!Array.isArray(calls)) {
-      throw new TypeError("Native invocations are missing");
-    }
-    return calls.filter(
-      (call: unknown) =>
-        typeof call === "object" &&
-        call !== null &&
-        "command" in call &&
-        call.command === "time_entry_submit_batch_confirmed",
+  const after = await tauriInvocations(page);
+  const submissions = (calls: TauriInvocation[]) =>
+    calls.filter(
+      ({ command }) => command === "time_entry_submit_batch_confirmed",
     );
-  };
   expect(submissions(before)).toHaveLength(1);
   expect(submissions(after)).toHaveLength(2);
   expect(submissions(after).at(0)).toEqual(submissions(after).at(1));
@@ -971,7 +1068,7 @@ for (const recoveryState of ["empty", "unreadable", "off"] as const) {
       })
       .click();
     await expect(page.getByRole("status")).toContainText("1 draft created");
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "time_entry_submit_batch_confirmed",
       args: {
         request: {
@@ -984,8 +1081,50 @@ for (const recoveryState of ["empty", "unreadable", "off"] as const) {
   });
 }
 
+test("pending drafts protect every deletion in the activity settings", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    snapshot: {
+      ...SNAPSHOT,
+      deletionStatus: "pending",
+      otherAccountHistoryDays: 1,
+    },
+  });
+  for (const name of [
+    enMessages.activity.deleteDay,
+    enMessages.activity.deleteAll,
+    enMessages.activity.deleteOtherAccountHistory,
+  ]) {
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toBeDisabled();
+  }
+  // "Nothing" can offer to delete an app's history, so it is protected too.
+  await expect(
+    captureMode(page, "Example Editor", "captureModeNothing"),
+  ).toBeDisabled();
+  await expect(
+    page.getByText(enMessages.activity.pendingActivityProtected, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  for (const command of [
+    "activity_delete_day",
+    "activity_delete_all",
+    "activity_delete_other_account_history",
+    "activity_exclude_app",
+  ]) {
+    expect(await tauriInvocations(page)).not.toContainEqual(
+      expect.objectContaining({ command }),
+    );
+  }
+});
+
 for (const recordingStatus of ["recording", "off"] as const) {
-  test(`pending drafts on another day protect deletion while ${recordingStatus} and permit recovery navigation`, async ({
+  test(`pending drafts on another day permit recovery navigation while ${recordingStatus}`, async ({
     page,
   }) => {
     await installNativeBoundary({
@@ -998,18 +1137,12 @@ for (const recordingStatus of ["recording", "off"] as const) {
       },
     });
     await expect(
-      page.getByRole("button", {
-        name: enMessages.activity.deleteAll,
-        exact: true,
-      }),
-    ).toBeDisabled();
-    await expect(
       page.getByRole("button", { name: enMessages.activity.previousDay }),
     ).toBeEnabled();
     await page
       .getByRole("button", { name: enMessages.activity.previousDay })
       .click();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_get_day",
       args: { date: "2026-10-06" },
     });
@@ -1037,9 +1170,9 @@ test("stored pending drafts stay immutable after a rejected retry until cancella
     enMessages.activity.batchFailed,
   );
   await expect(retry).toBeEnabled();
-  await expect(
-    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
-  ).toBeDisabled();
+  await openSuggestion(page, "Example matter");
+  const accept = page.getByRole("button", { name: acceptName(enMessages) });
+  await expect(accept).toBeDisabled();
   await page.evaluate((next) => {
     const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
     if (typeof update !== "function") {
@@ -1048,9 +1181,7 @@ test("stored pending drafts stay immutable after a rejected retry until cancella
     update(next);
   }, SNAPSHOT);
   await expect(retry).toHaveCount(0);
-  await expect(
-    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
-  ).toBeEnabled();
+  await expect(accept).toBeEnabled();
 });
 
 test("unreadable saved activity explains why deletion is unavailable", async ({
@@ -1058,6 +1189,7 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       persistence: "deletionOnly",
@@ -1083,41 +1215,91 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
   ).toBeDisabled();
 });
 
-test("stored pending drafts remain visible without billing capability and cannot be submitted", async ({
+for (const deletionStatus of ["keyMissing", "unreadable"] as const) {
+  test(`saved activity that cannot be opened (${deletionStatus}) sends recovery to the settings`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        persistence: "deletionOnly",
+        recordingStatus: "off",
+        deletionStatus,
+        otherAccountHistoryDays: 3,
+      },
+    });
+    for (const name of [
+      enMessages.activity.deleteAll,
+      enMessages.activity.unreadableEraseAction,
+      enMessages.activity.deleteOtherAccountHistory,
+    ]) {
+      await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
+        0,
+      );
+    }
+    await page
+      .getByRole("button", { name: enMessages.activity.settings, exact: true })
+      .click();
+    expect(await tauriInvocations(page)).toContainEqual({
+      command: "activity_open_settings",
+      args: {},
+    });
+  });
+}
+
+test("the activity window opens its settings in the Settings window", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page });
+  await page
+    .getByRole("button", { name: enMessages.activity.settings, exact: true })
+    .click();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_open_settings",
+    args: {},
+  });
+});
+
+test("the Activity tab is absent while the activity feature is off", async ({
   page,
 }) => {
   await installNativeBoundary({
     page,
-    snapshot: {
-      ...SNAPSHOT,
-      segments: [],
-      pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
-      deletionStatus: "pending",
-    },
+    view: "settings",
+    activityEnabled: false,
   });
   await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
+    page.getByRole("tab", { name: enMessages.settings.general, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", {
+      name: enMessages.activity.captureModesTitle,
       exact: true,
     }),
-  ).toBeDisabled();
-  await expect(page.getByRole("status")).toContainText(
-    enMessages.activity.batchUnavailable,
-  );
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
-  );
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.previousDay }),
-  ).toBeEnabled();
-  await page
-    .getByRole("button", { name: enMessages.activity.previousDay })
-    .click();
-  expect(await invocations(page)).toContainEqual({
-    command: "activity_get_day",
-    args: { date: "2026-10-06" },
+  ).toHaveCount(0);
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "is_activity_enabled",
+    args: {},
   });
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_get_settings" }),
+  );
+});
+
+test("the Activity tab reads settings, never the day timeline", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, view: "settings" });
+  await expect(
+    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  const commands = (await tauriInvocations(page)).map(({ command }) => command);
+  expect(commands).toContain("activity_get_settings");
+  expect(commands).not.toContain("activity_get_day");
 });
 
 test("empty recovery keeps its saved receipt visible until navigating to another day", async ({
@@ -1210,7 +1392,7 @@ test("a failed draft receipt remains retryable with the same stored batch key", 
   ).toBeEnabled();
   await retry.click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
-  const calls = await invocations(page);
+  const calls = await tauriInvocations(page);
   const expected = {
     command: "time_entry_submit_batch_confirmed",
     args: {
@@ -1224,15 +1406,9 @@ test("a failed draft receipt remains retryable with the same stored batch key", 
     },
   };
   expect(
-    Array.isArray(calls)
-      ? calls.filter(
-          (call: unknown) =>
-            typeof call === "object" &&
-            call !== null &&
-            "command" in call &&
-            call.command === "time_entry_submit_batch_confirmed",
-        )
-      : [],
+    calls.filter(
+      ({ command }) => command === "time_entry_submit_batch_confirmed",
+    ),
   ).toEqual([expected, expected]);
 });
 
@@ -1242,6 +1418,7 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
   }) => {
     await installNativeBoundary({
       page,
+      view: "settings",
       historyDeletion: "keyMissing",
       snapshot: {
         ...SNAPSHOT,
@@ -1264,14 +1441,14 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
     await expect(page.getByRole("dialog")).toContainText(
       enMessages.activity.unrecoverableOtherHistoryConfirmation,
     );
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "preserve" },
     });
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({ command: "activity_delete_all" }),
     );
-    expect(await invocations(page)).not.toContainEqual({
+    expect(await tauriInvocations(page)).not.toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "discardUnrecoverable" },
     });
@@ -1279,60 +1456,12 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
       .getByRole("dialog")
       .getByRole("button", { name: enMessages.activity.delete, exact: true })
       .click();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "discardUnrecoverable" },
     });
   });
 }
-
-test("billing-disabled pending recovery can be discarded locally only after confirmation", async ({
-  page,
-}) => {
-  await installNativeBoundary({
-    page,
-    snapshot: {
-      ...SNAPSHOT,
-      segments: [],
-      pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
-      deletionStatus: "pending",
-    },
-  });
-  const discard = page.getByRole("button", {
-    name: enMessages.activity.discardPendingRecovery,
-    exact: true,
-  });
-  await discard.click();
-  await expect(page.getByRole("dialog")).toContainText(
-    enMessages.activity.discardPendingConfirmation,
-  );
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_discard_pending_batch_confirmed",
-    }),
-  );
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: enMessages.activity.cancel, exact: true })
-    .click();
-  await expect(discard).toBeVisible();
-  await discard.click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: enMessages.activity.delete, exact: true })
-    .click();
-  await expect(
-    page.getByText(enMessages.activity.empty, { exact: true }),
-  ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
-    command: "time_entry_discard_pending_batch_confirmed",
-    args: { date: SNAPSHOT.date, idempotencyKey: PENDING_BATCH.idempotencyKey },
-  });
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
-  );
-});
 
 test("pending drafts dated after today remain reachable after the clock moves backward", async ({
   page,
@@ -1372,121 +1501,31 @@ test("pending drafts dated after today remain reachable after the clock moves ba
       exact: true,
     }),
   ).toBeEnabled();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_get_day",
     args: { date: futureDate },
   });
   await expect(next).toBeDisabled();
 });
 
-test("discarding an old recovery key cannot unlock a later uncertain batch", async ({
-  page,
-}) => {
-  await installNativeBoundary({
-    page,
-    batchValidation: "hold-first",
-    snapshot: {
-      ...SNAPSHOT,
-      pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
-      deletionStatus: "pending",
-    },
-  });
-  await page
-    .getByRole("button", {
-      name: enMessages.activity.discardPendingRecovery,
-      exact: true,
-    })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: enMessages.activity.delete, exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await page.evaluate((next) => {
-    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
-    if (typeof update !== "function") {
-      throw new TypeError("Snapshot control is missing");
-    }
-    update(next);
-  }, SNAPSHOT);
-  await page
-    .getByRole("button", { name: "Create 1 draft", exact: true })
-    .click();
-  await page.evaluate(() => {
-    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
-    if (typeof reject !== "function") {
-      throw new TypeError("Pending batch control is missing");
-    }
-    reject();
-  });
-  await expect(page.getByRole("alert")).toContainText(
-    enMessages.activity.batchFailed,
-  );
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
-      exact: true,
-    }),
-  ).toBeEnabled();
-  await expect(
-    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
-  ).toBeDisabled();
-  expect(await invocations(page)).toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_submit_batch_confirmed",
-      args: expect.objectContaining({
-        request: expect.objectContaining({
-          idempotencyKey: expect.not.stringContaining(
-            PENDING_BATCH.idempotencyKey,
-          ),
-        }),
-      }),
-    }),
-  );
-});
+const UNREADABLE_PENDING_SNAPSHOT = {
+  ...SNAPSHOT,
+  segments: [],
+  pendingBatch: PENDING_BATCH,
+  unreadable: true,
+  deletionStatus: "unreadable",
+} satisfies ActivityDaySnapshot;
 
-test("pending discard confirmation becomes unavailable when billing capability returns", async ({
+test("stored pending retry over unreadable activity stays retryable", async ({
   page,
 }) => {
-  const snapshot = {
-    ...SNAPSHOT,
-    pendingBatch: PENDING_BATCH,
-    timeBillingEnabled: false,
-    deletionStatus: "pending",
-  } satisfies ActivityDaySnapshot;
-  await installNativeBoundary({ page, snapshot });
-  await page
-    .getByRole("button", {
-      name: enMessages.activity.discardPendingRecovery,
-      exact: true,
-    })
-    .click();
-  await page.evaluate(
-    (next) => {
-      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
-      if (typeof update !== "function") {
-        throw new TypeError("Snapshot control is missing");
-      }
-      update(next);
-    },
-    { ...snapshot, timeBillingEnabled: true },
-  );
+  await installNativeBoundary({ page, snapshot: UNREADABLE_PENDING_SNAPSHOT });
   await expect(
-    page
-      .getByRole("dialog")
-      .getByRole("button", { name: enMessages.activity.delete, exact: true }),
-  ).toBeDisabled();
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_discard_pending_batch_confirmed",
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
     }),
-  );
+  ).toBeVisible();
 });
 
 test("stored pending retry permits confirmed unreadable repair while ordinary deletion stays blocked", async ({
@@ -1494,27 +1533,14 @@ test("stored pending retry permits confirmed unreadable repair while ordinary de
 }) => {
   await installNativeBoundary({
     page,
-    snapshot: {
-      ...SNAPSHOT,
-      segments: [],
-      pendingBatch: PENDING_BATCH,
-      timeBillingEnabled: false,
-      unreadable: true,
-      deletionStatus: "unreadable",
-    },
+    view: "settings",
+    snapshot: UNREADABLE_PENDING_SNAPSHOT,
   });
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.discardPendingRecovery,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.deleteDay,
-      exact: true,
-    }),
-  ).toBeDisabled();
+  const deleteDay = page.getByRole("button", {
+    name: enMessages.activity.deleteDay,
+    exact: true,
+  });
+  await expect(deleteDay).toBeDisabled();
   const repair = page.getByRole("button", {
     name: enMessages.activity.unreadableEraseAction,
     exact: true,
@@ -1528,24 +1554,12 @@ test("stored pending retry permits confirmed unreadable repair while ordinary de
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  await expect(
-    page.getByText(enMessages.activity.empty, { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  expect(await invocations(page)).toContainEqual({
+  await expect(repair).toHaveCount(0);
+  await expect(deleteDay).toBeEnabled();
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_all",
     args: { recovery: "discardUnreadable" },
   });
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({
-      command: "time_entry_discard_pending_batch_confirmed",
-    }),
-  );
 });
 
 test("unreadable activity erase requires confirmation of lost pending recovery", async ({
@@ -1553,6 +1567,7 @@ test("unreadable activity erase requires confirmation of lost pending recovery",
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: { ...SNAPSHOT, unreadable: true, deletionStatus: "unreadable" },
   });
   await page
@@ -1564,14 +1579,14 @@ test("unreadable activity erase requires confirmation of lost pending recovery",
   await expect(page.getByRole("dialog")).toContainText(
     enMessages.activity.unreadableEraseConfirmation,
   );
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_all" }),
   );
   await page
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_all",
     args: { recovery: "discardUnreadable" },
   });
@@ -1582,6 +1597,7 @@ test("inactive unreadable history reaches its dedicated confirmed recovery path"
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     historyDeletion: "unreadable",
     snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
   });
@@ -1602,7 +1618,7 @@ test("inactive unreadable history reaches its dedicated confirmed recovery path"
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_other_account_history",
     args: { recovery: "discardUnrecoverable" },
   });
@@ -1613,6 +1629,7 @@ test("mixed inactive recovery failures use one confirmation and one discard mode
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     historyDeletion: "mixed",
     snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
   });
@@ -1634,17 +1651,10 @@ test("mixed inactive recovery failures use one confirmation and one discard mode
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  const calls = await invocations(page);
   expect(
-    Array.isArray(calls)
-      ? calls.filter(
-          (call: unknown) =>
-            typeof call === "object" &&
-            call !== null &&
-            "command" in call &&
-            call.command === "activity_delete_other_account_history",
-        )
-      : [],
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "activity_delete_other_account_history",
+    ),
   ).toEqual([
     {
       command: "activity_delete_other_account_history",
@@ -1657,41 +1667,47 @@ test("mixed inactive recovery failures use one confirmation and one discard mode
   ]);
 });
 
-test("incompatible saved activity asks for an app update and exposes no erase action", async ({
-  page,
-}) => {
-  await installNativeBoundary({
+for (const view of ["activity", "settings"] as const) {
+  test(`incompatible saved activity asks for an app update and exposes no erase action (${view})`, async ({
     page,
-    snapshot: {
-      ...SNAPSHOT,
-      persistence: "deletionOnly",
-      recordingStatus: "off",
-      deletionStatus: "incompatible",
-    },
+  }) => {
+    await installNativeBoundary({
+      page,
+      view,
+      snapshot: {
+        ...SNAPSHOT,
+        persistence: "deletionOnly",
+        recordingStatus: "off",
+        deletionStatus: "incompatible",
+      },
+    });
+    await expect(
+      page.getByText(enMessages.activity.incompatibleActivity, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: enMessages.activity.deleteAll,
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", {
+        name: enMessages.activity.unreadableEraseAction,
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.deleteAll,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.unreadableEraseAction,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-});
+}
 
 test("healthy current activity shows incompatible history guidance and protects deletion", async ({
   page,
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       deletionStatus: "incompatible",
@@ -1723,7 +1739,7 @@ test("an open erase dialog disappears safely when saved history becomes incompat
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await installNativeBoundary({ page });
+  await installNativeBoundary({ page, view: "settings" });
   await page
     .getByRole("button", { name: enMessages.activity.deleteDay, exact: true })
     .click();
@@ -1743,7 +1759,7 @@ test("an open erase dialog disappears safely when saved history becomes incompat
     page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
   ).toBeVisible();
   expect(pageErrors).toEqual([]);
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_day" }),
   );
 });
@@ -1753,6 +1769,7 @@ test("inactive incompatible history closes consent and requests an app update", 
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     historyDeletion: "incompatible",
     snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
   });
@@ -1770,7 +1787,7 @@ test("inactive incompatible history closes consent and requests an app update", 
   await expect(page.getByRole("alert")).toContainText(
     enMessages.activity.incompatibleActivity,
   );
-  expect(await invocations(page)).not.toContainEqual({
+  expect(await tauriInvocations(page)).not.toContainEqual({
     command: "activity_delete_other_account_history",
     args: { recovery: "discardUnrecoverable" },
   });
@@ -1781,6 +1798,7 @@ test("missing-key erase requires explicit confirmation that draft recovery will 
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       persistence: "deletionOnly",
@@ -1794,14 +1812,14 @@ test("missing-key erase requires explicit confirmation that draft recovery will 
   await expect(page.getByRole("dialog")).toContainText(
     enMessages.activity.missingKeyEraseConfirmation,
   );
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_all" }),
   );
   await page
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_all",
     args: { recovery: "discardMissingKey" },
   });
@@ -1811,50 +1829,27 @@ test("only an explicit summary copy publishes activity to the clipboard", async 
   page,
 }) => {
   await installNativeBoundary({ page });
-  await page.evaluate(() => {
-    const changed: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_ACTIVITY_CHANGED__",
-    );
-    if (typeof changed !== "function") {
-      throw new TypeError("Activity event fixture is missing");
-    }
-    changed();
-  });
-  await page
-    .getByRole("button", { name: enMessages.activity.previousDay })
-    .click();
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.nextDay }),
-  ).toBeEnabled();
-  const callsBeforeCopy = await invocations(page);
+  await openSuggestion(page, "Example matter");
+  const callsBeforeCopy = await tauriInvocations(page);
   expect(callsBeforeCopy).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
   expect(callsBeforeCopy).not.toContainEqual(
     expect.objectContaining({ command: expect.stringContaining("clipboard_") }),
   );
-  await page
+  await suggestionCard(page, "Example matter")
     .getByRole("button", { name: enMessages.activity.copySummary })
     .click();
   await expect(
     page.getByRole("button", { name: enMessages.activity.copied }),
   ).toBeVisible();
-  const callsAfterCopy = await invocations(page);
+  const callsAfterCopy = await tauriInvocations(page);
   expect(callsAfterCopy).toContainEqual({
     command: "activity_copy_text",
     args: { text: expect.stringContaining("Example Editor") },
   });
   expect(
-    Array.isArray(callsAfterCopy)
-      ? callsAfterCopy.filter(
-          (call: unknown) =>
-            typeof call === "object" &&
-            call !== null &&
-            "command" in call &&
-            call.command === "activity_copy_text",
-        )
-      : [],
+    callsAfterCopy.filter(({ command }) => command === "activity_copy_text"),
   ).toHaveLength(1);
 });
 
@@ -1867,6 +1862,7 @@ for (const state of [
   }) => {
     await installNativeBoundary({
       page,
+      view: "settings",
       snapshot: {
         ...SNAPSHOT,
         ...state,
@@ -1887,7 +1883,7 @@ for (const state of [
     await expect(page.getByRole("dialog")).toContainText(
       "Delete 3 saved days from other accounts on this device? This cannot be undone.",
     );
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({
         command: "activity_delete_other_account_history",
       }),
@@ -1897,7 +1893,7 @@ for (const state of [
       .getByRole("button", { name: enMessages.activity.cancel, exact: true })
       .click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({
         command: "activity_delete_other_account_history",
       }),
@@ -1909,7 +1905,7 @@ for (const state of [
       .click();
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(openDelete).toBeHidden();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "preserve" },
     });
@@ -1919,7 +1915,7 @@ for (const state of [
 test("no other-account history note is shown when its day count is zero", async ({
   page,
 }) => {
-  await installNativeBoundary({ page });
+  await installNativeBoundary({ page, view: "settings" });
   await expect(
     page.getByRole("button", {
       name: enMessages.activity.deleteOtherAccountHistory,
@@ -1939,7 +1935,7 @@ test("detail capture is unchecked in welcome and recording starts without enabli
     name: enMessages.activity.captureDetails,
   });
   await expect(details).not.toBeChecked();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
   await page
@@ -1948,17 +1944,12 @@ test("detail capture is unchecked in welcome and recording starts without enabli
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
-  await page
-    .locator("summary")
-    .filter({ hasText: enMessages.activity.settings })
-    .click();
-  await expect(details).not.toBeChecked();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
 });
 
-test("detail capture changes only on explicit choice and can be turned off in settings", async ({
+test("detail capture changes only on explicit choice in the welcome", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -1970,7 +1961,7 @@ test("detail capture changes only on explicit choice and can be turned off in se
   });
   await details.check();
   await expect(details).toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_capture_details",
     args: { enabled: true },
   });
@@ -1980,13 +1971,25 @@ test("detail capture changes only on explicit choice and can be turned off in se
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
-  await page
-    .locator("summary")
-    .filter({ hasText: enMessages.activity.settings })
-    .click();
+});
+
+test("detail capture is unchecked in the settings until chosen and can be turned off", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, view: "settings" });
+  const details = page.getByRole("checkbox", {
+    name: enMessages.activity.captureDetails,
+  });
+  await expect(details).not.toBeChecked();
+  await details.check();
+  await expect(details).toBeChecked();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_set_capture_details",
+    args: { enabled: true },
+  });
   await details.uncheck();
   await expect(details).not.toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_capture_details",
     args: { enabled: false },
   });
@@ -1997,6 +2000,7 @@ test("accessibility hint opens system settings only after a user request", async
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       captureDetails: true,
@@ -2006,7 +2010,7 @@ test("accessibility hint opens system settings only after a user request", async
   await expect(
     page.getByText(enMessages.activity.accessibilityRequired, { exact: true }),
   ).toBeVisible();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "activity_open_accessibility_settings",
     }),
@@ -2016,32 +2020,30 @@ test("accessibility hint opens system settings only after a user request", async
       name: enMessages.activity.openAccessibilitySettings,
     })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_open_accessibility_settings",
     args: {},
   });
 });
 
-test("per-app detail controls keep time recording and allow details to be restored", async ({
+test("per-app modes keep time recording and allow window titles to be restored", async ({
   page,
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       captureDetails: true,
       detailsAccess: "ready",
     },
   });
-  await page
-    .getByRole("button", { name: "Record app name only for Example Editor" })
-    .click();
-  await expect(
-    page
-      .getByRole("button", { name: "Record details for Example Editor" })
-      .first(),
-  ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
+  const titles = captureMode(page, "Example Editor", "captureModeTitles");
+  const appOnly = captureMode(page, "Example Editor", "captureModeAppOnly");
+  await expect(titles).toHaveAttribute("aria-pressed", "true");
+  await appOnly.click();
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_app_detail_capture",
     args: {
       identifier: "com.example.editor",
@@ -2049,19 +2051,12 @@ test("per-app detail controls keep time recording and allow details to be restor
       mode: "appNameOnly",
     },
   });
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_exclude_app" }),
   );
-  await page
-    .getByRole("button", { name: "Record details for Example Editor" })
-    .first()
-    .click();
-  await expect(
-    page.getByRole("button", {
-      name: "Record app name only for Example Editor",
-    }),
-  ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
+  await titles.click();
+  await expect(titles).toHaveAttribute("aria-pressed", "true");
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_app_detail_capture",
     args: {
       identifier: "com.example.editor",
@@ -2071,80 +2066,237 @@ test("per-app detail controls keep time recording and allow details to be restor
   });
 });
 
-test("browser title capture is a separate unticked opt-in and can be turned off", async ({
+const NATIVE_BROWSER = {
+  identifier: "native-classified.browser",
+  name: "Native Browser",
+};
+
+/** A day with one browser the native side classified, used for an hour. */
+const BROWSER_DAY = {
+  ...SNAPSHOT,
+  captureDetails: true,
+  detailsAccess: "ready",
+  browserApps: [NATIVE_BROWSER],
+  segments: [
+    ...SNAPSHOT.segments,
+    {
+      appIdentifier: NATIVE_BROWSER.identifier,
+      appName: NATIVE_BROWSER.name,
+      start: "2026-10-07T09:30:00Z",
+      end: "2026-10-07T10:30:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+test("a browser records its app name until titles are chosen for it in settings", async ({
   page,
 }) => {
-  const browser = {
-    identifier: "native-classified.browser",
-    name: "Native Browser",
-  };
   await installNativeBoundary({
     page,
+    view: "settings",
+    snapshot: BROWSER_DAY,
+  });
+  const titles = captureMode(page, NATIVE_BROWSER.name, "captureModeTitles");
+  const appOnly = captureMode(page, NATIVE_BROWSER.name, "captureModeAppOnly");
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByText(enMessages.activity.browserPrivacyNote, { exact: true }),
+  ).toBeVisible();
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_set_browser_title_capture" }),
+  );
+  await titles.click();
+  await expect(titles).toHaveAttribute("aria-pressed", "true");
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_set_browser_title_capture",
+    args: { ...NATIVE_BROWSER, enabled: true },
+  });
+  await appOnly.click();
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
+  const changes = (await tauriInvocations(page)).filter(({ command }) =>
+    [
+      "activity_set_browser_title_capture",
+      "activity_set_app_detail_capture",
+    ].includes(command),
+  );
+  // Titles stop first; the name-only choice keeps the browser decided.
+  expect(changes.slice(-2)).toEqual([
+    {
+      command: "activity_set_browser_title_capture",
+      args: { ...NATIVE_BROWSER, enabled: false },
+    },
+    {
+      command: "activity_set_app_detail_capture",
+      args: { ...NATIVE_BROWSER, mode: "appNameOnly" },
+    },
+  ]);
+});
+
+test("an excluded app is recorded again only after its new mode is saved", async ({
+  page,
+}) => {
+  const music = { identifier: "com.example.music", name: "Example Music" };
+  await installNativeBoundary({
+    page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       captureDetails: true,
       detailsAccess: "ready",
-      browserApps: [browser],
+      excludedApps: [music],
     },
   });
-  const browserTitles = page.getByRole("checkbox", {
-    name: "Record window titles in Native Browser",
-  });
-  await expect(browserTitles).not.toBeChecked();
+  const appOnly = captureMode(page, music.name, "captureModeAppOnly");
   await expect(
-    page.getByText(enMessages.activity.browserPrivacyNote, { exact: true }),
-  ).toBeVisible();
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "activity_set_browser_title_capture" }),
+    captureMode(page, music.name, "captureModeNothing"),
+  ).toHaveAttribute("aria-pressed", "true");
+  await appOnly.click();
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
+  const changes = (await tauriInvocations(page)).filter(({ command }) =>
+    [
+      "activity_set_app_detail_capture",
+      "activity_remove_app_exclusion",
+    ].includes(command),
   );
-  await browserTitles.check();
-  await expect(browserTitles).toBeChecked();
-  expect(await invocations(page)).toContainEqual({
-    command: "activity_set_browser_title_capture",
-    args: { identifier: browser.identifier, name: browser.name, enabled: true },
-  });
-  await browserTitles.uncheck();
-  await expect(browserTitles).not.toBeChecked();
-  expect(await invocations(page)).toContainEqual({
-    command: "activity_set_browser_title_capture",
-    args: {
-      identifier: browser.identifier,
-      name: browser.name,
-      enabled: false,
+  expect(changes).toEqual([
+    {
+      command: "activity_set_app_detail_capture",
+      args: { ...music, mode: "appNameOnly" },
     },
-  });
+    {
+      command: "activity_remove_app_exclusion",
+      args: { identifier: music.identifier },
+    },
+  ]);
 });
 
-for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
-  test(`browser title capture requires detail recording (${prerequisite})`, async ({
+test("with details off the modes say why window titles are unavailable", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    snapshot: {
+      ...BROWSER_DAY,
+      captureDetails: false,
+      detailsAccess: "disabled",
+      browserTitleApps: [NATIVE_BROWSER],
+    },
+  });
+  for (const app of ["Example Editor", NATIVE_BROWSER.name]) {
+    const titles = captureMode(page, app, "captureModeTitles");
+    await expect(titles).toBeDisabled();
+    await expect(titles).toHaveAttribute("aria-pressed", "false");
+    await expect(captureMode(page, app, "captureModeAppOnly")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(
+      page.getByRole("group", {
+        name: enMessages.activity.captureModeLabel.replace("{name}", () => app),
+      }),
+    ).toHaveAccessibleDescription(enMessages.activity.captureModesDetailsOff);
+  }
+  await expect(
+    page.getByText(enMessages.activity.captureModesDetailsOff, { exact: true }),
+  ).toBeVisible();
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "activity_set_browser_title_capture",
+    }),
+  );
+});
+
+const browserQuestion = (page: Page) =>
+  page.getByRole("region", {
+    name: enMessages.activity.browserQuestionTitle.replace(
+      "<bdi>{browser}</bdi>",
+      () => NATIVE_BROWSER.name,
+    ),
+    exact: true,
+  });
+
+for (const [answer, expected] of [
+  [
+    "browserQuestionRecordTitles",
+    {
+      command: "activity_set_browser_title_capture",
+      args: { ...NATIVE_BROWSER, enabled: true },
+    },
+  ],
+  [
+    "browserQuestionAppNameOnly",
+    {
+      command: "activity_set_app_detail_capture",
+      args: { ...NATIVE_BROWSER, mode: "appNameOnly" },
+    },
+  ],
+] as const) {
+  test(`answering the browser question with ${answer} saves that choice and hides it`, async ({
     page,
   }) => {
-    const browser = {
-      identifier: "native-classified.browser",
-      name: "Native Browser",
-    };
-    await installNativeBoundary({
-      page,
-      snapshot: {
-        ...SNAPSHOT,
-        captureDetails: prerequisite !== "globalOff",
-        detailsAccess: prerequisite === "globalOff" ? "disabled" : "ready",
-        browserApps: [browser],
-        appNameOnlyApps: prerequisite === "appNameOnly" ? [browser] : [],
-      },
-    });
-    await expect(
-      page.getByRole("checkbox", {
-        name: "Record window titles in Native Browser",
-      }),
-    ).toBeDisabled();
-    expect(await invocations(page)).not.toContainEqual(
+    await installNativeBoundary({ page, snapshot: BROWSER_DAY });
+    const question = browserQuestion(page);
+    await expect(question).toBeVisible();
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({
         command: "activity_set_browser_title_capture",
       }),
     );
+    const button = question.getByRole("button", {
+      name: enMessages.activity[answer],
+      exact: true,
+    });
+    await button.focus();
+    await page.keyboard.press("Enter");
+    await expect(question).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText(NATIVE_BROWSER.name);
+    await expect(page.getByRole("status")).toBeFocused();
+    const changes = (await tauriInvocations(page)).filter(({ command }) =>
+      [
+        "activity_set_browser_title_capture",
+        "activity_set_app_detail_capture",
+        "activity_remove_app_exclusion",
+      ].includes(command),
+    );
+    expect(changes).toEqual([expected]);
   });
 }
+
+test("the browser question can be put off without a choice", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: BROWSER_DAY });
+  const question = browserQuestion(page);
+  await question
+    .getByRole("button", {
+      name: enMessages.activity.browserQuestionLater,
+      exact: true,
+    })
+    .click();
+  await expect(question).toHaveCount(0);
+  const commands = (await tauriInvocations(page)).map(({ command }) => command);
+  expect(commands).not.toContain("activity_set_browser_title_capture");
+  expect(commands).not.toContain("activity_set_app_detail_capture");
+});
+
+test("the browser question waits for detail recording", async ({ page }) => {
+  await installNativeBoundary({
+    page,
+    snapshot: { ...BROWSER_DAY, captureDetails: false },
+  });
+  await expect(page.locator("[data-activity-browser-question]")).toHaveCount(0);
+  await page.evaluate((next) => {
+    const setSnapshot: unknown = Reflect.get(
+      window,
+      "__STELLA_TEST_SET_SNAPSHOT__",
+    );
+    if (typeof setSnapshot === "function") {
+      setSnapshot(next);
+    }
+  }, BROWSER_DAY);
+  await expect(browserQuestion(page)).toBeVisible();
+});
 
 test("document names render locally without publishing full paths", async ({
   page,
@@ -2163,30 +2315,28 @@ test("document names render locally without publishing full paths", async ({
       })),
     },
   });
-  await expect(page.getByText(/memo\.docx/u).first()).toBeVisible();
-  await expect(page.getByText(document, { exact: true })).toHaveCount(0);
-  await page
-    .getByRole("button", { name: /Example Editor$/u })
-    .first()
-    .hover();
-  const tooltip = page.locator('[data-slot="tooltip-popup"]');
-  await expect(tooltip).toBeVisible();
-  await expect(tooltip).toContainText("memo.docx");
-  await expect(tooltip).not.toContainText(document);
-  expect(await invocations(page)).not.toContainEqual(
+  await expect(
+    page.locator(ACTIVITY_BLOCKS).filter({ hasText: "memo.docx" }),
+  ).toHaveCount(1);
+  await expect(page.getByText(document)).toHaveCount(0);
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByRole("tabpanel")).toContainText("memo.docx");
+  await expect(card).not.toContainText(document);
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
-  await page
+  await card
     .getByRole("button", { name: enMessages.activity.copySummary })
     .click();
   await expect(
     page.getByRole("button", { name: enMessages.activity.copied }),
   ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_copy_text",
     args: { text: expect.stringContaining("memo.docx") },
   });
-  expect(await invocations(page)).not.toContainEqual({
+  expect(await tauriInvocations(page)).not.toContainEqual({
     command: "activity_copy_text",
     args: { text: expect.stringContaining(document) },
   });
@@ -2212,18 +2362,12 @@ test("short matched activity counts toward its matter draft", async ({
       ],
     },
   });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card).toContainText("0.1 h");
   await expect(
-    page.getByRole("heading", {
-      name: enMessages.activity.reviewToday,
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Create 1 draft", exact: true }),
+    card.getByRole("button", { name: acceptName(enMessages) }),
   ).toBeEnabled();
-  await expect(
-    page.getByText(enMessages.activity.roundedSixMinutes, { exact: true }),
-  ).toBeVisible();
 });
 
 for (const language of ["en", "ar"] as const) {
@@ -2258,38 +2402,279 @@ for (const language of ["en", "ar"] as const) {
     await expect(
       page.getByText(messages.activity.welcomeDetails, { exact: true }),
     ).toBeVisible();
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({ command: "activity_set_recording_status" }),
     );
   });
 }
 
-test("timeline and totals reuse local app visuals and keep a neutral fallback", async ({
+const ICON_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+
+const VISUALS_SNAPSHOT = {
+  ...SNAPSHOT,
+  sourceAppVisuals: [
+    { key: "com.example.editor", iconDataUrl: ICON_DATA_URL, color: null },
+  ],
+  segments: [
+    ...SNAPSHOT.segments,
+    {
+      appIdentifier: "com.example.viewer",
+      appName: "Preview",
+      start: "2026-10-07T10:00:00Z",
+      end: "2026-10-07T10:30:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+test("the calendar reuses local app visuals and keeps a neutral fallback", async ({
   page,
 }) => {
-  const iconDataUrl =
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  await installNativeBoundary({ page, snapshot: VISUALS_SNAPSHOT });
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await expect(
+    blocks.filter({ hasText: "Example Editor" }).locator("img"),
+  ).toHaveAttribute("src", ICON_DATA_URL);
+  const fallback = blocks.filter({ hasText: "Preview" });
+  await expect(fallback.locator("img")).toHaveCount(0);
+  await expect(fallback.locator("svg").first()).toBeAttached();
+});
+
+test("hovering an Activity block lists its apps with time and title, then counts the rest", async ({
+  page,
+}) => {
+  const apps = Array.from({ length: 7 }, (_, index) => ({
+    appIdentifier: `com.example.app-${String(index)}`,
+    appName: `App ${String(index)}`,
+    windowTitle: `Window ${String(index)}`,
+    // Longest first: app 0 has seven minutes, app 6 one.
+    minutes: 7 - index,
+  }));
+  let minute = 0;
+  const segments = apps.map(({ minutes, ...app }) => {
+    const start = minute;
+    minute += minutes;
+    return {
+      ...app,
+      start: new Date(Date.UTC(2026, 9, 7, 9, start)).toISOString(),
+      end: new Date(Date.UTC(2026, 9, 7, 9, minute)).toISOString(),
+    };
+  });
   await installNativeBoundary({
     page,
     snapshot: {
       ...SNAPSHOT,
-      sourceAppVisuals: [
-        { key: "com.example.editor", iconDataUrl, color: null },
-      ],
-      segments: [
-        ...SNAPSHOT.segments,
-        {
-          appIdentifier: "com.example.viewer",
-          appName: "Preview",
-          start: "2026-10-07T10:00:00Z",
-          end: "2026-10-07T10:10:00Z",
-        },
-      ],
+      captureDetails: true,
+      detailsAccess: "ready",
+      segments,
     },
   });
-  const totals = page
-    .getByRole("heading", { name: enMessages.activity.byApp, exact: true })
-    .locator("..");
+  await page
+    .locator(ACTIVITY_BLOCKS)
+    .and(page.locator('[data-kind="mixed"]'))
+    .hover();
+  const details = page.locator('[data-slot="tooltip-popup"]');
+  await expect(details).toBeVisible();
+  for (const { appName, windowTitle } of apps.slice(0, 5)) {
+    await expect(details).toContainText(appName);
+    await expect(details).toContainText(windowTitle);
+  }
+  await expect(details).not.toContainText("App 5");
+  await expect(details).toContainText(
+    enMessages.activity.moreApps.replace("{count}", "2"),
+  );
+  await expect(details).toContainText(
+    enMessages.activity.durationMinutes.replace("{minutes}", "7"),
+  );
+});
+
+/** Chrome recorded today but never allowed to record its titles. */
+const CHROME = { identifier: "com.google.chrome", name: "Google Chrome" };
+const UNTITLED_CHROME_SNAPSHOT = {
+  ...SNAPSHOT,
+  captureDetails: true,
+  detailsAccess: "ready",
+  browserApps: [CHROME],
+  segments: [
+    {
+      // The segment keeps the bundle's own casing; the consent list does not.
+      appIdentifier: "com.google.Chrome",
+      appName: CHROME.name,
+      matterId: "matter-1",
+      start: "2026-10-07T09:00:00Z",
+      end: "2026-10-07T09:30:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+const RECORD_CHROME_TITLES = {
+  command: "activity_set_browser_title_capture",
+  args: { identifier: CHROME.identifier, name: CHROME.name, enabled: true },
+};
+
+test("an Activity block says a browser's titles are withheld and records them from now on", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  // Room above the block, so reaching the action needs no scroll that would
+  // carry the block away from the pointer.
+  await page.setViewportSize({ height: 640, width: 1100 });
+  const block = page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name });
+  await block.hover();
+  const details = page.locator('[data-slot="popover-popup"]');
+  await expect(details).toContainText(
+    enMessages.activity.browserTitlesWithheld.replace(
+      "{browser}",
+      () => CHROME.name,
+    ),
+  );
+  await expect(details).toContainText(
+    enMessages.activity.earlierTimeStaysUntitled,
+  );
+  // The pointer travels from the block to the action as a hand would.
+  const action = details.getByRole("button", {
+    name: enMessages.activity.recordTitlesFromNow,
+  });
+  const box = await action.boundingBox();
+  if (box === null) {
+    throw new TypeError("The titles action is not laid out");
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
+    steps: 12,
+  });
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect
+    .poll(async () => tauriInvocations(page))
+    .toContainEqual(RECORD_CHROME_TITLES);
+  // The hover stays open and the action confirms in place.
+  await expect(details).toContainText(
+    enMessages.activity.browserTitlesRecordedFromNow.replace(
+      "{browser}",
+      () => CHROME.name,
+    ),
+  );
+  await expect(
+    details.getByRole("button", {
+      name: enMessages.activity.recordTitlesFromNow,
+    }),
+  ).toHaveCount(0);
+});
+
+test("an Activity block's titles action is reachable from the keyboard", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  const block = page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name });
+  await block.focus();
+  await page.keyboard.press("Enter");
+  const action = page
+    .locator('[data-slot="popover-popup"]')
+    .getByRole("button", { name: enMessages.activity.recordTitlesFromNow });
+  // Opening from the keyboard moves focus to the action.
+  await expect(action).toBeFocused();
+  await page.keyboard.press("Enter");
+  expect(await tauriInvocations(page)).toContainEqual(RECORD_CHROME_TITLES);
+  // Escape closes it and hands focus back to the block.
+  await page.keyboard.press("Escape");
+  await expect(block).toBeFocused();
+});
+
+test("a block with titles from an allowed browser offers no action", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: { ...UNTITLED_CHROME_SNAPSHOT, browserTitleApps: [CHROME] },
+  });
+  const block = page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name });
+  await expect(block).toHaveJSProperty("tagName", "ARTICLE");
+  await block.hover();
+  await expect(page.locator('[data-slot="tooltip-popup"]')).toBeVisible();
+  await expect(
+    page.getByText(enMessages.activity.earlierTimeStaysUntitled),
+  ).toHaveCount(0);
+});
+
+test("a suggestion card without titles says beside its description which browser withheld them", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  // The reason is in view without opening a tab; the empty tab stays disabled.
+  await expect(
+    card.getByRole("tab", { name: enMessages.activity.evidenceTitles }),
+  ).toBeDisabled();
+  const reason = card.locator("[data-activity-titles-reason]");
+  await expect(reason).toBeVisible();
+  await expect(reason).toContainText(
+    enMessages.activity.browserTitlesWithheld.replace(
+      "{browser}",
+      () => CHROME.name,
+    ),
+  );
+  await reason
+    .getByRole("button", { name: enMessages.activity.recordTitlesFromNow })
+    .click();
+  expect(await tauriInvocations(page)).toContainEqual(RECORD_CHROME_TITLES);
+});
+
+test("the activity window says when Accessibility keeps titles out and opens its settings", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...UNTITLED_CHROME_SNAPSHOT,
+      detailsAccess: "accessibilityRequired",
+    },
+  });
+  const strip = page.getByRole("region", {
+    name: enMessages.activity.titlesNotRecorded,
+  });
+  await expect(strip).toContainText(
+    enMessages.activity.accessibilityAccessMissing,
+  );
+  await strip
+    .getByRole("button", {
+      name: enMessages.activity.openAccessibilitySettings,
+    })
+    .click();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_open_accessibility_settings",
+    args: {},
+  });
+  // Turning Chrome on would record nothing yet, so its block offers no action.
+  await page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name }).hover();
+  await expect(page.locator('[data-slot="tooltip-popup"]')).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.recordTitlesFromNow }),
+  ).toHaveCount(0);
+});
+
+test("the Accessibility strip is absent once access is granted", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  await expect(
+    page.getByRole("region", { name: enMessages.activity.titlesNotRecorded }),
+  ).toHaveCount(0);
+});
+
+test("the settings app list reuses local app visuals and keeps a neutral fallback", async ({
+  page,
+}) => {
+  const iconDataUrl = ICON_DATA_URL;
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    snapshot: VISUALS_SNAPSHOT,
+  });
+  const totals = page.getByRole("region", {
+    name: enMessages.activity.captureModesTitle,
+    exact: true,
+  });
   const editor = totals
     .getByRole("listitem")
     .filter({ hasText: "Example Editor" });
@@ -2297,21 +2682,7 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
   const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
   await expect(fallback.locator("img")).toHaveCount(0);
   await expect(fallback.locator("svg").first()).toBeVisible();
-  const lane = page.getByRole("region", {
-    name: enMessages.activity.reviewToday,
-  });
-  await expect(
-    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
-  ).toHaveAttribute("src", iconDataUrl);
-  await expect(
-    lane
-      .getByRole("button", { name: /Preview$/u })
-      .locator("svg")
-      .first(),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Stop recording Example Editor" })
-    .click();
+  await captureMode(page, "Example Editor", "captureModeNothing").click();
   await expect(
     page.getByRole("dialog").getByRole("heading").locator("img"),
   ).toHaveAttribute("src", iconDataUrl);
@@ -2330,22 +2701,24 @@ for (const motion of ["no-preference", "reduce"] as const) {
     await expect(preview).toHaveAttribute("aria-hidden", "true");
     await expect(preview).toHaveAttribute("inert", "");
     await expect(
-      preview.getByText(enMessages.activity.timelineHint, { exact: true }),
+      preview.getByText(enMessages.activity.calendarHint, { exact: true }),
     ).toHaveCount(0);
     await expect(
-      preview.getByRole("button", {
+      preview.getByRole("slider", {
         name: enMessages.activity.selectRange,
         includeHidden: true,
       }),
     ).toHaveCount(0);
     const matterSegments = preview.locator(
-      "[data-activity-matter-lane] [data-activity-segment]",
+      '[data-column-id="activity"] [data-slot="day-calendar-block"]',
     );
     await expect(matterSegments).toHaveCount(previewApps.length);
     for (const segment of await matterSegments.all()) {
       expect(
         await segment.evaluate((element) =>
-          element instanceof HTMLElement ? element.style.backgroundColor : null,
+          element instanceof HTMLElement
+            ? element.style.borderInlineStartColor
+            : null,
         ),
       ).toBe("var(--option-emerald)");
     }
@@ -2408,10 +2781,9 @@ test("welcome uses native icons for sample apps without recorded activity", asyn
       await expect(total.locator("svg")).toBeVisible();
     } else {
       await expect(total.locator("img")).toHaveAttribute("src", iconDataUrl);
-      const timelineApp = preview.getByRole("button", {
-        name: new RegExp(`${appName}$`, "u"),
-        includeHidden: true,
-      });
+      const timelineApp = preview
+        .locator('[data-column-id="activity"] [data-slot="day-calendar-block"]')
+        .filter({ hasText: appName });
       await expect(timelineApp.locator("img")).toHaveAttribute(
         "src",
         iconDataUrl,
@@ -2420,43 +2792,30 @@ test("welcome uses native icons for sample apps without recorded activity", asyn
   }
 });
 
-test("invalid range endpoints remain editable until their order is repaired", async ({
+test("a suggestion card shows each app with its native icon", async ({
   page,
 }) => {
-  await installNativeBoundary({ page });
-  await page.locator("button[data-activity-segment]").first().click();
-  const start = page.getByRole("group", {
-    name: enMessages.activity.rangeStart,
-    exact: true,
+  const iconDataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      sourceAppVisuals: [
+        { key: "com.example.editor", iconDataUrl, color: null },
+      ],
+    },
   });
-  const end = page.getByRole("group", {
-    name: enMessages.activity.rangeEnd,
-    exact: true,
-  });
-  const startMinutes = start.getByRole("spinbutton").nth(1);
-  const endMinutes = end.getByRole("spinbutton").nth(1);
-  await startMinutes.fill("0");
-  await end
-    .getByRole("spinbutton")
-    .nth(0)
-    .fill(await start.getByRole("spinbutton").nth(0).inputValue());
-  await endMinutes.fill("0");
-  await expect(start).toBeVisible();
-  await expect(end).toBeVisible();
-  await expect(endMinutes).toHaveAttribute("aria-invalid", "true");
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.assignRange }),
-  ).toBeDisabled();
-  await endMinutes.fill("30");
-  await expect(endMinutes).toHaveAttribute("aria-invalid", "false");
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.assignRange }),
-  ).toBeEnabled();
+  await page.locator(SUGGESTION_BLOCKS).first().click();
+  const card = suggestionCard(page, "Example matter");
+  await card
+    .getByRole("tab", { name: enMessages.activity.evidenceApps })
+    .click();
+  const app = card.getByRole("listitem").filter({ hasText: "Example Editor" });
+  await expect(app.locator("img")).toHaveAttribute("src", iconDataUrl);
 });
 
-test("a call segment reads as a call in the timeline and its tooltip", async ({
-  page,
-}) => {
+test("a call segment reads as a call in the calendar", async ({ page }) => {
   await installNativeBoundary({
     page,
     snapshot: {
@@ -2477,26 +2836,22 @@ test("a call segment reads as a call in the timeline and its tooltip", async ({
     "{app}",
     "Microsoft Teams",
   );
-  const call = page
-    .getByRole("button", { name: new RegExp(`${callLabel}$`, "u") })
-    .first();
-  const editor = page.getByRole("button", { name: /Example Editor$/u }).first();
-  await expect(call).toBeVisible();
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  const call = blocks.filter({ hasText: callLabel });
+  await expect(call).toHaveCount(1);
+  await expect(call).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^${escapePattern(callLabel)}, `, "u"),
+  );
   await expect(call.locator("svg.lucide-phone")).toHaveCount(1);
+  const editor = blocks.filter({ hasText: "Example Editor" });
   await expect(editor.locator("svg.lucide-phone")).toHaveCount(0);
-  await call.hover();
-  const tooltip = page.locator('[data-slot="tooltip-popup"]');
-  await expect(tooltip).toContainText(callLabel);
-  await editor.hover();
-  await expect(tooltip).toContainText("Example Editor");
-  await expect(tooltip).not.toContainText(callLabel);
 });
 
 test("call recording is on by default and changes only on explicit choice", async ({
   page,
 }) => {
-  // The boundary opens settings for a recording day.
-  await installNativeBoundary({ page });
+  await installNativeBoundary({ page, view: "settings" });
   const calls = page.getByRole("checkbox", {
     name: enMessages.activity.detectCalls,
   });
@@ -2504,26 +2859,985 @@ test("call recording is on by default and changes only on explicit choice", asyn
   await expect(
     page.getByText(enMessages.activity.detectCallsDescription),
   ).toBeVisible();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_detect_calls" }),
   );
   await calls.uncheck();
   await expect(calls).not.toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_detect_calls",
     args: { enabled: false },
   });
-  expect(await invocations(page)).not.toContainEqual({
+  expect(await tauriInvocations(page)).not.toContainEqual({
     command: "activity_set_detect_calls",
     args: { enabled: true },
   });
   await calls.check();
   await expect(calls).toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_detect_calls",
     args: { enabled: true },
   });
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
+});
+
+test("suggestions render as dashed blocks and the day is triaged from the keyboard", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: TRIAGE_SNAPSHOT });
+  const suggestions = page.locator(SUGGESTION_BLOCKS);
+  await expect(suggestions).toHaveCount(4);
+  await expect(suggestions.first()).toHaveClass(/border-dashed/u);
+  await openSuggestion(page, "Example matter");
+  await pressCardShortcut(page, "Enter");
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  expect(batchRequests(await tauriInvocations(page))).toEqual([
+    {
+      date: "2026-10-07",
+      idempotencyKey: expect.any(String),
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 30,
+            narrative: "Work on Lease draft.docx",
+            billable: true,
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    },
+  ]);
+  await pressCardShortcut(page, "Backspace");
+  await expect(suggestionCard(page, "Third matter")).toBeFocused();
+  await expect(suggestions.filter({ hasText: "Second matter" })).toHaveCount(0);
+  await expect(suggestions).toHaveCount(2);
+  expect(batchRequests(await tauriInvocations(page))).toHaveLength(1);
+  const card = suggestionCard(page, "Third matter");
+  await expect(
+    card.getByRole("button", { name: acceptName(enMessages) }),
+  ).toContainText(/↩|Enter/u);
+  await expect(
+    card.getByRole("button", { name: rejectName(enMessages) }),
+  ).toContainText(/⌫|Backspace/u);
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+});
+
+for (const language of ["en", "ar"] as const) {
+  test(`${language}: selecting a range in Time entries opens a card for that range`, async ({
+    page,
+  }) => {
+    const messages = language === "ar" ? arMessages : enMessages;
+    await installNativeBoundary({ page, language });
+    // Activity is the record and takes no drag; entries are drawn where
+    // they are kept.
+    await expect(
+      page.locator(
+        '[data-column-id="activity"] [role="slider"][data-slot="day-calendar-surface"]',
+      ),
+    ).toHaveCount(0);
+    const block = page.locator(ACTIVITY_BLOCKS).first();
+    await block.scrollIntoViewIfNeeded();
+    const box = await block.boundingBox();
+    const entries = await page
+      .locator('[data-column-id="entries"] [data-slot="day-calendar-surface"]')
+      .boundingBox();
+    if (!box || !entries) {
+      throw new TypeError("The activity block and entries column need bounds");
+    }
+    // The suggestion covers the block's time in Time entries; the drag starts
+    // in the empty time just after it and runs up across it.
+    const x = entries.x + entries.width / 2;
+    await page.mouse.move(x, box.y + box.height + 8);
+    await page.mouse.down();
+    await page.mouse.move(x, box.y + 3, { steps: 6 });
+    await page.mouse.up();
+    const card = suggestionCard(page, "Example matter");
+    await expect(card).toBeFocused();
+    await card.getByRole("button", { name: acceptName(messages) }).click();
+    await expect(page.getByRole("status")).toBeVisible();
+    // The selected range is the entry: the whole hour the drag snapped to, not
+    // only the half hour recorded inside it.
+    expect(batchRequests(await tauriInvocations(page))).toEqual([
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            entry: expect.objectContaining({
+              durationMinutes: 60,
+              matterId: "matter-1",
+            }),
+            ranges: [
+              { start: "2026-10-07T09:00:00Z", end: "2026-10-07T10:00:00Z" },
+            ],
+          }),
+        ],
+      }),
+    ]);
+
+    const surface = page.getByRole("slider", {
+      name: messages.activity.selectRange,
+    });
+    await surface.focus();
+    await surface.press("ArrowDown");
+    await surface.press("Enter");
+    const empty = suggestionCard(page, messages.activity.newEntry);
+    await expect(empty).toBeFocused();
+    await expect(empty).toContainText(messages.activity.rangeEmpty);
+    await expect(
+      empty.getByRole("button", { name: acceptName(messages) }),
+    ).toBeDisabled();
+  });
+}
+
+const DRAWN_BLOCKS = "__STELLA_TEST_DRAWN_BLOCKS__";
+
+test("the day's blocks wait for its matters and are drawn once", async ({
+  page,
+}) => {
+  // Every Activity block the page ever puts in the document, by its name.
+  await page.addInitScript((key) => {
+    const drawn: string[] = [];
+    Reflect.set(window, key, drawn);
+    const record = (node: Node) => {
+      if (!(node instanceof Element)) {
+        return;
+      }
+      for (const block of [node, ...node.querySelectorAll("*")]) {
+        if (
+          block.matches('[data-slot="day-calendar-block"]') &&
+          block.closest('[data-column-id="activity"]') !== null
+        ) {
+          drawn.push(block.getAttribute("aria-label") ?? "");
+        }
+      }
+    };
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          record(node);
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  }, DRAWN_BLOCKS);
+  await installNativeBoundary({ page, candidates: "held" });
+  await expect(page.locator('[data-slot="day-calendar"]')).toBeVisible();
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await expect(blocks).toHaveCount(0);
+
+  await releaseCandidates(page);
+  await expect(blocks).toHaveCount(1);
+  await expect(blocks).toHaveAccessibleName(
+    /^Example matter · Example Editor/u,
+  );
+  const drawn: unknown = await page.evaluate(
+    (key) => Reflect.get(window, key),
+    DRAWN_BLOCKS,
+  );
+  expect(drawn).toEqual([expect.stringMatching(/^Example matter · /u)]);
+});
+
+/** An hour mostly spent on mail no matter claimed, ending on a matter's
+ * document. */
+const MINORITY_SNAPSHOT = {
+  ...SNAPSHOT,
+  captureDetails: true,
+  detailsAccess: "ready",
+  segments: [
+    {
+      appIdentifier: "com.example.mail",
+      appName: "Example Mail",
+      matterId: null,
+      windowTitle: "Training invite",
+      start: "2026-10-07T09:00:00Z",
+      end: "2026-10-07T09:42:00Z",
+    },
+    {
+      appIdentifier: "com.example.editor",
+      appName: "Example Editor",
+      matterId: "matter-1",
+      windowTitle: "Lease draft.docx",
+      start: "2026-10-07T09:42:00Z",
+      end: "2026-10-07T10:00:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+test("a range a matter holds only a minority of starts on no matter, non-billable and undescribed", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: MINORITY_SNAPSHOT });
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await blocks
+    .first()
+    .evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const mail = await blocks.first().boundingBox();
+  const lease = await blocks.last().boundingBox();
+  const entries = await page
+    .locator('[data-column-id="entries"] [data-slot="day-calendar-surface"]')
+    .boundingBox();
+  if (!mail || !lease || !entries) {
+    throw new TypeError("The activity blocks and entries column need bounds");
+  }
+  // Across the whole hour: 42 minutes of mail, 18 of the lease draft.
+  const x = entries.x + entries.width / 2;
+  await page.mouse.move(x, mail.y + 3);
+  await page.mouse.down();
+  await page.mouse.move(x, lease.y + lease.height - 3, { steps: 6 });
+  await page.mouse.up();
+  const card = suggestionCard(page, enMessages.activity.newEntry);
+  await expect(card).toBeFocused();
+  await expect(
+    card.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).not.toBeChecked();
+  await expect(card.getByText(enMessages.activity.chooseMatter)).toBeVisible();
+  await expect(
+    card.getByText(enMessages.activity.rangeMostlyUnmatched),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue("");
+  // The evidence keeps both titles; the matter's row names it faintly.
+  await expect(card.getByText("Training invite")).toBeVisible();
+  await expect(
+    card.locator("[data-activity-evidence-matter]", {
+      hasText: "Example matter",
+    }),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("button", { name: acceptName(enMessages) }),
+  ).toBeDisabled();
+  // Choosing the matter makes the time billable, as a matter's card starts.
+  await card
+    .getByRole("button", { name: enMessages.activity.chooseMatter })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  const chosen = suggestionCard(page, "Second matter");
+  await expect(
+    chosen.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  await expect(
+    chosen.getByText(enMessages.activity.rangeMostlyUnmatched),
+  ).toHaveCount(0);
+});
+
+test("a range a matter holds most of starts on it, described by that matter's titles only", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...MINORITY_SNAPSHOT,
+      // 42 minutes of the lease draft, then 18 of mail.
+      segments: [
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          matterId: "matter-1",
+          windowTitle: "Lease draft.docx",
+          start: "2026-10-07T09:00:00Z",
+          end: "2026-10-07T09:42:00Z",
+        },
+        {
+          appIdentifier: "com.example.mail",
+          appName: "Example Mail",
+          matterId: null,
+          windowTitle: "Training invite",
+          start: "2026-10-07T09:42:00Z",
+          end: "2026-10-07T10:00:00Z",
+        },
+      ],
+    },
+  });
+  const surface = page.getByRole("slider", {
+    name: enMessages.activity.selectRange,
+  });
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await blocks
+    .first()
+    .evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const first = await blocks.first().boundingBox();
+  const last = await blocks.last().boundingBox();
+  const entries = await surface.boundingBox();
+  if (!first || !last || !entries) {
+    throw new TypeError("The activity blocks and entries column need bounds");
+  }
+  // The lease's suggestion covers its own time in Time entries, so the drag
+  // starts in the mail's time and runs up.
+  const x = entries.x + entries.width / 2;
+  await page.mouse.move(x, last.y + last.height - 3);
+  await page.mouse.down();
+  await page.mouse.move(x, first.y + 3, { steps: 6 });
+  await page.mouse.up();
+  const card = suggestionCard(page, "Example matter");
+  await expect(card).toBeFocused();
+  await expect(
+    card.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(/Lease draft\.docx/u);
+  await expect(narrative).not.toHaveValue(/Training invite/u);
+});
+
+const draftInvocations = async (page: Page) =>
+  (await tauriInvocations(page)).filter(
+    ({ command }) => command === "billing_draft_create_confirmed",
+  );
+
+test("a card asks for consent once, then drafts its description and shows the earlier entry it follows", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: TRIAGE_SNAPSHOT });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  // One line asks; what a draft sends is a click away.
+  await expect(card.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
+  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toBeHidden();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiDraftWhatIsSent })
+    .click();
+  await expect(
+    card.getByText(enMessages.activity.aiDraftConsent),
+  ).toBeVisible();
+  // Nothing is drafted before the user allows it.
+  expect(await draftInvocations(page)).toEqual([]);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiDraftAllow })
+    .click();
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue(GENERATED_NARRATIVE);
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "billing_draft_grant_consent",
+    args: {
+      scopeKey: '["org_fixture","user_fixture"]',
+      revision: "revision-1",
+    },
+  });
+  const [draft] = await draftInvocations(page);
+  // Only the entry's matter, date, duration, app names and, as titles are
+  // recorded, the names the card shows are sent.
+  expect(draft?.args).toEqual({
+    request: {
+      entries: [
+        {
+          entryId: "entry_1",
+          matterId: expect.any(String),
+          date: TRIAGE_SNAPSHOT.date,
+          timezone: expect.any(String),
+          durationMinutes: expect.any(Number),
+          appNames: ["Example Editor"],
+          evidence: { documentNames: [], windowTitles: ["Lease draft.docx"] },
+        },
+      ],
+    },
+  });
+  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
+    0,
+  );
+  // The English plural for one earlier entry.
+  await card.getByRole("button", { name: "Follows 1 earlier entry" }).click();
+  await expect(card.getByText(EARLIER_ENTRY.narrative)).toBeVisible();
+  // The next card drafts as it opens: consent is asked once.
+  await pressCardShortcut(page, "Backspace");
+  const next = suggestionCard(page, "Second matter");
+  await expect(next).toBeFocused();
+  await expect(
+    next.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue(GENERATED_NARRATIVE);
+  await expect(page.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
+    0,
+  );
+  expect(await draftInvocations(page)).toHaveLength(2);
+});
+
+test("a long card keeps its actions in view in the activity window, its details scrolling inside", async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP_WINDOW_SIZES.activity);
+  // Late in the day, with a guided draft's notes and many titles: taller
+  // than the window.
+  const titles = Array.from(
+    { length: 10 },
+    (_, index) => `Lease schedule ${String(index + 1)}.docx`,
+  );
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...TRIAGE_SNAPSHOT,
+      segments: titles.map((windowTitle, index) => ({
+        appIdentifier: "com.example.editor",
+        appName: "Example Editor",
+        matterId: "matter-1",
+        windowTitle,
+        start: `2026-10-07T14:${String(index * 5).padStart(2, "0")}:00Z`,
+        end: `2026-10-07T14:${String(index * 5 + 4).padStart(2, "0")}:00Z`,
+      })),
+    },
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("List each task separately.")).toBeAttached();
+  const body = card.locator(
+    '[data-activity-card-body] [data-slot="scroll-area-viewport"]',
+  );
+  // The fixture must outgrow the window, or nothing here is tested.
+  await expect
+    .poll(async () =>
+      body.evaluate((element) => element.scrollHeight > element.clientHeight),
+    )
+    .toBe(true);
+  const box = await card.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.y).toBeGreaterThanOrEqual(0);
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(
+    DESKTOP_WINDOW_SIZES.activity.height,
+  );
+  for (const action of [
+    card.getByRole("button", { name: acceptName(enMessages) }),
+    card.getByRole("button", { name: rejectName(enMessages) }),
+    card.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ]) {
+    await expect(action).toBeInViewport({ ratio: 1 });
+  }
+  await expect(card).toBeFocused();
+  await pressCardShortcut(page, "Enter");
+  await expect
+    .poll(async () => batchRequests(await tauriInvocations(page)))
+    .toHaveLength(1);
+});
+
+test("an accepted drafted entry carries the drafted description", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue(GENERATED_NARRATIVE);
+  await pressCardShortcut(page, "Enter");
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  expect(batchRequests(await tauriInvocations(page))).toEqual([
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          entry: expect.objectContaining({ narrative: GENERATED_NARRATIVE }),
+        }),
+      ],
+    }),
+  ]);
+});
+
+test("text typed while a draft is written is kept over the draft", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted", held: true },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByText(enMessages.activity.aiDraftWriting),
+  ).toBeVisible();
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await narrative.fill("My own words");
+  await releaseDraft(page);
+  await expect(card.getByText(enMessages.activity.aiDraftWriting)).toHaveCount(
+    0,
+  );
+  await expect(
+    card.getByRole("button", { name: enMessages.activity.aiDraftAgain }),
+  ).toBeVisible();
+  await expect(narrative).toHaveValue("My own words");
+  // Asking again replaces the description with a new draft.
+  await card
+    .getByRole("button", { name: enMessages.activity.aiDraftAgain })
+    .click();
+  await releaseDraft(page);
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  expect(await draftInvocations(page)).toHaveLength(2);
+});
+
+test("a guided draft shows its codes and guideline notes, and the accepted entry carries its classification", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
+  const notes = card.getByRole("region", {
+    name: enMessages.activity.aiDraftFlags,
+  });
+  await expect(notes).toContainText("List each task separately.");
+  await expect(notes).toContainText("Outside counsel guidelines.pdf, 4.2");
+  await pressCardShortcut(page, "Enter");
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  expect(batchRequests(await tauriInvocations(page))).toEqual([
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          entry: expect.objectContaining({
+            narrative: GENERATED_NARRATIVE,
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+          }),
+        }),
+      ],
+    }),
+  ]);
+});
+
+test("a guided split creates its parts as entries, each over its own share of the time", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      flagFix: "split",
+      operations: [
+        {
+          type: "split",
+          parts: [10, 20].map((durationMinutes, index) => ({
+            durationMinutes,
+            narrative: `Part ${String(index + 1)}`,
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toContainText("Part 1");
+  await expect(proposal).toContainText("Part 2");
+  // Nothing is created until the split is accepted.
+  expect(batchRequests(await tauriInvocations(page))).toEqual([]);
+  await card
+    .getByRole("region", { name: enMessages.activity.aiDraftFlags })
+    .getByRole("button", { name: enMessages.activity.aiFlagSplit })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 10,
+            narrative: "Part 1",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:10:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: "Part 2",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:10:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+/** A matter the server named from the firm's records, outside the card's
+ * candidates. */
+const OTHER_CLIENT_MATTER_ID = "00000000-0000-4000-8000-0000000000b2";
+
+test("a guided move of part of the time keeps the rest on the card's matter", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "move",
+          targetMatterId: OTHER_CLIENT_MATTER_ID,
+          targetMatterName: "Other client matter",
+          durationMinutes: 10,
+          narrative: "Called about the service agreement.",
+          classification: { type: "activity_group", activityGroup: "client" },
+          billable: false,
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: /Other client matter/u,
+  });
+  await expect(proposal).toContainText("Called about the service agreement.");
+  await proposal
+    .getByRole("button", { name: enMessages.activity.aiStructureMoveAccept })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: GENERATED_NARRATIVE,
+            billable: true,
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:20:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: OTHER_CLIENT_MATTER_ID,
+            durationMinutes: 10,
+            narrative: "Called about the service agreement.",
+            billable: false,
+            classification: {
+              type: "activity_group",
+              activityGroup: "client",
+            },
+          }),
+          ranges: [
+            { start: "2026-10-07T09:20:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+test("a split proposed for one matter is not offered once the card's matter changes", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "split",
+          parts: [15, 15].map((durationMinutes) => ({
+            durationMinutes,
+            narrative: "Half",
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toBeVisible();
+  await card.getByRole("button", { name: "Example matter" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  await expect(proposal).toHaveCount(0);
+});
+
+test("choosing another matter drops a guided draft's codes", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
+  await card.getByRole("button", { name: "Example matter" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  await expect(page.getByText("Task L120 · Activity A104")).toHaveCount(0);
+});
+
+test("refining a draft proposes the change, accepting applies it and Undo restores the draft", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiSteerShorter })
+    .click();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  const proposal = card.getByRole("region", {
+    name: enMessages.activity.aiProposal,
+  });
+  await expect(proposal).toBeVisible();
+  // The proposal reads as a change to the draft until it is accepted.
+  expect(
+    (await proposal.getByRole("deletion").allTextContents()).join(""),
+  ).toBe("draft and its annexes.");
+  expect(
+    (await proposal.getByRole("insertion").allTextContents()).join(""),
+  ).toBe("draft.");
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  const [, refined] = await draftInvocations(page);
+  // The instruction goes with the entry and the server's first result, sent
+  // back as it came.
+  expect(refined?.args).toEqual({
+    request: {
+      entries: [expect.objectContaining({ entryId: "entry_1" })],
+      steer: enMessages.activity.aiSteerShorter,
+      previousResult: {
+        mode: "plain",
+        drafts: [
+          {
+            entryId: "entry_1",
+            narrative: GENERATED_NARRATIVE,
+            matchedEarlierEntryIds: [EARLIER_ENTRY.id],
+          },
+        ],
+      },
+    },
+  });
+  await proposal
+    .getByRole("button", { name: enMessages.activity.aiAccept })
+    .click();
+  await expect(narrative).toHaveValue(REFINED_NARRATIVE);
+  await card.getByRole("button", { name: enMessages.activity.aiUndo }).click();
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+});
+
+test("dismissing a proposal keeps the draft, and Use original brings back the template", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("textbox", { name: enMessages.activity.aiRefinePlaceholder })
+    .fill("Mention the annex numbers");
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  await card
+    .getByRole("region", { name: enMessages.activity.aiProposal })
+    .getByRole("button", { name: enMessages.activity.aiDismiss })
+    .click();
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiUseOriginal })
+    .click();
+  await expect(narrative).toHaveValue("Work on Lease draft.docx");
+});
+
+test("an instruction remembered while refining becomes the drafting preference", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiSteerShorter })
+    .click();
+  await card
+    .getByRole("checkbox", { name: enMessages.activity.aiSteerRemember })
+    .click();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "billing_draft_set_preference",
+      ),
+    )
+    .toEqual([
+      {
+        command: "billing_draft_set_preference",
+        args: {
+          scopeKey: '["org_fixture","user_fixture"]',
+          revision: "revision-1",
+          preference: enMessages.activity.aiSteerShorter,
+        },
+      },
+    ]);
+});
+
+test("Settings shows the remembered drafting preference and forgets it", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "granted", preference: "Shorter" },
+  });
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsPreference),
+  ).toBeVisible();
+  await expect(page.getByText("Shorter", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.billingDraftsForgetPreference,
+    })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsPreference),
+  ).toHaveCount(0);
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "billing_draft_set_preference",
+    args: {
+      scopeKey: '["org_fixture","user_fixture"]',
+      revision: "revision-1",
+      preference: null,
+    },
+  });
+});
+
+test("a failed draft keeps the template and offers to try again", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted", generation: "fail" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText(enMessages.activity.aiDraftFailed)).toBeVisible();
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue("Work on Lease draft.docx");
+  await expect(
+    card.getByRole("button", { name: enMessages.activity.aiDraftRetry }),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("button", { name: acceptName(enMessages) }),
+  ).toBeEnabled();
+});
+
+test("with drafting switched off for the firm, a card offers no stella AI and sends nothing", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "off", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card).toBeFocused();
+  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
+    0,
+  );
+  await expect(
+    card.getByRole("button", { name: enMessages.activity.aiDraftWrite }),
+  ).toHaveCount(0);
+  expect(await draftInvocations(page)).toEqual([]);
+});
+
+test("Settings withdraws consent to stella AI drafts and sends nothing else", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsGranted),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: enMessages.activity.billingDraftsWithdraw })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsRevoked),
+  ).toBeVisible();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "billing_draft_withdraw_consent",
+    args: { scopeKey: '["org_fixture","user_fixture"]' },
+  });
+  expect(await draftInvocations(page)).toEqual([]);
 });

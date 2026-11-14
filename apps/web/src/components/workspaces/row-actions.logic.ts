@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 
 import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
+import {
+  type CopyToMatterEntity,
+  getCopyToMatterRootEntities,
+} from "@/components/workspaces/copy-to-matter-dialog.logic";
+import type { WorkspaceEntityColumnRender } from "@/components/workspaces/table/table-schema";
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   FieldId,
@@ -20,6 +25,156 @@ export type OcrSource = {
 
 export type RowActionContext = "bulk" | "cell" | "row";
 export type OcrExportFormat = "searchable-pdf" | "text";
+
+/**
+ * What right-clicking a table cell opens. A `row` column is the row's handle
+ * (the select gutter, a list item's name) and opens the row's menu; a `cell`
+ * column holds a property value and opens that cell's menu; a `native` column
+ * shows a value no menu action applies to, so the browser's own menu (copy,
+ * look up) stays.
+ */
+export type ColumnContextMenu = "cell" | "native" | "row";
+
+export const COLUMN_CONTEXT_MENU = {
+  select: "row",
+  "add-property": "row",
+  name: "row",
+  "list-item-type": "native",
+  "task-status": "native",
+  "task-priority": "native",
+  "task-due-date": "native",
+  "created-by": "native",
+  "updated-at": "native",
+  version: "native",
+  property: "cell",
+} as const satisfies Record<
+  WorkspaceEntityColumnRender["type"],
+  ColumnContextMenu
+>;
+
+/**
+ * What a row menu acts on: the row (its ⋮ trigger or handle), a bulk
+ * selection, the cell holding the file the row's file actions act on, another
+ * file cell, or a cell holding any other value.
+ */
+export type RowMenuSubject =
+  "bulk" | "file-cell" | "row" | "row-file-cell" | "value-cell";
+
+type ResolveRowMenuSubjectOptions = {
+  cellPropertyId: PropertyId | null;
+  fields: WorkspaceEntity["fields"];
+  isBulk: boolean;
+  rowFilePropertyId: PropertyId | null;
+};
+
+export const resolveRowMenuSubject = ({
+  cellPropertyId,
+  fields,
+  isBulk,
+  rowFilePropertyId,
+}: ResolveRowMenuSubjectOptions): RowMenuSubject => {
+  if (isBulk) {
+    return "bulk";
+  }
+  if (cellPropertyId === null) {
+    return "row";
+  }
+  if (fields[cellPropertyId]?.content.type !== "file") {
+    return "value-cell";
+  }
+  return cellPropertyId === rowFilePropertyId ? "row-file-cell" : "file-cell";
+};
+
+export type RowMenuSection =
+  | "cell-ocr-export"
+  | "cell-review"
+  | "chat"
+  | "desktop-edit"
+  | "edit-pages"
+  | "file-operations"
+  | "new-folder-from-selection"
+  | "new-subfolder"
+  | "open"
+  | "preview"
+  | "rename"
+  | "run-ocr"
+  | "sign"
+  | "translate"
+  | "upload-version";
+
+/** The kinds of table cell a review decision is made for. */
+type CellReviewKind = "file" | "value";
+
+/**
+ * Whether a cell kind offers review (retry, lock and flags), in its row menu
+ * and in its hover corner. A file cell does not: a lock only holds back
+ * automated column runs and retry, which never write a file cell, and approving
+ * a file duplicates the document review flow.
+ */
+const CELL_REVIEW_BY_KIND = {
+  file: "none",
+  value: "review",
+} as const satisfies Record<CellReviewKind, "none" | "review">;
+
+export const offersCellReview = (kind: CellReviewKind): boolean =>
+  CELL_REVIEW_BY_KIND[kind] === "review";
+
+const cellReviewSections = (kind: CellReviewKind): RowMenuSection[] =>
+  offersCellReview(kind) ? ["cell-review"] : [];
+
+// Every action on the row's file or entity. `cell-review` (retry, lock, flags)
+// is a property's, so only a cell can offer it and the row does not.
+const ROW_FILE_SECTIONS = [
+  "preview",
+  "upload-version",
+  "run-ocr",
+  "desktop-edit",
+  "open",
+  "edit-pages",
+  "sign",
+  "chat",
+  "translate",
+  "file-operations",
+] satisfies readonly RowMenuSection[];
+
+const ROW_SECTIONS = [
+  ...ROW_FILE_SECTIONS,
+  "rename",
+  "new-subfolder",
+] satisfies readonly RowMenuSection[];
+
+/**
+ * The sections a row menu may show for each subject; each section still hides
+ * itself when it does not apply to the entity (no file, read-only, …). A cell
+ * offers only what acts on that cell: file actions belong to the row and the
+ * cell holding the row's file, and another file cell keeps the actions that
+ * take its own file.
+ */
+export const ROW_MENU_SECTIONS = {
+  row: ROW_SECTIONS,
+  bulk: [...ROW_SECTIONS, "new-folder-from-selection"],
+  "row-file-cell": [...ROW_FILE_SECTIONS, ...cellReviewSections("file")],
+  "file-cell": [
+    "run-ocr",
+    "edit-pages",
+    "translate",
+    "cell-ocr-export",
+    ...cellReviewSections("file"),
+  ],
+  "value-cell": cellReviewSections("value"),
+} as const satisfies Record<RowMenuSubject, readonly RowMenuSection[]>;
+
+export const getRowMenuSections = (
+  subject: RowMenuSubject,
+): ReadonlySet<RowMenuSection> => new Set(ROW_MENU_SECTIONS[subject]);
+
+export const ROW_MENU_ACTION_CONTEXT = {
+  row: "row",
+  bulk: "bulk",
+  "row-file-cell": "row",
+  "file-cell": "cell",
+  "value-cell": "cell",
+} as const satisfies Record<RowMenuSubject, RowActionContext>;
 
 /**
  * The searchable PDF is a stored derivative that can lag or fail behind the
@@ -189,4 +344,30 @@ export const requestDesktopEditTakeover = async ({
     return;
   }
   awaitConsent();
+};
+
+type FolderFromSelectionPlan = {
+  entityIds: string[];
+  parentId: string | null;
+};
+
+/**
+ * Where a folder made from a selection goes and what moves into it. An entity
+ * whose ancestor is also selected moves with that ancestor, so only the
+ * top-level targets are sent. The folder goes to the deepest folder that
+ * contains every target (their shared parent when they are siblings), or the
+ * matter root when none does. A chain cut short by a missing lookup only loses
+ * its upper ancestors, so the answer falls back to the root, never to a folder
+ * that does not contain every target.
+ */
+export const planFolderFromSelection = (
+  selection: readonly CopyToMatterEntity[],
+): FolderFromSelectionPlan => {
+  const targets = getCopyToMatterRootEntities(selection);
+  const [first, ...rest] = targets;
+  const parentId =
+    first?.ancestorIds.find((ancestorId) =>
+      rest.every((target) => target.ancestorIds.includes(ancestorId)),
+    ) ?? null;
+  return { entityIds: targets.map((target) => target.entityId), parentId };
 };

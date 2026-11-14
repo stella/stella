@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import {
+  booleanFromString,
+  numberFromString,
+} from "@stll/api-contract/http-input";
 
 import { billingCodes } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -18,13 +23,20 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedBillingCodeId } from "@/api/lib/safe-id-boundaries";
 
-const readBillingCodesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.billingCodesPageSizeMax }),
+const readBillingCodesQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.billingCodesPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
-  type: t.Optional(t.Union([t.Literal("task"), t.Literal("activity")])),
-  active: t.Optional(t.BooleanString()),
+  cursor: v.optional(paginationCursorSchema()),
+  type: v.optional(v.picklist(["task", "activity"])),
+  active: v.optional(booleanFromString()),
 });
 
 const config = {

@@ -12,7 +12,8 @@ import type {
 } from "@/components/inspector/inspector-store-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DOCX_MIME, isEmailFile } from "@/lib/consts";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
 export type Facet = FileFacet;
@@ -83,8 +84,8 @@ export const TabFacetBar = ({
 }: TabFacetBarProps) => {
   const t = useTranslations();
   const dataQuery = useQuery(entityVersionsOptions({ workspaceId, entityId }));
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "TabFacetBar:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const version = data?.versions.find((v) => v.file?.fieldId === fieldId);
   const activeBadge = version ? `v${String(version.versionNumber)}` : undefined;

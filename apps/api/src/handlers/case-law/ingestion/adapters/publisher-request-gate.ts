@@ -1,13 +1,17 @@
+// parser-output-unchanged: typed pacing availability and reply validation affect request scheduling only; parsed response values and persisted records are unchanged.
 // parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
 // parser-output-unchanged: checked coordination clients and bounded immediate gate checks; response parsing and stored output are unchanged.
 // parser-output-unchanged: isolate default test gate state through a lightweight runner signal; production requests and parsed output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import { Temporal } from "@stll/time";
 
 import type * as RedisClientModule from "@/api/lib/admission-redis";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
@@ -44,6 +48,10 @@ const PUBLISHER_GATE_TIMEOUT_LABEL = {
   "birosag-hu": "birosag-hu publisher gate reservation",
   "eureka-mf": "eureka-mf publisher gate reservation",
   "cellar-eu": "cellar-eu publisher gate reservation",
+  "bfdi-de": "bfdi-de publisher gate reservation",
+  "fcl-uk": "fcl-uk publisher gate reservation",
+  "suip-cz": "suip-cz publisher gate reservation",
+  "uoou-sk": "uoou-sk publisher gate reservation",
 } as const satisfies Record<PublisherGateId, string>;
 
 const TRY_RESERVE_SLOT_SCRIPT = `
@@ -181,8 +189,7 @@ const loadRedisClient = async () => {
 };
 
 let deployedStore:
-  | ReturnType<typeof RedisClientModule.createAdmissionRedis>
-  | undefined;
+  ReturnType<typeof RedisClientModule.createAdmissionRedis> | undefined;
 const deployedGateClient = async () => {
   const { createAdmissionRedis } = await loadRedisClient();
   deployedStore ??= createAdmissionRedis();
@@ -322,24 +329,41 @@ export const createPublisherRequestSlot = (
       catch: (error) => error,
     });
     if (Result.isError(response)) {
+      if (signal?.aborted) {
+        return Result.err(response.error);
+      }
+      const error =
+        ActionAdmissionError.is(response.error) ||
+        LimiterStoreUnavailableError.is(response.error)
+          ? response.error
+          : new LimiterStoreUnavailableError({
+              message: LIMITER_STORE_UNAVAILABLE.message,
+              operation: "command",
+              cause: response.error,
+            });
       return Result.err(
         mode === "immediate"
           ? new PublisherPacingStopped({
               message: "Publisher pacing unavailable",
               status: "pacing-unavailable",
-              cause: response.error,
+              cause: error,
             })
-          : response.error,
+          : error,
       );
     }
-    const waitMs = Number(response.value);
+    const waitMs = response.value;
     if (
-      !Number.isFinite(waitMs) ||
+      typeof waitMs !== "number" ||
+      !Number.isSafeInteger(waitMs) ||
       waitMs < 0 ||
       (replies !== undefined && !replies.includes(waitMs))
     ) {
-      const error = new PublisherGateReplyError({
-        message: `${publisher} publisher gate returned an invalid wait`,
+      const error = new LimiterStoreUnavailableError({
+        message: LIMITER_STORE_UNAVAILABLE.message,
+        operation: "command",
+        cause: new PublisherGateReplyError({
+          message: `${publisher} publisher gate returned an invalid wait`,
+        }),
       });
       return Result.err(
         mode === "immediate"

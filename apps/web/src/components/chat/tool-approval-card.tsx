@@ -1,7 +1,7 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -11,25 +11,56 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
-import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+import {
+  localRunProposedPlan,
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@stll/api-contract/chat-local-run-steps";
+import {
+  requiresPerCallChatApproval,
+  USE_CONNECTOR_SECRET_TOOL_NAME,
+} from "@stll/api-contract/chat-secret";
+import {
+  formatReadableInputValue,
+  getCompleteConnectorInputRows,
+  getReadableInputRows,
+  humanizeIdentifier,
+} from "@stll/api-contract/chat-tool-input-rows";
 import { Button } from "@stll/ui/button";
-import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import {
+  BrowserControlIcon,
+  CheckIcon,
+  GlobeIcon,
+  PencilIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
-  getChatToolTitleKey,
   getApprovalToolName,
+  getChatToolTitleKey,
   isApprovalOnceChatToolName,
   isExternalInputChatToolName,
   isExternalMcpToolName,
   isNonPersistentGrantChatToolName,
-  isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
   isSuggestChangesApplyOutput,
+  LOCAL_RUN_TITLE_KEYS,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -40,6 +71,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
+  describeProposedDocxEdits,
   describeSuggestChangesApplyOutcome,
   hasAutomaticApproval,
 } from "@/components/chat/tool-approval-card.logic";
@@ -47,10 +79,7 @@ import {
   buildRegistryWriteSummaryRows,
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
-  formatReadableInputValue,
   getReaderAnnotationEditTargetId,
-  getReadableInputRows,
-  humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
 import {
@@ -63,22 +92,29 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
+  browserCommandSite,
+  currentBrowserAutoApproval,
+  recordBrowserSiteGrantApproval,
   setBrowserApprovalMode,
   useBrowserApprovalMode,
-  useBrowserCommandAutoApproved,
+  useBrowserAutoApproval,
+  useBrowserObservedPage,
 } from "@/features/chat/browser-control/browser-approval-mode";
 import {
-  getBrowserApprovalDetails,
   type BrowserApprovalDetail,
+  getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
+import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
 import { useMountEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -151,130 +187,44 @@ type SuggestChangesSummaryProps = {
   activeFileName?: string | undefined;
 };
 
-/**
- * The fields the card shows for one proposed operation. The model-facing
- * `suggest_changes` input is loosely typed (folio's parser owns the
- * contract), so the card narrows each operation locally and skips anything
- * it cannot describe.
- */
-type SummaryOperation = {
-  type: string;
-  blockId: string;
-  find?: string;
-  replace?: string;
-};
-
-const readOptionalString = (
-  value: Record<string, unknown>,
-  key: string,
-): string | undefined => {
-  const candidate = value[key];
-  return typeof candidate === "string" ? candidate : undefined;
-};
-
-const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/** Range ops carry their anchor on the `find_text` handle; block ops carry it directly. */
-const readSummaryOperation = (operation: unknown): SummaryOperation | null => {
-  if (!isPlainRecord(operation)) {
-    return null;
-  }
-  const type = readOptionalString(operation, "type");
-  const range = operation["range"];
-  const blockId =
-    readOptionalString(operation, "blockId") ??
-    (isPlainRecord(range) ? readOptionalString(range, "blockId") : undefined);
-  if (type === undefined || blockId === undefined) {
-    return null;
-  }
-  const find = readOptionalString(operation, "find");
-  const replace = readOptionalString(operation, "replace");
-  return {
-    type,
-    blockId,
-    ...(find !== undefined && { find }),
-    ...(replace !== undefined && { replace }),
-  };
-};
-
 const SuggestChangesSummary = ({
   activeFileName,
   operations,
 }: SuggestChangesSummaryProps) => {
   const t = useTranslations("chat.tool");
-  const summaries = operations.flatMap((operation) => {
-    const summary = readSummaryOperation(operation);
-    return summary === null ? [] : [summary];
-  });
-  const previewOperations = summaries.slice(0, 3);
+  const edits = describeProposedDocxEdits(operations);
+  const previewEdits = edits.slice(0, 3);
   // Only describable operations can be "more"; the count line above still
   // reports every operation the model sent.
-  const hiddenCount = summaries.length - previewOperations.length;
-
-  const renderOperationSummary = (operation: SummaryOperation) => {
-    const { blockId } = operation;
-    switch (operation.type) {
-      case "replaceInBlock":
-        return operation.find !== undefined && operation.replace !== undefined
-          ? t("docxReplaceSummary", {
-              find: operation.find,
-              replace: operation.replace,
-            })
-          : t("docxReplaceBlockSummary", { blockId });
-      // Range-addressed ops reuse the block-level summaries: the range
-      // handle anchors to one block, and the card only needs to say
-      // which block is touched.
-      case "replaceBlock":
-      case "replaceRange":
-        return t("docxReplaceBlockSummary", { blockId });
-      case "commentOnBlock":
-      case "commentOnRange":
-        return t("docxCommentSummary", { blockId });
-      case "insertAfterBlock":
-        return t("docxInsertAfterSummary", { blockId });
-      case "insertBeforeBlock":
-        return t("docxInsertBeforeSummary", { blockId });
-      case "deleteBlock":
-        return t("docxDeleteSummary", { blockId });
-      case "insertSignatureTable":
-        return t("docxSignatureTableSummary", { blockId });
-      case "insertTableRow":
-        return t("docxInsertTableRowSummary", { blockId });
-      case "deleteTableRow":
-        return t("docxDeleteTableRowSummary", { blockId });
-      case "insertTableColumn":
-        return t("docxInsertTableColumnSummary", { blockId });
-      case "deleteTableColumn":
-        return t("docxDeleteTableColumnSummary", { blockId });
-      case "mergeTableCells":
-        return t("docxMergeTableCellsSummary", { blockId });
-      case "splitTableCell":
-        return t("docxSplitTableCellSummary", { blockId });
-      default:
-        // An operation kind this card has no line for yet (folio's parser
-        // decides validity); the count above still includes it.
-        return t("docxReplaceBlockSummary", { blockId });
-    }
-  };
+  const hiddenCount = edits.length - previewEdits.length;
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
       {activeFileName && (
-        <div className="text-foreground-strong-muted truncate font-medium">
+        <TruncatedText
+          className="text-foreground-strong-muted font-medium"
+          render={<div />}
+        >
           {activeFileName}
-        </div>
+        </TruncatedText>
       )}
       <div className="text-muted-foreground">
         {t("docxEditSummary", { count: operations.length })}
       </div>
-      {previewOperations.map((operation, index) => (
+      {previewEdits.map((edit, index) => (
         <div
-          className="text-foreground-strong-muted truncate"
-          // oxlint-disable-next-line react/no-array-index-key -- previewOperations is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
-          key={`${operation.blockId}-${operation.type}-${index}`}
+          className="flex min-w-0 flex-col"
+          // oxlint-disable-next-line react/no-array-index-key -- previewEdits is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
+          key={index}
         >
-          {renderOperationSummary(operation)}
+          <TruncatedText className="text-foreground-strong-muted">
+            {edit.summary}
+          </TruncatedText>
+          {edit.text !== null && (
+            <TruncatedText className="text-muted-foreground">
+              {edit.text}
+            </TruncatedText>
+          )}
         </div>
       ))}
       {hiddenCount > 0 && (
@@ -311,12 +261,19 @@ const CreateWorkspaceDocumentSummary = ({
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
-      <div className="text-foreground-strong-muted truncate font-medium">
+      <TruncatedText
+        className="text-foreground-strong-muted font-medium"
+        render={<div />}
+      >
         {fileName}
-      </div>
-      <div className="text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+      </TruncatedText>
+      <TruncatedText
+        className="text-muted-foreground whitespace-pre-wrap"
+        lines={4}
+        render={<div />}
+      >
         {markdownPreview}
-      </div>
+      </TruncatedText>
     </div>
   );
 };
@@ -437,7 +394,7 @@ const useMcpApprovalIconHref = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== null,
   });
-  const connectorsView = useQueryView(mcpConnectorsQuery);
+  const connectorsView = queryView(mcpConnectorsQuery);
   const availableConnectors =
     connectorsView.type === "items" ? connectorsView.items.connectors : [];
   return connectorSlug === null
@@ -480,12 +437,131 @@ export const PendingToolApprovalCard = ({
   );
 };
 
+/**
+ * How a browser command card relates to website approvals: the website its
+ * command acts on or moves to (by exact origin), whether the reads mode or a
+ * website approval may answer it, and the user's stored approvals. Like a
+ * stored tool grant, a website approval the API did not confirm (`unconfirmed`)
+ * answers nothing.
+ */
+const useBrowserCardApproval = ({
+  browserCommand,
+  unconfirmed,
+}: {
+  browserCommand: BrowserControlCommand | null;
+  unconfirmed: boolean;
+}) => {
+  const sites = useBrowserSiteGrants(browserCommand !== null);
+  const autoApproval = useBrowserAutoApproval({
+    command: browserCommand,
+    grantedOrigins: sites.grantedOrigins,
+  });
+  const observedPage = useBrowserObservedPage();
+  const site =
+    browserCommand === null
+      ? null
+      : browserCommandSite({ command: browserCommand, observedPage });
+  const siteGrantOrigin =
+    autoApproval.type === "site-grant" && !unconfirmed
+      ? autoApproval.origin
+      : null;
+  return {
+    /**
+     * Whether the API still allows the site, read with a request of its own.
+     * The card decides again once that read is back, on the approval state
+     * of that moment: a re-paired controller, a failed command or a moved
+     * tab in the meantime makes it ask. The site is kept with the call, and
+     * its result is checked against it once the command ran.
+     */
+    confirmSiteGrant: async (toolCallId: string): Promise<boolean> => {
+      if (siteGrantOrigin === null || browserCommand === null) {
+        return false;
+      }
+      const fresh = await sites.readFresh();
+      if (fresh === null) {
+        return false;
+      }
+      const now = currentBrowserAutoApproval({
+        command: browserCommand,
+        grantedOrigins: fresh,
+      });
+      return (
+        now.type === "site-grant" &&
+        now.origin === siteGrantOrigin &&
+        recordBrowserSiteGrantApproval(toolCallId, now.origin)
+      );
+    },
+    isReadsAutoApproval: autoApproval.type === "reads-mode",
+    /** The site the card offers to always allow: known, and not yet allowed. */
+    offeredSite:
+      site !== null && sites.canGrant && !sites.grantedOrigins.has(site)
+        ? site
+        : null,
+    site,
+    siteGrantOrigin,
+    sites,
+  };
+};
+
+/**
+ * Allows this call and stores a website approval for `site`. The call is
+ * allowed either way; a failed save only means the next call asks again.
+ */
+const AlwaysAllowSiteButton = ({
+  allow,
+  approve,
+  site,
+}: {
+  allow: (origin: string) => Promise<void>;
+  /** Answers the card; false when it was already answered. */
+  approve: () => boolean;
+  site: string;
+}) => {
+  const t = useTranslations();
+  const allowSite = async () => {
+    const stored = await Result.tryPromise(async () => await allow(site));
+    if (stored.isErr()) {
+      notifyUserError(stored.error, t("chat.approval.browser.allowSiteFailed"));
+    }
+  };
+  return (
+    <Button
+      onClick={() => {
+        if (approve()) {
+          detached(allowSite(), "tool-approval-card.allow-browser-site");
+        }
+      }}
+      size="xs"
+      title={browserSiteGrantHost(site)}
+      variant="outline"
+    >
+      {t("chat.approval.browser.alwaysAllowSite")}
+    </Button>
+  );
+};
+
 const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
   useMountEffect(() => {
     respond();
   });
 
   return null;
+};
+
+/**
+ * The card's title. A step a coding agent asks about on the member's computer
+ * is named by its kind, as its row names it.
+ */
+const approvalTitleKey = (name: ApprovalToolName, part: ApprovalToolPart) => {
+  const titleKind =
+    localRunToolView({
+      name,
+      input: getApprovalPartInput(part),
+      output: part.output,
+    })?.titleKind ?? null;
+  return titleKind === null
+    ? getChatToolTitleKey(name)
+    : LOCAL_RUN_TITLE_KEYS[titleKind];
 };
 
 export const ToolApprovalCard = ({
@@ -525,13 +601,12 @@ export const ToolApprovalCard = ({
     isBlocked,
     isFailed,
     isProcessing,
-    isPublicOfficialApproval,
     isDenied,
     label,
     showsExternalInput,
   } = getToolApprovalState({
     blockedApprovalTools,
-    defaultLabel: t(getChatToolTitleKey(name)),
+    defaultLabel: t(approvalTitleKey(name, part)),
     name,
     part,
     isTurnActive,
@@ -542,7 +617,7 @@ export const ToolApprovalCard = ({
     ? getToolOutputError(part.output)
     : undefined;
   const failureLabelKey = isFailed
-    ? toolFailureLabelKey(rawErrorDetails, part.state)
+    ? toolFailureLabelKey({ name, output: part.output, state: part.state })
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
@@ -551,26 +626,30 @@ export const ToolApprovalCard = ({
     name === BROWSER_CONTROL_TOOL_NAME
       ? parseBrowserControlCommand(getApprovalPartInput(part))
       : null;
-  const isBrowserCommandAutoApproved =
-    useBrowserCommandAutoApproved(browserCommand);
-  // A stored grant answers a card only once the API confirms it still holds;
-  // public-registry lookups and opted-in browser page reads need no grant.
+  const browserApproval = useBrowserCardApproval({
+    browserCommand,
+    unconfirmed: approvalId === unconfirmedGrantApprovalId,
+  });
+  // A stored grant or website approval answers a card only once the API
+  // confirms it still holds; opted-in browser page reads need no grant.
   const isGrantAutoApproval =
-    !isPublicOfficialApproval &&
     approvalId !== unconfirmedGrantApprovalId &&
     hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
-      isPublicOfficialApproval,
       name,
     });
+  const confirmAutoApproval =
+    browserApproval.siteGrantOrigin === null
+      ? async () => await confirmStoredApprovalGrant(name)
+      : async () => await browserApproval.confirmSiteGrant(part.id);
   const shouldAutoApprove =
     !isBlocked &&
     !requiresPerCallChatApproval(name) &&
     (isGrantAutoApproval ||
-      isPublicOfficialApproval ||
-      isBrowserCommandAutoApproved);
+      browserApproval.isReadsAutoApproval ||
+      browserApproval.siteGrantOrigin !== null);
   const automaticResponse =
     approvalId === null
       ? null
@@ -580,9 +659,11 @@ export const ToolApprovalCard = ({
             setResponded(true);
             if (isBlocked) {
               onDeny(approvalId);
-            } else if (isGrantAutoApproval && !isBrowserCommandAutoApproved) {
-              const answerIfGrantHeld = async () => {
-                if (await confirmStoredApprovalGrant(name)) {
+            } else if (browserApproval.isReadsAutoApproval) {
+              onApprove(approvalId, name);
+            } else if (shouldAutoApprove) {
+              const answerIfConfirmed = async () => {
+                if (await confirmAutoApproval()) {
                   await onApprove(approvalId, name);
                   return;
                 }
@@ -590,11 +671,9 @@ export const ToolApprovalCard = ({
                 setResponded(false);
               };
               detached(
-                answerIfGrantHeld(),
+                answerIfConfirmed(),
                 "tool-approval-card.confirm-stored-grant",
               );
-            } else if (shouldAutoApprove) {
-              onApprove(approvalId, name);
             }
           },
           // A card the user already answered is not answered again.
@@ -605,8 +684,7 @@ export const ToolApprovalCard = ({
   // a batch.
   const asksForDecision =
     isAwaitingUser && isApprovalRequested && !responded && !isProcessing;
-  const isAwaitingDecision =
-    asksForDecision && !isBlocked && !isPublicOfficialApproval;
+  const isAwaitingDecision = asksForDecision && !isBlocked;
   const beginManualResponse = (id: string): boolean => {
     if (submittedApprovalIdRef.current === id) {
       return false;
@@ -678,6 +756,7 @@ export const ToolApprovalCard = ({
 
       <ToolApprovalSummary
         activeFileName={activeFileName}
+        browserSite={browserApproval.site}
         externalInput={showsExternalInput ? externalInput : undefined}
         isAwaitingDecision={isAwaitingDecision}
         part={part}
@@ -701,97 +780,109 @@ export const ToolApprovalCard = ({
           />
         )}
 
-      {approvalId &&
-        asksForDecision &&
-        !isBlocked &&
-        !isPublicOfficialApproval && (
-          <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
-            <Button
-              autoFocus
-              onClick={() => {
+      {approvalId && asksForDecision && !isBlocked && (
+        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
+          <Button
+            autoFocus
+            onClick={() => {
+              if (!beginManualResponse(approvalId)) {
+                return;
+              }
+              onApprove(approvalId, name);
+            }}
+            size="xs"
+          >
+            {t("chat.approval.allowOnce")}
+          </Button>
+          {browserApproval.offeredSite !== null && (
+            <AlwaysAllowSiteButton
+              allow={browserApproval.sites.allow}
+              approve={() => {
                 if (!beginManualResponse(approvalId)) {
-                  return;
+                  return false;
                 }
                 onApprove(approvalId, name);
+                return true;
               }}
-              size="xs"
-            >
-              {t("chat.approval.allowOnce")}
-            </Button>
-            {browserCommand !== null &&
-              isReadOnlyBrowserCommand(browserCommand) &&
-              browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
-                <Button
-                  onClick={() => {
-                    if (!beginManualResponse(approvalId)) {
-                      return;
-                    }
-                    setBrowserApprovalMode(
-                      BROWSER_APPROVAL_MODE.autoApproveReads,
-                    );
-                    onApprove(approvalId, name);
-                  }}
-                  size="xs"
-                  variant="outline"
-                >
-                  {t("chat.approval.browser.autoApproveReads")}
-                </Button>
-              )}
-            {canAllowInConversation && (
+              site={browserApproval.offeredSite}
+            />
+          )}
+          {browserCommand !== null &&
+            isReadOnlyBrowserCommand(browserCommand) &&
+            browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
               <Button
                 onClick={() => {
                   if (!beginManualResponse(approvalId)) {
                     return;
                   }
-                  onAllowInConversation(approvalId, name);
+                  setBrowserApprovalMode(
+                    BROWSER_APPROVAL_MODE.autoApproveReads,
+                  );
+                  onApprove(approvalId, name);
                 }}
                 size="xs"
                 variant="outline"
               >
-                {t("chat.approval.allowInConversation")}
+                {t("chat.approval.browser.autoApproveReads")}
               </Button>
             )}
-            {canAlwaysAllow && (
-              <Button
-                onClick={() => {
-                  if (!beginManualResponse(approvalId)) {
-                    return;
-                  }
-                  onAlwaysAllow(approvalId, name);
-                }}
-                size="xs"
-                variant="outline"
-              >
-                {t("chat.approval.alwaysAllow")}
-              </Button>
-            )}
+          {canAllowInConversation && (
             <Button
-              className="ms-auto"
               onClick={() => {
                 if (!beginManualResponse(approvalId)) {
                   return;
                 }
-                onDeny(approvalId);
+                onAllowInConversation(approvalId, name);
               }}
               size="xs"
-              variant="ghost"
+              variant="outline"
             >
-              {t("chat.approval.deny")}
+              {t("chat.approval.allowInConversation")}
             </Button>
-          </div>
-        )}
+          )}
+          {canAlwaysAllow && (
+            <Button
+              onClick={() => {
+                if (!beginManualResponse(approvalId)) {
+                  return;
+                }
+                onAlwaysAllow(approvalId, name);
+              }}
+              size="xs"
+              variant="outline"
+            >
+              {t("chat.approval.alwaysAllow")}
+            </Button>
+          )}
+          <Button
+            className="ms-auto"
+            onClick={() => {
+              if (!beginManualResponse(approvalId)) {
+                return;
+              }
+              onDeny(approvalId);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            {t("chat.approval.deny")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
 
 const ToolApprovalSummary = ({
   activeFileName,
+  browserSite,
   externalInput,
   isAwaitingDecision,
   part,
   providerName,
 }: {
   activeFileName: string | undefined;
+  browserSite: string | null;
   externalInput: unknown;
   isAwaitingDecision: boolean;
   part: ApprovalToolPart;
@@ -803,8 +894,10 @@ const ToolApprovalSummary = ({
 
   const name = getApprovalToolName(part);
   const input = getApprovalPartInput(part);
+  const proposedPlan = localRunProposedPlan({ name, input });
   return (
     <>
+      {proposedPlan !== null && <LocalRunPlanSummary plan={proposedPlan} />}
       {part.name === "update-entity-fields" && part.input !== undefined && (
         <UpdateSummary input={part.input} />
       )}
@@ -833,6 +926,7 @@ const ToolApprovalSummary = ({
         <BrowserControlInputSummary
           input={input}
           isAwaitingDecision={isAwaitingDecision}
+          site={browserSite}
         />
       )}
       {externalInput !== undefined && (
@@ -840,14 +934,62 @@ const ToolApprovalSummary = ({
           input={externalInput}
           isAwaitingDecision={isAwaitingDecision}
           providerName={providerName}
+          toolName={name}
         />
       )}
       {isRegistryWriteSummaryToolName(name) && input !== undefined && (
         <RegistryWriteSummary input={input} toolName={name} />
       )}
+      <LocalRunToolSummary input={input} name={name} />
     </>
   );
 };
+
+/**
+ * What a coding agent on the member's computer asks to do, as its step row
+ * names it (a command, file names, a web search's query), so the member
+ * approves the step itself rather than a tool name. Nothing for any other
+ * tool.
+ */
+const LocalRunToolSummary = ({
+  input,
+  name,
+}: {
+  input: unknown;
+  name: string;
+}) => {
+  const t = useTranslations();
+  const view = localRunToolView({ name, input, output: undefined });
+  const subtitle =
+    view === null
+      ? null
+      : localRunToolSubtitleText(view.subtitle, {
+          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
+          commandExited: (values) => t("chat.toolCall.commandExited", values),
+        });
+  if (subtitle === null || subtitle === "") {
+    return null;
+  }
+  return (
+    <div className="border-border/50 border-t px-3 py-2">
+      <p className="text-xs wrap-break-word">{subtitle}</p>
+    </div>
+  );
+};
+
+/**
+ * The plan a coding agent proposes before it acts, read whole so the member
+ * knows what approving it lets the agent do.
+ */
+const LocalRunPlanSummary = ({ plan }: { plan: string }) => (
+  <div className="border-border/50 border-t">
+    <ScrollArea axis="vertical" className="max-h-96">
+      <div className="px-3 py-2 text-sm">
+        <MessageResponse mode="static">{plan}</MessageResponse>
+      </div>
+    </ScrollArea>
+  </div>
+);
 
 type SummaryMatter = { color: string | null; id: string; name: string };
 
@@ -868,8 +1010,8 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
     }),
     enabled: user !== null,
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useMattersById:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
@@ -943,8 +1085,8 @@ const getToolApprovalState = ({
     part.output !== undefined &&
     isSuggestChangesApplyOutput(part.output) &&
     !part.output.success;
-  // The decision remains denied when the SDK settles the call as an error.
-  const isDenied = isStructuredEditFailure || part.approval.approved === false;
+  // A declined call is stored settled as an error; it is still a decline.
+  const isDenied = isStructuredEditFailure || isDeclinedChatToolCall(part);
   const isApproved =
     part.state === "complete" && part.output !== undefined && !isDenied;
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
@@ -988,7 +1130,6 @@ const getToolApprovalState = ({
       isTurnActive &&
       !isDenied &&
       (isApprovalResponded || (responded && isApprovalRequested)),
-    isPublicOfficialApproval: isPublicOfficialChatToolName(name),
     isStructuredEditFailure,
     label: externalMcpProviderName ?? defaultLabel,
     showsExternalInput,
@@ -1010,24 +1151,19 @@ const RegistryWriteSummaryRow = ({
   matter: SummaryMatter | undefined;
   value: string;
 }) => (
-  <div className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
-    <dt className="text-muted-foreground text-xs">
-      {matter ? stripIdSuffix(label) : label}
-    </dt>
-    <dd className="text-xs wrap-break-word">
-      {matter ? (
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <MatterIcon
-            className="size-3.5 shrink-0"
-            matter={{ color: matter.color, id: matter.id }}
-          />
-          <span className="truncate">{matter.name}</span>
-        </span>
-      ) : (
-        value
-      )}
-    </dd>
-  </div>
+  <DetailsItem label={matter ? stripIdSuffix(label) : label}>
+    {matter ? (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <MatterIcon
+          className="size-3.5 shrink-0"
+          matter={{ color: matter.color, id: matter.id }}
+        />
+        <TruncatedText>{matter.name}</TruncatedText>
+      </span>
+    ) : (
+      value
+    )}
+  </DetailsItem>
 );
 
 /** "Matter id" -> "Matter": the id is no longer what the row shows. A single
@@ -1074,7 +1210,7 @@ const RegistryWriteSummary = ({
 
   return (
     <div className="border-border/50 border-t px-3 py-2">
-      <dl className="space-y-1.5">
+      <DetailsGrid variant="list">
         {rows.map((row) => (
           <RegistryWriteSummaryRow
             key={row.key}
@@ -1083,7 +1219,7 @@ const RegistryWriteSummary = ({
             value={row.value}
           />
         ))}
-      </dl>
+      </DetailsGrid>
     </div>
   );
 };
@@ -1118,17 +1254,23 @@ const ExternalMcpInputSummary = ({
   input,
   isAwaitingDecision,
   providerName,
+  toolName,
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
   providerName: string;
+  toolName: ApprovalToolName;
 }) => {
   const t = useTranslations();
-  const rows = getReadableInputRows({
+  const rowOptions = {
     emptyLabel: t("common.empty"),
     input,
     requestLabel: t("chat.toolCall.input"),
-  });
+  };
+  const rows =
+    toolName === USE_CONNECTOR_SECRET_TOOL_NAME
+      ? getCompleteConnectorInputRows(rowOptions)
+      : getReadableInputRows(rowOptions);
 
   return (
     <div className="border-border/50 space-y-2 border-t px-3 py-2">
@@ -1142,24 +1284,26 @@ const ExternalMcpInputSummary = ({
           </p>
         </div>
       )}
-      <details className="group">
-        <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs">
-          {t("common.showDetails")}
-        </summary>
-        <div className="bg-background/60 mt-2 rounded-md border p-2">
-          <dl className="space-y-1.5">
-            {rows.map((row) => (
-              <div
-                className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]"
-                key={row.key}
-              >
-                <dt className="text-muted-foreground text-xs">{row.label}</dt>
-                <dd className="text-xs wrap-break-word">{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </details>
+      <div className="text-xs">
+        <Collapsible>
+          <CollapsibleTrigger render={<Button variant="plain" />}>
+            <span className="text-muted-foreground hover:text-foreground">
+              {t("common.showDetails")}
+            </span>
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            <div className="bg-background/60 mt-2 rounded-md border p-2">
+              <DetailsGrid variant="list">
+                {rows.map((row) => (
+                  <DetailsItem key={row.key} label={row.label}>
+                    {row.value}
+                  </DetailsItem>
+                ))}
+              </DetailsGrid>
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      </div>
     </div>
   );
 };
@@ -1173,7 +1317,9 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
     case BROWSER_CONTROL_ACTION.goBack:
       return "common.goBack";
     case BROWSER_CONTROL_ACTION.open:
-      return "chat.approval.browser.actions.open";
+      return command.newTab === true
+        ? "chat.approval.browser.actions.openNewTab"
+        : "chat.approval.browser.actions.open";
     case BROWSER_CONTROL_ACTION.pressKey:
       return "chat.approval.browser.actions.pressKey";
     case BROWSER_CONTROL_ACTION.select:
@@ -1182,6 +1328,8 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
       return (command.textOffset ?? 0) > 0
         ? "chat.approval.browser.actions.snapshotContinue"
         : "chat.approval.browser.actions.snapshot";
+    case BROWSER_CONTROL_ACTION.switchTab:
+      return "chat.approval.browser.actions.switchTab";
     default:
       command satisfies never;
       return panic("Unhandled browser-control action");
@@ -1203,9 +1351,12 @@ const BrowserApprovalModeNotice = ({ onReset }: { onReset: () => void }) => {
 const BrowserControlInputSummary = ({
   input,
   isAwaitingDecision,
+  site,
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
+  /** The website the command acts on or moves to, by origin. */
+  site: string | null;
 }) => {
   const t = useTranslations();
   const command = parseBrowserControlCommand(input);
@@ -1232,15 +1383,25 @@ const BrowserControlInputSummary = ({
         return panic("Unhandled browser approval detail");
     }
   };
+  const details = getBrowserApprovalDetails(command);
+  // A read or going back names no address of its own; while it asks, the
+  // card names the website the tab is on, the one "always allow" covers.
+  const pageSite =
+    isAwaitingDecision &&
+    site !== null &&
+    !details.some(({ type }) => type === "website")
+      ? [{ label: t("common.website"), value: browserSiteGrantHost(site) }]
+      : [];
   const rows = [
     {
       label: t("common.action"),
       value: t(browserActionTranslationKey(command)),
     },
-    ...getBrowserApprovalDetails(command).map((detail) => ({
+    ...details.map((detail) => ({
       label: labelForDetail(detail),
       value: detail.value,
     })),
+    ...pageSite,
   ];
 
   return (
@@ -1262,16 +1423,15 @@ const BrowserControlInputSummary = ({
           </p>
         </div>
       )}
-      <dl className="bg-background/60 space-y-1.5 rounded-md border p-2">
-        {rows.map((row) => (
-          <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.label}>
-            <dt className="text-muted-foreground text-xs">{row.label}</dt>
-            <dd className="text-xs wrap-break-word" dir="auto">
-              {row.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <div className="bg-background/60 rounded-md border p-2">
+        <DetailsGrid variant="list">
+          {rows.map((row) => (
+            <DetailsItem key={row.label} label={row.label}>
+              <span dir="auto">{row.value}</span>
+            </DetailsItem>
+          ))}
+        </DetailsGrid>
+      </div>
     </div>
   );
 };
@@ -1318,6 +1478,12 @@ const ToolApprovalLeadingIcon = ({
 
   if (toolName === "web_search" || toolName === "fetch_url") {
     return <GlobeIcon className="text-muted-foreground size-4 shrink-0" />;
+  }
+
+  if (toolName === BROWSER_CONTROL_TOOL_NAME) {
+    return (
+      <BrowserControlIcon className="text-muted-foreground size-4 shrink-0" />
+    );
   }
 
   return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;

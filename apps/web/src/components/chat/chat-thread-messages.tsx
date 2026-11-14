@@ -1,6 +1,7 @@
 import {
   createContext,
   Fragment,
+  memo,
   use,
   useLayoutEffect,
   useMemo,
@@ -15,23 +16,41 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  isChatPastedTextPart,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+} from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
+import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
+import {
+  countProcessWork,
+  groupProcessParts,
+  isProcessPart,
+  isVisibleProcessStep,
+  PROCESS_SUMMARY_KINDS,
+} from "@stll/api-contract/chat-tool-activity";
+import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
-  FileTextIcon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -42,20 +61,17 @@ import {
 } from "@/components/ai-elements/message";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
-import {
-  countProcessWork,
-  getLatestCompletedResearchPartIndex,
-  resolveChatActivityIndicatorState,
-} from "@/components/chat/chat-activity.logic";
-import type {
-  ChatActivityIndicatorState,
-  ProcessSummaryKind,
-} from "@/components/chat/chat-activity.logic";
+import { AttachmentChip } from "@/components/chat/attachment-chip";
+import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
-import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
+import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
+import {
+  ChatMessageActionsButton,
+  ChatMessageActionsScope,
+} from "@/components/chat/chat-message-actions-menu";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import {
@@ -67,8 +83,8 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
-  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
+  CHAT_MESSAGE_RENDER_POLICY,
   collectAnonRestorations,
   DATA_URL_PREFIX,
   decodeBase64DataUrl,
@@ -80,6 +96,8 @@ import {
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
 import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
+import { ChatTurnStatus } from "@/components/chat/chat-turn-status";
+import { turnPhaseFromParts } from "@/components/chat/chat-turn-status.logic";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -94,7 +112,6 @@ import type {
 import {
   getAwaitedAssistantMessageId,
   getChatToolTitleKey,
-  hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
@@ -103,9 +120,24 @@ import {
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  canRetryChatRequest,
+  canUndoLocalFilesOf,
+  finalChatRefusalKey,
+  isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
-import { ContextNotice } from "@/components/chat/context-notice";
-import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
+import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
+import {
+  ContextNotice,
+  LocalRunFilesNotSharedNotice,
+} from "@/components/chat/context-notice";
+import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
+import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
+import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
+import {
+  LocalRunStepOutputDetails,
+  localRunStepOutputKindOf,
+} from "@/components/chat/local-run-step-output";
+import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -118,30 +150,45 @@ import {
   ToolApprovalCard,
 } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import {
+  advanceToolCallTiming,
+  createToolCallTiming,
+} from "@/components/chat/tool-call-timing.logic";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
-import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
+import {
+  EditableUserMessage,
+  useUserMessageEdit,
+} from "@/components/chat/user-message-edit";
+import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
-import { CopyActionButton } from "@/components/copy-action-button";
-import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
+import { CopyControl } from "@/components/copy-control";
+import { DocumentIcon } from "@/components/document-icon";
+import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
+import { localRunLimitResetsAtFromThrown } from "@/features/chat/chat-local-run-limit";
 import {
-  findChatRequestError,
+  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
+  findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
+import type { NewestLocalTurn } from "@/features/chat/queries";
+import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
@@ -155,6 +202,7 @@ import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -266,6 +314,107 @@ const useOlderMessagePaging = ({
   return { sentinelRef, triggerLoadOlder };
 };
 
+/** A turn can persist an assistant message that shows nothing (only hidden
+ *  reasoning, for example) ahead of the one holding its tool card and answer.
+ *  Rendered, it is an empty block whose spacing opens a gap under the question.
+ *  The last message always renders: its footer carries retry and stop. */
+const showsNothing = (message: ChatUIMessage, isLast: boolean) =>
+  message.role === "assistant" &&
+  !isLast &&
+  !carriesAnswerNotice(message) &&
+  !hasVisibleAssistantParts(message.parts);
+
+/** Only an answer offers message actions. Its whole box, gaps between its parts
+ *  included, is the right-click target for what its "…" opens. */
+const answerCanFork = ({
+  generationActive,
+  message,
+  messages,
+}: {
+  generationActive: boolean;
+  message: ChatUIMessage;
+  messages: ChatUIMessage[];
+}) =>
+  CHAT_MESSAGE_RENDER_POLICY[message.role] === "assistant" &&
+  canForkAssistantMessage({
+    isGenerating: generationActive,
+    messageId: message.id,
+    messages,
+  });
+
+/** Only an answer offers actions. A role never changes, so neither does the
+ *  shape of the tree around a message's content. */
+const messageActionsThreadRef = (
+  message: ChatUIMessage,
+  threadRef: ChatThreadRef | undefined,
+) =>
+  CHAT_MESSAGE_RENDER_POLICY[message.role] === "assistant"
+    ? threadRef
+    : undefined;
+
+/** The live status line of the turn that is running now. Memoized: the
+ *  thread re-renders on every streamed chunk, while the line only changes
+ *  with the running assistant message. */
+const ActiveTurnStatus = memo(
+  ({
+    assistant,
+    sentAt,
+  }: {
+    assistant: ChatUIMessage | undefined;
+    sentAt: number | null | undefined;
+  }) => {
+    const t = useTranslations();
+    const turnSentAt = sentAt ?? null;
+    return (
+      <ChatTurnStatus
+        turn={
+          assistant === undefined
+            ? { state: "submitted", phase: null, sentAt: turnSentAt }
+            : {
+                state: "streaming",
+                phase: turnPhaseFromParts(assistant.parts, (name) =>
+                  t(getChatToolTitleKey(name)),
+                ),
+                timing: assistant.metadata?.turnTiming,
+                sentAt: turnSentAt,
+              }
+        }
+      />
+    );
+  },
+);
+
+/** What the thread knows about undoing its local turns' file changes. */
+type LocalFilesUndoFacts = {
+  generationActive: boolean;
+  messages: ChatUIMessage[];
+  newestLocalTurn: NewestLocalTurn | null | undefined;
+};
+
+/**
+ * The undo props of `message`'s actions: the turn it may undo (only the
+ * newest turn's answer), whether a new undo may be asked now, and whether
+ * its turn was undone already, as the server marked the answer.
+ */
+const localFilesUndoPropsFor = (
+  { generationActive, messages, newestLocalTurn }: LocalFilesUndoFacts,
+  { id: messageId, metadata }: ChatUIMessage,
+) => {
+  const turn =
+    newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn : null;
+  return {
+    localFilesUndoTurnId: turn?.id ?? null,
+    localFilesUndoOffered:
+      turn !== null &&
+      canUndoLocalFilesOf({
+        isGenerating: generationActive,
+        messageId,
+        messages,
+      }),
+    localFilesUndone: metadata?.localFilesUndone !== undefined,
+  };
+};
+
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -291,14 +440,17 @@ export const ChatThreadMessages = ({
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
   onOpenPlaybook,
-  showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
+  computerWait = null,
+  turnSentAt,
+  newestLocalTurn,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
   threadRef,
+  userMessageEdit,
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
@@ -312,23 +464,16 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const generationActive = error === undefined && isGenerating;
+  const undo = { generationActive, messages, newestLocalTurn };
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
   );
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
-  const latestCompletedResearchPartIndex =
-    getLatestCompletedResearchPartIndex(messages);
-  const activityIndicatorState = resolveChatActivityIndicatorState({
-    hasCompletedResearch: latestCompletedResearchPartIndex !== null,
-    hasRunningTool: hasRunningToolCallInLatestAssistantMessage({ messages }),
-    hasVisibleResponse: hasVisibleResponseContent(
-      messages,
-      latestCompletedResearchPartIndex,
-    ),
-    hasVisibleContent: hasVisibleContent(messages),
-  });
-
+  const turns = buildMessageTurns(messages);
+  const activeTurnMessageIds = new Set(
+    generationActive ? turns.at(-1)?.body.map(({ message }) => message.id) : [],
+  );
   // Null when this list renders outside a `Conversation` (the file-chat
   // overlay uses its own scroll container and never wires load-older).
   const stick = useMaybeStickToBottomContext();
@@ -346,125 +491,149 @@ export const ChatThreadMessages = ({
   // Rendered per message in both the flat and sticky layouts, so the message
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
-  const renderMessageNode = (message: ChatUIMessage, index: number) => (
-    <ChatRenderErrorBoundary
-      fallback={<MessageRenderFallback message={message} />}
-      key={message.id}
-      resetOn={message.parts}
-      surface="chat-message"
-    >
-      <Message
-        className={cn(
-          "transition-opacity duration-200",
-          approvalPendingMessageId &&
-            approvalPendingMessageId !== message.id &&
-            "opacity-40",
-        )}
-        from={message.role}
-        data-chat-message-id={message.id}
+  const renderMessageNode = (message: ChatUIMessage, index: number) => {
+    if (showsNothing(message, index === messages.length - 1)) {
+      return null;
+    }
+    const canFork = answerCanFork({ generationActive, message, messages });
+    return (
+      <ChatRenderErrorBoundary
+        fallback={<MessageRenderFallback message={message} />}
+        key={message.id}
+        resetOn={message.parts}
+        surface="chat-message"
       >
-        <MessageContent
+        <Message
           className={cn(
-            message.parts.some(
-              (part) =>
-                part.type === "ui-resource" &&
-                uiResourceRenderer(part.resource.mimeType) ===
-                  "generated-visual",
-            ) && "w-full",
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
           )}
+          from={message.role}
+          data-chat-message-id={message.id}
         >
-          <MessageBodyRender
-            render={() => {
-              const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
-              switch (policy) {
-                case "activity":
-                  return renderActivityMessage(message.parts);
-                case "assistant":
-                  return (
-                    <ChatAnswerDecisionProvider
-                      message={message}
-                      isAwaitingUser={awaitedAssistantMessageId === message.id}
-                    >
-                      <AssistantMessageParts
-                        activeFileName={activeFileName}
-                        activeOrganizationId={activeOrganizationId}
-                        assistantTextDensity={assistantTextDensity}
-                        isAwaitingUser={
-                          awaitedAssistantMessageId === message.id
-                        }
-                        isGenerating={generationActive}
-                        isLatestAssistantMessage={
-                          message.id === retryableAssistantMessageId
-                        }
-                        message={message}
-                        onAskUserEditAndRerun={onAskUserEditAndRerun}
-                        onAskUserEditingChange={onAskUserEditingChange}
-                        onAskUserSubmit={onAskUserSubmit}
-                        onCreateDocumentResolve={onCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-                        onOpenCreatedDocument={onOpenCreatedDocument}
-                        onOpenPlaybook={onOpenPlaybook}
-                        shouldShowToolCalls={shouldShowToolCalls}
-                        streamdownComponents={streamdownComponents}
-                        workspaceId={workspaceId}
-                        threadRef={threadRef}
-                      />
-                      <ChatTurnDuration timing={message.metadata?.turnTiming} />
-                      <div
-                        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                        data-chat-answer-footer
-                        data-chat-copy-exclude
-                      >
-                        <AssistantMessageActions
-                          exportArtifact={findCreateDocumentArtifactForMessage(
-                            messages,
-                            index,
-                          )}
-                          canFork={canForkAssistantMessage({
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          canRetry={canRetryAssistantMessage({
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          contextMatterIds={branchSource?.contextMatterIds}
+          <ChatMessageActionsScope
+            canExport={getMessageText(message) !== ""}
+            canFork={canFork}
+            contextMatterIds={branchSource?.contextMatterIds}
+            exportArtifact={
+              canFork
+                ? findCreateDocumentArtifactForMessage(messages, index)
+                : null
+            }
+            {...localFilesUndoPropsFor(undo, message)}
+            message={message}
+            threadRef={messageActionsThreadRef(message, threadRef)}
+          >
+            <MessageContent
+              className={cn(showsFullWidthResource(message) && "w-full")}
+            >
+              <MessageBodyRender
+                render={() => {
+                  const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
+                  switch (policy) {
+                    case "activity":
+                      return renderActivityMessage(message.parts);
+                    case "assistant":
+                      return (
+                        <ChatAnswerDecisionProvider
                           message={message}
-                          onResend={onResend}
-                          threadRef={threadRef}
-                        />
-                        <AssistantAnswerMetadata
-                          message={message}
-                          workspaceId={workspaceId}
-                          threadId={threadRef?.threadId}
-                          disabled={
-                            generationActive || !!awaitedAssistantMessageId
+                          isAwaitingUser={
+                            awaitedAssistantMessageId === message.id
                           }
-                          onAnswerEdited={onAnswerEdited}
-                        />
-                      </div>
-                    </ChatAnswerDecisionProvider>
-                  );
-                case "text":
-                  return (
-                    <TextMessageParts
-                      message={message}
-                      messages={messages}
-                      index={index}
-                    />
-                  );
-                default:
-                  policy satisfies never;
-                  return panic("Unhandled chat message render policy");
-              }
-            }}
-          />
-        </MessageContent>
-      </Message>
-    </ChatRenderErrorBoundary>
-  );
+                        >
+                          <AssistantMessageParts
+                            activeFileName={activeFileName}
+                            activeOrganizationId={activeOrganizationId}
+                            assistantTextDensity={assistantTextDensity}
+                            isAwaitingUser={
+                              awaitedAssistantMessageId === message.id
+                            }
+                            isGenerating={generationActive}
+                            isLatestAssistantMessage={
+                              message.id === retryableAssistantMessageId
+                            }
+                            message={message}
+                            onAskUserEditAndRerun={onAskUserEditAndRerun}
+                            onAskUserEditingChange={onAskUserEditingChange}
+                            onAskUserSubmit={onAskUserSubmit}
+                            onCreateDocumentResolve={onCreateDocumentResolve}
+                            onOpenCreateDocumentDraft={
+                              onOpenCreateDocumentDraft
+                            }
+                            onOpenCreatedDocument={onOpenCreatedDocument}
+                            onOpenPlaybook={onOpenPlaybook}
+                            turnStatus={
+                              activeTurnMessageIds.has(message.id)
+                                ? "running"
+                                : "finished"
+                            }
+                            shouldShowToolCalls={shouldShowToolCalls}
+                            streamdownComponents={streamdownComponents}
+                            workspaceId={workspaceId}
+                            threadRef={threadRef}
+                          />
+                          <div
+                            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                            data-chat-answer-footer
+                            data-chat-copy-exclude
+                          >
+                            <AssistantMessageActions
+                              canFork={canFork}
+                              canRetry={canRetryAssistantMessage({
+                                error,
+                                isGenerating: generationActive,
+                                messageId: message.id,
+                                messages,
+                              })}
+                              message={message}
+                              onResend={onResend}
+                              threadRef={threadRef}
+                            />
+                            {!activeTurnMessageIds.has(message.id) && (
+                              <ChatTurnDuration
+                                timing={message.metadata?.turnTiming}
+                              />
+                            )}
+                            <AssistantAnswerMetadata
+                              message={message}
+                              workspaceId={workspaceId}
+                              threadId={threadRef?.threadId}
+                              disabled={
+                                generationActive || !!awaitedAssistantMessageId
+                              }
+                              onAnswerEdited={onAnswerEdited}
+                            />
+                          </div>
+                        </ChatAnswerDecisionProvider>
+                      );
+                    case "text":
+                      return (
+                        <EditableUserMessage
+                          actions={userMessageEdit}
+                          isGenerating={generationActive}
+                          message={message}
+                        >
+                          <TextMessageParts
+                            message={message}
+                            messages={messages}
+                            index={index}
+                          />
+                        </EditableUserMessage>
+                      );
+                    default:
+                      policy satisfies never;
+                      return panic("Unhandled chat message render policy");
+                  }
+                }}
+              />
+            </MessageContent>
+          </ChatMessageActionsScope>
+        </Message>
+      </ChatRenderErrorBoundary>
+    );
+  };
 
   return (
     // Sent messages persist a same-matter mention without its matter; the
@@ -490,47 +659,63 @@ export const ChatThreadMessages = ({
             ref={sentinelRef}
           />
         )}
-        {stickyUserMessages
-          ? buildMessageTurns(messages).map((turn, turnIndex) => {
-              if (turn.type === "orphan") {
-                const orphanFirstMessageId = turn.body.at(0)?.message.id;
-                return (
-                  <Fragment key={orphanFirstMessageId ?? `orphan-${turnIndex}`}>
-                    {turn.body.map((item) =>
-                      renderMessageNode(item.message, item.index),
-                    )}
-                  </Fragment>
-                );
-              }
-              return (
-                <StickyUserTurn
-                  approvalPendingMessageId={approvalPendingMessageId}
-                  headerIndex={turn.index}
-                  headerMessage={turn.header}
-                  key={turn.header.id}
-                  messages={messages}
-                  scrollRef={scrollRef}
-                >
-                  {turn.body.map((item) =>
-                    renderMessageNode(item.message, item.index),
-                  )}
-                </StickyUserTurn>
-              );
-            })
-          : messages.map((message, index) => renderMessageNode(message, index))}
+        {turns.map((turn, turnIndex) => {
+          const body = turn.body.map((item) =>
+            renderMessageNode(item.message, item.index),
+          );
+          const assistant = turn.body.findLast(
+            (item) => item.message.role === "assistant",
+          )?.message;
+          const active = generationActive && turnIndex === turns.length - 1;
+          const status =
+            active && computerWait === null ? (
+              <ActiveTurnStatus assistant={assistant} sentAt={turnSentAt} />
+            ) : null;
+          if (turn.type === "orphan") {
+            return (
+              <Fragment key={turn.body.at(0)?.message.id}>
+                {body}
+                {status}
+              </Fragment>
+            );
+          }
+          if (!stickyUserMessages) {
+            return (
+              <Fragment key={turn.header.id}>
+                {renderMessageNode(turn.header, turn.index)}
+                {body}
+                {status}
+              </Fragment>
+            );
+          }
+          return (
+            <StickyUserTurn
+              approvalPendingMessageId={approvalPendingMessageId}
+              headerIndex={turn.index}
+              headerMessage={turn.header}
+              isGenerating={generationActive}
+              key={turn.header.id}
+              messages={messages}
+              scrollRef={scrollRef}
+              userMessageEdit={userMessageEdit}
+            >
+              {body}
+              {status}
+            </StickyUserTurn>
+          );
+        })}
         {error && (
           <ChatErrorMessage
             error={error}
             isGenerating={generationActive}
             onResend={onResend}
             onSendWithoutAnonymization={onSendWithoutAnonymization}
+            threadRef={threadRef}
           />
         )}
-        {showThinkingIndicator &&
-          generationActive &&
-          activityIndicatorState && (
-            <ThinkingIndicator state={activityIndicatorState} />
-          )}
+        {generationActive && computerWait !== null && (
+          <ComputerWaitIndicator wait={computerWait} />
+        )}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -548,8 +733,10 @@ type StickyUserTurnProps = {
   approvalPendingMessageId: string | null;
   headerIndex: number;
   headerMessage: PersistedChatMessage;
+  isGenerating: boolean;
   messages: readonly PersistedChatMessage[];
   scrollRef: RefObject<HTMLDivElement | null> | null;
+  userMessageEdit: UserMessageEditActions | undefined;
   children: ReactNode;
 };
 
@@ -566,11 +753,18 @@ const StickyUserTurn = ({
   approvalPendingMessageId,
   headerIndex,
   headerMessage,
+  isGenerating,
   messages,
   scrollRef,
+  userMessageEdit,
   children,
 }: StickyUserTurnProps) => {
   const t = useTranslations();
+  const messageEdit = useUserMessageEdit({
+    actions: userMessageEdit,
+    isGenerating,
+    message: headerMessage,
+  });
   const sentinelRef = useRef<HTMLDivElement>(null);
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
@@ -713,11 +907,13 @@ const StickyUserTurn = ({
               pointer-events-none so plain text falls through to this jump
               target, and only its interactive children re-enable clicks. */}
           {isStuck && (
-            <button
+            // An invisible hit area: a plain button paints nothing, so no
+            // fill shows over the pinned header.
+            <Button
               aria-label={t("chat.jumpToMessage")}
-              className="absolute inset-0 z-0 cursor-pointer"
+              className="absolute inset-0 z-0"
               onClick={handleScrollBack}
-              type="button"
+              variant="plain"
             />
           )}
           <Message
@@ -733,9 +929,9 @@ const StickyUserTurn = ({
             from="user"
             data-chat-message-id={headerMessage.id}
           >
-            <MessageContent>
+            <MessageContent className={cn(messageEdit.editing && "hidden")}>
               <div className="group-data-[stuck=true]/sticky:hidden">
-                <UserAttachments parts={fileParts} />
+                <MessageAttachments parts={fileParts} />
               </div>
               {!hasVisibleText && fileParts.length > 0 && (
                 <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
@@ -745,6 +941,9 @@ const StickyUserTurn = ({
               )}
               <div
                 className={cn(
+                  // Anchors the idle edit action, which sits in this text box
+                  // as it does in the flat layout's `EditableUserMessage`.
+                  "relative",
                   "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
                   // Fade the clipped overflow so a long pinned message dissolves
                   // instead of ending in a hard mid-glyph cut. The absolute-length
@@ -764,8 +963,10 @@ const StickyUserTurn = ({
                     />
                   ) : null,
                 )}
+                {!messageEdit.editing && messageEdit.editor}
               </div>
             </MessageContent>
+            {messageEdit.editing && messageEdit.editor}
           </Message>
         </div>
       </div>
@@ -799,10 +1000,9 @@ const LoadOlderSentinel = ({
       {isLoadingOlder ? (
         <span
           aria-busy="true"
-          className="text-muted-foreground flex items-center gap-2 text-xs"
+          className="text-muted-foreground text-xs"
           role="status"
         >
-          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (
@@ -816,7 +1016,11 @@ const LoadOlderSentinel = ({
 
 const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
-    <StreamdownMentionLink interactive={false} {...props} />
+    <StreamdownMentionLink
+      externalLinks="written"
+      interactive={false}
+      {...props}
+    />
   ),
 };
 
@@ -871,6 +1075,17 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
   return result;
 };
 
+/** Rendered apps that lay out across the whole message column. */
+const FULL_WIDTH_RENDERERS: ReadonlySet<ReturnType<typeof uiResourceRenderer>> =
+  new Set(["generated-visual", "stella-app"]);
+
+const showsFullWidthResource = (message: ChatUIMessage) =>
+  message.parts.some(
+    (part) =>
+      part.type === "ui-resource" &&
+      FULL_WIDTH_RENDERERS.has(uiResourceRenderer(part.resource.mimeType)),
+  );
+
 const IMAGE_MEDIA_TYPES = Object.freeze([
   "image/png",
   "image/jpeg",
@@ -911,7 +1126,10 @@ const downloadDataAttachment = ({
 }: DownloadDataAttachmentOptions): void => {
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
-    getAnalytics().captureError(decoded.error);
+    getAnalytics().captureError(decoded.error, {
+      fingerprintKey: "downloadDataAttachment:failure",
+      scope: { type: "handler", handlerId: "downloadDataAttachment:failure" },
+    });
     notifyUserError(decoded.error, errorTitle);
     return;
   }
@@ -921,7 +1139,7 @@ const downloadDataAttachment = ({
 
 type UserAttachmentPart = ChatAttachmentPart | ChatPastedTextPart;
 
-const UserAttachments = ({
+const MessageAttachments = ({
   parts,
 }: {
   parts: readonly UserAttachmentPart[];
@@ -982,56 +1200,32 @@ const UserAttachments = ({
           );
         }
 
-        const attachmentContent = (
-          <>
-            <FileTextIcon className="size-3" />
-            <span>{filename ?? fallbackLabel}</span>
-          </>
-        );
-        const attachmentClassName = cn(
-          "flex items-center gap-1.5",
-          "bg-muted/50 rounded-md px-2 py-1",
-          "text-muted-foreground text-xs",
-        );
-
+        const title = filename ?? fallbackLabel;
+        let open: AttachmentChipOpen = { type: "none" };
         if (contentUrl?.startsWith(DATA_URL_PREFIX)) {
-          return (
-            <button
-              className={attachmentClassName}
-              key={key}
-              onClick={() =>
-                downloadDataAttachment({
-                  errorTitle: t("errors.actionFailed"),
-                  fileName: filename ?? fallbackLabel,
-                  mimeType,
-                  url: contentUrl,
-                })
-              }
-              type="button"
-            >
-              {attachmentContent}
-            </button>
-          );
+          open = {
+            type: "action",
+            onClick: () =>
+              downloadDataAttachment({
+                errorTitle: t("errors.actionFailed"),
+                fileName: title,
+                mimeType,
+                url: contentUrl,
+              }),
+          };
+        } else if (contentUrl !== null) {
+          open = { type: "link", href: contentUrl };
         }
-
-        if (contentUrl) {
-          return (
-            <a
-              className={attachmentClassName}
-              href={sanitizeHref(contentUrl)}
-              key={key}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {attachmentContent}
-            </a>
-          );
-        }
-
         return (
-          <span className={attachmentClassName} key={key}>
-            {attachmentContent}
-          </span>
+          <AttachmentChip
+            icon={({ className }) => (
+              <DocumentIcon className={className} mimeType={mimeType} />
+            )}
+            key={key}
+            kind="file"
+            open={open}
+            title={title}
+          />
         );
       })}
     </div>
@@ -1059,24 +1253,77 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
   );
 };
 
-const ThinkingIndicator = ({
-  state,
-}: {
-  state: ChatActivityIndicatorState;
-}) => {
+/**
+ * The turn waits on its computer: for stella desktop to open before it is
+ * sent, for the computer to pick the run up, with the time since the turn
+ * was sent, or to come back after it went away mid-turn.
+ */
+const ComputerWaitIndicator = ({ wait }: { wait: ChatComputerWait }) => {
   const t = useTranslations();
+  const label = (() => {
+    switch (wait.status) {
+      case "opening_desktop":
+        return t("settings.account.desktopCardOpeningTitle");
+      case "delivering":
+        return t("chat.localRun.waitingForPickup");
+      case "waiting":
+        return t("chat.localRun.waitingForComputer");
+      default:
+        wait satisfies never;
+        return panic("Unknown computer wait");
+    }
+  })();
 
   return (
     <Message from="assistant">
       <MessageContent>
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <StatusMark status="running" />
-          <span className={CHAT_PENDING_TEXT_CLASS}>
-            {t(state === "solving" ? "chat.analyzingSources" : "chat.thinking")}
+        <div className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
+          {/* Only the wait is announced: the count would be read out every
+              second, so it is shown but hidden from assistive technology,
+              which reads when the turn was sent instead. */}
+          <span className="flex items-center gap-2" role="status">
+            <StatusMark status="pending" />
+            {label}
           </span>
+          {wait.status === "delivering" ? (
+            <ElapsedSince since={wait.since} />
+          ) : null}
         </div>
       </MessageContent>
     </Message>
+  );
+};
+
+/** Whole seconds since `since`, counted live, and when that was. */
+const ElapsedSince = ({ since }: { since: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const sinceMs = Temporal.Instant.from(since).epochMilliseconds;
+  const [nowMs, setNowMs] = useState(
+    () => Temporal.Now.instant().epochMilliseconds,
+  );
+  useExternalSyncEffect(() => {
+    const interval = setInterval(
+      () => setNowMs(Temporal.Now.instant().epochMilliseconds),
+      1000,
+    );
+    return () => clearInterval(interval);
+  }, [sinceMs]);
+  return (
+    <>
+      <span aria-hidden="true">
+        {format.number(Math.max(0, Math.floor((nowMs - sinceMs) / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })}
+      </span>
+      <span className="sr-only">
+        {t("chat.localRun.waitingSentAt", {
+          time: format.dateTime(new Date(sinceMs), { timeStyle: "medium" }),
+        })}
+      </span>
+    </>
   );
 };
 
@@ -1085,13 +1332,6 @@ type ChatErrorTranslationKey =
   | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
-
-const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
-  preparation_failed: "chat.sendErrorPreparationFailed",
-  connection_failed: "chat.sendErrorConnectionFailed",
-  timed_out: "chat.sendErrorTimedOut",
-  not_started: "chat.sendErrorNotStarted",
-} as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   const requestError = findChatRequestError(error);
@@ -1109,17 +1349,84 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   return "chat.sendError";
 };
 
+/**
+ * A local run's usage limit with the time the harness said it resets, in the
+ * member's own locale and time zone.
+ */
+const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return t("chat.localRun.errorLimitResetsAt", {
+    time: format.dateTime(new Date(resetsAt), MEDIUM_DATE_SHORT_TIME_FORMAT),
+  });
+};
+
+/**
+ * For a turn refused because none of the member's computers is connected:
+ * opens stella desktop on this click, waits for a computer to connect, and
+ * then sends the turn again by itself, unless something superseded this
+ * refusal meanwhile (`holdResend`'s signal). One click opens the desktop
+ * once; while it opens the button says so and takes no other click.
+ */
+const OpenDesktopAndResendButton = ({
+  disabled,
+  holdResend,
+  onResend,
+}: {
+  disabled: boolean;
+  /** Starts this click's resend; its signal aborts once it is superseded. */
+  holdResend: () => AbortSignal;
+  onResend: (options?: ChatResendOptions) => void | PromiseLike<void>;
+}) => {
+  const t = useTranslations();
+  const { activeOrganizationId } = useAuthenticatedUser();
+  const desktop = useDesktopLaunch(activeOrganizationId);
+  const opening = desktop.state.type === "opening";
+  return (
+    <>
+      <Button
+        disabled={disabled || opening}
+        onClick={() => {
+          const superseded = holdResend();
+          detached(
+            (async () => {
+              const outcome = await desktop.launch();
+              if (outcome === "connected" && !superseded.aborted) {
+                await onResend();
+              }
+            })(),
+            "chat-thread-messages.open-desktop-and-resend",
+          );
+        }}
+        size="sm"
+        variant="destructive-outline"
+      >
+        {opening
+          ? t("settings.account.desktopCardOpeningTitle")
+          : t("settings.account.desktopOpenApp")}
+      </Button>
+      {/* A button's label is not announced as it changes, so the launch's
+          progress has its own status region, mounted before it changes. */}
+      <span className="sr-only" role="status">
+        {opening ? t("settings.account.desktopCardOpeningTitle") : ""}
+      </span>
+    </>
+  );
+};
+
 export const ChatErrorMessage = ({
   error,
   isGenerating,
   onResend,
   onSendWithoutAnonymization,
+  threadRef,
 }: {
   error: Error;
   isGenerating: boolean;
+  /** The chat the error belongs to; offers the limit reminder when set. */
+  threadRef?: ChatThreadRef | undefined;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
@@ -1127,14 +1434,42 @@ export const ChatErrorMessage = ({
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
-  const diagnostic = providerDiagnosticFromThrown(error);
+  const finalRefusalKey = finalChatRefusalKey(error);
+  // A provider refusal shows its typed message and, for a known setup
+  // problem, the fix; the provider's own wording is never shown.
+  const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
   const rejectedInput =
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
-  const errorMessage = rejectedInput
-    ? t("errors.api.validation")
-    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
+  let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
+  if (isChatMessageEditRefusal(error)) {
+    errorMessage = t("chat.editMessageRefused");
+  } else if (finalRefusalKey !== undefined) {
+    errorMessage = t(finalRefusalKey);
+  } else if (rejectedInput) {
+    errorMessage = t("errors.api.validation");
+  }
+  const limitResetsAt =
+    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+      ? localRunLimitResetsAtFromThrown(error)
+      : null;
+  // The resend an "Open stella desktop" click holds until a computer
+  // connects belongs to this refusal: Resend, another refusal in its place,
+  // or the card leaving the page (a new send, another thread) drops it.
+  const desktopResend = useRef<AbortController | null>(null);
+  useExternalSyncEffect(
+    () => () => {
+      desktopResend.current?.abort();
+    },
+    [error],
+  );
+  const holdDesktopResend = () => {
+    desktopResend.current?.abort();
+    const held = new AbortController();
+    desktopResend.current = held;
+    return held.signal;
+  };
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1159,11 +1494,14 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        {diagnostic !== undefined ? (
-          <ProviderDiagnosticMessage diagnostic={diagnostic} />
-        ) : (
-          <p className="text-sm">{errorMessage}</p>
-        )}
+        <p className="text-sm">
+          {limitResetsAt === null ? (
+            errorMessage
+          ) : (
+            <LocalRunLimitResetMessage resetsAt={limitResetsAt} />
+          )}
+        </p>
+        <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button
@@ -1180,10 +1518,24 @@ export const ChatErrorMessage = ({
               {t("chat.sendWithoutAnonymization")}
             </Button>
           )}
-          {onResend && (
+          {limitResetsAt !== null && threadRef !== undefined && (
+            <LocalRunLimitReminder
+              disabled={isGenerating}
+              threadRef={threadRef}
+            />
+          )}
+          {onResend && refusal?.code === CHAT_LOCAL_RUN_REFUSAL.noComputer && (
+            <OpenDesktopAndResendButton
+              disabled={isGenerating}
+              holdResend={holdDesktopResend}
+              onResend={onResend}
+            />
+          )}
+          {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
               onClick={() => {
+                desktopResend.current?.abort();
                 detached(onResend(), "chat-thread-messages.resend");
               }}
               size="sm"
@@ -1196,56 +1548,6 @@ export const ChatErrorMessage = ({
       </MessageContent>
     </Message>
   );
-};
-
-const hasVisibleContent = (
-  messages: readonly PersistedChatMessage[],
-): boolean => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!message || message.role !== "assistant") {
-      break;
-    }
-
-    for (const part of message.parts) {
-      if (part.type === "text" && part.content.trim()) {
-        return true;
-      }
-
-      if (part.type === "tool-call") {
-        return true;
-      }
-
-      if (part.type === "thinking" && part.content.trim()) {
-        return true;
-      }
-
-      if (isRichChatPart(part)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-};
-
-const hasVisibleResponseContent = (
-  messages: readonly PersistedChatMessage[],
-  afterPartIndex: number | null,
-): boolean => {
-  const message = messages.at(-1);
-  if (message?.role !== "assistant") {
-    return false;
-  }
-
-  return message.parts
-    .slice((afterPartIndex ?? -1) + 1)
-    .some(
-      (part) =>
-        (part.type === "text" && part.content.trim().length > 0) ||
-        (part.type === "thinking" && part.content.trim().length > 0) ||
-        isRichChatPart(part),
-    );
 };
 
 const getMessageText = (message: PersistedChatMessage) => {
@@ -1262,8 +1564,6 @@ const getMessageText = (message: PersistedChatMessage) => {
 const AssistantMessageActions = ({
   canFork: forkOffered,
   canRetry: retryOffered,
-  contextMatterIds,
-  exportArtifact,
   message,
   onResend,
   threadRef,
@@ -1272,13 +1572,9 @@ const AssistantMessageActions = ({
   canFork: boolean;
   /** `canRetryAssistantMessage`. */
   canRetry: boolean;
-  /** The chat's matter scope, which a fork opened in the inspector keeps. */
-  contextMatterIds?: readonly string[] | undefined;
-  exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   /** Present on the main chat surface; enables the export action. Omitted on
    *  embedded surfaces (file-chat overlay, template studio) that don't export. */
   threadRef?: ChatThreadRef | undefined;
@@ -1303,7 +1599,7 @@ const AssistantMessageActions = ({
         </span>
       )}
       {text && (
-        <CopyActionButton
+        <CopyControl
           className="text-muted-foreground h-6 px-1.5"
           size="xs"
           text={text}
@@ -1327,16 +1623,7 @@ const AssistantMessageActions = ({
           {t("common.retry")}
         </Button>
       )}
-      {threadRef && forkOffered && (
-        <ChatMessageActionsMenu
-          canExport={Boolean(text)}
-          canFork={canFork}
-          contextMatterIds={contextMatterIds}
-          exportArtifact={exportArtifact}
-          message={message}
-          threadRef={threadRef}
-        />
-      )}
+      {canFork && <ChatMessageActionsButton />}
     </div>
   );
 };
@@ -1384,10 +1671,7 @@ type ChatThreadMessagesProps = {
   messages: ChatUIMessage[];
   onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
   answerRewriteAvailability?:
-    | "available"
-    | "anonymized"
-    | "unknown"
-    | undefined;
+    "available" | "anonymized" | "unknown" | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1395,8 +1679,7 @@ type ChatThreadMessagesProps = {
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
@@ -1414,8 +1697,7 @@ type ChatThreadMessagesProps = {
   /** Mirrors an ask-user card's local edit-mode up to the page so it can
    *  keep treating a reopened answered card as a live clarification. */
   onAskUserEditingChange?:
-    | ((toolCallId: string, isEditing: boolean) => void)
-    | undefined;
+    ((toolCallId: string, isEditing: boolean) => void) | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
     destination: CreateDocumentDestination,
@@ -1430,7 +1712,18 @@ type ChatThreadMessagesProps = {
       { entityId: string }
     >,
   ) => Promise<void> | void;
-  showThinkingIndicator?: boolean | undefined;
+  /** The turn runs on the member's computer and waits on it (to pick the
+   *  run up, or to come back); the turn shows the wait in place of its live
+   *  status. */
+  computerWait?: ChatComputerWait | null | undefined;
+  /** When this page sent the running turn's message (`performance.now()`);
+   *  its live status counts from it. `null` for a turn the page joined. */
+  turnSentAt?: number | null | undefined;
+  /**
+   * The newest turn of a chat that runs on the member's computer: the
+   * message that answered it offers to undo its file changes.
+   */
+  newestLocalTurn?: NewestLocalTurn | null | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**
@@ -1458,6 +1751,8 @@ type ChatThreadMessagesProps = {
   /** The thread being rendered. Enables the per-message export action; omitted
    *  on embedded surfaces that don't offer export. */
   threadRef?: ChatThreadRef | undefined;
+  /** Editing the user's sent messages; omitted, no message offers it. */
+  userMessageEdit?: UserMessageEditActions | undefined;
   workspaceId?: string | undefined;
 };
 
@@ -1561,6 +1856,7 @@ type AssistantMessagePartsProps = Pick<
   isLatestAssistantMessage: boolean;
   message: ChatUIMessage;
   shouldShowToolCalls: boolean;
+  turnStatus: "running" | "finished";
 };
 
 type AssistantPartRenderEntry =
@@ -1590,7 +1886,7 @@ const TextMessageParts = ({
         }
       }
 
-      return <UserAttachments parts={fileParts} />;
+      return <MessageAttachments parts={fileParts} />;
     })()}
     {message.parts.map((part, partIndex) =>
       part.type === "text" && !isChatPastedTextPart(part) ? (
@@ -1625,6 +1921,13 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
         area: "chat-unknown-activity",
         message: "A chat activity has no registered renderer",
       }),
+      {
+        fingerprintKey: "UnknownChatActivity:ClientTelemetryError",
+        scope: {
+          type: "handler",
+          handlerId: "UnknownChatActivity:ClientTelemetryError",
+        },
+      },
     );
   }, [activitySession, activityType, analytics]);
   return null;
@@ -1643,6 +1946,10 @@ const ChatActivityPart = ({ part }: ChatActivityPartProps) => {
       break;
     case "review":
       labelKey = "chat.activity.review";
+      break;
+    // A part a newer release stored: named, never read or rendered here.
+    case UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE:
+      labelKey = "chat.activity.newerVersion";
       break;
     default:
       return (
@@ -1679,6 +1986,16 @@ const isRequestSecretToolCallPart = (
   part: ChatPart,
 ): part is RequestSecretToolCallPart =>
   part.type === "tool-call" && part.name === "request_secret";
+
+type ConnectConnectorToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "connect_connector" }
+>;
+
+const isConnectConnectorToolCallPart = (
+  part: ChatPart,
+): part is ConnectConnectorToolCallPart =>
+  part.type === "tool-call" && part.name === "connect_connector";
 
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
@@ -1722,66 +2039,58 @@ const toAssistantPartRenderEntries = (
   return entries;
 };
 
-// "Process" parts are the low-emphasis progress rows of a turn: reasoning
-// trace disclosures and tool-step lines. Tool-result parts are invisible
-// transport companions, so they stay inside a process run without becoming
-// visible steps or splitting the run. Interactive tool cards (ask-user,
-// create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure; an approval-gated call
-// is one of them from its first input byte, before the request arrives.
+// "Process" parts are the low-emphasis progress rows of a turn
+// (`isProcessPart`, shared with the phone). On the web an approval card
+// reads as answer content too, so it stays outside the folded process
+// disclosure; an approval-gated call is one from its first input byte,
+// before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
   }
   const { part } = entry;
-  if (part.type === "thinking") {
-    return true;
-  }
-  if (part.type === "tool-result") {
-    return true;
-  }
   return (
-    part.type === "tool-call" &&
-    part.name !== "ask-user" &&
-    part.name !== "create-document" &&
-    part.name !== "spawn_subagents" &&
-    !isApprovalPart(part) &&
-    !isPendingApprovalPart(part)
+    isProcessPart(part) && !isApprovalPart(part) && !isPendingApprovalPart(part)
   );
 };
 
-// Mirrors `renderEntry`'s null branches for process parts, so a run whose
-// steps all render nothing (skill-lookup misses, completed searches that
-// fold into the sources row) does not produce an empty disclosure.
-const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
-  if (entry.type !== "standard") {
-    return true;
-  }
-  const { part } = entry;
-  if (part.type === "thinking") {
-    return part.content.trim().length > 0;
-  }
-  if (part.type === "tool-result") {
-    return false;
-  }
-  if (part.type !== "tool-call") {
-    return true;
-  }
-  if (
-    part.state === "error" &&
-    (part.name === "load-skill" || part.name === "read-skill-resource")
-  ) {
-    return false;
-  }
-  return !(
-    (part.name === "web_search" || part.name === "fetch_url") &&
-    part.state === "complete"
-  );
-};
+// Share visibility with the renderer so hidden skill misses and searches
+// folded into the sources row cannot produce an empty process disclosure.
+/**
+ * Whether any part of an assistant message draws something: a step, card or
+ * answer text, or a finished web search or fetch, which shows in the sources
+ * tray instead of as a step.
+ */
+/** A message without metadata carries no notice of its own. */
+const carriesAnswerNotice = (message: ChatUIMessage): boolean =>
+  message.metadata?.contextNotice !== undefined ||
+  message.metadata?.localRunFilesNotShared !== undefined;
+
+const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
+  toAssistantPartRenderEntries(parts).some((entry) => {
+    if (entry.type !== "standard") {
+      return true;
+    }
+    const { part } = entry;
+    if (part.type === "text") {
+      return part.content.trim().length > 0;
+    }
+    if (
+      part.type === "tool-call" &&
+      (part.name === "web_search" || part.name === "fetch_url")
+    ) {
+      return true;
+    }
+    return isVisibleProcessEntry(entry);
+  });
+
+const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean =>
+  entry.type !== "standard" ||
+  // Finished searches and fetches show in the sources tray instead.
+  isVisibleProcessStep(entry.part, { searchesShownApart: true });
 
 type ProcessStepTitleKey =
-  | ReturnType<typeof getChatToolTitleKey>
-  | "chat.reasoning";
+  ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
 
 const getProcessStepTitleKey = (
   entry: AssistantPartRenderEntry,
@@ -1799,35 +2108,48 @@ const getProcessStepTitleKey = (
   return null;
 };
 
-type AssistantPartRenderGroup =
-  | {
-      kind: "process";
-      startIndex: number;
-      entries: AssistantPartRenderEntry[];
-    }
-  | { kind: "standard"; index: number; entry: AssistantPartRenderEntry };
+type ToolCallRenderEntry = {
+  entry: AssistantPartRenderEntry;
+  index: number;
+  part: Extract<ChatUIPart, { type: "tool-call" }>;
+};
+
+/** A turn's tool calls that show as steps or cards, with their place in it. */
+const toToolCallRenderEntries = (
+  entries: readonly AssistantPartRenderEntry[],
+): ToolCallRenderEntry[] =>
+  entries.flatMap((entry, index) =>
+    entry.type === "standard" &&
+    entry.part.type === "tool-call" &&
+    isVisibleProcessEntry(entry)
+      ? [{ entry, index, part: entry.part }]
+      : [],
+  );
+
+/**
+ * Which steps of a coding agent's turn show under a subagent's step. A call
+ * with an approval card is a card of its own; every other one is a row.
+ */
+const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
+  localRunSubagentGroups(
+    toolCalls.map(({ part }) => ({
+      id: part.id,
+      name: part.name,
+      input: "input" in part ? part.input : undefined,
+      parentCallId: chatLocalRunParentCallId(
+        "metadata" in part ? part.metadata : undefined,
+      ),
+      shownAs:
+        isApprovalPart(part) || isPendingApprovalPart(part) ? "card" : "row",
+    })),
+  );
 
 // Chunks render entries into runs of consecutive process parts so a
 // multi-step turn packs its reasoning/tool rows tightly instead of
 // spreading them across the message's standard part gap.
 const toAssistantPartRenderGroups = (
   entries: readonly AssistantPartRenderEntry[],
-): AssistantPartRenderGroup[] => {
-  const groups: AssistantPartRenderGroup[] = [];
-  for (const [index, entry] of entries.entries()) {
-    if (!isProcessRenderEntry(entry)) {
-      groups.push({ kind: "standard", index, entry });
-      continue;
-    }
-    const previous = groups.at(-1);
-    if (previous?.kind === "process") {
-      previous.entries.push(entry);
-      continue;
-    }
-    groups.push({ kind: "process", startIndex: index, entries: [entry] });
-  }
-  return groups;
-};
+) => groupProcessParts(entries, isProcessRenderEntry);
 
 /**
  * Renders the body of an assistant message. Splitting this out of
@@ -1874,9 +2196,20 @@ const AssistantMessageParts = ({
   onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
+  turnStatus,
   workspaceId,
 }: AssistantMessagePartsProps) => {
   const label = useTranslations()("knowledge.playbooks.openInPane");
+  const localRunQuestion = use(ChatLocalRunQuestionContext);
+  // The paused question shows in place of its call while the turn waits on
+  // it, live and after a reload alike: both read the pause from the turn's
+  // pending interrupts.
+  const localRunQuestionPause =
+    isAwaitingUser && localRunQuestion !== null ? localRunQuestion.pause : null;
+  const localRunQuestionCall =
+    localRunQuestionPause === null
+      ? null
+      : localRunQuestionCallId(message.parts);
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1891,6 +2224,13 @@ const AssistantMessageParts = ({
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
+  // A coding agent's subagent shows as one group holding the steps it took.
+  const toolCallEntries = toToolCallRenderEntries(renderEntries);
+  const subagentGroups = toLocalRunSubagentGroups(toolCallEntries);
+  const isShownInSubagent = (entry: AssistantPartRenderEntry) =>
+    entry.type === "standard" &&
+    entry.part.type === "tool-call" &&
+    subagentGroups.rowIn.has(entry.part.id);
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1947,12 +2287,29 @@ const AssistantMessageParts = ({
       );
     }
 
+    if (
+      part.type === "tool-call" &&
+      part.id === localRunQuestionCall &&
+      localRunQuestion !== null &&
+      localRunQuestionPause !== null
+    ) {
+      return (
+        <LocalRunQuestionCard
+          threadRef={localRunQuestion.threadRef}
+          key={localRunQuestionPause.interruptId}
+          onAnswer={localRunQuestion.answer}
+          pause={localRunQuestionPause}
+        />
+      );
+    }
+
     if (part.type === "tool-call" && isOpaquePersistedChatToolCallPart(part)) {
       return (
         <ToolCallCard
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}
+          turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
         />
       );
@@ -1996,6 +2353,16 @@ const AssistantMessageParts = ({
       );
     }
 
+    if (isConnectConnectorToolCallPart(part)) {
+      return (
+        <ConnectConnectorCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
+        />
+      );
+    }
+
     if (part.type === "tool-call" && part.name === "create-document") {
       return (
         <NeedsMatterCard
@@ -2008,26 +2375,7 @@ const AssistantMessageParts = ({
       );
     }
 
-    if (
-      part.type === "tool-call" &&
-      part.state === "error" &&
-      (part.name === "load-skill" || part.name === "read-skill-resource")
-    ) {
-      // Skill lookup is internal routing. Once the agent has the error and
-      // can recover, showing the miss as a prominent transcript event adds
-      // implementation noise without giving the user an action to take.
-      return null;
-    }
-
-    if (
-      part.type === "tool-call" &&
-      (part.name === "web_search" || part.name === "fetch_url") &&
-      part.state === "complete"
-    ) {
-      // Completed searches are rendered as a single dedup'd row by
-      // <WebSearchSources> below; skipping here avoids the duplicate.
-      // Other states (approval-requested, input-*) still need to fall
-      // through to the approval/tool-call cards.
+    if (part.type === "tool-call" && !isVisibleProcessEntry(entry)) {
       return null;
     }
 
@@ -2067,6 +2415,7 @@ const AssistantMessageParts = ({
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}
+          turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
         />
       );
@@ -2079,23 +2428,60 @@ const AssistantMessageParts = ({
       <ContextNotice metadata={message.metadata} />
       {renderGroups.map((group) => {
         if (group.kind === "standard") {
-          return renderEntry(group.entry, group.index);
+          return renderEntry(group.item, group.index);
         }
-        const visibleEntries = group.entries.filter(isVisibleProcessEntry);
-        if (visibleEntries.length === 0) {
+        const visibleEntries = group.items.filter(isVisibleProcessEntry);
+        // A run whose steps all show inside a subagent's group draws nothing
+        // of its own.
+        if (visibleEntries.every(isShownInSubagent)) {
           return null;
         }
+        const renderStep = (entry: AssistantPartRenderEntry, index: number) => {
+          if (isShownInSubagent(entry)) {
+            return null;
+          }
+          const subagent = toolCallEntries.find((call) => call.entry === entry);
+          if (subagent === undefined) {
+            return renderEntry(entry, index);
+          }
+          const stepIds = subagentGroups.stepsOf.get(subagent.part.id);
+          if (stepIds === undefined) {
+            return renderEntry(entry, index);
+          }
+          const steps = toolCallEntries.filter(({ part }) =>
+            stepIds.includes(part.id),
+          );
+          return (
+            <LocalRunSubagentGroup
+              conversation={
+                localRunStepOutputKindOf(subagent.part) === null ? null : (
+                  <LocalRunStepOutputDetails
+                    activeOrganizationId={activeOrganizationId}
+                    part={subagent.part}
+                  />
+                )
+              }
+              key={subagent.part.id}
+              part={subagent.part}
+              rows={steps
+                .filter((step) => isShownInSubagent(step.entry))
+                .map((step) => renderEntry(step.entry, step.index))}
+              steps={steps.map(({ part }) => part)}
+            />
+          );
+        };
         // A run that is still receiving parts at the end of a streaming
         // message relays its current step in the collapsed summary.
         const isLiveGroup =
           isGenerating &&
           isLatestAssistantMessage &&
-          group.startIndex + group.entries.length === renderEntries.length;
+          group.startIndex + group.items.length === renderEntries.length;
         const lastVisibleEntry = visibleEntries.at(-1);
         return (
           <AssistantProcessGroup
             defaultOpen={shouldShowToolCalls}
             isLive={isLiveGroup}
+            turnStatus={turnStatus}
             key={`${message.id}-process-${group.startIndex}`}
             liveStepKey={
               isLiveGroup && lastVisibleEntry
@@ -2106,15 +2492,17 @@ const AssistantMessageParts = ({
             // Counted over every entry: completed web searches and fetches
             // render in the sources tray, not as steps, but are still work.
             workCounts={countProcessWork(
-              group.entries.map((entry) => entry.part),
+              group.items.map((entry) => entry.part),
             )}
           >
-            {group.entries.map((entry, offset) =>
-              renderEntry(entry, group.startIndex + offset),
+            {group.items.map((entry, offset) =>
+              renderStep(entry, group.startIndex + offset),
             )}
           </AssistantProcessGroup>
         );
       })}
+      <MessageAttachments parts={message.parts.filter(isChatAttachmentPart)} />
+      <LocalRunFilesNotSharedNotice metadata={message.metadata} />
       <WebSearchSources parts={message.parts} />
     </>
   );
@@ -2128,57 +2516,62 @@ type AssistantProcessGroupProps = {
   isLive: boolean;
   /** Title of the run's current step while it is still streaming. */
   liveStepKey: ProcessStepTitleKey | null;
+  turnStatus: "running" | "finished";
   stepCount: number;
   /** What the run accomplished, for the settled summary. */
   workCounts: ReadonlyMap<ProcessSummaryKind, number>;
 };
 
-/** The phrase each kind of work is counted in, in the order they read. */
-const PROCESS_SUMMARY_PHRASES = [
-  { key: "chat.processSummary.sourcesChecked", kind: "research" },
-  { key: "chat.processSummary.documentEdits", kind: "artifact" },
-  { key: "chat.processSummary.changesSaved", kind: "mutation" },
-  { key: "chat.processSummary.analyses", kind: "computation" },
-] as const satisfies readonly {
-  key: TranslationKey;
-  kind: ProcessSummaryKind;
-}[];
+/** The phrase each kind of work is counted in; `PROCESS_SUMMARY_KINDS`
+ *  orders them. */
+const PROCESS_SUMMARY_KEYS = {
+  research: "chat.processSummary.sourcesChecked",
+  artifact: "chat.processSummary.documentEdits",
+  mutation: "chat.processSummary.changesSaved",
+  computation: "chat.processSummary.analyses",
+} as const satisfies Record<ProcessSummaryKind, TranslationKey>;
 
 const LIVE_STEP_MIN_DWELL_MS = 1500;
 
-// Whole seconds: counted up while the run is live, then its rounded duration
-// (at least one); null when this view never saw it run.
-const processElapsedSeconds = (
-  elapsedMs: number | undefined,
-  isLive: boolean,
-): number | null => {
-  if (elapsedMs === undefined) {
-    return null;
-  }
-  if (isLive) {
-    return Math.floor(elapsedMs / 1000);
-  }
-  return Math.max(1, Math.round(elapsedMs / 1000));
-};
-
-/**
- * One run of consecutive process steps (reasoning traces and tool rows),
- * folded into a single disclosure so the transcript reads as question and
- * answer. The collapsed summary shows the step count; while the run is
- * still streaming it relays the current step instead, with a timer that
- * keeps running until the run settles and then stays as its duration.
- */
 const AssistantProcessGroup = ({
   children,
   defaultOpen,
   isLive,
   liveStepKey,
   stepCount,
+  turnStatus,
   workCounts,
 }: AssistantProcessGroupProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const format = useFormatter();
+  const [timing, setTiming] = useState(() =>
+    createToolCallTiming({
+      durationMs: undefined,
+      isRunning: isLive,
+      now: performance.now(),
+    }),
+  );
+  useExternalSyncEffect(() => {
+    setTiming((current) =>
+      advanceToolCallTiming({
+        current,
+        durationMs: undefined,
+        isRunning: isLive,
+        now: performance.now(),
+      }),
+    );
+  }, [isLive]);
+  const elapsed =
+    turnStatus === "finished" &&
+    timing.status === "finished" &&
+    timing.durationMs !== undefined
+      ? format.number(Math.max(1, Math.round(timing.durationMs / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })
+      : null;
   // A run that appears mid-stream fades in where the thinking indicator was;
   // one that renders settled (a reload) simply is there.
   const [appearedLive] = useState(isLive);
@@ -2187,75 +2580,56 @@ const AssistantProcessGroup = ({
   // Settled, the summary says what was done ("3 sources checked · 1 document
   // edit"); a run of reasoning alone, or of steps that did not land, falls
   // back to the step count.
-  const workSummary = PROCESS_SUMMARY_PHRASES.flatMap(({ key, kind }) => {
+  const workSummary = PROCESS_SUMMARY_KINDS.flatMap((kind) => {
     const count = workCounts.get(kind) ?? 0;
-    return count > 0 ? [t(key, { count })] : [];
+    return count > 0 ? [t(PROCESS_SUMMARY_KEYS[kind], { count })] : [];
   }).join(" · ");
   const label =
     shownStepKey !== null
       ? t(shownStepKey)
       : workSummary || t("common.stepCount", { count: stepCount });
-  const elapsedMs = useLiveElapsedMs(isLive);
-  const elapsedSeconds = processElapsedSeconds(elapsedMs, isLive);
-  // A live timer appears from its first whole second, never as "0s".
-  const elapsed =
-    elapsedSeconds === null || elapsedSeconds === 0
-      ? null
-      : format.number(elapsedSeconds, {
-          style: "unit",
-          unit: "second",
-          unitDisplay: "narrow",
-        });
   return (
-    <details
+    <div
       data-slot="chat-step-list"
       className={cn(
         "max-w-[min(44rem,100%)] rounded-md",
         isOpen && "border-border/70 bg-muted/20 border",
         appearedLive && "motion-safe:animate-text-fade",
       )}
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
     >
-      <summary
-        className={cn(
-          "inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5",
-          "rounded-md px-2.5 py-1.5 text-xs",
-          !isOpen &&
-            "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
-          "text-muted-foreground",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <ChevronRightIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-transform",
-            isOpen && "rotate-90",
-          )}
-        />
-        <span className="text-xs font-medium">
-          <SwapText
-            className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
-            text={label}
-          />
-        </span>
-        {elapsed !== null && (
-          <>
-            <span aria-hidden="true" className="text-foreground-placeholder">
-              ·
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger render={<Button variant="plain" />}>
+          <span
+            className={cn(
+              "inline-flex min-h-8 items-center gap-1.5",
+              "rounded-md px-2.5 py-1.5 text-xs",
+              !isOpen &&
+                "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
+              "text-muted-foreground",
+            )}
+          >
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 shrink-0 transition-transform",
+                isOpen && "rotate-90",
+              )}
+              flip={!isOpen}
+              icon={ChevronRightIcon}
+            />
+            <span className="text-xs font-medium">
+              <SwapText
+                className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
+                text={label}
+              />
             </span>
-            {/* The timer ticks plainly: a fade every second is motion for
-                its own sake. */}
-            <span className="text-foreground-ghost tabular-nums">
-              {elapsed}
-            </span>
-          </>
-        )}
-      </summary>
-      <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
-    </details>
+            {elapsed && <span data-process-duration>{elapsed}</span>}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 
@@ -2277,7 +2651,7 @@ const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
     if (part.type === "text" && part.content.trim()) {
       return true;
     }
-    if (isRichChatPart(part)) {
+    if (isRichChatPart(part) || isChatAttachmentPart(part)) {
       return true;
     }
   }
@@ -2324,33 +2698,29 @@ const AssistantThinkingPart = ({
   // time, and a trailing chevron that shows on hover, so every step in a
   // run lines up and reads at one size.
   return (
-    <details
-      className="group/reasoning my-0.5 max-w-xl text-sm"
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
-    >
-      <summary
-        className={cn(
-          "flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg ps-2",
-          "text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <AssistantThinkingHeader
-          isExpanded={isOpen}
-          isStreaming={isStreaming}
-          reasoningTokenCount={reasoningTokenCount}
-        />
-      </summary>
-      <AssistantThinkingBody
-        components={components}
-        isStreaming={isStreaming}
-        restorationPairs={restorationPairs}
-        text={text}
-      />
-    </details>
+    <div className="group/reasoning my-0.5 max-w-xl text-sm">
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger
+          render={<Button className="flex w-full" variant="plain" />}
+        >
+          <span className="text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted flex min-h-11 w-full items-center gap-2 rounded-lg ps-2">
+            <AssistantThinkingHeader
+              isExpanded={isOpen}
+              isStreaming={isStreaming}
+              reasoningTokenCount={reasoningTokenCount}
+            />
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <AssistantThinkingBody
+            components={components}
+            isStreaming={isStreaming}
+            restorationPairs={restorationPairs}
+            text={text}
+          />
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 
@@ -2364,34 +2734,16 @@ const AssistantThinkingHeader = ({
   reasoningTokenCount: number | null;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const elapsedMs = useLiveElapsedMs(isStreaming);
-  const elapsed =
-    elapsedMs === undefined || isStreaming
-      ? null
-      : format.number(Math.max(1, Math.round(elapsedMs / 1000)), {
-          style: "unit",
-          unit: "second",
-          unitDisplay: "narrow",
-        });
   return (
     <>
-      <StatusMark status={isStreaming ? "running" : "done"} />
-      <span
-        className={cn(
-          "min-w-0 truncate",
-          isStreaming && CHAT_PENDING_TEXT_CLASS,
-        )}
+      <StatusMark status="done" />
+      <TruncatedText
+        render={<span className={cn(isStreaming && CHAT_PENDING_TEXT_CLASS)} />}
       >
         {t("chat.reasoning")}
-      </span>
+      </TruncatedText>
       {reasoningTokenCount !== null && (
         <ReasoningTokenCount count={reasoningTokenCount} />
-      )}
-      {elapsed !== null && (
-        <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
-          {elapsed}
-        </span>
       )}
       <span
         aria-hidden="true"

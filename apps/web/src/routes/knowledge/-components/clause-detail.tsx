@@ -28,9 +28,9 @@ import {
 } from "@stll/ui/combobox";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -47,6 +47,7 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import {
   DropdownMenu,
@@ -64,8 +65,9 @@ import {
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -75,13 +77,14 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clauseDetailOptions,
-  knowledgeKeys,
   invalidateTemplateClauseSources,
+  knowledgeKeys,
 } from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -276,12 +279,15 @@ export const DetailContent = ({
     transport ??
     ({
       save: async (write: ClauseBodyWrite) => {
-        const saved = unwrapEden(await api.clauses({ clauseId }).post(write));
+        const saved = unwrapApiResponse(
+          await api.clauses({ clauseId }).post(write),
+        );
         return { ...saved, body: write.body };
       },
-      read: async () => unwrapEden(await api.clauses({ clauseId }).get()).body,
+      read: async () =>
+        unwrapApiResponse(await api.clauses({ clauseId }).get()).body,
       restore: async (versionId: string, expectedBody: ClauseParagraph[]) =>
-        unwrapEden(
+        unwrapApiResponse(
           await api
             .clauses({ clauseId })
             .versions({ versionId })
@@ -291,7 +297,7 @@ export const DetailContent = ({
         body: ClauseParagraph[],
         expectedBody: ClauseParagraph[],
       ) => {
-        const saved = unwrapEden(
+        const saved = unwrapApiResponse(
           await api
             .clauses({ clauseId })
             .post({ body, expectedBody, snapshotVersion: true }),
@@ -320,7 +326,13 @@ export const DetailContent = ({
       setDirectiveRefusal(true);
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "DetailContent.reportBodyError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "DetailContent.reportBodyError:failure",
+      },
+    });
     notifyUserError(error, t("clauses.saveFailed"), {
       description: userErrorFromThrown(error, t("common.unexpectedError")),
     });
@@ -578,6 +590,41 @@ const ClauseLeaveDialog = ({
   );
 };
 
+// The clause title opens its rename in place for an editor; a reader sees the
+// title as plain text rather than a dimmed, disabled control.
+const ClauseTitleText = ({
+  canEdit,
+  onEdit,
+  title,
+}: {
+  canEdit: boolean;
+  onEdit: () => void;
+  title: string;
+}) => {
+  const text = (
+    <TruncatedText className="text-lg font-semibold whitespace-pre">
+      {title}
+    </TruncatedText>
+  );
+  if (!canEdit) {
+    return (
+      <span className="flex min-w-0 flex-1" dir="auto">
+        {text}
+      </span>
+    );
+  }
+  return (
+    <Button
+      className="min-w-0 flex-1 shrink"
+      dir="auto"
+      onClick={onEdit}
+      variant="plain"
+    >
+      {text}
+    </Button>
+  );
+};
+
 const ClauseHeader = ({
   detail,
   clauseId,
@@ -717,7 +764,7 @@ const ClauseHeader = ({
   const deleteClause = useMutation({
     mutationFn: async () => {
       const response = await api.clauses({ clauseId }).delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       stellaToast.add({
@@ -751,18 +798,14 @@ const ClauseHeader = ({
           value={titleDraft}
         />
       ) : (
-        <button
-          className="flex-1 overflow-hidden text-start text-lg font-semibold text-ellipsis whitespace-pre disabled:cursor-default"
-          dir="auto"
-          disabled={!canEdit}
-          onClick={() => {
+        <ClauseTitleText
+          canEdit={canEdit}
+          onEdit={() => {
             setTitleDraft(detail.title);
             setEditingTitle(true);
           }}
-          type="button"
-        >
-          {detail.title}
-        </button>
+          title={detail.title}
+        />
       )}
 
       {canEdit && (
@@ -941,9 +984,7 @@ const ClauseInlineTextField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor={`clause-${field}`}>
-        {label}
-      </label>
+      <Label htmlFor={`clause-${field}`}>{label}</Label>
       <Input
         id={`clause-${field}`}
         onBlur={() => {
@@ -1042,11 +1083,10 @@ const ClauseLanguageField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="clause-language">
-        {t("common.language")}
-      </label>
+      <Label htmlFor="clause-language">{t("common.language")}</Label>
       <Combobox<LanguagePick>
         autoHighlight
+        filter={matchesComboboxItem}
         isItemEqualToValue={(a, b) => a.code === b.code}
         items={options}
         itemToStringLabel={(item) => item.label}
@@ -1126,9 +1166,7 @@ const ClauseUsageNotesField = ({
 
   return (
     <div className="mt-3 grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="clause-usage-notes">
-        {t("clauses.usageNotes")}
-      </label>
+      <Label htmlFor="clause-usage-notes">{t("clauses.usageNotes")}</Label>
       <Textarea
         className="min-h-[60px]"
         id="clause-usage-notes"
@@ -1381,7 +1419,7 @@ const VariantRow = ({
         </div>
       </div>
       {body.length > 0 && (
-        <div className="bg-muted/30 mt-2 rounded border p-3">
+        <div className="bg-muted/30 mt-2 rounded-sm border p-3">
           <ClauseBody paragraphs={body} />
         </div>
       )}
@@ -1489,6 +1527,7 @@ const VariantFormDialogBody = ({
   onSaved: () => void;
   variant: VariantItem | undefined;
 }) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const isEdit = !!variant;
   const [label, setLabel] = useState(() => variant?.label ?? "");
@@ -1513,7 +1552,12 @@ const VariantFormDialogBody = ({
             .clauses({ clauseId })
             .variants({ variantId: variant.id })
             .post(payload)
-        : await api.clauses({ clauseId }).variants.put(payload);
+        : await idempotentSubmit.run({
+            operation: `clauses.${clauseId}.variants.create`,
+            body: payload,
+            send: async (creationPayload) =>
+              api.clauses({ clauseId }).variants.put(creationPayload),
+          });
 
     setSaving(false);
 
@@ -1555,9 +1599,7 @@ const VariantFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="variant-label">
-            {t("clauses.variantLabel")}
-          </label>
+          <Label htmlFor="variant-label">{t("clauses.variantLabel")}</Label>
           <Input
             id="variant-label"
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
@@ -1567,9 +1609,7 @@ const VariantFormDialogBody = ({
           />
         </div>
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="variant-body">
-            {t("clauses.body")}
-          </label>
+          <Label htmlFor="variant-body">{t("clauses.body")}</Label>
           <Textarea
             className="min-h-[100px]"
             id="variant-body"
@@ -1751,15 +1791,13 @@ const VersionRow = ({
 
   return (
     <li className="flex items-center gap-2 px-2">
-      <button
-        className={cn(
-          "flex flex-1 items-center justify-between",
-          "px-2 py-3 text-sm",
-          "hover:bg-muted/50 rounded",
-          isSelected && "bg-muted",
-        )}
+      <Button
+        aria-pressed={isSelected}
+        className="flex-1 justify-between"
+        selected={isSelected}
         onClick={onToggleDiff}
-        type="button"
+        size="row"
+        variant="ghost"
       >
         <span className="font-medium">
           {t("common.versionLabel", {
@@ -1772,7 +1810,7 @@ const VersionRow = ({
             MEDIUM_DATE_SHORT_TIME_FORMAT,
           )}
         </span>
-      </button>
+      </Button>
       <AlertDialog onOpenChange={setRestoreOpen} open={restoreOpen}>
         <Button
           aria-label={t("clauses.restoreVersion")}

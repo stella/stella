@@ -1,6 +1,8 @@
 import type { ReactElement } from "react";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { TruncatedTextLines } from "@stll/ui/truncated-text";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
@@ -35,6 +37,12 @@ type DecisionColumnModel = {
   /** Whether the reader may hide it. */
   hide: boolean;
   emphasis: "content" | "metadata";
+  /**
+   * What the results are ordered by through this column's header, or null
+   * for a column they are never ordered by: the search and the listing order
+   * by relevance or by date, and by no other value a column holds.
+   */
+  sortKind: ColumnSortKind | null;
 };
 
 /**
@@ -45,15 +53,15 @@ type DecisionColumnModel = {
  * column set stays testable without drawing one.
  */
 export const DECISION_COLUMN_MODEL = {
-  caseNumber: { size: 320, hide: false, emphasis: "content" },
-  summary: { size: 460, hide: true, emphasis: "content" },
-  court: { size: 220, hide: true, emphasis: "metadata" },
-  country: { size: 90, hide: true, emphasis: "metadata" },
-  date: { size: 130, hide: true, emphasis: "metadata" },
-  type: { size: 120, hide: true, emphasis: "metadata" },
-  headnote: { size: 420, hide: true, emphasis: "content" },
-  citedBy: { size: 96, hide: true, emphasis: "metadata" },
-  language: { size: 120, hide: true, emphasis: "metadata" },
+  caseNumber: { size: 320, hide: false, emphasis: "content", sortKind: null },
+  summary: { size: 460, hide: true, emphasis: "content", sortKind: null },
+  court: { size: 220, hide: true, emphasis: "metadata", sortKind: null },
+  country: { size: 90, hide: true, emphasis: "metadata", sortKind: null },
+  date: { size: 130, hide: true, emphasis: "metadata", sortKind: "date" },
+  type: { size: 120, hide: true, emphasis: "metadata", sortKind: null },
+  headnote: { size: 420, hide: true, emphasis: "content", sortKind: null },
+  citedBy: { size: 96, hide: true, emphasis: "metadata", sortKind: null },
+  language: { size: 120, hide: true, emphasis: "metadata", sortKind: null },
 } as const satisfies Record<DecisionColumnId, DecisionColumnModel>;
 
 /** The narrowest a decision column may be dragged. */
@@ -216,14 +224,15 @@ export const decisionColumnWidthClassNames = (
  */
 export type DecisionContentMode = TableContentMode;
 
-const DECISION_CLAMP_CLASS_NAMES = {
-  tight: "line-clamp-2",
-  "fit-content": "",
-} as const satisfies Record<DecisionContentMode, string>;
+const DECISION_CLAMP_LINES = {
+  tight: 2,
+  "fit-content": "none",
+} as const satisfies Record<DecisionContentMode, TruncatedTextLines>;
 
-/** The clamp a prose cell carries in this mode; empty when it carries none. */
-export const decisionClampClassName = (mode: DecisionContentMode): string =>
-  DECISION_CLAMP_CLASS_NAMES[mode];
+/** The lines a prose cell is cut to in this mode; `"none"` when it is not cut. */
+export const decisionClampLines = (
+  mode: DecisionContentMode,
+): TruncatedTextLines => DECISION_CLAMP_LINES[mode];
 
 /**
  * Facts the case-number cell repeats under the case number when, and only

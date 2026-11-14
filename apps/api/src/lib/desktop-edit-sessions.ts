@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { DESKTOP_HANDOFF_LIFETIME_SECONDS } from "@stll/api-contract/desktop-handoff";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";

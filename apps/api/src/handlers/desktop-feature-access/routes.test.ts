@@ -1,37 +1,58 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import {
   DESKTOP_FEATURE_ACCESS_PATH,
   DESKTOP_FEATURE_IDS,
 } from "@stll/api-contract/desktop-feature-access";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteEntry } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
-import { createTestState } from "@/api/tests/helpers/test-state";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { createDesktopFeatureAccessReadEndpoint } from "./read";
 import { desktopFeatureAccessRoute } from "./routes";
 
 const ORGANIZATION_ID = "org_test";
+const USER_ID = "user_test";
 const GRANTED_EMAIL = "granted@example.test";
 
 type Caller = { email: string; emailVerified: boolean } | null;
 const testState = createTestState({ file: import.meta.path, config: env });
 
-const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
-  const { scopedDb } = createScopedDbMock(
-    {},
-    { featureAccess: { identity: caller } },
-  );
+const serve = (table: readonly RouteEntry[]) =>
+  serveForTest(createHttpApp({ routes: table, middleware: [errorBoundary] }));
+
+const TIME_BILLING = {
+  enrolled: "enrolled",
+  notEnrolled: "not-enrolled",
+} as const;
+
+type ReadAsOptions = {
+  caller: Caller;
+  organizationId?: string;
+  timeBilling?: (typeof TIME_BILLING)[keyof typeof TIME_BILLING];
+};
+
+const readAs = async ({
+  caller,
+  organizationId = ORGANIZATION_ID,
+  timeBilling = TIME_BILLING.enrolled,
+}: ReadAsOptions) => {
+  const accountOrganizationId = toSafeId<"organization">(organizationId);
+
   const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopFeatureAccessReadEndpoint({
     authorizeAccount: async (request) =>
@@ -45,16 +66,29 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
           keyId: "key_test",
           credential: "fixture-credential",
         }),
-        organizationId: toSafeId<"organization">(organizationId),
-        userId: toSafeId<"user">("user_test"),
+        organizationId: accountOrganizationId,
+        userId: toSafeId<"user">(USER_ID),
         keyId: "key_test",
         memberRole: sessionMemberRole("member"),
-        scopedDb,
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          organizationId,
+          userId: "user_test",
+          identity: caller,
+          enrolments:
+            timeBilling === TIME_BILLING.enrolled
+              ? [{ featureId: "time-billing", organizationId, userId: USER_ID }]
+              : [],
+        }),
+        scopedDb: async () =>
+          panic(
+            "Feature access must reuse authorized identity without querying scopedDb",
+          ),
       }),
   });
-  const app = new Elysia().get(DESKTOP_FEATURE_ACCESS_PATH, endpoint.handler, {
-    response: endpoint.config.response,
-  });
+  await using server = serve(
+    routes({ [DESKTOP_FEATURE_ACCESS_PATH]: { GET: endpoint } }),
+  );
+  testState.setConfig("FEATURE_TIME_BILLING", true);
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline": [
       {
@@ -64,7 +98,7 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
       },
     ],
   });
-  const response = await app.handle(
+  const response = await server.fetch(
     new Request(`http://localhost${DESKTOP_FEATURE_ACCESS_PATH}`),
   );
   expect(response.status).toBe(200);
@@ -72,13 +106,13 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
 };
 
 test("feature access requires the desktop account credential", async () => {
-  const app = new Elysia().use(desktopFeatureAccessRoute);
+  await using server = serve(desktopFeatureAccessRoute);
   for (const authorization of [
     undefined,
     "Bearer unrelated-credential",
     "Basic stella_dr_key",
   ]) {
-    const response = await app.handle(
+    const response = await server.fetch(
       new Request(`http://localhost${DESKTOP_FEATURE_ACCESS_PATH}`, {
         headers: authorization ? { authorization } : {},
       }),
@@ -90,22 +124,55 @@ test("feature access requires the desktop account credential", async () => {
   }
 });
 
-test("a granted member sees the feature enabled", async () => {
-  const body = await readAs({ email: GRANTED_EMAIL, emailVerified: true });
+test("a granted member enrolled in time billing sees the feature enabled", async () => {
+  const body = await readAs({
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
+  });
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "enabled" },
-      "time-billing": { status: "hidden" },
+      "desktop-dictation": { status: "hidden" },
+      "desktop-dictation-cloud": { status: "hidden" },
+      "local-agents": { status: "hidden" },
+    },
+  });
+});
+
+test("a granted member sees the feature enabled without reading identity again", async () => {
+  const body = await readAs({
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
+  });
+  expect(body).toStrictEqual({
+    features: {
+      "activity-timeline": { status: "enabled" },
+      "desktop-dictation": { status: "hidden" },
+      "desktop-dictation-cloud": { status: "hidden" },
+      "local-agents": { status: "hidden" },
+    },
+  });
+});
+
+test("a granted member without time billing sees the activity timeline hidden", async () => {
+  const body = await readAs({
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
+    timeBilling: TIME_BILLING.notEnrolled,
+  });
+  expect(body).toStrictEqual({
+    features: {
+      "activity-timeline": { status: "hidden" },
+      "desktop-dictation": { status: "hidden" },
+      "desktop-dictation-cloud": { status: "hidden" },
+      "local-agents": { status: "hidden" },
     },
   });
 });
 
 test("a member grant does not cross the desktop account organization", async () => {
   const caller = { email: GRANTED_EMAIL, emailVerified: true };
-  expect(await readAs(caller)).toMatchObject({
+  expect(await readAs({ caller })).toMatchObject({
     features: { "activity-timeline": { status: "enabled" } },
   });
-  expect(await readAs(caller, "org_other")).toMatchObject({
+  expect(await readAs({ caller, organizationId: "org_other" })).toMatchObject({
     features: { "activity-timeline": { status: "hidden" } },
   });
 });
@@ -116,10 +183,12 @@ test("callers outside the grant see the feature hidden", async () => {
     { email: GRANTED_EMAIL, emailVerified: false },
     null,
   ]) {
-    expect(await readAs(caller)).toStrictEqual({
+    expect(await readAs({ caller })).toStrictEqual({
       features: {
         "activity-timeline": { status: "hidden" },
-        "time-billing": { status: "hidden" },
+        "desktop-dictation": { status: "hidden" },
+        "desktop-dictation-cloud": { status: "hidden" },
+        "local-agents": { status: "hidden" },
       },
     });
   }
@@ -127,8 +196,7 @@ test("callers outside the grant see the feature hidden", async () => {
 
 test("the response decides every desktop feature and nothing else", async () => {
   const body: unknown = await readAs({
-    email: GRANTED_EMAIL,
-    emailVerified: true,
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
   });
   const features = isRecord(body) ? body["features"] : undefined;
   expect(

@@ -68,7 +68,10 @@ describe("decision paragraph range input", () => {
   test("publishes a bounded patterned string and keeps semantic checks at runtime", () => {
     const published = getStaticMcpToolDefinition("open_case_law_decision")
       ?.inputSchema.properties?.["paragraphs"];
-    expect(published).toMatchObject({
+    // A copy: the registry is shared with every later test in the process,
+    // and Bun's `toMatchObject` swaps a matched property for its asymmetric
+    // matcher.
+    expect(structuredClone(published)).toMatchObject({
       type: "string",
       maxLength: 33,
       description: expect.stringContaining("Court paragraph"),

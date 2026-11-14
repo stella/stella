@@ -31,7 +31,7 @@ import { parsePersistedDocxOperation } from "@/components/docx/operation-payload
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
 type UseSyncDocxSuggestionsInput = {
@@ -51,7 +51,7 @@ export const useSyncDocxSuggestions = ({
   entityId,
   editorRef,
 }: UseSyncDocxSuggestionsInput) => {
-  const view = useQueryView(
+  const view = queryView(
     useQuery(docxSuggestionsOptions({ workspaceId, entityId })),
     { isEmpty: ({ items }) => items.length === 0 },
   );
@@ -123,6 +123,13 @@ export const useSyncDocxSuggestions = ({
             area: "docx-suggestion-hydration",
             message: "Persisted DOCX suggestion operation failed validation.",
           }),
+          {
+            fingerprintKey: "useSyncDocxSuggestions:ClientTelemetryError",
+            scope: {
+              type: "handler",
+              handlerId: "useSyncDocxSuggestions:ClientTelemetryError",
+            },
+          },
         );
         return [];
       }

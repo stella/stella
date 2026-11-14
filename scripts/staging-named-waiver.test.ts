@@ -13,6 +13,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { evaluate } from "./github-expression";
 
 const stepSchema = v.looseObject({
@@ -60,7 +61,22 @@ const run = (script: string, env: Record<string, string>) => {
   mkdirSync(bin);
   writeFileSync(
     path.join(bin, "gh"),
-    '#!/bin/bash\njq -c . >> "$STUB_PAYLOADS"\n',
+    `#!/bin/bash
+set -euo pipefail
+if [[ " $* " == *" --method POST "* ]]; then
+  jq -c . >> "$STUB_PAYLOADS"
+  exit 0
+fi
+case "$*" in
+  *actions/workflows/deploy-staging.yml/runs?*)
+    jq -cn --arg sha "$DEPLOY_SHA" --argjson id "$GITHUB_RUN_ID" '{workflow_runs: [{
+      id: $id, event: "workflow_dispatch", head_sha: $sha, head_branch: "main",
+      path: ".github/workflows/deploy-staging.yml", display_title: ("Deploy main to staging " + $sha),
+      repository: {full_name: "stella/stella"}}]}' ;;
+  *commits/*/statuses?*) printf '[[]]\\n' ;;
+  *) echo "Unexpected fixture GET: $*" >&2; exit 1 ;;
+esac
+`,
     { mode: 0o755 },
   );
   try {
@@ -68,6 +84,10 @@ const run = (script: string, env: Record<string, string>) => {
       env: {
         PATH: `${bin}:${process.env["PATH"] ?? ""}`,
         GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
+        STAGING_STATUS_WRITER: path.resolve(
+          import.meta.dir,
+          "post-staging-verification.sh",
+        ),
         ...env,
         GITHUB_OUTPUT: output,
         GITHUB_STEP_SUMMARY: summary,
@@ -123,6 +143,7 @@ const expression = (value: boolean | string | undefined, waived: boolean) => {
     needs: { resolve: { outputs: { corpus_search_waived: String(waived) } } },
     steps: {
       "smoke-deps": { conclusion: "success" },
+      "proof-readiness": { outputs: { status: "ready" } },
       "corpus-preflight": { outcome: "failure", conclusion: "success" },
     },
   });
@@ -148,6 +169,12 @@ const assertScope = (candidate = workflow) => {
         expect(step.if).toContain("github.token != ''");
         expect(step.if).not.toContain("corpus_search_waived");
         expect(step["continue-on-error"]).toBe(true);
+        continue;
+      }
+      if (step.id === "proof-readiness") {
+        expect(jobName).toBe("promote-staging");
+        expect(step["continue-on-error"]).toBe(true);
+        expect(step.run).toContain("staging-proof-readiness-cli.ts");
         continue;
       }
       if (step.id === "corpus-preflight") {
@@ -192,7 +219,8 @@ const assertValidation = (candidate = workflow) => {
 };
 const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
   run(
-    `gh() { jq -c . >> "$STUB_PAYLOADS"; }\n${findStep("Record staging verification", candidate).run ?? panic("Missing verification script")}`,
+    findStep("Record staging verification", candidate).run ??
+      panic("Missing verification script"),
     {
       GITHUB_REPOSITORY: "stella/stella",
       GITHUB_RUN_ID: "1",
@@ -200,6 +228,8 @@ const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
       DEPLOY_SHA: "a".repeat(40),
       DEPLOYMENT_ID: "1",
       WEB_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
       API_SMOKE: "success",
       MCP_SMOKE: "skipped",
       CORPUS_PREFLIGHT: "failure",
@@ -207,6 +237,8 @@ const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
       WAIVE_REASON:
         "Backend verification deferred; evidence=artifacts/corpus-check.log",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
       ...overrides,
     },
   );
@@ -238,7 +270,17 @@ test("the sole named waiver validates before checkout and derives its downstream
     workflow.on.workflow_dispatch.inputs,
   );
   expect(inputs.waive_check.options).toEqual(["none", "corpus-search"]);
-  expect(workflow.jobs["resolve"]?.steps?.at(1)?.id).toBe("waiver");
+  const resolveSteps =
+    workflow.jobs["resolve"]?.steps ?? panic("Missing resolver steps");
+  const waiverIndex = resolveSteps.findIndex(({ id }) => id === "waiver");
+  // The network retry helper checkout reads only the workflow's own revision.
+  const candidateCheckoutIndex = resolveSteps.findIndex(
+    (step) =>
+      isRepositoryCheckoutAction(step.uses) &&
+      step.with?.["ref"] !== `\${{ github.workflow_sha }}`,
+  );
+  expect(waiverIndex).toBeGreaterThanOrEqual(0);
+  expect(candidateCheckoutIndex).toBeGreaterThan(waiverIndex);
   expect(workflow.jobs["resolve"]?.outputs?.["corpus_search_waived"]).toBe(
     `\${{ steps.waiver.outputs.corpus_search_waived }}`,
   );
@@ -269,6 +311,12 @@ test("the sole named waiver validates before checkout and derives its downstream
   expect(recordEnv?.["CORPUS_PREFLIGHT"]).toBe(
     `\${{ steps.corpus-preflight.outcome }}`,
   );
+  for (const [name, id] of [
+    ["DEPLOYED_JOURNEYS", "deployed-journeys"],
+    ["MOCK_JOURNEYS", "mock-journeys"],
+  ] as const) {
+    expect(recordEnv?.[name]).toBe(`\${{ steps.${id}.outcome }}`);
+  }
   assertValidation();
   expect(
     validation({
@@ -311,6 +359,28 @@ test("only failed corpus preflight can use the waiver and its MCP dependency rem
     "Reason: Backend verification deferred; evidence=artifacts/corpus-check.log",
   );
 });
+test("a declared corpus gap succeeds only with a passed preflight and skipped MCP", () => {
+  const declared = {
+    CORPUS_DECLARED_GAP: "true",
+    CORPUS_SEARCH_WAIVED: "false",
+    CORPUS_PREFLIGHT: "success",
+    MCP_SMOKE: "skipped",
+  };
+  expect(statuses(record(declared)).at(0)).toMatchObject({
+    state: "success",
+    description: "Staging smoke success, corpus_reads=search-only: run 1",
+  });
+  for (const overrides of [
+    { CORPUS_PREFLIGHT: "failure" },
+    { MCP_SMOKE: "failure" },
+    { WEB_SMOKE: "failure" },
+  ]) {
+    expect(statuses(record({ ...declared, ...overrides })).at(0)?.state).toBe(
+      "failure",
+    );
+  }
+});
+// timeout: The matrix executes the status writer in a separate shell per outcome.
 test("unused waiver keeps normal success and every unrelated failure remains blocking", () => {
   const unused = record({ CORPUS_PREFLIGHT: "success", MCP_SMOKE: "success" });
   expect(statuses(unused).at(0)).toMatchObject({
@@ -329,6 +399,10 @@ test("unused waiver keeps normal success and every unrelated failure remains blo
     { CORPUS_SEARCH_WAIVED: "false" },
     { WEB_SMOKE: "failure" },
     { API_SMOKE: "failure" },
+    ...["failure", "skipped", "cancelled", ""].flatMap((outcome) => [
+      { DEPLOYED_JOURNEYS: outcome },
+      { MOCK_JOURNEYS: outcome },
+    ]),
     { JOB_STATUS: "failure" },
     { JOB_STATUS: "cancelled" },
     { CORPUS_PREFLIGHT: "skipped" },
@@ -343,7 +417,7 @@ test("unused waiver keeps normal success and every unrelated failure remains blo
       JSON.stringify(overrides),
     ).toBe(true);
   }
-});
+}, 15_000);
 test("waiver scope, required reason and manual-only boundary mutations are rejected", () => {
   const widened = structuredClone(workflow);
   findStep("Run staging web smoke", widened)["continue-on-error"] =
@@ -397,4 +471,28 @@ test("waiver scope, required reason and manual-only boundary mutations are rejec
   expect(statuses(record({ WEB_SMOKE: "failure" })).at(0)?.state).toBe(
     "failure",
   );
+});
+
+test("both application journey outcomes belong to the serialized staging promotion", () => {
+  const promotion =
+    workflow.jobs["promote-staging"] ?? panic("Missing promotion owner");
+  expect(promotion["concurrency"]).toEqual({
+    group: `\${{ inputs.release_ref != '' && 'deploy-staging-candidate' || 'deploy-staging-ordinary' }}`,
+    "cancel-in-progress": false,
+  });
+  const steps = promotion.steps ?? panic("Missing promotion steps");
+  const verification = steps.findIndex(
+    ({ name }) => name === "Record staging verification",
+  );
+  for (const id of ["deployed-journeys", "mock-journeys"]) {
+    const index = steps.findIndex((step) => step.id === id);
+    expect(index).toBeGreaterThan(-1);
+    expect(index).toBeLessThan(verification);
+    const journey = steps.at(index) ?? panic("Missing application journey");
+    expect(journey.uses).toBe("./.github/actions/user-journeys");
+    expect(journey.with?.["expected-commit"]).toBe(
+      `\${{ needs.resolve.outputs.sha }}`,
+    );
+    expect(journey["continue-on-error"]).toBeUndefined();
+  }
 });

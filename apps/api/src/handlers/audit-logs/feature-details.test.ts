@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { AUDIT_LOG_EXPORT_CSV_HEADER } from "@/api/lib/audit-log-export";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -17,11 +19,11 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/audit-logs.list";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
@@ -95,6 +97,7 @@ const contextFor = ({
       }
       return {
         from: () => ({
+          where: async () => [],
           innerJoin: () => ({
             where: async () => [
               {
@@ -113,7 +116,7 @@ const contextFor = ({
     query: {},
     recordAuditEvent: auditRecorderDouble(),
     request: new Request("https://example.test/v1/audit-logs"),
-    route: "/v1/audit-logs",
+    route: "/v1/audit-logs" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: PRINCIPAL.organizationId },
     set: { headers: {} },
@@ -201,8 +204,8 @@ describe("audit details follow feature enrolment", () => {
           ),
         );
         expect(result).toBe(
-          `Time,User Name,User Email,Action,Resource Type,Resource ID,Changes,Changes Status\n` +
-            `2026-07-16T12:00:00.000Z,Test User,test@example.test,update,${resourceType},resource_test,${
+          `${AUDIT_LOG_EXPORT_CSV_HEADER}\n` +
+            `2026-07-16T12:00:00.000Z,${PRINCIPAL.userId},Test User,test@example.test,update,${resourceType},resource_test,${
               enrolled ? '"{""amount"":{""old"":100,""new"":200}}"' : ""
             },${changesStatus}`,
         );
@@ -218,7 +221,7 @@ describe("audit details follow feature enrolment", () => {
       });
       const result = await RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log({
         args: {},
-        context: asTestRaw<McpRequestContext>({
+        context: asTestRaw<AuthorizedMcpRequestContext>({
           ...PRINCIPAL,
           memberRole: "owner",
           safeDb: fixture.safeDb,
@@ -289,8 +292,14 @@ describe("audit operation details follow verification enrolment", () => {
       test(`${operation} generated MCP and CLI dispatch preserve status for enrolment ${enrolled}`, async () => {
         const context = fixture();
         const endpoint = await CAPABILITY_DISPATCH["audit-logs.list"].load();
-        const result = await endpoint.default.handler(
-          asTestRaw<Parameters<typeof endpoint.default.handler>[0]>(context),
+        const handler = endpoint["default"];
+        const isRestHandler = (value: unknown): value is typeof readAuditLogs =>
+          value === readAuditLogs;
+        if (!isRestHandler(handler)) {
+          throw new TypeError("Audit capability must load the REST handler");
+        }
+        const result = await handler.handler(
+          asTestRaw<Parameters<typeof readAuditLogs.handler>[0]>(context),
         );
         const mapped = mapHandlerResult({
           id: "audit-logs.list",

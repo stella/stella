@@ -10,9 +10,9 @@ import {
 } from "./fields.js";
 import { EntityCheckCancelledError, unavailable } from "./result.js";
 import type {
+  CheckedEntityCheckSubject,
   EntityCheckSource,
   EntityCheckSourceError,
-  CheckedEntityCheckSubject,
   EntityCheckUnavailableError,
   SourceAnswer,
 } from "./result.js";
@@ -266,22 +266,36 @@ type IsirQuery = {
   signal: AbortSignal | undefined;
 };
 
-const subjectCriteria = (subject: CheckedEntityCheckSubject): string => {
+type SubjectCriteria = {
+  identity: string;
+  withoutDiacritics: boolean;
+  relevance: string;
+};
+
+const subjectCriteria = (
+  subject: CheckedEntityCheckSubject,
+): SubjectCriteria => {
   switch (subject.type) {
     case "company-id": {
-      return `<ic>${escapeXml(subject.value)}</ic><maxRelevanceVysledku>${RELEVANCE.companyId}</maxRelevanceVysledku>`;
+      return {
+        identity: `<ic>${escapeXml(subject.value)}</ic>`,
+        withoutDiacritics: false,
+        relevance: RELEVANCE.companyId,
+      };
     }
     case "person": {
       // Prefix and diacritics-insensitive name matching widens recall; the
       // birth date plus the relevance cap keep matches on the same person,
       // and each finding carries the debtor as registered for review.
-      return [
-        `<nazevOsoby>${escapeXml(subject.lastName)}</nazevOsoby>`,
-        `<jmeno>${escapeXml(subject.firstName)}</jmeno>`,
-        `<datumNarozeni>${escapeXml(subject.birthDate)}</datumNarozeni>`,
-        `<vyhledatBezDiakritiky>T</vyhledatBezDiakritiky>`,
-        `<maxRelevanceVysledku>${RELEVANCE.nameAndBirthDate}</maxRelevanceVysledku>`,
-      ].join("");
+      return {
+        identity: [
+          `<nazevOsoby>${escapeXml(subject.lastName)}</nazevOsoby>`,
+          `<jmeno>${escapeXml(subject.firstName)}</jmeno>`,
+          `<datumNarozeni>${escapeXml(subject.birthDate)}</datumNarozeni>`,
+        ].join(""),
+        withoutDiacritics: true,
+        relevance: RELEVANCE.nameAndBirthDate,
+      };
     }
     case "tax-id": {
       // The service has no tax ID criterion; the runner answers not-covered
@@ -301,11 +315,16 @@ const queryIsir = async ({
   signal,
   observer,
 }: IsirQuery): Promise<Result<IsirAnswer, EntityCheckSourceError>> => {
-  // The service rejects empty elements, so optional ones are omitted.
+  // The service validates the request against its schema's element sequence
+  // and rejects empty elements, so optional ones are omitted and the rest
+  // follow the schema order.
+  const { identity, withoutDiacritics, relevance } = subjectCriteria(subject);
   const criteria = [
-    subjectCriteria(subject),
+    identity,
     `<maxPocetVysledku>${MAX_RESULTS}</maxPocetVysledku>`,
     pendingOnly ? "<filtrAktualniRizeni>T</filtrAktualniRizeni>" : "",
+    withoutDiacritics ? "<vyhledatBezDiakritiky>T</vyhledatBezDiakritiky>" : "",
+    `<maxRelevanceVysledku>${relevance}</maxRelevanceVysledku>`,
   ].join("");
   const body = await soapRequest({
     url: ENDPOINT,

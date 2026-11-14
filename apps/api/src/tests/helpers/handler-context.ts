@@ -1,11 +1,14 @@
 import { panic } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { createScopedDb } from "@/api/db/scoped";
+import type { RlsDatabase } from "@/api/db/scoped";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   ORG_AI_CONFIG_STATUS,
   type OrgAIConfigStatus,
 } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -13,8 +16,20 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabaseTransaction } from "@/api/tests/security/test-utils";
+
+type OrganizationTestPrincipal = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+/** Run handler authorization against the fixture's actual scoped database. */
+export const createOrganizationScopedTestDb = (
+  database: RlsDatabase,
+  { organizationId, userId }: OrganizationTestPrincipal,
+) => executeRowsScopedDb(createScopedDb(database, [], organizationId, userId));
 
 /**
  * Assert that this path must not record audit events. The recorder panics, but
@@ -51,9 +66,7 @@ export type BaseTestHandlerContext = {
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   managedAIResidency: ManagedAIResidency;
-  request: Request;
-  route: string;
-};
+} & SafeHandlerLogContext;
 
 /**
  * Overrides accepted by {@link createTestHandlerContext}. The base identity
@@ -129,12 +142,12 @@ const createBaseContext = (): Omit<
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the handler's own context type per call
 export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   overrides: TestHandlerContextOverrides,
-): TContext => {
+): TContext & SafeHandlerLogContext => {
   const base = createBaseContext();
   const { audit, safeDb, scopedDb, createAuditRecorder, ...fields } = overrides;
   const recordAuditEvent =
     typeof audit === "function" ? audit : unconfiguredAuditRecorder;
-  return asTestRaw<TContext>({
+  return asTestRaw<TContext & SafeHandlerLogContext>({
     ...base,
     ...fields,
     // Only the sentinel is replaced; any supplied double passes through as is.

@@ -13,8 +13,8 @@ import {
   isIdentifierReference,
   isStringLiteral,
   patternKeyFor,
-  resolveVariable,
   resolveImportedExpressionForEnforcement,
+  resolveVariable,
   stableInitializer,
   staticStringValue,
 } from "./utils.ts";
@@ -155,6 +155,46 @@ const portableIdentifierMixer = (
   };
 };
 
+const cookedTemplatePart = (quasi: unknown): string | null => {
+  if (!isAstNode(quasi)) {
+    return null;
+  }
+  const value = quasi.value;
+  if (typeof value !== "object" || value === null || !("cooked" in value)) {
+    return null;
+  }
+  return typeof value.cooked === "string" ? value.cooked : null;
+};
+
+const isNativeEscapePrefix = (
+  node: unknown,
+  isPathSeparator: (node: unknown) => boolean,
+): boolean => {
+  if (staticStringValue(node) === "..\\") {
+    return true;
+  }
+  if (!isAstNode(node) || node.type !== "TemplateLiteral") {
+    return false;
+  }
+  const { expressions, quasis } = node;
+  if (
+    !Array.isArray(expressions) ||
+    expressions.length !== 1 ||
+    !Array.isArray(quasis) ||
+    quasis.length !== 2
+  ) {
+    return false;
+  }
+  const head = quasis.at(0);
+  const tail = quasis.at(1);
+
+  return (
+    cookedTemplatePart(head) === ".." &&
+    cookedTemplatePart(tail) === "" &&
+    isPathSeparator(expressions.at(0))
+  );
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-raw-path-relative" },
   rules: {
@@ -280,44 +320,7 @@ export default eslintCompatPlugin({
             pathObjectImport(object.object)
           );
         };
-        const isNativeEscapePrefix = (node: unknown): boolean => {
-          if (staticStringValue(node) === "..\\") {
-            return true;
-          }
-          if (!isAstNode(node) || node.type !== "TemplateLiteral") {
-            return false;
-          }
-          const { expressions, quasis } = node;
-          if (
-            !Array.isArray(expressions) ||
-            expressions.length !== 1 ||
-            !Array.isArray(quasis) ||
-            quasis.length !== 2
-          ) {
-            return false;
-          }
-          const head = quasis.at(0);
-          const tail = quasis.at(1);
-          const cooked = (quasi: unknown): string | null => {
-            if (!isAstNode(quasi)) {
-              return null;
-            }
-            const value = quasi.value;
-            if (
-              typeof value !== "object" ||
-              value === null ||
-              !("cooked" in value)
-            ) {
-              return null;
-            }
-            return typeof value.cooked === "string" ? value.cooked : null;
-          };
-          return (
-            cooked(head) === ".." &&
-            cooked(tail) === "" &&
-            isPathSeparator(expressions.at(0))
-          );
-        };
+
         const isNativeEscapeCheck = (node: unknown): boolean =>
           isAstNode(node) &&
           node.type === "MemberExpression" &&
@@ -331,14 +334,16 @@ export default eslintCompatPlugin({
             isOwner = filenameForContext(context).includes(OWNER_PATH);
           },
           CallExpression(node) {
-            if (!isOwner && isPathRelative(node.callee)) {
+            if (isOwner) {
+              return;
+            }
+            if (isPathRelative(node.callee)) {
               context.report({ node, messageId: "noRawPathRelative" });
             }
             if (
-              !isOwner &&
               isNativeEscapeCheck(node.callee) &&
               Array.isArray(node.arguments) &&
-              isNativeEscapePrefix(node.arguments.at(0))
+              isNativeEscapePrefix(node.arguments.at(0), isPathSeparator)
             ) {
               context.report({
                 node,
@@ -346,7 +351,7 @@ export default eslintCompatPlugin({
                   "Do not build path escape checks from native separators. Use isPathInside from @stll/portable-path.",
               });
             }
-            if (!isOwner && mixesPortableIdentifierAndSeparator(node)) {
+            if (mixesPortableIdentifierAndSeparator(node)) {
               context.report({
                 node,
                 message:

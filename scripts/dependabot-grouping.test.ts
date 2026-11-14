@@ -25,34 +25,6 @@ const readStringArray = (value: unknown, field: string) => {
   return strings;
 };
 
-const parseElysiaGroup = (source: string) => {
-  const dependabot: unknown = Bun.YAML.parse(source);
-  if (!isRecord(dependabot) || !Array.isArray(dependabot["updates"])) {
-    throw new TypeError("Dependabot config must contain an updates array");
-  }
-  const bunUpdate = dependabot["updates"].find(
-    (update) => isRecord(update) && update["package-ecosystem"] === "bun",
-  );
-  if (!isRecord(bunUpdate) || !isRecord(bunUpdate["groups"])) {
-    throw new TypeError("Dependabot config must contain Bun dependency groups");
-  }
-  const elysiaGroup = bunUpdate["groups"]["elysia"];
-  if (!isRecord(elysiaGroup)) {
-    throw new TypeError("Dependabot config must contain the Elysia group");
-  }
-
-  return {
-    excludePatterns:
-      elysiaGroup["exclude-patterns"] === undefined
-        ? []
-        : readStringArray(
-            elysiaGroup["exclude-patterns"],
-            "Elysia exclude-patterns",
-          ),
-    patterns: readStringArray(elysiaGroup["patterns"], "Elysia patterns"),
-  };
-};
-
 const parseBunIgnores = (source: string) => {
   const dependabot: unknown = Bun.YAML.parse(source);
   if (!isRecord(dependabot) || !Array.isArray(dependabot["updates"])) {
@@ -78,11 +50,6 @@ type IgnorePolicy =
       readonly type: "documented_policy";
     }
   | {
-      readonly blockedVersion: string;
-      readonly prerequisite: string;
-      readonly type: "installed_prerequisite";
-    }
-  | {
       readonly type: "expo_sdk";
     };
 
@@ -106,12 +73,6 @@ const ignorePolicies = {
     blocker: "@tanstack/ai-openrouter",
     repositoryBlocker: undefined,
     type: "upstream_blocker",
-  },
-  // elysia-rate-limit 5 requires Elysia 2.
-  "elysia-rate-limit": {
-    blockedVersion: "2.0.0",
-    prerequisite: "elysia",
-    type: "installed_prerequisite",
   },
   expo: {
     reason:
@@ -311,29 +272,6 @@ const ignoredVersion = async ({
   return nextVersion(match.at(0) ?? "", part);
 };
 
-const readElysiaGroup = async () =>
-  parseElysiaGroup(
-    await Bun.file(
-      new URL("../.github/dependabot.yml", import.meta.url),
-    ).text(),
-  );
-
-const matchesDependabotPattern = (dependency: string, pattern: string) => {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp(`^${escaped.replaceAll("*", ".*")}$`, "u").test(dependency);
-};
-
-type DependabotGroup = ReturnType<typeof parseElysiaGroup>;
-
-const isDependencyInGroup = (
-  dependency: string,
-  { excludePatterns, patterns }: DependabotGroup,
-) =>
-  patterns.some((pattern) => matchesDependabotPattern(dependency, pattern)) &&
-  !excludePatterns.some((pattern) =>
-    matchesDependabotPattern(dependency, pattern),
-  );
-
 describe("Dependabot dependency groups", () => {
   test("keeps every Bun ignore tied to a live policy", async () => {
     const source = await Bun.file(
@@ -358,19 +296,6 @@ describe("Dependabot dependency groups", () => {
         case "documented_policy":
           // Pinned by "keeps Expo packages on one SDK major".
           break;
-        case "installed_prerequisite": {
-          const prerequisitePath = `${repositoryRoot}/node_modules/${policy.prerequisite}/package.json`;
-          const prerequisite = await readManifest(prerequisitePath);
-          const installed = prerequisite["version"];
-          if (typeof installed !== "string") {
-            throw new TypeError(`${prerequisitePath} must declare a version`);
-          }
-          expect(
-            Bun.semver.order(installed, policy.blockedVersion),
-            `${policy.prerequisite} ${installed} is installed; delete the ${dependency} ignore.`,
-          ).toBe(-1);
-          break;
-        }
         case "expo_sdk": {
           const candidate = await ignoredVersion(ignore);
           const bundledModulesPath = `${repositoryRoot}/node_modules/expo/bundledNativeModules.json`;
@@ -553,70 +478,5 @@ describe("Dependabot dependency groups", () => {
       "dependency-name": "react-native-screens",
       "update-types": ["version-update:semver-minor"],
     });
-  });
-
-  test("keeps every installed Elysia package in one update group", async () => {
-    const manifestPaths = [
-      "package.json",
-      ...(await Array.fromAsync(
-        new Bun.Glob("apps/*/package.json").scan(repositoryRoot),
-      )),
-      ...(await Array.fromAsync(
-        new Bun.Glob("packages/*/package.json").scan(repositoryRoot),
-      )),
-    ];
-    const installedElysiaPackages = new Set<string>();
-    const manifests = await Promise.all(
-      manifestPaths.map(async (manifestPath) => ({
-        manifest: await Bun.file(`${repositoryRoot}/${manifestPath}`).json(),
-        manifestPath,
-      })),
-    );
-
-    for (const { manifest, manifestPath } of manifests) {
-      if (!isRecord(manifest)) {
-        throw new TypeError(`${manifestPath} must contain a JSON object`);
-      }
-
-      for (const field of dependencyFields) {
-        const dependencies = manifest[field];
-        if (!isRecord(dependencies)) {
-          continue;
-        }
-        for (const dependency of Object.keys(dependencies)) {
-          if (
-            dependency === "elysia" ||
-            dependency.startsWith("@elysia/") ||
-            dependency.startsWith("@elysiajs/")
-          ) {
-            installedElysiaPackages.add(dependency);
-          }
-        }
-      }
-    }
-
-    const group = await readElysiaGroup();
-    const uncovered = [...installedElysiaPackages]
-      .filter((dependency) => !isDependencyInGroup(dependency, group))
-      .toSorted();
-
-    expect(uncovered).toEqual([]);
-  });
-
-  test("applies exclude patterns after include patterns", () => {
-    const group = parseElysiaGroup(`
-version: 2
-updates:
-  - package-ecosystem: bun
-    groups:
-      elysia:
-        patterns:
-          - "@elysia/*"
-        exclude-patterns:
-          - "@elysia/eden"
-`);
-
-    expect(isDependencyInGroup("@elysia/cors", group)).toBe(true);
-    expect(isDependencyInGroup("@elysia/eden", group)).toBe(false);
   });
 });

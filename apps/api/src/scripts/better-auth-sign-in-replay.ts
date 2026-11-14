@@ -13,10 +13,9 @@ import { betterAuth } from "better-auth";
  * only.
  */
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { bearer } from "better-auth/plugins";
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
+import type { SQL } from "bun";
+import { desc } from "drizzle-orm";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
@@ -24,7 +23,11 @@ import { errorOutputLogger } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { session as authSession } from "@/api/db/auth-schema";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
+import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { isRecord } from "@/api/lib/type-guards";
 import { normalizeBetterAuthOAuthBaseUrl } from "@/api/mcp/resource-policy-contract";
 import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
@@ -122,13 +125,12 @@ const readRows = async (client: SQL) => {
          ORDER BY a.id
          LIMIT ${MAX_SIGN_IN_ROWS + 1}
       `;
-      const sessions: unknown = await client`
-        SELECT token, user_id AS "userId"
-          FROM session
-         WHERE expires_at > now()
-         ORDER BY expires_at DESC
-         LIMIT ${MAX_SESSION_ROWS}
-      `;
+      const sessions = await createDatabase({ client })
+        .select({ token: authSession.token, userId: authSession.userId })
+        .from(authSession)
+        .where(liveSessionPredicate(new Date()))
+        .orderBy(desc(authSession.expiresAt))
+        .limit(MAX_SESSION_ROWS);
       const userCount: unknown =
         await client`SELECT count(*)::text AS "count" FROM "user"`;
       const accountCount: unknown =
@@ -238,7 +240,7 @@ const run = async (
     );
   }
   const { oauthBaseUrl, sessionSample } = parsed.value;
-  const client = new SQL({
+  const client = createSqlClient({
     connectionTimeout: DATABASE_CONNECTION_TIMEOUT_SECONDS,
     max: 1,
     url: databaseUrl,
@@ -257,12 +259,13 @@ const run = async (
     kid: SIGNING_KEY_ID,
     use: "sig",
   };
-  const database = drizzle({ client });
+  const database = createDatabase({ client });
+  // A throwaway secret: nothing signed here outlives the replay.
+  const secret = Bun.randomUUIDv7() + Bun.randomUUIDv7();
   const auth = betterAuth({
     logger: errorOutputLogger,
     baseURL: oauthBaseUrl,
-    // A throwaway secret: nothing signed here outlives the replay.
-    secret: Bun.randomUUIDv7() + Bun.randomUUIDv7(),
+    secret,
     database: drizzleAdapter(database, AUTH_DATABASE_ADAPTER_OPTIONS),
     // The replay issues every request in-process from one address-less
     // client; rate limiting would throttle the sample into false rejections
@@ -277,7 +280,6 @@ const run = async (
         tenantId,
       },
     },
-    plugins: [bearer()],
   });
 
   let currentIdToken = "";
@@ -422,6 +424,7 @@ const run = async (
   globalThis.fetch = realFetch;
 
   const sessionOutcomes = { resolved: 0, unresolved: 0 };
+  const sessionCookieName = (await auth.$context).authCookies.sessionToken.name;
   if (Result.isOk(replayed)) {
     const sampled = rows.value.sessions.slice(0, sessionSample).values();
     const resolveNext = async (): Promise<void> => {
@@ -429,9 +432,16 @@ const run = async (
       if (next.done) {
         return;
       }
+      // Sessions are cookie credentials; sign the stored token like the runtime.
+      const cookieValue = createSignedSessionCookieValue(
+        next.value.token,
+        secret,
+      );
       const response = await auth.handler(
         new Request(`${oauthBaseUrl}/api/auth/get-session`, {
-          headers: { authorization: `Bearer ${next.value.token}` },
+          headers: {
+            cookie: `${sessionCookieName}=${encodeURIComponent(cookieValue)}`,
+          },
         }),
       );
       const body: unknown = await response.json();

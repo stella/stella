@@ -7,12 +7,12 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 
 import {
   collectFileCopySources,
-  getFolderSubtree,
-  remapFileIds,
-  type EntitySnapshot,
   type EntityFieldSnapshot,
+  type EntitySnapshot,
   type EntityVersionSnapshot,
   type FileMapping,
+  getFolderSubtree,
+  remapFileIds,
 } from "./copy-utils";
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
@@ -56,6 +56,8 @@ const version = ({
   collaborationContributorUserIds: null,
   detectedLanguage: null,
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  deletedAt: null,
+  deletedBy: null,
   fields,
 });
 
@@ -63,6 +65,7 @@ const fileField = (id: string): EntityFieldSnapshot => ({
   id: toSafeId<"field">(id),
   content: sharedSourceFile,
   propertyId: filePropertyId,
+  aiSettlement: null,
 });
 
 const documentWith = (

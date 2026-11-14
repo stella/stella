@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { dispatchQueuedDocumentProcessingRuns } from "@/api/lib/document-processing-queue";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -83,35 +84,41 @@ export const dispatchDocumentOcrBatches = async ({
 };
 
 /** Release durable OCR requests in bounded batches at the configured cadence. */
-export const dispatchDocumentOcr: SchedulerTask = async ({
-  db,
-  logger,
-  scheduleContinuation,
-  signal,
-}) => {
-  const { dispatched, reachedLimit, retryAt } =
-    await dispatchDocumentOcrBatches({
-      dispatch: async ({ limit }) =>
-        await dispatchQueuedDocumentProcessingRuns({ database: db, limit }),
-      signal,
+export const createDispatchDocumentOcrTask =
+  (
+    enqueue: typeof enqueueDocumentProcessingRun = enqueueDocumentProcessingRun,
+  ): SchedulerTask =>
+  async ({ db, dueAt, logger, scheduleContinuation, signal }) => {
+    const { dispatched, reachedLimit, retryAt } =
+      await dispatchDocumentOcrBatches({
+        dispatch: async ({ limit }) =>
+          await dispatchQueuedDocumentProcessingRuns({
+            database: db,
+            enqueue,
+            limit,
+            selection: { kind: "ocr", scheduledRetriesOnly: false },
+          }),
+        signal,
+      });
+
+    logger.info("scheduler.document_ocr_dispatched", {
+      "documentProcessing.runs": dispatched,
     });
 
-  logger.info("scheduler.document_ocr_dispatched", {
-    "documentProcessing.runs": dispatched,
-  });
+    if (signal.aborted) {
+      panic("SchedulerAborted");
+    }
 
-  if (signal.aborted) {
-    panic("SchedulerAborted");
-  }
+    const continuationAt = nextDocumentOcrDispatchAt({
+      now: dueAt.toDate(),
+      reachedLimit,
+      retryAt,
+    });
+    if (continuationAt) {
+      // A full final batch may hide more eligible rows, while a failed handoff has
+      // a durable retry deadline. Use the earlier bounded continuation.
+      scheduleContinuation(continuationAt);
+    }
+  };
 
-  const continuationAt = nextDocumentOcrDispatchAt({
-    now: new Date(),
-    reachedLimit,
-    retryAt,
-  });
-  if (continuationAt) {
-    // A full final batch may hide more eligible rows, while a failed handoff has
-    // a durable retry deadline. Use the earlier bounded continuation.
-    scheduleContinuation(continuationAt);
-  }
-};
+export const dispatchDocumentOcr = createDispatchDocumentOcrTask();

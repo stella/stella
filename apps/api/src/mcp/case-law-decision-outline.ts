@@ -1,5 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { headingPathsByAnchor } from "@stll/legal-ast";
 import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -11,6 +12,59 @@ const OUTLINE_LIMIT = 100;
 // opening words, and a hundred long openings would outweigh the page itself.
 const TITLE_LIMIT = 80;
 const NUMBERED_SECTION = /^(?:[IVXLCDM]+[.)]|\d+[.)]|\[\d+\])(?:\s|$)/u;
+// Anonymised names print as capital initials, and `M.`, `L.`, `D.`, `C.`
+// (or `V.`, `I.`) read as Roman numerals. A run of two initials that goes on
+// in lower case or after a comma ("M. T. poznała", "M. D., poszukując") is a
+// party. A lone `L.`, `C.`, `D.` or `M.` that goes on in lower case, after a
+// comma or with a second initial ("M. T. Pozwana") is one too: those numerals
+// never open a lettered subsection. "I. zasądza" (a lone I, V or X) and
+// "I. A. Stan" (a numeral, then a lettered subsection) stay sections.
+const ANONYMISED_INITIALS =
+  /^(?:\p{Lu}\.\s*){2,}(?:[,;:]|\p{Ll})|^[LCDM]\.\s*(?:[,;:]|\p{Ll}|\p{Lu}\.)/u;
+// `I.`, `V.` or `X.` followed by a letter: a lettered subsection or a party's
+// initials. Only the text tells them apart.
+const LETTERED_SUBSECTION = /^([IVX])\.\s*(\p{Lu})\.\s/u;
+
+const letteredKey = (numeral: string, letter: string): string =>
+  `${numeral}.${letter}`;
+
+/**
+ * The numeral-and-letter pairs the text prints. Lettered subsections come in
+ * runs ("I. A.", "I. B."), while a party's initials stand alone, so a pair
+ * whose neighbouring letter also opens a line is a subsection.
+ */
+const letteredSubsections = (text: string): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const line of text.matchAll(/[^\r\n]+/gu)) {
+    const match = LETTERED_SUBSECTION.exec(line[0].trim());
+    if (match?.[1] !== undefined && match[2] !== undefined) {
+      keys.add(letteredKey(match[1], match[2]));
+    }
+  }
+  return keys;
+};
+
+const inLetteredRun = (
+  title: string,
+  lettered: ReadonlySet<string>,
+): boolean => {
+  const match = LETTERED_SUBSECTION.exec(title);
+  const numeral = match?.[1];
+  const code = match?.[2]?.codePointAt(0);
+  if (numeral === undefined || code === undefined) {
+    return false;
+  }
+  return [code - 1, code + 1].some((neighbour) =>
+    lettered.has(letteredKey(numeral, String.fromCodePoint(neighbour))),
+  );
+};
+
+const opensNumberedSection = (
+  title: string,
+  lettered: ReadonlySet<string>,
+): boolean =>
+  NUMBERED_SECTION.test(title) &&
+  (!ANONYMISED_INITIALS.test(title) || inLetteredRun(title, lettered));
 
 /** A block found in the served plain text, with where it sits there. */
 export type LocatedDecisionBlock = {
@@ -29,6 +83,48 @@ export const printedParagraphLabel = (text: string): string | null => {
   return match?.[1] ?? match?.[2] ?? null;
 };
 
+/** The paragraph numbers the parser recovered as structure. */
+const courtNumbersOf = (blocks: readonly Block[]): ReadonlySet<number> =>
+  new Set(
+    blocks.flatMap((block) => {
+      const number = courtParagraphNumber(block);
+      return number === null ? [] : [number];
+    }),
+  );
+
+/**
+ * A located block's label: the court's number where the parser recovered
+ * one, else the number a paragraph prints at its start.
+ *
+ * A printed number that is also one of the court's structural numbers is
+ * not a label: the figure opening a heading (`2. The provisional
+ * nature…`), a quoted provision (`2. The adequacy of…`) or a list item
+ * (`1) disciplinary proceedings:`) would otherwise name a second
+ * "paragraph 2". A heading is never labelled as a paragraph.
+ */
+const blockLabel = ({
+  block,
+  number,
+  courtNumbers,
+}: {
+  block: Block;
+  number: number | null;
+  courtNumbers: ReadonlySet<number>;
+}): string | null => {
+  if (number !== null) {
+    return String(number);
+  }
+  const printed =
+    block.type === "paragraph" ? printedParagraphLabel(block.plainText) : null;
+  if (printed === null) {
+    return null;
+  }
+  const printedNumber = parseIntegerToken(printed, { sign: "unsigned" });
+  return Result.isOk(printedNumber) && courtNumbers.has(printedNumber.value)
+    ? null
+    : printed;
+};
+
 /**
  * Every block with text, located in the served plain text in document order.
  * The plain text is built from these blocks, so each is found after the one
@@ -41,6 +137,7 @@ export const locateDecisionBlocks = (
 ): LocatedDecisionBlock[] => {
   const located: LocatedDecisionBlock[] = [];
   const paths = headingPathsByAnchor(blocks);
+  const courtNumbers = courtNumbersOf(blocks);
   let offset = 0;
   for (const block of blocks) {
     const found = text.indexOf(block.plainText, offset);
@@ -60,10 +157,7 @@ export const locateDecisionBlocks = (
         paths.get(block.anchorId) ??
         panic("Every AST anchor has a heading path")
       ).map(({ title }) => title),
-      label:
-        number === null
-          ? printedParagraphLabel(block.plainText)
-          : String(number),
+      label: blockLabel({ block, number, courtNumbers }),
     });
   }
   return located;
@@ -88,6 +182,74 @@ type DecisionOutlineResult = {
   numberedEntriesTruncated: boolean;
 };
 
+/** A numbered passage the outline may name, in served-text order. */
+type NumberedCandidate = {
+  anchorId: string | null;
+  number?: number | undefined;
+  start: number;
+  title: string;
+};
+
+/**
+ * The court's numbered paragraphs, where the parser recovered the
+ * numbering: each block that carries a number, titled by its opening words.
+ */
+const structuralNumberedCandidates = (
+  located: readonly LocatedDecisionBlock[],
+): NumberedCandidate[] =>
+  located.flatMap((block) =>
+    block.number === undefined
+      ? []
+      : [
+          {
+            anchorId: block.anchorId,
+            number: block.number,
+            start: block.start,
+            title: block.text.split(/\r?\n/u, 1)[0]?.trim() ?? "",
+          },
+        ],
+  );
+
+/**
+ * Lines of the served text that open with a section or paragraph marker,
+ * where the parser recovered no numbering and the text is all there is. A
+ * line inside a heading block is the heading's, which travels already.
+ */
+const printedNumberedCandidates = (
+  located: readonly LocatedDecisionBlock[],
+  text: string,
+): NumberedCandidate[] => {
+  const candidates: NumberedCandidate[] = [];
+  const lettered = letteredSubsections(text);
+  let blockIndex = 0;
+  for (const line of text.matchAll(/[^\r\n]+/gu)) {
+    const title = line[0].trim();
+    if (!opensNumberedSection(title, lettered)) {
+      continue;
+    }
+    const start = line.index + line[0].indexOf(title);
+    let block = located.at(blockIndex);
+    while (block !== undefined && block.end <= start) {
+      blockIndex += 1;
+      block = located.at(blockIndex);
+    }
+    const enclosingBlock =
+      block !== undefined && block.start <= start ? block : undefined;
+    if (enclosingBlock?.type === "heading") {
+      continue;
+    }
+    candidates.push({
+      anchorId: enclosingBlock?.anchorId ?? null,
+      ...(enclosingBlock?.number !== undefined
+        ? { number: enclosingBlock.number }
+        : {}),
+      start,
+      title,
+    });
+  }
+  return candidates;
+};
+
 export const decisionOutline = ({
   blocks,
   text,
@@ -104,35 +266,25 @@ export const decisionOutline = ({
       });
     }
   }
-  // AST headings always travel verbatim; numbered lines fill the remaining
-  // navigation budget. Walk located spans once, in the same order as lines.
-  let blockIndex = 0;
-  for (const line of text.matchAll(/[^\r\n]+/gu)) {
-    const title = line[0].trim();
-    if (!NUMBERED_SECTION.test(title)) {
-      continue;
-    }
-    const start = line.index + line[0].indexOf(title);
-    let block = located.at(blockIndex);
-    while (block !== undefined && block.end <= start) {
-      blockIndex += 1;
-      block = located.at(blockIndex);
-    }
-    const enclosingBlock =
-      block !== undefined && block.start <= start ? block : undefined;
-    if (entries.has(start) || enclosingBlock?.type === "heading") {
+  // AST headings always travel verbatim; numbered passages fill the
+  // remaining navigation budget. Where the parser recovered the court's
+  // numbering, the numbered passages are its paragraphs: a line that still
+  // opens with a figure there is a quoted provision or a list item
+  // (`2. The adequacy of…`, `1) disciplinary proceedings:`), not a section.
+  const numbered =
+    blocks !== null && courtNumbersOf(blocks).size > 0
+      ? structuralNumberedCandidates(located)
+      : printedNumberedCandidates(located, text);
+  for (const { title, ...candidate } of numbered) {
+    if (entries.has(candidate.start)) {
       continue;
     }
     if (entries.size >= OUTLINE_LIMIT) {
       numberedEntriesTruncated = true;
       continue;
     }
-    entries.set(start, {
-      anchorId: enclosingBlock?.anchorId ?? null,
-      ...(enclosingBlock?.number === undefined
-        ? {}
-        : { number: enclosingBlock.number }),
-      start,
+    entries.set(candidate.start, {
+      ...candidate,
       title: title.slice(
         0,
         resolveTextWindowBounds({ text: title, offset: 0, size: TITLE_LIMIT })

@@ -20,8 +20,8 @@ import {
   CLASSIFIABLE_POLARITIES,
   isClassifiablePolarity,
   POLARITY_PRECEDENCE,
-  RULE_SOURCE,
   REPORTED_PARTY_SUBMISSION_GROUP,
+  RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   ClassifiablePolarity,
@@ -31,6 +31,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 export type CompiledRule = {
   id: SafeId<"caseLawPolarityRule">;
@@ -198,7 +199,10 @@ export const compileRules = (
         new TelemetryError({
           message: "Polarity rule pattern does not compile",
         }),
-        { pattern: row.pattern, ruleId: row.id },
+        handlerErrorContext("polarity.compileRules.pattern", {
+          pattern: row.pattern,
+          ruleId: row.id,
+        }),
       );
       continue;
     }
@@ -208,7 +212,10 @@ export const compileRules = (
         new TelemetryError({
           message: "Polarity rule carries a polarity no match may assign",
         }),
-        { polarity: row.polarity, ruleId: row.id },
+        handlerErrorContext("polarity.compileRules.polarity", {
+          polarity: row.polarity,
+          ruleId: row.id,
+        }),
       );
       continue;
     }

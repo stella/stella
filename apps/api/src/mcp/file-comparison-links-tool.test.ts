@@ -7,9 +7,9 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { toSafeId } from "@/api/lib/branded-types";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handlePrepareFileComparisonFromLinksTool } from "@/api/mcp/file-comparison-links-tool";
 import type { PrepareFileComparisonFromLinksDependencies } from "@/api/mcp/file-comparison-links-tool";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -77,7 +77,7 @@ const createHarness = ({
     }),
   });
 
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set<string>(),
     accessibleWorkspaceStatusById: new Map(),
@@ -242,9 +242,7 @@ describe("prepare_file_comparison_from_links", () => {
         headers: {
           "content-type": DOCX_MIME_TYPE,
           "content-length": "1",
-          "x-amz-checksum-sha256": Buffer.from(BASE_SHA, "hex").toString(
-            "base64",
-          ),
+          "x-amz-checksum-sha256": Buffer.from(BASE_SHA, "hex").toBase64(),
           "x-amz-sdk-checksum-algorithm": "SHA256",
         },
         size: BASE_BYTES.byteLength,
@@ -254,9 +252,7 @@ describe("prepare_file_comparison_from_links", () => {
         headers: {
           "content-type": DOCX_MIME_TYPE,
           "content-length": "1",
-          "x-amz-checksum-sha256": Buffer.from(TARGET_SHA, "hex").toString(
-            "base64",
-          ),
+          "x-amz-checksum-sha256": Buffer.from(TARGET_SHA, "hex").toBase64(),
           "x-amz-sdk-checksum-algorithm": "SHA256",
         },
         size: TARGET_BYTES.byteLength,

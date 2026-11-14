@@ -325,10 +325,8 @@ export const product = <Dimensions extends Record<string, readonly unknown[]>>(
     }
     assignments = next;
   }
-  return assignments.map((assignment) =>
-    asTestRaw<{ [Key in keyof Dimensions]: Dimensions[Key][number] }>(
-      assignment,
-    ),
+  return asTestRaw<{ [Key in keyof Dimensions]: Dimensions[Key][number] }[]>(
+    assignments,
   );
 };
 

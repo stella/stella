@@ -1,13 +1,20 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
+import {
+  CASE_LAW_DECISIONS_SLUG_UIDX,
+  CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
+  CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -16,6 +23,7 @@ import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeli
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
+  recordParsedGenerationTx,
   writeDecisionJudges,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
@@ -53,6 +61,7 @@ const insertedRowValues = (
     persistedDecisionDate,
     observedAt,
     observationOrder,
+    sourceFingerprintVersion,
     shape: { storesUnpublishedWithoutDocument },
     plan: { docketColumns, languageGroupKey, payloadColumns, preparedMetadata },
     rawArtifact: { sourceRawS3Key, sourceRawContentType },
@@ -84,6 +93,7 @@ const insertedRowValues = (
   sourceRawS3Key,
   sourceRawContentType,
   sourceHash: result.rawHash,
+  sourceHashVersion: sourceFingerprintVersion,
   sourceObservedAt: observedAt,
   sourceObservationOrder: observationOrder,
   sourceObservationHash: result.rawHash,
@@ -127,7 +137,10 @@ const insertDecisionRowTx = async (
       // The slug index is `(slug) WHERE slug IS NOT NULL`; the predicate
       // lets Postgres infer it as the only arbiter.
       .onConflictDoNothing({
-        target: caseLawDecisions.slug,
+        target: onlineUniqueIndexTarget(
+          CASE_LAW_DECISIONS_SLUG_UIDX,
+          caseLawDecisions,
+        ),
         where: isNotNull(caseLawDecisions.slug),
       })
       .returning({ id: caseLawDecisions.id });
@@ -162,7 +175,11 @@ const finishInsertedRowTx = async (
   } = write;
   await writeDecisionJudges(tx, write, insertedId);
 
-  await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
+  // The row and its identifiers are stored, so the citations that were
+  // waiting for this decision are answered here rather than by the walk.
+  await settleReopenedCitations(tx, [
+    await announceDecisionIdentifiers(tx, write, insertedId, identifierRows),
+  ]);
 
   switch (citations.disposition) {
     case "annotation-only":
@@ -193,6 +210,7 @@ const finishInsertedRowTx = async (
     ...(write.signal === undefined ? {} : { signal: write.signal }),
   });
   await reconcileStableProjection(tx, write, insertedId, projectionLock);
+  await recordParsedGenerationTx(tx, { write, phase: "row" });
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };
 
@@ -214,7 +232,8 @@ const writeDecisionRow = async (
       composition,
       composedSupplements,
       shape: { preservesExistingDetail },
-      plan: { payloadColumns, storedPayloadUnchanged },
+      plan: { payloadColumns, replacedBlockAnchors, storedPayloadUnchanged },
+      inputProvenance,
     } = write;
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
@@ -271,7 +290,10 @@ const writeDecisionRow = async (
         // payload fence: another write replaced what the plan compared
         // against.
         return await lostRowWriteStatus(tx, write, existing.id, {
-          payloadFenced: storedPayloadUnchanged,
+          payloadFenced:
+            storedPayloadUnchanged ||
+            replacedBlockAnchors !== null ||
+            inputProvenance.type === "stored",
         });
       }
 
@@ -339,6 +361,11 @@ const writeDecisionRow = async (
       );
     }
 
+    if (inputProvenance.type === "stored") {
+      // A reparse must never recreate a removed decision under a new identity.
+      return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
+    }
+
     if (slugLadder === undefined) {
       panic("Missing slug for a new case-law decision");
     }
@@ -401,7 +428,7 @@ export const writeDecisionRowWithSlug = async (
     isPgConstraintError(
       rowWrite.error,
       PG_ERROR.UNIQUE_VIOLATION,
-      "case_law_decisions_slug_uidx",
+      CASE_LAW_DECISIONS_SLUG_UIDX,
     )
   ) {
     // Only the ladder's last candidate can raise on the slug index.
@@ -419,12 +446,12 @@ export const isConcurrentIdentityInsert = (error: unknown): boolean =>
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_document_idx",
+    CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
   ) ||
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_case_lang_null_idx",
+    CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX,
   ) ||
   isPgConstraintError(
     error,

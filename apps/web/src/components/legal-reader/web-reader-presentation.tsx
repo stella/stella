@@ -1,43 +1,44 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
-import { Result } from "better-result";
-import { useTranslations } from "use-intl";
-
-import { copyToClipboard } from "@stll/clipboard";
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
-import type { ReaderPresentationAdapters } from "@stll/decision-reader/reader-adapters";
-import { stellaToast } from "@stll/ui/toast";
+import type {
+  PermalinkCopyState,
+  ReaderPresentationAdapters,
+} from "@stll/decision-reader/reader-adapters";
 
+import { useCopyControl } from "@/components/copy-control";
 import { useWebReaderMessages } from "@/components/legal-reader/web-reader-messages";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+
+/**
+ * A block's permalink mark: a press writes the block's address into the
+ * location and copies it. The link is shown nowhere as text, so no
+ * selection the reader copies can be it; only the press confirms.
+ */
+const PermalinkCopy = ({
+  anchorId,
+  render,
+}: {
+  anchorId: string;
+  render: (state: PermalinkCopyState) => ReactElement;
+}) => {
+  const control = useCopyControl({ confirmation: "in-place" });
+  return render({
+    copied: control.copied,
+    copy: () => {
+      window.history.replaceState(null, "", `#${anchorId}`);
+      const url = new URL(window.location.href);
+      url.hash = anchorId;
+      detached(control.copy(url.href), "web-reader.copy-permalink");
+    },
+  });
+};
 
 export const useWebReaderPresentationAdapters =
-  (): ReaderPresentationAdapters => {
-    const t = useTranslations();
-    const analytics = useAnalytics();
-    return {
-      messages: useWebReaderMessages(),
-      copyPermalink: (anchorId) => {
-        window.history.replaceState(null, "", `#${anchorId}`);
-        detached(
-          (async () => {
-            const url = new URL(window.location.href);
-            url.hash = anchorId;
-            const copied = await copyToClipboard(url.href);
-            if (Result.isError(copied)) {
-              analytics.captureError(copied.error);
-              notifyUserError(copied.error, t("errors.actionFailed"));
-              return;
-            }
-            stellaToast.add({ title: t("common.copied"), type: "success" });
-          })(),
-          "legal-reader.permalink-copy",
-        );
-      },
-    };
-  };
+  (): ReaderPresentationAdapters => ({
+    messages: useWebReaderMessages(),
+    renderPermalinkCopy: (props) => <PermalinkCopy {...props} />,
+  });
 
 export const WebReaderPresentationProvider = ({
   children,

@@ -14,6 +14,7 @@ import {
   resolveUsCourt,
   type UsCourtResolution,
 } from "@stll/api-contract/us-courts";
+import { declareFingerprintFields } from "@stll/errors";
 
 import {
   type CourtDirectoryJurisdiction,
@@ -64,7 +65,11 @@ export class DecisionCourtIdentityError extends TaggedError(
   country: string;
   courtId: string | null;
   reason: DecisionCourtIdentityRejection;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type DecisionCourtIdentityInput = {
   country: string;

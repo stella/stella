@@ -1,10 +1,5 @@
 [
   {
-    "table": "organization_settings",
-    "column": "documentStampEnabled",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "buffer_object_cleanup_intents",
     "column": "writerUserId",
     "reason": "not app-code dead: default expression pulls the PostgreSQL session var and the column only appears inside the RLS policy predicate built alongside the table in schema/entities.ts, which this check excludes as the definitions. Allowlisted rather than a scanner fix -- picking it up would require reading inside the excluded schema files, defeating the point of the exclusion."
@@ -20,6 +15,11 @@
     "reason": "not app-code dead: append-only audit timestamp written by a migration-owned trigger (see schema/case-law.ts comment). Migrations are excluded by design."
   },
   {
+    "table": "case_law_population_seed_state",
+    "column": "foldGeneration",
+    "reason": "not app-code dead: incremented by the migration-owned fold function (apps/api/drizzle/20261101022151_case_law_population_counts/migration.sql) and read back through read_case_law_population_freshness(), which serves it as the fold number. Migrations are excluded by design."
+  },
+  {
     "table": "case_law_citation_resolution_census_runs",
     "column": "keysScanned",
     "reason": "dormant feature: citation-resolution-census-consts.ts is explicitly headed 'Dormant closed vocabularies of the citation-resolution census' -- the whole table is scaffolded ahead of a census feature that has not landed; only referenced in branded-id registries and RLS/schema-invariant tests."
@@ -28,36 +28,6 @@
     "table": "case_law_citation_resolution_census_runs",
     "column": "cursorKey",
     "reason": "dormant feature: see case_law_citation_resolution_census_runs.keysScanned -- same not-yet-landed census feature."
-  },
-  {
-    "table": "case_law_decisions",
-    "column": "indexedGeneration",
-    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
-  },
-  {
-    "table": "case_law_decisions",
-    "column": "indexedAt",
-    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
-  },
-  {
-    "table": "legislation_documents",
-    "column": "indexedGeneration",
-    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
-  },
-  {
-    "table": "legislation_documents",
-    "column": "indexedAt",
-    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
-  },
-  {
-    "table": "case_law_decisions",
-    "column": "citationAuthorityComputedAt",
-    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
-  },
-  {
-    "table": "legislation_documents",
-    "column": "citationAuthorityComputedAt",
-    "reason": "unreferenced as of 2026-09-23; drop with its case-law twin in the next schema release"
   },
   {
     "table": "case_law_provision_extraction_revisions",
@@ -103,11 +73,6 @@
     "table": "case_law_provision_extractions",
     "column": "unresolvedCounts",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "corpus_index_group_withdrawals",
-    "column": "withdrawnAt",
-    "reason": "not app-code dead: append-only audit timestamp filled by its column default when a withdrawal is recorded; the trail is read by operators, and no app path reads it."
   },
   {
     "table": "usage_policies",

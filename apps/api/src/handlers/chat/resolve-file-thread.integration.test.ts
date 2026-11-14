@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import { chatThreads, fileChatThreads } from "@/api/db/schema";
-import { markRlsDatabase, createScopedDb } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

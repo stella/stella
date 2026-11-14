@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import { useScreenActionsStore } from "@/lib/capabilities/screen-actions";
 import type { ScreenAction } from "@/lib/capabilities/screen-actions";

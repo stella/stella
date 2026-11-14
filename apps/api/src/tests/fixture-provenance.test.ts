@@ -9,8 +9,8 @@ import {
   isCapturedFixture,
   LEGACY_CAPTURES,
   parseProvenance,
-  provenancePathOf,
   PROVENANCE_SUFFIX,
+  provenancePathOf,
 } from "./fixture-provenance";
 
 // `apps/api`, two levels up from `src/tests`.
@@ -99,6 +99,17 @@ const sidecarPaths = allPaths.filter((entry) =>
 );
 
 describe("captured fixture provenance", () => {
+  test("synthetic files declare their authored origin without a captured URL", () => {
+    const payload = {
+      capture: "synthetic",
+      sha256: "a".repeat(64),
+      note: "Invented input",
+    } satisfies FixtureProvenance;
+    expect(parseProvenance(JSON.stringify(payload))).toEqual(payload);
+    expect(
+      parseProvenance(JSON.stringify({ ...payload, note: undefined })),
+    ).toBeUndefined();
+  });
   /**
    * Guard the walk itself. Every other test here reports violations out
    * of this list, so a glob that silently matched nothing would turn the
@@ -126,7 +137,7 @@ describe("captured fixture provenance", () => {
 
     expect(
       malformed,
-      'sidecars need capture: "recorded" with sourceUrl + capturedAt, or capture: "legacy" with a note',
+      'sidecars need capture: "recorded" with sourceUrl + capturedAt, or capture: "legacy" / "synthetic" with a note',
     ).toEqual([]);
   });
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 const fixturePath = "/src/components/fixtures/split-button.fixture.html";
 const primaryName = "Create document";

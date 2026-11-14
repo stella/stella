@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { TruncatedText } from "../components/truncated-text";
 import { cn } from "../lib/utils";
 import { KANBAN_CHROME_ROW_HEIGHT } from "./layout-tokens";
 
@@ -44,6 +45,7 @@ export const KanbanColumnHeader = ({
       KANBAN_CHROME_ROW_HEIGHT,
       className,
     )}
+    data-kanban-column-header=""
   >
     {/* How far the name may travel: up to where the row's own controls begin,
      * so a name holding the visible edge of a board scrolled sideways never
@@ -60,12 +62,12 @@ export const KanbanColumnHeader = ({
         data-kanban-column-title=""
       >
         {swatch}
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm font-medium">
+        <TruncatedText className="flex flex-1 items-center gap-1.5 text-sm font-medium">
           {title}
           {meta !== undefined && (
             <span className="text-muted-foreground text-xs">{meta}</span>
           )}
-        </span>
+        </TruncatedText>
       </div>
     </div>
     {calculation}

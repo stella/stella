@@ -4,27 +4,35 @@ import { panic } from "better-result";
 
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  BUSINESS_REGISTRY_SLUGS,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  BUSINESS_REGISTRY_SLUGS,
   CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
-import type { ChatEditApplyMode } from "@stll/api-contract";
+import type {
+  BusinessRegistrySlug,
+  ChatEditApplyMode,
+} from "@stll/api-contract";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import { SHOW_APP_TOOL_NAME } from "@stll/api-contract/stella-mcp-app";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
+import { SHOW_APP_DEPLOYMENT_FEATURE } from "@/api/handlers/chat/tools/show-app-tool";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import type { RegistryHandler } from "@/api/lib/business-registries/dispatch";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -34,6 +42,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { hiddenMcpDescriptorIds } from "@/api/mcp/feature-access-prose";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 
 import type { CanaryProvider } from "./ai-provider-canary-config";
 
@@ -89,6 +98,7 @@ const activeSkillContext: ActiveChatSkillContext = {
   excludedChatTools: [],
   id: skillId,
   origin: "authored",
+  binding: UNBOUND,
   requiredTools: [],
   resources: [{ path: "references/canary.md" }],
   source: "installed",
@@ -96,7 +106,9 @@ const activeSkillContext: ActiveChatSkillContext = {
   version: null,
 };
 
-const canaryRegistryDispatch = { ...BUSINESS_REGISTRY_DISPATCH };
+const canaryRegistryDispatch: Record<BusinessRegistrySlug, RegistryHandler> = {
+  ...BUSINESS_REGISTRY_DISPATCH,
+};
 for (const slug of BUSINESS_REGISTRY_SLUGS) {
   canaryRegistryDispatch[slug] = {
     ...BUSINESS_REGISTRY_DISPATCH[slug],
@@ -170,9 +182,13 @@ const buildChatToolsForScenario = ({
       store: () => panic("The provider canary must not publish views."),
       preview: () => panic("The provider canary must not render previews."),
     },
+    appTools: { origin: createVisualResourceOrigin() },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
-    browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
+    browserExtension: {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
+    },
     docxSuggestionSurface: surface,
     editApplyMode,
     hasActiveDocxEditClient: true,
@@ -221,7 +237,7 @@ const buildChatToolsForScenario = ({
       webSearchProvider: inertWebSearchProvider,
     },
     workspaceId,
-    workspaceStatusById: new Map([[workspaceId, "active"]]),
+    workspaceStatusById: new Map([[workspaceId, WORKSPACE_STATUS.active]]),
   });
 };
 
@@ -245,9 +261,15 @@ export const buildCanaryChatToolsets = (
   const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
   // The canary has no feature admission. Account for those tools through the
   // same registry-derived visibility rule chat uses, without granting access.
-  const gatedNames = hiddenMcpDescriptorIds(undefined, [
-    ...DEFAULT_MCP_TOOL_DEFINITIONS,
-    ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  const gatedNames = new Set([
+    ...hiddenMcpDescriptorIds(undefined, [
+      ...DEFAULT_MCP_TOOL_DEFINITIONS,
+      ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+    ]),
+    // A deployment without the public corpus offers no app to show.
+    ...(isMcpToolFeatureEnabled(SHOW_APP_DEPLOYMENT_FEATURE)
+      ? []
+      : [SHOW_APP_TOOL_NAME]),
   ]);
   const missing = catalogNames.filter(
     (name) => !registeredNames.has(name) && !gatedNames.has(name),

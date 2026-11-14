@@ -9,7 +9,13 @@ import {
 } from "@stll/decision-reader/reader-landing";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
+import {
+  heldAnchorTarget,
+  type HeldDecisionAnchor,
+} from "@/features/case-law/decision-anchor-resolution.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 import { decisionParagraphLanding } from "./decision-paragraph-landing.logic";
 
@@ -18,35 +24,50 @@ export const applyDecisionParagraphLanding = (
   container: HTMLElement,
   paragraphLanding: ReturnType<typeof decisionParagraphLanding>,
 ) => {
+  let anchorIds: readonly string[];
+  let firstAnchorId: string;
   switch (paragraphLanding.type) {
-    case "anchor":
+    case "anchor": {
+      const { anchorId } = paragraphLanding;
+      if (anchorId === undefined) {
+        return undefined;
+      }
+      anchorIds = [anchorId];
+      firstAnchorId = anchorId;
+      break;
+    }
     case "invalid":
     case "text-unavailable":
+    case "anchor-pending":
       return undefined;
     case "not-found":
+    case "anchor-gone":
       return holdTop(container);
     case "range":
+      anchorIds = paragraphLanding.anchorIds;
+      firstAnchorId = paragraphLanding.firstAnchorId;
       break;
     default:
       paragraphLanding satisfies never;
       return panic("Unhandled decision paragraph landing");
   }
-  const targets = paragraphLanding.anchorIds.map((id) => {
+  const targets: HTMLElement[] = [];
+  for (const id of anchorIds) {
     const target = readerBlockByAnchor(container, id);
-    return target ?? panic("Resolved court paragraph must be rendered");
-  });
-  const target = readerBlockByAnchor(container, paragraphLanding.firstAnchorId);
-  if (target === null) {
-    return panic("First resolved court paragraph must be rendered");
-  }
-  for (const paragraph of targets) {
-    for (
-      let disclosure = paragraph.closest("details");
-      disclosure !== null;
-      disclosure = disclosure.parentElement?.closest("details") ?? null
-    ) {
-      disclosure.open = true;
+    if (target === null) {
+      if (paragraphLanding.type === "anchor") {
+        return undefined;
+      }
+      return panic("Resolved court paragraph must be rendered");
     }
+    targets.push(target);
+  }
+  const target =
+    targets.find(
+      (candidate) => candidate.dataset["anchor"] === firstAnchorId,
+    ) ?? panic("First resolved court paragraph must be rendered");
+  for (const paragraph of targets) {
+    revealEnclosingDisclosures(paragraph);
     paragraph.dataset["readerLanding"] = "";
     paragraph.classList.add("bg-accent", "text-accent-foreground");
   }
@@ -55,7 +76,7 @@ export const applyDecisionParagraphLanding = (
   target.focus({ preventScroll: true });
   const article =
     target.closest("article") ??
-    panic("Court paragraph must belong to the reader article");
+    panic("Reader block must belong to the reader article");
   const release = holdLanding({ article, target });
   return () => {
     release();
@@ -76,6 +97,8 @@ type DecisionParagraphLandingSyncOptions = {
   /** The decision's stored AST; its reference, not a per-render parse, keys the landing. */
   documentAst: unknown;
   fragment: string | undefined;
+  /** Where the fragment's block anchor points in the shown document. */
+  fragmentAnchor: HeldDecisionAnchor | undefined;
   sessionId?: string | undefined;
 };
 
@@ -88,8 +111,19 @@ export const useDecisionParagraphLanding = ({
   containerRef,
   documentAst,
   fragment,
+  fragmentAnchor,
   sessionId,
 }: DecisionParagraphLandingSyncOptions) => {
+  // The landing reruns when the resolution's state or target changes, never
+  // on a new object carrying the same answer.
+  const fragmentAnchorType = fragmentAnchor?.type;
+  const fragmentAnchorTarget =
+    fragmentAnchor === undefined ? undefined : heldAnchorTarget(fragmentAnchor);
+  const resolveFragmentAnchor = useLatestCallback(
+    () =>
+      fragmentAnchor ??
+      panic("A block anchor fragment must arrive with its resolution"),
+  );
   useExternalSyncEffect(() => {
     const container = containerRef.current;
     if (container === null) {
@@ -97,7 +131,19 @@ export const useDecisionParagraphLanding = ({
     }
     return applyDecisionParagraphLanding(
       container,
-      decisionParagraphLanding(parseDocumentAst(documentAst), fragment),
+      decisionParagraphLanding(
+        parseDocumentAst(documentAst),
+        fragment,
+        resolveFragmentAnchor,
+      ),
     );
-  }, [containerRef, documentAst, fragment, sessionId]);
+  }, [
+    containerRef,
+    documentAst,
+    fragment,
+    fragmentAnchorType,
+    fragmentAnchorTarget,
+    resolveFragmentAnchor,
+    sessionId,
+  ]);
 };

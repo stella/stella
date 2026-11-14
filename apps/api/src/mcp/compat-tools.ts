@@ -1,12 +1,19 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET } from "@stll/api-contract/search";
+
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
+import { getPublicReadSignal } from "@/api/lib/legal-search/public-read-timeout-context";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -17,8 +24,8 @@ import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import {
   type AuthorizedWorkspaceIds,
-  type AuthorizedWorkspaceReadError,
   authorizedWorkspaceIds,
+  type AuthorizedWorkspaceReadError,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
@@ -28,7 +35,7 @@ import {
   EMPTY_CORPUS_CURSORS,
   hasMoreCorpusPages,
   resolveCompatCorpusCountries,
-  searchCompatCorpus,
+  waitForCompatCorpus,
 } from "@/api/mcp/compat-corpus";
 import {
   COMPAT_ID_HINT,
@@ -37,17 +44,20 @@ import {
   decodeCompatId,
 } from "@/api/mcp/compat-ids";
 import {
+  COMPAT_PAIR_HOST_META,
   COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
+  type CompatSearchPosition,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
   publicLawDisabledResult,
-  type CompatSearchPosition,
 } from "@/api/mcp/compat-shared";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
+import { underFleetCallerSlot } from "@/api/mcp/public-read-continuation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -58,20 +68,21 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildDocumentUrl,
   buildMatterUrl,
-  cursorInput,
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  nullAsAbsent,
+  structuredErrorResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type CompatToolName = "fetch" | "search";
 
@@ -98,9 +109,9 @@ const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
  * failure envelope.
  */
 const readAuthorizedMatterContent = async <T>(
-  context: McpRequestContext,
+  context: McpRequestResources,
   read: (
-    tx: Parameters<Parameters<McpRequestContext["scopedDb"]>[0]>[0],
+    tx: Parameters<Parameters<McpRequestResources["scopedDb"]>[0]>[0],
     workspaceIds: AuthorizedWorkspaceIds,
   ) => Promise<T>,
 ): Promise<Result<T, unknown>> =>
@@ -127,7 +138,7 @@ const getFetchableEntityMap = async ({
   context,
   entityIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityIds: string[];
 }) => {
   if (entityIds.length === 0) {
@@ -346,6 +357,9 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "searches only public law and caller-accessible matter records",
+    ),
     readClass: "both",
     anonymized: {
       exposure: "anonymize",
@@ -363,6 +377,7 @@ const COMPAT_TOOL_DEFINITIONS = [
       `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ` +
       "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatSearchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "search",
     scope: "stella:search",
   }),
@@ -375,6 +390,9 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "fetches only public law or caller-accessible matter records",
+    ),
     readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",
@@ -393,6 +411,7 @@ const COMPAT_TOOL_DEFINITIONS = [
       "as cursor to read more. " +
       "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatFetchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "fetch",
     scope: "stella:read",
   }),
@@ -443,7 +462,7 @@ const searchMatterKnowledge = async ({
   cursor,
   query,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   cursor: string | undefined;
   query: string;
 }): Promise<Result<MatterSearchPage, unknown>> => {
@@ -505,13 +524,22 @@ const handleCompatSearchTool: McpToolHandler<
   const matterResult =
     position.matter === null
       ? Result.ok(EXHAUSTED_MATTER_PAGE)
-      : await searchMatterKnowledge({
+      : // The slot covers this read alone: holding it through the corpus wait
+        // would queue the continued read behind its own caller.
+        await underFleetCallerSlot({
           context,
-          cursor: position.matter,
-          query,
+          signal: getPublicReadSignal() ?? new AbortController().signal,
+          run: async () =>
+            await searchMatterKnowledge({
+              context,
+              cursor: position.matter ?? undefined,
+              query,
+            }),
         });
   if (matterResult.isErr()) {
-    return internalFailureResult(matterResult.error);
+    return ActionAdmissionError.is(matterResult.error)
+      ? structuredErrorResult(actionAdmissionRefusal(matterResult.error))
+      : internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
   }
   const matter = matterResult.value;
 
@@ -523,7 +551,7 @@ const handleCompatSearchTool: McpToolHandler<
     };
   }
 
-  const corpus = await searchCompatCorpus({
+  const corpus = await waitForCompatCorpus({
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
@@ -531,6 +559,19 @@ const handleCompatSearchTool: McpToolHandler<
   });
   if (corpus.type === "failed") {
     return corpus.result;
+  }
+  if (corpus.type === "still_running") {
+    // Nothing here says "running", so the page says it is cut short and its
+    // cursor runs the same corpus page again.
+    return {
+      egress: "compatSearch",
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      nextCursor: encodeCompatSearchCursor({
+        matter: matter.nextCursor ?? null,
+        corpus: position.corpus,
+      }),
+      results: matter.results,
+    };
   }
 
   // Matter hits first, then decisions, then statutes: a caller asking this
@@ -618,7 +659,7 @@ const handleCompatFetchTool: McpToolHandler<
       }),
   );
   if (loaded.isErr()) {
-    return internalFailureResult(loaded.error);
+    return internalFailureResult(loaded.error, "mcp.compatFetch.matter");
   }
   const row = loaded.value.at(0);
 

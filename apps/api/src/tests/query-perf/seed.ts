@@ -6,15 +6,16 @@ import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type { SearchQuery } from "@/api/lib/search/types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
-import type { QueryPerfProfileId } from "./profiles";
+import type { QueryPerfTenantProfileId } from "./profiles";
+import { withSeededTableMaintenance } from "./seeded-tables";
 
-export const QUERY_PERF_SEED_ID = "document-search-placeholder-v4";
 const DOCUMENT_COUNTS = {
   small: 3000,
   growth: 100_000,
-} as const satisfies Record<QueryPerfProfileId, number>;
+} as const satisfies Record<QueryPerfTenantProfileId, number>;
 const MATCH_COUNT = 200;
 const GROWTH_SELECTED_WORKSPACE_FRACTION = 1 / 100;
 
@@ -65,7 +66,7 @@ const seedDocumentChunk = async (
 
 const seedPlaceholderQueryPerf = async (
   database: GatedTestDb,
-  profileId: QueryPerfProfileId,
+  profileId: QueryPerfTenantProfileId,
 ) => {
   const documentCount = DOCUMENT_COUNTS[profileId];
   const organizationId = toSafeId<"organization">(
@@ -85,47 +86,48 @@ const seedPlaceholderQueryPerf = async (
       : documentCount;
   const seededWorkspace = sql`CASE WHEN n <= ${selectedWorkspaceCount} THEN ${workspaceId}::uuid ELSE ${backgroundWorkspaceId}::uuid END`;
   const queryText = `perfneedle${profileId}`;
-  await database.transaction(async (tx) => {
-    await tx.execute(sql`INSERT INTO organization (id, name, slug, created_at)
+  return await withSeededTableMaintenance(database, async () => {
+    await database.transaction(async (tx) => {
+      await tx.execute(sql`INSERT INTO organization (id, name, slug, created_at)
       VALUES (${organizationId}, 'Query perf fixture', ${organizationId}, now())`);
-    await tx.execute(sql`INSERT INTO "user" (id, name, email)
+      await recordNewOrganizationAccessState(tx, {
+        organizationId,
+        now: new Date(),
+      });
+      await tx.execute(sql`INSERT INTO "user" (id, name, email)
       VALUES (${userId}, 'Query perf fixture', 'query-perf@example.test')`);
-    await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
       VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'member', now())`);
-    await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference)
+      await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference)
       VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf'),
         (${backgroundWorkspaceId}, ${organizationId}, 'Query perf background matter', 'query-perf-background')`);
-    await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
+      await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
       VALUES ('01990000-0003-7000-8000-000000000001', ${workspaceId}, ${userId})`);
-    for (let first = 1; first <= documentCount; first += SEED_CHUNK_ROWS) {
-      const last = Math.min(first + SEED_CHUNK_ROWS - 1, documentCount);
-      // db-await-in-loop: bounded chunks keep each seed statement well inside the connection's statement timeout.
-      await seedDocumentChunk(tx, {
-        first,
-        last,
-        organizationId,
-        queryText,
-        seededWorkspace,
-      });
-    }
+      for (let first = 1; first <= documentCount; first += SEED_CHUNK_ROWS) {
+        const last = Math.min(first + SEED_CHUNK_ROWS - 1, documentCount);
+        // db-await-in-loop: bounded chunks keep each seed statement well inside the connection's statement timeout.
+        await seedDocumentChunk(tx, {
+          first,
+          last,
+          organizationId,
+          queryText,
+          seededWorkspace,
+        });
+      }
+    });
+    return {
+      organizationId,
+      userId,
+      bigWorkspaceId: workspaceId,
+      query: queryText,
+      searchMatchCount: MATCH_COUNT,
+    };
   });
-  await database.execute(sql`VACUUM (ANALYZE) entities`);
-  await database.execute(sql`VACUUM (ANALYZE) entity_versions`);
-  await database.execute(sql`VACUUM (ANALYZE) search_documents`);
-  await database.execute(sql`VACUUM (ANALYZE) workspaces`);
-  await database.execute(sql`VACUUM (ANALYZE) workspace_members`);
-  return {
-    organizationId,
-    userId,
-    bigWorkspaceId: workspaceId,
-    query: queryText,
-    searchMatchCount: MATCH_COUNT,
-  };
 };
 
 export const seedQueryPerf = async (
   database: GatedTestDb,
-  profileId: QueryPerfProfileId,
+  profileId: QueryPerfTenantProfileId,
 ) => {
   const { organizationId, userId, bigWorkspaceId, query, searchMatchCount } =
     await seedPlaceholderQueryPerf(database, profileId);

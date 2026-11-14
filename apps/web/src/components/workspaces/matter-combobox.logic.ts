@@ -1,3 +1,22 @@
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
+
+type SearchableMatterOption = {
+  clientName: string | null;
+  name: string;
+};
+
+/**
+ * A matter matches on its name or its client's, accent- and
+ * case-insensitively, so "novak" finds "Novák v. Horák".
+ */
+export const matchesMatterOption = (
+  { clientName, name }: SearchableMatterOption,
+  query: string,
+): boolean => {
+  const matches = createSearchQueryMatcher(query);
+  return matches(name) || matches(clientName);
+};
+
 /** How many matters the picker's "recent" group offers. */
 export const MATTER_PICKER_RECENT_LIMIT = 5;
 

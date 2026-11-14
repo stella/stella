@@ -8,7 +8,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -53,7 +53,7 @@ export const ContactPersonDetailsEditor = ({
     }
     const dateOfBirth = parseBirthDateDraft(birthDate);
     if (hasBirthDateInput && !dateOfBirth) {
-      notifyUserError(undefined, t("contacts.invalidDateOfBirth"));
+      notifyUserProblem(t("contacts.invalidDateOfBirth"));
       return;
     }
     submittedDraft.current = draftKey;

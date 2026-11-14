@@ -11,8 +11,8 @@ import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterp
 import { DIRECT_ONLY_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import {
-  chatToolNamesForSkills,
   type ChatSkillToolContext,
+  chatToolNamesForSkills,
 } from "@/api/handlers/chat/tools/skill-tool-availability";
 import { resolveSkillToolAvailability } from "@/api/lib/agent-skills/required-tools";
 import type { AuditRecorder } from "@/api/lib/audit-log";

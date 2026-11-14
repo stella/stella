@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { getColumnTable, sql } from "drizzle-orm";
-import type { SQL, GetColumnData, SQLWrapper } from "drizzle-orm";
-import { getTableConfig, pgPolicy, PgDialect } from "drizzle-orm/pg-core";
+import type { GetColumnData, SQL, SQLWrapper } from "drizzle-orm";
+import { getTableConfig, PgDialect, pgPolicy } from "drizzle-orm/pg-core";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { EntityContextReference } from "@stll/api-contract/entity-reference";
@@ -9,6 +9,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
+import type { PolicyDefinition } from "./online-ddl";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
 const ENTITY_FEATURE_GATE_ROLE_NAME = "stella_entity_gate";
@@ -166,17 +167,23 @@ export const entityFeaturePolicies = (
   ];
 };
 
-/** The migration and its parity check render the schema owner's actual policies. */
-export const entityFeaturePolicyStatements = (
+/**
+ * The schema owner's actual policies of that name, sorted by table, as the
+ * online phase's `replacePolicy` and `createPolicy` render them; the
+ * migration parity checks render them the same way.
+ */
+export const entityFeaturePolicyDefinitions = (
   tables: readonly PgTable[],
   policyName = "workspace_entity_feature",
-): string[] => {
+): PolicyDefinition[] => {
   const dialect = new PgDialect();
+  const render = (expression: SQL) =>
+    dialect.sqlToQuery(expression.inlineParams()).sql.replace(/\s+/gu, " ");
   return tables
     .map(getTableConfig)
     .toSorted((left, right) => compareCodeUnit(left.name, right.name))
     .flatMap((config) =>
-      config.policies.flatMap((policy) => {
+      config.policies.flatMap((policy): PolicyDefinition[] => {
         if (
           policy.name !== policyName ||
           policy.using === undefined ||
@@ -184,18 +191,22 @@ export const entityFeaturePolicyStatements = (
         ) {
           return [];
         }
+        if ((config.schema ?? "public") !== "public") {
+          return panic(`Policy ${policy.name} must be on a public table`);
+        }
         return [
-          dialect
-            .sqlToQuery(
-              sql`
-        CREATE POLICY ${sql.identifier(policy.name)}
-        ON ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
-        AS ${sql.raw(policy.as === "restrictive" ? "RESTRICTIVE" : "PERMISSIVE")} FOR ALL TO ${sql.identifier(policyName === "entity_feature_gate_maintenance" ? ENTITY_FEATURE_GATE_ROLE_NAME : APPLICATION_RLS_ROLE_NAME)}
-        USING (${policy.using}) WITH CHECK (${policy.withCheck});
-      `.inlineParams(),
-            )
-            .sql.trim()
-            .replace(/\s+/gu, " "),
+          {
+            tableName: config.name,
+            name: policy.name,
+            as: policy.as ?? "permissive",
+            for: policy.for ?? "all",
+            role:
+              policyName === "entity_feature_gate_maintenance"
+                ? ENTITY_FEATURE_GATE_ROLE_NAME
+                : APPLICATION_RLS_ROLE_NAME,
+            using: render(policy.using),
+            withCheck: render(policy.withCheck),
+          },
         ];
       }),
     );

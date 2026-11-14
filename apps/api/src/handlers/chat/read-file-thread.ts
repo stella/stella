@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
-  readFileChatThreadMapping,
   type FileThreadLookupInput,
+  readFileChatThreadMapping,
 } from "@/api/handlers/chat/file-thread-mapping";
 import {
   emptyMessagePage,
@@ -15,7 +15,7 @@ import type { FileThreadMessagePage } from "@/api/handlers/chat/file-thread-shar
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 /**
  * Read-only file-thread lookup, issued on every document open.
@@ -34,9 +34,9 @@ import { tSafeId } from "@/api/lib/custom-schema";
  * chat-thread RLS is reported as "no thread" here and left intact; the POST's
  * detach-and-replace branch handles it at materialization time.
  */
-const readFileThreadQuerySchema = t.Object({
-  entityId: tSafeId("entity"),
-  fieldId: tSafeId("field"),
+const readFileThreadQuerySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
 });
 
 const config = {

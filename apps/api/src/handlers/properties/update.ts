@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
@@ -12,7 +12,7 @@ import type { PropertyRole } from "@/api/db/schema";
 import {
   aiModelToolSchema,
   manualInputToolSchema,
-  propertyContentSchema,
+  scalarPropertyContentSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
@@ -24,8 +24,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
-  tDefaultVarchar,
-  tSafeId,
+  displayNameSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -46,6 +46,7 @@ import {
 } from "@/api/lib/properties/dependency-limits";
 import { propertyKindsForUpdate } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
+import { UPDATE_PROPERTY_TABLE_ANALYSIS_ACCESS } from "@/api/lib/properties/table-analysis-access";
 
 type PropertyWithDeps = {
   id: SafeId<"property">;
@@ -215,22 +216,21 @@ const hasCircularDependency = ({
   return false;
 };
 
-const updatePropertyBodySchema = t.Object({
-  name: tDefaultVarchar,
-  content: propertyContentSchema,
-  tool: t.Union([
-    t.Intersect([
+const updatePropertyBodySchema = v.object({
+  name: displayNameSchema(),
+  content: scalarPropertyContentSchema,
+  tool: v.union([
+    v.intersect([
       aiModelToolSchema,
-      t.Object({
-        // Bounded by the structural ceiling, not the write cap: a list stored
-        // under an earlier, larger cap must round-trip. The handler rejects a
-        // list that grows past the cap once it knows the stored count.
-        dependencies: t.Array(
-          t.Object({
-            dependsOnPropertyId: tSafeId("property"),
-            condition: t.Nullable(tConditionNode),
-          }),
-          { maxItems: PROPERTY_DEPENDENCY_LIMITS.perProperty },
+      v.object({
+        dependencies: v.pipe(
+          v.array(
+            v.object({
+              dependsOnPropertyId: resourceIdSchema("property"),
+              condition: v.nullable(tConditionNode),
+            }),
+          ),
+          v.maxLength(PROPERTY_DEPENDENCY_LIMITS.perProperty),
         ),
       }),
     ]),
@@ -256,6 +256,7 @@ const config = {
     "changed to or from another type. Keep the existing type when renaming; " +
     "use properties.create for a custom column with another value type.",
   permissions: { property: ["update"] },
+  featureAccess: UPDATE_PROPERTY_TABLE_ANALYSIS_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: propertyRealtimeUpdates,
   mcp: {
@@ -263,7 +264,7 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ propertyId: tSafeId("property") }),
+  params: workspaceParams({ propertyId: resourceIdSchema("property") }),
   body: updatePropertyBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

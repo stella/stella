@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
+import { type ParsedUserAgent, parseUserAgent } from "@stll/user-agent";
 
 import { isNewDeviceNoticeAuthPath } from "@/api/lib/auth/session-path-classification";
 import type { SafeId } from "@/api/lib/branded-types";

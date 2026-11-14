@@ -10,11 +10,16 @@ export default {
   enforcement: {
     kind: "import",
     specifiers: ["@/api/lib/auth/professional-use"],
-    names: ["acceptAccountProfessionalUse"],
+    names: ["recordAccountProfessionalUse"],
     allowed: [
       {
         path: "apps/api/src/handlers/me/accept-professional-use.ts",
         reason: "Accepts the current statement for the authenticated account.",
+      },
+      {
+        path: "apps/api/src/scripts/review-account.ts",
+        reason:
+          "Records acceptance while provisioning the operator-owned review account.",
       },
       {
         path: "apps/api/src/lib/auth/professional-use.db.test.ts",

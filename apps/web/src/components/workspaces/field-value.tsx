@@ -5,22 +5,24 @@ import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { SquareMinusIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 import {
   ClipFieldValue,
   EmptyFieldValue,
   ErrorFieldValue,
   formatIntFieldValue,
-  getIntClassName,
   getSelectPropertyColor,
+  NumericFieldText,
   PendingSkeleton,
   PersonAvatar,
+  RecordFieldValue,
   UnsupportedFieldValue,
 } from "@stll/workspace-ui/field-value";
 import type { FieldValueVariant } from "@stll/workspace-ui/field-value";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
 
 export type { FieldValueVariant } from "@stll/workspace-ui/field-value";
@@ -134,6 +136,10 @@ export const FieldValue = ({
     );
   }
 
+  if (content.type === "record") {
+    return <RecordFieldValue content={content} variant={resolvedVariant} />;
+  }
+
   return <ClipFieldValue content={content} variant={resolvedVariant} />;
 };
 
@@ -147,9 +153,9 @@ export const IntFieldValue = ({
   const format = useFormatter();
 
   return (
-    <span className={cn(getIntClassName(variant ?? "default"))}>
+    <NumericFieldText variant={variant ?? "default"}>
       {formatIntFieldValue({ content, format })}
-    </span>
+    </NumericFieldText>
   );
 };
 
@@ -160,17 +166,17 @@ const MoneyFieldValue = ({
   content: Extract<WorkspaceFieldContent, { type: "money" }>;
   variant?: FieldValueVariant;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const resolvedVariant = variant ?? "default";
 
   return (
-    <span className={cn(getIntClassName(resolvedVariant))}>
+    <NumericFieldText variant={resolvedVariant}>
       {formatMoneyCents({
         amountCents: content.amountCents,
         currency: content.currency,
         locale,
       })}
-    </span>
+    </NumericFieldText>
   );
 };
 
@@ -188,16 +194,16 @@ const PersonFieldValue = ({
   return (
     <span
       className={cn(
-        "flex max-w-full min-w-0 items-center truncate",
+        "flex max-w-full min-w-0 items-center",
         resolvedVariant === "kanban"
-          ? "text-muted-foreground bg-muted/60 gap-1 rounded px-1.5 py-0.5 text-xs leading-none"
+          ? "text-muted-foreground bg-muted/60 gap-1 rounded-sm px-1.5 py-0.5 text-xs leading-none"
           : "gap-1.5 text-sm",
       )}
     >
       <PersonAvatar image={content.image} name={content.name} />
-      <span className="truncate">
+      <TruncatedText>
         <HighlightedText columnId={propertyId} text={content.name} />
-      </span>
+      </TruncatedText>
     </span>
   );
 };
@@ -228,9 +234,9 @@ const PendingFieldValue = ({
           size="sm"
         />
         {hasPreview ? (
-          <BidiText as="div" className="line-clamp-2 min-w-0">
+          <TruncatedText lines={2} render={<BidiText as="div" />}>
             {trimmedPreview}
-          </BidiText>
+          </TruncatedText>
         ) : (
           <PendingSkeleton contentType={contentType} />
         )}
@@ -264,12 +270,14 @@ const FileFieldValue = ({
   }
 
   return (
-    <BidiText
-      as="span"
-      className={cn(variant === "table" ? "truncate" : "text-sm")}
+    <TruncatedText
+      className={cn(variant !== "table" && "text-sm")}
+      lines={variant === "table" ? 1 : "none"}
+      render={<BidiText as="span" />}
+      tooltip={content.fileName}
     >
       <HighlightedText columnId={propertyId} text={content.fileName} />
-    </BidiText>
+    </TruncatedText>
   );
 };
 
@@ -290,22 +298,24 @@ const TextFieldValue = ({
     }
 
     return (
-      <BidiText
-        as="span"
-        className="text-muted-foreground line-clamp-2 min-w-0 basis-full text-xs leading-4"
+      <TruncatedText
+        className="text-muted-foreground basis-full text-xs leading-4"
+        lines={2}
+        render={<BidiText as="span" />}
       >
         {value}
-      </BidiText>
+      </TruncatedText>
     );
   }
 
-  const className =
-    variant === "table" ? "line-clamp-2" : "line-clamp-2 text-sm";
-
   return (
-    <BidiText as="span" className={cn(className)}>
+    <TruncatedText
+      className={cn(variant !== "table" && "text-sm")}
+      lines={2}
+      render={<BidiText as="span" />}
+    >
       {value}
-    </BidiText>
+    </TruncatedText>
   );
 };
 
@@ -350,7 +360,7 @@ const DateFieldValue = ({
 
   if (variant === "kanban") {
     return (
-      <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none">
+      <span className="text-muted-foreground bg-muted/60 rounded-sm px-1.5 py-0.5 text-xs leading-none">
         {formatted}
       </span>
     );
@@ -387,16 +397,16 @@ const SelectFieldValue = ({
 
   if (variant === "kanban") {
     return (
-      <BidiText
-        as="span"
-        className="max-w-full truncate rounded px-1.5 py-0.5 text-xs leading-none font-medium"
+      <TruncatedText
+        className="rounded-sm px-1.5 py-0.5 text-xs leading-none font-medium"
         style={{
           backgroundColor: color?.background,
           color: color?.foreground,
         }}
+        render={<BidiText as="span" />}
       >
         {label}
-      </BidiText>
+      </TruncatedText>
     );
   }
 
@@ -404,8 +414,8 @@ const SelectFieldValue = ({
     <span
       className={cn(
         variant === "table"
-          ? "flex max-w-full items-center gap-x-1 rounded px-1 py-0.25 font-medium"
-          : "flex w-max max-w-full items-center gap-x-1 rounded px-1 py-0.25 text-sm font-medium",
+          ? "flex max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 font-medium"
+          : "flex w-max max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 text-sm font-medium",
       )}
       style={{
         backgroundColor: color?.background,
@@ -413,9 +423,7 @@ const SelectFieldValue = ({
       }}
     >
       {variant === "table" && !value && <SquareMinusIcon className="size-4" />}
-      <BidiText as="span" className="truncate">
-        {label}
-      </BidiText>
+      <TruncatedText render={<BidiText as="span" />}>{label}</TruncatedText>
     </span>
   );
 };

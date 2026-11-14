@@ -16,6 +16,7 @@ import {
 import { buildEmailPreview, parseEmail } from "@/api/lib/files/email-to-html";
 import { createFileKey, resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 export const EMAIL_ATTACHMENT_LOAD_STATUS = {
   loaded: "loaded",
@@ -151,11 +152,14 @@ export const loadEmailAttachment = async function* ({
   );
   const parsedResult = await parseEmail(sourceBuffer, emailMimeType);
   if (Result.isError(parsedResult)) {
-    captureError(parsedResult.error, {
-      fieldId,
-      mimeType: emailMimeType,
-      workspaceId,
-    });
+    captureError(
+      parsedResult.error,
+      handlerErrorContext("files.loadEmailAttachment.parsedResult_error", {
+        fieldId,
+        mimeType: emailMimeType,
+        workspaceId,
+      }),
+    );
     return {
       status: EMAIL_ATTACHMENT_LOAD_STATUS.unreadable,
     } as const satisfies EmailAttachmentLoadResult;

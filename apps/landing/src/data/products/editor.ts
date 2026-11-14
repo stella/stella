@@ -1,10 +1,10 @@
-import { frameAccents, productCtaLabels, type Product } from "./types";
+import { frameAccents, type Product, productCtaLabels } from "./types";
 
 export const editor = {
   slug: "editor",
   hero: {
     type: "live-editor",
-    alt: "stella · Editor — live demo",
+    alt: "stella · Editor: live demo",
     aspect: "16 / 11",
   },
   heroFrameVariant: "bloom",

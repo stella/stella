@@ -4,9 +4,13 @@
  * runs in the background and is read back with lists.verifications.get.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { decisionParagraphRangeSchema } from "@stll/api-contract/decision-paragraph-range";
+import { VERIFICATION_SCOPE_REFUSALS } from "@stll/api-contract/verification-scope";
+import type { ParagraphRange } from "@stll/legal-ast/paragraph-range";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { legalListVerificationRuns } from "@/api/db/schema";
@@ -22,25 +26,43 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
+import { WHOLE_DOCUMENT_SCOPE } from "@/api/lib/lists/verification/contract";
+import type { VerificationScope } from "@/api/lib/lists/verification/contract";
+import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import { readVerificationEvidence } from "@/api/lib/lists/verification/evidence";
 import { VERIFICATION_MODEL_TASK } from "@/api/lib/lists/verification/model-call";
-import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
+import {
+  passageBytes,
+  resolveParagraphScope,
+  scopePassages,
+} from "@/api/lib/lists/verification/paragraph-scope";
+import type { ParagraphScopeRefusal } from "@/api/lib/lists/verification/paragraph-scope";
 import { enqueueListVerificationRun } from "@/api/lib/lists/verification/run-queue";
 import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import {
+  ModelRunCapError,
+  modelRunCapRefusal,
+} from "@/api/lib/usage/model-run-caps/caps";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  entityId: tSafeId("entity"),
-  fileFieldId: tSafeId("field"),
-  /** The estimate the caller accepted, when a large run asked for one. */
-  confirmedUnits: t.Optional(t.Integer({ minimum: 0 })),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  entityId: resourceIdSchema("entity"),
+  fileFieldId: resourceIdSchema("field"),
+  paragraphs: v.optional(
+    decisionParagraphRangeSchema(
+      "Check only these paragraphs, e.g. `82-136` or `14`: the numbers the " +
+        "document prints on its paragraphs, or their positions when it " +
+        "numbers none. Omit to check the whole document.",
+    ),
+  ),
+  confirmedUnits: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
 const config = {
@@ -51,13 +73,19 @@ const config = {
     "Start checking one document (DOCX, PDF, or a file with a PDF " +
     "rendition) against the facts of one list. Every claim the document " +
     "makes is found and, when factual, graded against the list's facts " +
-    "(held facts are left out). Returns a run id; read the result with " +
+    "(held facts are left out); with `paragraphs`, only the claims in that " +
+    "range. Returns a run id; read the result with " +
     "lists.verifications.get. A document holds one unfinished verification " +
     "at a time.",
   permissions: { workspace: ["read"], entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Reads the document to find a paragraph range; returns a run id, never file bytes.",
+  },
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -72,6 +100,24 @@ const config = {
  */
 const PROMPT_BYTES_PER_EXPECTED_CLAIM = 400;
 const PROMPT_BYTES_PER_STORED_BYTE = 4;
+
+/** A run's size from the bytes it reads: the stored file, or a range's text. */
+const estimateVerificationUnits = (modelId: string, inputBytes: number) =>
+  estimateDocumentRunUnits({
+    modelId,
+    actionType: "doc_review",
+    storedInputBytes: inputBytes,
+    plannedOutputs: Math.ceil(
+      (inputBytes * PROMPT_BYTES_PER_STORED_BYTE) /
+        PROMPT_BYTES_PER_EXPECTED_CLAIM,
+    ),
+    serviceTier: "standard",
+  });
+
+const scopeAuditLabel = (scope: VerificationScope): string =>
+  scope.kind === "whole"
+    ? "whole"
+    : `paragraphs ${String(scope.from)}-${String(scope.to)}`;
 
 const requireVerifiableFile = (content: {
   mimeType: string;
@@ -91,6 +137,145 @@ const requireVerifiableFile = (content: {
         "Only DOCX files, PDFs and files with a PDF rendition can be verified.",
     }),
   );
+};
+
+/** Long enough for the largest document a matter may hold to download. */
+const SCOPE_READ_TIMEOUT_MS = 60_000;
+
+const paragraphList = (numbers: readonly number[]): string =>
+  numbers.map(String).join(" and ");
+
+const scopeRefusalError = (
+  refusal: ParagraphScopeRefusal,
+): HandlerError<422> => {
+  switch (refusal.type) {
+    case "not-found": {
+      const available =
+        refusal.available === null
+          ? "It has no paragraphs to count."
+          : `Its paragraphs run from ${String(refusal.available.from)} to ${String(refusal.available.to)}.`;
+      return new HandlerError({
+        status: 422,
+        code: VERIFICATION_SCOPE_REFUSALS.paragraphsNotFound,
+        message: `Paragraph ${paragraphList(refusal.missing)} is not in this document.`,
+        hint:
+          refusal.numbering === "document"
+            ? `${available} Use the numbers the document prints.`
+            : `${available} This document does not number its paragraphs, so they are counted in order.`,
+      });
+    }
+    case "empty": {
+      return new HandlerError({
+        status: 422,
+        code: VERIFICATION_SCOPE_REFUSALS.paragraphsEmpty,
+        message: "These paragraphs hold no text to check.",
+        hint: "Choose a range that includes the paragraphs' text.",
+      });
+    }
+    case "numbering-unclear": {
+      return new HandlerError({
+        status: 422,
+        code: VERIFICATION_SCOPE_REFUSALS.numberingUnclear,
+        message:
+          "This document's paragraph numbers could not be read reliably, so a range cannot be checked.",
+        hint: "Verify the whole document instead.",
+      });
+    }
+    default: {
+      refusal satisfies never;
+      return panic(`Unhandled scope refusal: ${String(refusal)}`);
+    }
+  }
+};
+
+type ResolveRunScopeArgs = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  file: {
+    id: string;
+    mimeType: string;
+    pdfFileId: string | null;
+    sizeBytes: number;
+  };
+  paragraphs: ParagraphRange | undefined;
+};
+
+type RunScope = {
+  scope: VerificationScope;
+  /** What the run is sized by: the stored file, or the range's own text. */
+  inputBytes: number;
+};
+
+/**
+ * The scope a run starts with. A paragraph range is resolved against the
+ * document now, so a range the document does not have is refused here and
+ * a run never quietly checks the whole document instead.
+ */
+const resolveRunScope = async ({
+  organizationId,
+  workspaceId,
+  file,
+  paragraphs,
+}: ResolveRunScopeArgs): Promise<
+  Result<RunScope, HandlerError<422> | HandlerError<502>>
+> => {
+  if (paragraphs === undefined) {
+    return Result.ok({
+      scope: WHOLE_DOCUMENT_SCOPE,
+      inputBytes: file.sizeBytes,
+    });
+  }
+  const read = await Result.tryPromise({
+    try: async () =>
+      await readVerificationDocument({
+        organizationId,
+        workspaceId,
+        file: {
+          fileId: file.id,
+          mimeType: file.mimeType,
+          pdfFileId: file.pdfFileId,
+        },
+        signal: AbortSignal.timeout(SCOPE_READ_TIMEOUT_MS),
+      }),
+    catch: (cause) =>
+      new HandlerError({
+        status: 502,
+        code: "upstream_unavailable",
+        message: "The document could not be read to find these paragraphs.",
+        hint: "Try again in a moment.",
+        retryable: true,
+        retryAfterMs: 1000,
+        cause,
+      }),
+  });
+  if (Result.isError(read)) {
+    return Result.err(read.error);
+  }
+  const document = read.value;
+  if (document.type === "unsupported-format") {
+    return panic("A verifiable file always has a readable format");
+  }
+  if (document.type === "no-text") {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        code: VERIFICATION_SCOPE_REFUSALS.noText,
+        message: "No text could be read from this document.",
+        hint: "Upload a version with a text layer, such as a PDF made from the original file.",
+      }),
+    );
+  }
+  const resolution = resolveParagraphScope(document.blocks, paragraphs);
+  if (resolution.type !== "resolved") {
+    return Result.err(scopeRefusalError(resolution));
+  }
+  const passages =
+    scopePassages(document.blocks, resolution.scope) ??
+    panic("A range resolved against these blocks must land in them");
+  return Result.ok({
+    scope: resolution.scope,
+    inputBytes: passageBytes(passages),
+  });
 };
 
 type MarkVerificationEnqueueFailedOptions = {
@@ -200,6 +385,14 @@ const createVerification = createSafeHandler(
         }),
       );
     }
+    const runScope = yield* Result.await(
+      resolveRunScope({
+        organizationId,
+        workspaceId,
+        file,
+        paragraphs: body.paragraphs,
+      }),
+    );
     const model = getTanStackTextModelInfoForTask(
       VERIFICATION_MODEL_TASK,
       orgAIConfig,
@@ -215,16 +408,10 @@ const createVerification = createSafeHandler(
           actionType: "doc_review",
           modelTask: VERIFICATION_MODEL_TASK,
         },
-        estimatedUnits: estimateDocumentRunUnits({
-          modelId: model.modelId,
-          actionType: "doc_review",
-          storedInputBytes: file.sizeBytes,
-          plannedOutputs: Math.ceil(
-            (file.sizeBytes * PROMPT_BYTES_PER_STORED_BYTE) /
-              PROMPT_BYTES_PER_EXPECTED_CLAIM,
-          ),
-          serviceTier: "standard",
-        }),
+        estimatedUnits: estimateVerificationUnits(
+          model.modelId,
+          runScope.inputBytes,
+        ),
         confirmedUnits: body.confirmedUnits,
         organizationId,
         orgAIConfig,
@@ -238,6 +425,7 @@ const createVerification = createSafeHandler(
         version,
         file,
         evidence: evidence.evidence,
+        scope: runScope.scope,
       }),
     );
     return await authorization.execute(
@@ -256,6 +444,7 @@ const createVerification = createSafeHandler(
               entityVersionId: checked.version.id,
               contentSha256: checked.file.sha256Hex,
               evidence: checked.evidence,
+              scope: checked.scope,
               requestedBy: checked.userId,
             },
             recordAuditEvent: async (tx) =>
@@ -268,19 +457,12 @@ const createVerification = createSafeHandler(
                   entityId: checked.entityId,
                   fileFieldId: checked.fileFieldId,
                   factCount: checked.evidence.facts.length,
+                  scope: scopeAuditLabel(checked.scope),
                 },
               }),
           });
           const created = yield* inserted.mapError((error) =>
-            ListVerificationRunCapError.is(error)
-              ? new HandlerError({
-                  status: 429,
-                  code: error.code,
-                  message: error.message,
-                  hint: error.hint,
-                  retryable: true,
-                })
-              : error,
+            ModelRunCapError.is(error) ? modelRunCapRefusal(error) : error,
           );
           if (!created) {
             return Result.err(

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { deferred } from "@stll/test-kit";
+
 import {
   POSTGRES_LOCK_SNAPSHOT_SQL,
   startLockMonitor,
@@ -13,6 +15,7 @@ import { openBoundedDatabaseObserver } from "../db/online-index-observer";
 import { getPgErrorCode } from "../lib/pg-error";
 import { withFreshIndicatorDatabase } from "./database-load-indicator-fixture";
 import { withGatedTestClients } from "./gated-test-database";
+import { waitForBlockedPid } from "./helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -100,31 +103,64 @@ describe.skipIf(!enabled)(
           url: url.toString(),
           ...POSTGRES_TEST_MAINTENANCE_TIMEOUTS,
         });
-        let ready = () => {};
-        const acquired = new Promise<void>((resolve) => {
-          ready = resolve;
-        });
-        const holder = client.begin(async (tx) => {
-          await tx`LOCK TABLE public.fixture IN SHARE UPDATE EXCLUSIVE MODE`;
-          ready();
-          await tx`SELECT pg_sleep(1.5)`;
-        });
         try {
-          await Promise.race([acquired, holder]);
-          const started = performance.now();
-          await maintenance.execute(POSTGRES_TEST_MAINTENANCE_SQL);
-          expect(performance.now() - started).toBeGreaterThan(1000);
-          const configured =
-            await client`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
-          expect(configured.at(0)?.["reloptions"]).toContain(
-            "autovacuum_enabled=false",
-          );
-        } finally {
-          try {
-            await holder;
-          } finally {
-            await maintenance.release();
+          const acquired = deferred<number>();
+          const releaseHolder = deferred();
+          const maintenanceSession = (
+            await maintenance.query("SELECT pg_backend_pid() AS pid")
+          ).at(0);
+          if (
+            maintenanceSession === null ||
+            typeof maintenanceSession !== "object" ||
+            !("pid" in maintenanceSession) ||
+            typeof maintenanceSession.pid !== "number"
+          ) {
+            panic("Expected the maintenance session pid");
           }
+          const maintenancePid = maintenanceSession.pid;
+          const holder = client.begin(async (tx) => {
+            const pid = (await tx`SELECT pg_backend_pid() AS pid`).at(0)?.[
+              "pid"
+            ];
+            if (typeof pid !== "number") {
+              panic("Expected the lock holder session pid");
+            }
+            await tx`LOCK TABLE public.fixture IN SHARE UPDATE EXCLUSIVE MODE`;
+            acquired.resolve(pid);
+            await releaseHolder.promise;
+          });
+          try {
+            const holdingPid = await Promise.race([
+              acquired.promise,
+              holder.then(() =>
+                panic("Lock holder ended before acquiring its lock"),
+              ),
+            ]);
+            const configuring = Result.tryPromise(
+              async () =>
+                await maintenance.execute(POSTGRES_TEST_MAINTENANCE_SQL),
+            );
+            await waitForBlockedPid(client, {
+              waitingPid: maintenancePid,
+              holdingPid,
+            });
+            expect(releaseHolder.settled()).toBe(false);
+            releaseHolder.resolve();
+            const configuration = await configuring;
+            if (configuration.isErr()) {
+              throw configuration.error;
+            }
+            const configured =
+              await client`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
+            expect(configured.at(0)?.["reloptions"]).toContain(
+              "autovacuum_enabled=false",
+            );
+          } finally {
+            releaseHolder.resolve();
+            await holder;
+          }
+        } finally {
+          await maintenance.release();
         }
       });
     });
@@ -182,11 +218,27 @@ describe.skipIf(!enabled)(
               expect(getPgErrorCode(result.error)).toBe("55P03");
             }
             const report = await monitor.stop();
-            const snapshot = JSON.parse(JSON.parse(report).samples.at(-1));
-            expect(snapshot.waiters).toContainEqual({
-              pid: waiterPid,
-              blockers: [holderPid],
-            });
+            // The final sample can be taken after the wait timed out, when the
+            // waiter is still listed but no longer blocked; one sample taken
+            // during the wait must show the waiter and its lock owner.
+            const samples: unknown[] = JSON.parse(report).samples.map(
+              (sample: string): unknown => JSON.parse(sample),
+            );
+            expect(
+              samples.some(
+                (snapshot) =>
+                  typeof snapshot === "object" &&
+                  snapshot !== null &&
+                  "waiters" in snapshot &&
+                  Array.isArray(snapshot.waiters) &&
+                  snapshot.waiters.some(
+                    (waiter: { pid?: unknown; blockers?: unknown }) =>
+                      waiter.pid === waiterPid &&
+                      Array.isArray(waiter.blockers) &&
+                      waiter.blockers.includes(holderPid),
+                  ),
+              ),
+            ).toBe(true);
             expect(report).toContain("ShareUpdateExclusiveLock");
             expect(report).toContain("AccessExclusiveLock");
             expect(report).toContain("client backend");

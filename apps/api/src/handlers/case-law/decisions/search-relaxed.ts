@@ -11,7 +11,9 @@ import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-clie
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
+import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import type { BoundedRequestStep } from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -83,11 +85,57 @@ const RELAXED_OVERFETCH = 3;
 export const relaxedFetchLimit = (needed: number): number =>
   Math.min(needed * RELAXED_OVERFETCH, LIMITS.caseLawSearchPageSizeMax);
 
+/** Coverage queries are whole-index aggregations: at most this many per search. */
+const TERM_COVERAGE_MAX_TERMS = 6;
+
+/**
+ * The terms whose coverage ranks the partial hits: distinct, longest first
+ * (the longer word is usually the more specific), bounded so a long question
+ * cannot spend one whole-index aggregation per word. Coverage only orders
+ * hits that are already partial, so a word left out here changes no hit's
+ * eligibility.
+ */
+export const termsForCoverage = <Term extends { value: string }>(
+  terms: readonly Term[],
+): Term[] =>
+  [...new Map(terms.map((term) => [term.value, term])).values()]
+    .toSorted((left, right) => right.value.length - left.value.length)
+    .slice(0, TERM_COVERAGE_MAX_TERMS);
+
+/** How a search's partial-match phase ended. */
+export type RelaxedTopUpState = "not_run" | "read" | "skipped";
+
+export type RelaxedTopUpOutcome<T> =
+  { type: "read"; value: T } | { type: "skipped"; error: unknown };
+
+/**
+ * How the top-up step ended. It is optional and starts with a strict page
+ * already in hand, so any way of not finishing it answers with that page
+ * rather than failing a request that has its hits.
+ */
+export const relaxedTopUpOutcome = <T>(
+  step: BoundedRequestStep<Result<T, unknown>>,
+): RelaxedTopUpOutcome<T> => {
+  switch (step.status) {
+    case "complete":
+      return Result.isOk(step.value)
+        ? { type: "read", value: step.value.value }
+        : { type: "skipped", error: step.value.error };
+    case "degraded":
+    case "failed":
+      return { type: "skipped", error: step.error };
+    default:
+      step satisfies never;
+      return panic("Unhandled relaxed top-up step");
+  }
+};
+
 const TERM_COVERAGE_CONCURRENCY = 4;
 
 type ReadTermCoverageOptions = {
   aggregate: CorpusIndexClient["aggregate"];
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   indexId: string;
   /** One query per distinct required term, using the executed expansion dictionary. */
   queries: readonly string[];
@@ -102,11 +150,12 @@ type ReadTermCoverageOptions = {
 export const readTermCoverage = async ({
   aggregate,
   observer,
+  signal,
   indexId,
   queries,
   ids,
 }: ReadTermCoverageOptions): Promise<
-  Result<ReadonlyMap<string, number>, HandlerError<502 | 503>>
+  Result<ReadonlyMap<string, number>, HandlerError<400 | 502 | 503>>
 > => {
   if (ids.length === 0) {
     return Result.ok(new Map());
@@ -118,9 +167,10 @@ export const readTermCoverage = async ({
     limit: TERM_COVERAGE_CONCURRENCY,
     operation: async (
       query,
-    ): Promise<Result<void, HandlerError<502 | 503>>> => {
+    ): Promise<Result<void, HandlerError<400 | 502 | 503>>> => {
       const answer = await aggregate({
         observer,
+        signal,
         indexId,
         query: `(${query}) AND (${candidates})`,
         aggs: {
@@ -137,12 +187,16 @@ export const readTermCoverage = async ({
       });
       if (Result.isError(answer)) {
         return Result.err(
-          new HandlerError({
-            code: "upstream_unavailable",
-            status: 503,
-            message: "Search term coverage is temporarily unavailable",
-            cause: answer.error,
-          }),
+          corpusIndexReadRefusal(
+            answer.error,
+            (answered) =>
+              new HandlerError({
+                code: "upstream_unavailable",
+                status: 503,
+                message: "Search term coverage is temporarily unavailable",
+                cause: answered,
+              }),
+          ),
         );
       }
       const buckets = answer.value["term_coverage"];
@@ -156,6 +210,7 @@ export const readTermCoverage = async ({
           classifyFailure(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Search term coverage is incomplete",
               cause: new CorpusIndexError({
                 message: "Expected exact candidate term buckets",
@@ -179,6 +234,7 @@ export const readTermCoverage = async ({
             classifyFailure(
               new HandlerError({
                 status: 502,
+                code: "internal_error",
                 message: "Search term coverage is invalid",
                 cause: new CorpusIndexError({
                   message: "Unexpected candidate term bucket",

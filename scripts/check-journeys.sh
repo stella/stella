@@ -1,55 +1,95 @@
 #!/usr/bin/env bash
-# Read-only journeys; all external output stays in private temporary files.
+# Read-only journeys; external output is private except redacted failure excerpts.
 set -euo pipefail
 umask 077
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 failed=0
+detail=
 reason=contract_error
 credential="${MCP_CANARY_TOKEN:-}"
 unset MCP_CANARY_TOKEN
 protocol_version=2025-11-25
 session_id=
 request_count=0
-# At most three extra HTTP requests: the hourly run stays within ten.
+# Nine requests plus at most three retries: the hourly run stays within twelve.
 retry_budget=3
+request_limit=12
 pause="${JOURNEY_RETRY_PAUSE_SECONDS:-5}"
 deadline="${JOURNEY_TIMEOUT_SECONDS:-15}"
 web="${JOURNEY_WEB_URL:-https://my.stll.app}"
 mcp="${JOURNEY_MCP_URL:-https://api.stll.app/mcp}"
 cli_server="${JOURNEY_CLI_URL:-https://api.stll.app}"
+# Each run searches one public case-law country, so a day covers every one of
+# them on the web and on MCP. The slot is the UTC hour unless pinned.
+search_countries=(CZE SVK POL HUN EU)
+search_queries=(smlouva zmluva umowa "szerződés" contract)
+search_slot="${JOURNEY_SEARCH_SLOT:-$((10#$(date -u +%H)))}"
+search_country="${search_countries[$((search_slot % ${#search_countries[@]}))]}"
+search_query="${search_queries[$((search_slot % ${#search_queries[@]}))]}"
+search_path="$(printf '%s' "$search_country" | tr '[:upper:]' '[:lower:]')"
 decision_id="01a10c6e-cd77-77cc-97bd-19a8dc2e360c"
 decision_path="/law/cze/cases/nejvyssi-spravni-soud/2-azs-146-2026"
 
 report() {
   printf 'journey %s %s %s\n' "$1" "$2" "$3"
-  if [[ "$2" == failed ]]; then failed=1; fi
+  if [[ "$2" != failed ]]; then return; fi
+  failed=1
+  case "$1" in
+    cli_*|mcp_*)
+      local excerpt="$detail"
+      if [[ -z "$excerpt" && -s "$scratch/error" ]]; then
+        excerpt="$(head -n 1 "$scratch/error")"
+      fi
+      excerpt="${excerpt:-check failed: $3}"
+      excerpt="$(printf '%s' "$excerpt" | JOURNEY_DETAIL_CREDENTIAL="$credential" JOURNEY_DETAIL_SESSION="$session_id" \
+        jq -Rrs -f "$script_dir/journey-detail.jq")"
+      printf 'journey-detail %s %s\n' "$1" "$excerpt"
+      ;;
+  esac
 }
 
 request() {
+  detail=
   local response status redirects allowed_redirects="${redirect_limit:-0}" rc=0
-  if [[ "$request_count" -ge 10 ]]; then reason=http_status; return 1; fi
+  if [[ "$request_count" -ge "$request_limit" ]]; then reason=http_status; return 1; fi
   request_count=$((request_count + 1))
-  if [[ "$allowed_redirects" -gt $((10 - request_count)) ]]; then allowed_redirects=$((10 - request_count)); fi
+  if [[ "$allowed_redirects" -gt $((request_limit - request_count)) ]]; then allowed_redirects=$((request_limit - request_count)); fi
   response="$(curl --silent --location --max-redirs "$allowed_redirects" --max-time "$deadline" --max-filesize 4000000 \
     --dump-header "$scratch/headers" --output "$scratch/body" --write-out '%{http_code} %{num_redirects}' "$@" 2>"$scratch/error")" || rc=$?
   status="${response%% *}"
   redirects="${response##* }"
+  last_status="$status"
   request_count=$((request_count + redirects))
+  if [[ ! -s "$scratch/error" ]]; then detail="HTTP status check: received $status (curl exit $rc)"; fi
   if [[ "$rc" == 28 ]]; then reason=timeout; return 1; fi
   if [[ "$status" == 401 || "$status" == 403 ]]; then reason=auth_rejected; return 1; fi
   if [[ "$rc" != 0 || ! "$status" =~ ${accepted_status:-^200$} ]]; then reason=http_status; return 1; fi
 }
 
 probe() {
+  detail=
+  probe_status=passed
+  probe_reason=ok
+  : > "$scratch/error"
   local name="$1"
   shift
-  if "$@"; then report "$name" passed ok; return; fi
+  if "$@"; then report "$name" "$probe_status" "$probe_reason"; return; fi
   local first_reason="$reason"
   if [[ "$reason" != auth_rejected && "$retry_budget" -gt 0 ]]; then
     retry_budget=$((retry_budget - 1))
     sleep "$pause"
-    if "$@"; then report "$name" passed_after_retry "$first_reason"; return; fi
+    detail=
+    : > "$scratch/error"
+    if "$@"; then
+      if [[ "$probe_status" == skipped ]]; then
+        report "$name" skipped "$probe_reason"
+      else
+        report "$name" passed_after_retry "$first_reason"
+      fi
+      return
+    fi
   fi
   report "$name" failed "$reason"
 }
@@ -69,6 +109,7 @@ rpc() {
     -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
     -H "MCP-Protocol-Version: $protocol_version" -H "Mcp-Session-Id: $session_id" --data "$1" "$mcp" || return 1
   reason=contract_error
+  detail="JSON-RPC envelope: expected matching id and object result"
   # Streamable HTTP may answer a JSON envelope or an SSE data frame.
   if [[ "$(head -c 1 "$scratch/body")" != '{' ]]; then
     sed -n 's/^data: //p' "$scratch/body" > "$scratch/frame"
@@ -86,6 +127,7 @@ initialize() {
   session_id=
   protocol_version=2025-11-25
   rpc '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"journey-canary","version":"1"}}}' 1 || return 1
+  detail="initialize shape check: protocolVersion date and nonempty serverInfo.name"
   jq -e '.result | (.protocolVersion | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and (.serverInfo.name | type == "string" and length > 0)' \
     "$scratch/body" >/dev/null 2>"$scratch/error" || return 1
   protocol_version="$(jq -r '.result.protocolVersion' "$scratch/body")"
@@ -97,13 +139,21 @@ initialize() {
       -H "Mcp-Session-Id: $session_id" --data '{"jsonrpc":"2.0","method":"notifications/initialized"}' "$mcp" || return 1
   fi
   reason=contract_error
+  detail=
 }
 
 validate_payload() {
   reason=contract_error
+  detail="payload shape check: $1"
   jq -e "$1" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
   reason=empty_result
+  detail="payload nonempty check: $2"
   jq -e "$2" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
+  if [[ -n "${3:-}" ]]; then
+    reason=stale_result
+    detail="payload freshness check: $3"
+    jq -e "$3" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
+  fi
   reason=contract_error
 }
 
@@ -113,36 +163,48 @@ read_shape='.items | type == "array" and all(.[]; .status == "found" and (.decis
 read_nonempty='.items | length > 0 and all(.[]; .decision.text | type == "string" and test("\\S"))'
 statute_shape='.results | type == "array" and all(.[]; type == "object" and (.documentId | type == "string" and length > 0) and (.eli | type == "string" and length > 0) and (.title | type == "string" and length > 0))'
 statute_nonempty='.results | length > 0'
+coverage_shape='(.asOf | type == "string") and (.freshness.status | type == "string") and (.countries | type == "array" and all(.[]; type == "object" and (.country | type == "string") and (.sources | type == "array")))'
+coverage_nonempty='[.countries[] | select(.availability == "searchable")] | length > 0 and all(.[]; .sources | length > 0)'
+# Figures older than three refresh intervals mean refreshes are not landing.
+coverage_current='.freshness.status == "current"'
 
 mcp_tool() {
   local payload
   payload="$(jq -nc --arg name "$1" --argjson args "$2" '{jsonrpc:"2.0",id:2,method:"tools/call",params:{name:$name,arguments:$args}}')"
   rpc "$payload" 2 || return 1
+  detail="tool result check: isError must not be true"
   if ! jq -e '.result.isError != true' "$scratch/body" >/dev/null 2>"$scratch/error"; then
     auth_rejection "$scratch/body"
     return 1
   fi
+  detail="tool content check: expected exactly one JSON text payload"
   jq -e '.result.content | map(select(.type == "text") | .text | fromjson) | if length == 1 then .[0] else error("contract") end' \
     "$scratch/body" > "$scratch/payload" 2>"$scratch/error" || return 1
-  validate_payload "$3" "$4"
+  validate_payload "$3" "$4" "${5:-}"
 }
 
 cli_version() {
   reason=contract_error
-  git tag --list '@stll/cli@*' > "$scratch/tags" 2>"$scratch/error" || return 1
-  expected="$(jq -erRs 'split("\n") | map(select(test("^@stll/cli@[0-9]+\\.[0-9]+\\.[0-9]+$")) | split("@")[2]) | sort_by(split(".") | map(tonumber)) | last | strings' "$scratch/tags" 2>"$scratch/error")" || return 1
-  if ! env -u MCP_CANARY_TOKEN -u STELLA_API_KEY npm i -g @stll/cli --ignore-scripts --prefix "$scratch/install" >"$scratch/install-log" 2>&1; then return 1; fi
+  if ! env -u MCP_CANARY_TOKEN -u STELLA_API_KEY -u GITHUB_TOKEN -u GH_TOKEN npm i -g @stll/cli --ignore-scripts --prefix "$scratch/install" >"$scratch/install-log" 2>"$scratch/error"; then return 1; fi
   cli="$scratch/install/bin/stella"
-  actual="$(env -u MCP_CANARY_TOKEN -u STELLA_API_KEY "$cli" --version 2>"$scratch/error")" || return 1
-  reason=version_mismatch
-  [[ "$actual" == "$expected" ]] || return 1
+  actual="$(env -u MCP_CANARY_TOKEN -u STELLA_API_KEY -u GITHUB_TOKEN -u GH_TOKEN "$cli" --version 2>"$scratch/error")" || return 1
+  bun "$script_dir/check-cli-promotion.ts" "$actual" >"$scratch/promotion" 2>"$scratch/error" || return 1
+  probe_status="$(jq -er '.status | select(. == "passed" or . == "skipped" or . == "failed")' "$scratch/promotion" 2>"$scratch/error")" || return 1
+  probe_reason="$(jq -er '.reason' "$scratch/promotion" 2>"$scratch/error")" || return 1
+  detail="$(jq -r 'if .target then "target \(.target); publication deadline \(.deadline)" else .message // "promotion metadata check failed" end' "$scratch/promotion")"
+  reason="$probe_reason"
+  if [[ "$probe_status" == skipped ]]; then
+    printf 'journey-detail cli_version %s\n' "$detail"
+  fi
+  [[ "$probe_status" != failed ]]
 }
 
 cli_tool() {
   reason=contract_error
+  detail=
   local shape="$1" nonempty="$2" rc=0
   shift 2
-  STELLA_API_KEY="${credential}" STELLA_SERVER_URL="$cli_server" \
+  env -u GITHUB_TOKEN -u GH_TOKEN STELLA_API_KEY="${credential}" STELLA_SERVER_URL="$cli_server" \
     XDG_CONFIG_HOME="$scratch/config" XDG_CACHE_HOME="$scratch/cache" \
     "$cli" "$@" --json >"$scratch/payload" 2>"$scratch/error" || rc=$?
   # A rejected server registry leaves the CLI on its built-in commands: never a pass,
@@ -152,6 +214,7 @@ cli_tool() {
     return 1
   fi
   if [[ "$rc" != 0 ]]; then
+    if [[ ! -s "$scratch/error" ]]; then detail="CLI exited $rc"; fi
     auth_rejection "$scratch/error" "$scratch/payload"
     return 1
   fi
@@ -164,31 +227,182 @@ auth_rejection() {
   fi
 }
 
-case_args='{"queries":["smlouva"],"country":"CZE","limit":1}'
-read_args="$(jq -nc --arg id "$decision_id" '{decision_ids:[$id],max_chars:1000,include:[]}')"
-if [[ "${1:-}" == --cli ]]; then
-  probe cli_version cli_version
+# Fresh-query probe (--search-probe, case-law-search-probe.yml). A fixed query
+# answers from caches once it has run, and a retry hides exactly the failure
+# this looks for (a first hit that times out and passes when repeated), so
+# every query is new for the slot and nothing is retried.
+#
+# Each run: one query per country, plus two court-filtered ones rotating
+# through the apex courts. Seven searches, sequential, about 2,000 a day.
+# 20 terms a country give 380 ordered pairs, a cycle of 31 hours at one slot
+# per five minutes, longer than any search cache (the longest is one hour).
+probe_terms() {
+  case "$1" in
+    CZE) printf '%s\n' náhrada nájem výpověď dědictví žaloba rozsudek smlouva škoda pojištění exekuce insolvence vlastnictví zaměstnanec úrok promlčení odpovědnost spotřebitel věřitel dlužník stavba ;;
+    SVK) printf '%s\n' náhrada nájom výpoveď dedičstvo žaloba rozsudok zmluva škoda poistenie exekúcia konkurz vlastníctvo zamestnanec úrok premlčanie zodpovednosť spotrebiteľ veriteľ dlžník stavba ;;
+    POL) printf '%s\n' odszkodowanie najem wypowiedzenie spadek pozew wyrok umowa szkoda ubezpieczenie egzekucja upadłość własność pracownik odsetki przedawnienie odpowiedzialność konsument wierzyciel dłużnik budowa ;;
+    HUN) printf '%s\n' kártérítés bérlet felmondás öröklés kereset ítélet szerződés kár biztosítás végrehajtás felszámolás tulajdon munkavállaló kamat elévülés felelősség fogyasztó hitelező adós építkezés ;;
+    EU) printf '%s\n' damages lease termination succession action judgment contract liability insurance enforcement insolvency ownership worker interest limitation consumer creditor debtor construction competition ;;
+  esac
+}
+
+# Two different terms from the country's pool, a distinct ordered pair per slot.
+probe_query() {
+  local terms=() term first second
+  while IFS= read -r term; do terms+=("$term"); done < <(probe_terms "$1")
+  local count="${#terms[@]}"
+  first=$(($2 % count))
+  second=$((($2 / count) % (count - 1)))
+  if [[ "$second" -ge "$first" ]]; then second=$((second + 1)); fi
+  printf '%s %s' "${terms[$first]}" "${terms[$second]}"
+}
+
+# The codes a search that ran out of time answers with, directly or through
+# its continuation.
+probe_timeout_code() {
+  case "$1" in
+    public_read_timeout | upstream_unavailable | search_index_unavailable | public_read_unfinished | continuation_expired) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# One search, followed through its continuation. Sets reason and detail, and
+# returns nonzero on any failure.
+probe_search() {
+  local args="$1" payload code status token wait_ms polls=0
+  while :; do
+    payload="$(jq -nc --argjson args "$args" '{jsonrpc:"2.0",id:2,method:"tools/call",params:{name:"search_case_law",arguments:$args}}')"
+    rpc "$payload" 2 || return 1
+    if jq -e '.result.isError == true' "$scratch/body" >/dev/null 2>"$scratch/error"; then
+      code="$(jq -r '[.result.content[]? | select(.type == "text") | .text | fromjson? | .error.code? // empty] | first // "unknown"' "$scratch/body")"
+      detail="tool error $code"
+      if probe_timeout_code "$code"; then reason=timeout; else reason=contract_error; fi
+      return 1
+    fi
+    reason=contract_error
+    detail="tool content check: expected exactly one JSON text payload"
+    jq -e '.result.content | map(select(.type == "text") | .text | fromjson) | if length == 1 then .[0] else error("contract") end' \
+      "$scratch/body" > "$scratch/payload" 2>"$scratch/error" || return 1
+    status="$(jq -r '.status? // empty' "$scratch/payload")"
+    if [[ "$status" != running ]]; then break; fi
+    # A search still running answers with a token: following it is what a
+    # client does, and giving up on it is a timeout the client would see.
+    if [[ "$polls" -ge "$probe_poll_limit" ]] || ((SECONDS - probe_started >= probe_run_limit)); then
+      reason=timeout
+      detail="still running after $polls continuations"
+      return 1
+    fi
+    polls=$((polls + 1))
+    token="$(jq -r '.continuationToken' "$scratch/payload")"
+    wait_ms="$(jq -r '.retryAfterMs // 1000' "$scratch/payload")"
+    sleep "$(jq -rn --argjson ms "$wait_ms" '[$ms, 10000] | min | . / 1000')"
+    args="$(jq -c --arg token "$token" '. + {continuation_token: $token}' <<<"$args")"
+  done
+  # An empty page is a correct answer to a generated query.
+  detail="result check: results must be an array"
+  jq -e '.results | type == "array"' "$scratch/payload" >/dev/null 2>"$scratch/error"
+}
+
+probe_one() {
+  local name="$1" args="$2" started="$SECONDS"
+  detail=
+  if ((SECONDS - probe_started > probe_run_limit)); then
+    # A skipped search is coverage nobody is getting.
+    report "$name" failed run_budget
+    return
+  fi
+  last_status=
+  : > "$scratch/error"
+  probe_total=$((probe_total + 1))
+  if probe_search "$args"; then
+    probe_answered=$((probe_answered + 1))
+    report "$name" passed ok
+  elif [[ "$reason" == http_status && "$last_status" == 000 ]]; then
+    # Unreachable from this runner: not an answer from the service. A run in
+    # which nothing was reached still fails, below.
+    report "$name" skipped network_error
+  else
+    probe_answered=$((probe_answered + 1))
+    report "$name" failed "$reason"
+  fi
+  printf 'journey-timing %s %ss\n' "$name" "$((SECONDS - started))"
+}
+
+search_probe() {
+  local countries=(CZE SVK POL HUN EU)
+  local courts=(CZE:NS CZE:NSS CZE:ÚS SVK:NS SVK:ÚS POL:SN POL:NSA POL:TK HUN:Kúria HUN:AB EU:CJEU EU:GC)
+  local slot="${JOURNEY_PROBE_SLOT:-$(($(date -u +%s) / 300))}" country court pick offset
+  local court_label=(a b)
+  # Above the 30-second public read budget, so a timeout answers as the
+  # service's own error code whenever the service still answers at all.
+  deadline="${JOURNEY_PROBE_TIMEOUT_SECONDS:-35}"
+  # Seven searches, each with up to three continuations, plus the session
+  # setup and its notification; the wall-clock bound below stops a run first.
+  request_limit=30
+  probe_run_limit="${JOURNEY_PROBE_RUN_SECONDS:-240}"
+  probe_poll_limit=3
+  probe_started="$SECONDS"
+  probe_total=0
+  probe_answered=0
+  # The workflow only runs once enabled, so an absent token is a broken probe.
   if [[ -z "$credential" ]]; then
+    report mcp_probe failed no_credential
+    return
+  fi
+  if ! initialize; then
+    report mcp_probe_initialize failed "$reason"
+    return
+  fi
+  for country in "${countries[@]}"; do
+    probe_one "mcp_probe_$(tr '[:upper:]' '[:lower:]' <<<"$country")" \
+      "$(jq -nc --arg query "$(probe_query "$country" "$slot")" --arg country "$country" '{queries:[$query],country:$country,limit:3}')"
+  done
+  for offset in 0 1; do
+    pick="${courts[$(((slot + offset * 5) % ${#courts[@]}))]}"
+    country="${pick%%:*}"
+    court="${pick#*:}"
+    # A different term pair from the same slot's unfiltered query.
+    probe_one "mcp_probe_$(tr '[:upper:]' '[:lower:]' <<<"$country")_court_${court_label[$offset]}" \
+      "$(jq -nc --arg query "$(probe_query "$country" "$((slot + 191))")" --arg country "$country" --arg court "$court" '{queries:[$query],country:$country,courts:[$court],limit:3}')"
+  done
+  if [[ "$probe_total" -gt 0 && "$probe_answered" -eq 0 ]]; then
+    report mcp_probe_reachable failed http_status
+  fi
+}
+
+case_args="$(jq -nc --arg query "$search_query" --arg country "$search_country" '{queries:[$query],country:$country,limit:1}')"
+read_args="$(jq -nc --arg id "$decision_id" '{decision_ids:[$id],max_chars:1000,include:[]}')"
+if [[ "${1:-}" == --search-probe ]]; then
+  search_probe
+elif [[ "${1:-}" == --cli ]]; then
+  probe cli_version cli_version
+  if [[ "$probe_status" == skipped ]]; then
+    report cli_search skipped "$probe_reason"
+    report cli_read skipped "$probe_reason"
+    printf 'journey-detail cli_search %s\njourney-detail cli_read %s\n' "$detail" "$detail"
+  elif [[ "$failed" != 0 ]]; then
+    report cli_search failed "$reason"
+    report cli_read failed "$reason"
+  elif [[ -z "$credential" ]]; then
     report cli_search skipped no_credential
     report cli_read skipped no_credential
-  elif [[ "$failed" != 0 ]]; then
-    report cli_search failed contract_error
-    report cli_read failed contract_error
   else
-    probe cli_search cli_tool "$case_shape" "$case_nonempty" case-law search --queries smlouva --country CZE --limit 1
+    probe cli_search cli_tool "$case_shape" "$case_nonempty" case-law search --queries "$search_query" --country "$search_country" --limit 1
     probe cli_read cli_tool "$read_shape" "$read_nonempty" case-law read --decision-ids "$decision_id"
   fi
 else
-  probe web_search web_check "${JOURNEY_WEB_SEARCH_URL:-$web/law/cases?q=smlouva&country=cze}" '<a[[:space:]][^>]*href="/law/cze/cases/[^" ]+"'
+  search_url="$web/law/cases?q=$(jq -rn --arg query "$search_query" '$query | @uri')&country=$search_path"
+  probe web_search web_check "${JOURNEY_WEB_SEARCH_URL:-$search_url}" "<a[[:space:]][^>]*href=\"/law/$search_path/cases/[^\" ]+\""
   probe web_decision web_check "${JOURNEY_WEB_DECISION_URL:-$web$decision_path}" '<article[ >]'
   probe web_statutes web_check "${JOURNEY_WEB_STATUTES_URL:-$web/law/cze/statutes/}" '<a[[:space:]][^>]*href="/law/cze/statutes/[^" ]+"'
   if [[ -z "$credential" ]]; then
-    for name in mcp_initialize mcp_search mcp_read mcp_legislation; do report "$name" skipped no_credential; done
+    for name in mcp_initialize mcp_search mcp_read mcp_legislation mcp_coverage; do report "$name" skipped no_credential; done
   else
     probe mcp_initialize initialize
     probe mcp_search mcp_tool search_case_law "$case_args" "$case_shape" "$case_nonempty"
     probe mcp_read mcp_tool read_case_law_decision "$read_args" "$read_shape" "$read_nonempty"
     probe mcp_legislation mcp_tool search_legislation '{"query":"smlouva","country":"CZE","limit":1}' "$statute_shape" "$statute_nonempty"
+    probe mcp_coverage mcp_tool case_law_coverage '{}' "$coverage_shape" "$coverage_nonempty" "$coverage_current"
   fi
 fi
 exit "$failed"

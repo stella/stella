@@ -14,8 +14,8 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   fileComparisonUploads,
-  schedulerJobs,
   schedulerJobRuns,
+  schedulerJobs,
   systemAuditRuns,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -38,15 +38,21 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
-const sweepMock = mock(async () =>
-  Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }),
-);
+beforeEach(() => {
+  sweepMock.mockReset();
+  sweepMock.mockImplementation(sweepDefault);
+});
+
+const sweepDefault = async () =>
+  Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 });
+const sweepMock = mock(sweepDefault);
 const {
   createSweepFileComparisonUploadsTask,
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,
@@ -237,12 +243,12 @@ describe("comparison sweep replay and runner capture", () => {
         task: SWEEP_FILE_COMPARISON_UPLOADS_TASK,
         schedule: { type: "interval", everyMs: 300_000 },
         nextRunAt: new Date(),
-        lockedBy: "test-lease",
+        ...heldSchedulerLease("test-lease"),
         payload: { cursor: null },
       })
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { lockedBy: "test-lease" },
+        set: heldSchedulerLease("test-lease"),
       });
   });
   afterEach(async () => {
@@ -268,7 +274,7 @@ describe("comparison sweep replay and runner capture", () => {
       {
         stage,
         grade: "defect",
-        reason: "unclassified",
+        reason: "tagged_failure",
         cause: new TypeError("Sweep dependency failed"),
       },
       {
@@ -281,7 +287,7 @@ describe("comparison sweep replay and runner capture", () => {
       },
     ]),
   )(
-    "$stage: one $grade capture, retained rows and replay",
+    "$stage: a $grade failure, retained rows and replay",
     async ({ stage, cause, grade, reason }) => {
       let calls = 0;
       const rootSafeDb: SafeDb = async (run) => {
@@ -324,11 +330,20 @@ describe("comparison sweep replay and runner capture", () => {
           }),
       });
       expect(await runInRunner(task)).toBe("failed");
-      expect(analytics.exceptions()).toHaveLength(1);
-      expect(analytics.exceptions().at(0)?.properties).toMatchObject({
-        "error.class": "FileComparisonSweepError",
-        "failure.grade": grade,
-        "failure.reason": reason,
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          "error.class": "FileComparisonSweepError",
+          "failure.grade": grade,
+          "failure.reason": reason,
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason": reason,
       });
       expect(
         logs.records.filter(
@@ -373,7 +388,7 @@ describe("comparison sweep replay and runner capture", () => {
           deleteObject: async () => Result.ok(undefined),
         }),
       ).toEqual(Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }));
-      expect(analytics.exceptions()).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
     },
   );
 

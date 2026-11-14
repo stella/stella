@@ -6,6 +6,7 @@ export default {
   owner: [
     "apps/api/src/lib/hosted-usage-provider/webhook-store.ts",
     "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
+    "apps/api/src/lib/hosted-usage-provider/webhook-result-transitions.ts",
   ],
   summary:
     "The store projects authenticated deliveries through the dispatch schema before persistence. Retention redacts completed details while preserving deduplication identifiers and unresolved records.",
@@ -14,6 +15,11 @@ export default {
     specifiers: ["@/api/db/schema", "@/api/db/schema/usage"],
     names: ["hostedUsageWebhookEvents"],
     allowed: [
+      {
+        path: "apps/api/src/db/entity-feature-gate-repair.ts",
+        reason:
+          "Full-schema policy introspection: renders the entity feature policies the online cutover installs; reads no rows.",
+      },
       {
         path: "apps/api/src/tests/pglite-test-db.ts",
         reason:

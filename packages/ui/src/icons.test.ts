@@ -38,15 +38,18 @@ const parseSemanticEntries = (source: string): SemanticEntry[] => {
   return entries;
 };
 
-const sharedWith = (entry: SemanticEntry): string | null => {
-  for (const comment of entry.comments) {
-    const match = /^sharedOnPurpose: (?<other>\w+)\b/u.exec(comment);
-    if (match?.groups?.["other"] !== undefined) {
-      return match.groups["other"];
-    }
-  }
-  return null;
-};
+// Every entry a semantic entry names in its `sharedOnPurpose:` lines.
+const sharedWith = (entry: SemanticEntry): ReadonlySet<string> =>
+  new Set(
+    entry.comments.flatMap((comment) => {
+      const other = /^sharedOnPurpose: (?<other>\w+)\b/u.exec(comment)
+        ?.groups?.["other"];
+      return other === undefined ? [] : [other];
+    }),
+  );
+
+// Annotation lines that do not count as the entry's reason.
+const ANNOTATION = /^(?:sharedOnPurpose|ownedBy):/u;
 
 const glyphComponent = (name: string): unknown =>
   Reflect.get(lucide, name) as unknown;
@@ -60,9 +63,7 @@ const semanticEntryProblems = (source: string): string[] => {
   const entries = parseSemanticEntries(source);
   const problems: string[] = [];
   for (const entry of entries) {
-    if (
-      !entry.comments.some((comment) => !comment.startsWith("sharedOnPurpose:"))
-    ) {
+    if (!entry.comments.some((comment) => !ANNOTATION.test(comment))) {
       problems.push(`${entry.name} has no one-line reason above it`);
     }
   }
@@ -72,8 +73,8 @@ const semanticEntryProblems = (source: string): string[] => {
         continue;
       }
       if (
-        sharedWith(other) !== entry.name &&
-        sharedWith(entry) !== other.name
+        !sharedWith(other).has(entry.name) &&
+        !sharedWith(entry).has(other.name)
       ) {
         problems.push(
           `${entry.name} and ${other.name} both draw ${entry.glyph} without a sharedOnPurpose note`,
@@ -98,6 +99,8 @@ describe("icon module", () => {
     expect(icons.AiActionIcon).toBe(lucide.WandSparklesIcon);
     expect(icons.NewChatIcon).toBe(lucide.MessageSquarePlusIcon);
     expect(icons.AddCommentIcon).toBe(lucide.MessageSquareQuoteIcon);
+    expect(icons.CopyToClipboardIcon).toBe(lucide.CopyIcon);
+    expect(icons.DuplicateIcon).toBe(lucide.CopyIcon);
   });
 
   test("gives every semantic entry a reason and its own glyph unless shared on purpose", () => {
@@ -146,5 +149,24 @@ describe("icon module", () => {
       'export { BookOpenIcon as CaseLawIcon } from "lucide-react";',
     ].join("\n");
     expect(semanticEntryProblems(source)).toEqual([]);
+  });
+
+  test("accepts an entry that names several partners and counts no annotation as a reason", () => {
+    const source = [
+      "// Copying from a button.",
+      'export { CopyIcon as CopyToClipboardIcon } from "lucide-react";',
+      "// Copying from a menu.",
+      "// sharedOnPurpose: CopyToClipboardIcon, same action.",
+      'export { CopyIcon as CopyFromMenuIcon } from "lucide-react";',
+      "// Duplicating an item.",
+      "// sharedOnPurpose: CopyToClipboardIcon, the common duplicate mark.",
+      "// sharedOnPurpose: CopyFromMenuIcon, the common duplicate mark.",
+      'export { CopyIcon as DuplicateIcon } from "lucide-react";',
+      "// ownedBy: CopyButton (packages/ui/src/components/copy-button.tsx)",
+      'export { CheckIcon as ConfirmedIcon } from "lucide-react";',
+    ].join("\n");
+    expect(semanticEntryProblems(source)).toEqual([
+      "ConfirmedIcon has no one-line reason above it",
+    ]);
   });
 });

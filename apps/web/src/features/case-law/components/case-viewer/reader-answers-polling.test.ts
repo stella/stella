@@ -25,10 +25,14 @@ const fixture = (remaining: number, id = "assistant"): ReaderAnswer => ({
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "paragraph",
-    quote: "Text",
-    startOffset: 0,
-    endOffset: 4,
+    spans: [
+      {
+        paragraphId: "paragraph",
+        quote: "Text",
+        startOffset: 0,
+        endOffset: 4,
+      },
+    ],
   },
   createdAt: Temporal.Instant.fromEpochMilliseconds(now).toString(),
   updatedAt: Temporal.Instant.fromEpochMilliseconds(now).toString(),

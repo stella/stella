@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { queryView } from "@/lib/query-view.logic";
 
 import { questionReads } from "./question-columns.logic";
-import type { QuestionColumn, QuestionAnswer } from "./question-columns.logic";
+import type { QuestionAnswer, QuestionColumn } from "./question-columns.logic";
 
 const readError = new Error("Question read unavailable");
 

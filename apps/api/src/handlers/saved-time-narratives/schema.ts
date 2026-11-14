@@ -1,9 +1,9 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
-export const savedTimeNarrativeParamsSchema = t.Object({
-  id: tSafeId("savedTimeNarrative"),
+export const savedTimeNarrativeParamsSchema = v.object({
+  id: resourceIdSchema("savedTimeNarrative"),
 });
 
 export const toSavedTimeNarrativeItem = (row: {

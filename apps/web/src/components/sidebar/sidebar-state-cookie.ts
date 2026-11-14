@@ -1,0 +1,10 @@
+/** Shared with browser-free e2e setup so a seeded cookie matches SSR. */
+export const SIDEBAR_STATE_COOKIE = "sidebar_state";
+
+export const SIDEBAR_STATE_VALUES = {
+  expanded: "expanded",
+  collapsed: "collapsed",
+} as const;
+
+export type SidebarStateValue =
+  (typeof SIDEBAR_STATE_VALUES)[keyof typeof SIDEBAR_STATE_VALUES];

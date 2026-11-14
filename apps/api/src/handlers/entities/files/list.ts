@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { and, asc, eq, or, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { entityContextId } from "@/api/db/entity-feature-policies";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -8,24 +10,42 @@ import { entities, fields } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import {
   decodeEntityFileListCursor,
   encodeEntityFileListCursor,
   entityFileListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import { findTermMatches } from "@/api/lib/entity-filters";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
-const listFilesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.entitiesWindowSizeMax }),
+const listFilesQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.entitiesWindowSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
+  search: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description(
+        "Keep only documents whose file name or name contains this text, " +
+          "ignoring case and accents. Blank lists every document.",
+      ),
+    ),
+  ),
 });
-type ListFilesQuery = (typeof listFilesQuerySchema)["static"];
+type ListFilesQuery = v.InferOutput<typeof listFilesQuerySchema>;
 
 type ListFilesHandlerProps = {
   safeDb: SafeDb;
@@ -43,6 +63,16 @@ const listFilesHandler = async function* ({
   );
   const cursor = decodeEntityFileListCursor(query.cursor);
   const cursorCondition = entityFileListCursorCondition(cursor);
+  const search = query.search?.trim() ?? "";
+  // Literal containment through `search_fold`, the comparison a table find
+  // makes, so a typed `%` or `_` matches itself.
+  const searchCondition =
+    search === ""
+      ? undefined
+      : or(
+          findTermMatches(sql`${fields.content}->>'fileName'`, search),
+          findTermMatches(sql`${entities.name}`, search),
+        );
   const rows = yield* Result.await(
     safeDb((tx) =>
       tx
@@ -68,6 +98,7 @@ const listFilesHandler = async function* ({
             eq(entities.workspaceId, workspaceId),
             eq(entities.kind, "document"),
             ...(cursorCondition ? [cursorCondition] : []),
+            ...(searchCondition ? [searchCondition] : []),
           ),
         )
         .orderBy(asc(entities.createdAt), asc(entities.id), asc(fields.id))
@@ -81,6 +112,7 @@ const listFilesHandler = async function* ({
     parentId: SafeId<"entity"> | null;
     fileName: string;
     mimeType: string;
+    sizeBytes: number;
   };
 
   const files: (FileRow & {
@@ -100,6 +132,7 @@ const listFilesHandler = async function* ({
       fieldId: row.fieldId,
       fileName: content.fileName,
       mimeType: content.mimeType,
+      sizeBytes: content.sizeBytes,
     });
   }
 
@@ -125,7 +158,9 @@ const config = {
   description:
     "List every document in a matter that has an uploaded file, oldest first " +
     "with cursor pagination, each with its entity id, name, parent folder, " +
-    "file field id, file name, and media type. Documents without a file, " +
+    "file field id, file name, media type, and size in bytes. search " +
+    "narrows the list to " +
+    "documents whose file name or name contains the text. Documents without a file, " +
     "and folders and tasks, are left out; use entities.list for the full " +
     "table with column values.",
   permissions: { workspace: ["read"] },

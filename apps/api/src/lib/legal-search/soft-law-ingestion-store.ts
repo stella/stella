@@ -5,11 +5,11 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  softLawSources,
-  softLawIngestionAttempts,
+  softLawDocumentLocators,
   softLawDocuments,
   softLawDocumentVersions,
-  softLawDocumentLocators,
+  softLawIngestionAttempts,
+  softLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,11 +27,11 @@ import {
   storedSoftLawDiscoveryEntry,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
-  SoftLawEntry,
   SoftLawDiscoveryEntry,
   SoftLawDocumentInput,
-  SoftLawSourceAdapter,
+  SoftLawEntry,
   SoftLawRawObject,
+  SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";

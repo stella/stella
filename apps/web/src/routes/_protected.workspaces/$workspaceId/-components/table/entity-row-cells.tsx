@@ -10,8 +10,10 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -19,7 +21,6 @@ import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region
 import { renderDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
   getEntityName,
@@ -88,15 +89,27 @@ const shouldIgnoreRowExpansionClick = (target: EventTarget) => {
   );
 };
 
-const getContextPropertyId = (target: EventTarget): PropertyId | null => {
-  if (!(target instanceof HTMLElement)) {
-    return null;
+/** What right-clicking a cell opens: the row's or the cell's menu, or none. */
+type CellContextMenuTarget =
+  { type: "menu"; propertyId: PropertyId | null } | { type: "native" };
+
+const getCellContextMenuTarget = (
+  column: TableColumn,
+): CellContextMenuTarget => {
+  const contextMenu =
+    column.columnDef.meta?.contextMenu ??
+    panic(`Entity column ${column.id} declares no context menu`);
+  switch (contextMenu) {
+    case "native":
+      return { type: "native" };
+    case "row":
+      return { type: "menu", propertyId: null };
+    case "cell":
+      return { type: "menu", propertyId: toSafeId<"property">(column.id) };
+    default:
+      contextMenu satisfies never;
+      return panic(`Unhandled context menu: ${String(contextMenu)}`);
   }
-
-  const propertyId = target.closest<HTMLElement>("[data-table-property-id]")
-    ?.dataset["tablePropertyId"];
-
-  return propertyId ? toSafeId<"property">(propertyId) : null;
 };
 
 type ActiveCellFlashInput = {
@@ -268,11 +281,14 @@ export const DraggableRow = ({
     return selectedRows.map((selectedRow) => selectedRow.original);
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const openContextMenu = (
+    e: React.MouseEvent,
+    propertyId: PropertyId | null,
+  ) => {
     e.preventDefault();
     e.stopPropagation();
     setBulkEntities(getBulkSelectedEntities());
-    setContextPropertyId(getContextPropertyId(e.target));
+    setContextPropertyId(propertyId);
     setContextAnchor({
       getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
     });
@@ -280,6 +296,18 @@ export const DraggableRow = ({
     // right-click doesn't immediately count as an outside-click and
     // dismiss the menu that the contextmenu just opened.
     requestAnimationFrame(() => setContextOpen(true));
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => openContextMenu(e, null);
+
+  const handleCellContextMenu = (e: React.MouseEvent, column: TableColumn) => {
+    const target = getCellContextMenuTarget(column);
+    if (target.type === "native") {
+      // Keep the browser's menu, and keep the row from opening its own.
+      e.stopPropagation();
+      return;
+    }
+    openContextMenu(e, target.propertyId);
   };
 
   const handleRowClick = (e: React.MouseEvent) => {
@@ -329,51 +357,42 @@ export const DraggableRow = ({
   );
 
   const rowActions = (
-    <RowActions
-      anchor={contextAnchor}
-      entity={entity}
-      ocrSource={
-        getOcrSource({
-          fields: entity.fields,
-          propertyId: contextPropertyId,
-        }) ?? undefined
-      }
-      onOpenChange={(open) => {
-        if (open) {
-          setBulkEntities(getBulkSelectedEntities());
+    <span className="sr-only pointer-coarse:not-sr-only pointer-coarse:-my-2 pointer-coarse:shrink-0">
+      <RowActions
+        anchor={contextAnchor}
+        entity={entity}
+        ocrSource={
+          getOcrSource({
+            fields: entity.fields,
+            propertyId: contextPropertyId,
+          }) ?? undefined
         }
-        setContextOpen(open);
-        if (!open) {
-          setContextAnchor(null);
-          setContextPropertyId(null);
-          setBulkEntities(undefined);
+        onOpenChange={(open) => {
+          if (open) {
+            setBulkEntities(getBulkSelectedEntities());
+          }
+          setContextOpen(open);
+          if (!open) {
+            setContextAnchor(null);
+            setContextPropertyId(null);
+            setBulkEntities(undefined);
+          }
+        }}
+        onRename={isFolder ? () => onStartEditing(entity.entityId) : undefined}
+        open={contextOpen}
+        selectedEntities={contextOpen ? bulkEntities : undefined}
+        cellMetadataTarget={
+          contextPropertyId
+            ? {
+                propertyId: contextPropertyId,
+                metadata: entity.cellMetadata[contextPropertyId],
+              }
+            : null
         }
-      }}
-      onRename={isFolder ? () => onStartEditing(entity.entityId) : undefined}
-      open={contextOpen}
-      selectedEntities={contextOpen ? bulkEntities : undefined}
-      cellMetadataTarget={
-        contextPropertyId
-          ? {
-              propertyId: contextPropertyId,
-              metadata: entity.cellMetadata[contextPropertyId],
-            }
-          : null
-      }
-      triggerClassName="size-11 min-h-11 min-w-11 opacity-0! transition-opacity group-hover/row:opacity-100! focus-visible:opacity-100!"
-      workspaceId={workspaceId}
-    />
-  );
-
-  // Kebab stays mounted (right-click context menu uses the same Menu),
-  // but the visible trigger is hidden so the row checkbox owns this
-  // slot. We use sr-only positioning rather than `display: none` so
-  // keyboard users can still Tab to it and open the actions menu.
-  const selectCellWithActions = (
-    <>
-      {selectCellContent}
-      <span className="sr-only">{rowActions}</span>
-    </>
+        triggerClassName="size-11 min-h-11 min-w-11 opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100! focus-visible:opacity-100!"
+        workspaceId={workspaceId}
+      />
+    </span>
   );
 
   useExternalSyncEffect(() => {
@@ -438,7 +457,8 @@ export const DraggableRow = ({
         ref={setRowRef}
         renderColumns={renderColumns}
         row={row}
-        selectCellWithActions={selectCellWithActions}
+        selectCellContent={selectCellContent}
+        rowActions={rowActions}
         selected={selected}
         visibleCells={visibleCells}
       />
@@ -471,18 +491,21 @@ export const DraggableRow = ({
           contentMode={contentMode}
           hasExpandedCell={isFocusedExpansionRow}
           onCellClick={handleCellClick}
-          selectCellWithActions={selectCellWithActions}
+          onCellContextMenu={handleCellContextMenu}
+          selectCellContent={selectCellContent}
+          rowActions={rowActions}
           selected={selected}
           visibleCells={visibleCells}
         />
         <RowEndFillerCell
+          actions={rowActions}
           addPropertyColumn={addPropertyColumn}
           renderColumns={renderColumns}
           selected={selected}
         />
         <AddPropertyCell
           cell={addPropertyCell}
-          columnIndex={renderColumns.length + 1}
+          renderColumns={renderColumns}
           selected={selected}
         />
       </WorkspaceGridRow>
@@ -505,7 +528,8 @@ type FolderTableRowProps = {
   ref: (element: HTMLDivElement | null) => void;
   renderColumns: TableColumn[];
   row: TableRow;
-  selectCellWithActions: React.ReactNode;
+  selectCellContent: React.ReactNode;
+  rowActions: React.ReactNode;
   selected: boolean;
   visibleCells: TableCell[];
 };
@@ -524,7 +548,8 @@ const FolderTableRow = ({
   ref,
   renderColumns,
   row,
-  selectCellWithActions,
+  selectCellContent,
+  rowActions,
   selected,
   visibleCells,
 }: FolderTableRowProps) => {
@@ -563,7 +588,7 @@ const FolderTableRow = ({
         }}
       >
         <PinnedBoundary column={selectCell.column} />
-        {selectCellWithActions}
+        {selectCellContent}
       </WorkspaceGridCell>
       <WorkspaceGridCell
         aria-colindex={2}
@@ -580,15 +605,20 @@ const FolderTableRow = ({
         }}
       >
         <PinnedBoundary column={nameCell.column} />
-        <FolderCell
-          depth={row.depth}
-          editingEntityId={editingEntityId}
-          entity={entity}
-          isExpanded={row_getIsExpanded(row)}
-          onRename={onRename}
-          onStopEditing={onStopEditing}
-          startEditing={() => onStartEditing(entity.entityId)}
-        />
+        <div className="flex min-w-0 items-center gap-1.5">
+          <div className="min-w-0 flex-1">
+            <FolderCell
+              depth={row.depth}
+              editingEntityId={editingEntityId}
+              entity={entity}
+              isExpanded={row_getIsExpanded(row)}
+              onRename={onRename}
+              onStopEditing={onStopEditing}
+              startEditing={() => onStartEditing(entity.entityId)}
+            />
+          </div>
+          {rowActions}
+        </div>
       </WorkspaceGridCell>
       <WorkspaceGridCell
         aria-colindex={3}
@@ -599,7 +629,7 @@ const FolderTableRow = ({
       />
       <AddPropertyCell
         cell={addPropertyCell}
-        columnIndex={renderColumns.length + 1}
+        renderColumns={renderColumns}
         selected={selected}
       />
     </WorkspaceGridRow>
@@ -615,7 +645,9 @@ type DataRowCellsProps = {
     columnId: string,
     canExpandCell: boolean,
   ) => void;
-  selectCellWithActions: React.ReactNode;
+  onCellContextMenu: (event: React.MouseEvent, column: TableColumn) => void;
+  selectCellContent: React.ReactNode;
+  rowActions: React.ReactNode;
   selected: boolean;
   visibleCells: TableCell[];
 };
@@ -625,15 +657,19 @@ const DataRowCells = ({
   contentMode,
   hasExpandedCell,
   onCellClick,
-  selectCellWithActions,
+  onCellContextMenu,
+  selectCellContent,
+  rowActions,
   selected,
   visibleCells,
-}: DataRowCellsProps) =>
-  visibleCells.map((cell, cellIndex) => {
+}: DataRowCellsProps) => {
+  const firstValueCell = visibleCells.find(
+    ({ column }) => column.id !== selectColId,
+  );
+  return visibleCells.map((cell, cellIndex) => {
     const isSelectCell = cell.column.id === selectColId;
     const isAddPropertyCell = cell.column.id === addPropertyColId;
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
-    const canFlagCell = canExpandCell && !cell.column.id.startsWith("_");
     const isExpandedCell = expandedCellId === cell.column.id;
 
     return (
@@ -658,9 +694,11 @@ const DataRowCells = ({
         )}
         data-expanded-cell={isExpandedCell || undefined}
         data-state={selected ? "selected" : undefined}
-        data-table-property-id={canFlagCell ? cell.column.id : undefined}
         key={cell.id}
         onClick={(event) => onCellClick(event, cell.column.id, canExpandCell)}
+        onContextMenu={containedEventHandler((event) =>
+          onCellContextMenu(event, cell.column),
+        )}
         style={{
           gridColumn: cellIndex + 1,
           ...getGridPinningStyles(cell.column),
@@ -668,9 +706,10 @@ const DataRowCells = ({
       >
         <PinnedBoundary column={cell.column} />
         {isSelectCell ? (
-          selectCellWithActions
+          selectCellContent
         ) : (
           <EntityCellContent
+            actions={cell === firstValueCell ? rowActions : undefined}
             layout={getCellContentLayout({ contentMode, isExpandedCell })}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -679,6 +718,7 @@ const DataRowCells = ({
       </WorkspaceGridCell>
     );
   });
+};
 
 /**
  * How a value cell lays out its content: on one line, centred in the first
@@ -701,9 +741,11 @@ const getCellContentLayout = ({
 };
 
 const EntityCellContent = ({
+  actions,
   children,
   layout,
 }: {
+  actions?: React.ReactNode;
   children: React.ReactNode;
   layout: CellContentLayout;
 }) => {
@@ -717,6 +759,7 @@ const EntityCellContent = ({
           )}
         >
           {children}
+          {actions}
         </span>
       );
     case "wrap":
@@ -733,6 +776,7 @@ const EntityCellContent = ({
           <FirstLineStrut firstLine={FIRST_LINE} />
           <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
             {children}
+            {actions}
           </span>
         </span>
       );
@@ -740,6 +784,7 @@ const EntityCellContent = ({
       return (
         <span className="border-border/80 bg-background absolute inset-x-0 top-0 z-40 flex max-h-96 min-h-24 w-full min-w-0 items-start gap-1.5 overflow-y-auto border p-2 pb-8 shadow-lg">
           {children}
+          {actions}
         </span>
       );
     default:
@@ -792,15 +837,11 @@ const FolderCell = ({
         paddingLeft: depth > 0 ? `${depth * 20}px` : undefined,
       }}
     >
-      <Tooltip
-        content={rowToggleLabel}
-        render={
-          <button
-            aria-label={rowToggleLabel}
-            className="flex shrink-0 items-center"
-            type="button"
-          />
-        }
+      <Button
+        aria-label={rowToggleLabel}
+        className="flex shrink-0 items-center"
+        tooltip={rowToggleLabel}
+        variant="plain"
       >
         <DirectionalIcon
           className={cn(
@@ -810,7 +851,7 @@ const FolderCell = ({
           flip={!isExpanded}
           icon={ChevronRightIcon}
         />
-      </Tooltip>
+      </Button>
       <EntityKindIcon
         className="text-muted-foreground size-4 shrink-0"
         folderState={isExpanded ? "expanded" : "collapsed"}
@@ -827,18 +868,20 @@ const FolderCell = ({
           value={editValue}
         />
       ) : (
-        <button
-          className="overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
+        <Button
+          className="flex min-w-0 shrink overflow-hidden"
           dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();
             setEditValue(name);
             startEditing();
           }}
-          type="button"
+          variant="plain"
         >
-          {name}
-        </button>
+          <TruncatedText className="text-sm whitespace-pre">
+            {name}
+          </TruncatedText>
+        </Button>
       )}
     </div>
   );

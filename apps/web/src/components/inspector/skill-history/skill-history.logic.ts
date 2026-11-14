@@ -27,7 +27,7 @@ export type SkillCommentRow = Awaited<
  * Authoring statuses a proposal moves through. Mirrors the API's
  * `agentSkillProposals.status`; the mirror is bound at compile time because
  * every consumer indexes {@link PROPOSAL_STATUS_LABEL_KEY} with the status the
- * Eden client returns, so a new server-side status fails to typecheck here
+ * API client returns, so a new server-side status fails to typecheck here
  * rather than falling through to a default label.
  */
 const NO_MEMBERS: readonly never[] = [];
@@ -51,6 +51,11 @@ export const PROPOSAL_STATUS_LABEL_KEY = {
 /** Still awaiting a decision, so it counts towards the toolbar's open badge. */
 export const isOpenProposalStatus = (status: SkillProposalStatus): boolean =>
   status === "draft" || status === "proposed";
+
+/** Only a proposal its author submitted for review can be accepted or rejected. */
+export const isReviewableProposalStatus = (
+  status: SkillProposalStatus,
+): boolean => status === "proposed";
 
 // Bodies that ship with the product are replaced wholesale on update, so the
 // API refuses proposals against them.

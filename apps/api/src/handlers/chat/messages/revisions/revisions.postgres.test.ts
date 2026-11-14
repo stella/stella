@@ -2,31 +2,36 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
-  chatMessages,
   chatMessageRevisions,
+  chatMessages,
   chatThreadCompactions,
   chatThreads,
   chatTurns,
-  workspaces,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import {
+  decodeStoredChatContent,
+  encodeStoredChatContent,
+} from "@/api/db/stored-chat-part-codec";
 import {
   chatMessageFromPersisted,
   normalizePersistedChatMessageContent,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
-  buildChatSystemPromptParts,
   buildChatRevisionNoteSection,
+  buildChatSystemPromptParts,
   CHAT_REVISION_NOTE_MAX_CHARS,
   estimateChatRevisionNoteTokens,
 } from "@/api/handlers/chat/chat-prompt";
@@ -37,17 +42,23 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { readChatMessageRevisionsOnTx } from "@/api/handlers/chat/messages/revisions/list";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import type { ChatMessageRevisionChange } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import type { ChatMessageMetadata } from "@/api/handlers/chat/types";
+import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
+import type {
+  ChatMessageMetadata,
+  PersistedChatMessageContentV3,
+} from "@/api/handlers/chat/types";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { decodePaginationCursor } from "@/api/lib/pagination";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -55,6 +66,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { EMPTY_SUMMARY } from "@/api/tests/helpers/chat-compaction-checkpoint";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -99,6 +112,10 @@ const seedFixture = async (db: GatedTestDb) => {
     name: "Revision fixture",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values({
     id: userId,
@@ -216,7 +233,7 @@ const seedFixture = async (db: GatedTestDb) => {
   const cleanUp = async () => {
     await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   };
   return {
@@ -241,6 +258,70 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("chat message revisions on the migrated schema (postgres)", () => {
+    test("a single text edit retains stored future fields and ignores client additions", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const fixture = await seedFixture(db);
+        try {
+          const stored = {
+            version: 3,
+            data: [
+              {
+                type: "text",
+                content: "Original answer: café\n\nNext paragraph.",
+                later: { owner: "future-release" },
+              },
+            ],
+          };
+          const content = asTestRaw<PersistedChatMessageContentV3>(
+            decodeStoredChatContent(stored),
+          );
+          await db
+            .update(chatMessages)
+            .set({ content })
+            .where(eq(chatMessages.id, fixture.messageId));
+          const visible = serializeRevisionSnapshot(content);
+          expect(JSON.stringify(visible)).not.toContain("future-release");
+          const change = {
+            ...acceptedChange,
+            content: {
+              version: 3 as const,
+              data: [
+                {
+                  type: "text",
+                  content: "**Original** answer: café\n\nNext paragraph.",
+                  later: { owner: "forged-client" },
+                },
+              ],
+            },
+          };
+          expect(await fixture.write(db, change)).toEqual({
+            type: "ok",
+            revision: 1,
+            edited: true,
+          });
+          const observed = await fixture.observe();
+          expect(
+            encodeStoredChatContent(observed.messages.at(0)?.content),
+          ).toEqual({
+            version: 3,
+            data: [
+              {
+                type: "text",
+                content: "**Original** answer: café\n\nNext paragraph.",
+                later: { owner: "future-release" },
+              },
+            ],
+          });
+          expect(
+            encodeStoredChatContent(observed.revisions.at(0)?.content),
+          ).toEqual(stored);
+        } finally {
+          await fixture.cleanUp();
+        }
+      });
+    });
+
     test.each([3] as const)(
       "accept preserves normalized v%i metadata in the snapshot and edited message",
       async () => {
@@ -515,6 +596,10 @@ if (!databaseUrl || !runPostgres) {
             slug: otherOrganizationId,
             createdAt: new Date(),
           });
+          await recordNewOrganizationAccessState(db, {
+            organizationId: otherOrganizationId,
+            now: new Date(),
+          });
           await db.insert(member).values({
             id: mintAuthProviderIdValue(),
             organizationId: fixture.organizationId,
@@ -599,9 +684,7 @@ if (!databaseUrl || !runPostgres) {
           });
         } finally {
           await fixture.cleanUp();
-          await db
-            .delete(organization)
-            .where(eq(organization.id, otherOrganizationId));
+          await deleteOrganizationsForTest(db, [otherOrganizationId]);
           await db.delete(user).where(eq(user.id, historicalAuthorId));
         }
       });
@@ -731,6 +814,7 @@ if (!databaseUrl || !runPostgres) {
 
     test("editing an answer inside an active compaction retires its summary and returns the edited answer to next-turn history", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const testClock = createTestClock();
         const db = openClient().db;
         const fixture = await seedFixture(db);
         try {
@@ -744,7 +828,7 @@ if (!databaseUrl || !runPostgres) {
             content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "Continue" }],
             }),
-            createdAt: new Date(Date.now() + 60_000),
+            createdAt: sql`now() + interval '1 minute'`,
           });
           const boundary = (
             await db
@@ -762,7 +846,7 @@ if (!databaseUrl || !runPostgres) {
               recapText: "Original answer recap",
               recapMessageId: keptMessageId,
               recapPromptVersion: 1,
-              recapGeneratedAt: new Date(),
+              recapGeneratedAt: new Date(testClock.now()),
             })
             .where(eq(chatThreads.id, fixture.threadId));
           await db.insert(chatThreadCompactions).values({
@@ -859,6 +943,7 @@ if (!databaseUrl || !runPostgres) {
               practiceJurisdictions: [],
               refRegistry: createChatRefRegistry(),
               safeDb: toSafeDbMock(fixture.scoped(db)),
+              skillBindingScope: NO_SKILL_BINDING_SCOPE,
               messages,
               requestedSkillNames: new Set(),
               threadId: fixture.threadId,
@@ -1106,6 +1191,7 @@ if (!databaseUrl || !runPostgres) {
 
     test("an audit failure rolls back content, revision snapshots and compaction epoch", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const testClock = createTestClock();
         const db = openClient().db;
         const fixture = await seedFixture(db);
         try {
@@ -1115,7 +1201,7 @@ if (!databaseUrl || !runPostgres) {
               recapText: "Original answer recap",
               recapMessageId: fixture.messageId,
               recapPromptVersion: 1,
-              recapGeneratedAt: new Date(),
+              recapGeneratedAt: new Date(testClock.now()),
             })
             .where(eq(chatThreads.id, fixture.threadId));
           const before = await fixture.observe();
@@ -1212,7 +1298,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: fixture.organizationId,
             userId: fixture.userId,
             userMessageId,
-            leaseExpiresAt: new Date(Date.now() + 60_000),
+            leaseExpiresAt: sql`now() + interval '1 minute'`,
           });
           const beforeActive = await fixture.observe();
           expect(await fixture.write(db, acceptedChange)).toEqual({

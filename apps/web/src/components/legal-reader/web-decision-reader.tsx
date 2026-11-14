@@ -7,7 +7,6 @@ import {
   prepareDecisionTextPlacements,
 } from "@stll/decision-reader/decision-text";
 import type { DecisionTextProps } from "@stll/decision-reader/decision-text";
-import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
 import { useReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import {
   holdLanding,
@@ -16,23 +15,22 @@ import {
 import type {
   CitationAnchorSource,
   DecisionProvisionAnchor,
-  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
+  UnresolvedCitationAnchorSource,
 } from "@stll/decision-reader/reader-types";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
-import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { citationOccurrencesByDecision } from "@/components/legal-reader/citation-occurrences.logic";
+import { CitedDecisionSourceText } from "@/components/legal-reader/cited-decision-link";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
-import {
-  decisionCitationCourtLabel,
-  presentationBesideCitationText,
-} from "@/components/references/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 export type WebDecisionReaderProps = Omit<
   DecisionTextProps,
@@ -41,9 +39,10 @@ export type WebDecisionReaderProps = Omit<
   surface: DecisionReaderSurface;
   landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
+  unresolvedCitationAnchors?:
+    readonly UnresolvedCitationAnchorSource[] | undefined;
   externalProvisionAnchors?:
-    | readonly ExternalDecisionProvisionAnchor[]
-    | undefined;
+    readonly ExternalDecisionProvisionAnchor[] | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };
@@ -58,6 +57,7 @@ const NO_ANCHORS = [] as const;
 const WebDecisionReaderContent = ({
   annotationAnchors = NO_ANCHORS,
   citationAnchors = NO_ANCHORS,
+  unresolvedCitationAnchors = NO_ANCHORS,
   provisionAnchors = NO_ANCHORS,
   externalProvisionAnchors = NO_ANCHORS,
   statuteCitationAnchors = NO_ANCHORS,
@@ -76,38 +76,48 @@ const WebDecisionReaderContent = ({
     props.decision.fulltext,
   );
   const citations = hydrated ? citationAnchors : NO_ANCHORS;
-  const presentations = decisionCitationPresentationsById(
-    Object.values(locateCitationSpans({ blocks, citations })).flatMap((spans) =>
-      spans.map(({ source: { decision } }) => ({
-        decisionId: decision.id,
-        courtShortCode: decisionCitationCourtLabel(decision),
-      })),
-    ),
-  );
+  const citationSpans = locateCitationSpans({ blocks, citations });
+  const occurrences = citationOccurrencesByDecision({
+    blocks,
+    spansByBlockId: citationSpans,
+  });
+  const jumpToParagraph = (anchorId: string) => {
+    const article =
+      articleRef.current ?? panic("Citation jump outside a mounted reader");
+    const target =
+      readerBlockByAnchor(article, anchorId) ??
+      panic("Citation jump to a paragraph the reader did not render");
+    revealEnclosingDisclosures(target);
+    target.scrollIntoView({
+      behavior: "instant",
+      block: "center",
+      inline: "nearest",
+    });
+  };
   const placements = prepareDecisionTextPlacements({
     adapters: {
       renderStatuteLink: adapters.renderStatuteLink,
-      renderDecisionLink: ({ citation, ...linkProps }) => (
-        <CitedDecisionLink
+      // The card leaves out the citing passage: it is the text the reader is
+      // pointing at. It offers the decision's other mentions instead.
+      renderDecisionLink: ({ citation: _citation, blockId, ...linkProps }) => (
+        <CitedDecisionSourceText
           {...linkProps}
-          passage={{
-            type: "citation",
-            citation,
-            textDecisionId: props.decisionId,
+          occurrences={{
+            occurrences:
+              occurrences.get(linkProps.decision.id) ??
+              panic("Reader citation missing located occurrences"),
+            currentBlockId: blockId,
+            onJump: jumpToParagraph,
           }}
-          presentation={presentationBesideCitationText({
-            caseNumber: linkProps.decision.caseNumber,
-            citationText: citation.citationText,
-            presentation:
-              presentations.get(linkProps.decision.id) ??
-              panic("Reader citation missing collected identity"),
-          })}
         />
       ),
     },
     blocks,
     annotationAnchors: hydrated ? annotationAnchors : NO_ANCHORS,
     citationAnchors: citations,
+    unresolvedCitationAnchors: hydrated
+      ? unresolvedCitationAnchors
+      : NO_ANCHORS,
     provisionAnchors: hydrated ? provisionAnchors : NO_ANCHORS,
     externalProvisionAnchors: hydrated ? externalProvisionAnchors : NO_ANCHORS,
     statuteCitationAnchors: hydrated ? statuteCitationAnchors : NO_ANCHORS,
@@ -130,13 +140,7 @@ const WebDecisionReaderContent = ({
     if (!target) {
       return undefined;
     }
-    for (
-      let disclosure = target.closest("details");
-      disclosure !== null;
-      disclosure = disclosure.parentElement?.closest("details") ?? null
-    ) {
-      disclosure.open = true;
-    }
+    revealEnclosingDisclosures(target);
     return holdLanding({ article, target });
   }, [landingAnchorId, landingSessionId]);
 

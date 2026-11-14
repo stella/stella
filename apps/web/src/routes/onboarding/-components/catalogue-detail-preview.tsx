@@ -9,15 +9,18 @@ import {
   CogIcon,
   ExternalLinkIcon,
   FileBadgeIcon,
+  type LucideIcon,
   TagIcon,
   UserIcon,
   XIcon,
-  type LucideIcon,
 } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import Tooltip from "@/components/tooltip";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 
 /**
  * iOS Privacy-Nutritional-Label-style detail panel. Replaces the stack
@@ -44,23 +47,24 @@ export const CatalogueDetailPreview = ({
   const t = useTranslations();
   const isFirstParty = entry.author === "stella";
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: entry.slug,
+    kind: entry.kind,
+  });
 
   return (
     <div className="flex h-full max-h-full w-full items-stretch justify-center overflow-hidden">
       <div className="bg-background border-border/40 shadow-floating relative flex h-full max-h-full w-full max-w-[340px] flex-col rounded-2xl border">
-        <Tooltip
-          content={t("common.close")}
-          render={
-            <button
-              aria-label={t("common.close")}
-              className="text-muted-foreground hover:text-foreground absolute end-4 top-4"
-              onClick={onCancel}
-              type="button"
-            />
-          }
+        {/* Inset so the glyph sits where it did before it had a box. */}
+        <Button
+          aria-label={t("common.close")}
+          className="absolute end-3 top-3"
+          onClick={onCancel}
+          size="icon-sm"
+          variant="muted"
         >
           <XIcon className="size-5" />
-        </Tooltip>
+        </Button>
 
         {/* Header */}
         <header className="border-border flex items-center gap-3 border-b px-5 py-4">
@@ -72,10 +76,12 @@ export const CatalogueDetailPreview = ({
           />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <h2
-              className="text-foreground truncate text-base leading-tight font-semibold"
+              className="text-foreground min-w-0 text-base leading-tight font-semibold"
               dir="auto"
             >
-              {labelKey ? t(labelKey) : entry.displayName}
+              <TruncatedText>
+                {labelKey ? t(labelKey) : entry.displayName}
+              </TruncatedText>
             </h2>
             <p className="text-muted-foreground text-xs tracking-wider uppercase">
               {t(`catalogue.filter.${kindToFilter(entry.kind)}`)}
@@ -89,7 +95,7 @@ export const CatalogueDetailPreview = ({
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
           <Section title={t("onboarding.catalogueDetailAbout")}>
             <p className="text-foreground text-sm leading-relaxed">
-              {entry.description}
+              {descriptionKey ? t(descriptionKey) : entry.description}
             </p>
           </Section>
 
@@ -206,9 +212,9 @@ const Field = ({
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground min-w-0 truncate text-sm font-medium">
+      <TruncatedText className="text-foreground text-sm font-medium">
         {value}
-      </span>
+      </TruncatedText>
     </div>
   );
 };
@@ -231,9 +237,9 @@ const AuthorField = ({
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground min-w-0 truncate text-sm font-medium">
+      <TruncatedText className="text-foreground text-sm font-medium">
         {value}
-      </span>
+      </TruncatedText>
       {safeAuthorUrl && (
         <ExternalLinkIcon
           aria-hidden="true"

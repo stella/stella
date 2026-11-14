@@ -4,10 +4,10 @@ import {
   decideAttachable,
   ghSupportsAttach,
   isSealTrusted,
+  type ManifestEntry,
   parseCaptureLog,
   parseSealStatus,
   verifyAttachment,
-  type ManifestEntry,
 } from "./agent-evidence";
 
 const EVIDENCE_DIR = "/work/.stella-dev/evidence";

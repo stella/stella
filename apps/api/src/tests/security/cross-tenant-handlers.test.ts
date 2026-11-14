@@ -1,69 +1,84 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
+  beforeEach,
   describe,
   expect,
   mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
-import Elysia from "elysia";
-import type { Context } from "elysia";
+import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { desktopBillingDraftSettingsResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { VAT_RATE_PRESETS } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
+  chatBrowserSiteGrants,
+  chatLimitReminders,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
   chatToolGrants,
   chatTurns,
-  documentTranslationRuns,
+  conflictChecks,
   desktopPresence,
+  desktopRunnerFolderRestores,
   desktopTimeEntryBatches,
-  templateLookupFormats,
+  documentTranslationRuns,
   entities,
-  entityViews,
   entityVersions,
+  entityViews,
+  featureEnrolments,
   fields,
   invoiceLines,
   invoices,
   legalLists,
   legalReaderAnnotations,
   legalReaderAnswers,
-  numberSeries,
   notifications,
-  savedTimeNarratives,
+  numberSeries,
+  organizationDataExports,
+  organizationSettings,
   savedSearches,
+  savedTimeNarratives,
   searchHistoryEntries,
+  searchHistoryOwners,
   sellerProfiles,
   signals,
+  templateLookupFormats,
   timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
@@ -71,6 +86,9 @@ import forkChatThread from "@/api/handlers/chat/fork/create";
 import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import readChatThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
+import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
+import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
+import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
 import getChatMessage from "@/api/handlers/chat/messages/get";
 import listChatMessages from "@/api/handlers/chat/messages/list";
@@ -83,6 +101,7 @@ import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
+import listActiveChatRuns from "@/api/handlers/chat/runs/list";
 import readSavedChatSecret from "@/api/handlers/chat/saved-secret";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
@@ -91,11 +110,15 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatConnector from "@/api/handlers/chat/submit-connector";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
+import { createReadBackgroundTasks } from "@/api/handlers/chat/threads/background-tasks";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
 import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
@@ -104,9 +127,18 @@ import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
+import createClientInvoice from "@/api/handlers/client-invoices/create";
+import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
+import listConflictChecks from "@/api/handlers/conflict-checks/list";
 import readContactById from "@/api/handlers/contacts/get";
+import readDataExport from "@/api/handlers/data-exports/get";
+import listDataExports from "@/api/handlers/data-exports/list";
 import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
 import { createDesktopRegistryRequestEndpoint } from "@/api/handlers/desktop-registry/request";
@@ -115,13 +147,23 @@ import {
   desktopBatchFingerprint,
 } from "@/api/handlers/desktop-time-entries/batch";
 import { createDesktopTimeEntryBatchStatusEndpoint } from "@/api/handlers/desktop-time-entries/batch-status";
+import {
+  createDesktopBillingDraftSettingsReadEndpoint,
+  createDesktopBillingDraftSettingsUpdateEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-draft-settings";
+import {
+  type BillingDraftPrompt,
+  createDesktopBillingDraftEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-drafts";
 import { createDesktopMatterCandidatesEndpoint } from "@/api/handlers/desktop-time-entries/candidates";
 import { createDesktopTimeEntryEndpoint } from "@/api/handlers/desktop-time-entries/create";
 import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entries/matters";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
+import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
+import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -132,13 +174,15 @@ import createInvoice from "@/api/handlers/invoices/create";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
-import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
-import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
+import { createListReaderAnnotations } from "@/api/handlers/legal-reader/annotations/list";
+import { createListReaderAnswers } from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
+import updateMemory from "@/api/handlers/memories/update";
 import listNotifications from "@/api/handlers/notifications/list";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
@@ -159,14 +203,25 @@ import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
+import { createHttpApp } from "@/api/http/app";
+import { createResponseSet } from "@/api/http/context";
+import type { ResponseSet } from "@/api/http/context";
+import { routes } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createDesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import { createLocalDoorbell } from "@/api/lib/desktop-runner/doorbell";
+import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -178,15 +233,24 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
-import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import type {
+  generateTanStackObjectForTask,
+  generateTanStackTextForTask,
+} from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { grantedConflictCheckSnapshot } from "@/api/tests/helpers/conflict-check-access";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
 import {
   createTestIds,
@@ -202,6 +266,15 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+const readCopies = createTestWithdrawalCopyReader(() => testDb);
+const listReaderAnnotations = createListReaderAnnotations({ readCopies });
+const listReaderAnswers = createListReaderAnswers({ readCopies });
+const lookupResearchAnswers = createLookupResearchAnswers({ readCopies });
+
+beforeEach(() => {
+  streamChatStub.mockClear();
+});
 
 type TestHandlerContext = {
   createAuditRecorder: () => AuditRecorder;
@@ -222,7 +295,11 @@ type TestHandlerContext = {
   route: string;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
-  set: Context["set"];
+  set: ResponseSet;
+  server: null;
+  path: string;
+  headers: Record<string, string>;
+  status: typeof status;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
   workspaceId: SafeId<"workspace">;
@@ -316,6 +393,9 @@ const DESKTOP_ENTRY = {
 };
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+const conflictCheckB = toSafeId<"conflictCheck">(
+  "22222222-2222-4222-8222-2222222222c7",
+);
 const savedSearchA = toSafeId<"savedSearch">(
   "11111111-1111-4111-8111-111111111145",
 );
@@ -330,6 +410,9 @@ const sellerProfileB = toSafeId<"sellerProfile">(
 );
 const invoiceLineB = toSafeId<"invoiceLine">(
   "22222222-2222-4222-8222-222222222259",
+);
+const clientInvoiceEntryB = toSafeId<"timeEntry">(
+  "22222222-2222-4222-8222-222222222296",
 );
 const manualInvoiceLineBody = {
   source: {
@@ -351,6 +434,9 @@ const numberSeriesB = toSafeId<"numberSeries">(
   "22222222-2222-4222-8222-222222222259",
 );
 const vatRateB = toSafeId<"vatRate">("22222222-2222-4222-8222-222222222260");
+const dataExportB = toSafeId<"dataExport">(
+  "22222222-2222-4222-8222-2222222229d1",
+);
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
 );
@@ -499,6 +585,17 @@ const chatDecisionThreadB = toSafeId<"chatThread">(
 const chatDecisionB = toSafeId<"caseLawDecision">(
   "22222222-2222-4222-8222-222222222294",
 );
+// Chats whose latest turn stopped on the usage limit of the member's
+// computer, each with the reminder its member asked for. Cancelling gets a
+// chat of its own, so its positive case leaves the others' reminders.
+const chatLimitThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222320",
+);
+const chatLimitCancelThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222324",
+);
+// Far enough ahead to stay a future reset whenever the suite runs.
+const chatLimitResetsAt = new Date("2100-01-01T00:00:00.000Z");
 const chatForkFromA = toSafeId<"chatThread">(
   "11111111-1111-4111-8111-111111111268",
 );
@@ -530,6 +627,14 @@ const chatToolGrantConversationB = toSafeId<"chatToolGrant">(
 );
 const chatToolGrantDeleteB = toSafeId<"chatToolGrant">(
   "22222222-2222-4222-8222-222222222299",
+);
+// Website approvals of user A1 in organization B: one listed, one the delete
+// case removes.
+const browserSiteGrantB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222311",
+);
+const browserSiteGrantDeleteB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222312",
 );
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
@@ -642,12 +747,23 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
     await testDb
       .select({
         chatModel: chatThreads.chatModel,
+        lastReadAt: chatThreads.lastReadAt,
+        pinnedAt: chatThreads.pinnedAt,
         title: chatThreads.title,
         webSearchEnabled: chatThreads.webSearchEnabled,
       })
       .from(chatThreads)
       .where(eq(chatThreads.id, threadId))
   ).at(0) ?? null;
+
+const chatLimitRemindersOf = async (threadId: SafeId<"chatThread">) =>
+  await testDb
+    .select({
+      organizationId: chatLimitReminders.organizationId,
+      remindAt: chatLimitReminders.remindAt,
+    })
+    .from(chatLimitReminders)
+    .where(eq(chatLimitReminders.threadId, threadId));
 
 const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
   (
@@ -657,6 +773,16 @@ const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
       .where(eq(chatToolGrants.id, grantId))
   ).length > 0;
 
+const browserSiteGrantExists = async (
+  grantId: SafeId<"chatBrowserSiteGrant">,
+) =>
+  (
+    await testDb
+      .select({ id: chatBrowserSiteGrants.id })
+      .from(chatBrowserSiteGrants)
+      .where(eq(chatBrowserSiteGrants.id, grantId))
+  ).length > 0;
+
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
   (
     await testDb
@@ -664,6 +790,40 @@ const countChatMessages = async (threadId: SafeId<"chatThread">) =>
       .from(chatMessages)
       .where(eq(chatMessages.threadId, threadId))
   ).length;
+
+const CZECH_PRESET_CODES = [
+  ...new Set(VAT_RATE_PRESETS.CZ.map(({ code }) => code)),
+];
+
+/** An organization's Czech preset rows, read past RLS after a handler ran. */
+const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
+  (
+    await testDb
+      .select({ id: vatRates.id })
+      .from(vatRates)
+      .where(
+        and(
+          eq(vatRates.organizationId, organizationId),
+          inArray(vatRates.code, CZECH_PRESET_CODES),
+        ),
+      )
+  ).length;
+
+/** The undo handlers on the test database, as the runner control reads it. */
+const undoControl = () =>
+  createDesktopRunnerControl({
+    db: asTestRaw<DesktopRunnerDb>(testDb),
+    doorbell: createLocalDoorbell(),
+  });
+const readLocalFilesUndo = createReadLocalFilesUndo({ control: undoControl });
+const undoLocalFiles = createUndoLocalFiles({ control: undoControl });
+const readBackgroundTasks = createReadBackgroundTasks({ control: undoControl });
+
+const folderRestoresOfTurn = async (turnId: SafeId<"chatTurn">) =>
+  await testDb
+    .select({ id: desktopRunnerFolderRestores.id })
+    .from(desktopRunnerFolderRestores)
+    .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId));
 
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
   (
@@ -710,6 +870,40 @@ const expectDesktopEntryOwnedByB = async (entryId: string) => {
       userId: ids.userA1,
     },
   ]);
+};
+
+const DESKTOP_DRAFT_PREFERENCE_B = "Organization B drafting preference";
+
+// Grants and preference changes apply to the revision the caller last read.
+const putDraftSettings = async (
+  caller: (request: Request) => Promise<Response>,
+  change:
+    { type: "grant_consent" } | { type: "set_preference"; preference: string },
+) => {
+  const current = await caller(desktopRequest("/draft-settings"));
+  expect(current.status).toBe(200);
+  const { revision } = v.parse(
+    desktopBillingDraftSettingsResponseSchema,
+    await current.json(),
+  );
+  const response = await caller(
+    desktopRequest("/draft-settings", { ...change, revision }),
+  );
+  expect(response.status).toBe(200);
+};
+
+const grantDraftConsent = async (
+  caller: (request: Request) => Promise<Response>,
+) => await putDraftSettings(caller, { type: "grant_consent" });
+
+const saveOrganizationBDraftSettings = async (
+  desktopB: (request: Request) => Promise<Response>,
+) => {
+  await grantDraftConsent(desktopB);
+  await putDraftSettings(desktopB, {
+    type: "set_preference",
+    preference: DESKTOP_DRAFT_PREFERENCE_B,
+  });
 };
 
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
@@ -847,6 +1041,78 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
       }),
   },
   {
+    // Consent and preference are kept per organization: the same user's
+    // settings in B never answer a request bound to A.
+    name: "desktop billing draft settings",
+    runAAgainstB: async ({ desktopA, desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopA(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopB(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) =>
+      expect(result).toEqual({
+        revision: null,
+        effectiveMode: "plain",
+        consent: "revoked",
+        preference: null,
+      }),
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        revision: expect.any(String),
+        effectiveMode: "plain",
+        consent: "granted",
+        preference: DESKTOP_DRAFT_PREFERENCE_B,
+      }),
+  },
+  {
+    // Drafting reads the selected matter before guidelines or the model, so
+    // B's matter is refused to A, while B, with consent and no firm
+    // guideline file bound, gets a plain description.
+    name: "desktop billing drafts",
+    runAAgainstB: async ({ desktopA, ids: testIds }) => {
+      await grantDraftConsent(desktopA);
+      const response = await desktopA(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
+      return { status: response.status, body: await response.json() };
+    },
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      await grantDraftConsent(desktopB);
+      const response = await desktopB(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
+      return { status: response.status, body: await response.json() };
+    },
+    expectDenied: (result) => {
+      expect(result).toMatchObject({ status: 403 });
+      expect(JSON.stringify(result)).toContain(
+        "Selected matter is unavailable",
+      );
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        status: 200,
+        body: {
+          result: {
+            mode: "plain",
+            drafts: [
+              {
+                entryId: "entry_1",
+                narrative: "Reviewed the agreement",
+                matchedEarlierEntryIds: [],
+              },
+            ],
+          },
+          earlierEntries: [],
+        },
+      }),
+  },
+  {
     name: "desktop single create",
     runAAgainstB: async ({ desktopA, ids: testIds }) =>
       await desktopA(desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY)),
@@ -976,6 +1242,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -994,6 +1262,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -1073,6 +1343,52 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
+  },
+  {
+    // The positive run rejects B's suggestion; the revert case below returns
+    // it to pending, so the fixture leaves the matrix as it entered.
+    name: "docx suggestion resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
+    name: "docx suggestion revert",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(revertDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(revertDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
   },
   {
     name: "document review source list",
@@ -1158,6 +1474,66 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBeNull();
       expect(result).toMatchObject({ id: expect.any(String) });
     },
+  },
+  {
+    name: "client invoice prefill",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(prefillClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(prefillClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        clientId: testIds.contactB,
+        matters: [expect.objectContaining({ workspaceId: testIds.wsB1 })],
+      }),
+  },
+  {
+    name: "client invoice create",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(createClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(createClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        id: expect.any(String),
+        workspaceId: testIds.wsB1,
+        entryCount: 1,
+        totalAmount: 200,
+      }),
   },
   {
     name: "invoice read by id",
@@ -1293,6 +1669,61 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
+  },
+  {
+    name: "organization data export list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listDataExports, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listDataExports, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, dataExportB),
+    expectPositive: (result) => expectPageContainsId(result, dataExportB),
+  },
+  {
+    name: "organization data export read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readDataExport, workspaceA, {
+        params: { exportId: dataExportB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(readDataExport, workspaceB, {
+        params: { exportId: dataExportB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", dataExportB),
+  },
+  {
+    name: "VAT rate preset applies only to the active organization",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) => {
+      const otherBefore = await countCzechPresetRates(testIds.orgB);
+      const result = await runHandler(applyVatRatePreset, workspaceA, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgA),
+        otherUnchanged:
+          (await countCzechPresetRates(testIds.orgB)) === otherBefore,
+      };
+    },
+    runBPositive: async ({ ids: testIds, workspaceB }) => {
+      const result = await runHandler(applyVatRatePreset, workspaceB, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgB),
+      };
+    },
+    expectDenied: (outcome) =>
+      expect(outcome).toEqual({
+        added: 5,
+        activeRows: 5,
+        otherUnchanged: true,
+      }),
+    expectPositive: (outcome) =>
+      expect(outcome).toEqual({ added: 5, activeRows: 5 }),
   },
   {
     name: "time entry read by id",
@@ -1474,6 +1905,27 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, legalListB),
   },
   {
+    name: "conflict check list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listConflictChecks, workspaceA, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceA.session.activeOrganizationId,
+          userId: workspaceA.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listConflictChecks, workspaceB, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceB.session.activeOrganizationId,
+          userId: workspaceB.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, conflictCheckB),
+    expectPositive: (result) => expectPageContainsId(result, conflictCheckB),
+  },
+  {
     name: "saved search list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listSavedSearches, workspaceA, {
@@ -1588,6 +2040,42 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesId(result, testIds.aiMemoryFirmB),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.aiMemoryFirmB),
+  },
+  {
+    // Both probes need a live firm administrator for the in-transaction
+    // authority check. `pinned: false` reaches the locked row without writing.
+    name: "memory update",
+    runAAgainstB: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsA1],
+        organizationId: testIds.orgA,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsA1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("owner"),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      });
+    },
+    runBPositive: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsB1],
+        organizationId: testIds.orgB,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsB1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("admin"),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      });
+    },
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
   },
   {
     name: "memory delete",
@@ -1708,6 +2196,32 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesField(result, "id", notificationB),
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
+  },
+  {
+    // Same organization, other recipient: only the recipient predicate stands
+    // between user A1 and user B1's notification.
+    name: "notification mark read",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(markNotificationRead, sameUserWorkspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(markNotificationRead, workspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
+  },
+  {
+    name: "active chat run list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listActiveChatRuns, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listActiveChatRuns, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expect(activeChatRunThreadIds(result)).not.toContain(chatTurnThreadB),
+    expectPositive: (result) =>
+      expect(activeChatRunThreadIds(result)).toContain(chatTurnThreadB),
   },
   {
     name: "chat thread list",
@@ -2026,6 +2540,23 @@ const isolationCases: IsolationCase[] = [
     expectPositive: expectStatus(409),
   },
   {
+    name: "chat connector request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatConnector, workspaceA, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatConnector, sameUserWorkspaceB, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
     // The same person's approvals in another firm stay with that firm: the
     // list in organization A neither returns them nor sees thread B's grant.
     name: "chat tool grant list",
@@ -2107,6 +2638,59 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ deleted: true }),
   },
   {
+    // The same person's website approvals in another firm stay with that firm.
+    name: "browser site grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listBrowserSiteGrants, workspaceA, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {}),
+    expectDenied: (result) =>
+      expect(chatToolGrantIds(result)).not.toContain(browserSiteGrantB),
+    expectPositive: (result) =>
+      expect(chatToolGrantIds(result)).toContain(browserSiteGrantB),
+  },
+  {
+    // A website allowed in one firm never answers the same person's browser
+    // cards in another: the grant is stored for the session's organization.
+    name: "browser site grant create",
+    runAAgainstB: async ({ sameUserWorkspaceB, workspaceA }) => {
+      await runHandler(createBrowserSiteGrant, workspaceA, {
+        body: { url: "https://allowed-in-a.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      await runHandler(createBrowserSiteGrant, sameUserWorkspaceB, {
+        body: { url: "https://allowed-in-b.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    expectDenied: (result) =>
+      expect(JSON.stringify(result)).not.toContain(
+        "https://allowed-in-a.example",
+      ),
+    expectPositive: (result) =>
+      expect(JSON.stringify(result)).toContain("https://allowed-in-b.example"),
+  },
+  {
+    name: "browser site grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteBrowserSiteGrant, workspaceA, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+      exists: await browserSiteGrantExists(browserSiteGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteBrowserSiteGrant, sameUserWorkspaceB, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
+  },
+  {
     name: "chat thread rename",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(renameChatThread, workspaceA, {
@@ -2130,6 +2714,54 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({ title: chatThreadTitleB }),
+  },
+  {
+    name: "chat thread read state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadReadState, workspaceA, {
+        body: { readState: "unread" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadReadState, sameUserWorkspaceB, {
+        body: { readState: "read" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      // Marking unread clears the instant; the other firm's attempt left it.
+      expect(recordField(result, "thread")).toMatchObject({
+        lastReadAt: expect.any(Date),
+      });
+    },
+    expectPositive: (result) => expect(result).toEqual({ readState: "read" }),
+  },
+  {
+    name: "chat thread pin state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadPinState, workspaceA, {
+        body: { pinState: "pinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadPinState, sameUserWorkspaceB, {
+        body: { pinState: "unpinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "thread")).toMatchObject({ pinnedAt: null });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ pinState: "unpinned" }),
   },
   {
     // An upsert: a thread id the caller cannot see must neither be updated
@@ -2304,6 +2936,124 @@ const isolationCases: IsolationCase[] = [
       expect(result).toMatchObject({
         turn: { id: chatTurnB, status: "cancelled" },
       }),
+  },
+  {
+    // Runs after the cancel case: the turn ended without a run, so it has
+    // nothing to undo, which its own member is told.
+    name: "chat turn local files undo",
+    runAAgainstB: async ({ workspaceA }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, workspaceA, { params }),
+        undo: await runHandler(undoLocalFiles, workspaceA, { params }),
+        queued: await folderRestoresOfTurn(chatTurnB),
+      };
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, sameUserWorkspaceB, {
+          params,
+        }),
+        undo: await runHandler(undoLocalFiles, sameUserWorkspaceB, {
+          params,
+        }),
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "read"))).toBe(404);
+      expect(getStatusCode(recordField(result, "undo"))).toBe(404);
+      expect(recordField(result, "queued")).toEqual([]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        read: { undoable: false, undo: null },
+        undo: { status: "refused", undo: null, reason: "no_checkpoint" },
+      }),
+  },
+  {
+    // A chat of another member reads as missing; its own member reads that
+    // nothing of it runs in the background on a computer.
+    name: "chat thread background tasks",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readBackgroundTasks, workspaceA, {
+        params: { threadId: chatTurnThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readBackgroundTasks, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => expect(result).toEqual({ count: 0 }),
+  },
+  {
+    // Another firm's caller reads the chat as missing; its own member reads
+    // the reminder they asked for.
+    name: "chat limit reminder read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ remindAt: chatLimitResetsAt.toISOString() }),
+  },
+  {
+    // Asking again for the same stopped turn keeps the stored reminder, so
+    // the positive case changes nothing either.
+    name: "chat limit reminder set",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(setChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+      reminders: await chatLimitRemindersOf(chatLimitThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(setChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "reminders")).toEqual([
+        { organizationId: ids.orgB, remindAt: chatLimitResetsAt },
+      ]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ remindAt: chatLimitResetsAt.toISOString() }),
+  },
+  {
+    name: "chat limit reminder cancel",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(cancelChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitCancelThreadB },
+        query: {},
+      }),
+      reminders: await chatLimitRemindersOf(chatLimitCancelThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(cancelChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitCancelThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "reminders")).toEqual([
+        { organizationId: ids.orgB, remindAt: chatLimitResetsAt },
+      ]);
+    },
+    expectPositive: (result) => expect(result).toEqual({ remindAt: null }),
   },
   {
     name: "chat message send",
@@ -2608,6 +3358,10 @@ testState.beforeAll(async () => {
     name: "Matrix format B",
     format: "[company name]",
   });
+  await testDb
+    .update(organizationSettings)
+    .set({ aiBillingDraftsMode: "enabled" })
+    .where(inArray(organizationSettings.organizationId, [ids.orgA, ids.orgB]));
   desktopCredentials = await createRlsDesktopCredentials(testDb, ids);
   await testDb.insert(desktopTimeEntryBatches).values({
     organizationId: ids.orgB,
@@ -2632,6 +3386,21 @@ testState.beforeAll(async () => {
     organizationId: ids.orgB,
     mode: "hourly",
     currency: "USD",
+  });
+  await testDb.insert(timeEntries).values({
+    id: clientInvoiceEntryB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    userId: ids.userB1,
+    dateWorked: "2026-10-14",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(200),
+    currency: "USD",
+    narrative: "Client invoice isolation work",
+    billable: true,
+    status: "approved",
   });
   await testDb.insert(invoices).values({
     id: creditOriginalB,
@@ -2673,6 +3442,14 @@ testState.beforeAll(async () => {
     pattern: "INV-{YYYY}-{SEQ}",
     padding: 5,
     isDefault: true,
+  });
+  await testDb.insert(organizationDataExports).values({
+    id: dataExportB,
+    organizationId: ids.orgB,
+    requestedBy: ids.userB1,
+    status: "failed",
+    versionScope: "all",
+    completedAt: new Date("2026-01-01T00:00:00.000Z"),
   });
   await testDb.insert(vatRates).values({
     id: vatRateB,
@@ -2719,6 +3496,22 @@ testState.beforeAll(async () => {
       createdBy: ids.userB1,
     },
   ]);
+  await testDb.insert(conflictChecks).values({
+    id: conflictCheckB,
+    organizationId: ids.orgB,
+    runBy: ids.userB1,
+    title: "Workspace B intake",
+    parties: [
+      {
+        type: "organization",
+        role: "client",
+        name: "Firm B prospect",
+        aliases: [],
+      },
+    ],
+    results: { version: 1, contactsScreened: 0, gaps: [], parties: [] },
+    outcome: "no_matches",
+  });
   await testDb.insert(savedSearches).values([
     {
       id: savedSearchA,
@@ -2739,7 +3532,11 @@ testState.beforeAll(async () => {
     { organizationId: ids.orgB, userId: ids.userA1 },
     [
       {
-        entry: { kind: "search", query: "Firm B research" },
+        entry: {
+          kind: "search",
+          query: "Firm B research",
+          country: "CZE",
+        },
         usedAt: new Date(),
       },
     ],
@@ -2747,6 +3544,10 @@ testState.beforeAll(async () => {
   if (searchHistoryRowB === undefined) {
     throw new Error("Search history fixture was not prepared");
   }
+  await testDb
+    .insert(searchHistoryOwners)
+    .values({ organizationId: ids.orgB, userId: ids.userA1 })
+    .onConflictDoNothing();
   await testDb
     .insert(searchHistoryEntries)
     .values({ ...searchHistoryRowB, id: searchHistoryEntryB });
@@ -3059,6 +3860,72 @@ testState.beforeAll(async () => {
     userMessageId: chatTurnUserMessageB,
     workspaceId: null,
   });
+  for (const [threadId, questionId, answerId, turnId] of [
+    [
+      chatLimitThreadB,
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222321"),
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222322"),
+      toSafeId<"chatTurn">("22222222-2222-4222-8222-222222222323"),
+    ],
+    [
+      chatLimitCancelThreadB,
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222325"),
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222326"),
+      toSafeId<"chatTurn">("22222222-2222-4222-8222-222222222327"),
+    ],
+  ] as const) {
+    await testDb.insert(chatThreads).values(chatThreadOfB(threadId));
+    await testDb.insert(chatMessages).values([
+      {
+        id: questionId,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+        role: "user",
+        content: chatText("Draft the reply."),
+        createdAt: chatAskedAt,
+      },
+      {
+        id: answerId,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+        role: "assistant",
+        content: toPersistedChatMessageContentV3({
+          data: [],
+          metadata: {
+            turnOutcome: {
+              type: "failed",
+              error: "local_runner_limit_reached",
+              limitResetsAt: chatLimitResetsAt.toISOString(),
+            },
+          },
+        }),
+        createdAt: new Date(chatAskedAt.getTime() + 1000),
+      },
+    ]);
+    await testDb.insert(chatTurns).values({
+      assistantMessageId: answerId,
+      createdAt: chatAskedAt,
+      failureCode: "provider-error",
+      failureRetryable: false,
+      id: turnId,
+      organizationId: ids.orgB,
+      settledAt: new Date(chatAskedAt.getTime() + 1000),
+      status: "failed",
+      threadId,
+      userId: ids.userA1,
+      userMessageId: questionId,
+      workspaceId: null,
+    });
+    await testDb.insert(chatLimitReminders).values({
+      organizationId: ids.orgB,
+      remindAt: chatLimitResetsAt,
+      threadId,
+      turnId,
+      userId: ids.userA1,
+    });
+  }
   await testDb.insert(chatToolGrants).values([
     {
       id: chatToolGrantAlwaysB,
@@ -3083,13 +3950,103 @@ testState.beforeAll(async () => {
       toolName: "fetch_url",
     },
   ]);
-});
-
-afterAll(async () => {
-  await releaseTestDb();
+  await testDb.insert(chatBrowserSiteGrants).values([
+    {
+      id: browserSiteGrantB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.com",
+    },
+    {
+      id: browserSiteGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.org",
+    },
+  ]);
 });
 
 describe("cross-tenant handler isolation", () => {
+  test.each([
+    "reader answers across organizations",
+    "legal reader annotation list",
+    "case-law research answers lookup",
+  ])(
+    "%s: withdrawal changes content but preserves visible resource identities",
+    async (name) => {
+      const testCase =
+        isolationCases.find((candidate) => candidate.name === name) ??
+        panic("Missing withdrawal isolation case");
+      const context = createIsolationContext();
+      const beforeA = await testCase.runAAgainstB(context);
+      const beforeB = await testCase.runBPositive(context);
+      testCase.expectDenied(beforeA, context);
+      testCase.expectPositive(beforeB, context);
+      const identities = (result: unknown) =>
+        getPageItems(result).map((item) => ({
+          id: item["id"],
+          columnId: item["columnId"],
+          decisionId: item["decisionId"],
+        }));
+      const sourceId = createSafeId<"caseLawSource">();
+      await testDb.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: sourceId,
+        name: "Withdrawal isolation fixture",
+        enabled: false,
+      });
+      const [originalDecision] = await testDb
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, ids.caseLawDecisionB))
+        .limit(1);
+      try {
+        await testDb
+          .insert(caseLawDecisions)
+          .values({
+            id: ids.caseLawDecisionB,
+            sourceId,
+            sourceDocumentId: ids.caseLawDecisionB,
+            caseNumber: "Fixture",
+            court: "Fixture court",
+            country: "POL",
+            language: "pl",
+            redactedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: caseLawDecisions.id,
+            set: {
+              redactedAt: new Date(),
+              fulltext: null,
+              contentHash: null,
+              sections: null,
+              documentAst: null,
+            },
+          });
+        const afterA = await testCase.runAAgainstB(createIsolationContext());
+        const afterB = await testCase.runBPositive(createIsolationContext());
+        expect(getStatusCode(afterA)).toBeNull();
+        expect(getStatusCode(afterB)).toBeNull();
+        expect(identities(afterA)).toEqual(identities(beforeA));
+        expect(identities(afterB)).toEqual(identities(beforeB));
+        expect(JSON.stringify(afterB)).toContain("Withdrawn by publisher");
+      } finally {
+        if (originalDecision !== undefined) {
+          await testDb
+            .update(caseLawDecisions)
+            .set(originalDecision)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        } else {
+          await testDb
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        }
+        await testDb
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId));
+      }
+    },
+  );
   for (const testCase of isolationCases) {
     test(`${testCase.name}: workspace A cannot read workspace/org B resource IDs`, async () => {
       const context = createIsolationContext();
@@ -3176,7 +4133,11 @@ const createWorkspaceContext = ({
     route: "/security/cross-tenant-handler",
     safeDb,
     scopedDb,
-    set: { headers: {} },
+    set: createResponseSet(),
+    server: null,
+    path: `/workspaces/${workspaceId}`,
+    headers: {},
+    status,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,
@@ -3196,7 +4157,7 @@ const runHandler = async <TContext>(
 
   try {
     return await handler(
-      asTestRaw<TContext>({
+      asTestRaw<TContext & SafeHandlerLogContext>({
         ...context,
         ...requestShape,
       }),
@@ -3396,6 +4357,15 @@ function chatToolGrantIds(result: unknown): unknown[] {
   return grants.map((grant) => recordField(grant, "id"));
 }
 
+function activeChatRunThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const runs = recordField(result, "items");
+  if (!Array.isArray(runs)) {
+    throw new TypeError("Expected an active chat run list response");
+  }
+  return runs.map((run) => recordField(run, "threadId"));
+}
+
 function globalChatThreadIds(result: unknown): unknown[] {
   expect(getStatusCode(result)).toBeNull();
   const threads = recordField(result, "global");
@@ -3475,7 +4445,7 @@ testState.beforeAll(() => {
   });
 });
 
-const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+const desktopServer = (): TestServer => {
   const authorize = desktopCredentials.authorizeDesktopAccount;
   const registry = createDesktopRegistryRequestEndpoint({
     config: authorize,
@@ -3490,44 +4460,100 @@ const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
   const candidates = createDesktopMatterCandidatesEndpoint(authorize);
   const matters = createDesktopMattersEndpoint(authorize);
   const batch = createDesktopTimeEntryBatchEndpoint(authorize);
-  const status = createDesktopTimeEntryBatchStatusEndpoint(authorize);
+  const batchStatus = createDesktopTimeEntryBatchStatusEndpoint(authorize);
   const single = createDesktopTimeEntryEndpoint(authorize);
-  const app = new Elysia()
-    .put("/registry", registry.handler, { body: registry.config.body })
-    .get("/features", feature.handler, { response: feature.config.response })
-    .get("/candidates", candidates.handler, {
-      response: candidates.config.response,
-    })
-    .get("/matters", matters.handler, {
-      query: matters.config.query,
-      response: matters.config.response,
-    })
-    .put("/batch", batch.handler, {
-      body: batch.config.body,
-      response: batch.config.response,
-    })
-    .put("/status", status.handler, {
-      body: status.config.body,
-      response: status.config.response,
-    })
-    .put("/single/:workspaceId", single.handler, {
-      params: single.config.params,
-      body: single.config.body,
-      response: single.config.response,
-    });
-  const credential =
-    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
-  return await app.handle(await credential.signRequest(request));
+  const readDraftSettings =
+    createDesktopBillingDraftSettingsReadEndpoint(authorize);
+  const updateDraftSettings =
+    createDesktopBillingDraftSettingsUpdateEndpoint(authorize);
+  const drafts = createDesktopBillingDraftEndpoint({
+    authorizeAccount: authorize,
+    // The model is the one external boundary: it describes each selected
+    // entry under the reference the prompt gave it.
+    generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
+      async ({ prompt }: { prompt?: string }) => ({
+        drafts: asTestRaw<BillingDraftPrompt>(
+          JSON.parse(prompt ?? "{}"),
+        ).entries.map(({ entryId }) => ({
+          entryId,
+          narrative: "Reviewed the agreement",
+          matchedEarlierEntryIds: [],
+        })),
+      }),
+    ),
+    admit: asTestRaw<typeof withActionAdmission>(
+      async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
+        Result.ok(
+          await run(new AbortController().signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
+        ),
+    ),
+  });
+  // The real routes on the real HTTP core: each definition decodes its own
+  // input and answers through its own response schemas.
+  return serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        "/registry": { PUT: registry },
+        "/features": { GET: feature },
+        "/candidates": { GET: candidates },
+        "/matters": { GET: matters },
+        "/batch": { PUT: batch },
+        "/status": { PUT: batchStatus },
+        "/single/:workspaceId": { PUT: single },
+        "/draft-settings": { GET: readDraftSettings, PUT: updateDraftSettings },
+        "/drafts": { POST: drafts },
+      }),
+    }),
+  );
 };
 
+// One server answers both tenants; the credential decides who is calling.
+let desktopRoutes: TestServer | undefined;
+
+afterAll(async () => {
+  await releaseTestDb();
+  await desktopRoutes?.stop();
+});
+
+const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+  desktopRoutes ??= desktopServer();
+  const credential =
+    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
+  return await desktopRoutes.fetch(await credential.signRequest(request));
+};
+
+const desktopDraftRequest = (matterId: string) =>
+  new Request("http://localhost/drafts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(
+      createDesktopBillingDraftRequest({
+        matterId,
+        entry: {
+          date: DESKTOP_ENTRY.dateWorked,
+          timezone: DESKTOP_ENTRY.timezoneId,
+          durationMinutes: DESKTOP_ENTRY.durationMinutes,
+        },
+      }),
+    ),
+  });
+
+/** A request as the desktop app sends it: its HTTP client names itself on
+ *  every call, and the registry route admits no other agent. */
 const desktopRequest = (path: string, body?: unknown) =>
   new Request(
     `http://localhost${path}`,
     body === undefined
-      ? {}
+      ? { headers: { "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT } }
       : {
           method: "PUT",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+          },
           body: JSON.stringify(body),
         },
   );

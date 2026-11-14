@@ -43,7 +43,10 @@ export const createServiceOAuthClientInTransaction = async ({
   operatorUid,
 }: CreateServiceOAuthClientOptions & { tx: Transaction }) => {
   const clientId = Bun.randomUUIDv7().replaceAll("-", "");
-  const clientSecret = randomBytes(32).toString("base64url");
+  const clientSecret = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
   const org = (
     await tx
       .select({ id: organization.id })
@@ -106,7 +109,9 @@ export const changeServiceOAuthClientInTransaction = async ({
   operatorUid,
 }: ChangeServiceOAuthClientOptions & { tx: Transaction }) => {
   const clientSecret =
-    operation === "rotate" ? randomBytes(32).toString("base64url") : null;
+    operation === "rotate"
+      ? randomBytes(32).toBase64({ alphabet: "base64url", omitPadding: true })
+      : null;
   const binding = (
     await tx
       .select({

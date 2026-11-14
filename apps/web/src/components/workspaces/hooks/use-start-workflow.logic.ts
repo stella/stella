@@ -57,7 +57,7 @@ export const estimateWorkflowTargetCount = async ({
   queryClient,
   workspaceId,
 }: EstimateWorkflowTargetCountArgs): Promise<number> => {
-  const entityIds = args?.entityIds === undefined ? [] : [...args.entityIds];
+  const entityIds = args?.entityIds !== undefined ? [...args.entityIds] : [];
 
   return await queryClient.query(
     workflowTargetCountOptions({
@@ -123,8 +123,7 @@ type PerformWorkflowStartArgs<TStatus extends string> = {
 };
 
 type PerformWorkflowStartResult<TStatus extends string> =
-  | { status: TStatus }
-  | typeof WORKFLOW_START_FAILED;
+  { status: TStatus } | typeof WORKFLOW_START_FAILED;
 
 /**
  * Send the start request and answer only a status the endpoint stands behind.

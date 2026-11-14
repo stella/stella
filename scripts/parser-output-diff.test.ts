@@ -27,28 +27,36 @@ test("parser workers respect their concurrency bound and preserve result order",
   let active = 0;
   let peak = 0;
   const releases: (() => void)[] = [];
+  // Settles once `count` tasks are parked on their release.
+  let parkedWaiter: { count: number; resolve: () => void } | undefined;
+  const parked = async (count: number) => {
+    if (releases.length >= count) {
+      return;
+    }
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    parkedWaiter = { count, resolve: () => resolve(undefined) };
+    await promise;
+  };
   const tasks = [0, 1, 2, 3].map((value) => async () => {
     active += 1;
     peak = Math.max(peak, active);
     await new Promise<void>((resolve) => {
       releases.push(resolve);
+      if (parkedWaiter !== undefined && releases.length >= parkedWaiter.count) {
+        parkedWaiter.resolve();
+        parkedWaiter = undefined;
+      }
     });
     active -= 1;
     return value;
   });
   const results = runWithConcurrency(tasks, 2);
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
+  await parked(2);
   expect(active).toBe(2);
   releases.shift()?.();
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
+  await parked(2);
   releases.shift()?.();
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
+  await parked(2);
   for (const release of releases.splice(0)) {
     release();
   }

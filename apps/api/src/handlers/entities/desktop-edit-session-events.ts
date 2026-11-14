@@ -1,14 +1,15 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
 } from "@stll/api-contract";
 
-import { captureError } from "@/api/lib/analytics/capture";
+import { status } from "@/api/http/status";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDesktopEditSessionCloseSignal } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
@@ -18,18 +19,24 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
-import { registerSessionDelivery, sseResponse } from "@/api/lib/sse";
+import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import {
+  addStreamWithinLimit,
+  registerSessionDelivery,
+  sseResponse,
+} from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
 const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
-export const desktopEditSessionEventsParamsSchema = t.Object({
-  sessionId: tSafeId("desktopEditSession"),
+export const desktopEditSessionEventsParamsSchema = v.object({
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
-export const desktopEditSessionEventsHeadersSchema = t.Object({
-  authorization: t.Optional(t.String()),
+export const desktopEditSessionEventsHeadersSchema = v.object({
+  authorization: v.optional(v.string()),
 });
 
 type SessionEventConnection = {
@@ -100,7 +107,7 @@ const deliverSessionEventLocal = (
 registerSessionDelivery(deliverSessionEventLocal);
 
 type DesktopEditSessionEventsHandlerProps = {
-  headers: { authorization?: string };
+  headers: { authorization?: string | undefined };
   sessionId: SafeId<"desktopEditSession">;
 };
 
@@ -211,9 +218,18 @@ export const desktopEditSessionEventsHandler = async (
   }
 
   const refreshLivenessInBackground = () => {
-    refreshLiveness().catch((error: unknown) => {
-      captureError(error, { sessionId });
-    });
+    detached(
+      async () =>
+        refreshLiveness().catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entities.refreshLivenessInBackground", {
+              sessionId,
+            }),
+          );
+        }),
+      "desktop-edit-session-events.refresh-liveness",
+    );
   };
 
   const stream = new ReadableStream<Uint8Array>({
@@ -230,7 +246,18 @@ export const desktopEditSessionEventsHandler = async (
         sessionConns = new Set();
         connections.set(sessionId, sessionConns);
       }
-      sessionConns.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          stale.cleanup();
+          Result.try(() => {
+            stale.controller.close();
+          }).unwrapOr(undefined);
+        },
+        connection: conn,
+        limit: LIMITS.desktopEditSessionStreams,
+        sameHolder: () => true,
+        set: sessionConns,
+      });
 
       // Send an SSE comment to flush response headers immediately.
       // Without this, Bun may buffer the response until the first
@@ -263,7 +290,18 @@ export const desktopEditSessionEventsHandler = async (
     },
   });
 
-  return sseResponse(stream);
+  // The stream holds while its edit session does: taken over, expired,
+  // closed or no longer permitted all end it.
+  return sseResponse(stream, {
+    kind: "credential",
+    revalidate: async () =>
+      (
+        await dependencies.authorizeDesktopEditSession({
+          sessionId,
+          sessionToken,
+        })
+      ).status === "authorized",
+  });
 };
 
 /**

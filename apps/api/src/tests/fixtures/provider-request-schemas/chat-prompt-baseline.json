@@ -40,6 +40,38 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32845
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 32670
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33274
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33477
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33232
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35620
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 35862
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36046
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36247
       }
     ],
     "anthropic/extended": [
@@ -82,6 +114,38 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33336
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 33160
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33765
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33967
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33722
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36110
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36352
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36535
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36738
       }
     ],
     "bedrock/default": [
@@ -124,6 +188,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33078
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33523
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33732
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33487
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35874
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36122
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 36306
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 36507
       }
     ],
     "bedrock/extended": [
@@ -166,6 +258,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33567
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34012
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34220
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33975
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36363
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36611
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 36883
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37179
       }
     ],
     "google/default": [
@@ -204,6 +324,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32188
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 32639
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 32841
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 32597
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 34625
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 34851
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 35035
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 35237
       }
     ],
     "google/extended": [
@@ -238,6 +386,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32666
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33117
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33320
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33075
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35103
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 35329
+      },
+      {
+        "reason": "adds the regulator guidance tools",
+        "tokens": 35513
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 35714
       }
     ],
     "mistral/default": [
@@ -280,6 +456,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34330
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34800
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35026
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34781
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37096
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37353
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37637
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37940
       }
     ],
     "mistral/extended": [
@@ -322,6 +526,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34857
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35327
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35552
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35307
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37623
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37879
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38163
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38467
       }
     ],
     "openai/default": [
@@ -364,6 +596,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33933
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34387
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34608
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34363
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36678
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 36929
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37213
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37516
       }
     ],
     "openai/extended": [
@@ -406,6 +666,34 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34449
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34903
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35123
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34878
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37193
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37445
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37728
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38031
       }
     ],
     "openrouter-anthropic/default": [
@@ -444,6 +732,38 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34298
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34013
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34609
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37079
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37340
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37925
       }
     ],
     "openrouter-anthropic/extended": [
@@ -482,6 +802,38 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34797
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34525
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35120
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37591
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37852
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38436
       }
     ],
     "openrouter/default": [
@@ -520,6 +872,38 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34298
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34013
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34609
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37079
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37340
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 37625
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 37925
       }
     ],
     "openrouter/extended": [
@@ -558,6 +942,38 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34797
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34525
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35120
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37591
+      },
+      {
+        "reason": "show_app joins cloud chat where the public corpus is enabled",
+        "tokens": 37852
+      },
+      {
+        "reason": "ask-user questions take a selection mode for multiple-choice answers",
+        "tokens": 38136
+      },
+      {
+        "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
+        "tokens": 38436
       }
     ]
   },

@@ -1,7 +1,18 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import {
+  AUDIT_CHANGES_STATUS,
+  AUDIT_PERFORMER_FILTER,
+  AUDIT_RESOURCE_TYPE,
+} from "@stll/api-contract/audit-log";
+import {
+  ORGANIZATION_EVALUATION_LIMIT,
+  ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+  organizationCreateOutputSchema,
+} from "@stll/api-contract/organization-create";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -13,13 +24,14 @@ import {
 } from "@/api/handlers/audit-logs/query";
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
+import { organizationCreateBodySchema } from "@/api/handlers/organizations/schema";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import {
   ADD_MATTER_MEMBER_PROJECTION,
   REMOVE_MATTER_MEMBER_PROJECTION,
-  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
+  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
@@ -30,8 +42,12 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpToolDefinition,
@@ -42,29 +58,30 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  cursorInput,
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
-  nullAsAbsent,
+  legalCitationLinkFields,
   structuredErrorResult,
   toolDataResult,
-  legalCitationLinkFields,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
   defineChatProjectionMcpToolOutput,
   defineMcpToolOutput,
+  defineProjectedMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
   | "search_boe_legislation"
   | "list_audit_log"
   | "add_matter_member"
   | "remove_matter_member"
-  | "update_organization_settings";
+  | "update_organization_settings"
+  | "create_organization";
 
 /** Consolidated-law relation kinds accepted by search_boe_legislation `relation_type`. */
 const RELATION_TYPE_VALUES = [
@@ -113,44 +130,34 @@ const widenDateOnlyBound = (bound: string, edge: "start" | "end"): string =>
 const listAuditLogArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      matter_id: v.optional(
-        uuidInputSchema("Only entries scoped to this matter."),
-      ),
+      matter_id: v.optional(uuidInputSchema("Matter ID")),
       action: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description("Only entries with this audit action"),
-        ),
+        v.pipe(v.string(), v.minLength(1), v.description("Audit action")),
       ),
       resource_type: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description("Only entries about this resource type"),
-        ),
+        v.pipe(v.string(), v.minLength(1), v.description("Resource type")),
       ),
       resource_id: v.optional(
         v.pipe(
           v.string(),
           v.minLength(1),
-          v.description(
-            "Only entries about this resource id; requires resource_type",
-          ),
+          v.description("Resource id; requires resource_type"),
         ),
       ),
       user_id: v.optional(
+        v.pipe(v.string(), v.minLength(1), v.description("Actor user id")),
+      ),
+      performer: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description("Only entries whose actor is this user"),
+          v.picklist(Object.values(AUDIT_PERFORMER_FILTER)),
+          v.description("Members and their agents, or services"),
         ),
       ),
       from: v.optional(
         v.pipe(
           auditRangeBoundSchema,
           v.description(
-            "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)",
+            "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)",
           ),
         ),
       ),
@@ -158,7 +165,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
         v.pipe(
           auditRangeBoundSchema,
           v.description(
-            "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)",
+            "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)",
           ),
         ),
       ),
@@ -167,13 +174,12 @@ const listAuditLogArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(LIMITS.auditLogPageSizeMax),
+          v.maxValue(LIMITS.mcpListPageSizeMax),
           v.description("Max entries to return"),
         ),
       ),
       cursor: cursorInput({
-        description:
-          "Opaque cursor from a previous list_audit_log call to fetch the next page",
+        description: "Next-page cursor",
       }),
     }),
     v.forward(
@@ -197,12 +203,8 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "Read the organization's audit trail (compliance view). Returns audit " +
-    "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail. Filter by matter_id, " +
-    "action, resource_type (with optional resource_id), user_id, and a " +
-    "created-at range (from/to, ISO date-time). Paginate with limit and " +
-    "cursor. Requires organization audit-log access.",
+    "Read organization audits newest first. Change detail is null unless " +
+    'changesStatus is "visible". Requires audit-log access.',
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
@@ -214,6 +216,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   // and never appears on the anonymized surface.
   access: "read",
   readClass: "tenant",
+  permissions: { type: "all", permissions: { auditLog: ["read"] } },
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
   scope: "stella:admin_read",
@@ -229,6 +232,21 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       action: v.string(),
       resourceType: v.string(),
       resourceId: v.string(),
+      resource: v.variant("kind", [
+        v.strictObject({
+          kind: v.picklist(Object.values(AUDIT_RESOURCE_TYPE)),
+          id: v.string(),
+          name: v.nullable(v.string()),
+          available: v.boolean(),
+        }),
+        v.strictObject({
+          kind: v.literal("unknown"),
+          rawKind: v.string(),
+          id: v.string(),
+          name: v.null(),
+          available: v.literal(false),
+        }),
+      ]),
       changes: v.unknown(),
       changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
@@ -247,7 +265,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(256),
-          v.description("Free-text search over consolidated legislation"),
+          v.description("Consolidated legislation full-text query"),
         ),
       ),
       title: v.optional(
@@ -255,7 +273,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(256),
-          v.description("Filter search results by title text"),
+          v.description("Title text"),
         ),
       ),
       department_code: v.optional(
@@ -263,7 +281,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(32),
-          v.description("Filter search results by department code"),
+          v.description("Department code"),
         ),
       ),
       legal_range_code: v.optional(
@@ -271,7 +289,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(32),
-          v.description("Filter search results by legal-range code (law rank)"),
+          v.description("Legal-range code (law rank)"),
         ),
       ),
       matter_code: v.optional(
@@ -279,7 +297,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(32),
-          v.description("Filter search results by subject-matter code"),
+          v.description("Subject-matter code"),
         ),
       ),
       date_from: v.optional(
@@ -287,7 +305,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.regex(BOE_DATE),
           v.maxLength(8),
-          v.description("Only laws published on or after this date (YYYYMMDD)"),
+          v.description("Published on or after YYYYMMDD"),
         ),
       ),
       date_to: v.optional(
@@ -295,9 +313,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.regex(BOE_DATE),
           v.maxLength(8),
-          v.description(
-            "Only laws published on or before this date (YYYYMMDD)",
-          ),
+          v.description("Published on or before YYYYMMDD"),
         ),
       ),
       limit: v.optional(
@@ -306,7 +322,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.integer(),
           v.minValue(1),
           v.maxValue(100),
-          v.description("Max search results to return"),
+          v.description("Result limit"),
         ),
       ),
       cursor: cursorInput({
@@ -323,9 +339,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
         v.pipe(
           v.string(),
           v.regex(BOE_LAW_ID),
-          v.description(
-            "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
-          ),
+          v.description("BOE law id (e.g. BOE-A-1889-4763); omit to search"),
         ),
       ),
       block_id: v.optional(
@@ -333,25 +347,21 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(128),
-          v.description(
-            "With law_id, return this text block's content instead of the whole law",
-          ),
+          v.description("With law_id: read this block instead of the law"),
         ),
       ),
       relation_type: v.optional(
         v.pipe(
           v.picklist(RELATION_TYPE_VALUES),
           v.description(
-            "With law_id, list related laws of this relation kind instead of the law body",
+            "With law_id: list this relation kind instead of the law",
           ),
         ),
       ),
       full_text: v.optional(
         v.pipe(
           v.boolean(),
-          v.description(
-            "With law_id (no block_id/relation_type), include the consolidated full text",
-          ),
+          v.description("With law_id only: include consolidated full text"),
         ),
       ),
     }),
@@ -475,6 +485,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
       "BOE date/id/cursor patterns and the law_id read/search mode rules remain authoritative in the runtime schema; the wire schema only advertises type and length bounds.",
   },
   access: "read",
+  permissions: openMcpRead("public legislation corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
@@ -510,7 +521,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
-        return internalFailureResult(block.error);
+        return internalFailureResult(
+          block.error,
+          "mcp.handleSearchBoeLegislationTool.block_error",
+        );
       }
       return toolDataResult({ lawId, blockId, block: block.value });
     }
@@ -522,7 +536,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(related)) {
-        return internalFailureResult(related.error);
+        return internalFailureResult(
+          related.error,
+          "mcp.handleSearchBoeLegislationTool.related_error",
+        );
       }
       return toolDataResult(related.value);
     }
@@ -544,7 +561,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
       catch: mapBoeError,
     });
     if (Result.isError(detail)) {
-      return internalFailureResult(detail.error);
+      return internalFailureResult(
+        detail.error,
+        "mcp.handleSearchBoeLegislationTool.detail_error",
+      );
     }
     return toolDataResult(detail.value);
   }
@@ -581,7 +601,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
     catch: mapBoeError,
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleSearchBoeLegislationTool.result_error",
+    );
   }
   // Publisher search has no held corpus identity. Its existing source URL
   // remains primary through the same citation resolver as corpus reads.
@@ -637,6 +660,7 @@ const handleListAuditLogTool: McpToolHandler<
     ...(input.user_id === undefined
       ? {}
       : { userId: brandPersistedUserId(input.user_id) }),
+    ...(input.performer === undefined ? {} : { performer: input.performer }),
     ...(input.from === undefined
       ? {}
       : { from: widenDateOnlyBound(input.from, "start") }),
@@ -668,7 +692,10 @@ const handleListAuditLogTool: McpToolHandler<
     }),
   );
   if (Result.isError(page)) {
-    return internalFailureResult(page.error);
+    return internalFailureResult(
+      page.error,
+      "mcp.handleListAuditLogTool.page_error",
+    );
   }
   return toolDataResult(
     projectionPayload(LIST_AUDIT_LOG_OUTPUT_SCHEMA, {
@@ -681,6 +708,7 @@ const handleListAuditLogTool: McpToolHandler<
         action: item.action,
         resourceType: item.resourceType,
         resourceId: item.resourceId,
+        resource: item.resource,
         changes: item.changes,
         changesStatus: item.changesStatus,
       })),
@@ -730,7 +758,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(LIMITS.matterNumberPatternMinLength),
           v.maxLength(LIMITS.matterNumberPatternMaxLength),
-          v.description("Number pattern; pair with matter_number_padding"),
+          v.description("Pattern; send with matter_number_padding"),
         ),
       ),
       matter_number_padding: v.optional(
@@ -743,12 +771,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
         ),
       ),
       matter_numbering_enabled: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description(
-            "Show the matter number beside the matter name in titles",
-          ),
-        ),
+        v.pipe(v.boolean(), v.description("Show matter numbers in titles")),
       ),
       prompt_caching_enabled: v.optional(
         v.pipe(v.boolean(), v.description("Toggle AI prompt caching")),
@@ -778,7 +801,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       ),
       time_locked_through_month: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.isoDate())),
+          v.nullable(apiDateSchema),
           v.description("Locked month-end date; null unlocks"),
         ),
       ),
@@ -832,14 +855,16 @@ const ADD_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   accountAccess: "standard",
   permissions: { type: "all", permissions: { workspace: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
-  scope: "stella:admin_write",
+  // Who can open a matter is a matter edit, gated by the matter update
+  // permission like every other one; it needs no admin consent.
+  scope: "stella:matters_write",
 });
 
 const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "remove_matter_member",
   description:
-    "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
   inputSchema: removeMatterMemberArgsSchema,
   annotations: {
     title: "Remove matter member",
@@ -853,8 +878,61 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   permissions: { type: "all", permissions: { workspace: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   destructiveBehavior: { type: "always" },
-  scope: "stella:admin_write",
+  scope: "stella:matters_write",
 });
+
+const CREATE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
+  name: "create_organization",
+  description: `Create an owned organization after human approval (confirm:true). Lifetime cap: ${ORGANIZATION_EVALUATION_LIMIT} evaluations; deletion never resets it. ${ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE}: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.`,
+  inputNormalization: {
+    slug: { kind: AGENT_INPUT_NORMALIZATION_KIND.slug },
+  },
+  inputSchema: nullAsAbsent(
+    v.strictObject({
+      ...organizationCreateBodySchema.entries,
+      confirm: v.optional(
+        v.pipe(v.boolean(), v.description("True after human approval")),
+      ),
+    }),
+  ),
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["trim"],
+    reason:
+      "The runtime schema trims organization names and slugs before validation.",
+  },
+  nonDestructiveReason:
+    "Creates a new organization without modifying existing organizations or their memberships.",
+  annotations: {
+    title: "Create organization",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  access: "write",
+  accountAccess: "account-control",
+  permissions: {
+    type: "delegated",
+    reason:
+      "The organizations.create session capability checks the account-level organization creation scope before dispatch.",
+  },
+  anonymized: { exposure: "excluded", reason: "write" },
+  scope: "stella:organization_create",
+});
+
+const handleCreateOrganizationTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  const { CAPABILITY_TOOL_HANDLERS } =
+    await import("@/api/mcp/capability-tools");
+  const { confirm, ...body } = args;
+  return await CAPABILITY_TOOL_HANDLERS.write_capability({
+    args: { capability: "organizations.create", input: { body }, confirm },
+    context,
+  });
+};
 
 const UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
@@ -891,7 +969,7 @@ const handleAddMember = async ({
   requestedWorkspaceId,
   userId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
 }): Promise<
@@ -917,7 +995,10 @@ const handleAddMember = async ({
     }),
   );
   if (Result.isError(added)) {
-    return internalFailureResult(added.error);
+    return internalFailureResult(
+      added.error,
+      "mcp.handleAddMember.added_error",
+    );
   }
   return toolDataResult(
     projectionPayload(ADD_MATTER_MEMBER_PROJECTION, {
@@ -932,7 +1013,7 @@ const handleRemoveMember = async ({
   userId,
   reassignTo,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
   reassignTo?: string | undefined;
@@ -961,7 +1042,10 @@ const handleRemoveMember = async ({
     }),
   );
   if (Result.isError(removed)) {
-    return internalFailureResult(removed.error);
+    return internalFailureResult(
+      removed.error,
+      "mcp.handleRemoveMember.removed_error",
+    );
   }
   return toolDataResult(
     projectionPayload(REMOVE_MATTER_MEMBER_PROJECTION, {
@@ -1049,7 +1133,10 @@ const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleUpdateOrganizationSettingsTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(UPDATE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),
@@ -1062,6 +1149,7 @@ const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   ADD_MATTER_MEMBER_TOOL_DEFINITION,
   REMOVE_MATTER_MEMBER_TOOL_DEFINITION,
   UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION,
+  CREATE_ORGANIZATION_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {
@@ -1070,6 +1158,7 @@ export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   add_matter_member: handleAddMatterMemberTool,
   remove_matter_member: handleRemoveMatterMemberTool,
   update_organization_settings: handleUpdateOrganizationSettingsTool,
+  create_organization: handleCreateOrganizationTool,
 } satisfies Record<ResearchAdminToolName, McpToolHandler>;
 
 export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
@@ -1077,6 +1166,10 @@ export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
   RESEARCH_ADMIN_TOOL_HANDLERS,
   {
     list_audit_log: defineMcpToolOutput(LIST_AUDIT_LOG_OUTPUT_SCHEMA),
+    create_organization: defineProjectedMcpToolOutput(
+      organizationCreateOutputSchema,
+      (result) => v.parse(organizationCreateOutputSchema, result),
+    ),
     add_matter_member: defineChatProjectionMcpToolOutput(
       ADD_MATTER_MEMBER_PROJECTION,
     ),

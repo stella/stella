@@ -5,8 +5,8 @@ import * as v from "valibot";
 
 import {
   checkPoolJob,
-  readCheckPool,
   type ReadCheckPool,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import {
   loadGlobalRuleInputs,
@@ -23,6 +23,7 @@ const STATIC_CHECK_JOB_ROOTS = [
 const STATIC_CHECK_JOB_PREFIXES = ["code-quality-"] as const;
 
 const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
+  maxBuffer: 2 ** 30,
   cwd: REPOSITORY_ROOT,
   encoding: "utf-8",
 })

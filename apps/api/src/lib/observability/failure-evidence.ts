@@ -26,7 +26,8 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import type { FailureBrand } from "@stll/errors";
-import { readFailureBrand } from "@stll/errors";
+import { readFailureBrand, readFingerprintFields } from "@stll/errors";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { errorClassNameFrom } from "@/api/lib/errors/error-tag";
@@ -35,7 +36,8 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 
-export const MAX_EVIDENCE_DEPTH = 6;
+// parser-output-unchanged: error snapshot depth derives from the shared exception identity bound.
+export const MAX_EVIDENCE_DEPTH = MAX_EXCEPTION_CAUSE_DEPTH;
 
 // A stack is read from where its frames start, so these bound only the frame
 // block: a 1 MB message costs a newline count, never a 1 MB split.
@@ -81,17 +83,16 @@ const STACK_FRAME_PREFIX = "at ";
 const RECOGNIZED_FRAME_ORIGIN =
   /^(?:(?:[^\s]*\/)?(?:apps|packages|node_modules)\/|\/app\/|(?:node|bun|native):)/u;
 
+// `panic()` builds its error inside the library, so that frame would name the
+// helper on every panic. The caller is the site that failed.
+const PANIC_HELPER_FRAME = /\/better-result(?:@[^/]*)?\//u;
+
 type EvidenceNodeKind = "error" | "plain" | "primitive" | "tagged";
 
 type EvidenceTruncation = "cycle" | "depth" | "none" | "read_failed";
 
 type ProviderStatusSource =
-  | "body_code"
-  | "body_status"
-  | "code"
-  | "metadata"
-  | "status"
-  | "statusCode";
+  "body_code" | "body_status" | "code" | "metadata" | "status" | "statusCode";
 
 type ProviderStatus = {
   readonly status: number;
@@ -139,8 +140,7 @@ export type EvidenceNode = {
   readonly ownStatus: number | undefined;
   readonly providerStatus: ProviderStatus | undefined;
   readonly handler:
-    | { readonly status: number; readonly code: string | undefined }
-    | undefined;
+    { readonly status: number; readonly code: string | undefined } | undefined;
   readonly brand: FailureBrand | undefined;
   /** The prototype chain, read once; identity checks run against it. */
   readonly prototypes: readonly object[];
@@ -154,6 +154,7 @@ export type EvidenceNode = {
       }
     | undefined;
   readonly extraction: Readonly<Record<string, string>> | undefined;
+  readonly discriminators?: Readonly<Record<string, string>> | undefined;
 };
 
 export type FailureEvidence = {
@@ -163,7 +164,11 @@ export type FailureEvidence = {
   readonly cycleTo: number | undefined;
 };
 
-type ReadState = { failed: boolean };
+type ReadState = {
+  failed: boolean;
+  reads: WeakMap<object, Map<string, unknown>>;
+  views: WeakMap<object, object>;
+};
 
 const attempt = <TValue>(
   state: ReadState,
@@ -180,8 +185,24 @@ const attempt = <TValue>(
   return result.value.read;
 };
 
-const readKey = (state: ReadState, value: object, key: string): unknown =>
-  attempt(state, (): unknown => Reflect.get(value, key), undefined);
+const readKey = (state: ReadState, value: object, key: string): unknown => {
+  let reads = state.reads.get(value);
+  if (reads === undefined) {
+    reads = new Map();
+    state.reads.set(value, reads);
+  }
+  if (reads.has(key)) {
+    return reads.get(key);
+  }
+  const receiver = state.views.get(value) ?? value;
+  const result = attempt(
+    state,
+    (): unknown => Reflect.get(value, key, receiver),
+    undefined,
+  );
+  reads.set(key, result);
+  return result;
+};
 
 const isObject = (value: unknown): value is object =>
   typeof value === "object" && value !== null;
@@ -319,7 +340,11 @@ export const readProviderStatus = (
   if (!isObject(value)) {
     return undefined;
   }
-  const state: ReadState = { failed: false };
+  const state: ReadState = {
+    failed: false,
+    reads: new WeakMap(),
+    views: new WeakMap(),
+  };
   const body = readKey(state, value, "error");
   return providerStatusFrom({
     isHandlerError: prototypeChain(state, value).includes(
@@ -492,7 +517,7 @@ const topFrame = (
   for (const line of lines.slice(0, MAX_STACK_FRAME_LINES)) {
     const location = frameLocation(line);
     if (location !== undefined) {
-      if (skipLocation(location)) {
+      if (skipLocation(location) || PANIC_HELPER_FRAME.test(location)) {
         continue;
       }
       return RECOGNIZED_FRAME_ORIGIN.test(location)
@@ -516,6 +541,12 @@ const extractionFields = (
     fields["signalCode"] = String(readKey(state, termination, "signalCode"));
     fields["terminationReason"] = String(readKey(state, termination, "reason"));
     return fields;
+  }
+  const workerErrorClass = nonEmptyString(
+    readKey(state, value, "workerErrorClass"),
+  );
+  if (workerErrorClass !== undefined) {
+    fields["workerErrorClass"] = workerErrorClass;
   }
   fields["exitCode"] = String(readKey(state, value, "exitCode"));
   return fields;
@@ -558,6 +589,31 @@ const nodeKind = (isError: boolean, isTagged: boolean): EvidenceNodeKind => {
 
 const readNode = (state: ReadState, value: object): ReadNodeResult => {
   const prototypes = prototypeChain(state, value);
+  const declared = readFingerprintFields({
+    value,
+    prototypes,
+    read: (object, key) => readKey(state, object, key),
+  });
+  const { fields } = declared;
+  if (declared.status === "read_failed") {
+    state.failed = true;
+  }
+  // Only declared application errors use a cached receiver. Native accessors
+  // (DOMException, for example) require their original branded instance.
+  if (fields !== undefined) {
+    state.views.set(
+      value,
+      new Proxy(value, {
+        get: (target, property) => {
+          const result: unknown =
+            typeof property === "string"
+              ? readKey(state, target, property)
+              : Reflect.get(target, property);
+          return result;
+        },
+      }),
+    );
+  }
   const isError = prototypes.includes(Error.prototype);
   const isHandlerError = prototypes.includes(HandlerError.prototype);
   const rawTag = readKey(state, value, "_tag");
@@ -629,6 +685,12 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
   const message =
     className === undefined ? undefined : readKey(state, value, "message");
   const frameParts = { stack, message, name, className: className ?? "" };
+  const brand = readFailureBrand(value, {
+    prototypes,
+    read: (object, key) => readKey(state, object, key),
+  });
+  const discriminators =
+    brand === undefined ? fields : { ...fields, failureReason: brand.reason };
   const node: EvidenceNode = {
     kind: nodeKind(isError, isTagged),
     tag:
@@ -670,7 +732,8 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
       bodyCode: nestedKey(state, body, "code"),
     }),
     handler,
-    brand: readFailureBrand(value, prototypes),
+    brand,
+    discriminators,
     prototypes,
     frame: className === undefined ? { kind: "absent" } : topFrame(frameParts),
     timeout:
@@ -697,7 +760,11 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
 const evidenceCache = new WeakMap<object, FailureEvidence>();
 
 const walk = (error: unknown): FailureEvidence => {
-  const state: ReadState = { failed: false };
+  const state: ReadState = {
+    failed: false,
+    reads: new WeakMap(),
+    views: new WeakMap(),
+  };
   const nodes: EvidenceNode[] = [];
   const seen = new Map<object, number>();
   let current = error;

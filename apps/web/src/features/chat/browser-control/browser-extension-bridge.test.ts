@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { buildSendRequestBody } from "@/features/chat/chat-runtime";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -19,8 +21,10 @@ import {
   setBrowserApprovalMode,
 } from "./browser-approval-mode";
 import {
+  BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS,
+  browserExtensionSupport,
   executeBrowserExtensionCommand,
-  getBrowserClientCapability,
+  getBrowserExtensionState,
   isBrowserExtensionBridgeMounted,
   mountBrowserExtensionBridge,
 } from "./browser-extension-bridge";
@@ -30,7 +34,13 @@ const ORIGIN = "https://app.stella.test";
 const click = {
   action: "click",
   page: { revision: "revision-1", url: "https://example.com/" },
-  target: { name: "Submit", ref: "e:0:0.1", role: "button" },
+  target: {
+    context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    name: "Submit",
+    ref: "e:0:0.1",
+    role: "button",
+  },
 } satisfies BrowserControlCommand;
 const snapshot = { action: "snapshot" } satisfies BrowserControlCommand;
 
@@ -47,12 +57,18 @@ const APPROVAL_MODE_KEY = userStorageKey("stella.chat.browserApprovalMode");
 const storedValues = new Map<string, string>();
 
 let previousWindow: PropertyDescriptor | undefined;
+let previousNavigator: PropertyDescriptor | undefined;
 let messageListener: ((event: unknown) => void) | null = null;
 let fakeWindow: FakeWindow;
 let unmount: (() => void) | null = null;
 
 beforeEach(() => {
   previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  previousNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36" },
+  });
   fakeWindow = {
     addEventListener: (type, listener) => {
       if (type === "message") {
@@ -85,7 +101,12 @@ beforeEach(() => {
 afterEach(() => {
   unmount?.();
   unmount = null;
-  jest.useRealTimers();
+  restoreRealTimers();
+  if (previousNavigator) {
+    Object.defineProperty(globalThis, "navigator", previousNavigator);
+  } else {
+    Reflect.deleteProperty(globalThis, "navigator");
+  }
   if (previousWindow) {
     Object.defineProperty(globalThis, "window", previousWindow);
   } else {
@@ -100,9 +121,10 @@ const deliver = (data: unknown) => {
 const report = (
   controllerId: string | null,
   controlledTabId: number | null = null,
+  allSitesGranted = true,
 ) => {
   deliver({
-    allSitesGranted: true,
+    allSitesGranted,
     controlledTabId,
     controllerId,
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
@@ -111,6 +133,238 @@ const report = (
     type: "pong",
   });
 };
+
+describe("Chromium extension support", () => {
+  test.each([
+    {
+      name: "Chrome",
+      browser: { userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36" },
+      support: "supported",
+    },
+    {
+      name: "Chromium",
+      browser: { userAgent: "Mozilla/5.0 Chromium/140.0.0.0" },
+      support: "supported",
+    },
+    {
+      name: "Edge",
+      browser: {
+        userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0",
+      },
+      support: "supported",
+    },
+    {
+      name: "Brave brands",
+      browser: {
+        userAgent: "reduced",
+        userAgentData: { brands: [{ brand: "Brave" }, { brand: "Chromium" }] },
+      },
+      support: "supported",
+    },
+    {
+      name: "Google Chrome brands",
+      browser: {
+        userAgent: "reduced",
+        userAgentData: { brands: [{ brand: "Google Chrome" }] },
+      },
+      support: "supported",
+    },
+    {
+      name: "unknown brands override UA",
+      browser: {
+        userAgent: "Chrome/140",
+        userAgentData: { brands: [{ brand: "Unknown" }] },
+      },
+      support: "unsupported-browser",
+    },
+    {
+      name: "Firefox",
+      browser: { userAgent: "Mozilla/5.0 Firefox/140.0" },
+      support: "unsupported-browser",
+    },
+    {
+      name: "iOS Firefox",
+      browser: { userAgent: "Mozilla/5.0 FxiOS/140.0 Safari/605.1.15" },
+      support: "unsupported-device",
+    },
+    {
+      name: "Safari",
+      browser: { userAgent: "Mozilla/5.0 Version/18.0 Safari/605.1.15" },
+      support: "unsupported-browser",
+    },
+    {
+      name: "iPad Safari asking for the desktop site",
+      browser: {
+        maxTouchPoints: 5,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15",
+      },
+      support: "unsupported-device",
+    },
+    {
+      name: "Mac Safari",
+      browser: {
+        maxTouchPoints: 0,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15",
+      },
+      support: "unsupported-browser",
+    },
+    {
+      name: "Mac Chrome",
+      browser: {
+        maxTouchPoints: 0,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0.0.0 Safari/537.36",
+      },
+      support: "supported",
+    },
+    {
+      name: "iOS Chrome",
+      browser: { userAgent: "Mozilla/5.0 (iPhone) CriOS/140.0 Safari/604.1" },
+      support: "unsupported-device",
+    },
+    {
+      name: "iOS with Chromium brands",
+      browser: {
+        userAgent: "Mozilla/5.0 (iPad) CriOS/140.0",
+        userAgentData: { brands: [{ brand: "Chromium" }] },
+      },
+      support: "unsupported-device",
+    },
+    {
+      name: "Android Chrome",
+      browser: {
+        userAgent:
+          "Mozilla/5.0 (Linux; Android 14) Chrome/140.0.0.0 Mobile Safari/537.36",
+      },
+      support: "unsupported-device",
+    },
+    {
+      name: "mobile Chromium brands",
+      browser: {
+        userAgent: "reduced",
+        userAgentData: { brands: [{ brand: "Chromium" }], mobile: true },
+      },
+      support: "unsupported-device",
+    },
+    {
+      name: "unknown browser",
+      browser: { userAgent: "UnknownBrowser/1.0" },
+      support: "unsupported-browser",
+    },
+    {
+      name: "missing navigator",
+      browser: undefined,
+      support: "unsupported-device",
+    },
+  ] as const)("$name", ({ browser, support }) => {
+    expect(browserExtensionSupport(browser)).toBe(support);
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: browser,
+    });
+    expect(getBrowserExtensionState().status).toBe(
+      support === "supported" ? "not-installed" : support,
+    );
+  });
+});
+
+describe("live browser extension state", () => {
+  test("discovery stays checking until the deadline, including after remount", () => {
+    jest.useFakeTimers();
+    for (let mount = 0; mount < 2; mount += 1) {
+      unmount = mountBrowserExtensionBridge();
+      expect(getBrowserExtensionState().status).toBe("checking");
+      jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS - 1);
+      expect(getBrowserExtensionState().status).toBe("checking");
+      jest.advanceTimersByTime(1);
+      expect(getBrowserExtensionState().status).toBe("not-installed");
+      unmount();
+      unmount = null;
+    }
+  });
+
+  test("an announcement resolves checking before the deadline", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    expect(getBrowserExtensionState().status).toBe("checking");
+    report(null);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+  });
+
+  test.each([
+    {
+      side: "an older extension waits for its update",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      status: "extension-outdated",
+    },
+    {
+      side: "a newer extension asks for a reload of this tab",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      status: "stella-outdated",
+    },
+  ])("$side, never reads as not installed", ({ status, version }) => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    // Another version's announcement: same source and version fields, a
+    // shape this tab's protocol does not accept.
+    deliver({
+      allSitesGranted: true,
+      protocolVersion: version,
+      requestId: "extension-ready",
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "pong",
+    });
+    expect(getBrowserExtensionState().status).toBe(status);
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe(status);
+    // Once Chrome updated the extension, it reports on this tab's protocol.
+    report("controller-1");
+    expect(getBrowserExtensionState().status).toBe("connected");
+  });
+
+  test("a message from a stella page is not taken for an extension", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    deliver({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+    });
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe("not-installed");
+  });
+  test("covers discovery, permission, pairing, disconnect, and late installation", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+
+    jest.advanceTimersByTime(1000);
+    expect(getBrowserExtensionState().status).toBe("not-installed");
+
+    report(null, null, false);
+    expect(getBrowserExtensionState().status).toBe("needs-site-access");
+
+    report(null);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+
+    report("controller-1");
+    expect(getBrowserExtensionState().status).toBe("connected");
+
+    report(null);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+
+    report("controller-2");
+    expect(getBrowserExtensionState().status).toBe("connected");
+    report(null); // A different stella tab now owns the controller.
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+
+    unmount();
+    unmount = null;
+    expect(getBrowserExtensionState().status).toBe("not-installed");
+  });
+});
 
 const connect = () => {
   unmount = mountBrowserExtensionBridge();
@@ -151,6 +405,7 @@ const snapshotResult = (tabId: number, revision: string) =>
       elements: [],
       revision,
       tabId,
+      tabs: [{ active: true, tabId, url: "https://example.com/" }],
       text: "",
       textOffset: 0,
       textTotalChars: 0,
@@ -380,17 +635,30 @@ describe("the bridge outlives every chat surface", () => {
     });
   };
 
-  test("the first send of a fresh chat carries the browser client once the extension answered", () => {
-    connect();
-
-    expect(sendBody().browserClient).toEqual({
+  test("a send during discovery reports checking", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    expect(sendBody().browserExtension).toEqual({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "checking",
     });
   });
 
-  test("a send without a mounted bridge omits the browser client and is detectable", () => {
+  test("the first send of a fresh chat carries the browser client once the extension answered", () => {
+    connect();
+
+    expect(sendBody().browserExtension).toEqual({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
+    });
+  });
+
+  test("a send without a mounted bridge reports the extension as not installed", () => {
     expect(isBrowserExtensionBridgeMounted()).toBe(false);
-    expect(sendBody().browserClient).toBeUndefined();
+    expect(sendBody().browserExtension).toEqual({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "not-installed",
+    });
   });
 
   test("surfaces coming and going under the frame keep the pairing", () => {
@@ -399,8 +667,8 @@ describe("the bridge outlives every chat surface", () => {
     surface();
 
     expect(isBrowserExtensionBridgeMounted()).toBe(true);
-    expect(getBrowserClientCapability()).toBeDefined();
-    expect(sendBody().browserClient).toBeDefined();
+    expect(getBrowserExtensionState()).toBeDefined();
+    expect(sendBody().browserExtension).toBeDefined();
   });
 });
 

@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
@@ -40,7 +42,11 @@ export class FlowRunStartError extends TaggedError("FlowRunStartError")<{
     | "admission-refused"
     | "enqueue-failed";
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export type StartFlowRunOptions = {
   safeDb: SafeDb;

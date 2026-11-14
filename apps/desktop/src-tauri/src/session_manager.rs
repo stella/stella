@@ -1,6 +1,8 @@
+use crate::logging::best_effort;
 use futures_util::{StreamExt, future::join_all};
 use notify::{
-  Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::AccessKind,
+  Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+  event::{AccessKind, AccessMode},
 };
 use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use sha2::{Digest, Sha256};
@@ -20,6 +22,9 @@ pub use crate::config::normalize_api_base_url;
 use crate::diagnostics::{
   DiagnosticNotificationPreferences, DiagnosticSession, DiagnosticStoreLoadIssue,
   DiagnosticUpdate, DiagnosticsInput, render_diagnostics,
+};
+use crate::document_sessions::{
+  self, AccountOwner, CopyRetirement, EditorState, RetiredSession,
 };
 use crate::http_client::DesktopHttpClient;
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
@@ -56,8 +61,9 @@ pub fn set_takeover_response(label: &str, approved: bool) {
   let mut guard = TAKEOVER_SENDERS.lock().unwrap_or_else(|e| e.into_inner());
   if let Some(ref mut map) = *guard
     && let Some(tx) = map.remove(label)
+    && tx.send(approved).is_err()
   {
-    let _ = tx.send(approved);
+    tracing::debug!("takeover answer had no waiter");
   }
 }
 
@@ -66,7 +72,8 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(20);
 const REMOTE_SAVE_TIMEOUT: Duration = Duration::from_secs(60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(15);
 const KEYCHAIN_RESTORE_TIMEOUT: Duration = Duration::from_secs(10);
-const OPEN_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const OPEN_PROBE_INTERVAL: Duration = Duration::from_secs(1);
+const OPEN_PROBE_IDLE_INTERVAL: Duration = Duration::from_secs(15);
 const CLOSED_RECHECK_COUNT: u8 = 5;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
 const LIBRE_OFFICE_LOCK_PREFIX: &str = ".~lock.";
@@ -81,6 +88,9 @@ const GENERIC_OFFICE_DOWNLOAD_MIME_TYPES: &[&str] =
 
 // Internal session with runtime-only fields
 struct DesktopSession {
+  editor_state: EditorState,
+  account_owner: AccountOwner,
+  download_sha: Option<String>,
   // Persisted fields
   api_base_url: String,
   base_version_number: i64,
@@ -101,6 +111,8 @@ struct DesktopSession {
   takeover_detected: bool,
   workspace_id: String,
   // Runtime-only
+  generation: uuid::Uuid,
+  last_observed_file: Option<FileFingerprint>,
   changed_during_remote_save: bool,
   checkpoint_in_flight: bool,
   finalize_in_flight: bool,
@@ -109,11 +121,61 @@ struct DesktopSession {
   retry_notice_shown: bool,
   watcher: Option<RecommendedWatcher>,
   checkpoint_timer: Option<JoinHandle<()>>,
-  open_poll_timer: Option<JoinHandle<()>>,
+  open_probe_timer: Option<JoinHandle<()>>,
   sse_listener: Option<JoinHandle<()>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FileFingerprint {
+  size: u64,
+  modified: std::time::SystemTime,
+  identity: u64,
+}
+
+trait SessionFileSystem: Send + Sync {
+  fn fingerprint(&self, path: &Path) -> std::io::Result<FileFingerprint>;
+  fn read<'a>(
+    &'a self,
+    path: &'a Path,
+  ) -> futures_util::future::BoxFuture<'a, std::io::Result<Vec<u8>>>;
+}
+
+struct LocalSessionFileSystem;
+
+impl SessionFileSystem for LocalSessionFileSystem {
+  fn fingerprint(&self, path: &Path) -> std::io::Result<FileFingerprint> {
+    let metadata = std::fs::metadata(path)?;
+    #[cfg(unix)]
+    let identity = {
+      use std::os::unix::fs::MetadataExt;
+      metadata.ino()
+    };
+    #[cfg(not(unix))]
+    let identity = 0;
+    Ok(FileFingerprint {
+      size: metadata.len(),
+      modified: metadata.modified()?,
+      identity,
+    })
+  }
+
+  fn read<'a>(
+    &'a self,
+    path: &'a Path,
+  ) -> futures_util::future::BoxFuture<'a, std::io::Result<Vec<u8>>> {
+    Box::pin(tokio::fs::read(path))
+  }
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct SessionCosts {
+  writes: std::sync::atomic::AtomicUsize,
+  emits: std::sync::atomic::AtomicUsize,
+}
+
 struct SyncCheckpointInput {
+  generation: uuid::Uuid,
   session_id: String,
   file_type: DesktopEditFileType,
   file_path: String,
@@ -121,11 +183,17 @@ struct SyncCheckpointInput {
   session_token: String,
   file_name: String,
   last_checkpoint_sha: Option<String>,
+  fingerprint: FileFingerprint,
+  last_local_sha: String,
+  pending_finalize: bool,
 }
 
 impl DesktopSession {
   fn to_persisted(&self) -> PersistedDesktopSession {
     PersistedDesktopSession {
+      editor_state: self.editor_state,
+      account_owner: Some(self.account_owner.clone()),
+      download_sha: self.download_sha.clone(),
       api_base_url: self.api_base_url.clone(),
       base_version_number: self.base_version_number,
       entity_id: self.entity_id.clone(),
@@ -168,7 +236,7 @@ impl DesktopSession {
     if let Some(handle) = self.checkpoint_timer.take() {
       handle.abort();
     }
-    if let Some(handle) = self.open_poll_timer.take() {
+    if let Some(handle) = self.open_probe_timer.take() {
       handle.abort();
     }
     if let Some(handle) = self.sse_listener.take() {
@@ -177,7 +245,32 @@ impl DesktopSession {
   }
 }
 
+pub struct OpenDocument<'a> {
+  pub account: &'a crate::account::LinkedAccount,
+  pub request: OpenFileRequest,
+  pub prefetched_buffer: Vec<u8>,
+}
+
+#[derive(PartialEq, Eq)]
+enum SessionStoreAccess {
+  Pending,
+  Ready,
+  Unavailable,
+}
+
+#[derive(PartialEq, Eq)]
+enum RetirementPass {
+  Pending,
+  ObserveEditors,
+}
+
 pub struct SessionManager {
+  store_access: SessionStoreAccess,
+  account_owner: Option<AccountOwner>,
+  retired_sessions: Vec<RetiredSession>,
+  file_system: Arc<dyn SessionFileSystem>,
+  #[cfg(test)]
+  costs: Arc<SessionCosts>,
   sessions: HashMap<String, DesktopSession>,
   session_ids_by_key: HashMap<String, String>,
   unconfirmed_sessions: HashMap<String, PersistedDesktopSession>,
@@ -382,7 +475,7 @@ async fn align_managed_copy_file_name(
     );
   }
 
-  tokio::fs::rename(path, &aligned_path).await.map_err(|e| {
+  crate::local_store::rename_private(path, &aligned_path).map_err(|e| {
     format!("stella desktop could not rename the managed Office file: {e}")
   })?;
 
@@ -463,74 +556,120 @@ fn is_temporary_lock_file_for(candidate: &str, file_name: &str) -> bool {
     || is_libre_office_lock_file_for(candidate, file_name)
 }
 
-async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> bool {
-  match tokio::fs::read_dir(dir).await {
-    Ok(mut entries) => {
-      while let Ok(Some(entry)) = entries.next_entry().await {
-        if is_temporary_lock_file_for(&entry.file_name().to_string_lossy(), file_name) {
-          return true;
-        }
-      }
-      false
+async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> std::io::Result<bool> {
+  let mut entries = match tokio::fs::read_dir(dir).await {
+    Ok(entries) => entries,
+    Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+    Err(error) => return Err(error),
+  };
+  while let Some(entry) = entries.next_entry().await? {
+    if is_temporary_lock_file_for(&entry.file_name().to_string_lossy(), file_name) {
+      return Ok(true);
     }
-    Err(_) => false,
   }
+  Ok(false)
 }
 
-async fn append_probe_reports_locked(file_path: &Path) -> bool {
-  match tokio::fs::OpenOptions::new()
-    .append(true)
-    .open(file_path)
-    .await
-  {
-    Ok(_) => false,
-    Err(e) => matches!(
-      e.kind(),
-      ErrorKind::PermissionDenied | ErrorKind::WouldBlock
-    ),
+async fn observe_editor(original: &Path, current: &Path) -> EditorState {
+  let Some(file_name) = original.file_name() else {
+    return EditorState::Unknown;
+  };
+  for directory in [original.parent(), current.parent()].into_iter().flatten() {
+    match has_temporary_lock_file(directory, &file_name.to_string_lossy()).await {
+      Ok(true) => return EditorState::Attached,
+      Ok(false) => {}
+      Err(error) => {
+        tracing::warn!(error = %error, "document editor observation is unavailable");
+        return EditorState::Unknown;
+      }
+    }
   }
-}
-
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-async fn lsof_reports_open(file_path: &Path) -> bool {
-  match Command::new("lsof").arg("-t").arg(file_path).output().await {
-    Ok(output) if output.status.success() => !output.stdout.is_empty(),
-    Ok(output) => !output.stdout.is_empty(),
-    Err(_) => false,
+  match tokio::fs::symlink_metadata(current).await {
+    Ok(metadata) if metadata.is_file() => {}
+    Ok(_) => return EditorState::Unknown,
+    Err(error) if error.kind() == ErrorKind::NotFound => {
+      return match tokio::fs::symlink_metadata(original).await {
+        Err(error) if error.kind() == ErrorKind::NotFound => EditorState::Missing,
+        Ok(_) => EditorState::Unknown,
+        Err(error) => {
+          tracing::warn!(error = %error, "document editor observation is unavailable");
+          EditorState::Unknown
+        }
+      };
+    }
+    Err(error) => {
+      tracing::warn!(error = %error, "document editor observation is unavailable");
+      return EditorState::Unknown;
+    }
   }
-}
-
-async fn local_file_appears_open(file_path: &Path, file_name: &str) -> bool {
-  let dir = file_path.parent().unwrap_or(Path::new("."));
-
-  if has_temporary_lock_file(dir, file_name).await {
-    return true;
-  }
-
-  if append_probe_reports_locked(file_path).await {
-    return true;
-  }
-
   #[cfg(any(target_os = "macos", target_os = "linux"))]
   {
-    lsof_reports_open(file_path).await
+    const EDITOR_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
+    match tokio::time::timeout(
+      EDITOR_PROBE_TIMEOUT,
+      Command::new("lsof")
+        .kill_on_drop(true)
+        .arg("-t")
+        .arg("-w")
+        .arg("--")
+        .arg(current)
+        .output(),
+    )
+    .await
+    {
+      Ok(Ok(output)) if !output.stdout.is_empty() => EditorState::Attached,
+      Ok(Ok(output)) if output.status.code() == Some(1) && output.stderr.is_empty() => {
+        EditorState::Closed
+      }
+      _ => EditorState::Unknown,
+    }
   }
-
-  #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+  #[cfg(windows)]
   {
-    false
+    match crate::local_store::open_private(
+      crate::local_store::OpenMode::ExclusiveRead,
+      current,
+    ) {
+      Ok(_) => EditorState::Closed,
+      Err(error)
+        if matches!(
+          error.kind(),
+          ErrorKind::PermissionDenied | ErrorKind::WouldBlock
+        ) =>
+      {
+        EditorState::Attached
+      }
+      Err(error) => {
+        tracing::warn!(error = %error, "document editor observation is unavailable");
+        EditorState::Unknown
+      }
+    }
+  }
+  #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+  {
+    EditorState::Unknown
   }
 }
 
 impl SessionManager {
-  pub fn new() -> Self {
-    let data_dir = dirs::data_dir()
-      .unwrap_or_else(|| PathBuf::from("."))
+  pub fn new() -> Result<Self, String> {
+    Self::with_data_dir(dirs::data_dir())
+  }
+
+  fn with_data_dir(data_dir: Option<PathBuf>) -> Result<Self, String> {
+    let data_dir = data_dir
+      .ok_or("desktop data directory is unavailable")?
       .join(config::APP_DATA_DIR_NAME);
 
     let bridge_port = config::resolve_bridge_port();
 
-    Self {
+    Ok(Self {
+      store_access: SessionStoreAccess::Pending,
+      account_owner: None,
+      retired_sessions: Vec::new(),
+      file_system: Arc::new(LocalSessionFileSystem),
+      #[cfg(test)]
+      costs: Arc::new(SessionCosts::default()),
       sessions: HashMap::new(),
       session_ids_by_key: HashMap::new(),
       unconfirmed_sessions: HashMap::new(),
@@ -550,15 +689,288 @@ impl SessionManager {
       http_client: DesktopHttpClient::new(Default::default())
         .expect("desktop HTTP client initialization failed"),
       app_handle: None,
-    }
+    })
   }
 
   pub fn set_app_handle(&mut self, handle: AppHandle) {
     self.app_handle = Some(handle);
   }
 
-  pub async fn initialize(&mut self) {
-    let store = session_store::load_session_store(&self.store_path).await;
+  fn quarantine_root(&self) -> PathBuf {
+    self
+      .store_path
+      .parent()
+      .expect("session store has a data directory")
+      .join("document-recovery")
+  }
+
+  pub fn is_account_owner(&self, owner: Option<&AccountOwner>) -> bool {
+    self.account_owner.as_ref() == owner
+  }
+
+  pub async fn set_account_owner(
+    &mut self,
+    owner: Option<AccountOwner>,
+  ) -> Result<(), String> {
+    match self.store_access {
+      SessionStoreAccess::Pending => {
+        if let Err(error) = self.initialize(owner).await
+          && self.store_access != SessionStoreAccess::Unavailable
+        {
+          return Err(error);
+        }
+        return Ok(());
+      }
+      SessionStoreAccess::Unavailable => {
+        self.account_owner = owner;
+        return Ok(());
+      }
+      SessionStoreAccess::Ready => {}
+    }
+    if self.account_owner == owner {
+      return self.retry_retired_sessions(RetirementPass::Pending).await;
+    }
+    let mut persisted: Vec<_> = self
+      .sessions
+      .values()
+      .map(DesktopSession::to_persisted)
+      .collect();
+    persisted.extend(
+      self
+        .unconfirmed_sessions
+        .values()
+        .filter(|session| !self.sessions.contains_key(&session.id))
+        .cloned(),
+    );
+    let quarantine = self.quarantine_root();
+    let plans = persisted
+      .into_iter()
+      .map(|session| RetiredSession::plan(session, &quarantine))
+      .collect::<Result<Vec<_>, _>>()?;
+    for session in self.sessions.values_mut() {
+      session.cancel_timers();
+    }
+    self.retired_sessions.extend(plans);
+    self.sessions.clear();
+    self.session_ids_by_key.clear();
+    self.unconfirmed_sessions.clear();
+    self.account_owner = owner;
+    self.persist_sessions_result().await?;
+    self.retry_retired_sessions(RetirementPass::Pending).await?;
+    self.emit_state_change();
+    Ok(())
+  }
+
+  async fn retry_retired_sessions(
+    &mut self,
+    pass: RetirementPass,
+  ) -> Result<(), String> {
+    if self.store_access != SessionStoreAccess::Ready {
+      return Err(crate::i18n::t("settings.errorReadState").into());
+    }
+    let indices: Vec<_> = self
+      .retired_sessions
+      .iter()
+      .enumerate()
+      .filter(|(_, record)| {
+        !record.finished()
+          || (pass == RetirementPass::ObserveEditors && record.needs_editor_check())
+      })
+      .map(|(index, _)| index)
+      .collect();
+    if indices.is_empty() {
+      return Ok(());
+    }
+    // Cleanup starts only after its destination and credential state are durable.
+    self.persist_sessions_result().await?;
+    let mut changed = false;
+    let mut set_aside = false;
+    let mut recovery_changed = false;
+    for index in indices {
+      let mut record = self.retired_sessions[index].clone();
+      let paths = match &record.copy {
+        CopyRetirement::Pending {
+          source,
+          destination,
+          ..
+        } if record.editor_state == EditorState::Closed
+          || pass == RetirementPass::ObserveEditors =>
+        {
+          Some((
+            source.clone(),
+            if source.exists() {
+              source.clone()
+            } else {
+              destination.clone()
+            },
+          ))
+        }
+        CopyRetirement::Quarantined { source, path, .. }
+          if record.editor_state == EditorState::Closed
+            || (pass == RetirementPass::ObserveEditors
+              && record.needs_editor_check()) =>
+        {
+          Some((source.clone(), path.clone()))
+        }
+        _ => None,
+      };
+      if let Some((original, current)) = paths {
+        let observed = observe_editor(&original, &current).await;
+        // A rename-save may briefly hide both paths. Only consecutive durable
+        // missing observations can authorize the existing NotFound retirement.
+        record.editor_state = match (record.editor_state, observed, &record.copy) {
+          (
+            EditorState::Missing,
+            EditorState::Missing,
+            CopyRetirement::Pending { .. } | CopyRetirement::Quarantined { .. },
+          ) => EditorState::Closed,
+          (_, observed, _) => observed,
+        };
+      }
+      if record.finished() && record.editor_state != EditorState::Closed {
+        self.retired_sessions[index] = record;
+        changed = true;
+        continue;
+      }
+      let root = self.edit_root.clone();
+      let result = tokio::task::spawn_blocking(move || {
+        let result = document_sessions::retire_session(
+          &mut record,
+          &root,
+          &document_sessions::NativeRetirementIo,
+        );
+        (record, result)
+      })
+      .await
+      .map_err(|error| format!("document retirement task failed: {error}"))?;
+      let (record, result) = result;
+      if let Err(error) = result {
+        tracing::warn!(error = %error, "document retirement remains pending");
+      }
+      set_aside |= matches!(
+        self.retired_sessions[index].copy,
+        CopyRetirement::Pending { .. }
+      ) && matches!(record.copy, CopyRetirement::Quarantined { .. });
+      recovery_changed |= self.retired_sessions[index].copy != record.copy
+        || self.retired_sessions[index].token != record.token;
+      self.retired_sessions[index] = record;
+      changed = true;
+    }
+    self.retired_sessions.retain(|record| {
+      !(record.finished() && matches!(record.copy, CopyRetirement::Removed))
+    });
+    if changed {
+      self.persist_sessions_result().await?;
+    }
+    if recovery_changed {
+      self.emit_state_change();
+    }
+    if set_aside {
+      self.show_notification(
+        NotifType::SyncIssues,
+        crate::i18n::t("notification.editsSetAsideTitle"),
+        Some(crate::i18n::t("notification.editsSetAsideBody")),
+      );
+    }
+    Ok(())
+  }
+
+  fn recovery_snapshot(&self) -> DocumentRecoverySnapshot {
+    let recoverable =
+      |record: &&RetiredSession| !matches!(record.copy, CopyRetirement::Removed);
+    let edits = self
+      .retired_sessions
+      .iter()
+      .filter(recoverable)
+      .filter(|record| {
+        record.account_owner.is_some() && record.account_owner == self.account_owner
+      })
+      .take(document_sessions::RECOVERY_LIST_LIMIT)
+      .map(|record| RecoveryEdit {
+        id: record.id.clone(),
+        file_name: record.file_name.clone(),
+        status: match record.copy {
+          CopyRetirement::Pending { .. } => RecoveryStatus::Pending,
+          CopyRetirement::Quarantined { .. } => RecoveryStatus::Available,
+          CopyRetirement::Removed => {
+            unreachable!("removed copies are not recovery entries")
+          }
+        },
+      })
+      .collect();
+    let unassigned = self
+      .retired_sessions
+      .iter()
+      .filter(recoverable)
+      .any(|record| record.account_owner.is_none());
+    let access = if self
+      .retired_sessions
+      .iter()
+      .filter(recoverable)
+      .any(|record| {
+        record.account_owner.is_some() && record.account_owner != self.account_owner
+      }) {
+      RecoveryAccess::SignInRequired
+    } else {
+      RecoveryAccess::Available
+    };
+    DocumentRecoverySnapshot {
+      edits,
+      unassigned,
+      pending: self
+        .retired_sessions
+        .iter()
+        .any(|record| !record.finished()),
+      access,
+    }
+  }
+
+  pub fn open_recovery_folder(&self, target: RecoveryTarget) -> Result<(), String> {
+    let namespace = match target {
+      RecoveryTarget::Account => self
+        .account_owner
+        .as_ref()
+        .ok_or("Connect your account to open document recovery")?
+        .as_str(),
+      RecoveryTarget::Unassigned => "unassigned",
+    };
+    let directory = self.quarantine_root().join(namespace);
+    crate::local_store::create_private_dir(&directory)
+      .map_err(|error| error.to_string())?;
+    open_path_native(directory.to_string_lossy().as_ref())
+  }
+
+  pub async fn initialize(
+    &mut self,
+    account_owner: Option<AccountOwner>,
+  ) -> Result<(), String> {
+    self
+      .initialize_with_tokens(account_owner, |id| async move {
+        crate::keychain::get_token_with_timeout(&id, KEYCHAIN_RESTORE_TIMEOUT).await
+      })
+      .await
+  }
+
+  async fn initialize_with_tokens<F, Fut>(
+    &mut self,
+    account_owner: Option<AccountOwner>,
+    lookup: F,
+  ) -> Result<(), String>
+  where
+    F: Fn(String) -> Fut,
+    Fut: std::future::Future<
+        Output = Result<Option<String>, crate::keychain::KeychainReadUnavailable>,
+      >,
+  {
+    self.account_owner = account_owner;
+    let mut store = session_store::load_session_store(&self.store_path).await;
+    // Editor observations are confirmed again after each launch.
+    for session in &mut store.sessions {
+      session.editor_state = EditorState::Unknown;
+    }
+    for record in &mut store.retired_sessions {
+      record.editor_state = EditorState::Unknown;
+    }
 
     // Older stores record only the remembered web origin. Restore its pair
     // only when unique; an ambiguous API selection needs explicit reconnection.
@@ -584,66 +996,72 @@ impl SessionManager {
     self.store_load_issue = store.load_issue;
 
     if self.store_load_issue.is_some() {
+      self.store_access = SessionStoreAccess::Unavailable;
       self.show_notification(
         NotifType::SyncIssues,
-        crate::i18n::t("notification.recoveryResetTitle"),
-        Some(crate::i18n::t("notification.recoveryResetBody")),
+        crate::i18n::t("settings.stellaDesktop"),
+        Some(crate::i18n::t("settings.errorReadState")),
       );
+      return Err(crate::i18n::t("settings.errorReadState").into());
     }
 
+    self.retired_sessions = store.retired_sessions;
     for path in store.cleanup_paths {
       self.cleanup_paths.insert(path);
     }
 
     self.unconfirmed_sessions.clear();
 
-    let persisted_sessions: Vec<PersistedDesktopSession> = store
-      .sessions
-      .into_iter()
-      .filter(|persisted| Path::new(&persisted.file_path).exists())
-      .collect();
-    let restored_tokens = join_all(persisted_sessions.iter().map(|persisted| async {
-      (
-        persisted.id.clone(),
-        crate::keychain::get_token_with_timeout(
-          &persisted.id,
-          KEYCHAIN_RESTORE_TIMEOUT,
-        )
-        .await,
-      )
-    }))
+    let partition = document_sessions::partition_sessions(
+      store.sessions,
+      self.account_owner.as_ref(),
+    );
+    for retired in partition.retired {
+      self
+        .retired_sessions
+        .push(RetiredSession::plan(retired, &self.quarantine_root())?);
+    }
+    let persisted_sessions = partition.active;
+    for owned in &persisted_sessions {
+      let mut persisted = owned.session.clone();
+      persisted.account_owner = Some(owned.owner.clone());
+      self
+        .unconfirmed_sessions
+        .insert(persisted.id.clone(), persisted);
+    }
+    let restored_tokens = join_all(
+      persisted_sessions
+        .iter()
+        .map(|owned| lookup(owned.session.id.clone())),
+    )
     .await;
     let mut token_restore_unavailable = false;
 
-    for (persisted, (_, restored_token)) in
-      persisted_sessions.into_iter().zip(restored_tokens)
-    {
+    for (owned, restored_token) in persisted_sessions.into_iter().zip(restored_tokens) {
+      let mut persisted = owned.session;
+      persisted.account_owner = Some(owned.owner.clone());
       // Token lives in OS keychain. A confirmed missing token prunes the
       // session, but an inconclusive keychain read must retain the persisted
       // metadata for a later retry.
       let session_token = match restored_token {
         Ok(Some(token)) => token,
         Ok(None) => {
-          tracing::warn!(
-              session_id = %persisted.id,
-              "session token missing from keychain, skipping restore"
-          );
+          self.unconfirmed_sessions.remove(&persisted.id);
+          self
+            .retired_sessions
+            .push(RetiredSession::plan(persisted, &self.quarantine_root())?);
           continue;
         }
         Err(crate::keychain::KeychainReadUnavailable) => {
           token_restore_unavailable = true;
-          tracing::warn!(
-              session_id = %persisted.id,
-              "session token could not be confirmed, retaining persisted session for retry"
-          );
-          self
-            .unconfirmed_sessions
-            .insert(persisted.id.clone(), persisted);
           continue;
         }
       };
 
       let session = DesktopSession {
+        editor_state: EditorState::Unknown,
+        account_owner: owned.owner,
+        download_sha: persisted.download_sha,
         api_base_url: persisted.api_base_url,
         base_version_number: persisted.base_version_number,
         entity_id: persisted.entity_id,
@@ -662,6 +1080,8 @@ impl SessionManager {
         status: persisted.status,
         takeover_detected: persisted.takeover_detected,
         workspace_id: persisted.workspace_id,
+        generation: uuid::Uuid::new_v4(),
+        last_observed_file: None,
         changed_during_remote_save: false,
         checkpoint_in_flight: false,
         finalize_in_flight: false,
@@ -670,7 +1090,7 @@ impl SessionManager {
         retry_notice_shown: false,
         watcher: None,
         checkpoint_timer: None,
-        open_poll_timer: None,
+        open_probe_timer: None,
         sse_listener: None,
       };
 
@@ -682,13 +1102,13 @@ impl SessionManager {
     }
 
     if token_restore_unavailable {
-      tracing::warn!(
-        "session store persistence skipped because one or more keychain reads were inconclusive"
-      );
-      return;
+      tracing::warn!("document session credentials will be checked on a later restore");
     }
+    self.store_access = SessionStoreAccess::Ready;
+    self.persist_sessions_result().await?;
+    self.retry_retired_sessions(RetirementPass::Pending).await?;
     self.retry_pending_cleanup().await;
-    self.persist_sessions().await;
+    self.persist_sessions_result().await
   }
 
   /// Returns session IDs that need watchers attached (called after initialize).
@@ -707,6 +1127,7 @@ impl SessionManager {
     sessions.sort_by(|a, b| a.file_name.cmp(&b.file_name));
 
     AppSnapshot {
+      document_recovery: self.recovery_snapshot(),
       bridge_port: self.bridge_port,
       bridge_version: crate::types::BRIDGE_VERSION,
       capabilities: crate::types::BRIDGE_CAPABILITIES
@@ -752,9 +1173,16 @@ impl SessionManager {
 
   pub async fn open_file(
     &mut self,
-    request: OpenFileRequest,
-    prefetched_buffer: Option<Vec<u8>>,
+    OpenDocument {
+      account,
+      request,
+      prefetched_buffer,
+    }: OpenDocument<'_>,
   ) -> Result<OpenFileResponse, String> {
+    self
+      .set_account_owner(Some(AccountOwner::for_account(account)))
+      .await?;
+    self.persist_sessions_result().await?;
     let key = session_key(
       &request.workspace_id,
       &request.entity_id,
@@ -801,6 +1229,9 @@ impl SessionManager {
       // Update session fields, then extract what we need before dropping the borrow
       let (file_path, session_id, file_name) = {
         let session = self.sessions.get_mut(&eid).unwrap();
+        session.generation = uuid::Uuid::new_v4();
+        session.checkpoint_in_flight = false;
+        session.finalize_in_flight = false;
         session.api_base_url = normalize_api_base_url(&request.api_base_url);
         session.base_version_number = remote.base_version_number;
         session.file_type = file_type;
@@ -808,6 +1239,7 @@ impl SessionManager {
         session.file_path = file_path;
         session.last_checkpoint_at = remote.last_checkpoint_at.clone();
         session.last_error = None;
+        session.editor_state = EditorState::Unknown;
         session.local_open_seen = false;
         session.closed_recheck_count = 0;
         session.changed_during_remote_save = false;
@@ -857,10 +1289,7 @@ impl SessionManager {
     };
 
     // Use prefetched buffer (downloaded outside the lock) or download now
-    let buffer = match prefetched_buffer {
-      Some(buf) => buf,
-      None => self.download_file(file_type, &remote.download_url).await?,
-    };
+    let buffer = prefetched_buffer;
     let local_sha = hash_bytes(&buffer);
 
     // Write to local disk
@@ -870,16 +1299,28 @@ impl SessionManager {
 
     // Clean up existing session if any
     if let Some(eid) = existing_id {
-      self.cleanup_session_internal(&eid, false).await;
+      self.cleanup_session_internal(&eid).await?;
+    }
+
+    if self.retired_sessions.iter().any(|record| {
+      record.session_id == remote.session_id
+        && record.token == document_sessions::TokenRetirement::Pending
+    }) {
+      return Err(crate::i18n::t("settings.recoveryPending").into());
     }
 
     // Create new session
     let session = DesktopSession {
+      editor_state: EditorState::Unknown,
+      account_owner: AccountOwner::for_account(account),
+      download_sha: Some(local_sha.clone()),
       api_base_url: normalize_api_base_url(&request.api_base_url),
       base_version_number: remote.base_version_number,
       entity_id: request.entity_id,
       file_type,
       file_name: managed_file_name,
+      generation: uuid::Uuid::new_v4(),
+      last_observed_file: self.file_system.fingerprint(Path::new(&file_path)).ok(),
       file_path: file_path.clone(),
       id: remote.session_id.clone(),
       key: key.clone(),
@@ -905,7 +1346,7 @@ impl SessionManager {
       retry_notice_shown: false,
       watcher: None,
       checkpoint_timer: None,
-      open_poll_timer: None,
+      open_probe_timer: None,
       sse_listener: None,
     };
 
@@ -927,7 +1368,9 @@ impl SessionManager {
 
     // Open in default app
     if let Err(e) = open_path_native(&file_path) {
-      self.cleanup_session_internal(&session_id, false).await;
+      if let Err(error) = self.cleanup_session_internal(&session_id).await {
+        tracing::warn!(error = %error, "document cleanup remains pending");
+      }
       return Err(e);
     }
 
@@ -961,12 +1404,14 @@ impl SessionManager {
     })
   }
 
-  pub fn open_session_file(&self, session_id: &str) -> bool {
-    self
-      .sessions
-      .get(session_id)
-      .map(|s| open_path_native(&s.file_path).is_ok())
-      .unwrap_or(false)
+  pub fn open_session_file(&mut self, session_id: &str) -> bool {
+    let Some(session) = self.sessions.get_mut(session_id) else {
+      return false;
+    };
+    session.editor_state = EditorState::Unknown;
+    session.local_open_seen = false;
+    session.closed_recheck_count = 0;
+    open_path_native(&session.file_path).is_ok()
   }
 
   pub fn reveal_session(&self, session_id: &str) -> bool {
@@ -996,6 +1441,18 @@ impl SessionManager {
 
     self.emit_state_change();
     true
+  }
+
+  fn finish_confirmed_closed_session(&mut self, session_id: &str) -> bool {
+    let confirmed = self.sessions.get(session_id).is_some_and(|session| {
+      session.local_open_seen
+        && session.closed_recheck_count >= CLOSED_RECHECK_COUNT
+        && !session.pending_finalize
+        && !session.checkpoint_in_flight
+        && !session.finalize_in_flight
+        && !session.takeover_detected
+    });
+    confirmed && self.finish_session(session_id)
   }
 
   pub fn retry_session_now(&mut self, session_id: &str) -> bool {
@@ -1288,53 +1745,43 @@ impl SessionManager {
     });
   }
 
-  /// Respond to a takeover request (called from tray menu action).
-  pub async fn respond_to_takeover(&self, session_id: &str, approved: bool) -> bool {
-    let Some(session) = self.sessions.get(session_id) else {
-      return false;
-    };
-
+  fn prepare_takeover_response(
+    &self,
+    session_id: &str,
+    approved: bool,
+  ) -> Option<reqwest::RequestBuilder> {
+    let session = self.sessions.get(session_id)?;
     let url = format!(
-      "{}/v1/desktop-edit-sessions/{}/respond-takeover",
-      session.api_base_url, session_id
+      "{}/v1/desktop-edit-sessions/{session_id}/respond-takeover",
+      session.api_base_url
     );
-
-    let body = serde_json::json!({
-      "sessionToken": session.session_token,
-      "approved": approved,
-    });
-
-    match self
-      .http_client
-      .post(&url)
-      .json(&body)
-      .timeout(Duration::from_secs(10))
-      .send()
-      .await
-    {
-      Ok(r) if r.status().is_success() => true,
-      Ok(r) => {
-        tracing::warn!(
-          session_id,
-          status = r.status().as_u16(),
-          "respond-takeover failed"
-        );
-        false
-      }
-      Err(e) => {
-        tracing::warn!(
-          session_id,
-          error = %e,
-          "respond-takeover network error"
-        );
-        false
-      }
-    }
+    Some(
+      self
+        .http_client
+        .post(url)
+        .json(&serde_json::json!({
+          "sessionToken": session.session_token, "approved": approved,
+        }))
+        .timeout(Duration::from_secs(10)),
+    )
   }
 
   pub async fn open_edit_root(&self) -> bool {
-    let _ = tokio::fs::create_dir_all(&self.edit_root).await;
-    open_path_native(self.edit_root.to_string_lossy().as_ref()).is_ok()
+    let Some(owner) = &self.account_owner else {
+      return false;
+    };
+    let root = self.edit_root.join(owner.as_str());
+    let opened_root = root.clone();
+    if !matches!(
+      tokio::task::spawn_blocking(move || crate::local_store::create_private_dir(
+        &root
+      ))
+      .await,
+      Ok(Ok(()))
+    ) {
+      return false;
+    }
+    open_path_native(opened_root.to_string_lossy().as_ref()).is_ok()
   }
 
   pub fn reveal_support_root(&self) -> bool {
@@ -1364,35 +1811,49 @@ impl SessionManager {
 
   // --- Checkpoint sync ---
 
-  pub async fn sync_checkpoint(&mut self, session_id: &str) -> bool {
+  async fn prepare_checkpoint(
+    &mut self,
+    session_id: &str,
+  ) -> Option<SyncCheckpointInput> {
+    let session = self.sessions.get_mut(session_id)?;
+    if session.checkpoint_in_flight
+      || session.finalize_in_flight
+      || session.takeover_detected
     {
-      let session = match self.sessions.get(session_id) {
-        Some(s)
-          if !s.checkpoint_in_flight
-            && !s.finalize_in_flight
-            && !s.takeover_detected =>
-        {
-          s
-        }
-        _ => return false,
-      };
-
-      if !Path::new(&session.file_path).exists() {
-        let session = self.sessions.get_mut(session_id).unwrap();
-        session.last_error = Some("The managed local file is missing.".to_string());
-        session.status = SessionStatus::Error;
-        self.persist_sessions().await;
-        self.emit_state_change();
-        return false;
-      }
+      return None;
     }
-
-    let session = self.sessions.get_mut(session_id).unwrap();
+    let fingerprint = match self.file_system.fingerprint(Path::new(&session.file_path))
+    {
+      Ok(fingerprint) => fingerprint,
+      Err(error) => {
+        let message = format!("Failed to read file: {error}");
+        if session.last_error.as_ref() != Some(&message) {
+          session.last_error = Some(message);
+          session.status = SessionStatus::Error;
+          self.persist_sessions().await;
+          self.emit_state_change();
+        }
+        return None;
+      }
+    };
+    if session.last_observed_file.as_ref() == Some(&fingerprint)
+      && session.last_error.is_none()
+      && session.status
+        == (if session.pending_finalize {
+          SessionStatus::Finalizing
+        } else {
+          SessionStatus::Ready
+        })
+      && (session.last_checkpoint_sha.as_deref()
+        == Some(session.last_local_sha.as_str())
+        || (session.last_checkpoint_sha.is_none() && !session.pending_finalize))
+    {
+      return None;
+    }
     session.changed_during_remote_save = false;
     session.checkpoint_in_flight = true;
-    session.last_error = None;
-    session.status = SessionStatus::Syncing;
-    let input = SyncCheckpointInput {
+    Some(SyncCheckpointInput {
+      generation: session.generation,
       session_id: session.id.clone(),
       file_type: session.file_type,
       file_path: session.file_path.clone(),
@@ -1400,27 +1861,48 @@ impl SessionManager {
       session_token: session.session_token.clone(),
       file_name: session.file_name.clone(),
       last_checkpoint_sha: session.last_checkpoint_sha.clone(),
-    };
+      fingerprint,
+      last_local_sha: session.last_local_sha.clone(),
+      pending_finalize: session.pending_finalize,
+    })
+  }
 
-    self.persist_sessions().await;
-    self.emit_state_change();
-
-    let result = self.do_sync_checkpoint(input).await;
-
+  async fn apply_checkpoint(
+    &mut self,
+    session_id: &str,
+    fingerprint: FileFingerprint,
+    generation: uuid::Uuid,
+    result: CheckpointResult,
+  ) -> bool {
     let Some(session) = self.sessions.get_mut(session_id) else {
       return false;
     };
+    if session.generation != generation || session.takeover_detected {
+      return false;
+    }
     session.checkpoint_in_flight = false;
 
     match result {
-      CheckpointResult::Unchanged => {
-        session.status = if session.pending_finalize {
+      CheckpointResult::Unchanged { sha } => {
+        if session.changed_during_remote_save {
+          session.last_observed_file = None;
+          return false;
+        }
+        session.last_observed_file = Some(fingerprint);
+        let status = if session.pending_finalize {
           SessionStatus::Finalizing
         } else {
           SessionStatus::Ready
         };
-        self.persist_sessions().await;
-        self.emit_state_change();
+        let state_changed = session.last_error.take().is_some()
+          || session.last_local_sha != sha
+          || session.status != status;
+        session.last_local_sha = sha;
+        session.status = status;
+        if state_changed {
+          self.persist_sessions().await;
+          self.emit_state_change();
+        }
         true
       }
       CheckpointResult::Uploaded {
@@ -1431,6 +1913,12 @@ impl SessionManager {
       } => {
         let changed_during_upload =
           session.changed_during_remote_save || current_sha != next_sha;
+
+        session.last_observed_file = if changed_during_upload {
+          None
+        } else {
+          Some(fingerprint)
+        };
 
         // Apply rotated token from server
         if let Some(ref new_token) = rotated_token {
@@ -1496,35 +1984,42 @@ impl SessionManager {
     }
   }
 
-  async fn do_sync_checkpoint(&self, input: SyncCheckpointInput) -> CheckpointResult {
-    let file_bytes = match tokio::fs::read(&input.file_path).await {
+  async fn do_sync_checkpoint(
+    client: &DesktopHttpClient,
+    file_system: &dyn SessionFileSystem,
+    input: &SyncCheckpointInput,
+  ) -> CheckpointResult {
+    let file_bytes = match file_system.read(Path::new(&input.file_path)).await {
       Ok(b) => b,
       Err(e) => return CheckpointResult::Error(format!("Failed to read file: {e}")),
     };
 
     let next_sha = hash_bytes(&file_bytes);
 
-    if Some(next_sha.as_str()) == input.last_checkpoint_sha.as_deref() {
-      return CheckpointResult::Unchanged;
+    if Some(next_sha.as_str()) == input.last_checkpoint_sha.as_deref()
+      || (input.last_checkpoint_sha.is_none()
+        && !input.pending_finalize
+        && next_sha == input.last_local_sha)
+    {
+      return CheckpointResult::Unchanged { sha: next_sha };
     }
 
     let form = reqwest::multipart::Form::new()
       .part(
         "file",
         reqwest::multipart::Part::bytes(file_bytes)
-          .file_name(input.file_name)
+          .file_name(input.file_name.clone())
           .mime_str(input.file_type.mime_type())
           .unwrap(),
       )
-      .text("sessionToken", input.session_token);
+      .text("sessionToken", input.session_token.clone());
 
     let url = format!(
       "{}/v1/desktop-edit-sessions/{}/checkpoint",
       input.api_base_url, input.session_id
     );
 
-    let response = match self
-      .http_client
+    let response = match client
       .post(&url)
       .multipart(form)
       .timeout(REMOTE_SAVE_TIMEOUT)
@@ -1567,12 +2062,21 @@ impl SessionManager {
 
     match response.json::<CheckpointResponse>().await {
       Ok(cp) => {
-        let current_sha = match tokio::fs::read(&input.file_path).await {
-          Ok(bytes) => hash_bytes(&bytes),
-          Err(e) => {
-            return CheckpointResult::Error(format!(
-              "Failed to re-read file after checkpoint upload: {e}"
-            ));
+        let current_sha = if file_system
+          .fingerprint(Path::new(&input.file_path))
+          .ok()
+          .as_ref()
+          == Some(&input.fingerprint)
+        {
+          next_sha.clone()
+        } else {
+          match file_system.read(Path::new(&input.file_path)).await {
+            Ok(bytes) => hash_bytes(&bytes),
+            Err(e) => {
+              return CheckpointResult::Error(format!(
+                "Failed to re-read file after checkpoint upload: {e}"
+              ));
+            }
           }
         };
 
@@ -1591,25 +2095,29 @@ impl SessionManager {
 
   // --- Finalize ---
 
-  pub async fn finalize_session(&mut self, session_id: &str) -> bool {
+  async fn prepare_finalize(&mut self, session_id: &str) -> Option<FinalizeInput> {
     let (file_path, checkpoint_sha) = {
       let session = match self.sessions.get(session_id) {
-        Some(s) if !s.finalize_in_flight && !s.takeover_detected => s,
-        _ => return false,
+        Some(s)
+          if !s.checkpoint_in_flight
+            && !s.finalize_in_flight
+            && !s.takeover_detected =>
+        {
+          s
+        }
+        _ => return None,
       };
 
-      let Some(checkpoint_sha) = session.last_checkpoint_sha.clone() else {
-        return false;
-      };
+      let checkpoint_sha = session.last_checkpoint_sha.clone()?;
 
       if session.last_local_sha != checkpoint_sha {
-        return false;
+        return None;
       }
 
       (session.file_path.clone(), checkpoint_sha)
     };
 
-    let current_sha = match tokio::fs::read(&file_path).await {
+    let current_sha = match self.file_system.read(Path::new(&file_path)).await {
       Ok(bytes) => hash_bytes(&bytes),
       Err(e) => {
         let session = self.sessions.get_mut(session_id).unwrap();
@@ -1617,7 +2125,7 @@ impl SessionManager {
         session.status = SessionStatus::Error;
         self.persist_sessions().await;
         self.emit_state_change();
-        return false;
+        return None;
       }
     };
 
@@ -1628,7 +2136,7 @@ impl SessionManager {
       session.status = SessionStatus::Syncing;
       self.persist_sessions().await;
       self.emit_state_change();
-      return false;
+      return None;
     }
 
     let session = self.sessions.get_mut(session_id).unwrap();
@@ -1641,14 +2149,28 @@ impl SessionManager {
     let session_token = session.session_token.clone();
     let pending_finalize = session.pending_finalize;
 
-    self.persist_sessions().await;
-    self.emit_state_change();
+    Some(FinalizeInput {
+      generation: session.generation,
+      api_base_url,
+      session_id: sid,
+      session_token,
+      pending_finalize,
+    })
+  }
 
-    let result = self.do_finalize(&sid, &api_base_url, &session_token).await;
-
+  async fn apply_finalize(
+    &mut self,
+    session_id: &str,
+    pending_finalize: bool,
+    generation: uuid::Uuid,
+    result: FinalizeResult,
+  ) -> bool {
     let Some(session) = self.sessions.get_mut(session_id) else {
       return false;
     };
+    if session.generation != generation || session.takeover_detected {
+      return false;
+    }
     session.finalize_in_flight = false;
 
     match result {
@@ -1678,8 +2200,13 @@ impl SessionManager {
             ],
           )),
         );
-        self.cleanup_session_internal(session_id, true).await;
-        true
+        match self.cleanup_session_internal(session_id).await {
+          Ok(()) => true,
+          Err(error) => {
+            tracing::warn!(error = %error, "document cleanup remains pending");
+            false
+          }
+        }
       }
       FinalizeResult::NoChanges => {
         if session.changed_during_remote_save {
@@ -1695,8 +2222,13 @@ impl SessionManager {
           return false;
         }
 
-        self.cleanup_session_internal(session_id, true).await;
-        true
+        match self.cleanup_session_internal(session_id).await {
+          Ok(()) => true,
+          Err(error) => {
+            tracing::warn!(error = %error, "document cleanup remains pending");
+            false
+          }
+        }
       }
       FinalizeResult::TakenOver(message) => {
         self.mark_session_taken_over(session_id, &message).await;
@@ -1734,7 +2266,7 @@ impl SessionManager {
   }
 
   async fn do_finalize(
-    &self,
+    client: &DesktopHttpClient,
     session_id: &str,
     api_base_url: &str,
     session_token: &str,
@@ -1742,8 +2274,7 @@ impl SessionManager {
     let url = format!("{api_base_url}/v1/desktop-edit-sessions/{session_id}/finalize");
     let body = serde_json::json!({ "sessionToken": session_token });
 
-    let response = match self
-      .http_client
+    let response = match client
       .post(&url)
       .json(&body)
       .timeout(REMOTE_SAVE_TIMEOUT)
@@ -1795,58 +2326,18 @@ impl SessionManager {
 
   // --- Retry loop (called from spawned timer) ---
 
-  pub async fn retry_pending_work(&mut self) {
-    self.retry_pending_cleanup().await;
-
-    let session_ids: Vec<String> = self.sessions.keys().cloned().collect();
-    for sid in session_ids {
-      self.retry_session(&sid).await;
-    }
-  }
-
-  pub async fn retry_session(&mut self, session_id: &str) {
-    if self
-      .sessions
-      .get(session_id)
-      .is_none_or(|s| s.takeover_detected)
-    {
-      return;
-    }
-
-    let mut checkpoint_ready = false;
-    for _ in 0..3 {
-      checkpoint_ready = self.sync_checkpoint(session_id).await;
-      if checkpoint_ready {
-        break;
-      }
-
-      let should_retry_checkpoint = self.sessions.get(session_id).is_some_and(|s| {
-        !s.takeover_detected
-          && !s.checkpoint_in_flight
-          && !s.finalize_in_flight
-          && s.last_error.is_none()
-          && s.status == SessionStatus::Syncing
-          && s
-            .last_checkpoint_sha
-            .as_deref()
-            .is_none_or(|sha| s.last_local_sha != sha)
-      });
-      if !should_retry_checkpoint {
-        break;
-      }
-    }
-
-    let should_finalize = self
-      .sessions
-      .get(session_id)
-      .is_some_and(|s| s.pending_finalize);
-
-    if should_finalize && checkpoint_ready {
-      self.finalize_session(session_id).await;
-    }
-  }
-
   // --- File watcher ---
+
+  pub async fn attach_pending_listeners(manager: &Arc<Mutex<Self>>) {
+    let ids = manager.lock().await.session_ids_needing_watchers();
+    for id in &ids {
+      Self::attach_watcher(manager, id).await;
+    }
+    let mut state = manager.lock().await;
+    for id in &ids {
+      state.ensure_sse_listener(manager, id);
+    }
+  }
 
   pub async fn attach_watcher(manager: &Arc<Mutex<Self>>, session_id: &str) {
     let (watch_dir, file_name, sid) = {
@@ -1873,44 +2364,45 @@ impl SessionManager {
     let sid_for_watcher = sid.clone();
     let fname_for_watcher = file_name.clone();
 
+    let runtime = tokio::runtime::Handle::current();
     let watcher_result = notify::recommended_watcher(move |res: Result<Event, _>| {
       if let Ok(event) = res {
-        match event.kind {
-          EventKind::Modify(_)
-          | EventKind::Create(_)
-          | EventKind::Remove(_)
-          | EventKind::Access(AccessKind::Close(_)) => {
-            let changed_file = event
-              .paths
-              .first()
-              .and_then(|p| p.file_name())
-              .and_then(|n| n.to_str())
-              .map(|s| s.to_string());
-
-            let mgr = Arc::clone(&mgr_for_watcher);
-            let sid = sid_for_watcher.clone();
-            let fname = fname_for_watcher.clone();
-
-            let _ = tokio::runtime::Handle::try_current().map(|handle| {
-              handle.spawn(async move {
-                handle_filesystem_event(mgr, &sid, changed_file.as_deref(), &fname)
-                  .await;
-              });
-            });
-          }
-          _ => {}
+        if !event_needs_open_probe(&event.kind) {
+          return;
         }
+        let changed_file = event
+          .paths
+          .iter()
+          .filter_map(|path| path.file_name().and_then(|name| name.to_str()))
+          .find(|name| {
+            *name == fname_for_watcher
+              || is_temporary_lock_file_for(name, &fname_for_watcher)
+          })
+          .map(str::to_string);
+        if !event.paths.is_empty() && changed_file.is_none() {
+          return;
+        }
+
+        let mgr = Arc::clone(&mgr_for_watcher);
+        let sid = sid_for_watcher.clone();
+        let fname = fname_for_watcher.clone();
+
+        runtime.spawn(async move {
+          handle_filesystem_event(mgr, &sid, changed_file.as_deref(), &fname).await;
+        });
       }
     });
 
     let mut mgr = manager.lock().await;
     if let Some(session) = mgr.sessions.get_mut(&sid) {
       match watcher_result {
-        Ok(mut w) => {
-          let _ = w.watch(&watch_dir, RecursiveMode::NonRecursive);
-          ensure_open_poll_loop(session, manager, &sid);
-          session.watcher = Some(w);
-        }
+        Ok(mut w) => match w.watch(&watch_dir, RecursiveMode::NonRecursive) {
+          Ok(()) => {
+            ensure_open_probe_loop(session, manager, &sid);
+            session.watcher = Some(w);
+          }
+          Err(error) => tracing::warn!(%error, "failed to watch editing directory"),
+        },
         Err(e) => {
           tracing::warn!(error = %e, "failed to create file watcher");
         }
@@ -1926,6 +2418,9 @@ impl SessionManager {
     };
 
     session.cancel_timers();
+    session.generation = uuid::Uuid::new_v4();
+    session.checkpoint_in_flight = false;
+    session.finalize_in_flight = false;
     session.last_error = Some(message.to_string());
     session.pending_finalize = false;
     session.retry_notice_shown = false;
@@ -1963,41 +2458,37 @@ impl SessionManager {
 
       self.show_notification(NotifType::SyncIssues, message, Some(&body));
     }
-    self.cleanup_session_internal(session_id, false).await;
+    if let Err(error) = self.cleanup_session_internal(session_id).await {
+      tracing::warn!(error = %error, "document cleanup remains pending");
+    }
   }
 
-  async fn cleanup_session_internal(
-    &mut self,
-    session_id: &str,
-    remove_local_files: bool,
-  ) {
-    // Remove token from OS keychain
-    crate::keychain::delete_token(session_id);
-
-    if let Some(mut session) = self.sessions.remove(session_id) {
-      session.cancel_timers();
-      self.session_ids_by_key.remove(&session.key);
-
-      if remove_local_files && let Some(parent) = Path::new(&session.file_path).parent()
-      {
-        self
-          .schedule_cleanup_path(parent.to_string_lossy().to_string())
-          .await;
-      }
-    }
-
-    self.persist_sessions().await;
+  async fn cleanup_session_internal(&mut self, session_id: &str) -> Result<(), String> {
+    let Some(session) = self.sessions.get(session_id) else {
+      return Ok(());
+    };
+    let record = RetiredSession::plan(session.to_persisted(), &self.quarantine_root())?;
+    self.retired_sessions.push(record);
+    let mut session = self
+      .sessions
+      .remove(session_id)
+      .expect("session was present while retiring");
+    session.cancel_timers();
+    self.session_ids_by_key.remove(&session.key);
+    self.unconfirmed_sessions.remove(session_id);
+    self.persist_sessions_result().await?;
+    self.retry_retired_sessions(RetirementPass::Pending).await?;
     self.emit_state_change();
-  }
-
-  async fn schedule_cleanup_path(&mut self, path: String) {
-    if self.try_remove_cleanup_path(&path).await {
-      return;
-    }
-    self.cleanup_paths.insert(path);
+    Ok(())
   }
 
   async fn try_remove_cleanup_path(&mut self, path: &str) -> bool {
+    let Some(owner) = &self.account_owner else {
+      return false;
+    };
+    if !Path::new(path).starts_with(self.edit_root.join(owner.as_str())) {
+      return false;
+    }
     match tokio::fs::remove_dir_all(path).await {
       Ok(()) => {
         self.cleanup_paths.remove(path);
@@ -2079,28 +2570,14 @@ impl SessionManager {
     session.sse_listener = Some(handle);
   }
 
-  async fn download_file(
-    &self,
-    file_type: DesktopEditFileType,
-    url: &str,
-  ) -> Result<Vec<u8>, String> {
-    let response = self
-      .http_client
-      .get(url)
-      .timeout(DOWNLOAD_TIMEOUT)
-      .send()
-      .await
-      .map_err(|e| format!("stella desktop could not download the Office file: {e}"))?;
-
-    if !response.status().is_success() {
-      return Err("stella desktop could not download the Office file.".to_string());
-    }
-
-    validate_office_download_response(file_type, &response)?;
-
-    let bytes = read_office_download_bytes(response).await?;
-    validate_office_download_bytes(file_type, &bytes)?;
-    Ok(bytes)
+  fn holds_pending_recovery(&self, folder: &Path) -> bool {
+    self.retired_sessions.iter().any(|record| {
+      matches!(
+        &record.copy,
+        document_sessions::CopyRetirement::Pending { source, .. }
+          if source.starts_with(folder)
+      )
+    })
   }
 
   async fn write_managed_copy(
@@ -2109,21 +2586,44 @@ impl SessionManager {
     file_name: &str,
     buffer: &[u8],
   ) -> Result<String, String> {
-    let safe_folder = sanitize_path_segment(folder_name);
-    let session_folder = self.edit_root.join(&safe_folder);
-    tokio::fs::create_dir_all(&session_folder)
-      .await
-      .map_err(|e| format!("Failed to create editing folder: {e}"))?;
-
+    let owner = self
+      .account_owner
+      .as_ref()
+      .ok_or("Connect your account to edit documents")?;
+    let edit_root = self.edit_root.join(owner.as_str());
+    let mut session_folder = edit_root.join(sanitize_path_segment(folder_name));
+    // A retired editor may still hold unsynced work in this folder until its
+    // copy is quarantined; a new copy never replaces it.
+    if self.holds_pending_recovery(&session_folder) {
+      session_folder = edit_root.join(sanitize_path_segment(&format!(
+        "{folder_name}-{}",
+        uuid::Uuid::new_v4()
+      )));
+    }
     let file_path = session_folder.join(file_name);
-    tokio::fs::write(&file_path, buffer)
-      .await
-      .map_err(|e| format!("Failed to write Office file: {e}"))?;
-
-    Ok(file_path.to_string_lossy().to_string())
+    let buffer = buffer.to_vec();
+    tokio::task::spawn_blocking(move || {
+      crate::local_store::create_private_dir(&edit_root)
+        .and_then(|()| crate::local_store::create_private_dir(&session_folder))
+        .map_err(|error| format!("Failed to create editing folder: {error}"))?;
+      crate::local_store::write_private_atomic(&file_path, &buffer)
+        .map_err(|error| format!("Failed to write Office file: {error}"))?;
+      Ok(file_path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|error| format!("Office file task failed: {error}"))?
   }
 
   async fn persist_sessions_result(&self) -> Result<(), String> {
+    if self.store_access != SessionStoreAccess::Ready || self.store_load_issue.is_some()
+    {
+      return Err(crate::i18n::t("settings.errorReadState").into());
+    }
+    #[cfg(test)]
+    self
+      .costs
+      .writes
+      .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut persisted: Vec<PersistedDesktopSession> = self
       .unconfirmed_sessions
       .values()
@@ -2142,6 +2642,7 @@ impl SessionManager {
     session_store::persist_session_store(
       &self.store_path,
       &session_store::SessionStorePayload {
+        retired_sessions: self.retired_sessions.clone(),
         cleanup_paths: cleanup,
         linked_account: self.linked_account.clone(),
         linked_account_web_origin: self.linked_account_web_origin.clone(),
@@ -2161,9 +2662,17 @@ impl SessionManager {
   }
 
   fn emit_state_change(&self) {
+    #[cfg(test)]
+    self
+      .costs
+      .emits
+      .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if let Some(ref handle) = self.app_handle {
       let snapshot = self.get_snapshot();
-      let _ = handle.emit_to("main", "state-changed", &snapshot);
+      best_effort(
+        handle.emit_to("main", "state-changed", &snapshot),
+        "session state change was not announced",
+      );
 
       crate::tray::refresh(handle, &snapshot);
     }
@@ -2240,7 +2749,9 @@ impl SessionManager {
 // --- Helper types ---
 
 enum CheckpointResult {
-  Unchanged,
+  Unchanged {
+    sha: String,
+  },
   Uploaded {
     next_sha: String,
     current_sha: String,
@@ -2250,6 +2761,14 @@ enum CheckpointResult {
   TakenOver(String),
   SessionClosed(String),
   Error(String),
+}
+
+struct FinalizeInput {
+  generation: uuid::Uuid,
+  api_base_url: String,
+  session_id: String,
+  session_token: String,
+  pending_finalize: bool,
 }
 
 enum FinalizeResult {
@@ -2264,6 +2783,16 @@ enum NotifType {
   DocumentReady,
   RevisionCreated,
   SyncIssues,
+}
+
+fn event_needs_open_probe(kind: &EventKind) -> bool {
+  matches!(
+    kind,
+    EventKind::Modify(_)
+      | EventKind::Create(_)
+      | EventKind::Remove(_)
+      | EventKind::Access(AccessKind::Close(AccessMode::Write))
+  )
 }
 
 // --- File system event handler (called from watcher callback) ---
@@ -2288,6 +2817,10 @@ async fn handle_filesystem_event(
     };
 
     if is_relevant {
+      session.editor_state = EditorState::Attached;
+      if is_managed {
+        session.last_observed_file = None;
+      }
       if session.pending_finalize && !session.finalize_in_flight {
         session.pending_finalize = false;
         session.local_open_seen = true;
@@ -2307,7 +2840,7 @@ async fn handle_filesystem_event(
       if is_managed && (session.checkpoint_in_flight || session.finalize_in_flight) {
         session.changed_during_remote_save = true;
       }
-      ensure_open_poll_loop(session, &manager, session_id);
+      ensure_open_probe_loop(session, &manager, session_id);
     }
     drop(mgr);
   }
@@ -2333,113 +2866,297 @@ async fn handle_filesystem_event(
         let sid_for_timer = sid.clone();
         session.checkpoint_timer = Some(tokio::spawn(async move {
           tokio::time::sleep(CHECKPOINT_DEBOUNCE).await;
-          mgr_for_timer
-            .lock()
-            .await
-            .retry_session(&sid_for_timer)
-            .await;
+          if let Some(session) =
+            mgr_for_timer.lock().await.sessions.get_mut(&sid_for_timer)
+          {
+            session.checkpoint_timer.take();
+          }
+          retry_session(mgr_for_timer, &sid_for_timer).await;
         }));
       }
     }
   }
 }
 
-fn ensure_open_poll_loop(
+fn ensure_open_probe_loop(
   session: &mut DesktopSession,
   manager: &Arc<Mutex<SessionManager>>,
   session_id: &str,
 ) {
-  if session
-    .open_poll_timer
-    .as_ref()
-    .is_some_and(|handle| !handle.is_finished())
-  {
-    return;
+  if let Some(handle) = session.open_probe_timer.take() {
+    handle.abort();
   }
-
+  session.closed_recheck_count = 0;
   let mgr_clone = Arc::clone(manager);
   let sid = session_id.to_string();
-  session.open_poll_timer = Some(tokio::spawn(async move {
-    open_poll_loop(mgr_clone, sid).await;
+  session.open_probe_timer = Some(tokio::spawn(async move {
+    run_open_probe_loop(|| probe_session_open(&mgr_clone, &sid)).await;
   }));
 }
 
-async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String) {
-  let mut interval = tokio::time::interval(OPEN_POLL_INTERVAL);
-  interval.tick().await; // skip first immediate tick
+enum OpenProbeSchedule {
+  Stopped,
+  Watching,
+  ConfirmingClose,
+}
 
+/// Lockless editors can close without a filesystem event. Keep a sparse
+/// fallback alive; only a suspected close needs the faster confirmation rate.
+async fn run_open_probe_loop<F, Fut>(mut probe: F)
+where
+  F: FnMut() -> Fut,
+  Fut: std::future::Future<Output = OpenProbeSchedule>,
+{
+  let mut interval = OPEN_PROBE_INTERVAL;
   loop {
-    interval.tick().await;
+    tokio::time::sleep(interval).await;
+    interval = match probe().await {
+      OpenProbeSchedule::Stopped => return,
+      OpenProbeSchedule::Watching => OPEN_PROBE_IDLE_INTERVAL,
+      OpenProbeSchedule::ConfirmingClose => OPEN_PROBE_INTERVAL,
+    };
+  }
+}
 
-    let Some((file_path, file_name)) = ({
-      let mgr = manager.lock().await;
-      match mgr.sessions.get(&session_id) {
-        Some(s)
-          if !s.pending_finalize
+async fn probe_session_open(
+  manager: &Arc<Mutex<SessionManager>>,
+  session_id: &str,
+) -> OpenProbeSchedule {
+  probe_session_open_with(manager, session_id, |file_path, _| async move {
+    observe_editor(Path::new(&file_path), Path::new(&file_path)).await
+  })
+  .await
+}
+
+async fn probe_session_open_with<F, Fut>(
+  manager: &Arc<Mutex<SessionManager>>,
+  session_id: &str,
+  observe_open: F,
+) -> OpenProbeSchedule
+where
+  F: FnOnce(String, String) -> Fut,
+  Fut: std::future::Future<Output = EditorState>,
+{
+  let Some((file_path, file_name, generation)) = ({
+    let mgr = manager.lock().await;
+    let input = mgr.sessions.get(session_id).and_then(|session| {
+      (!session.pending_finalize && !session.takeover_detected).then(|| {
+        (
+          session.file_path.clone(),
+          session.file_name.clone(),
+          session.generation,
+        )
+      })
+    });
+    drop(mgr);
+    input
+  }) else {
+    return OpenProbeSchedule::Stopped;
+  };
+
+  let editor_state = observe_open(file_path, file_name).await;
+  let mut mgr = manager.lock().await;
+  let Some(session) = mgr.sessions.get_mut(session_id) else {
+    return OpenProbeSchedule::Stopped;
+  };
+  if session.generation != generation
+    || session.pending_finalize
+    || session.takeover_detected
+  {
+    return OpenProbeSchedule::Stopped;
+  }
+  session.editor_state = editor_state;
+  if matches!(editor_state, EditorState::Unknown | EditorState::Missing) {
+    session.closed_recheck_count = 0;
+    return OpenProbeSchedule::Watching;
+  }
+  if editor_state == EditorState::Attached {
+    session.local_open_seen = true;
+    session.closed_recheck_count = 0;
+    return OpenProbeSchedule::Watching;
+  }
+  if !session.local_open_seen {
+    return OpenProbeSchedule::Watching;
+  }
+  session.closed_recheck_count = session.closed_recheck_count.saturating_add(1);
+  if session.closed_recheck_count < CLOSED_RECHECK_COUNT
+    || session.checkpoint_in_flight
+    || session.finalize_in_flight
+  {
+    return OpenProbeSchedule::ConfirmingClose;
+  }
+
+  // Stop detection before remote work: a new watcher event may safely rearm
+  // the timer without canceling a checkpoint upload.
+  session.open_probe_timer.take();
+  mgr.finish_session(session_id);
+  mgr.persist_sessions().await;
+  drop(mgr);
+  retry_session(Arc::clone(manager), session_id).await;
+  OpenProbeSchedule::Stopped
+}
+
+pub async fn respond_to_takeover(
+  manager: Arc<Mutex<SessionManager>>,
+  session_id: &str,
+  approved: bool,
+) -> bool {
+  let request = manager
+    .lock()
+    .await
+    .prepare_takeover_response(session_id, approved);
+  let Some(request) = request else {
+    return false;
+  };
+  match request.send().await {
+    Ok(r) if r.status().is_success() => true,
+    Ok(r) => {
+      tracing::warn!(
+        session_id,
+        status = r.status().as_u16(),
+        "respond-takeover failed"
+      );
+      false
+    }
+    Err(e) => {
+      tracing::warn!(
+        session_id,
+        error = %e,
+        "respond-takeover network error"
+      );
+      false
+    }
+  }
+}
+
+/// Each remote operation owns its input; the manager guard cannot cross the request.
+pub async fn retry_session(manager: Arc<Mutex<SessionManager>>, session_id: &str) {
+  for _ in 0..3 {
+    let (input, client, file_system) = {
+      let mut mgr = manager.lock().await;
+      (
+        mgr.prepare_checkpoint(session_id).await,
+        mgr.http_client.clone(),
+        Arc::clone(&mgr.file_system),
+      )
+    };
+    let checkpoint_ready = match input {
+      Some(input) => {
+        let result =
+          SessionManager::do_sync_checkpoint(&client, file_system.as_ref(), &input)
+            .await;
+        manager
+          .lock()
+          .await
+          .apply_checkpoint(session_id, input.fingerprint, input.generation, result)
+          .await
+      }
+      None => manager
+        .lock()
+        .await
+        .sessions
+        .get(session_id)
+        .is_some_and(|s| {
+          !s.checkpoint_in_flight
+            && !s.finalize_in_flight
             && !s.takeover_detected
-            && !s.checkpoint_in_flight
-            && !s.finalize_in_flight =>
-        {
-          Some((s.file_path.clone(), s.file_name.clone()))
+            && s.last_error.is_none()
+            && s.last_checkpoint_sha.as_deref() == Some(s.last_local_sha.as_str())
+        }),
+    };
+    if checkpoint_ready {
+      let input = {
+        let mut mgr = manager.lock().await;
+        // A confirmed close remains pending when its last probe overlapped
+        // the upload. The save owner resumes finalization after it settles.
+        if mgr.finish_confirmed_closed_session(session_id) {
+          mgr.persist_sessions().await;
         }
-        Some(s)
-          if !s.pending_finalize
-            && !s.takeover_detected
-            && (s.checkpoint_in_flight || s.finalize_in_flight) =>
+        if mgr
+          .sessions
+          .get(session_id)
+          .is_some_and(|s| s.pending_finalize)
         {
+          mgr.prepare_finalize(session_id).await
+        } else {
           None
         }
-        _ => return,
+      };
+      if let Some(input) = input {
+        let result = SessionManager::do_finalize(
+          &client,
+          &input.session_id,
+          &input.api_base_url,
+          &input.session_token,
+        )
+        .await;
+        manager
+          .lock()
+          .await
+          .apply_finalize(session_id, input.pending_finalize, input.generation, result)
+          .await;
       }
-    }) else {
-      continue;
-    };
-
-    let appears_open = local_file_appears_open(Path::new(&file_path), &file_name).await;
-
-    let mut mgr = manager.lock().await;
-    let Some(session) = mgr.sessions.get_mut(&session_id) else {
-      return;
-    };
-    if session.pending_finalize || session.takeover_detected {
-      session.open_poll_timer.take();
       return;
     }
-    if session.checkpoint_in_flight || session.finalize_in_flight {
-      continue;
+    let should_retry = manager
+      .lock()
+      .await
+      .sessions
+      .get(session_id)
+      .is_some_and(|s| {
+        !s.takeover_detected
+          && !s.checkpoint_in_flight
+          && !s.finalize_in_flight
+          && s.last_error.is_none()
+          && (s.status == SessionStatus::Syncing || s.changed_during_remote_save)
+      });
+    if !should_retry {
+      return;
     }
-
-    if appears_open {
-      session.local_open_seen = true;
-      session.closed_recheck_count = 0;
-      continue;
-    }
-
-    if !session.local_open_seen {
-      continue;
-    }
-
-    session.closed_recheck_count = session.closed_recheck_count.saturating_add(1);
-    if session.closed_recheck_count < CLOSED_RECHECK_COUNT {
-      continue;
-    }
-
-    session.open_poll_timer.take();
-    mgr.finish_session(&session_id);
-    mgr.persist_sessions().await;
-    mgr.retry_session(&session_id).await;
-    drop(mgr);
-    return;
   }
 }
 
 // --- Retry loop (spawned as background task) ---
 
+trait RetryClock {
+  fn tick(&mut self) -> futures_util::future::BoxFuture<'_, bool>;
+}
+
+struct IntervalRetryClock(tokio::time::Interval);
+
+impl RetryClock for IntervalRetryClock {
+  fn tick(&mut self) -> futures_util::future::BoxFuture<'_, bool> {
+    Box::pin(async move {
+      self.0.tick().await;
+      true
+    })
+  }
+}
+
 pub async fn run_retry_loop(manager: Arc<Mutex<SessionManager>>) {
-  let mut interval = tokio::time::interval(RETRY_INTERVAL);
-  loop {
-    interval.tick().await;
-    manager.lock().await.retry_pending_work().await;
+  let mut clock = IntervalRetryClock(tokio::time::interval(RETRY_INTERVAL));
+  run_retry_clock(manager, &mut clock).await;
+}
+
+async fn run_retry_clock(
+  manager: Arc<Mutex<SessionManager>>,
+  clock: &mut (impl RetryClock + Send),
+) {
+  while clock.tick().await {
+    let session_ids = {
+      let mut mgr = manager.lock().await;
+      if let Err(error) = mgr
+        .retry_retired_sessions(RetirementPass::ObserveEditors)
+        .await
+      {
+        tracing::warn!(error = %error, "document recovery retry remains pending");
+      }
+      mgr.retry_pending_cleanup().await;
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in session_ids {
+      retry_session(Arc::clone(&manager), &id).await;
+    }
   }
 }
 
@@ -2477,20 +3194,29 @@ fn open_path_native(path: &str) -> Result<(), String> {
 fn reveal_in_folder(path: &str) {
   #[cfg(target_os = "macos")]
   {
-    let _ = std::process::Command::new("open")
-      .args(["-R", path])
-      .spawn();
+    best_effort(
+      std::process::Command::new("open")
+        .args(["-R", path])
+        .spawn(),
+      "file manager could not be opened",
+    );
   }
   #[cfg(target_os = "windows")]
   {
-    let _ = std::process::Command::new("explorer")
-      .args(["/select,", path])
-      .spawn();
+    best_effort(
+      std::process::Command::new("explorer")
+        .args(["/select,", path])
+        .spawn(),
+      "file manager could not be opened",
+    );
   }
   #[cfg(target_os = "linux")]
   {
     if let Some(parent) = Path::new(path).parent() {
-      let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
+      best_effort(
+        std::process::Command::new("xdg-open").arg(parent).spawn(),
+        "file manager could not be opened",
+      );
     }
   }
 }
@@ -2570,13 +3296,91 @@ fn chrono_now() -> String {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use std::io::{Cursor, Write};
   use zip::write::SimpleFileOptions;
 
+  fn test_manager() -> SessionManager {
+    let mut manager = SessionManager::new().expect("test data directory");
+    manager.store_access = SessionStoreAccess::Ready;
+    manager.account_owner = Some(AccountOwner::fixture("account"));
+    manager
+  }
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn local_file_creation_keeps_edit_copies() {
+    use std::os::unix::fs::PermissionsExt;
+    if crate::local_store::local_file_creation_child(
+      "session_manager::tests::local_file_creation_keeps_edit_copies",
+    ) {
+      return;
+    }
+    let mut manager = test_manager();
+    manager.edit_root =
+      std::env::temp_dir().join(format!("stella-edit-{}", uuid::Uuid::new_v4()));
+    let path = PathBuf::from(
+      manager
+        .write_managed_copy("session", "document.docx", b"document")
+        .await
+        .unwrap(),
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"document");
+    assert_eq!(
+      std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+      0o600
+    );
+    for directory in [manager.edit_root.as_path(), path.parent().unwrap()] {
+      assert_eq!(
+        std::fs::metadata(directory).unwrap().permissions().mode() & 0o777,
+        0o700
+      );
+    }
+    std::fs::remove_dir_all(manager.edit_root).unwrap();
+  }
+
+  #[tokio::test]
+  async fn a_new_copy_never_replaces_a_retired_editors_unsynced_work() {
+    let mut manager = test_manager();
+    manager.edit_root =
+      std::env::temp_dir().join(format!("stella-edit-{}", uuid::Uuid::new_v4()));
+    // Account A's editor was retired by a switch to B and back; its working
+    // copy is still waiting to be quarantined.
+    let preserved = PathBuf::from(
+      manager
+        .write_managed_copy("session", "document.docx", b"unsynced edits")
+        .await
+        .unwrap(),
+    );
+    let mut stored = persisted_session_for_test("session");
+    stored.file_path = preserved.to_string_lossy().into_owned();
+    let mut record = RetiredSession::plan(stored, &manager.quarantine_root()).unwrap();
+    record.token = document_sessions::TokenRetirement::Deleted;
+    manager.retired_sessions.push(record);
+
+    let reopened = PathBuf::from(
+      manager
+        .write_managed_copy("session", "document.docx", b"server version")
+        .await
+        .unwrap(),
+    );
+
+    assert_ne!(reopened.parent(), preserved.parent());
+    assert_eq!(std::fs::read(&preserved).unwrap(), b"unsynced edits");
+    assert_eq!(std::fs::read(&reopened).unwrap(), b"server version");
+    std::fs::remove_dir_all(manager.edit_root).unwrap();
+  }
+
   fn persisted_session_for_test(id: &str) -> PersistedDesktopSession {
     PersistedDesktopSession {
+      editor_state: EditorState::Unknown,
+      account_owner: Some(AccountOwner::fixture("account")),
+      download_sha: None,
       api_base_url: "https://api.example.com".to_string(),
       base_version_number: 1,
       entity_id: format!("entity-{id}"),
@@ -2605,6 +3409,9 @@ mod tests {
     session_token: &str,
   ) -> DesktopSession {
     DesktopSession {
+      editor_state: persisted.editor_state,
+      account_owner: persisted.account_owner.unwrap(),
+      download_sha: persisted.download_sha,
       api_base_url: persisted.api_base_url,
       base_version_number: persisted.base_version_number,
       entity_id: persisted.entity_id,
@@ -2623,6 +3430,8 @@ mod tests {
       status: persisted.status,
       takeover_detected: persisted.takeover_detected,
       workspace_id: persisted.workspace_id,
+      generation: uuid::Uuid::new_v4(),
+      last_observed_file: None,
       changed_during_remote_save: false,
       checkpoint_in_flight: false,
       finalize_in_flight: false,
@@ -2631,9 +3440,1006 @@ mod tests {
       retry_notice_shown: false,
       watcher: None,
       checkpoint_timer: None,
-      open_poll_timer: None,
+      open_probe_timer: None,
       sse_listener: None,
     }
+  }
+
+  #[tokio::test]
+  async fn editor_observations_keep_the_original_folder_hints() {
+    let sandbox = std::env::temp_dir()
+      .join(format!("desktop-editor-hints-{}", uuid::Uuid::new_v4()));
+    let original = sandbox.join("editing/document.docx");
+    let recovery = sandbox.join("recovery/document.docx");
+    let hint = original.with_file_name("~$document.docx");
+    for path in [&original, &recovery] {
+      crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
+    }
+    crate::local_store::write_private_atomic(&original, b"document").unwrap();
+    crate::local_store::write_private_atomic(&hint, b"editor").unwrap();
+    crate::local_store::move_private(&original, &recovery).unwrap();
+    assert_eq!(
+      observe_editor(&original, &recovery).await,
+      EditorState::Attached
+    );
+    crate::local_store::remove_private(&hint).unwrap();
+    crate::local_store::remove_private(&recovery).unwrap();
+    assert_eq!(
+      observe_editor(&original, &recovery).await,
+      EditorState::Missing
+    );
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  fn missing_copy_manager() -> (SessionManager, PathBuf, PathBuf) {
+    crate::i18n::init_en();
+    let sandbox = std::env::temp_dir()
+      .join(format!("desktop-missing-copy-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    manager.edit_root = sandbox.join("editing");
+    let mut stored = persisted_session_for_test("missing");
+    let source = manager.edit_root.join("missing/document.docx");
+    stored.file_path = source.to_string_lossy().into_owned();
+    let mut record = RetiredSession::plan(stored, &manager.quarantine_root()).unwrap();
+    record.token = document_sessions::TokenRetirement::Deleted;
+    let CopyRetirement::Pending { destination, .. } = &record.copy else {
+      unreachable!();
+    };
+    let destination = destination.clone();
+    for path in [&source, &destination] {
+      crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
+    }
+    manager.retired_sessions.push(record);
+    (manager, source, destination)
+  }
+
+  #[tokio::test]
+  async fn missing_copy_requires_two_durable_observations() {
+    let (mut manager, _, _) = missing_copy_manager();
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Pending { .. }
+    ));
+    assert_eq!(
+      manager.retired_sessions[0].editor_state,
+      EditorState::Missing
+    );
+    assert!(manager.get_snapshot().document_recovery.pending);
+    let loaded = session_store::load_session_store(&manager.store_path).await;
+    assert_eq!(
+      loaded.retired_sessions[0].editor_state,
+      EditorState::Missing
+    );
+    manager.retired_sessions = loaded.retired_sessions;
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(manager.retired_sessions.is_empty());
+    let recovery = manager.get_snapshot().document_recovery;
+    assert!(!recovery.pending);
+    assert!(recovery.edits.is_empty());
+    std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+  }
+
+  #[tokio::test]
+  async fn missing_quarantined_copy_retires_after_two_observations_across_a_restart() {
+    let (mut manager, source, destination) = missing_copy_manager();
+    let synced_sha = match &manager.retired_sessions[0].copy {
+      CopyRetirement::Pending { synced_sha, .. } => synced_sha.clone(),
+      _ => unreachable!(),
+    };
+    manager.retired_sessions[0].copy = CopyRetirement::Quarantined {
+      source,
+      path: destination,
+      synced_sha,
+    };
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert_eq!(
+      manager.retired_sessions[0].editor_state,
+      EditorState::Missing
+    );
+    let loaded = session_store::load_session_store(&manager.store_path).await;
+    manager.retired_sessions = loaded.retired_sessions;
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(manager.retired_sessions.is_empty());
+    assert!(manager.get_snapshot().document_recovery.edits.is_empty());
+    std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+  }
+
+  #[tokio::test]
+  async fn missing_copy_keeps_a_returning_rename_save() {
+    let (mut manager, source, destination) = missing_copy_manager();
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Pending { .. }
+    ));
+    crate::local_store::write_private_atomic(&source, b"saved edits").unwrap();
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Quarantined { .. }
+    ));
+    assert_eq!(std::fs::read(&destination).unwrap(), b"saved edits");
+    assert!(!manager.get_snapshot().document_recovery.pending);
+    std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+  }
+
+  #[tokio::test]
+  async fn missing_copy_lock_hints_reset_consecutive_observations() {
+    for lock_in_source in [true, false] {
+      let (mut manager, source, destination) = missing_copy_manager();
+      manager
+        .retry_retired_sessions(RetirementPass::ObserveEditors)
+        .await
+        .unwrap();
+      let hint = if lock_in_source {
+        &source
+      } else {
+        &destination
+      }
+      .with_file_name("~$document.docx");
+      crate::local_store::write_private_atomic(&hint, b"editor").unwrap();
+      for _ in 0..3 {
+        manager
+          .retry_retired_sessions(RetirementPass::ObserveEditors)
+          .await
+          .unwrap();
+        assert_eq!(
+          manager.retired_sessions[0].editor_state,
+          EditorState::Attached
+        );
+        assert!(matches!(
+          manager.retired_sessions[0].copy,
+          CopyRetirement::Pending { .. }
+        ));
+        assert!(manager.get_snapshot().document_recovery.pending);
+      }
+      crate::local_store::remove_private(&hint).unwrap();
+      manager
+        .retry_retired_sessions(RetirementPass::ObserveEditors)
+        .await
+        .unwrap();
+      assert!(matches!(
+        manager.retired_sessions[0].copy,
+        CopyRetirement::Pending { .. }
+      ));
+      manager
+        .retry_retired_sessions(RetirementPass::ObserveEditors)
+        .await
+        .unwrap();
+      assert!(manager.retired_sessions.is_empty());
+      std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+    }
+  }
+
+  #[tokio::test]
+  async fn account_profile_updates_keep_document_sessions() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-profile-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    let session = desktop_session_for_test(persisted_session_for_test("open"), "token");
+    manager.sessions.insert(session.id.clone(), session);
+    manager
+      .link_account(
+        LinkedAccountSnapshot {
+          email: "updated@example.test".into(),
+          name: Some("Updated".into()),
+          verified_at: "2026-01-01T00:00:00Z".into(),
+        },
+        None,
+      )
+      .await
+      .unwrap();
+    assert_eq!(manager.get_snapshot().sessions.len(), 1);
+    assert!(manager.retired_sessions.is_empty());
+    assert_eq!(
+      manager.account_owner,
+      Some(AccountOwner::fixture("account"))
+    );
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[test]
+  fn a_missing_data_directory_is_a_construction_error() {
+    assert!(matches!(
+      SessionManager::with_data_dir(None),
+      Err(error) if error == "desktop data directory is unavailable"
+    ));
+  }
+
+  #[tokio::test]
+  async fn account_recovery_keeps_an_unreadable_store_intact() {
+    // The refusal is a localized message.
+    crate::i18n::init_en();
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-journal-{}", uuid::Uuid::new_v4()));
+    crate::local_store::create_private_dir(&sandbox).unwrap();
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    let bytes = b"{unreadable journal";
+    crate::local_store::write_private_atomic(&manager.store_path, bytes).unwrap();
+    assert!(
+      manager
+        .initialize(Some(AccountOwner::fixture("account")))
+        .await
+        .is_err()
+    );
+    assert!(manager.persist_sessions_result().await.is_err());
+    for owner in [None, Some(AccountOwner::fixture("other"))] {
+      manager.set_account_owner(owner.clone()).await.unwrap();
+      assert!(manager.is_account_owner(owner.as_ref()));
+      assert!(manager.persist_sessions_result().await.is_err());
+      assert_eq!(std::fs::read(&manager.store_path).unwrap(), bytes);
+    }
+    assert!(manager.sessions.is_empty());
+    assert!(manager.retired_sessions.is_empty());
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[tokio::test]
+  async fn account_recovery_follows_the_current_namespace() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-recovery-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    manager.edit_root = sandbox.join("editing");
+    let owner = AccountOwner::fixture("account");
+    let other = AccountOwner::fixture("other");
+    let mut stored = persisted_session_for_test("saved");
+    stored.file_path = manager
+      .edit_root
+      .join(owner.as_str())
+      .join("saved/file.docx")
+      .to_string_lossy()
+      .into_owned();
+    let mut record = RetiredSession::plan(stored, &manager.quarantine_root()).unwrap();
+    record.token = document_sessions::TokenRetirement::Deleted;
+    record.copy = CopyRetirement::Quarantined {
+      source: PathBuf::from("/unused"),
+      synced_sha: None,
+      path: manager
+        .quarantine_root()
+        .join(owner.as_str())
+        .join("saved/file.docx"),
+    };
+    manager.retired_sessions.push(record);
+    assert_eq!(manager.get_snapshot().document_recovery.edits.len(), 1);
+    manager.set_account_owner(None).await.unwrap();
+    assert!(manager.get_snapshot().document_recovery.edits.is_empty());
+    manager.set_account_owner(Some(other)).await.unwrap();
+    assert!(manager.get_snapshot().document_recovery.edits.is_empty());
+    assert!(matches!(
+      manager.get_snapshot().document_recovery.access,
+      RecoveryAccess::SignInRequired
+    ));
+    manager.set_account_owner(Some(owner)).await.unwrap();
+    assert_eq!(
+      manager.get_snapshot().document_recovery.edits[0].file_name,
+      "saved.docx"
+    );
+    let loaded = session_store::load_session_store(&manager.store_path).await;
+    assert!(loaded.sessions.is_empty());
+    assert_eq!(loaded.retired_sessions.len(), 1);
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[tokio::test]
+  async fn account_transition_keeps_a_journal_before_cleanup() {
+    let sandbox =
+      std::env::temp_dir().join(format!("desktop-transition-{}", uuid::Uuid::new_v4()));
+    crate::local_store::create_private_dir(&sandbox).unwrap();
+    let blocked = sandbox.join("blocked");
+    crate::local_store::write_private_atomic(&blocked, b"directory unavailable")
+      .unwrap();
+    let mut manager = test_manager();
+    manager.store_path = blocked.join("sessions.json");
+    manager.edit_root = sandbox.join("editing");
+    let mut stored = persisted_session_for_test("editing");
+    stored.file_path = manager
+      .edit_root
+      .join("editing/file.docx")
+      .to_string_lossy()
+      .into_owned();
+    let file = PathBuf::from(&stored.file_path);
+    crate::local_store::create_private_dir(file.parent().unwrap()).unwrap();
+    crate::local_store::write_private_atomic(&file, b"unsaved").unwrap();
+    let runtime = desktop_session_for_test(stored, "token");
+    manager.sessions.insert(runtime.id.clone(), runtime);
+    assert!(manager.set_account_owner(None).await.is_err());
+    assert!(
+      manager
+        .retry_retired_sessions(RetirementPass::Pending)
+        .await
+        .is_err()
+    );
+    assert!(manager.get_snapshot().sessions.is_empty());
+    assert_eq!(manager.retired_sessions.len(), 1);
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Pending { .. }
+    ));
+    assert_eq!(std::fs::read(file).unwrap(), b"unsaved");
+    std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  #[test]
+  fn open_detection_ignores_its_own_file_read_events() {
+    for access in [
+      AccessKind::Read,
+      AccessKind::Open(AccessMode::Read),
+      AccessKind::Close(AccessMode::Read),
+    ] {
+      assert!(!event_needs_open_probe(&EventKind::Access(access)));
+    }
+    assert!(event_needs_open_probe(&EventKind::Access(
+      AccessKind::Close(AccessMode::Write)
+    )));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn open_detection_bounds_probes_for_five_idle_sessions() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let spawns = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+    for _ in 0..5 {
+      let spawns = Arc::clone(&spawns);
+      handles.push(tokio::spawn(async move {
+        run_open_probe_loop(|| {
+          spawns.fetch_add(1, Ordering::SeqCst);
+          std::future::ready(OpenProbeSchedule::Watching)
+        })
+        .await;
+      }));
+    }
+    tokio::task::yield_now().await;
+    tokio::time::advance(OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(spawns.load(Ordering::SeqCst), 5);
+    for _ in 0..3 {
+      tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL).await;
+      tokio::task::yield_now().await;
+    }
+    tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL - OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(spawns.load(Ordering::SeqCst), 20);
+    for handle in handles {
+      assert!(!handle.is_finished());
+      handle.abort();
+      assert!(handle.await.unwrap_err().is_cancelled());
+    }
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn closing_an_unchanged_lockless_document_finalizes_without_a_filesystem_event()
+  {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let (manager, _, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(move || {
+        let requests = Arc::clone(&request_count);
+        async move {
+          requests.fetch_add(1, Ordering::SeqCst);
+          axum::Json(serde_json::json!({ "outcome": "no_changes" }))
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut("idle-0").unwrap();
+      session.api_base_url = base_url;
+      assert!(
+        session.last_checkpoint_sha.as_deref() == Some(session.last_local_sha.as_str())
+      );
+      drop(mgr);
+    }
+    let open = Arc::new(AtomicBool::new(true));
+    let observed_open = Arc::clone(&open);
+    let probe_manager = Arc::clone(&manager);
+    let handle = tokio::spawn(async move {
+      run_open_probe_loop(|| {
+        probe_session_open_with(&probe_manager, "idle-0", |_, _| {
+          std::future::ready(if observed_open.load(Ordering::SeqCst) {
+            EditorState::Attached
+          } else {
+            EditorState::Closed
+          })
+        })
+      })
+      .await;
+    });
+    tokio::task::yield_now().await;
+    tokio::time::advance(OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert!(manager.lock().await.sessions["idle-0"].local_open_seen);
+    assert_eq!(requests.load(Ordering::SeqCst), 0);
+    // Closing changes only the OS observation, with no watcher event or save.
+    open.store(false, Ordering::SeqCst);
+    tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    for _ in 1..CLOSED_RECHECK_COUNT {
+      tokio::time::advance(OPEN_PROBE_INTERVAL).await;
+      tokio::task::yield_now().await;
+    }
+    tokio::time::resume();
+    handle.await.unwrap();
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+    assert!(!manager.lock().await.sessions.contains_key("idle-0"));
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[derive(Default)]
+  struct CountingFileSystem {
+    files: std::sync::Mutex<HashMap<PathBuf, (FileFingerprint, Vec<u8>)>>,
+    reads: std::sync::atomic::AtomicUsize,
+  }
+
+  impl CountingFileSystem {
+    fn put(&self, path: &str, bytes: &[u8], revision: u64) -> FileFingerprint {
+      let fingerprint = FileFingerprint {
+        size: bytes.len() as u64,
+        modified: std::time::UNIX_EPOCH + Duration::from_secs(revision),
+        identity: revision,
+      };
+      self
+        .files
+        .lock()
+        .unwrap()
+        .insert(PathBuf::from(path), (fingerprint.clone(), bytes.to_vec()));
+      fingerprint
+    }
+  }
+
+  impl SessionFileSystem for CountingFileSystem {
+    fn fingerprint(&self, path: &Path) -> std::io::Result<FileFingerprint> {
+      self
+        .files
+        .lock()
+        .unwrap()
+        .get(path)
+        .map(|(fingerprint, _)| fingerprint.clone())
+        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))
+    }
+
+    fn read<'a>(
+      &'a self,
+      path: &'a Path,
+    ) -> futures_util::future::BoxFuture<'a, std::io::Result<Vec<u8>>> {
+      self
+        .reads
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+      Box::pin(async move {
+        self
+          .files
+          .lock()
+          .unwrap()
+          .get(path)
+          .map(|(_, bytes)| bytes.clone())
+          .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))
+      })
+    }
+  }
+
+  fn idle_test_manager() -> (
+    Arc<Mutex<SessionManager>>,
+    Arc<CountingFileSystem>,
+    Arc<SessionCosts>,
+  ) {
+    crate::i18n::init_en();
+    let mut manager = SessionManager::new().expect("test data directory");
+    let fs = Arc::new(CountingFileSystem::default());
+    manager.file_system = fs.clone();
+    manager.store_access = SessionStoreAccess::Ready;
+    let root =
+      std::env::temp_dir().join(format!("stella-idle-{}", uuid::Uuid::new_v4()));
+    manager.store_path = root.join("sessions.json");
+    manager.edit_root = root.join("editing");
+    for n in 0..5 {
+      let mut session = desktop_session_for_test(
+        persisted_session_for_test(&format!("idle-{n}")),
+        "token",
+      );
+      session.file_path = manager
+        .edit_root
+        .join(&session.id)
+        .join(&session.file_name)
+        .to_string_lossy()
+        .into_owned();
+      session.last_local_sha = hash_bytes(b"unchanged document");
+      session.last_checkpoint_sha = if n % 2 == 0 {
+        Some(session.last_local_sha.clone())
+      } else {
+        None
+      };
+      session.last_observed_file =
+        Some(fs.put(&session.file_path, b"unchanged document", 1));
+      manager.sessions.insert(session.id.clone(), session);
+    }
+    let costs = Arc::clone(&manager.costs);
+    (Arc::new(Mutex::new(manager)), fs, costs)
+  }
+
+  struct MinuteRetryClock {
+    elapsed: Duration,
+  }
+
+  impl RetryClock for MinuteRetryClock {
+    fn tick(&mut self) -> futures_util::future::BoxFuture<'_, bool> {
+      Box::pin(async move {
+        if self.elapsed == Duration::from_secs(60) {
+          return false;
+        }
+        self.elapsed += RETRY_INTERVAL;
+        true
+      })
+    }
+  }
+
+  #[tokio::test]
+  async fn idle_cost_all_sessions_do_no_work_for_one_minute() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    let mut clock = MinuteRetryClock {
+      elapsed: Duration::ZERO,
+    };
+    run_retry_clock(Arc::clone(&manager), &mut clock).await;
+    assert_eq!(clock.elapsed, Duration::from_secs(60));
+    assert_eq!(manager.lock().await.sessions.len(), 5);
+    tracing::debug!(
+      "idle minute / 5 sessions: reads={} writes={} emits={}",
+      fs.reads.load(Ordering::Relaxed),
+      costs.writes.load(Ordering::Relaxed),
+      costs.emits.load(Ordering::Relaxed)
+    );
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 0, "idle file reads");
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0, "idle store writes");
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0, "idle state emits");
+  }
+
+  #[tokio::test]
+  async fn idle_cost_fingerprint_changes_read_once_without_publishing_equal_content() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    // Enumerate the manager's entire registry; every session follows the same gate.
+    let sessions = manager
+      .lock()
+      .await
+      .sessions
+      .values()
+      .map(|s| (s.id.clone(), s.file_path.clone()))
+      .collect::<Vec<_>>();
+    for (id, path) in &sessions {
+      // A replacement inode with identical content must refresh the observation,
+      // without a remote save or a persisted/UI state transition.
+      fs.put(path, b"unchanged document", 2);
+      retry_session(Arc::clone(&manager), id).await;
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert_eq!(fs.reads.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+  }
+
+  #[tokio::test]
+  async fn idle_cost_remote_operations_release_manager_and_publish_once() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let manager_in_request = Arc::clone(&manager);
+    let router = Router::new().route("/v1/desktop-edit-sessions/{id}/checkpoint", post(move || {
+      let manager = Arc::clone(&manager_in_request);
+      let requests = Arc::clone(&request_count);
+      async move {
+        assert!(manager.try_lock().is_ok(), "manager held across upload");
+        requests.fetch_add(1, Ordering::Relaxed);
+        axum::Json(serde_json::json!({ "checkpointedAt": "2026-01-01T00:00:00Z", "noop": false }))
+      }
+    }));
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let sessions = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.api_base_url = base_url.clone();
+      }
+      mgr
+        .sessions
+        .values()
+        .map(|s| (s.id.clone(), s.file_path.clone()))
+        .collect::<Vec<_>>()
+    };
+    for (id, path) in &sessions {
+      fs.put(path, b"changed document", 2);
+      retry_session(Arc::clone(&manager), id).await;
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert_eq!(requests.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(fs.reads.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.emits.load(Ordering::Relaxed), sessions.len());
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test]
+  async fn managed_file_events_checkpoint_changed_bytes_with_the_same_fingerprint() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, fs, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/checkpoint",
+      post(move || {
+        let requests = Arc::clone(&request_count);
+        async move {
+          requests.fetch_add(1, Ordering::Relaxed);
+          axum::Json(serde_json::json!({
+            "checkpointedAt": "2026-01-01T00:00:00Z",
+            "noop": false
+          }))
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let (id, path, name, previous_fingerprint) = {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut("idle-0").unwrap();
+      session.api_base_url = base_url;
+      let values = (
+        session.id.clone(),
+        session.file_path.clone(),
+        session.file_name.clone(),
+        session.last_observed_file.clone().unwrap(),
+      );
+      drop(mgr);
+      values
+    };
+    let changed = b"modified! document";
+    assert_ne!(hash_bytes(changed), hash_bytes(b"unchanged document"));
+    assert_eq!(fs.put(&path, changed, 1), previous_fingerprint);
+    retry_session(Arc::clone(&manager), &id).await;
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 0);
+    assert_eq!(requests.load(Ordering::Relaxed), 0);
+
+    handle_filesystem_event(Arc::clone(&manager), &id, Some(&name), &name).await;
+    {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut(&id).unwrap();
+      assert!(session.last_observed_file.is_none());
+      // Drive the same retry boundary directly, without waiting on debounce
+      // or starting platform-specific open-file probes in this fixture.
+      if let Some(timer) = session.checkpoint_timer.take() {
+        timer.abort();
+      }
+      if let Some(timer) = session.open_probe_timer.take() {
+        timer.abort();
+      }
+      drop(mgr);
+    }
+    retry_session(Arc::clone(&manager), &id).await;
+    retry_session(Arc::clone(&manager), &id).await;
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 1);
+    assert_eq!(requests.load(Ordering::Relaxed), 1);
+    let checkpoint = manager.lock().await.sessions[&id]
+      .last_checkpoint_sha
+      .clone();
+    assert_eq!(checkpoint, Some(hash_bytes(changed)));
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test]
+  async fn idle_cost_finalize_releases_manager_during_request() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, _, costs) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let manager_in_request = Arc::clone(&manager);
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(move || {
+        let manager = Arc::clone(&manager_in_request);
+        let requests = Arc::clone(&request_count);
+        async move {
+          assert!(manager.try_lock().is_ok(), "manager held across finalize");
+          requests.fetch_add(1, Ordering::Relaxed);
+          // Keep this isolated fixture out of keychain/session-removal code.
+          (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({"message": "retry fixture"})),
+          )
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let sessions = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.api_base_url = base_url.clone();
+        s.last_checkpoint_sha = Some(s.last_local_sha.clone());
+        s.pending_finalize = true;
+        s.status = SessionStatus::Finalizing;
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &sessions {
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert_eq!(requests.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.emits.load(Ordering::Relaxed), sessions.len());
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn confirmed_close_finishes_after_in_flight_checkpoint_settles() {
+    use axum::{Router, routing::post};
+    let (manager, _, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(|| async {
+        (
+          axum::http::StatusCode::SERVICE_UNAVAILABLE,
+          axum::Json(serde_json::json!({"message": "retry fixture"})),
+        )
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let ids = {
+      let mut mgr = manager.lock().await;
+      for session in mgr.sessions.values_mut() {
+        session.api_base_url = base_url.clone();
+        session.last_checkpoint_sha = Some(session.last_local_sha.clone());
+        session.local_open_seen = true;
+        session.closed_recheck_count = CLOSED_RECHECK_COUNT;
+        session.checkpoint_in_flight = true;
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      assert!(!manager.lock().await.sessions[id].pending_finalize);
+    }
+    tokio::time::advance(OPEN_PROBE_INTERVAL * u32::from(CLOSED_RECHECK_COUNT)).await;
+    {
+      let mut mgr = manager.lock().await;
+      for session in mgr.sessions.values_mut() {
+        session.checkpoint_in_flight = false;
+      }
+    }
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      assert!(manager.lock().await.sessions[id].pending_finalize);
+    }
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test]
+  async fn idle_cost_stale_responses_preserve_the_current_generation() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    {
+      let mut mgr = manager.lock().await;
+      let ids = mgr.sessions.keys().cloned().collect::<Vec<_>>();
+      for id in &ids {
+        let (old_generation, fingerprint) = {
+          let session = mgr.sessions.get_mut(id).unwrap();
+          let old_generation = session.generation;
+          session.generation = uuid::Uuid::new_v4();
+          session.session_token = "refreshed-token".into();
+          (
+            old_generation,
+            fs.fingerprint(Path::new(&session.file_path)).unwrap(),
+          )
+        };
+        let before = serde_json::to_value(mgr.sessions[id].to_persisted()).unwrap();
+        assert!(
+          !mgr
+            .apply_checkpoint(
+              id,
+              fingerprint,
+              old_generation,
+              CheckpointResult::Uploaded {
+                next_sha: "obsolete-sha".into(),
+                current_sha: "obsolete-sha".into(),
+                checkpointed_at: "obsolete-time".into(),
+                rotated_token: None,
+              }
+            )
+            .await
+        );
+        assert!(
+          !mgr
+            .apply_finalize(
+              id,
+              true,
+              old_generation,
+              FinalizeResult::Error("obsolete-error".into())
+            )
+            .await
+        );
+        assert_eq!(
+          serde_json::to_value(mgr.sessions[id].to_persisted()).unwrap(),
+          before
+        );
+        assert_eq!(mgr.sessions[id].session_token, "refreshed-token");
+      }
+      drop(mgr);
+    }
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+  }
+
+  #[tokio::test]
+  async fn idle_cost_unchanged_content_converges_after_an_event_during_save() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    let mut mgr = manager.lock().await;
+    let ids = mgr.sessions.keys().cloned().collect::<Vec<_>>();
+    for id in &ids {
+      let (fingerprint, generation, sha) = {
+        let session = mgr.sessions.get_mut(id).unwrap();
+        session.changed_during_remote_save = true;
+        session.checkpoint_in_flight = true;
+        (
+          fs.fingerprint(Path::new(&session.file_path)).unwrap(),
+          session.generation,
+          session.last_local_sha.clone(),
+        )
+      };
+      assert!(
+        !mgr
+          .apply_checkpoint(
+            id,
+            fingerprint,
+            generation,
+            CheckpointResult::Unchanged { sha }
+          )
+          .await
+      );
+      let input = mgr.prepare_checkpoint(id).await.unwrap();
+      // The save owner rechecks after an event, even when it ultimately reads equal bytes.
+      assert!(
+        mgr
+          .apply_checkpoint(
+            id,
+            input.fingerprint,
+            input.generation,
+            CheckpointResult::Unchanged {
+              sha: input.last_local_sha
+            }
+          )
+          .await
+      );
+      assert_eq!(mgr.sessions[id].status, SessionStatus::Ready);
+      assert!(mgr.prepare_checkpoint(id).await.is_none());
+    }
+    drop(mgr);
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+  }
+
+  #[tokio::test]
+  async fn idle_cost_takeover_response_releases_manager_during_request() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, _, costs) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let manager_in_request = Arc::clone(&manager);
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/respond-takeover",
+      post(move || {
+        let manager = Arc::clone(&manager_in_request);
+        let requests = Arc::clone(&request_count);
+        async move {
+          assert!(
+            manager.try_lock().is_ok(),
+            "manager held across takeover response"
+          );
+          requests.fetch_add(1, Ordering::Relaxed);
+          axum::http::StatusCode::OK
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let ids = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.api_base_url = base_url.clone();
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &ids {
+      assert!(respond_to_takeover(Arc::clone(&manager), id, true).await);
+    }
+    assert_eq!(requests.load(Ordering::Relaxed), ids.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+    server.abort();
+  }
+
+  #[tokio::test]
+  async fn idle_cost_restored_syncing_state_converges_once() {
+    use std::sync::atomic::Ordering;
+    let (manager, _, costs) = idle_test_manager();
+    let ids = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.status = SessionStatus::Syncing;
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert!(
+      manager
+        .lock()
+        .await
+        .sessions
+        .values()
+        .all(|s| s.status == SessionStatus::Ready)
+    );
+    assert_eq!(costs.writes.load(Ordering::Relaxed), ids.len());
+    assert_eq!(costs.emits.load(Ordering::Relaxed), ids.len());
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
   }
 
   #[test]
@@ -2799,12 +4605,145 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_paused_account_read_uses_the_completed_link_owner() {
+    let linked = |label: &str| crate::account::LinkedAccount {
+      api_base_url: "https://api.example.test".into(),
+      web_origin: "https://example.test".into(),
+      account: LinkedAccountSnapshot {
+        email: "desktop@example.test".into(),
+        name: None,
+        verified_at: "2026-10-01T00:00:00Z".into(),
+      },
+      identity: crate::types::DesktopAccountIdentity {
+        user_id: label.into(),
+        organization_id: "org_fixture".into(),
+      },
+      credential: crate::types::DesktopAccountCredential {
+        key: format!("stella_dr_{label}"),
+        expires_at: (chrono::Utc::now() + chrono::Duration::minutes(10)).to_rfc3339(),
+      },
+      device_key: crate::device_proof::DeviceKey::fixture(),
+    };
+    let a = linked("a");
+    let b = linked("b");
+    let owner_a = AccountOwner::for_account(&a);
+    let owner_b = AccountOwner::for_account(&b);
+    let account = Arc::new(Mutex::new(crate::account::AccountStore::Memory(Some(a))));
+    let root = std::env::temp_dir()
+      .join(format!("stella-account-read-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = root.join("sessions.json");
+    manager.edit_root = root.join("edit");
+    manager.account_owner = Some(owner_a.clone());
+    let mut persisted = persisted_session_for_test("account-a");
+    persisted.account_owner = Some(owner_a);
+    persisted.file_path = manager
+      .edit_root
+      .join("a/document.docx")
+      .to_string_lossy()
+      .into_owned();
+    manager
+      .retired_sessions
+      .push(RetiredSession::plan(persisted, &manager.quarantine_root()).unwrap());
+    let sessions = Arc::new(Mutex::new(manager));
+    // A link owns this lease while updating the durable account and manager.
+    // Poll the read at the old account-read boundary; it must wait for the link.
+    let link_lease = crate::account::lock_requests().await;
+    let read = crate::account::read_session_account(&account, &sessions);
+    tokio::pin!(read);
+    assert!(futures_util::poll!(&mut read).is_pending());
+    *account.lock().await = crate::account::AccountStore::Memory(Some(b));
+    sessions
+      .lock()
+      .await
+      .set_account_owner(Some(owner_b.clone()))
+      .await
+      .unwrap();
+    drop(link_lease);
+    let crate::account::SessionAccountRead {
+      mut manager,
+      current,
+      lease: _lease,
+    } = read.await;
+    let selected = current.unwrap().as_ref().map(AccountOwner::for_account);
+    assert_eq!(selected, Some(owner_b.clone()));
+    manager.set_account_owner(selected).await.unwrap();
+    assert!(manager.is_account_owner(Some(&owner_b)));
+    let snapshot = manager.get_snapshot();
+    assert!(snapshot.sessions.is_empty());
+    assert!(snapshot.document_recovery.edits.is_empty());
+    drop(manager);
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  #[tokio::test]
+  async fn restored_sessions_stay_retired_after_restart() {
+    let mut manager = test_manager();
+    let root =
+      std::env::temp_dir().join(format!("stella-retire-{}", uuid::Uuid::new_v4()));
+    manager.store_path = root.join("sessions.json");
+    manager.edit_root = root.join("edit");
+    let id = "restored-session";
+    let mut persisted = persisted_session_for_test(id);
+    persisted.file_path = manager
+      .edit_root
+      .join("account/document.docx")
+      .to_string_lossy()
+      .into_owned();
+    manager.unconfirmed_sessions.insert(id.into(), persisted);
+    manager.persist_sessions_result().await.unwrap();
+    manager
+      .initialize_with_tokens(Some(AccountOwner::fixture("account")), |_| async {
+        Ok(Some("session-token".into()))
+      })
+      .await
+      .unwrap();
+    assert!(manager.sessions.contains_key(id));
+    assert!(!manager.unconfirmed_sessions.contains_key(id));
+    // Retirement also prunes any pending metadata for the same runtime id.
+    manager
+      .unconfirmed_sessions
+      .insert(id.into(), manager.sessions[id].to_persisted());
+    manager.cleanup_session_internal(id).await.unwrap();
+    assert!(!manager.unconfirmed_sessions.contains_key(id));
+    manager.persist_sessions_result().await.unwrap();
+    let before = session_store::load_session_store(&manager.store_path).await;
+    assert!(before.sessions.is_empty());
+    let retirement_ids: Vec<_> = before
+      .retired_sessions
+      .iter()
+      .map(|record| record.id.clone())
+      .collect();
+    assert_eq!(retirement_ids.len(), 1);
+    manager
+      .initialize_with_tokens(Some(AccountOwner::fixture("account")), |_| async {
+        panic!("retired session requested a credential")
+      })
+      .await
+      .unwrap();
+    assert!(manager.sessions.is_empty());
+    let after = session_store::load_session_store(&manager.store_path).await;
+    assert!(after.sessions.is_empty());
+    assert_eq!(
+      after
+        .retired_sessions
+        .iter()
+        .map(|record| record.id.clone())
+        .collect::<Vec<_>>(),
+      retirement_ids
+    );
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  #[tokio::test]
   async fn persist_sessions_keeps_unconfirmed_sessions() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-sessions-{}.json",
-      uuid::Uuid::new_v4()
-    ));
-    let mut manager = SessionManager::new();
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-sessions-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     manager.unconfirmed_sessions.insert(
       "session-unconfirmed".to_string(),
@@ -2826,11 +4765,13 @@ mod tests {
 
   #[tokio::test]
   async fn document_account_identity_and_origin_persist() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-sessions-{}.json",
-      uuid::Uuid::new_v4()
-    ));
-    let mut manager = SessionManager::new();
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-sessions-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     let account = LinkedAccountSnapshot {
       email: "user@example.com".to_string(),
@@ -2876,11 +4817,13 @@ mod tests {
 
   #[tokio::test]
   async fn the_selected_self_host_keeps_its_api_and_origin_together() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-selected-selfhost-{}.json",
-      uuid::Uuid::new_v4()
-    ));
-    let mut manager = SessionManager::new();
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-selected-selfhost-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     manager.trust_self_host_connection_for_test(
       "https://selfhost.example".into(),
@@ -2894,9 +4837,12 @@ mod tests {
     assert_eq!(selected.api_base_url, "https://api.selected.example");
     assert_eq!(selected.web_origin, "https://selfhost.example");
     manager.persist_sessions_result().await.unwrap();
-    let mut restored = SessionManager::new();
+    let mut restored = test_manager();
     restored.store_path = path.clone();
-    restored.initialize().await;
+    restored
+      .initialize(Some(AccountOwner::fixture("account")))
+      .await
+      .unwrap();
     let selected = restored.selected_self_host_connection().unwrap();
     assert_eq!(selected.api_base_url, "https://api.selected.example");
     assert_eq!(selected.web_origin, "https://selfhost.example");
@@ -2905,11 +4851,13 @@ mod tests {
 
   #[tokio::test]
   async fn document_relink_preserves_the_account_origin() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-account-origin-{}.json",
-      uuid::Uuid::new_v4()
-    ));
-    let mut manager = SessionManager::new();
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-account-origin-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     manager.trust_self_host_connection_for_test(
       "https://first.example".to_string(),
@@ -2941,11 +4889,13 @@ mod tests {
 
   #[tokio::test]
   async fn active_session_supersedes_unconfirmed_copy_on_persist() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-sessions-{}.json",
-      uuid::Uuid::new_v4()
-    ));
-    let mut manager = SessionManager::new();
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-sessions-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
+    let mut manager = test_manager();
     manager.store_path = path.clone();
     let persisted = persisted_session_for_test("session-restored");
     manager
@@ -3029,7 +4979,7 @@ mod tests {
 
   #[test]
   fn diagnostics_export_redacts_private_session_and_account_data() {
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.support_root = PathBuf::from("/Users/alice/Client Matter/support");
     manager.edit_root = PathBuf::from("/Users/alice/Client Matter/editing");
     manager.linked_account = Some(LinkedAccountSnapshot {
@@ -3119,7 +5069,7 @@ mod tests {
 
   #[test]
   fn trust_lookup_canonicalizes_api_base_url_like_approval() {
-    let mut manager = SessionManager::new();
+    let mut manager = test_manager();
     manager.trust_self_host_connection_for_test(
       "https://web.example".to_string(),
       "https://api.example".to_string(),
@@ -3140,3 +5090,7 @@ mod tests {
     );
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+#[path = "session_allocation_harness.rs"]
+pub mod allocation_harness;

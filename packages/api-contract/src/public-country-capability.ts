@@ -67,12 +67,15 @@ export type PublicLawDomain =
 /** Public admission, independent of whether ingestion holds rows for a country. */
 export const PUBLIC_COUNTRY_CAPABILITIES = {
   AUT: { caseLaw: "pending_public", legislation: "pending_public" },
+  BRA: { caseLaw: "pending_public", legislation: "pending_public" },
   CZE: { caseLaw: "admitted", legislation: "admitted" },
-  EU: { caseLaw: "identity_public", legislation: "pending_public" },
-  HUN: { caseLaw: "pending_public", legislation: "pending_public" },
+  // parser-output-unchanged: launching EU, Hungary and Slovakia gates public search reads only; no parser reads admission.
+  EU: { caseLaw: "admitted", legislation: "pending_public" },
+  GBR: { caseLaw: "pending_public", legislation: "pending_public" },
+  HUN: { caseLaw: "admitted", legislation: "pending_public" },
   // parser-output-unchanged: Poland's row is read by no parser; the EU and US parsers read only their own rows.
   POL: { caseLaw: "admitted", legislation: "pending_public" },
-  SVK: { caseLaw: "pages_public", legislation: "pages_public" },
+  SVK: { caseLaw: "admitted", legislation: "admitted" },
   USA: { caseLaw: "pending_public", legislation: "pending_public" },
 } as const satisfies Record<
   string,

@@ -26,7 +26,7 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const SINK_EVENT = "db.fresh_login";
 
 const randomHex = (): string =>
-  Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("hex");
+  Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toHex();
 
 const loginUrl = (base: string, user: string, password: string): string => {
   const url = new URL(base);
@@ -109,7 +109,15 @@ if (!databaseUrl || !runPostgresTests) {
         "failure.sink": SINK_EVENT,
         "error.sqlstate": "28P01",
       });
-      expect(analytics.exceptions()).toHaveLength(1);
+      // Count this probe's own failure: the process may still deliver an
+      // earlier file's late exception while this test runs.
+      expect(
+        analytics
+          .exceptions()
+          .filter(
+            (event) => event.properties["failure.reason"] === "pg_auth_failed",
+          ),
+      ).toHaveLength(1);
 
       const emitted = JSON.stringify({
         records: logs.records,

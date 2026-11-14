@@ -7,8 +7,8 @@ import { IntlProvider } from "use-intl";
 
 import {
   PROVISION_LINK_CAPABILITIES,
-  provisionLinkCapability,
   type ProvisionLinkCapability,
+  provisionLinkCapability,
 } from "@stll/api-contract/provision-link-capability";
 import {
   PROVISION_LINK_STATUS_TYPES,

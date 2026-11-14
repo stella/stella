@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { stripPromptUnsafeChars } from "@/api/lib/prompt-safety";
 
@@ -170,7 +171,12 @@ export const buildMemoryPromptParts = async ({
       });
       if (Result.isError(stampResult)) {
         // Recency bookkeeping must never make an otherwise valid chat fail.
-        captureError(stampResult.error, { feature: "memory.last_used_stamp" });
+        captureError(
+          stampResult.error,
+          handlerErrorContext("chat.buildMemoryPromptParts.stampResult_error", {
+            feature: "memory.last_used_stamp",
+          }),
+        );
       }
     }
 
