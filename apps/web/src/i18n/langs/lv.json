@@ -1625,6 +1625,8 @@
         "actions": {
           "click": "Noklikšķināt",
           "fill": "Ievadīt tekstu",
+          "find": "Meklēt lapā",
+          "findHeadings": "Uzskaitīt lapas virsrakstus",
           "open": "Atvērt vietni",
           "openNewTab": "Atvērt vietni jaunā cilnē",
           "pressKey": "Nospiest taustiņu",

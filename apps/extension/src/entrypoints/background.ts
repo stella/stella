@@ -326,12 +326,13 @@ const runCommand = async (
 
 /**
  * What a coding agent on this computer may ask for: its tools open, read,
- * click and type. Switching to another chat's tab, going back, keys and
- * selects are refused.
+ * find, click and type. Switching to another chat's tab, going back, keys
+ * and selects are refused.
  */
 const DESKTOP_ACTIONS: ReadonlySet<string> = new Set([
   BROWSER_CONTROL_ACTION.click,
   BROWSER_CONTROL_ACTION.fill,
+  BROWSER_CONTROL_ACTION.find,
   BROWSER_CONTROL_ACTION.open,
   BROWSER_CONTROL_ACTION.snapshot,
 ]);
@@ -351,7 +352,7 @@ const runDesktopCommand = async (
   if (!DESKTOP_ACTIONS.has(command.action)) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.invalidCommand,
-      "stella desktop opens, reads, clicks and types only.",
+      "stella desktop opens, reads, finds, clicks and types only.",
     );
   }
   const result = await runControlledCommand({

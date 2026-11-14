@@ -335,7 +335,7 @@ export const startLocalBrowserMcp = ({
           return rpcError(
             id,
             JSON_RPC_ERROR.invalidParams,
-            "Unknown tool: call open, snapshot, click or type.",
+            "Unknown tool: call open, snapshot, find, click or type.",
           );
         }
         const { arguments: input, name } = params.output;

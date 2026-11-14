@@ -1625,6 +1625,8 @@
         "actions": {
           "click": "Klicken",
           "fill": "Text eingeben",
+          "find": "Auf der Seite suchen",
+          "findHeadings": "Überschriften der Seite auflisten",
           "open": "Website öffnen",
           "openNewTab": "Website in neuem Tab öffnen",
           "pressKey": "Taste drücken",

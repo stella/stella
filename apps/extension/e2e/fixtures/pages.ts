@@ -21,7 +21,8 @@ export const HANDOFF_SECRET = "typed during the hand-off";
 /** Text the containment fixture hides from view in every supported way. */
 export const HIDDEN_TEXT_MARKER = "Hidden instruction";
 
-const LONG_TEXT = Array.from(
+/** One block of the index page far longer than a reading window. */
+export const LONG_TEXT = Array.from(
   { length: 900 },
   (_, index) =>
     `Paragraph ${index + 1}: the notice period runs from delivery, not from dispatch, and the appeal was dismissed with costs.`,

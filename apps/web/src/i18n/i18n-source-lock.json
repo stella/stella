@@ -1271,6 +1271,8 @@
   "chat.approval.alwaysAllow": "Always allow",
   "chat.approval.browser.actions.click": "Click",
   "chat.approval.browser.actions.fill": "Enter text",
+  "chat.approval.browser.actions.find": "Find on page",
+  "chat.approval.browser.actions.findHeadings": "List page headings",
   "chat.approval.browser.actions.open": "Open website",
   "chat.approval.browser.actions.openNewTab": "Open website in a new tab",
   "chat.approval.browser.actions.pressKey": "Press key",

@@ -1625,6 +1625,8 @@
         "actions": {
           "click": "Kattintás",
           "fill": "Szöveg beírása",
+          "find": "Keresés az oldalon",
+          "findHeadings": "Az oldal címsorainak listázása",
           "open": "Webhely megnyitása",
           "openNewTab": "Webhely megnyitása új lapon",
           "pressKey": "Billentyű lenyomása",

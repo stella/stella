@@ -18,6 +18,8 @@ const success = {
   snapshot: {
     contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
     elements: [],
+    elementsLeftOut: false,
+    facts: { meta: [] },
     revision: "revision-1",
     tabId: 7,
     tabs: [
@@ -28,10 +30,9 @@ const success = {
       },
     ],
     text: "Ready",
-    textOffset: 0,
-    textTotalChars: 5,
     title: "Example",
     url: "https://example.com/",
+    window: { cursor: "r1.window", fromPercent: 0, toPercent: 100 },
   },
   status: "success",
 } satisfies BrowserControlResult;
