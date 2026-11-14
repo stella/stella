@@ -24,6 +24,7 @@ import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { layoutMarginNotes } from "@/components/ai-suggestions/review-margin-notes.logic";
@@ -352,12 +353,13 @@ const MarginNoteBody = ({
         {note.label}
       </span>
       {note.caption !== null && (
-        <BidiText
-          as="span"
-          className="text-muted-foreground text-2xs line-clamp-3 leading-4 text-pretty"
+        <TruncatedText
+          className="text-muted-foreground text-2xs leading-4 text-pretty"
+          lines={3}
+          render={<BidiText as="span" />}
         >
           {note.caption}
-        </BidiText>
+        </TruncatedText>
       )}
     </span>
   </Button>

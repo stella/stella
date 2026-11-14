@@ -203,9 +203,11 @@ describe("browser controller connection", () => {
     });
 
     await disconnectBrowserController();
+    // The web connection held the browser, so its hold ends with it.
     expect(removedKeys).toEqual([
       [
         "browserController",
+        "browserControlOwner",
         "browserControlledTab",
         "browserExecutionReceipts",
         "browserCommandBudget",
@@ -214,6 +216,36 @@ describe("browser controller connection", () => {
     ]);
     expect(removedRuleIds).toEqual([CONTROLLED_TAB_RULE_IDS]);
   });
+});
+
+test("leaves a desktop chat's tab and rules alone when the web connection disconnects", async () => {
+  const removedKeys: unknown[] = [];
+  const removedRuleIds: unknown[] = [];
+  Object.defineProperty(globalThis, "chrome", {
+    configurable: true,
+    value: {
+      declarativeNetRequest: {
+        updateSessionRules: async (options: { removeRuleIds?: number[] }) => {
+          removedRuleIds.push(options.removeRuleIds);
+        },
+      },
+      storage: {
+        session: {
+          get: async (key: string) =>
+            key === "browserControlOwner"
+              ? { browserControlOwner: "desktop:thread-1" }
+              : { browserController: null },
+          remove: async (keys: unknown) => {
+            removedKeys.push(keys);
+          },
+        },
+      },
+    },
+  });
+
+  await disconnectBrowserController();
+  expect(removedKeys).toEqual(["browserController"]);
+  expect(removedRuleIds).toEqual([]);
 });
 
 describe("stella tab registry", () => {

@@ -25,6 +25,8 @@ import { stellaToast } from "@stll/ui/toast";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
+import { SharepointImportDialog } from "@/features/sharepoint/sharepoint-import-dialog";
+import { SharepointImportMenuItem } from "@/features/sharepoint/sharepoint-menu-item";
 import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -87,6 +89,7 @@ export const AddEntityMenu = ({
   const idempotentSubmit = useIdempotentSubmit();
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [styleDialogOpen, setStyleDialogOpen] = useState(false);
+  const [sharepointDialogOpen, setSharepointDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const workflowView = useIsWorkflowRunning(workspaceId);
   const workflowDisabled = workflowActionsDisabled(workflowView);
@@ -237,6 +240,10 @@ export const AddEntityMenu = ({
                 <UploadIcon />
                 {t("common.uploadFiles")}
               </MenuItem>
+              <SharepointImportMenuItem
+                disabled={workflowDisabled}
+                onSelect={() => setSharepointDialogOpen(true)}
+              />
               {canCreateStyledDocument && (
                 <MenuItem
                   disabled={workflowDisabled}
@@ -283,6 +290,12 @@ export const AddEntityMenu = ({
           workspaceId={workspaceId}
         />
       )}
+      <SharepointImportDialog
+        onOpenChange={setSharepointDialogOpen}
+        open={sharepointDialogOpen}
+        parentId={parentId ?? null}
+        workspaceId={workspaceId}
+      />
       {canCreateStyledDocument && (
         <StyleSetPickerDialog
           initialName={t("styleSets.untitledDocument")}

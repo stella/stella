@@ -39,6 +39,8 @@ import {
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
+const displayOnlySourceId = createSafeId<"caseLawSource">();
+const displayOnlyId = createSafeId<"caseLawDecision">();
 const supremeId = createSafeId<"caseLawDecision">();
 const administrativeId = createSafeId<"caseLawDecision">();
 const listingOnlyId = createSafeId<"caseLawDecision">();
@@ -154,8 +156,33 @@ beforeAll(
         id: closedSourceId,
         name: "closed",
       }),
+      caseLawSourceRow({
+        adapterKey: "display-only",
+        descriptor: {
+          allowsDerivedAi: false,
+          allowsRedistribution: true,
+          attribution: "Publisher",
+          license: "permitted-redistribution",
+        },
+        id: displayOnlySourceId,
+        name: "display only",
+      }),
     ]);
     await db.insert(caseLawDecisions).values([
+      {
+        id: displayOnlyId,
+        sourceId: displayOnlySourceId,
+        caseNumber: "4 Tdo 7/2021",
+        citationKey: citationKeyOf("4 Tdo 7/2021"),
+        court: "Nejvyšší soud",
+        country: "CZE",
+        decisionDate: "2021-02-03",
+        ecli: null,
+        language: "cs",
+        languageGroupKey: "lookup-display-only",
+        slug: "4-tdo-7-2021",
+        metadata: { keywords: ["podvod", "škoda"] },
+      },
       {
         id: supremeId,
         sourceId: openSourceId,
@@ -637,6 +664,16 @@ test("identity candidates carry bounded first-line publisher classifications", a
     locator: docketLocator("8 As 1/2019"),
   });
   expect(administrative.at(0)?.subjectSummary).toBe("x".repeat(400));
+});
+
+test("a source that withholds derived AI resolves without its publisher classification", async () => {
+  const displayOnly = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: docketLocator("4 Tdo 7/2021"),
+  });
+  expect(displayOnly.map(({ id }) => id)).toEqual([displayOnlyId]);
+  expect(displayOnly.at(0)?.subjectSummary).toBeNull();
 });
 
 test("identity response work stays fixed as unrelated corpus rows grow from 10 to 200", async () => {

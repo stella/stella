@@ -6,6 +6,7 @@ import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
@@ -88,7 +89,7 @@ export const ChatThreadDecisionLabel = ({
           <TooltipPopup>{decision.court}</TooltipPopup>
         </Tooltip>
       )}
-      <BidiText className="min-w-0 truncate">{decision.caseNumber}</BidiText>
+      <TruncatedText render={<BidiText />}>{decision.caseNumber}</TruncatedText>
       {date === null ? null : (
         <span className="shrink-0">
           {"· "}

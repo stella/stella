@@ -5,13 +5,18 @@ import {
 } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { VerificationRunStatus } from "@/features/avt/types";
+import type {
+  ClaimReviewEventKind,
+  VerificationRunStatus,
+} from "@/features/avt/types";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const RUN_POLL_INTERVAL_MS = 2500;
 
@@ -53,8 +58,9 @@ type LatestVerificationsKey = {
 
 export const avtKeys = {
   all: (workspaceId: string) => ["avt", workspaceId] as const,
+  runs: (workspaceId: string) => [...avtKeys.all(workspaceId), "run"] as const,
   run: (workspaceId: string, runId: string) =>
-    [...avtKeys.all(workspaceId), "run", runId] as const,
+    [...avtKeys.runs(workspaceId), runId] as const,
   latestAll: (workspaceId: string) =>
     [...avtKeys.all(workspaceId), "latest"] as const,
   latest: ({ workspaceId, documents }: LatestVerificationsKey) =>
@@ -64,6 +70,10 @@ export const avtKeys = {
     ] as const,
   historyAll: (workspaceId: string) =>
     [...avtKeys.all(workspaceId), "history"] as const,
+  reviewHistoryOfRun: (workspaceId: string, runId: string) =>
+    [...avtKeys.all(workspaceId), "review-history", runId] as const,
+  reviewHistory: ({ workspaceId, runId, ...filter }: ReviewHistoryKey) =>
+    [...avtKeys.reviewHistoryOfRun(workspaceId, runId), filter] as const,
   history: (workspaceId: string, entityId: string, fileFieldId: string) =>
     [
       ...avtKeys.historyAll(workspaceId),
@@ -128,20 +138,38 @@ export const originalPdfPagesOptions = ({
 const LATEST_READ_CHUNK = 200;
 
 export const verificationRunOptions = (workspaceId: string, runId: string) =>
-  queryOptions({
-    queryKey: avtKeys.run(workspaceId, runId),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .verifications({ runId: toSafeId<"legalListVerificationRun">(runId) })
-        .get({ fetch: { signal } });
-      return unwrapApiResponse(response);
+  // The run is read against the list as it stands, and holds each claim as
+  // its reviewers see it. This client's own review decisions write it in
+  // place (the claim's review from the server's answer), so they leave it
+  // fresh; another reviewer's decision marks it stale.
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: avtKeys.run(workspaceId, runId),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .verifications({ runId: toSafeId<"legalListVerificationRun">(runId) })
+          .get({ fetch: { signal } });
+        return unwrapApiResponse(response);
+      },
+      // Some of a claim's qualifiers are read against the list as it stands
+      // (a fact that gained a source, a fact now held), so a run is read again
+      // whenever it is opened rather than shown as cached.
+      staleTime: 0,
+      // Kept polling while the tab is hidden, so a reviewer who starts a run
+      // and switches away comes back to the claims that landed meanwhile.
+      refetchIntervalInBackground: true,
+      refetchInterval: (query) => runPollInterval(query.state.data?.status),
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.LEGAL_LIST,
+        RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+      ],
+      scope: { type: "workspace", workspaceId },
+      keptCurrentBy: ["recordClaimReview", "acceptRoutineClaims"],
     },
-    // Kept polling while the tab is hidden, so a reviewer who starts a run
-    // and switches away comes back to the claims that landed meanwhile.
-    refetchIntervalInBackground: true,
-    refetchInterval: (query) => runPollInterval(query.state.data?.status),
-  });
+  );
 
 /**
  * The latest verification of each document, one request per 200 documents
@@ -189,6 +217,54 @@ export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
       return false;
     },
   });
+
+/** Which review actions to list: one claim's or the whole run's, of one
+ *  kind or one reviewer's when set. */
+export type ReviewHistoryFilter = {
+  claimId?: string;
+  kind?: ClaimReviewEventKind;
+  actorId?: string;
+};
+
+type ReviewHistoryKey = ReviewHistoryFilter & {
+  workspaceId: string;
+  runId: string;
+};
+
+const REVIEW_HISTORY_PAGE_SIZE = 50;
+
+/** A run's review actions, newest first, a page at a time. */
+export const reviewHistoryOptions = (key: ReviewHistoryKey) =>
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: avtKeys.reviewHistory(key),
+      queryFn: async ({ pageParam, signal }) => {
+        const lists = api.lists({
+          workspaceId: toSafeId<"workspace">(key.workspaceId),
+        });
+        const response = await lists["claim-reviews"].get({
+          query: {
+            runId: toSafeId<"legalListVerificationRun">(key.runId),
+            limit: REVIEW_HISTORY_PAGE_SIZE,
+            ...(key.claimId !== undefined && {
+              claimId: toSafeId<"legalListClaim">(key.claimId),
+            }),
+            ...(key.kind !== undefined && { kind: key.kind }),
+            ...(key.actorId !== undefined && { actorId: key.actorId }),
+            ...(pageParam !== null && { cursor: pageParam }),
+          },
+          fetch: { signal },
+        });
+        return unwrapApiResponse(response);
+      },
+      initialPageParam: nullableStringCursorSeed(),
+      getNextPageParam: (page) => page.nextCursor,
+    }),
+    {
+      resources: [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION],
+      scope: { type: "workspace", workspaceId: key.workspaceId },
+    },
+  );
 
 const HISTORY_PAGE_SIZE = 20;
 

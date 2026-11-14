@@ -5,6 +5,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import { hasAllSiteAccess } from "./access";
+import { readControlOwner } from "./control-owner";
 import {
   readStellaTabs,
   rememberStellaTab,
@@ -13,6 +14,7 @@ import {
 } from "./stella-tabs";
 import {
   BROWSER_COMMAND_BUDGET_STORAGE_KEY,
+  BROWSER_CONTROL_OWNER_STORAGE_KEY,
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
   BROWSER_CONTROLLER_STORAGE_KEY,
   BROWSER_EXECUTION_RECEIPTS_STORAGE_KEY,
@@ -30,6 +32,7 @@ export type BrowserController = {
 };
 
 const CONTROLLER_DATA_STORAGE_KEYS = [
+  BROWSER_CONTROL_OWNER_STORAGE_KEY,
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
   BROWSER_EXECUTION_RECEIPTS_STORAGE_KEY,
   BROWSER_COMMAND_BUDGET_STORAGE_KEY,
@@ -172,9 +175,17 @@ export const pairStellaTab = async (
   return { controller, status: "paired" };
 };
 
-/** Ends the connection: forgets its controlled tab, receipts and budget. */
+/**
+ * Ends the connection: forgets its controlled tab, receipts and budget.
+ * While a desktop chat holds the browser, its tab, rules and hold stay: only
+ * the connection is forgotten.
+ */
 const endBrowserController = async (): Promise<BrowserController | null> => {
   const controller = await readBrowserController();
+  if ((await readControlOwner()) !== null) {
+    await chrome.storage.session.remove(BROWSER_CONTROLLER_STORAGE_KEY);
+    return controller;
+  }
   await chrome.storage.session.remove([...CONTROLLER_SESSION_STORAGE_KEYS]);
   // Control ended, so the user's former controlled tab is theirs again.
   await releaseContainedTabs();

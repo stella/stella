@@ -23,7 +23,11 @@
       ]
     },
     "apps/desktop": {
-      "typescript": { "config": ["tsconfig*.json"] }
+      "typescript": { "config": ["tsconfig*.json"] },
+      // build:sidecar builds the agent engine through `bun run --cwd`, which
+      // knip does not follow; the dependency is what brings the sidecar's own
+      // dependencies into installs filtered to the desktop's workspace graph.
+      "ignoreDependencies": ["@stll/agent-engine"]
     },
     "apps/mobile": {
       "typescript": { "config": ["tsconfig*.json"] },
@@ -129,12 +133,33 @@
         "src/**/*.test.ts"
       ]
     },
+    // scripts/build.ts bundles these entry points into the static task pane,
+    // dialog and command pages; knip cannot follow the bundler's list.
+    "apps/outlook": {
+      "entry": [
+        "src/main.tsx",
+        "src/commands.ts",
+        "src/auth-start.ts",
+        "src/auth-callback.ts",
+        "src/office-history-*.ts",
+        "scripts/*.ts",
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx"
+      ],
+      // scripts/build.ts runs the Tailwind CLI through `bun x`, which knip
+      // does not read as a use of the package.
+      "ignoreDependencies": ["@tailwindcss/cli"]
+    },
     "apps/landing": {
       "entry": [
         "src/**/*.astro",
         "src/pages/**/*.ts",
         "astro.config.*",
         "e2e/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        // Starlight's bundled routes import it by bare name from the build output.
+        "js-yaml"
       ]
     },
     "apps/legal-atlas-runner": {
@@ -151,6 +176,9 @@
       "entry": ["src/**/*.test.ts"]
     },
     "packages/db-load-gate": {
+      "entry": ["src/**/*.test.ts"]
+    },
+    "packages/deadlines": {
       "entry": ["src/**/*.test.ts"]
     },
     "packages/decision-reader": {
@@ -267,6 +295,9 @@
     },
     "apps/visual-preview": {
       "entry": ["src/handler.ts", "src/**/*.test.ts", "browser/**/*.test.ts"]
+    },
+    "apps/skill-runner": {
+      "entry": ["src/handler.ts", "src/**/*.test.ts"]
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],

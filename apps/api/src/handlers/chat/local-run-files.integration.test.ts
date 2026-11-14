@@ -112,6 +112,7 @@ const asStored = async (
     model: "gpt-test",
     runId,
     threadId: "desktop-thread",
+    workspaceDir: "/workspace",
     generateId: () => {
       generated += 1;
       return `generated-${String(generated)}`;
@@ -206,7 +207,9 @@ const localRunFor = ({
         harness: "codex",
         harnessVersion: "1.0.0",
         model: "gpt-test",
+        reasoningEffort: null,
         approvals: "ask",
+        linkedFolderId: null,
       },
     },
   );

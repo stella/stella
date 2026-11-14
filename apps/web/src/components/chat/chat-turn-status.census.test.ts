@@ -87,7 +87,7 @@ test("detects literal, computed, aliased, and spread running marks", () => {
   }
 });
 
-test("the turn status owner is the only turn loader or elapsed ticker", () => {
+test("the turn status owner is the only turn loader", () => {
   const files = sourceFileIndex(SOURCE_ROOT).filter(({ relativePath }) =>
     CHAT_SOURCE_PATH.test(relativePath),
   );
@@ -100,7 +100,6 @@ test("the turn status owner is the only turn loader or elapsed ticker", () => {
     }
     const ownsLiveIndicator =
       sourceText.includes("@stll/ui/loader") ||
-      sourceText.includes("use-live-elapsed") ||
       hasPotentialRunningMark(sourceText) ||
       sourceText.includes("animate-spin");
     if (

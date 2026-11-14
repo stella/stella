@@ -1,5 +1,6 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
@@ -102,6 +103,8 @@ export type ChatThreadTitleKey = {
 
 export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
+  /** Only the reader's pinned, or only their unpinned, threads. */
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   userId: string;
   /** Only the threads that live in this matter. */
@@ -227,17 +230,23 @@ export const chatKeys = {
     "decision-thread",
     key.decisionId,
   ],
-  groupedThreads: ({
-    activeOrganizationId,
-    search,
-    userId,
-    workspaceId,
-  }: GroupedChatThreadsKey) => [
+  /** Every grouped thread list of the reader, whatever its filters. */
+  groupedThreadLists: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
     userId,
     "threads",
     "grouped",
+  ],
+  groupedThreads: ({
+    activeOrganizationId,
+    pinState,
+    search,
+    userId,
+    workspaceId,
+  }: GroupedChatThreadsKey) => [
+    ...chatKeys.groupedThreadLists(activeOrganizationId, userId),
+    pinState ?? "",
     search ?? "",
     workspaceId ?? "",
   ],
@@ -246,6 +255,61 @@ export const chatKeys = {
     userId: string,
     threadId: string,
   ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
+  localFilesUndo: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+    turnId: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-files-undo",
+    threadId,
+    turnId,
+  ],
+  /** Every chat's background count of the reader, for one refresh. */
+  backgroundTaskCounts: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "background-tasks",
+  ],
+  backgroundTasks: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+  ) => [
+    ...chatKeys.backgroundTaskCounts(activeOrganizationId, userId),
+    threadId,
+  ],
+  localRunStepOutput: ({
+    activeOrganizationId,
+    userId,
+    callId,
+  }: {
+    activeOrganizationId: string;
+    userId: string;
+    callId: string;
+  }) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-run-step-output",
+    callId,
+  ],
+  /** An image a step viewed, read whole: another read than its text. */
+  localRunStepImage: (key: {
+    activeOrganizationId: string;
+    userId: string;
+    callId: string;
+  }) => [...chatKeys.localRunStepOutput(key), "image"],
+  browserSiteGrants: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "browser-site-grants",
+  ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,
     activeOrganizationId,

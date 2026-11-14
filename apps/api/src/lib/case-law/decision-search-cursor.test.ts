@@ -94,15 +94,9 @@ test("a cursor is read only by the order that issued it", () => {
   }
 });
 
-// The form issued before the order travelled: relevance is the only order a
-// replica issuing it could have ranked its page in.
-test("reads a cursor from before the order field as a relevance page", () => {
-  expect(
-    decodeDecisionSearchCursor(encodeCursor(0.25, DECISION_ID), "relevance"),
-  ).toEqual({ id: DECISION_ID, sort: "relevance", sortKey: 0.25 });
-});
-
 test.each([
+  // A payload naming no order bounds no page.
+  DECISION_ID,
   // An order this service does not declare is not one it ranked a page in.
   `oldest:${DECISION_ID}`,
   `newest:${DECISION_ID}`,
