@@ -33,6 +33,7 @@ import type { AIErrorKind } from "@/api/lib/ai-error";
 import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ChatRunLogRefusedError } from "@/api/lib/chat/run-log-refusal";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -221,6 +222,10 @@ const CHAT_TURN_RUN_HEARTBEAT = {
 export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
 const CHAT_TURN_PRODUCTION_FAILED_REASON = "stella.chat-turn.production-failed";
 
+const DURABILITY_FAILED_SINK = failureSink({
+  event: "chat.turn.durability_failed",
+  expected: [],
+});
 const HEARTBEAT_FAILED_SINK = failureSink({
   event: "chat.turn.stop_poll_failed",
   expected: [],
@@ -633,9 +638,17 @@ export class ChatTurnRun {
           {
             // Run control cuts the provider; delivery drains its terminal events.
             durability: {
-              adapter: reportDeliveryFailuresByKind(durability, (kind) => {
+              adapter: reportDeliveryFailuresByKind(durability, (failure) => {
+                // The run log reports its own refusals; any other failure
+                // (the store's) reaches the stream only as its kind.
+                if (!ChatRunLogRefusedError.is(failure.cause)) {
+                  observeFailure(failure.cause, {
+                    sink: DURABILITY_FAILED_SINK,
+                    ctx: { threadId: this.options.owner.threadId },
+                  });
+                }
                 if (this.deliveryFailure === "unknown") {
-                  this.deliveryFailure = kind;
+                  this.deliveryFailure = failure.kind;
                 }
               }),
             },

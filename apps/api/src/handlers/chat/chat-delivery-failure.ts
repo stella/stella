@@ -15,6 +15,10 @@ import { classifyAIError } from "@/api/lib/ai-error";
  * client reads from a RUN_ERROR's message (`aiErrorKindFromMessage`), so this
  * error carries the kind as its message and the kind's failure code as its
  * code. The failure it reports stays its cause.
+ *
+ * Only a size refusal names a kind of its own (`turn_too_large`). Any other
+ * durability failure is the store's, whatever its cause looks like (a database
+ * connection reset is not a provider outage), so it is `unknown`.
  */
 export class ChatDeliveryError extends TaggedError("ChatDeliveryError")<{
   /** The kind, which is what the client reads. */
@@ -28,7 +32,8 @@ const deliveryFailure = (error: unknown): ChatDeliveryError => {
   if (ChatDeliveryError.is(error)) {
     return error;
   }
-  const kind = classifyAIError(error);
+  const kind =
+    classifyAIError(error) === "turn_too_large" ? "turn_too_large" : "unknown";
   return new ChatDeliveryError({
     message: kind,
     kind,
@@ -40,15 +45,16 @@ const deliveryFailure = (error: unknown): ChatDeliveryError => {
 /**
  * `durability` whose failures reach the stream only as AI error kinds, never
  * as an internal message the client cannot explain. `onFailure` learns each
- * failure's kind, so the run can settle its turn with the same one.
+ * failure, so the run can settle its turn with the same kind and observe the
+ * cause the stream drops.
  */
 export const reportDeliveryFailuresByKind = (
   durability: StreamDurability,
-  onFailure: (kind: AIErrorKind) => void,
+  onFailure: (failure: ChatDeliveryError) => void,
 ): StreamDurability => {
   const reported = (error: unknown): ChatDeliveryError => {
     const failure = deliveryFailure(error);
-    onFailure(failure.kind);
+    onFailure(failure);
     return failure;
   };
   return {
