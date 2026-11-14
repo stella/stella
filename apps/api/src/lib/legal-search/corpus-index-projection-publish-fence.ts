@@ -1,7 +1,8 @@
 import { panic } from "better-result";
-import { type SQL, sql } from "drizzle-orm";
+import { type SQL, sql, type SQLWrapper } from "drizzle-orm";
 
 import { corpusIndexProjectionIntents } from "@/api/db/schema";
+import { corpusIndexMaturationPeriodMs } from "@/api/lib/legal-search/corpus-index-config";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusIndexAppendPublishDelayMs,
@@ -138,6 +139,30 @@ export const corpusProjectionAcceptedAppendCleanupFence = (
  * read the `append_committed_at` it is writing. The transition is later than
  * the acceptance it stands in for, so the barrier stays sound.
  */
+/**
+ * Where a state that stopped naming `retiredRevision` goes in the append
+ * walk's queue, which is ordered by `coalesce(retry_not_before, updated_at)`
+ * and reads only what is runnable now: the revision's cleanup fence plus the
+ * generation's split maturation period, the time a delete commonly takes to
+ * settle. The walk takes no entity with an outstanding revision, so before
+ * this instant it could only read such a state and refuse it. Settling the
+ * revision moves the state to the present at once
+ * (`wakeStatesAwaitingSettlementTx`), so this bounds the wait only when no
+ * settlement of this release does.
+ */
+export const corpusProjectionRetiredRevisionRunnableAt = (
+  manifest: CorpusIndexManifest,
+  retiredRevision: SQLWrapper,
+): SQL =>
+  sql`((
+    SELECT retired.cleanup_not_before
+    FROM ${corpusIndexProjectionIntents} retired
+    WHERE retired.id = ${retiredRevision}
+  ) + ${corpusIndexMaturationPeriodMs(
+    manifest.engine.indexConfig.indexing_settings.merge_policy
+      .maturation_period,
+  )}::double precision * interval '1 millisecond')`;
+
 export const corpusProjectionUnrecordedAppendCleanupFence = (
   manifest: CorpusIndexManifest,
   transitionAt: Date | SQL,

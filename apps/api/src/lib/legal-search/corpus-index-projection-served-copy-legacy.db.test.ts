@@ -113,8 +113,12 @@ const run = async (statement: ReturnType<typeof sql>) => {
   await db.execute(statement);
 };
 
-/** A legislation document projected once: its state names one applied revision. */
-const servedEntity = async () => {
+/**
+ * A legislation document projected once: its state names one applied revision.
+ * `desiredAtRecorded: false` writes the state the way writers did before
+ * `desired_at` existed.
+ */
+const servedEntity = async ({ desiredAtRecorded = true } = {}) => {
   const entityId = uuid();
   const revision = uuid();
   await run(sql`
@@ -132,7 +136,8 @@ const servedEntity = async () => {
       desired_fingerprint, desired_index_id, desired_at
     ) VALUES (
       'legislation', ${GENERATION}, ${entityId}, 'upsert', 1,
-      ${fingerprint(0)}, ${INDEX_ID}, statement_timestamp()
+      ${fingerprint(0)}, ${INDEX_ID},
+      ${desiredAtRecorded ? sql`statement_timestamp()` : sql`NULL`}
     )
   `);
   // Reserve, start, then the earlier release's leased commit and apply,
@@ -177,11 +182,16 @@ const servedEntity = async () => {
   return { entityId, revision };
 };
 
-/** A canonical change and the desired state the writers derive from it. */
+/**
+ * A canonical change and the desired state the earlier release's writer
+ * derives from it. `desiredAtRecorded: false` is the same write before
+ * `desired_at` existed.
+ */
 const changeDesired = async (
   entityId: string,
   epoch: number,
   next: { action: "upsert"; fingerprint: string } | { action: "erase" },
+  { desiredAtRecorded = true } = {},
 ) => {
   await run(sql`
     UPDATE legislation_documents SET projection_epoch = ${epoch}
@@ -194,7 +204,8 @@ const changeDesired = async (
     SET desired_action = ${next.action}, desired_epoch = ${epoch},
         desired_fingerprint = ${fingerprintValue},
         desired_index_id = ${indexValue},
-        desired_at = statement_timestamp(), work_status = 'eligible',
+        desired_at = ${desiredAtRecorded ? sql`statement_timestamp()` : sql`desired_at`},
+        work_status = 'eligible',
         retry_not_before = NULL, failure_attempts = 0,
         last_failure_kind = NULL, last_failure_message = NULL,
         updated_at = statement_timestamp()
@@ -515,6 +526,109 @@ describe("cleanup of revisions the previous release left served", () => {
     });
   });
 
+  test("a prepared revision whose state predates the desired-change stamp is restored", async () => {
+    const { entityId, revision } = await servedEntity({
+      desiredAtRecorded: false,
+    });
+    await changeDesired(
+      entityId,
+      2,
+      { action: "upsert", fingerprint: fingerprint(1) },
+      { desiredAtRecorded: false },
+    );
+    await previousPrepare(entityId, revision);
+
+    const result = await claim();
+    expect(result.leases).toEqual([]);
+    expect(result.restoredIntentIds).toEqual([
+      toSafeId<"corpusIndexProjectionIntent">(revision),
+    ]);
+    expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+  });
+
+  test("a revision prepared after an erasure and its undo is claimed, never restored", async () => {
+    const { entityId, revision } = await servedEntity();
+    await changeDesired(entityId, 2, { action: "erase" });
+    await changeDesired(entityId, 3, {
+      action: "upsert",
+      fingerprint: fingerprint(1),
+    });
+    await previousPrepare(entityId, revision);
+
+    const result = await claim();
+    expect(result.restoredIntentIds).toEqual([]);
+    expect(result.claimed).toEqual({
+      unserved: 0,
+      served_after_delete: 0,
+      served_unproven: 1,
+    });
+    expect(await intentOf(revision)).toMatchObject({
+      status: "cleanup_started",
+      cleanupAttempts: 1,
+    });
+  });
+
+  test("a copy an erasure and its undo left served is retired when this release next writes the state", async () => {
+    const { entityId, revision } = await servedEntity();
+    await changeDesired(entityId, 2, { action: "erase" });
+    await changeDesired(entityId, 3, {
+      action: "upsert",
+      fingerprint: fingerprint(1),
+    });
+    expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+
+    await run(sql`
+      UPDATE legislation_documents SET content_hash = ${fingerprint(3)}
+      WHERE id = ${entityId}
+    `);
+    await db.transaction(
+      async (tx) =>
+        await advanceCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "legislation",
+            entityId: toSafeId<"legislationDocument">(entityId),
+          },
+        ),
+    );
+    expect(await stateOf(entityId)).toEqual({
+      desiredAction: "upsert",
+      appliedAction: null,
+      appliedRevision: null,
+    });
+    expect(await intentOf(revision)).toMatchObject({
+      status: "cleanup_pending",
+      cleanupAttempts: 0,
+      lastError: "projection revision retired as not provably current",
+    });
+    // A first append from here: the retired copy is ordinary cleanup.
+    expect((await claim()).claimed.unserved).toBe(1);
+  });
+
+  test("a single desired change keeps serving the copy", async () => {
+    const { entityId, revision } = await servedEntity();
+    await run(sql`
+      UPDATE legislation_documents SET content_hash = ${fingerprint(3)}
+      WHERE id = ${entityId}
+    `);
+    await db.transaction(
+      async (tx) =>
+        await advanceCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "legislation",
+            entityId: toSafeId<"legislationDocument">(entityId),
+          },
+        ),
+    );
+    expect(await stateOf(entityId)).toEqual({
+      desiredAction: "upsert",
+      appliedAction: "upsert",
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
+    });
+    expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+  });
+
   test("a prepared revision whose desired value changed again is claimed as unproven", async () => {
     const { entityId, revision } = await servedEntity();
     await changeDesired(entityId, 2, {
@@ -662,18 +776,41 @@ describe("cleanup of revisions the previous release left served", () => {
         fc.record({
           claimedBefore: fc.boolean(),
           lastError: fc.boolean(),
+          desiredAtRecorded: fc.boolean(),
+          erasedBeforeQueueing: fc.boolean(),
           changedAfterQueueing: fc.constantFrom(
             "unchanged" as const,
             "upsert" as const,
             "erase" as const,
           ),
         }),
-        async ({ claimedBefore, lastError, changedAfterQueueing }) => {
-          const { entityId, revision } = await servedEntity();
-          await changeDesired(entityId, 2, {
-            action: "upsert",
-            fingerprint: fingerprint(1),
+        async ({
+          claimedBefore,
+          lastError,
+          desiredAtRecorded,
+          erasedBeforeQueueing,
+          changedAfterQueueing,
+        }) => {
+          const { entityId, revision } = await servedEntity({
+            desiredAtRecorded,
           });
+          let epoch = 1;
+          if (erasedBeforeQueueing) {
+            epoch += 1;
+            await changeDesired(
+              entityId,
+              epoch,
+              { action: "erase" },
+              { desiredAtRecorded },
+            );
+          }
+          epoch += 1;
+          await changeDesired(
+            entityId,
+            epoch,
+            { action: "upsert", fingerprint: fingerprint(1) },
+            { desiredAtRecorded },
+          );
           await previousPrepare(entityId, revision);
           if (claimedBefore) {
             await previousClaim(revision);
@@ -693,10 +830,11 @@ describe("cleanup of revisions the previous release left served", () => {
           if (changedAfterQueueing !== "unchanged") {
             await changeDesired(
               entityId,
-              3,
+              epoch + 1,
               changedAfterQueueing === "upsert"
                 ? { action: "upsert", fingerprint: fingerprint(2) }
                 : { action: "erase" },
+              { desiredAtRecorded },
             );
           }
           const intents = corpusIndexProjectionIntents;
@@ -713,9 +851,8 @@ describe("cleanup of revisions the previous release left served", () => {
                   cleanupAttempts: intents.cleanupAttempts,
                   revisionAppliedAt: intents.appliedAt,
                   lastError: intents.lastError,
-                  revisionUpdatedAt: intents.updatedAt,
                   appliedEpoch: states.appliedEpoch,
-                  desiredAt: states.desiredAt,
+                  desiredEpoch: states.desiredEpoch,
                 }).mapWith(Boolean),
               })
               .from(intents)
@@ -744,14 +881,16 @@ describe("cleanup of revisions the previous release left served", () => {
             accepted.isErr() &&
             accepted.error.cause instanceof TransactionRollbackError;
           expect({ admitted }).toEqual({ admitted: predicate === true });
+          // Whether `desired_at` was ever recorded does not matter.
           expect(predicate).toBe(
             !claimedBefore &&
               !lastError &&
+              !erasedBeforeQueueing &&
               changedAfterQueueing === "unchanged",
           );
         },
       ),
-      { numRuns: 24 },
+      { numRuns: 48 },
     );
   });
 });

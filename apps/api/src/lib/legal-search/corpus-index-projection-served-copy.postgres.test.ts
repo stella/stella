@@ -489,11 +489,17 @@ if (!databaseUrl || !runPostgresTests) {
             (await neverWaits(claim(claimer, fixture))).skippedLocked,
           ).toBe(1);
         });
-        // The desired value moved after the revision was queued: no proof
-        // that the copy is the one to serve, so it is claimed, not restored.
+        // Two desired changes now separate the queued copy from the desired
+        // state, so the writer itself stopped naming it, and the claim takes
+        // it as ordinary cleanup.
+        expect(await stateOf(claimer, fixture)).toEqual({
+          desiredAction: "upsert",
+          appliedAction: null,
+          appliedRevision: null,
+        });
         const after = await claim(claimer, fixture);
         expect(after.restoredIntentIds).toEqual([]);
-        expect(after.claimed.served_unproven).toBe(1);
+        expect(after.claimed.unserved).toBe(1);
       });
     });
 

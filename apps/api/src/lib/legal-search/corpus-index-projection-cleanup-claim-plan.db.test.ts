@@ -167,6 +167,7 @@ const claimPage = (tx: Transaction) =>
     indexId: INDEX_ID,
     limit: LIMIT,
     scopedEntityIds: null,
+    excludedIntentIds: [],
   }).getSQL();
 
 // timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.
@@ -231,6 +232,14 @@ test("the waiting-replacement gauge walks only the replacement index", async () 
     count: 300,
     waiting: true,
     queuedAt: null,
+  });
+  // Named, but queued for cleanup by an earlier release: not served, so not
+  // counted as waiting at a served revision.
+  await seedServed({
+    first: CONVERGED + 301,
+    count: 50,
+    waiting: true,
+    queuedAt: "2026-07-10",
   });
   await analyze();
   const gauge = await explain(() =>

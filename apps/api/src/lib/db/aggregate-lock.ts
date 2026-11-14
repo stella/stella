@@ -3877,10 +3877,12 @@ export const corpusProjectionReservationQueue = (
 
 /**
  * State rows precede their revisions in the projection lock order. Settling a
- * revision writes its state row through a trigger, so settlement takes these
- * first and cannot wait on replacement preparation over one revision.
+ * revision writes its entity's state row: through a trigger when the state
+ * still names it, and to wake a state that stopped naming it and waits for it
+ * to settle. Settlement takes these first, so it never waits on a writer that
+ * holds a state and then its revision.
  */
-export const lockCorpusProjectionStatesByAppliedRevision = async (
+export const lockCorpusProjectionStatesOfRevisions = async (
   tx: Transaction,
   revisionIds: readonly SafeId<"corpusIndexProjectionIntent">[],
 ) =>
@@ -3888,7 +3890,15 @@ export const lockCorpusProjectionStatesByAppliedRevision = async (
     .select({ entityId: corpusIndexProjectionStates.entityId })
     .from(corpusIndexProjectionStates)
     .where(
-      inArray(corpusIndexProjectionStates.appliedRevision, [...revisionIds]),
+      sql`(${corpusIndexProjectionStates.family}, ${corpusIndexProjectionStates.generation}, ${corpusIndexProjectionStates.entityId})
+        IN (${tx
+          .select({
+            family: corpusIndexProjectionIntents.family,
+            generation: corpusIndexProjectionIntents.generation,
+            entityId: corpusIndexProjectionIntents.entityId,
+          })
+          .from(corpusIndexProjectionIntents)
+          .where(inArray(corpusIndexProjectionIntents.id, [...revisionIds]))})`,
     )
     .orderBy(
       asc(corpusIndexProjectionStates.family),

@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawSources, corpusIndexProjectionStates } from "@/api/db/schema";
+import {
+  caseLawSources,
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
+} from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readServedCorpusIndexGenerationsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -219,11 +223,12 @@ const CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP = 10_000;
 
 /**
  * Replacements of one served index that are still served at their previous
- * revision: the desired epoch moved past the applied one. Nothing appends a
- * replacement before its applied revision settles, and nothing queues a
- * served revision for cleanup, so these wait, visible but stale. `count`
- * stops at the cap; the oldest is exact however long the queue, since the
- * walk reads it first.
+ * revision: the desired epoch moved past the applied one, and the revision
+ * the state names is still `applied`. Nothing appends a replacement before
+ * its applied revision settles, and nothing queues a served revision for
+ * cleanup, so these wait, visible but stale. A state naming a revision that
+ * already left `applied` is not counted. `count` stops at the cap; the oldest
+ * is exact however long the queue, since the walk reads it first.
  */
 type CaseLawWaitingReplacements = {
   generation: string;
@@ -285,6 +290,12 @@ export const caseLawWaitingReplacementsQuery = (generation: string) => {
           AND state.generation = ${generation}
           AND state.desired_index_id = indexes.index_id
           AND ${waiting("state")}
+          AND EXISTS (
+            SELECT 1
+            FROM ${corpusIndexProjectionIntents} named
+            WHERE named.id = state.applied_revision
+              AND named.status = 'applied'
+          )
         ORDER BY state.updated_at, state.entity_id
         LIMIT ${CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP + 1}
       ) AS walked

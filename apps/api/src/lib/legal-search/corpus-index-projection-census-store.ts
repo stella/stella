@@ -19,6 +19,7 @@ import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/c
 import {
   corpusProjectionAcceptedAppendCleanupFence,
   corpusProjectionAppendIsPublished,
+  corpusProjectionRetiredRevisionRunnableAt,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { logger } from "@/api/lib/observability/logger";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
@@ -302,13 +303,11 @@ export const repairAppliedCorpusProjectionDriftTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  // The one writer that stops naming an upsert's copy without a successor:
-  // the copy is drift, so the state becomes a first append, which keeps it in
-  // the work queue whatever a failed re-append charges. A state left naming
-  // the retired revision would leave no queue holding it once a failure
-  // overwrote `repair_scheduled`, and no census reading it again. The entity
-  // stays hidden until the re-append lands; that waits for the retired
-  // revision to settle.
+  // The copy is drift, so the state stops naming it and becomes a first
+  // append: it needs work until a re-append lands, whatever a failed attempt
+  // charges short of `blocked`. The re-append waits for the retired revision
+  // to settle, so the state is queued for the append walk at the instant it
+  // can have settled.
   // audit: skip - applied-state bookkeeping on the derived public corpus projection
   const unnamed = await tx
     .update(corpusIndexProjectionStates)
@@ -319,7 +318,10 @@ export const repairAppliedCorpusProjectionDriftTx = async (
       appliedFingerprint: null,
       appliedIndexId: null,
       appliedAt: null,
-      updatedAt: repairAt,
+      updatedAt: corpusProjectionRetiredRevisionRunnableAt(
+        manifest,
+        corpusIndexProjectionStates.appliedRevision,
+      ),
     })
     .where(
       and(

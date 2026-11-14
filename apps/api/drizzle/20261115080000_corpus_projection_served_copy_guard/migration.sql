@@ -1,3 +1,4 @@
+-- requires: 20261114190000_corpus_projection_durable_commit
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
@@ -84,8 +85,9 @@ BEGIN
       -- A restore is not a new append: the state's desired epoch has moved
       -- past this revision, which is why it was queued. It is admitted only
       -- for a revision no delete can have reached, which the state still
-      -- names at its own epoch, and whose desired value has not changed
-      -- since it was queued.
+      -- names at its own epoch, and which exactly one desired change
+      -- separates from the desired state. A change of the desired value
+      -- needs a strictly newer epoch, so an erasure and its undo take two.
       IF NOT (
         OLD."cleanup_attempts" = 0
         AND NEW."cleanup_attempts" = 0
@@ -100,8 +102,7 @@ BEGIN
         AND state."desired_action" = 'upsert'
         AND state."applied_action" = 'upsert'
         AND state."applied_epoch" = NEW."epoch"
-        AND state."desired_at" IS NOT NULL
-        AND state."desired_at" < OLD."updated_at"
+        AND state."desired_epoch" = NEW."epoch" + 1
       FOR UPDATE;
       IF NOT FOUND THEN
         RAISE EXCEPTION 'only a revision its unchanged upsert state still names can be restored';

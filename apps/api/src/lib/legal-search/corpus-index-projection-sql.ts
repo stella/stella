@@ -92,9 +92,8 @@ type CorpusProjectionRestoreColumns = CorpusProjectionServedColumns & {
   cleanupAttempts: SQLWrapper;
   revisionAppliedAt: SQLWrapper;
   lastError: SQLWrapper;
-  revisionUpdatedAt: SQLWrapper;
   appliedEpoch: SQLWrapper;
-  desiredAt: SQLWrapper;
+  desiredEpoch: SQLWrapper;
 };
 
 /**
@@ -107,17 +106,12 @@ type CorpusProjectionRestoreColumns = CorpusProjectionServedColumns & {
  * - `last_error IS NULL` and `applied_at IS NOT NULL`: replacement
  *   preparation queued it from `applied`; erasure, drift repair and every
  *   other cleanup writer record why.
- * - `desired_at < updated_at`: the desired value is the one it was queued
- *   under, so no erasure came in between. Strict, so two writes the clock
- *   cannot tell apart count as a change. `desired_at` is the desired write's
- *   statement start, and a write that started before the queueing and
- *   committed after it waited on the state row lock the preparation held. If
- *   it wrote an erasure, the state is not an upsert and nothing is restored.
- *   If it wrote an upsert, restoring is harmless, unless an erasure came
- *   before it, and that cannot carry an early stamp too: every desired writer
- *   locks the canonical row before its state statement, so a second write
- *   only starts that statement once the first has committed, which is after
- *   the preparation committed.
+ * - `desired_epoch = epoch + 1`: exactly one desired change separates the
+ *   revision from the desired state. The state guard admits a change of the
+ *   desired action, fingerprint or index only at a strictly newer epoch, so an
+ *   erasure and its undo take two epochs, and preparation queued the revision
+ *   only once the desired epoch had passed it, so no change came after the
+ *   queueing. Any longer gap is not restored.
  *
  * The database guard on `cleanup_pending -> applied` repeats this predicate.
  */
@@ -126,9 +120,8 @@ export const corpusIndexProjectionRevisionIsRestorable = ({
   cleanupAttempts,
   revisionAppliedAt,
   lastError,
-  revisionUpdatedAt,
   appliedEpoch,
-  desiredAt,
+  desiredEpoch,
   ...served
 }: CorpusProjectionRestoreColumns) => sql`(
   ${corpusIndexProjectionStateServesRevision(served)}
@@ -136,8 +129,7 @@ export const corpusIndexProjectionRevisionIsRestorable = ({
   AND ${revisionAppliedAt} IS NOT NULL
   AND ${lastError} IS NULL
   AND ${appliedEpoch} = ${revisionEpoch}
-  AND ${desiredAt} IS NOT NULL
-  AND ${desiredAt} < ${revisionUpdatedAt}
+  AND ${desiredEpoch} = ${revisionEpoch} + 1
 )`;
 
 /**

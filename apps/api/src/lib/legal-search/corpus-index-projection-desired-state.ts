@@ -1,5 +1,5 @@
 import { panic, TaggedError } from "better-result";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
@@ -40,7 +40,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
-import { corpusProjectionAcceptedAppendCleanupFence } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionRetiredRevisionRunnableAt,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
@@ -915,21 +918,64 @@ const readUndoneErasuresTx = async (
     );
 };
 
-const UNDONE_ERASURE_CLEANUP_REASON =
-  "projection revision retired by an undone erasure";
+/**
+ * States this write left naming a copy that more than one desired change
+ * separates from what they now desire, holding other content. An erasure and
+ * its undo take two changes, and an earlier release undid erasures without
+ * retiring the copy, so such a copy may be the pre-erasure one. Read after the
+ * write, which holds these state rows.
+ */
+const readUnprovenServedCopiesTx = async (
+  tx: Transaction,
+  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
+): Promise<DesiredStateKey[]> => {
+  const keys = desiredStateKeys(
+    values.filter(({ desiredAction }) => desiredAction === "upsert"),
+  );
+  if (keys === undefined) {
+    return [];
+  }
+  return await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+        isNotNull(corpusIndexProjectionStates.appliedRevision),
+        sql`${corpusIndexProjectionStates.desiredEpoch} >= ${corpusIndexProjectionStates.appliedEpoch} + 2`,
+        sql`(${corpusIndexProjectionStates.desiredFingerprint}, ${corpusIndexProjectionStates.desiredIndexId})
+          IS DISTINCT FROM
+          (${corpusIndexProjectionStates.appliedFingerprint}, ${corpusIndexProjectionStates.appliedIndexId})`,
+      ),
+    );
+};
+
+const SERVED_COPY_RETIREMENT_REASONS = {
+  undoneErasure: "projection revision retired by an undone erasure",
+  unproven: "projection revision retired as not provably current",
+} as const;
 
 /**
- * An undone erasure never brings the pre-erasure copy back: the copy still
- * named is queued for cleanup if it is still `applied`, then the state stops
- * naming it, so the entity is appended anew. Runs after the desired write,
- * which holds these state rows; the revisions are locked after them, in the
- * projection lock order.
+ * Retire the copy these states name and stop naming it, so the entity is
+ * appended anew and never served the retired copy again: an undone erasure,
+ * and a copy `readUnprovenServedCopiesTx` found. The copy is queued for
+ * cleanup if it is still `applied`. Runs after the desired write, which holds
+ * these state rows; the revisions are locked after them, in the projection
+ * lock order. Each state is then queued for the append walk at the instant
+ * its retired copy can have settled.
  */
-const retireUndoneErasureCopiesTx = async (
+const retireServedCopiesTx = async (
   tx: Transaction,
-  undone: readonly DesiredStateKey[],
+  retired: readonly DesiredStateKey[],
+  reason: (typeof SERVED_COPY_RETIREMENT_REASONS)[keyof typeof SERVED_COPY_RETIREMENT_REASONS],
 ): Promise<void> => {
-  const keys = desiredStateKeys(undone);
+  const keys = desiredStateKeys(retired);
   if (keys === undefined) {
     return;
   }
@@ -937,6 +983,7 @@ const retireUndoneErasureCopiesTx = async (
     .select({
       family: corpusIndexProjectionStates.family,
       generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
       revision: corpusIndexProjectionStates.appliedRevision,
     })
     .from(corpusIndexProjectionStates)
@@ -947,8 +994,8 @@ const retireUndoneErasureCopiesTx = async (
         eq(corpusIndexProjectionStates.appliedAction, "upsert"),
       ),
     );
-  const revisions = named.flatMap(({ family, generation, revision }) =>
-    revision === null ? [] : [{ family, generation, revision }],
+  const revisions = named.flatMap(({ revision, ...key }) =>
+    revision === null ? [] : [{ ...key, revision }],
   );
   if (revisions.length === 0) {
     return;
@@ -963,7 +1010,8 @@ const retireUndoneErasureCopiesTx = async (
     ({ family, generation }) => `${family}/${generation}`,
   );
   for (const group of generations.values()) {
-    const first = group.at(0) ?? panic("Empty undone erasure group");
+    const first = group.at(0) ?? panic("Empty retired copy group");
+    const manifest = requireCorpusIndexManifest(first.family, first.generation);
     // db-await-in-loop: one statement per generation, each with that generation's publish fence
     await transitionBatch({
       tx,
@@ -975,39 +1023,50 @@ const retireUndoneErasureCopiesTx = async (
         set: {
           leaseToken: null,
           leaseExpiresAt: null,
-          ...corpusProjectionAcceptedAppendCleanupFence(
-            requireCorpusIndexManifest(first.family, first.generation),
-            transitionAt,
-          ),
-          lastError: UNDONE_ERASURE_CLEANUP_REASON,
+          ...corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
+          lastError: reason,
           updatedAt: transitionAt,
         },
       },
       // Bookkeeping on the derived public corpus projection: no tenant data
-      // and no actor; the canonical write that undid the erasure is audited.
+      // and no actor; the canonical write that changed the desired state is
+      // audited.
       recordTransitionAuditEvent: () => undefined,
     });
-  }
-  const unname = replayWrite(corpusIndexProjectionStates, {
-    appliedAction: null,
-    appliedEpoch: null,
-    appliedRevision: null,
-    appliedFingerprint: null,
-    appliedIndexId: null,
-    appliedAt: null,
-  });
-  // audit: skip - applied-state bookkeeping on the derived public corpus projection
-  await tx
-    .update(corpusIndexProjectionStates)
-    .set(unname.set)
-    .where(
-      and(
-        keys,
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
-        unname.setWhere,
-      ),
+    const unname = replayWrite(
+      corpusIndexProjectionStates,
+      {
+        appliedAction: null,
+        appliedEpoch: null,
+        appliedRevision: null,
+        appliedFingerprint: null,
+        appliedIndexId: null,
+        appliedAt: null,
+      },
+      {
+        modifiedAt: {
+          column: corpusIndexProjectionStates.updatedAt,
+          value: corpusProjectionRetiredRevisionRunnableAt(
+            manifest,
+            corpusIndexProjectionStates.appliedRevision,
+          ),
+        },
+      },
     );
+    // audit: skip - applied-state bookkeeping on the derived public corpus projection
+    // db-await-in-loop: one statement per generation, each with that generation's settlement bound
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set(unname.set)
+      .where(
+        and(
+          desiredStateKeys(group),
+          eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+          eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+          unname.setWhere,
+        ),
+      );
+  }
 };
 
 export const writeDesiredStates = async (
@@ -1063,7 +1122,16 @@ export const writeDesiredStates = async (
         },
       ),
     });
-  await retireUndoneErasureCopiesTx(tx, undone);
+  await retireServedCopiesTx(
+    tx,
+    undone,
+    SERVED_COPY_RETIREMENT_REASONS.undoneErasure,
+  );
+  await retireServedCopiesTx(
+    tx,
+    await readUnprovenServedCopiesTx(tx, values),
+    SERVED_COPY_RETIREMENT_REASONS.unproven,
+  );
 };
 
 type DesiredStateSnapshot = {

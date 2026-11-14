@@ -10,6 +10,7 @@ import {
   lt,
   lte,
   min,
+  notInArray,
   or,
   type SQL,
   sql,
@@ -25,7 +26,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockCorpusProjectionServingStatesForCleanup,
-  lockCorpusProjectionStatesByAppliedRevision,
+  lockCorpusProjectionStatesOfRevisions,
   lockPendingCorpusProjectionCleanups,
 } from "@/api/lib/db/aggregate-lock";
 import { transitionBatch } from "@/api/lib/db/transitions";
@@ -64,6 +65,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
 import {
   corpusIndexProjectionCleanupIsDue,
+  corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionRevisionIsRestorable,
   corpusIndexProjectionStateServesRevision,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -160,12 +162,10 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
  * - `served_after_delete`: a delete may already have been issued, so the copy
  *   may already be gone and holding the cleanup back would only keep the
  *   entity hidden. It settles and the entity is appended again.
- * - `served_unproven`: never claimed, but the desired value changed after it
- *   was queued, so an erasure undone in between cannot be ruled out and the
- *   copy may be the pre-erasure one. Deleting it is the safe direction.
- *
- * Remove both, with `restored`, once no named revision outside `applied`
- * remains in any registered generation.
+ * - `served_unproven`: never claimed, but more than one desired change
+ *   separates it from the desired state, so an erasure undone in between
+ *   cannot be ruled out and the copy may be the pre-erasure one. Deleting it
+ *   is the safe direction; the entity is appended anew.
  */
 const CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS = [
   "unserved",
@@ -197,8 +197,10 @@ export type CorpusProjectionCleanupClaim = {
   /** Served revisions no delete reached, returned to `applied` instead. */
   restoredIntentIds: ProjectionIntentId[];
   /**
-   * Candidates whose serving state another transaction held; the next turn
-   * reaches them again. The claim never waits on a lock.
+   * Candidates the turn read but left queued: another transaction held the
+   * revision or its serving state, or the revision stopped being due before
+   * it was locked. A later turn reaches them again. The claim never waits on
+   * a lock.
    */
   skippedLocked: number;
 };
@@ -209,13 +211,15 @@ type CorpusProjectionCleanupPageOptions = {
   indexId: string;
   limit: number;
   scopedEntityIds: readonly string[] | null;
+  /** Candidates an earlier page of the same turn already read. */
+  excludedIntentIds: readonly ProjectionIntentId[];
 };
 
 /**
  * The cleanup claim's walk: the next `limit` revisions in queue order, each
  * with the state that serves it, if any (one probe of the applied-revision
  * unique index). Unlocked: every row it returns leaves the queue or is
- * reported skipped in this turn, so the walk costs the page it reads.
+ * reported skipped in this turn, so the walk costs the pages it reads.
  * Exported so the plan guard explains the exact statement the claim issues.
  */
 export const corpusProjectionCleanupClaimPage = (
@@ -226,6 +230,7 @@ export const corpusProjectionCleanupClaimPage = (
     indexId,
     limit,
     scopedEntityIds,
+    excludedIntentIds,
   }: CorpusProjectionCleanupPageOptions,
 ) =>
   tx
@@ -250,6 +255,9 @@ export const corpusProjectionCleanupClaimPage = (
         scopedEntityIds === null
           ? undefined
           : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+        excludedIntentIds.length === 0
+          ? undefined
+          : notInArray(corpusIndexProjectionIntents.id, [...excludedIntentIds]),
         eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
         corpusIndexProjectionCleanupIsDue({
           cleanupNotBefore: corpusIndexProjectionIntents.cleanupNotBefore,
@@ -317,8 +325,55 @@ const lockDecidableCleanupPageTx = async (
         );
   return {
     decidable: locked.map(({ id }) => id),
-    skippedLocked: page.length - decidable.length,
+    skippedLocked: page.length - locked.length,
   };
+};
+
+/**
+ * Pages one claim turn reads at most. A page whose candidates are all held
+ * elsewhere would otherwise fill the turn with nothing and keep heading the
+ * queue; each further page reads past what the turn already saw.
+ */
+const CLEANUP_CLAIM_MAX_PAGES = 4;
+
+type LockCleanupCandidatesOptions = Omit<
+  CorpusProjectionCleanupPageOptions,
+  "excludedIntentIds"
+>;
+
+/**
+ * Read and lock the turn's candidates, page after page, until `limit` are
+ * decidable, the queue runs out, or `CLEANUP_CLAIM_MAX_PAGES` were read.
+ */
+const lockCleanupCandidatesTx = async (
+  tx: Transaction,
+  options: LockCleanupCandidatesOptions,
+) => {
+  const decidable: ProjectionIntentId[] = [];
+  const seen: ProjectionIntentId[] = [];
+  let skippedLocked = 0;
+  for (let page = 0; page < CLEANUP_CLAIM_MAX_PAGES; page += 1) {
+    const wanted = options.limit - decidable.length;
+    // db-await-in-loop: each page starts past the rows the previous one read
+    const rows = await corpusProjectionCleanupClaimPage(tx, {
+      ...options,
+      limit: wanted,
+      excludedIntentIds: seen,
+    });
+    seen.push(...rows.map(({ id }) => id));
+    // db-await-in-loop: locks follow the page they decide
+    const locked = await lockDecidableCleanupPageTx(tx, {
+      family: options.family,
+      generation: options.generation,
+      page: rows,
+    });
+    decidable.push(...locked.decidable);
+    skippedLocked += locked.skippedLocked;
+    if (rows.length < wanted || decidable.length >= options.limit) {
+      break;
+    }
+  }
+  return { decidable, skippedLocked };
 };
 
 /** Each locked candidate's disposition, read under the locks just taken. */
@@ -348,9 +403,8 @@ const decideCleanupCandidatesTx = async (
           cleanupAttempts: corpusIndexProjectionIntents.cleanupAttempts,
           revisionAppliedAt: corpusIndexProjectionIntents.appliedAt,
           lastError: corpusIndexProjectionIntents.lastError,
-          revisionUpdatedAt: corpusIndexProjectionIntents.updatedAt,
           appliedEpoch: corpusIndexProjectionStates.appliedEpoch,
-          desiredAt: corpusIndexProjectionStates.desiredAt,
+          desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
         })}
           THEN ${CLEANUP_CANDIDATE_RESTORE satisfies CorpusProjectionCleanupDisposition}
         WHEN ${corpusIndexProjectionIntents.cleanupAttempts} > 0
@@ -456,17 +510,12 @@ export const claimCorpusProjectionCleanupTx = async <
     family,
     generation,
   );
-  const page = await corpusProjectionCleanupClaimPage(tx, {
+  const { decidable, skippedLocked } = await lockCleanupCandidatesTx(tx, {
     family,
     generation,
     indexId,
     limit,
     scopedEntityIds,
-  });
-  const { decidable, skippedLocked } = await lockDecidableCleanupPageTx(tx, {
-    family,
-    generation,
-    page,
   });
   const decided = await decideCleanupCandidatesTx(tx, decidable);
   const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
@@ -1223,7 +1272,7 @@ export const settleCorpusProjectionCleanupTx = async (
   { proof, testNow }: SettleCorpusProjectionCleanupOptions,
 ): Promise<number> => {
   await lockCorpusIndexProjectionIntentMutationsTx(tx, proof.intentIds);
-  await lockCorpusProjectionStatesByAppliedRevision(tx, proof.intentIds);
+  await lockCorpusProjectionStatesOfRevisions(tx, proof.intentIds);
   await lockCorpusProjectionIntentsById(tx, proof.intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
@@ -1253,7 +1302,59 @@ export const settleCorpusProjectionCleanupTx = async (
       `Corpus projection settlement matched ${rows.length} of ${proof.intentIds.length} verified revisions`,
     );
   }
+  await wakeStatesAwaitingSettlementTx(tx, {
+    intentIds: proof.intentIds,
+    transitionAt,
+  });
   return rows.length;
+};
+
+type WakeStatesAwaitingSettlementOptions = {
+  intentIds: readonly ProjectionIntentId[];
+  transitionAt: Date | SQL<Date>;
+};
+
+/**
+ * A state that stopped naming its copy is queued for the append walk at the
+ * instant that copy can have settled
+ * (`corpusProjectionRetiredRevisionRunnableAt`). Once its entity has no
+ * outstanding revision left, it is runnable now. A failure backoff
+ * (`retry_not_before`) is left alone.
+ */
+const wakeStatesAwaitingSettlementTx = async (
+  tx: Transaction,
+  { intentIds, transitionAt }: WakeStatesAwaitingSettlementOptions,
+): Promise<void> => {
+  const settledEntities = tx
+    .select({
+      family: corpusIndexProjectionIntents.family,
+      generation: corpusIndexProjectionIntents.generation,
+      entityId: corpusIndexProjectionIntents.entityId,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]));
+  // audit: skip - scheduling bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set({ updatedAt: transitionAt })
+    .where(
+      and(
+        sql`(${corpusIndexProjectionStates.family}, ${corpusIndexProjectionStates.generation}, ${corpusIndexProjectionStates.entityId}) IN (${settledEntities})`,
+        isNull(corpusIndexProjectionStates.appliedRevision),
+        isNull(corpusIndexProjectionStates.retryNotBefore),
+        // Queued for a later instant than the clock reads: only the
+        // settlement bound sets one.
+        sql`${corpusIndexProjectionStates.updatedAt} > clock_timestamp()`,
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM ${corpusIndexProjectionIntents} outstanding
+          WHERE outstanding.family = ${corpusIndexProjectionStates.family}
+            AND outstanding.generation = ${corpusIndexProjectionStates.generation}
+            AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
+            AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
+        )`,
+      ),
+    );
 };
 
 /**
