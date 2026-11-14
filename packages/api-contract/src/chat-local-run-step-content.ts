@@ -62,6 +62,9 @@ export const CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET = {
  * - `run_budget_reached`: the run had stored all it may before this step.
  * - `arriving`: nothing stored yet and the step's run is still going, so the
  *   computer may yet send it.
+ * - `not_copied`: the thread is a fork that holds nothing for a step its
+ *   source thread still stores: the copy made with the fork did not finish,
+ *   and asking for the same fork again completes it.
  * - `not_stored`: nothing stored and nothing will be.
  */
 export const CHAT_LOCAL_RUN_STEP_CONTENT_STATE = {
@@ -69,12 +72,13 @@ export const CHAT_LOCAL_RUN_STEP_CONTENT_STATE = {
   tooLarge: "too_large",
   runBudgetReached: "run_budget_reached",
   arriving: "arriving",
+  notCopied: "not_copied",
   notStored: "not_stored",
 } as const;
 export type ChatLocalRunStepContentState =
   (typeof CHAT_LOCAL_RUN_STEP_CONTENT_STATE)[keyof typeof CHAT_LOCAL_RUN_STEP_CONTENT_STATE];
 
-/** The states a stored row holds; the other two say there is no row. */
+/** The states a stored row holds; the others say there is no row. */
 export const CHAT_LOCAL_RUN_STEP_CONTENT_STORED_STATES = [
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE.stored,
   CHAT_LOCAL_RUN_STEP_CONTENT_STATE.tooLarge,
@@ -175,6 +179,9 @@ export const chatLocalRunStepContentSchema = v.variant("state", [
     state: v.literal(CHAT_LOCAL_RUN_STEP_CONTENT_STATE.arriving),
   }),
   v.strictObject({
+    state: v.literal(CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notCopied),
+  }),
+  v.strictObject({
     state: v.literal(CHAT_LOCAL_RUN_STEP_CONTENT_STATE.notStored),
   }),
 ]);
@@ -222,3 +229,15 @@ export const chatLocalRunStepContentWindow = (
   }
   return { start, end, nextStart: end < bytes.length ? end : null };
 };
+
+/**
+ * Whether a fork holds the stored content of the steps it copied. The fork
+ * exists either way; `incomplete` means the copy of its steps' content did
+ * not finish, and the same fork request sent again completes it.
+ */
+export const CHAT_FORK_STEP_CONTENT = {
+  complete: "complete",
+  incomplete: "incomplete",
+} as const;
+export type ChatForkStepContent =
+  (typeof CHAT_FORK_STEP_CONTENT)[keyof typeof CHAT_FORK_STEP_CONTENT];
