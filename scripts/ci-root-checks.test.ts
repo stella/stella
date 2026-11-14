@@ -389,6 +389,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test maintenance release preparation": [
     "packages/property-testing/src/pinned-seeds.ts",
+    "scripts/check-desktop-support-floor.ts",
     "scripts/check-marketing-recordings.ts",
     "scripts/prepare-maintenance-release.property.test.ts",
     "scripts/prepare-maintenance-release.ts",
@@ -558,6 +559,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/changeset-guard.ts",
     "scripts/check-cli-release-coupling.test.ts",
     "scripts/check-cli-release-coupling.ts",
+    "scripts/check-desktop-support-floor.ts",
     "scripts/check-marketing-recordings.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/prepare-maintenance-release.ts",
