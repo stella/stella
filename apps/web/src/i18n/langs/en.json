@@ -1673,6 +1673,8 @@
         "actions": {
           "click": "Click",
           "fill": "Enter text",
+          "find": "Find on page",
+          "findHeadings": "List page headings",
           "open": "Open website",
           "openNewTab": "Open website in a new tab",
           "pressKey": "Press key",

@@ -1673,6 +1673,8 @@
         "actions": {
           "click": "Cliquer",
           "fill": "Saisir du texte",
+          "find": "Rechercher dans la page",
+          "findHeadings": "Lister les titres de la page",
           "open": "Ouvrir le site web",
           "openNewTab": "Ouvrir le site web dans un nouvel onglet",
           "pressKey": "Appuyer sur une touche",

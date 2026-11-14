@@ -1673,6 +1673,8 @@
         "actions": {
           "click": "Kliknout",
           "fill": "Zadat text",
+          "find": "Najít na stránce",
+          "findHeadings": "Zobrazit nadpisy stránky",
           "open": "Otevřít web",
           "openNewTab": "Otevřít web na nové kartě",
           "pressKey": "Stisknout klávesu",

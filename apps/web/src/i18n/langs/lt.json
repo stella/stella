@@ -1673,6 +1673,8 @@
         "actions": {
           "click": "Spustelėti",
           "fill": "Įvesti tekstą",
+          "find": "Ieškoti puslapyje",
+          "findHeadings": "Išvardyti puslapio antraštes",
           "open": "Atverti svetainę",
           "openNewTab": "Atverti svetainę naujame skirtuke",
           "pressKey": "Paspausti klavišą",

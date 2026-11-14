@@ -1673,6 +1673,8 @@
         "actions": {
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
+          "find": "Otsi lehelt",
+          "findHeadings": "Loetle lehe pealkirjad",
           "open": "Ava veebisait",
           "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
