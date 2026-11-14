@@ -758,7 +758,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Re-drive document review runs no queued job owns anymore",
+    description:
+      "Fail stuck document review runs and re-drive the ones no queued job owns anymore",
     id: "documentReviews.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
@@ -767,7 +768,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   },
   {
     description:
-      "Re-drive list verification and fact extraction runs no queued job owns anymore",
+      "Fail stuck list verification and fact extraction runs and re-drive the ones no queued job owns anymore",
     id: "listVerifications.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
