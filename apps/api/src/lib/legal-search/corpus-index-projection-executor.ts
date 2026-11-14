@@ -40,7 +40,6 @@ import {
   type CorpusProjectionAppendCommitMode,
   type CorpusProjectionAppendEntry,
   corpusProjectionAppendIngestBudgetMs,
-  type CorpusProjectionPresenceProof,
   planCorpusProjectionAppendRequests,
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -53,7 +52,6 @@ import {
   abandonCorpusProjectionAppendTx,
   cancelCorpusProjectionReservationTx,
   classifyCorpusProjectionReservationFailureTx,
-  commitCorpusProjectionAppendTx,
   continueCorpusProjectionAppendPartTx,
   CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   CORPUS_PROJECTION_LEASE_MAX_MS,
@@ -66,7 +64,10 @@ import {
   type CorpusProjectionIntentLease,
   type CorpusProjectionReservationFailure,
   prepareCorpusProjectionReplacementsTx,
+  proveAcceptedCorpusProjectionAppendsTx,
+  recordAcceptedCorpusProjectionAppendsTx,
   reserveCorpusProjectionIntentsTx,
+  retireAcceptedCorpusProjectionAppendsTx,
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionMultipartAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -875,83 +876,6 @@ const logAppendFailure = ({
   return { fault, stopForEngine };
 };
 
-type ConfirmProjectionAppendOptions = {
-  client: ProjectionAppendClient;
-  indexId: string;
-  entries: readonly PreparedProjectionEntry[];
-};
-
-type ProvenProjectionEntry = {
-  entry: PreparedProjectionEntry;
-  proof: CorpusProjectionPresenceProof;
-};
-
-/** Each revision belongs to one document_id; require all of its passages. */
-const confirmProjectionAppend = async ({
-  client,
-  indexId,
-  entries,
-}: ConfirmProjectionAppendOptions): Promise<
-  Result<ProvenProjectionEntry[], CorpusIndexError>
-> => {
-  const proven: ProvenProjectionEntry[] = [];
-  for (const batch of chunkItems(
-    entries,
-    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-  )) {
-    const census = await proveCorpusProjectionRevisionsPresent({
-      client,
-      indexId,
-      expected: batch.map(({ material, documentCount }) => ({
-        revision: material.lease.intentId,
-        documentCount,
-      })),
-    });
-    if (census.isErr()) {
-      return Result.err(
-        new CorpusIndexError({
-          message: "projection append presence confirmation failed",
-          rejection: "transient",
-          cause: census.error,
-        }),
-      );
-    }
-    switch (census.value.status) {
-      case "unproven":
-        return Result.err(
-          new CorpusIndexError({
-            message:
-              "projection append is not fully searchable after publication",
-            rejection: "transient",
-          }),
-        );
-      case "proven": {
-        const proofs = new Map(
-          census.value.proofs.map((proof) => [proof.revision, proof]),
-        );
-        for (const entry of batch) {
-          proven.push({
-            entry,
-            proof:
-              proofs.get(entry.material.lease.intentId) ??
-              panic(`Lost presence proof ${entry.material.lease.intentId}`),
-          });
-        }
-        break;
-      }
-      default:
-        census.value satisfies never;
-        return panic(`Unhandled presence census: ${String(census.value)}`);
-    }
-  }
-  return Result.ok(proven);
-};
-
-type PublishAndConfirmProjectionAppendOptions =
-  ConfirmProjectionAppendOptions & {
-    commitMode: CorpusProjectionAppendCommitMode;
-  };
-
 /** One request writes one physical index, so one generation. */
 const requestManifest = (
   entries: readonly PreparedProjectionEntry[],
@@ -959,23 +883,214 @@ const requestManifest = (
   entries.at(0)?.material.manifest ??
   panic("A projection append request carries no revision");
 
-const publishAndConfirmProjectionAppend = async ({
+const PRESENCE_CONFIRMATION_FAILED =
+  "projection append presence confirmation failed";
+const PRESENCE_INCOMPLETE =
+  "projection append is not fully searchable after publication";
+
+type AcceptAndProveProjectionAppendOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: ProjectionAppendClient;
+  indexId: string;
+  /** Revisions of one request the engine accepted. */
+  entries: readonly PreparedProjectionEntry[];
+  result: CorpusProjectionAppendCycleResult;
+};
+
+/**
+ * Record an accepted request's revisions, then prove them at once: the request
+ * waited for publication, so an exact count applies a revision. A revision the
+ * census does not count exactly, or a census that fails, is retired through
+ * the same transition with an uncharged retry, and the failure is returned so
+ * the caller stops its chain as it does after an unknown request.
+ */
+const acceptAndProveProjectionAppend = async ({
+  runInTransaction,
   client,
-  commitMode,
   indexId,
   entries,
-}: PublishAndConfirmProjectionAppendOptions) => {
-  const published = await ingestCorpusProjectionRequest(client, {
-    commitMode,
-    manifest: requestManifest(entries),
-    indexId,
-    ndjson: entries.map(({ ndjson }) => ndjson).join("\n"),
-  });
-  if (published.isErr()) {
-    return published;
+  result,
+}: AcceptAndProveProjectionAppendOptions): Promise<CorpusIndexError | null> => {
+  const recorded = await measured(
+    async () =>
+      await runInTransaction(
+        async (tx) =>
+          await recordAcceptedCorpusProjectionAppendsTx(tx, {
+            accepted: entries.map(({ material, documentCount }) => ({
+              intentId: material.lease.intentId,
+              leaseToken: material.lease.leaseToken,
+              documentCount,
+            })),
+          }),
+      ),
+    (elapsedMs) => {
+      result.timing.storeCommitMs += elapsedMs;
+    },
+  );
+  const documentCounts = new Map(
+    entries.map(({ material, documentCount }) => [
+      material.lease.intentId,
+      documentCount,
+    ]),
+  );
+  const accepted: {
+    revision: CorpusProjectionIntentLease["intentId"];
+    documentCount: number;
+  }[] = [];
+  for (const outcome of recorded) {
+    switch (outcome.status) {
+      case "accepted":
+        accepted.push({
+          revision: outcome.intentId,
+          documentCount:
+            documentCounts.get(outcome.intentId) ??
+            panic(`Lost accepted projection revision ${outcome.intentId}`),
+        });
+        break;
+      case "stale_cleanup_pending":
+        result.staleCleanupPending += 1;
+        break;
+      case "lease_lost":
+        result.leaseLost += 1;
+        break;
+      default:
+        outcome satisfies never;
+        panic(`Unhandled accepted append: ${String(outcome)}`);
+    }
   }
-  return await confirmProjectionAppend({ client, indexId, entries });
+  let failure: CorpusIndexError | null = null;
+  for (const batch of chunkItems(
+    accepted,
+    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  )) {
+    const census = await measured(
+      async () =>
+        await proveCorpusProjectionRevisionsPresent({
+          client,
+          indexId,
+          expected: batch,
+        }),
+      (elapsedMs) => {
+        result.timing.ingestMs += elapsedMs;
+      },
+    );
+    if (census.isErr()) {
+      failure ??= new CorpusIndexError({
+        message: PRESENCE_CONFIRMATION_FAILED,
+        rejection: "transient",
+        cause: census.error,
+      });
+    } else if (census.value.unproven.length > 0) {
+      failure ??= new CorpusIndexError({
+        message: PRESENCE_INCOMPLETE,
+        rejection: "transient",
+      });
+    }
+    const settled = await measured(
+      async () =>
+        await runInTransaction(async (tx) =>
+          census.isOk()
+            ? await proveAcceptedCorpusProjectionAppendsTx(tx, {
+                indexId,
+                census: census.value,
+                timing: {
+                  type: "request_waited",
+                  failureMessage: PRESENCE_INCOMPLETE,
+                },
+              })
+            : await retireAcceptedCorpusProjectionAppendsTx(tx, {
+                indexId,
+                revisions: batch,
+                failureMessage: PRESENCE_CONFIRMATION_FAILED,
+              }),
+        ),
+      (elapsedMs) => {
+        result.timing.storeCommitMs += elapsedMs;
+      },
+    );
+    for (const outcome of settled) {
+      switch (outcome.status) {
+        case "applied":
+          result.applied += 1;
+          break;
+        case "stale_cleanup_pending":
+          result.staleCleanupPending += 1;
+          break;
+        case "unproven_cleanup_pending":
+          result.unknownCleanupPending += 1;
+          break;
+        case "blocked":
+          result.blocked += 1;
+          logger.warn("corpus_projection.append_blocked", {
+            entity: outcome.entityId,
+            kind: outcome.kind,
+            attempts: outcome.attempts,
+          });
+          break;
+        // An erasure moved it after the acceptance was recorded.
+        case "already_applied":
+        case "not_accepted":
+          result.leaseLost += 1;
+          break;
+        case "awaiting_publication":
+          return panic(`A waited request left ${outcome.intentId} unproven`);
+        default:
+          outcome satisfies never;
+          return panic(`Unhandled inline proof: ${String(outcome)}`);
+      }
+    }
+  }
+  return failure;
 };
+
+type StopAfterUnknownRequestOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  failure: { stopForEngine: boolean };
+  blocked: boolean;
+  laterLeases: readonly CorpusProjectionIntentLease[];
+  cancelMessage: string;
+  result: CorpusProjectionAppendCycleResult;
+};
+
+/** Cancel the chain behind a request whose outcome stopped it. */
+const stopAfterUnknownRequest = async ({
+  runInTransaction,
+  failure,
+  blocked,
+  laterLeases,
+  cancelMessage,
+  result,
+}: StopAfterUnknownRequestOptions): Promise<
+  "append_unknown" | "append_blocked" | "engine_unavailable"
+> => {
+  addCancellation(
+    result,
+    await cancelReservations({
+      runInTransaction,
+      leases: laterLeases,
+      errorMessage: cancelMessage,
+    }),
+  );
+  if (failure.stopForEngine) {
+    result.status = "engine_unavailable";
+    result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
+    return "engine_unavailable";
+  }
+  result.status = blocked ? "append_blocked" : "append_unknown";
+  return result.status;
+};
+
+/** Every lease behind request `requestIndex` in its chain. */
+const laterLeasesOf = (
+  requests: readonly PreparedProjectionRequest[],
+  requestIndex: number,
+  unattemptedLeases: readonly CorpusProjectionIntentLease[],
+): CorpusProjectionIntentLease[] => [
+  ...requests
+    .slice(requestIndex + 1)
+    .flatMap(({ entries }) => entries.map(({ material }) => material.lease)),
+  ...unattemptedLeases,
+];
 
 type ProcessPreparedRequestsOptions = {
   runInTransaction: ProjectionTransactionRunner;
@@ -1076,11 +1191,11 @@ const processPreparedRequests = async ({
   result.requestCount += 1;
   const appended = await measured(
     async () =>
-      await publishAndConfirmProjectionAppend({
-        client,
+      await ingestCorpusProjectionRequest(client, {
         commitMode,
+        manifest: requestManifest(started),
         indexId: request.indexId,
-        entries: started,
+        ndjson: started.map(({ ndjson }) => ndjson).join("\n"),
       }),
     (elapsedMs) => {
       result.timing.ingestMs += elapsedMs;
@@ -1116,70 +1231,38 @@ const processPreparedRequests = async ({
       };
     });
     recordAbandonedAppendResults(result, abandoned);
-    const laterLeases = requests
-      .slice(requestIndex + 1)
-      .flatMap(({ entries: laterEntries }) =>
-        laterEntries.map(({ material }) => material.lease),
-      );
-    for (const lease of unattemptedLeases) {
-      laterLeases.push(lease);
-    }
-    addCancellation(
+    return await stopAfterUnknownRequest({
+      runInTransaction,
+      failure,
+      blocked: abandoned.blocked.length > 0,
+      laterLeases: laterLeasesOf(requests, requestIndex, unattemptedLeases),
+      cancelMessage: "projection append stopped after an unknown request",
       result,
-      await cancelReservations({
-        runInTransaction,
-        leases: laterLeases,
-        errorMessage: "projection append stopped after an unknown request",
-      }),
-    );
-    if (failure.stopForEngine) {
-      result.status = "engine_unavailable";
-      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
-    } else if (abandoned.blocked.length > 0) {
-      result.status = "append_blocked";
-    } else {
-      result.status = "append_unknown";
-    }
-    return result.status;
+    });
   }
 
-  const committed = await measured(
-    async () =>
-      await runInTransaction(async (tx) => {
-        const outcomes = await mapSequentially(
-          appended.value,
-          async ({ entry, proof }) =>
-            await commitCorpusProjectionAppendTx(tx, {
-              proof,
-              leaseToken: entry.material.lease.leaseToken,
-            }),
-        );
-        const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
-        for (const outcome of outcomes) {
-          switch (outcome.status) {
-            case "applied":
-              counts.applied += 1;
-              break;
-            case "stale_cleanup_pending":
-              counts.staleCleanupPending += 1;
-              break;
-            case "lease_lost":
-              counts.leaseLost += 1;
-              break;
-            default:
-              outcome satisfies never;
-              panic(`Unhandled outcome: ${String(outcome)}`);
-          }
-        }
-        return counts;
+  const unproven = await acceptAndProveProjectionAppend({
+    runInTransaction,
+    client,
+    indexId: request.indexId,
+    entries: started,
+    result,
+  });
+  if (unproven !== null) {
+    return await stopAfterUnknownRequest({
+      runInTransaction,
+      failure: logAppendFailure({
+        indexId: request.indexId,
+        documents: started.length,
+        revisionCount: started.length,
+        error: unproven,
       }),
-    (elapsedMs) => {
-      result.timing.storeCommitMs += elapsedMs;
-    },
-  );
-  result.applied += committed.applied;
-  result.staleCleanupPending += committed.staleCleanupPending;
-  result.leaseLost += committed.leaseLost;
+      blocked: false,
+      laterLeases: laterLeasesOf(requests, requestIndex, unattemptedLeases),
+      cancelMessage: "projection append stopped after an unknown request",
+      result,
+    });
+  }
   return await processPreparedRequests({
     runInTransaction,
     client,
@@ -1342,62 +1425,29 @@ const processMultipartEntry = async ({
   if (appendStatus !== "completed") {
     return appendStatus;
   }
-  const confirmed = await measured(
-    async () =>
-      await confirmProjectionAppend({
-        client,
-        indexId: entry.indexId,
-        entries: [entry],
-      }),
-    (elapsedMs) => {
-      result.timing.ingestMs += elapsedMs;
-    },
-  );
-  if (confirmed.isErr()) {
-    const failure = logAppendFailure({
+  const unproven = await acceptAndProveProjectionAppend({
+    runInTransaction,
+    client,
+    indexId: entry.indexId,
+    entries: [entry],
+    result,
+  });
+  if (unproven === null) {
+    return "completed";
+  }
+  return await stopAfterUnknownRequest({
+    runInTransaction,
+    failure: logAppendFailure({
       indexId: entry.indexId,
       documents: entry.documentCount,
       revisionCount: 1,
-      error: confirmed.error,
-    });
-    return await stop({
-      errorMessage: confirmed.error.message,
-      rejection: confirmed.error.rejection,
-      fault: failure.fault,
-      stopForEngine: failure.stopForEngine,
-    });
-  }
-  const proven =
-    confirmed.value.at(0) ??
-    panic(`Lost multipart presence proof ${lease.intentId}`);
-  const committed = await measured(
-    async () =>
-      await runInTransaction(
-        async (tx) =>
-          await commitCorpusProjectionAppendTx(tx, {
-            proof: proven.proof,
-            leaseToken: lease.leaseToken,
-          }),
-      ),
-    (elapsedMs) => {
-      result.timing.storeCommitMs += elapsedMs;
-    },
-  );
-  switch (committed.status) {
-    case "applied":
-      result.applied += 1;
-      break;
-    case "stale_cleanup_pending":
-      result.staleCleanupPending += 1;
-      break;
-    case "lease_lost":
-      result.leaseLost += 1;
-      break;
-    default:
-      committed satisfies never;
-      panic(`Unhandled multipart commit: ${String(committed)}`);
-  }
-  return "completed";
+      error: unproven,
+    }),
+    blocked: false,
+    laterLeases: unattemptedLeases,
+    cancelMessage: "projection append stopped after a multipart request",
+    result,
+  });
 };
 
 type ProcessPreparedStreamOptions = {

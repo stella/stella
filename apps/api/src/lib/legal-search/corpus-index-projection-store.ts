@@ -19,13 +19,17 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { corpusProjectionReservationQueue } from "@/api/lib/db/aggregate-lock";
+import {
+  corpusProjectionReservationQueue,
+  lockCorpusProjectionAcceptedRows,
+} from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { unattestedCorpusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_INDEX_APPEND_CANCEL_REASON,
+  type CorpusIndexIntentStatus,
   type CorpusIndexProjectionAppendMode,
   type CorpusIndexProjectionFailureKind,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
@@ -35,10 +39,12 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  type CorpusProjectionPresenceCensus,
   type CorpusProjectionPresenceProof,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionAcceptedAppendProofDeadline,
   corpusProjectionAppendPublishBarrier,
   corpusProjectionUnrecordedAppendCleanupFence,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
@@ -53,6 +59,7 @@ import {
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionProducesAppend,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
@@ -828,13 +835,15 @@ export const continueCorpusProjectionAppendPartTx = async (
   return continued.length === 1 ? "started" : "lease_lost";
 };
 
+type CorpusProjectionAppendFailureFault = "document" | "engine";
+
 type AbandonCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
   testNow?: Date;
   errorMessage: string;
   rejection?: CorpusIndexError["rejection"];
-  fault?: "document" | "engine";
+  fault?: CorpusProjectionAppendFailureFault;
 };
 
 export type CorpusProjectionAppendAbandonResult =
@@ -909,6 +918,68 @@ const isStillDesiredProjection = (
   state.desiredFingerprint === intent.fingerprint &&
   state.desiredIndexId === intent.indexId;
 
+type AppendFailureChargeOptions = {
+  state: typeof corpusIndexProjectionStates.$inferSelect;
+  appendRequestRevisionCount: number | null;
+  transitionAt: Date;
+  rejection: CorpusIndexError["rejection"];
+  fault: CorpusProjectionAppendFailureFault;
+};
+
+type AppendFailureCharge = {
+  kind: CorpusIndexProjectionFailureKind;
+  workStatus: "blocked" | "retry_scheduled";
+  retryNotBefore: Date | null;
+  failureAttempts: number;
+  appendMode: CorpusIndexProjectionAppendMode;
+};
+
+/**
+ * What a failed or unproven append costs its entity. Only a document fault
+ * sent in a request of its own is charged; one sent with others splits the
+ * entity into single appends uncharged, so one bad revision cannot block the
+ * revisions it travelled with.
+ */
+const appendFailureCharge = ({
+  state,
+  appendRequestRevisionCount,
+  transitionAt,
+  rejection,
+  fault,
+}: AppendFailureChargeOptions): AppendFailureCharge => {
+  let kind: CorpusIndexProjectionFailureKind = "append_unknown";
+  if (rejection === "definite") {
+    kind = "append_rejected";
+  } else if (rejection === "transient") {
+    kind = "append_transient";
+  }
+  const isolated = appendRequestRevisionCount === 1;
+  const documentFault = fault === "document" && rejection !== "transient";
+  const charged = documentFault && isolated;
+  const failureAttempts = state.failureAttempts + (charged ? 1 : 0);
+  let attemptLimit = CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT;
+  if (rejection === "definite") {
+    attemptLimit = CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT;
+  }
+  const blocked = charged && failureAttempts >= attemptLimit;
+  const retryDelayMs = backoffDelay(
+    Math.min(Math.max(failureAttempts - 1, 0), 6),
+    {
+      baseMs: CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+      maxMs: CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
+    },
+  );
+  return {
+    kind,
+    workStatus: blocked ? "blocked" : "retry_scheduled",
+    retryNotBefore: blocked
+      ? null
+      : new Date(transitionAt.getTime() + retryDelayMs),
+    failureAttempts,
+    appendMode: documentFault && !isolated ? "single" : state.appendMode,
+  };
+};
+
 /** Failed append outcomes are assumed written and cleaned exactly before retry. */
 export const abandonCorpusProjectionAppendTx = async (
   tx: Transaction,
@@ -978,38 +1049,21 @@ export const abandonCorpusProjectionAppendTx = async (
   if (!isStillDesiredProjection(state, intent)) {
     return { status: "cleanup_pending" };
   }
-  let kind: CorpusIndexProjectionFailureKind = "append_unknown";
-  if (rejection === "definite") {
-    kind = "append_rejected";
-  } else if (rejection === "transient") {
-    kind = "append_transient";
-  }
-  const isolated = intent.appendRequestRevisionCount === 1;
-  const documentFault = fault === "document" && rejection !== "transient";
-  const charge = documentFault && isolated;
-  const failureAttempts = state.failureAttempts + (charge ? 1 : 0);
-  let attemptLimit = CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT;
-  if (rejection === "definite") {
-    attemptLimit = CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT;
-  }
-  const blocked = charge && failureAttempts >= attemptLimit;
-  const retryDelayMs = backoffDelay(
-    Math.min(Math.max(failureAttempts - 1, 0), 6),
-    {
-      baseMs: CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
-      maxMs: CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
-    },
-  );
+  const charge = appendFailureCharge({
+    state,
+    appendRequestRevisionCount: intent.appendRequestRevisionCount,
+    transitionAt,
+    rejection,
+    fault,
+  });
   const updated = await tx
     .update(corpusIndexProjectionStates)
     .set({
-      workStatus: blocked ? "blocked" : "retry_scheduled",
-      retryNotBefore: blocked
-        ? null
-        : new Date(transitionAt.getTime() + retryDelayMs),
-      failureAttempts,
-      appendMode: documentFault && !isolated ? "single" : state.appendMode,
-      lastFailureKind: kind,
+      workStatus: charge.workStatus,
+      retryNotBefore: charge.retryNotBefore,
+      failureAttempts: charge.failureAttempts,
+      appendMode: charge.appendMode,
+      lastFailureKind: charge.kind,
       lastFailureMessage: errorMessage.slice(0, 2048),
       updatedAt: transitionAt,
     })
@@ -1028,12 +1082,12 @@ export const abandonCorpusProjectionAppendTx = async (
   if (updated.length !== 1) {
     return panic(`Projection append failure CAS failed: ${intent.id}`);
   }
-  return blocked
+  return charge.workStatus === "blocked"
     ? {
         status: "blocked",
         entityId: intent.entityId,
-        kind,
-        attempts: failureAttempts,
+        kind: charge.kind,
+        attempts: charge.failureAttempts,
       }
     : { status: "cleanup_pending" };
 };
@@ -1124,177 +1178,860 @@ export const unparkCorpusProjectionAppendTx = async (
   return "unparked";
 };
 
-type CommitCorpusProjectionAppendOptions = {
-  /** Names the revision and the exact document count the census found. */
-  proof: CorpusProjectionPresenceProof;
+const ACCEPTED_STATUS = "append_committed" satisfies CorpusIndexIntentStatus;
+const APPLIED_STATUS = "applied" satisfies CorpusIndexIntentStatus;
+const CLEANUP_PENDING_STATUS =
+  "cleanup_pending" satisfies CorpusIndexIntentStatus;
+const STALE_ACCEPTED_APPEND_MESSAGE =
+  "projection desired state changed after append accepted";
+
+type AcceptedProjectionAppend = {
+  intentId: ProjectionIntentId;
   leaseToken: string;
-  testNow?: Date;
+  /** Documents the accepted request wrote for this revision. */
+  documentCount: number;
 };
 
-export type CommitCorpusProjectionAppendResult =
-  | { status: "applied"; entityId: string }
-  | { status: "stale_cleanup_pending"; entityId: string }
-  | { status: "lease_lost" };
+type RecordAcceptedCorpusProjectionAppendsOptions = {
+  /** Revisions of one index whose append the engine accepted. */
+  accepted: readonly AcceptedProjectionAppend[];
+  testNow?: Date | undefined;
+};
+
+type RecordedCorpusProjectionAppend =
+  | { status: "accepted"; intentId: ProjectionIntentId }
+  | { status: "stale_cleanup_pending"; intentId: ProjectionIntentId }
+  | { status: "lease_lost"; intentId: ProjectionIntentId };
+
+type ProjectionRowsByIntent = {
+  states: Map<string, typeof corpusIndexProjectionStates.$inferSelect>;
+  intents: Map<
+    ProjectionIntentId,
+    typeof corpusIndexProjectionIntents.$inferSelect
+  >;
+};
+
+type LockAcceptedProjectionRowsOptions = {
+  intentIds: readonly ProjectionIntentId[];
+  /** The one index every revision must belong to. */
+  indexId: string | null;
+};
+
+type LockedAcceptedProjectionRows = ProjectionRowsByIntent & {
+  manifest: CorpusIndexManifest;
+};
 
 /**
- * Finalize a published append and its authoritative state in one
- * transaction. Only presence evidence reaches it: the census that constructs
- * the proof runs outside this transaction.
- * A desired-state race cannot publish: the exact new revision is redirected to
- * cleanup instead, behind the barrier that makes that cleanup exact.
+ * Lock the rows one accept or proof transaction decides on, in the order the
+ * other projection writers take them: the mutation fence, the generation's
+ * manifest, the states by entity, then the intents. One call covers one
+ * index, so one generation.
  */
-export const commitCorpusProjectionAppendTx = async (
+const lockAcceptedProjectionRowsTx = async (
   tx: Transaction,
-  { proof, leaseToken, testNow }: CommitCorpusProjectionAppendOptions,
-): Promise<CommitCorpusProjectionAppendResult> => {
-  const { revision: intentId, documentCount } = proof;
+  { intentIds, indexId }: LockAcceptedProjectionRowsOptions,
+): Promise<LockedAcceptedProjectionRows | null> => {
   const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
       generation: corpusIndexProjectionIntents.generation,
       entityId: corpusIndexProjectionIntents.entityId,
+      indexId: corpusIndexProjectionIntents.indexId,
     })
     .from(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, intentId))
-    .limit(1);
+    .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]));
   const identity = identities.at(0);
   if (identity === undefined) {
-    return { status: "lease_lost" };
+    return null;
   }
+  if (
+    identities.some(
+      ({ family, generation, indexId: rowIndexId }) =>
+        family !== identity.family ||
+        generation !== identity.generation ||
+        rowIndexId !== (indexId ?? identity.indexId),
+    )
+  ) {
+    return panic("Accepted projection appends must name one index");
+  }
+  await lockCorpusIndexProjectionMutationsTx(tx, [identity]);
   const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     identity.family,
     identity.generation,
   );
-  const states = await tx
-    .select()
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, identity.family),
-        eq(corpusIndexProjectionStates.generation, identity.generation),
-        eq(corpusIndexProjectionStates.entityId, identity.entityId),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const state = states.at(0);
-  const intents = await tx
-    .select()
-    .from(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.id, intentId))
-    .limit(1)
-    .for("update");
-  const intent = intents.at(0);
-  if (intent === undefined) {
-    return { status: "lease_lost" };
-  }
-  if (intent.indexId !== proof.indexId) {
-    return panic(`Projection presence proof names another index: ${intent.id}`);
-  }
-  if (
-    intent.expectedDocumentCount !== null &&
-    intent.expectedDocumentCount !== documentCount
-  ) {
-    return panic(`Projection append document count changed: ${intent.id}`);
-  }
-  if (intent.status === "applied" && state?.appliedRevision === intent.id) {
-    return { status: "applied", entityId: intent.entityId };
-  }
-  if (
-    state === undefined ||
-    intent.leaseToken !== leaseToken ||
-    (intent.status !== "append_started" && intent.status !== "append_committed")
-  ) {
-    return { status: "lease_lost" };
-  }
+  const { states, intents } = await lockCorpusProjectionAcceptedRows(tx, {
+    family: identity.family,
+    generation: identity.generation,
+    entityIds: [...new Set(identities.map(({ entityId }) => entityId))],
+    intentIds,
+  });
+  return {
+    manifest,
+    states: new Map(states.map((state) => [state.entityId, state])),
+    intents: new Map(intents.map((intent) => [intent.id, intent])),
+  };
+};
 
-  const stillDesired =
-    state.desiredAction === "upsert" &&
-    state.desiredEpoch === intent.epoch &&
-    state.desiredFingerprint === intent.fingerprint &&
-    state.desiredIndexId === intent.indexId;
-  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
-  if (!stillDesired) {
-    if (intent.appendStartedAt === null) {
-      return panic(`Started projection intent has no start time: ${intent.id}`);
+const validateAcceptedBatch = (intentIds: readonly ProjectionIntentId[]) => {
+  if (
+    intentIds.length === 0 ||
+    intentIds.length > CORPUS_PROJECTION_APPEND_MAX_REVISIONS ||
+    new Set(intentIds).size !== intentIds.length
+  ) {
+    return panic(
+      `Accepted projection appends must name 1 to ${CORPUS_PROJECTION_APPEND_MAX_REVISIONS} unique revisions`,
+    );
+  }
+};
+
+/**
+ * Record the engine's acceptance of started appends. Each revision whose lease
+ * still holds releases it and becomes `append_committed` with its document
+ * count, its acceptance instant and the publish barrier counted from it; from
+ * then on no owner is needed, because only presence evidence applies it. The
+ * instant is read from PostgreSQL after the receipt, so it is never earlier
+ * than the acceptance and the barrier stays sound. A revision whose desired
+ * state moved meanwhile goes to cleanup behind the same barrier instead.
+ */
+export const recordAcceptedCorpusProjectionAppendsTx = async (
+  tx: Transaction,
+  { accepted, testNow }: RecordAcceptedCorpusProjectionAppendsOptions,
+): Promise<RecordedCorpusProjectionAppend[]> => {
+  // audit: skip - append bookkeeping on the derived public corpus projection
+  validateAcceptedBatch(accepted.map(({ intentId }) => intentId));
+  if (
+    accepted.some(
+      ({ documentCount }) =>
+        !Number.isSafeInteger(documentCount) || documentCount < 1,
+    )
+  ) {
+    return panic("Projection append document count must be a positive integer");
+  }
+  const rows = await lockAcceptedProjectionRowsTx(tx, {
+    intentIds: accepted.map(({ intentId }) => intentId),
+    indexId: null,
+  });
+  if (rows === null) {
+    return accepted.map(({ intentId }) => ({ status: "lease_lost", intentId }));
+  }
+  const transitionAt = testNow ?? (await readPostgresClock(tx));
+  const outcomes = accepted.map(({ intentId, leaseToken, documentCount }) => {
+    const intent = rows.intents.get(intentId);
+    if (
+      intent === undefined ||
+      intent.status !== "append_started" ||
+      intent.leaseToken !== leaseToken
+    ) {
+      return { status: "lease_lost", intentId, documentCount } as const;
     }
-    await tx
+    return isStillDesiredProjection(rows.states.get(intent.entityId), intent)
+      ? ({ status: "accepted", intentId, documentCount } as const)
+      : ({ status: "stale_cleanup_pending", intentId, documentCount } as const);
+  });
+  const written = outcomes.filter(({ status }) => status !== "lease_lost");
+  if (written.length > 0) {
+    const byIntent = (
+      selected: readonly { intentId: ProjectionIntentId }[],
+      value: (outcome: (typeof written)[number]) => SQL,
+      fallback: SQL,
+    ) =>
+      sqlCaseFragment({
+        operand: sql`${corpusIndexProjectionIntents.id}`,
+        branches: written
+          .filter(({ intentId }) =>
+            selected.some((outcome) => outcome.intentId === intentId),
+          )
+          .map(
+            (outcome) =>
+              sql`WHEN ${outcome.intentId}::uuid THEN ${value(outcome)}`,
+          ),
+        fallback,
+      });
+    const stale = written.filter(
+      ({ status }) => status === "stale_cleanup_pending",
+    );
+    // A revision whose desired state moved meanwhile was accepted all the
+    // same: it records the acceptance and its barrier and goes to cleanup
+    // behind that barrier instead of awaiting proof.
+    const fence = corpusProjectionUnrecordedAppendCleanupFence(
+      rows.manifest,
+      transitionAt,
+    );
+    const recorded = await tx
       .update(corpusIndexProjectionIntents)
       .set({
-        status: "cleanup_pending",
+        status: byIntent(
+          stale,
+          () => sql`${CLEANUP_PENDING_STATUS}`,
+          sql`${ACCEPTED_STATUS}`,
+        ),
         leaseToken: null,
         leaseExpiresAt: null,
-        ...(intent.appendCommittedAt === null
-          ? corpusProjectionUnrecordedAppendCleanupFence(manifest, transitionAt)
-          : corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt)),
-        expectedDocumentCount: documentCount,
-        lastError: "projection desired state changed after append committed",
+        appendCommittedAt: transitionAt,
+        appendPublishBarrierAt: fence.appendPublishBarrierAt,
+        cleanupNotBefore: byIntent(
+          stale,
+          () => fence.cleanupNotBefore,
+          sql`NULL`,
+        ),
+        expectedDocumentCount: byIntent(
+          written,
+          ({ documentCount }) => sql`${documentCount}::integer`,
+          sql`${corpusIndexProjectionIntents.expectedDocumentCount}`,
+        ),
+        lastError: byIntent(
+          stale,
+          () => sql`${STALE_ACCEPTED_APPEND_MESSAGE}`,
+          sql`${corpusIndexProjectionIntents.lastError}`,
+        ),
         updatedAt: transitionAt,
       })
-      .where(eq(corpusIndexProjectionIntents.id, intent.id));
-    return {
-      status: "stale_cleanup_pending",
-      entityId: intent.entityId,
+      .where(
+        and(
+          inArray(
+            corpusIndexProjectionIntents.id,
+            written.map(({ intentId }) => intentId),
+          ),
+          eq(corpusIndexProjectionIntents.status, "append_started"),
+        ),
+      )
+      .returning({ id: corpusIndexProjectionIntents.id });
+    if (recorded.length !== written.length) {
+      return panic(
+        `Projection acceptance recorded ${recorded.length} of ${written.length} locked revisions`,
+      );
+    }
+  }
+  return outcomes.map(({ status, intentId }) => ({ status, intentId }));
+};
+
+/**
+ * When a census may decide a committed revision.
+ *
+ * - `after_barrier`: the proof cycle. An exact count applies once the stored
+ *   barrier has passed by the PostgreSQL clock; an inexact one waits for the
+ *   proof deadline and then retires the revision, charged like an unknown
+ *   append outcome.
+ * - `request_waited`: the executor, right after a request that waited for
+ *   publication. An exact count applies at once; an inexact one retires the
+ *   revision at once with an uncharged retry, as a transient append failure.
+ */
+export type CorpusProjectionProofTiming =
+  | { type: "after_barrier" }
+  | { type: "request_waited"; failureMessage: string };
+
+type ProveAcceptedCorpusProjectionAppendsOptions = {
+  indexId: string;
+  /** One exact census of committed revisions of `indexId`. */
+  census: CorpusProjectionPresenceCensus;
+  timing: CorpusProjectionProofTiming;
+  testNow?: Date | undefined;
+};
+
+export type AcceptedCorpusProjectionAppendProof =
+  | { status: "applied"; intentId: ProjectionIntentId; entityId: string }
+  /** Another prover applied it first. */
+  | { status: "already_applied"; intentId: ProjectionIntentId }
+  | { status: "stale_cleanup_pending"; intentId: ProjectionIntentId }
+  | { status: "unproven_cleanup_pending"; intentId: ProjectionIntentId }
+  | {
+      status: "blocked";
+      intentId: ProjectionIntentId;
+      entityId: string;
+      kind: CorpusIndexProjectionFailureKind;
+      attempts: number;
+    }
+  /** Before its barrier, or not exactly present before its proof deadline. */
+  | { status: "awaiting_publication"; intentId: ProjectionIntentId }
+  /** No longer committed: erasure or an earlier proof moved it. */
+  | { status: "not_accepted"; intentId: ProjectionIntentId };
+
+const UNPUBLISHED_APPEND_MESSAGE =
+  "projection append was not exactly present at its proof deadline";
+
+type ProofDecision =
+  | { type: "settled"; outcome: AcceptedCorpusProjectionAppendProof }
+  | {
+      type: "apply";
+      intent: typeof corpusIndexProjectionIntents.$inferSelect;
+    }
+  | {
+      type: "stale";
+      intent: typeof corpusIndexProjectionIntents.$inferSelect;
+    }
+  | {
+      type: "unproven";
+      intent: typeof corpusIndexProjectionIntents.$inferSelect;
+      charge: AppendFailureCharge;
+      message: string;
     };
+
+/** A committed revision a census did not count exactly, or never counted. */
+type UnprovenCommittedRevision = {
+  revision: ProjectionIntentId;
+  expectedDocumentCount: number;
+  observedDocumentCount: number | null;
+};
+
+/** A count above what the append wrote is never proof; it is reported. */
+const logExcessCounts = async (
+  indexId: string,
+  excess: readonly UnprovenCommittedRevision[],
+): Promise<void> => {
+  if (excess.length === 0) {
+    return;
+  }
+  const { logger } = await import("@/api/lib/observability/logger");
+  for (const revision of excess) {
+    logger.warn("corpus_projection.append_excess", {
+      indexId,
+      revision: revision.revision,
+      expected: revision.expectedDocumentCount,
+      observed: revision.observedDocumentCount,
+    });
+  }
+};
+
+type SettleCommittedCorpusProjectionAppendsOptions = {
+  indexId: string;
+  proofs: readonly CorpusProjectionPresenceProof[];
+  unproven: readonly UnprovenCommittedRevision[];
+  timing: CorpusProjectionProofTiming;
+  testNow?: Date | undefined;
+};
+
+/**
+ * The one transition out of `append_committed` for the append path. A revision
+ * becomes `applied`, with its authoritative state, only against presence
+ * evidence the census constructed. A revision whose desired state moved goes
+ * to cleanup behind its stored barrier; one not exactly present goes to
+ * cleanup when its timing says so. Every branch is a compare-and-set on
+ * `append_committed` under the state and intent locks, so two provers of the
+ * same revision cannot both act on it.
+ */
+const settleCommittedCorpusProjectionAppendsTx = async (
+  tx: Transaction,
+  {
+    indexId,
+    proofs,
+    unproven,
+    timing,
+    testNow,
+  }: SettleCommittedCorpusProjectionAppendsOptions,
+): Promise<AcceptedCorpusProjectionAppendProof[]> => {
+  if (proofs.some((proof) => proof.indexId !== indexId)) {
+    return panic(`Projection presence proof names another index: ${indexId}`);
+  }
+  const intentIds = [
+    ...proofs.map(({ revision }) => revision),
+    ...unproven.map(({ revision }) => revision),
+  ];
+  validateAcceptedBatch(intentIds);
+  const rows = await lockAcceptedProjectionRowsTx(tx, { intentIds, indexId });
+  if (rows === null) {
+    return intentIds.map((intentId) => ({ status: "not_accepted", intentId }));
+  }
+  const { manifest, states, intents } = rows;
+  const transitionAt = testNow ?? (await readPostgresClock(tx));
+  const locked = (intentId: ProjectionIntentId, documentCount: number) => {
+    const intent = intents.get(intentId);
+    if (
+      intent !== undefined &&
+      intent.expectedDocumentCount !== null &&
+      intent.expectedDocumentCount !== documentCount
+    ) {
+      return panic(`Projection append document count changed: ${intent.id}`);
+    }
+    return intent;
+  };
+  /** Every outcome that does not depend on the census, or null to use it. */
+  const precedingDecision = (
+    intentId: ProjectionIntentId,
+    intent: typeof corpusIndexProjectionIntents.$inferSelect | undefined,
+  ): ProofDecision | null => {
+    if (intent === undefined) {
+      return {
+        type: "settled",
+        outcome: { status: "not_accepted", intentId },
+      };
+    }
+    const state = states.get(intent.entityId);
+    if (intent.status === "applied" && state?.appliedRevision === intent.id) {
+      return {
+        type: "settled",
+        outcome: { status: "already_applied", intentId },
+      };
+    }
+    if (intent.status !== "append_committed" || intent.leaseToken !== null) {
+      return {
+        type: "settled",
+        outcome: { status: "not_accepted", intentId },
+      };
+    }
+    return isStillDesiredProjection(state, intent)
+      ? null
+      : { type: "stale", intent };
+  };
+  const barrierOf = (
+    intent: typeof corpusIndexProjectionIntents.$inferSelect,
+  ) =>
+    intent.appendPublishBarrierAt ??
+    panic(`Committed projection intent has no barrier: ${intent.id}`);
+  const excess: UnprovenCommittedRevision[] = [];
+  const decisions: ProofDecision[] = [
+    ...proofs.map((proof): ProofDecision => {
+      const intent = locked(proof.revision, proof.documentCount);
+      const preceding = precedingDecision(proof.revision, intent);
+      if (preceding !== null) {
+        return preceding;
+      }
+      const committed = intent ?? panic(`Lost proven intent ${proof.revision}`);
+      switch (timing.type) {
+        case "request_waited":
+          return { type: "apply", intent: committed };
+        case "after_barrier":
+          return transitionAt.getTime() < barrierOf(committed).getTime()
+            ? {
+                type: "settled",
+                outcome: {
+                  status: "awaiting_publication",
+                  intentId: committed.id,
+                },
+              }
+            : { type: "apply", intent: committed };
+        default:
+          timing satisfies never;
+          return panic(`Unhandled proof timing: ${String(timing)}`);
+      }
+    }),
+    ...unproven.map((revision): ProofDecision => {
+      const intent = locked(revision.revision, revision.expectedDocumentCount);
+      const preceding = precedingDecision(revision.revision, intent);
+      if (preceding !== null) {
+        return preceding;
+      }
+      const committed =
+        intent ?? panic(`Lost unproven intent ${revision.revision}`);
+      const state =
+        states.get(committed.entityId) ??
+        panic(`Committed projection intent has no state: ${committed.id}`);
+      if (
+        revision.observedDocumentCount !== null &&
+        revision.observedDocumentCount > revision.expectedDocumentCount
+      ) {
+        excess.push(revision);
+      }
+      const retire = (
+        rejection: CorpusIndexError["rejection"],
+        message: string,
+      ): ProofDecision => ({
+        type: "unproven",
+        intent: committed,
+        message,
+        charge: appendFailureCharge({
+          state,
+          appendRequestRevisionCount: committed.appendRequestRevisionCount,
+          transitionAt,
+          rejection,
+          fault: "document",
+        }),
+      });
+      switch (timing.type) {
+        case "request_waited":
+          return retire("transient", timing.failureMessage);
+        case "after_barrier":
+          return transitionAt.getTime() <
+            corpusProjectionAcceptedAppendProofDeadline(
+              barrierOf(committed),
+              manifest,
+            ).getTime()
+            ? {
+                type: "settled",
+                outcome: {
+                  status: "awaiting_publication",
+                  intentId: committed.id,
+                },
+              }
+            : retire("unknown", UNPUBLISHED_APPEND_MESSAGE);
+        default:
+          timing satisfies never;
+          return panic(`Unhandled proof timing: ${String(timing)}`);
+      }
+    }),
+  ];
+
+  await logExcessCounts(indexId, excess);
+  const transitions = decisions.flatMap((decision) =>
+    decision.type === "settled" ? [] : [decision],
+  );
+  if (transitions.length > 0) {
+    await writeCorpusProjectionProofTransitionsTx(tx, {
+      manifest,
+      transitions,
+      transitionAt,
+    });
   }
 
-  if (intent.status === "append_started") {
-    await tx
-      .update(corpusIndexProjectionIntents)
-      .set({
-        status: "append_committed",
-        appendCommittedAt: transitionAt,
-        expectedDocumentCount: documentCount,
-        updatedAt: transitionAt,
-      })
-      .where(eq(corpusIndexProjectionIntents.id, intent.id));
-  }
-  await tx
+  return decisions.map((decision): AcceptedCorpusProjectionAppendProof => {
+    switch (decision.type) {
+      case "settled":
+        return decision.outcome;
+      case "apply":
+        return {
+          status: "applied",
+          intentId: decision.intent.id,
+          entityId: decision.intent.entityId,
+        };
+      case "stale":
+        return {
+          status: "stale_cleanup_pending",
+          intentId: decision.intent.id,
+        };
+      case "unproven":
+        return decision.charge.workStatus === "blocked"
+          ? {
+              status: "blocked",
+              intentId: decision.intent.id,
+              entityId: decision.intent.entityId,
+              kind: decision.charge.kind,
+              attempts: decision.charge.failureAttempts,
+            }
+          : {
+              status: "unproven_cleanup_pending",
+              intentId: decision.intent.id,
+            };
+      default:
+        decision satisfies never;
+        return panic(`Unhandled proof decision: ${String(decision)}`);
+    }
+  });
+};
+
+/** Act on one exact census of committed revisions of one index. */
+export const proveAcceptedCorpusProjectionAppendsTx = async (
+  tx: Transaction,
+  {
+    indexId,
+    census: { proofs, unproven },
+    timing,
+    testNow,
+  }: ProveAcceptedCorpusProjectionAppendsOptions,
+): Promise<AcceptedCorpusProjectionAppendProof[]> =>
+  await settleCommittedCorpusProjectionAppendsTx(tx, {
+    indexId,
+    proofs,
+    unproven,
+    timing,
+    testNow,
+  });
+
+type RetireAcceptedCorpusProjectionAppendsOptions = {
+  indexId: string;
+  /** Committed revisions no census could count, with the documents written. */
+  revisions: readonly {
+    revision: ProjectionIntentId;
+    documentCount: number;
+  }[];
+  failureMessage: string;
+  testNow?: Date | undefined;
+};
+
+/**
+ * Retire committed revisions whose census failed right after the request that
+ * wrote them, through the same transition as an inexact census.
+ */
+export const retireAcceptedCorpusProjectionAppendsTx = async (
+  tx: Transaction,
+  {
+    indexId,
+    revisions,
+    failureMessage,
+    testNow,
+  }: RetireAcceptedCorpusProjectionAppendsOptions,
+): Promise<AcceptedCorpusProjectionAppendProof[]> =>
+  await settleCommittedCorpusProjectionAppendsTx(tx, {
+    indexId,
+    proofs: [],
+    unproven: revisions.map(({ revision, documentCount }) => ({
+      revision,
+      expectedDocumentCount: documentCount,
+      observedDocumentCount: null,
+    })),
+    timing: { type: "request_waited", failureMessage },
+    testNow,
+  });
+
+type ReadProvableCorpusProjectionAppendsOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  limit: number;
+  testNow?: Date | undefined;
+};
+
+/**
+ * Accepted revisions of one index whose publish barrier has passed, oldest
+ * barrier first, with the document count their append wrote. A plain read:
+ * the proof transaction re-checks each one under its locks.
+ */
+export const readProvableCorpusProjectionAppendsTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    indexId,
+    limit: requestedLimit,
+    testNow,
+  }: ReadProvableCorpusProjectionAppendsOptions,
+) => {
+  const limit = validateBatchSize(requestedLimit);
+  const now = testNow ?? sql<Date>`clock_timestamp()`;
+  const rows = await tx
+    .select({
+      revision: corpusIndexProjectionIntents.id,
+      documentCount: corpusIndexProjectionIntents.expectedDocumentCount,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+        eq(corpusIndexProjectionIntents.indexId, indexId),
+        eq(corpusIndexProjectionIntents.status, "append_committed"),
+        sql`${corpusIndexProjectionIntents.appendPublishBarrierAt} <= ${now}::timestamptz`,
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionIntents.appendPublishBarrierAt),
+      asc(corpusIndexProjectionIntents.id),
+    )
+    .limit(limit);
+  return rows.map(({ revision, documentCount }) => ({
+    revision,
+    documentCount:
+      documentCount ??
+      panic(`Accepted projection intent has no document count: ${revision}`),
+  }));
+};
+
+type ProofTransition = Exclude<ProofDecision, { type: "settled" }>;
+
+type WriteCorpusProjectionProofTransitionsOptions = {
+  manifest: CorpusIndexManifest;
+  transitions: readonly ProofTransition[];
+  transitionAt: Date;
+};
+
+const STALE_PROOF_MESSAGE =
+  "projection desired state changed while its append awaited proof";
+
+/**
+ * Write every revision one proof decided, in one statement: a proven revision
+ * becomes applied, a stale or unproven one goes to cleanup behind the
+ * barrier it stored. Then the authoritative state of each applied entity and
+ * the retry of each unproven one, under the charge its timing decides; the
+ * retry writes a new revision, so a late publication of the old one is a
+ * survivor cleanup deletes. The caller holds the state and
+ * intent locks and checked every desired state.
+ */
+const writeCorpusProjectionProofTransitionsTx = async (
+  tx: Transaction,
+  {
+    manifest,
+    transitions,
+    transitionAt,
+  }: WriteCorpusProjectionProofTransitionsOptions,
+): Promise<void> => {
+  // audit: skip - proof bookkeeping on the derived public corpus projection
+  const byIntent = (
+    value: (transition: ProofTransition) => SQL | null,
+    fallback: SQL,
+  ) =>
+    sqlCaseFragment({
+      operand: sql`${corpusIndexProjectionIntents.id}`,
+      branches: transitions.flatMap((transition) => {
+        const branch = value(transition);
+        return branch === null
+          ? []
+          : [sql`WHEN ${transition.intent.id}::uuid THEN ${branch}`];
+      }),
+      fallback,
+    });
+  const { cleanupNotBefore } = corpusProjectionAcceptedAppendCleanupFence(
+    manifest,
+    transitionAt,
+  );
+  const written = await tx
     .update(corpusIndexProjectionIntents)
     .set({
-      status: "applied",
-      leaseToken: null,
-      leaseExpiresAt: null,
-      appliedAt: transitionAt,
-      updatedAt: transitionAt,
-    })
-    .where(eq(corpusIndexProjectionIntents.id, intent.id));
-  const applied = await tx
-    .update(corpusIndexProjectionStates)
-    .set({
-      appliedAction: "upsert",
-      appliedEpoch: intent.epoch,
-      appliedRevision: intent.id,
-      appliedFingerprint: intent.fingerprint,
-      appliedIndexId: intent.indexId,
-      appliedAt: transitionAt,
-      workStatus: "eligible",
-      retryNotBefore: null,
-      failureAttempts: 0,
-      appendMode: "batchable",
-      lastFailureKind: null,
-      lastFailureMessage: null,
+      status: byIntent(
+        ({ type }) =>
+          type === "apply"
+            ? sql`${APPLIED_STATUS}`
+            : sql`${CLEANUP_PENDING_STATUS}`,
+        sql`${corpusIndexProjectionIntents.status}`,
+      ),
+      appliedAt: byIntent(
+        ({ type }) => (type === "apply" ? sql`${transitionAt}` : null),
+        sql`${corpusIndexProjectionIntents.appliedAt}`,
+      ),
+      cleanupNotBefore: byIntent(
+        ({ type }) => (type === "apply" ? null : cleanupNotBefore),
+        sql`${corpusIndexProjectionIntents.cleanupNotBefore}`,
+      ),
+      lastError: byIntent(
+        (transition) => {
+          switch (transition.type) {
+            case "apply":
+              return null;
+            case "stale":
+              return sql`${STALE_PROOF_MESSAGE}`;
+            case "unproven":
+              return sql`${transition.message}`;
+            default:
+              transition satisfies never;
+              return panic(`Unhandled proof transition: ${String(transition)}`);
+          }
+        },
+        sql`${corpusIndexProjectionIntents.lastError}`,
+      ),
       updatedAt: transitionAt,
     })
     .where(
       and(
-        eq(corpusIndexProjectionStates.family, intent.family),
-        eq(corpusIndexProjectionStates.generation, intent.generation),
-        eq(corpusIndexProjectionStates.entityId, intent.entityId),
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        eq(corpusIndexProjectionStates.desiredEpoch, intent.epoch),
-        eq(corpusIndexProjectionStates.desiredFingerprint, intent.fingerprint),
-        eq(corpusIndexProjectionStates.desiredIndexId, intent.indexId),
+        inArray(
+          corpusIndexProjectionIntents.id,
+          transitions.map(({ intent }) => intent.id),
+        ),
+        eq(corpusIndexProjectionIntents.status, "append_committed"),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  if (written.length !== transitions.length) {
+    return panic(
+      `Projection proof wrote ${written.length} of ${transitions.length} locked revisions`,
+    );
+  }
+  const applied = transitions.flatMap(({ type, intent }) =>
+    type === "apply" ? [intent.id] : [],
+  );
+  if (applied.length > 0) {
+    const appliedStates = await tx
+      .update(corpusIndexProjectionStates)
+      .set({
+        appliedAction: "upsert",
+        appliedEpoch: sql`${corpusIndexProjectionIntents.epoch}`,
+        appliedRevision: sql`${corpusIndexProjectionIntents.id}`,
+        appliedFingerprint: sql`${corpusIndexProjectionIntents.fingerprint}`,
+        appliedIndexId: sql`${corpusIndexProjectionIntents.indexId}`,
+        appliedAt: transitionAt,
+        workStatus: "eligible",
+        retryNotBefore: null,
+        failureAttempts: 0,
+        appendMode: "batchable",
+        lastFailureKind: null,
+        lastFailureMessage: null,
+        updatedAt: transitionAt,
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          inArray(corpusIndexProjectionIntents.id, applied),
+          eq(
+            corpusIndexProjectionStates.family,
+            corpusIndexProjectionIntents.family,
+          ),
+          eq(
+            corpusIndexProjectionStates.generation,
+            corpusIndexProjectionIntents.generation,
+          ),
+          eq(
+            corpusIndexProjectionStates.entityId,
+            corpusIndexProjectionIntents.entityId,
+          ),
+          eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+          eq(
+            corpusIndexProjectionStates.desiredEpoch,
+            corpusIndexProjectionIntents.epoch,
+          ),
+          eq(
+            corpusIndexProjectionStates.desiredFingerprint,
+            corpusIndexProjectionIntents.fingerprint,
+          ),
+          eq(
+            corpusIndexProjectionStates.desiredIndexId,
+            corpusIndexProjectionIntents.indexId,
+          ),
+        ),
+      )
+      .returning({ entityId: corpusIndexProjectionStates.entityId });
+    if (appliedStates.length !== applied.length) {
+      return panic(
+        `Projection proof CAS applied ${appliedStates.length} of ${applied.length} locked states`,
+      );
+    }
+  }
+  const unproven = transitions.flatMap((transition) =>
+    transition.type === "unproven" ? [transition] : [],
+  );
+  if (unproven.length === 0) {
+    return;
+  }
+  const byEntity = <Value>(
+    value: (charge: AppendFailureCharge) => Value,
+    cast: string,
+  ) =>
+    sqlCaseFragment({
+      operand: sql`${corpusIndexProjectionStates.entityId}`,
+      branches: unproven.map(
+        ({ intent, charge }) =>
+          sql`WHEN ${intent.entityId}::uuid THEN ${value(charge)}${sql.raw(`::${cast}`)}`,
+      ),
+      fallback: sql`NULL`,
+    });
+  const { family, generation } =
+    unproven.at(0)?.intent ?? panic("No unproven projection appends");
+  const charged = await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: byEntity(({ workStatus }) => workStatus, "text"),
+      retryNotBefore: byEntity(
+        ({ retryNotBefore }) => retryNotBefore,
+        "timestamptz",
+      ),
+      failureAttempts: byEntity(
+        ({ failureAttempts }) => failureAttempts,
+        "integer",
+      ),
+      appendMode: byEntity(({ appendMode }) => appendMode, "text"),
+      lastFailureKind: byEntity(({ kind }) => kind, "text"),
+      lastFailureMessage: sqlCaseFragment({
+        operand: sql`${corpusIndexProjectionStates.entityId}`,
+        branches: unproven.map(
+          ({ intent, message }) =>
+            sql`WHEN ${intent.entityId}::uuid THEN ${message.slice(0, 2048)}`,
+        ),
+        fallback: sql`${corpusIndexProjectionStates.lastFailureMessage}`,
+      }),
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(
+          corpusIndexProjectionStates.entityId,
+          unproven.map(({ intent }) => intent.entityId),
+        ),
       ),
     )
     .returning({ entityId: corpusIndexProjectionStates.entityId });
-  if (applied.length !== 1) {
+  if (charged.length !== unproven.length) {
     return panic(
-      `Projection append CAS failed after locking state: ${intent.id}`,
+      `Unproven projection charge matched ${charged.length} of ${unproven.length} states`,
     );
   }
-  return { status: "applied", entityId: intent.entityId };
 };
 
 type CancelCorpusProjectionReservationOptions = {
