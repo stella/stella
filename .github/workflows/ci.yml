@@ -1871,8 +1871,8 @@ jobs:
           GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
           GH_TOKEN: ${{ github.token }}
         # Remove the tooling checkout so later source checks see only the
-        # candidate tree. A digest that only needs a mechanical refresh is
-        # rewritten by the autofix generator; this check (the script's
+        # candidate tree. A decision for a job that is not privileged is
+        # removed by the script's write mode; this check (the script's
         # default mode) stays fail-closed. It runs git, so it cannot load the
         # offline network preload that `--check` commands must use.
         run: |
@@ -6801,7 +6801,7 @@ jobs:
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests --target ${{ matrix.target }} --frozen
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests,dev-runner-stand-in --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
@@ -6951,7 +6951,7 @@ jobs:
       - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen -- -D warnings
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features dev-runner-stand-in --target ${{ matrix.target }} --frozen -- -D warnings
       - *merge_group_cancel
 
   dependency-audit:

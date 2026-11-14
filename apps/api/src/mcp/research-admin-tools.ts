@@ -855,7 +855,9 @@ const ADD_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   accountAccess: "standard",
   permissions: { type: "all", permissions: { workspace: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
-  scope: "stella:admin_write",
+  // Who can open a matter is a matter edit, gated by the matter update
+  // permission like every other one; it needs no admin consent.
+  scope: "stella:matters_write",
 });
 
 const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
@@ -876,7 +878,7 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   permissions: { type: "all", permissions: { workspace: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   destructiveBehavior: { type: "always" },
-  scope: "stella:admin_write",
+  scope: "stella:matters_write",
 });
 
 const CREATE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({

@@ -87,8 +87,12 @@ export type GraphEdgeWrite =
   /** The grades a run wrote and the re-checks carried to its claims,
    *  when it completes. */
   | { type: "run"; runId: SafeId<"legalListVerificationRun"> }
-  /** One re-check's grade, when it is recorded. */
-  | { type: "recheck"; eventId: SafeId<"legalListClaimReviewEvent"> };
+  /** The grades of the re-checks one request recorded, when they are
+   *  recorded (one statement however many). */
+  | {
+      type: "recheck";
+      eventIds: readonly SafeId<"legalListClaimReviewEvent">[];
+    };
 
 const writeSql = (
   workspaceId: SafeId<"workspace">,
@@ -108,7 +112,14 @@ const writeSql = (
     }
     case "recheck": {
       return recheckCitesSql(
-        sql`event.workspace_id = ${workspaceId} AND event.id = ${write.eventId}`,
+        sql`event.workspace_id = ${workspaceId} AND event.id IN ${
+          write.eventIds.length === 0
+            ? sql`(NULL)`
+            : sql`(${sql.join(
+                write.eventIds.map((eventId) => sql`${eventId}`),
+                sql`, `,
+              )})`
+        }`,
       );
     }
     default: {

@@ -41,6 +41,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { keepKeyPressLocal } from "@/lib/hotkeys";
 import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
@@ -69,6 +70,8 @@ type ChatInputSurfaceProps = {
    */
   isGenerating?: boolean;
   onStop?: () => void;
+  /** See `ChatComposerActionButton`'s `stopping`. */
+  stopping?: boolean;
   /**
    * Whether this surface will send the next request anonymized, driving
    * the box's blue-ring "shield active" treatment. The surface feeds this
@@ -137,6 +140,7 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
+  stopping = false,
   anonymized = false,
   dock,
   onNewThread,
@@ -264,9 +268,7 @@ export const ChatInputSurface = ({
                     ]
                   : ["relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS],
               )}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-              }}
+              onKeyDown={keepKeyPressLocal}
               role="presentation"
             >
               <ReferenceRenderScope
@@ -368,6 +370,7 @@ export const ChatInputSurface = ({
                     detached(submitDraft(), "chat-input-surface.submit-draft");
                   }}
                   onStop={onStop}
+                  stopping={stopping}
                 />
               </ControlGroup>
             </div>

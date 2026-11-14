@@ -14,6 +14,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
+  claimParagraphNumbers,
   resolveParagraphScope,
   scopePassages,
 } from "@/api/lib/lists/verification/paragraph-scope";
@@ -99,6 +100,14 @@ type Statement = {
   /** Where each paragraph's section begins and its number starts. */
   sectionStart: Map<number, { blockId: string; offset: number }>;
   numberStart: Map<number, { blockId: string; offset: number }>;
+  /** Every printed line: where it is, and the paragraph it belongs to (null
+   *  for the cover and the headings that open a section). */
+  placed: {
+    pageNumber: number;
+    offset: number;
+    length: number;
+    paragraph: number | null;
+  }[];
   count: number;
 };
 
@@ -139,6 +148,7 @@ const layOut = ({
   const blocks: VerificationBlock[] = [];
   const sectionStart = new Map<number, { blockId: string; offset: number }>();
   const numberStart = new Map<number, { blockId: string; offset: number }>();
+  const placed: Statement["placed"] = [];
   for (let from = 0; from < lines.length; from += linesPerPage) {
     const pageLines = lines.slice(from, from + linesPerPage);
     const pageNumber = blocks.length + 1;
@@ -151,6 +161,14 @@ const layOut = ({
       if (line.text.startsWith(`${String(line.section)}. `)) {
         numberStart.set(line.section, { blockId: id, offset });
       }
+      const heading =
+        line.opensSection && !line.text.startsWith(`${String(line.section)}.`);
+      placed.push({
+        pageNumber,
+        offset,
+        length: line.text.length,
+        paragraph: line.section === 0 || heading ? null : line.section,
+      });
       offset += line.text.length + 1;
     }
     blocks.push({
@@ -160,7 +178,13 @@ const layOut = ({
       structure: { type: "pdf-lines", boxes: null },
     });
   }
-  return { blocks, sectionStart, numberStart, count: bodies.length };
+  return {
+    blocks,
+    sectionStart,
+    numberStart,
+    placed,
+    count: bodies.length,
+  };
 };
 
 const withRange = statement.chain((input) =>
@@ -231,5 +255,32 @@ test("a paragraph the statement does not print is refused, never widened", () =>
         available: { from: 1, to: count },
       });
     }),
+  );
+});
+
+test("a claim anywhere in a printed paragraph is numbered as that paragraph, and nowhere else", () => {
+  assertProperty(
+    "a claim anywhere in a printed paragraph is numbered as that paragraph, and nowhere else",
+    fc.property(
+      statement,
+      fc.nat(),
+      fc.nat(),
+      (input, lineSeed, offsetSeed) => {
+        const { blocks, placed } = layOut(input);
+        const line =
+          placed.at(lineSeed % placed.length) ??
+          panic("A statement prints a line");
+        const start = line.offset + (offsetSeed % line.length);
+        const paragraphOf = claimParagraphNumbers(blocks);
+        expect(
+          paragraphOf({
+            type: "pdf-page",
+            pageNumber: line.pageNumber,
+            start,
+            end: start + 1,
+          }),
+        ).toBe(line.paragraph);
+      },
+    ),
   );
 });

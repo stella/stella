@@ -232,6 +232,8 @@
     "permissionNotificationsDescription": "Avisa quando um documento está pronto ou uma sincronização precisa de atenção.",
     "permissionAccessibility": "Acessibilidade",
     "permissionAccessibilityDescription": "Permite que a linha do tempo de atividade registre títulos de janelas.",
+    "permissionMicrophone": "Microfone",
+    "permissionMicrophoneDescription": "Permite que o ditado ouça você enquanto segura o atalho dele.",
     "permissionAllowed": "Permitido",
     "permissionAllow": "Permitir",
     "permissionOpenSettings": "Abrir configurações",
@@ -581,7 +583,18 @@
   },
   "dictation": {
     "title": "Ditado",
-    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
+    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada. Com a revisão por IA ativada, o texto transcrito, não o áudio, é enviado pela stella ao provedor de IA da sua organização para corrigir erros e formatação; a stella não o armazena.",
+    "cleanup": {
+      "title": "Revisar com IA",
+      "description": "A fala continua sendo transcrita neste computador, e o áudio nunca sai dele. Com a revisão ativada, o texto transcrito é enviado pela stella ao provedor de IA da sua organização para corrigir erros de reconhecimento e aplicar a pontuação e a formatação ditadas, como “nova linha” ou “negrito”. A stella não o armazena."
+    },
+    "language": {
+      "title": "Idioma do ditado",
+      "description": "A fala é reconhecida neste idioma, e a revisão mantém o texto nele. Automático usa os idiomas da interface e dos teclados deste computador.",
+      "automatic": "Automático",
+      "automaticWith": "Automático ({languages})",
+      "noResults": "Nenhum idioma encontrado"
+    },
     "modelNeeded": "O modelo de voz é executado neste computador.",
     "download": "Baixar ({size} MB)",
     "downloading": "Baixando o modelo de voz: {percent}%",
@@ -592,7 +605,10 @@
       "accessibility": "Permita o acesso à Acessibilidade para que a stella possa digitar em outros aplicativos.",
       "microphone": "A stella não consegue ouvir seu microfone. Verifique o acesso ao microfone nos Ajustes do Sistema.",
       "modelMissing": "Baixe primeiro o modelo de voz.",
-      "transcription": "A transcrição falhou. Tente novamente."
+      "transcription": "A transcrição falhou. Tente novamente.",
+      "focusChanged": "Você mudou para outro aplicativo antes de o texto ficar pronto, então nada foi digitado. Tente novamente.",
+      "focusUnconfirmed": "A stella não conseguiu confirmar qual aplicativo está em foco, então nada foi digitado. Tente novamente.",
+      "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente."
     }
   },
   "shortcut": {
@@ -710,6 +726,18 @@
     "introduceActivityTitle": "Novo: linha do tempo de atividade",
     "introduceActivityBody": "A atividade agora está disponível para sua conta. Nada é registrado até você iniciá-la na janela de atividade.",
     "openActivity": "Abrir atividade",
+    "dictationModel": "O modelo de voz ({size} MB) é baixado uma vez e funciona neste computador.",
+    "dictationTurnOn": "Ativar e baixar",
+    "dictationDownloadContinues": "Você pode continuar. O download segue em segundo plano.",
+    "dictationReady": "O ditado está ativado e pronto.",
+    "dictationTryLabel": "Dite aqui",
+    "dictationTryPlaceholder": "Clique aqui, segure {shortcut} e diga uma frase.",
+    "dictationListening": "Ouvindo…",
+    "dictationTranscribing": "Escrevendo o que você disse…",
+    "dictationMicrophone": "Permite que a stella ouça você enquanto segura o atalho.",
+    "dictationAccessibility": "Permite que a stella digite o que você disse no app que está usando.",
+    "dictationFailed": "O stella desktop não conseguiu ativar o ditado. Tente novamente.",
+    "introduceDictationTitle": "Novo: ditado",
     "guideWaiting": "Ative o stella desktop na lista acima para permitir Acessibilidade.",
     "guideAllowed": "O stella desktop tem permissão",
     "never": {
@@ -816,6 +844,27 @@
       "runs_can_write": "As execuções locais podem gravar nesta pasta, então ela não pode conter uma habilidade.",
       "network_folder": "Esta pasta está em um compartilhamento de rede. As habilidades precisam estar no disco deste computador.",
       "path_changed": "Uma pasta superior mudou. Remova esta pasta e adicione-a de novo."
+    }
+  },
+  "localLinkedFolders": {
+    "title": "Pastas vinculadas",
+    "description": "Pastas deste computador em que o agente de um chat pode trabalhar. O chat vê só o nome da pasta; o caminho dela fica neste computador.",
+    "add": "Vincular pasta",
+    "remove": "Desvincular",
+    "removeFolder": "Desvincular {name}",
+    "state": {
+      "offline": "A unidade em que esta pasta está não está conectada.",
+      "moved": "Esta pasta foi movida, renomeada ou excluída. Desvincule-a e vincule-a de novo.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
+    },
+    "notice": {
+      "action_failed": "Não funcionou. Tente de novo.",
+      "too_many": "Este computador já tem todas as pastas vinculadas que consegue guardar. Desvincule uma primeiro.",
+      "not_a_folder": "Escolha uma pasta.",
+      "network_folder": "Esta pasta está em um compartilhamento de rede. Vincule uma pasta do disco deste computador.",
+      "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
+      "unreadable": "Não foi possível ler esta pasta."
     }
   }
 }

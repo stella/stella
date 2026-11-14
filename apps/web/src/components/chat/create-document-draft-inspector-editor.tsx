@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+
 import { createDocumentDraftReviewId } from "@/components/ai-suggestions/file-review-session";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
@@ -19,7 +21,6 @@ import {
   getCreateDocumentDraftRestoration,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDownloadFileName,
   type CreateDocumentDraftPayload,
   getCreateDocumentDraftEditorAccess,
   resolveCreateDocumentDraftOverlayChatThreadId,

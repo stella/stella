@@ -42,10 +42,14 @@ mod diagnostics;
 mod dictation;
 #[cfg(dictation)]
 mod dictation_audio;
+mod dictation_cleanup;
 #[cfg(dictation)]
 mod dictation_engine;
+mod dictation_focus;
+mod dictation_format;
 #[cfg(dictation)]
 mod dictation_input;
+mod dictation_language;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -66,6 +70,8 @@ mod http_client;
 mod i18n;
 mod idle_time;
 mod keychain;
+mod local_linked_folder_commands;
+mod local_linked_folders;
 mod local_skill_folder_commands;
 mod local_skill_folders;
 mod local_store;
@@ -116,6 +122,21 @@ use tokio::sync::Mutex;
 pub fn run_codex_token_helper() -> Option<i32> {
   let args = std::env::args_os().collect::<Vec<_>>();
   codex_managed_token_broker::run_token_helper(&args)
+}
+
+/// Runs the development stand-in computer (`examples/runner_stand_in.rs`)
+/// until it is stopped, and returns its exit code; 2 off Unix, where it
+/// does not run.
+#[cfg(feature = "dev-runner-stand-in")]
+pub fn run_runner_stand_in() -> i32 {
+  #[cfg(unix)]
+  {
+    desktop_runner::stand_in::main()
+  }
+  #[cfg(not(unix))]
+  {
+    2
+  }
 }
 
 /// Runs the speech worker when the process was started as one, and returns
@@ -302,6 +323,9 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::Dictation => {
               dictation::apply_feature_gate(app, enabled);
+              if enabled {
+                onboarding::feature_enabled(app, feature);
+              }
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);

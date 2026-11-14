@@ -451,11 +451,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
 
     add_matter_member: {
       command: ["matter", "add-member"],
-      scope: "admin_write",
+      scope: "matters_write",
     },
     remove_matter_member: {
       command: ["matter", "remove-member"],
-      scope: "admin_write",
+      scope: "matters_write",
     },
     create_organization: {
       confirmPassthrough: true,
