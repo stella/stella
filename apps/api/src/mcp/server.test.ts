@@ -386,7 +386,7 @@ describe("handleMcpHttpRequest", () => {
       dependencyTimeoutMs = requestBoundedTimeoutMs(60_000);
       const step = await runBoundedRequestStep(
         async () => await Promise.withResolvers<never>().promise,
-        { label: "slow-dependency", budgetMs: 60_000 },
+        { label: "case-law-admitted-courts", budgetMs: 60_000 },
       );
       endedAfterRequestStartMs = performance.now() - requestStartedAt;
       return { content: [{ type: "text", text: step.status }] };
