@@ -238,7 +238,36 @@
       "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}"
     },
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
-    "reasoning": "Arutlus"
+    "reasoning": "Arutlus",
+    "failure": {
+      "aiDeadlineExceeded": "AI ei vastanud õigeaegselt. Proovi hetke pärast uuesti.",
+      "aiOutputInvalid": "Tehisintellekti vastus oli ootamatus vormingus. Proovige uuesti.",
+      "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
+      "aiUnknown": "Tehisintellekti taotlus nurjus. Proovige uuesti.",
+      "errorFolderUnavailable": "Selle vestlusega seotud kaust pole sinu arvutis saadaval. Kontrolli seda stella desktopis ja saada see siis uuesti.",
+      "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
+      "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
+      "errorNotReached": "Sinu arvuti ei võtnud seda vastust vastu. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "errorRelinked": "stella desktop seoti sinu arvutis uuesti, seega see vastus peatus. Saada see uuesti.",
+      "errorRestoring": "Sinu arvuti võtab veel failimuudatusi tagasi. Saada see hetke pärast uuesti.",
+      "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "refusalFolderNotApproved": "Luba esmalt programmeerimisagendil töötada selle vestlusega seotud kaustas.",
+      "refusalHarnessUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa seda päringut praegu vastu võtta. Kontrolli seda stella desktopis.",
+      "refusalModelUnavailable": "Sinu arvutis töötav programmeerimisagent seda mudelit enam ei paku. Vali menüüs Käivita mõni teine.",
+      "refusalNoComputer": "Ükski sinu arvuti pole ühendatud.",
+      "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
+      "refusalReasoningEffortUnavailable": "Sinu arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Vali menüüs Arutlustase mõni teine.",
+      "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
+      "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
+      "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
+      "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
+      "sendErrorProviderBilling": "AI-teenusepakkuja teatas arveldusprobleemist. Võta ühendust tööruumi administraatoriga.",
+      "sendErrorProviderCredentialsRejected": "AI-teenusepakkuja lükkas seadistatud mandaadi tagasi. Palu töökoha administraatoril kontrollida API-võtit organisatsiooni seadetes.",
+      "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
+      "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
+      "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
+      "sendErrorTurnTooLarge": "See vastus läks liiga suureks, et seda tervikuna edastada. Jätkamiseks saada uus sõnum."
+    }
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",
