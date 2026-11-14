@@ -625,7 +625,7 @@ type FindFrame = (
 
 type FindSearch =
   | { query: string; type: typeof BROWSER_FIND_TYPE.text }
-  | { query?: string; type: typeof BROWSER_FIND_TYPE.headings };
+  | { query?: string | undefined; type: typeof BROWSER_FIND_TYPE.headings };
 
 /** What `find` found, without the page it names; the host adds that. */
 export type PageFound =
