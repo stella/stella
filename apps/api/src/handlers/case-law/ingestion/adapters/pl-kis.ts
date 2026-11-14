@@ -527,6 +527,28 @@ const INCLUDED_IDS = PL_KIS_INCLUDED_CATEGORIES.map(({ id }) => id);
 export const plKisCategoryById = (id: number): IncludedCategory | undefined =>
   CATEGORY_LIST.find((category) => category.id === id);
 
+/** The templates of documents that rule on nothing. */
+const NON_RULING_TEMPLATES: ReadonlySet<PlKisCategoryFields> = new Set([
+  PL_KIS_FIELD_TEMPLATES.reference,
+  PL_KIS_FIELD_TEMPLATES.newsletter,
+  PL_KIS_FIELD_TEMPLATES.parliamentary,
+]);
+
+/**
+ * Whether a document of this type rules: an interpretation, an opinion or
+ * a court's judgment does; a brochure, guidance, a newsletter or an answer
+ * to parliament does not. A type the service has not declared is taken to
+ * rule.
+ */
+export const plKisDocumentRules = (
+  decisionType: string | undefined,
+): boolean => {
+  const category = PL_KIS_INCLUDED_CATEGORIES.find(
+    (candidate) => candidate.decisionType === decisionType,
+  );
+  return category === undefined || !NON_RULING_TEMPLATES.has(category.fields);
+};
+
 /**
  * The category a listing states by label, for a row whose detail never
  * arrived. The label is the category's name as the service capitalises it.

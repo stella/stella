@@ -163,6 +163,43 @@ const breaksAtVerdictFormula = (
   (grammar.isVerdictFormulaLine(text) ||
     grammar.isVerdictFormulaLine(nextText));
 
+/**
+ * A party's line in the Court of Justice's list of appearances, ended with a
+ * comma: set on a dash (`– w imieniu Komisji Europejskiej – B.-R. Killmann
+ * oraz W. Roels, w charakterze pełnomocników,`) or naming the party's agents
+ * (`…, by E. Montaguti and F. Wilman, acting as Agents,`).
+ */
+const PARTY_LINE_RE =
+  /(?:^[-–—]\s[\s\S]*|acting as Agents?|w charakterze pełnomocnik(?:a|ów))\s*,$/u;
+
+/**
+ * The recital the Court of Justice runs on in a paragraph of its own after
+ * its list of appearances: `podjąwszy …`, `after hearing the Opinion …`.
+ */
+const RECITAL_OPENING_RE =
+  /^(?:podjąwszy|po wysłuchaniu|po zapoznaniu się|after hearing|having regard|having considered)(?=[\s,])/u;
+
+/**
+ * The formula the Court of Justice sets on a line of its own in an
+ * operative part, after the provision it interprets: `należy interpretować
+ * w ten sposób, że:`, `must be interpreted as …`.
+ */
+const INTERPRETATION_FORMULA_RE =
+  /^(?:należy interpretować (?:w ten sposób|jako)|must be interpreted as)(?=[\s,:])/u;
+
+/** Whether a paragraph break is a court's own layout, not a cut sentence. */
+const breaksAtCourtLayout = (text: string, nextText: string): boolean =>
+  (PARTY_LINE_RE.test(text) && RECITAL_OPENING_RE.test(nextText)) ||
+  INTERPRETATION_FORMULA_RE.test(nextText);
+
+/**
+ * A paragraph opening on a full date (`1 lipca 2024 r. …`, `22 March
+ * 2018 …`): after a sentence that ended, a sentence that opens on its date,
+ * not a date cut off the line above.
+ */
+const OPENS_ON_FULL_DATE_RE = /^\d{1,2}\s+\p{L}+\s+\d{4}\b/u;
+const ENDS_SENTENCE_RE = /[.!?…]$/u;
+
 /** Units a table row prints beside its figures, compared lowercased. */
 const TABLE_UNITS: ReadonlySet<string> = new Set([
   "%",
@@ -279,9 +316,58 @@ const rules = (
  * Every printed-page structure the blocks carry, in document order, and
  * every role the decision's language grammar reads otherwise.
  */
+/**
+ * Whether a paragraph opens on a bare number the line above lost, rather
+ * than a sentence opening on its date after one that ended.
+ */
+const opensOnStrayNumber = (
+  text: string,
+  previous: Block | undefined,
+): boolean =>
+  STRAY_LEADING_NUMBER_RE.test(text) &&
+  !(
+    OPENS_ON_FULL_DATE_RE.test(text) &&
+    previous?.type === "paragraph" &&
+    ENDS_SENTENCE_RE.test(previous.plainText.trim())
+  );
+
+/**
+ * Whether a paragraph's sentence goes on in the next paragraph of its role,
+ * past every layout a court or a table sets on lines of their own.
+ */
+const cutsSentence = ({
+  grammar,
+  role,
+  text,
+  nextText,
+  afterNext,
+}: {
+  grammar: DecisionRoleGrammar | undefined;
+  role: string | undefined;
+  text: string;
+  nextText: string;
+  afterNext: Block | undefined;
+}): boolean =>
+  !OPENS_ON_LABEL_RE.test(nextText) &&
+  !isTableRow(text) &&
+  !isTableRow(nextText) &&
+  !separatesLabelledLines(nextText, afterNext) &&
+  !opensListPoint(nextText) &&
+  !breaksAtVerdictFormula(grammar, role, text, nextText) &&
+  !breaksAtCourtLayout(text, nextText) &&
+  continuesAcrossPageBreak(text, nextText);
+
+/**
+ * What the document is. `decision` (the default) is a court's or an
+ * authority's ruling; `other` is a document that rules on nothing (a
+ * brochure, guidance, a newsletter), whose ruling verbs open no ruling.
+ */
+export type StructureFidelityDocument = "decision" | "other";
+
 export const structureFidelityIn = (
   blocks: readonly Block[],
   language?: string,
+  document: StructureFidelityDocument = "decision",
 ): StructureFidelityFinding[] => {
   const findings: StructureFidelityFinding[] = [];
   let signed = false;
@@ -327,7 +413,7 @@ export const structureFidelityIn = (
     }
     if (isPageNumberLine(text)) {
       finding(STRUCTURE_FIDELITY_RULES.PAGE_NUMBER_BLOCK);
-    } else if (STRAY_LEADING_NUMBER_RE.test(text)) {
+    } else if (opensOnStrayNumber(text, blocks[index - 1])) {
       finding(STRUCTURE_FIDELITY_RULES.STRAY_LEADING_NUMBER);
     }
     const next = blocks[index + 1];
@@ -335,13 +421,13 @@ export const structureFidelityIn = (
     if (
       next?.type === "paragraph" &&
       next.role === block.role &&
-      !OPENS_ON_LABEL_RE.test(nextText) &&
-      !isTableRow(text) &&
-      !isTableRow(nextText) &&
-      !separatesLabelledLines(nextText, blocks[index + 2]) &&
-      !opensListPoint(nextText) &&
-      !breaksAtVerdictFormula(reading.grammar, block.role, text, nextText) &&
-      continuesAcrossPageBreak(text, nextText)
+      cutsSentence({
+        grammar: reading.grammar,
+        role: block.role,
+        text,
+        nextText,
+        afterNext: blocks[index + 2],
+      })
     ) {
       finding(
         STRUCTURE_FIDELITY_RULES.SENTENCE_CUT,
@@ -351,7 +437,7 @@ export const structureFidelityIn = (
     reading.reasoned ||= opens;
   }
   const opening = reading.rulingOpening;
-  if (opening !== undefined && !reading.held) {
+  if (document === "decision" && opening !== undefined && !reading.held) {
     findings.push({
       rule: STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
       anchorId: opening.anchorId,
