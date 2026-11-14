@@ -303,12 +303,17 @@ export const DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS = [
   "probe_failed",
 ] as const;
 
-/** What a ready harness reports it can do; the API never assumes more. */
+/**
+ * What a ready harness reports it can do; the API never assumes more.
+ * `steer`: a running turn takes a user message (`run.input`) and goes on with
+ * it, instead of being stopped and started again.
+ */
 export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
   "approvals",
   "interrupt",
   "resume",
   "image_input",
+  "steer",
 ] as const;
 
 /**
@@ -710,6 +715,29 @@ const outputFileNameSchema = v.pipe(
   v.maxLength(255),
 );
 
+/**
+ * The CUSTOM chunk a desktop reports what became of one `run.input` with, at
+ * the point in the run where it happened: `accepted` once the harness took
+ * the message into the running turn, `rejected` when it did not (no turn
+ * running, the turn already ending, a harness that takes none). Every input a
+ * desktop forwards gets exactly one, before the run's finish. It names the
+ * input only; the text stays the API's own, in its `run.input`.
+ */
+export const DESKTOP_RUNNER_INPUT_EVENT = "stella.run-input";
+
+export const DESKTOP_RUNNER_INPUT_STATUSES = ["accepted", "rejected"] as const;
+
+export const desktopRunnerInputEventSchema = v.strictObject({
+  inputId: v.pipe(v.string(), v.uuid()),
+  status: v.picklist(DESKTOP_RUNNER_INPUT_STATUSES),
+});
+export type DesktopRunnerInputEvent = v.InferOutput<
+  typeof desktopRunnerInputEventSchema
+>;
+
+/** Longest message one `run.input` steers a running turn with. */
+export const DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH = 65_536;
+
 export const desktopRunnerOutputEventSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("uploaded"),
@@ -965,11 +993,23 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
      */
     outputKey: chatLocalRunOutputKeySchema,
   }),
+  /**
+   * A user message for the run's running turn, sent only to a harness that
+   * reports `steer`; its content is the message's text. The desktop answers
+   * with a `DESKTOP_RUNNER_INPUT_EVENT` chunk on the run's stream.
+   */
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInput),
     runId: runIdSchema,
     inputId: v.pipe(v.string(), v.uuid()),
-    message: v.looseObject({ role: v.literal("user") }),
+    message: v.looseObject({
+      role: v.literal("user"),
+      content: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
+      ),
+    }),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runApproval),

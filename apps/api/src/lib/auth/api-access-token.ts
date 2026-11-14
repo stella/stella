@@ -311,6 +311,11 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
     uncataloged: "realtime_stream",
   },
+  "POST /v1/chat/threads/:threadId/turns/:turnId/steer": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/turns/steer.ts",
+    uncataloged: "realtime_stream",
+  },
   // Which chats are working or waiting on the person, for the chats list.
   "GET /v1/chat/runs/active": {
     scope: "stella:chat",

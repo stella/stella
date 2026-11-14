@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Editar resaltado o comentario",
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
+      "user_message": "Enviado mientras el agente trabajaba",
       "web_search": "Buscando en la web"
     },
     "toolCall": {

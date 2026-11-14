@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -54,8 +55,10 @@ import {
   readMemberRunners,
   readOpenRunChatThread,
   readRun,
+  readRunInputText,
   readRunOutputFile,
   readRunOutputKey,
+  readSteerableChatRun,
   readStoredRunEvents,
   readThreadBackgroundTasks,
   recordChatReadSeq,
@@ -586,6 +589,40 @@ const readEvents = async (
   });
 };
 
+type SteerChatTurnOptions = {
+  owner: RunOwner;
+  chat: ChatRunBinding;
+  inputId: string;
+  text: string;
+};
+
+const steerChatTurn = async (
+  deps: ControlDeps,
+  { owner, chat, inputId, text }: SteerChatTurnOptions,
+): Promise<Result<ChatLocalRunSteerOutcome, DesktopRunnerControlError>> => {
+  const run = await Result.tryPromise({
+    try: async () => await readSteerableChatRun(deps.db, { owner, chat }),
+    catch: toDatabaseError,
+  });
+  if (run.isErr()) {
+    return run;
+  }
+  if (run.value === null || !run.value.steerable) {
+    return Result.ok("unavailable");
+  }
+  const queued = await queue(deps, owner, {
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runInput,
+    runId: run.value.runId,
+    inputId,
+    message: { role: "user", content: text },
+  });
+  return queued.map((outcome) =>
+    outcome.type === "queued" || outcome.type === "duplicate"
+      ? "queued"
+      : "unavailable",
+  );
+};
+
 type BackgroundTasksOptions = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
@@ -602,6 +639,17 @@ const readBackgroundTasks = async (
         threadId,
         freshSince: seenSince(deps),
       }),
+    catch: toDatabaseError,
+  });
+
+type RunInputTextOptions = Parameters<typeof readRunInputText>[1];
+
+const readSteeredText = async (
+  deps: ControlDeps,
+  options: RunInputTextOptions,
+): Promise<Result<string | null, DatabaseError>> =>
+  await Result.tryPromise({
+    try: async () => await readRunInputText(deps.db, options),
     catch: toDatabaseError,
   });
 
@@ -656,6 +704,16 @@ export const createDesktopRunnerControl = ({
         inputId,
         message,
       }),
+    /**
+     * Steer chat turn `chat.turnId` with `text`: hand it to the turn's run
+     * when its harness reports `steer`; idempotent on `inputId`. `queued`
+     * means the computer will say on the run's stream whether it took it.
+     */
+    steerChatTurn: async (options: SteerChatTurnOptions) =>
+      await steerChatTurn(deps, options),
+    /** The text the owner's run was steered with under `inputId`. */
+    readRunInputText: async (options: RunInputTextOptions) =>
+      await readSteeredText(deps, options),
     /** Answer an approval the run requested; idempotent on `requestId`. */
     answerApproval: async ({
       owner,

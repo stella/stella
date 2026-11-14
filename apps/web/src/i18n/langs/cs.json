@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Upravit zvýraznění nebo komentář",
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",
+      "user_message": "Odesláno během práce agenta",
       "web_search": "Vyhledávání na webu"
     },
     "toolCall": {

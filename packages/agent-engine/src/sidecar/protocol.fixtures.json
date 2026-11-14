@@ -7,6 +7,7 @@
       "hello",
       "harness.probe",
       "run.start",
+      "run.input",
       "run.approval",
       "run.answer",
       "run.interrupt",
@@ -203,6 +204,12 @@
           "token": "run-token-1",
           "expiresAt": "2026-10-28T12:00:00.000Z"
         }
+      },
+      {
+        "type": "run.input",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "inputId": "7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+        "message": { "role": "user", "content": "Also check the annex." }
       },
       {
         "type": "run.approval",
@@ -407,7 +414,7 @@
       {
         "type": "rejected",
         "reason": "unknown_type",
-        "messageType": "run.input",
+        "messageType": "run.pause",
         "runId": null
       },
       {
@@ -432,8 +439,13 @@
       },
       {
         "name": "unknown type",
-        "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
+        "line": "{\"type\":\"run.pause\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
         "reason": "unknown_type"
+      },
+      {
+        "name": "input without text",
+        "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"inputId\":\"7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6\",\"message\":{\"role\":\"user\",\"content\":\"\"}}",
+        "reason": "invalid"
       },
       {
         "name": "relative executable",

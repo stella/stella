@@ -28,6 +28,9 @@ const lifecycleWith = (retryStallMs: number) => {
     respond: () => {
       throw new Error("no interaction in this test");
     },
+    steer: () => {
+      throw new Error("no interaction in this test");
+    },
     interrupt: async () => {
       await Promise.resolve();
     },

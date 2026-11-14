@@ -6,6 +6,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH,
   DESKTOP_RUNNER_REASONING_EFFORTS,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
@@ -281,6 +282,68 @@ export type {
   ChatLocalRunQuestion,
   ChatLocalRunQuestionReply,
 } from "./chat-local-run-question";
+
+/**
+ * The tool call a message the member steered a running local turn with is
+ * persisted as, in that turn's answer where the harness took it: a call the
+ * harness ran, whose input is the member's text and whose result says it was
+ * delivered. The API mints it from its own record of what was sent; a
+ * desktop only reports that the harness took it.
+ */
+export const CHAT_LOCAL_RUN_STEER_TOOL = "user_message";
+
+export const chatLocalRunSteerInputSchema = v.strictObject({
+  text: v.pipe(v.string(), v.minLength(1)),
+});
+export type ChatLocalRunSteerInput = v.InferOutput<
+  typeof chatLocalRunSteerInputSchema
+>;
+
+/** The call id of the steer `inputId` delivered; one input, one call. */
+export const chatLocalRunSteerCallId = (inputId: string) => `steer_${inputId}`;
+
+/**
+ * The CUSTOM stream event that tells the chat what became of a message it
+ * steered a running local turn with: `steered` once the harness took it
+ * (the answer holds it from there on), `refused` when it did not. A turn
+ * that ends without either did not take it. A rejoined stream replays these
+ * from the run log, so a reload settles the same way.
+ */
+export const CHAT_LOCAL_RUN_STEER_EVENT = "stella.local-run.steer";
+
+export const CHAT_LOCAL_RUN_STEER_STATUSES = ["steered", "refused"] as const;
+
+export const chatLocalRunSteerEventSchema = v.strictObject({
+  inputId: v.pipe(v.string(), v.uuid()),
+  status: v.picklist(CHAT_LOCAL_RUN_STEER_STATUSES),
+});
+export type ChatLocalRunSteerEvent = v.InferOutput<
+  typeof chatLocalRunSteerEventSchema
+>;
+
+/** What the chat asks to steer a running local turn with. */
+export const chatLocalRunSteerRequestSchema = v.strictObject({
+  /** The queued message's id, so a repeat steers once. */
+  inputId: v.pipe(v.string(), v.uuid()),
+  text: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
+  ),
+});
+export type ChatLocalRunSteerRequest = v.InferOutput<
+  typeof chatLocalRunSteerRequestSchema
+>;
+
+/**
+ * Whether the running turn will be steered: `queued` once the computer was
+ * handed the message (the turn's stream then says whether it took it),
+ * `unavailable` when this turn cannot be steered and the chat sends the
+ * message the usual way.
+ */
+export const CHAT_LOCAL_RUN_STEER_OUTCOMES = ["queued", "unavailable"] as const;
+export type ChatLocalRunSteerOutcome =
+  (typeof CHAT_LOCAL_RUN_STEER_OUTCOMES)[number];
 
 /**
  * The CUSTOM stream event a turn running on a computer sends while its run

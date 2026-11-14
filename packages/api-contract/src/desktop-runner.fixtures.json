@@ -99,7 +99,13 @@
       "unsupported",
       "unavailable"
     ],
-    "harnessCapabilities": ["approvals", "interrupt", "resume", "image_input"],
+    "harnessCapabilities": [
+      "approvals",
+      "interrupt",
+      "resume",
+      "image_input",
+      "steer"
+    ],
     "harnessUnavailableReasons": [
       "harness_failed",
       "unexpected_answer",
@@ -217,7 +223,13 @@
             "id": "codex",
             "state": "ready",
             "version": "0.48.0",
-            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "capabilities": [
+              "approvals",
+              "interrupt",
+              "resume",
+              "image_input",
+              "steer"
+            ],
             "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
@@ -1248,6 +1260,27 @@
         "message": {
           "type": "run.pause",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+        }
+      },
+      {
+        "name": "run.input with content parts instead of text",
+        "message": {
+          "type": "run.input",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "message": {
+            "role": "user",
+            "content": [{ "type": "text", "content": "Also check the annex." }]
+          }
+        }
+      },
+      {
+        "name": "run.input with an empty message",
+        "message": {
+          "type": "run.input",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "message": { "role": "user", "content": "" }
         }
       },
       {

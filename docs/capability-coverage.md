@@ -829,7 +829,7 @@ mechanics, and similar), not gaps in coverage.
 | organization_export | 2 |
 | provider_secret | 33 |
 | public_indexing | 10 |
-| realtime_stream | 9 |
+| realtime_stream | 10 |
 | search_ui | 21 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |

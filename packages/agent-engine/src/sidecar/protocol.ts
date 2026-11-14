@@ -11,6 +11,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
+  DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_REASONING_EFFORTS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
@@ -80,6 +81,7 @@ export const SIDECAR_HOST_MESSAGE = {
   hello: "hello",
   harnessProbe: "harness.probe",
   runStart: "run.start",
+  runInput: "run.input",
   runApproval: "run.approval",
   runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
@@ -389,6 +391,24 @@ export const sidecarHostMessageSchema = v.variant("type", [
       expiresAt: instantSchema,
     }),
   }),
+  /**
+   * A user message for the run's running turn, as the runner protocol's
+   * `run.input` carries it. The holder answers with one
+   * `DESKTOP_RUNNER_INPUT_EVENT` chunk on the run's stream.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.runInput),
+    runId: runIdSchema,
+    inputId: v.pipe(v.string(), v.uuid()),
+    message: v.object({
+      role: v.literal("user"),
+      content: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH),
+      ),
+    }),
+  }),
   v.object({
     type: v.literal(SIDECAR_HOST_MESSAGE.runApproval),
     runId: runIdSchema,
@@ -461,6 +481,11 @@ export type SidecarRunStart = Extract<
   SidecarHostMessage,
   { type: "run.start" }
 >;
+export type SidecarRunInput = Extract<
+  SidecarHostMessage,
+  { type: "run.input" }
+>;
+
 export type SidecarFolderRestore = Extract<
   SidecarHostMessage,
   { type: "folder.restore" }

@@ -408,6 +408,7 @@ describe("which routes an API access token opens", () => {
       "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
       "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+      "POST /v1/chat/threads/:threadId/turns/:turnId/steer",
       "GET /v1/chat/runs/active",
       "POST /v1/chat/tool-grants",
     ]);

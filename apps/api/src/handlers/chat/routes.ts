@@ -53,6 +53,7 @@ import {
   undoLocalFiles,
 } from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerTurn from "@/api/handlers/chat/turns/steer";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { routes } from "@/api/http/route";
 
@@ -121,6 +122,7 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
     "/threads/:threadId/turns/:turnId/local-files/undo": {
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,

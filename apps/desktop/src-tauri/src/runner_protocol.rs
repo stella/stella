@@ -36,6 +36,9 @@ pub(crate) const MAX_ANSWERS_PER_QUESTION: usize = 64;
 pub(crate) const MAX_ANSWER_LENGTH: usize = 16_384;
 /// UTF-16 code units of a question id.
 pub(crate) const MAX_QUESTION_ID_LENGTH: usize = 256;
+/// UTF-16 code units of the text one `run.input` steers a running turn with
+/// (`DESKTOP_RUNNER_MAX_INPUT_TEXT_LENGTH`).
+pub(crate) const MAX_INPUT_TEXT_LENGTH: usize = 65_536;
 
 /// Why the API closed a runner socket, with the contract's key for each.
 macro_rules! close_codes {
@@ -140,6 +143,7 @@ wire_values!(HarnessCapability {
   Interrupt => "interrupt",
   Resume => "resume",
   ImageInput => "image_input",
+  Steer => "steer",
 });
 
 wire_values!(RejectReason {
@@ -566,7 +570,37 @@ pub(crate) struct RunAttachment {
 pub(crate) struct RunInput {
   pub(crate) run_id: String,
   pub(crate) input_id: String,
-  pub(crate) message: JsonObject,
+  pub(crate) message: InputMessage,
+}
+
+/// The user message a `run.input` carries, relayed as it came. Parsing
+/// enforces the contract: role `user` and text content of 1 to
+/// `MAX_INPUT_TEXT_LENGTH` UTF-16 code units.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "JsonObject", into = "JsonObject")]
+pub(crate) struct InputMessage(JsonObject);
+
+impl TryFrom<JsonObject> for InputMessage {
+  type Error = String;
+
+  fn try_from(message: JsonObject) -> Result<Self, Self::Error> {
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+      return Err("a run input is a user message".to_owned());
+    }
+    let Some(text) = message.get("content").and_then(Value::as_str) else {
+      return Err("a run input's content is its text".to_owned());
+    };
+    if text.is_empty() || utf16_length(text) > MAX_INPUT_TEXT_LENGTH {
+      return Err("a run input's text is empty or too long".to_owned());
+    }
+    Ok(Self(message))
+  }
+}
+
+impl From<InputMessage> for JsonObject {
+  fn from(message: InputMessage) -> Self {
+    message.0
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

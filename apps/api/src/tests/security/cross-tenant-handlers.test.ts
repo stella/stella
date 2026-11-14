@@ -132,6 +132,7 @@ import {
   createUndoLocalFiles,
 } from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerChatTurn from "@/api/handlers/chat/turns/steer";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
 import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
@@ -2912,6 +2913,27 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
+  },
+  {
+    // B's turn is not running, so its own steer is declined; A's never finds
+    // the turn at all.
+    name: "chat turn steer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(steerChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        body: { inputId: Bun.randomUUIDv7(), text: "Also check the annex." },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(steerChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        body: { inputId: Bun.randomUUIDv7(), text: "Also check the annex." },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => {
+      expect(result).toEqual({ steer: "unavailable" });
+    },
   },
   {
     name: "chat turn cancel",

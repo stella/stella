@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
+      "user_message": "Während der Arbeit des Agenten gesendet",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {

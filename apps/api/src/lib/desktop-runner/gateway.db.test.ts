@@ -39,7 +39,10 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  CHAT_LOCAL_RUN_STEER_TOOL,
   chatLocalRunComputerEventSchema,
+  chatLocalRunSteerCallId,
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
@@ -2383,16 +2386,17 @@ describe("outbound frames", () => {
   test("a command that would not fit one frame is refused before it is queued", async () => {
     const { desktopId, runId, desktop } = await acceptedRun(first);
     const huge = "x".repeat(DESKTOP_RUNNER_MAX_FRAME_BYTES);
-    expect(
-      (
-        await control.sendInput({
-          owner,
-          runId,
-          inputId: Bun.randomUUIDv7(),
-          message: { role: "user", content: huge },
-        })
-      ).unwrap(),
-    ).toEqual({ type: "too_large" });
+    // A message for the running turn is refused well before a frame fills:
+    // the contract caps its text.
+    const input = await control.sendInput({
+      owner,
+      runId,
+      inputId: Bun.randomUUIDv7(),
+      message: { role: "user", content: huge },
+    });
+    expect(Result.isError(input) && input.error._tag).toBe(
+      "DesktopRunnerCommandInvalid",
+    );
     expect(
       (
         await control.startRun({
@@ -5118,7 +5122,12 @@ describe("chat turns on a computer", () => {
   /** The run's commands of `kind`, as the gateway stored them. */
   const commandsOf = async (
     runId: string,
-    kind: "run.interrupt" | "run.cancel" | "run.approval" | "run.answer",
+    kind:
+      | "run.input"
+      | "run.interrupt"
+      | "run.cancel"
+      | "run.approval"
+      | "run.answer",
   ) =>
     await db
       .select({ id: desktopRunnerCommands.id })
@@ -5558,6 +5567,249 @@ describe("chat turns on a computer", () => {
     expect(shownParts(client.getMessages().at(-1)?.parts ?? [])).toEqual(
       shownParts(stored.reloaded.parts),
     );
+  });
+
+  /** A computer whose Codex reports that a running turn takes a message. */
+  const steerableComputer = async () => {
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    clock.now += 1000;
+    desktop.send({
+      ...helloFrame(),
+      harnesses: [
+        {
+          id: "codex",
+          state: "ready",
+          version: HARNESS_VERSION,
+          capabilities: ["approvals", "interrupt", "steer"],
+          approvalModes: ["ask"],
+          models: [{ id: CHAT_MODEL, label: "GPT-5 Codex" }],
+        },
+      ],
+    });
+    await desktop.receive("welcome");
+    return { desktopId, desktop };
+  };
+
+  /** A local turn of `chatThreadId` on `desktopId`, served as a send serves it. */
+  const serveLocalTurn = async (
+    chatThreadId: SafeId<"chatThread">,
+    desktopId: string,
+    responseMessageId: SafeId<"chatMessage">,
+  ) =>
+    await serveTurn(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Review the lease" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+      responseMessageId,
+    );
+
+  const steerEventsOf = (chunks: readonly unknown[]) =>
+    chunks.flatMap((chunk) =>
+      isRecord(chunk) &&
+      chunk["type"] === EventType.CUSTOM &&
+      chunk["name"] === CHAT_LOCAL_RUN_STEER_EVENT
+        ? [chunk["value"]]
+        : [],
+    );
+
+  const STEER_TEXT = "Also check the annex.";
+
+  test("a message a running turn takes is stored in its answer where the harness took it, with the text the API sent, as streamed", async () => {
+    const { desktopId, desktop } = await steerableComputer();
+    const chatThreadId = await newThread();
+    const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const served = serveLocalTurn(chatThreadId, desktopId, responseMessageId);
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+
+    const inputId = Bun.randomUUIDv7();
+    const steer = {
+      owner,
+      chat: { threadId: chatThreadId, turnId: turnOf(chatThreadId) },
+      inputId,
+      text: STEER_TEXT,
+    };
+    // Another member names this thread and turn, and reaches no run.
+    expect(
+      (
+        await control.steerChatTurn({
+          ...steer,
+          owner: { ...owner, userId: ids.userA2 },
+        })
+      ).unwrap(),
+    ).toBe("unavailable");
+    expect(await commandsOf(start.runId, "run.input")).toEqual([]);
+    expect((await control.steerChatTurn(steer)).unwrap()).toBe("queued");
+    // A repeat of the same input is the same steer.
+    expect((await control.steerChatTurn(steer)).unwrap()).toBe("queued");
+    expect(
+      await desktop.receive("run.input", ofRun(start.runId)),
+    ).toMatchObject({
+      inputId,
+      message: { role: "user", content: STEER_TEXT },
+    });
+
+    const listing = {
+      id: "item_ls",
+      name: "command_execution",
+      input: { command: "ls" },
+    };
+    const sent = await harnessChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-s1"),
+        continuation: { type: "fresh" },
+      },
+      { type: "tool.started", toolCall: listing },
+      { type: "input.settled", inputId, status: "accepted" },
+      // A second report of the input, and one for an input this run was
+      // never sent, show nothing.
+      { type: "input.settled", inputId, status: "accepted" },
+      {
+        type: "input.settled",
+        inputId: Bun.randomUUIDv7(),
+        status: "accepted",
+      },
+      {
+        type: "tool.completed",
+        toolCall: listing,
+        result: { content: "lease.docx annex.docx", status: "succeeded" },
+      },
+      {
+        type: "text.completed",
+        messageId: "msg_s1",
+        text: "The annex extends the term.",
+      },
+      { type: "turn.completed", usage: null },
+    ]);
+    const run = desktopRun(desktop, start.runId);
+    await run.events(sent);
+    await run.finish("completed", "codex-session-s1");
+    const turn = await served;
+    expect(turn.finish.outcome).toMatchObject({ type: "completed" });
+    expect(steerEventsOf(turn.emitted)).toEqual([
+      { inputId, status: "steered" },
+    ]);
+
+    const stored = persistTurn(turn.finish, "harness").unwrap();
+    expect(
+      shownParts(stored.reloaded.parts).filter(
+        (part) => isRecord(part) && part["type"] !== "tool-result",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        type: "tool-call",
+        name: "command_execution",
+      }),
+      expect.objectContaining({
+        type: "tool-call",
+        id: chatLocalRunSteerCallId(inputId),
+        name: CHAT_LOCAL_RUN_STEER_TOOL,
+        input: { text: STEER_TEXT },
+        executor: CHAT_TOOL_EXECUTOR.harness,
+      }),
+      { type: "text", content: "The annex extends the term." },
+    ]);
+    // The page that streamed the turn shows what a reload shows.
+    const client = new ChatClient({
+      threadId: chatThreadId,
+      connection: {
+        async *connect() {
+          yield* turn.emitted;
+        },
+      },
+    });
+    await client.sendMessage("Review the lease");
+    expect(shownParts(client.getMessages().at(-1)?.parts ?? [])).toEqual(
+      shownParts(stored.reloaded.parts),
+    );
+    await desktop.close();
+  });
+
+  test("a message the harness does not take is reported refused and leaves the answer as it was", async () => {
+    const { desktopId, desktop } = await steerableComputer();
+    const chatThreadId = await newThread();
+    const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const served = serveLocalTurn(chatThreadId, desktopId, responseMessageId);
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const inputId = Bun.randomUUIDv7();
+    expect(
+      (
+        await control.steerChatTurn({
+          owner,
+          chat: { threadId: chatThreadId, turnId: turnOf(chatThreadId) },
+          inputId,
+          text: STEER_TEXT,
+        })
+      ).unwrap(),
+    ).toBe("queued");
+    await desktop.receive("run.input", ofRun(start.runId));
+    const sent = await harnessChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-s2"),
+        continuation: { type: "fresh" },
+      },
+      { type: "text.completed", messageId: "msg_s2", text: "Done." },
+      { type: "input.settled", inputId, status: "rejected" },
+      { type: "turn.completed", usage: null },
+    ]);
+    const run = desktopRun(desktop, start.runId);
+    await run.events(sent);
+    await run.finish("completed", "codex-session-s2");
+    const turn = await served;
+    expect(steerEventsOf(turn.emitted)).toEqual([
+      { inputId, status: "refused" },
+    ]);
+    const stored = persistTurn(turn.finish, "harness").unwrap();
+    expect(shownParts(stored.reloaded.parts)).toEqual([
+      { type: "text", content: "Done." },
+    ]);
+    await desktop.close();
+  });
+
+  test("a turn whose harness takes no message mid-turn, or that has no open run, is never handed one", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const served = serveLocalTurn(
+      chatThreadId,
+      desktopId,
+      toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const steer = {
+      owner,
+      chat: { threadId: chatThreadId, turnId: turnOf(chatThreadId) },
+      inputId: Bun.randomUUIDv7(),
+      text: STEER_TEXT,
+    };
+    expect((await control.steerChatTurn(steer)).unwrap()).toBe("unavailable");
+    expect(await commandsOf(start.runId, "run.input")).toEqual([]);
+    const run = desktopRun(desktop, start.runId);
+    await run.events(
+      await harnessChunks(start.runId, [
+        {
+          type: "session.started",
+          sessionId: harnessSessionId("codex-session-s3"),
+          continuation: { type: "fresh" },
+        },
+        { type: "turn.completed", usage: null },
+      ]),
+    );
+    await run.finish("completed", "codex-session-s3");
+    await served;
+    // The run ended: nothing is left to steer.
+    expect((await control.steerChatTurn(steer)).unwrap()).toBe("unavailable");
   });
 
   test("a native step keeps only its command, file names or search and how it ended, whatever else a desktop sends, and reloads as streamed", async () => {

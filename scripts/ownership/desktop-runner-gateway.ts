@@ -37,6 +37,11 @@ export default {
           "Reads the member's computers and harness reports for the chat composer.",
       },
       {
+        path: "apps/api/src/handlers/chat/turns/steer.ts",
+        reason:
+          "Queues a message for the open run of the member's running chat turn through the control.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-folder-approval.ts",
         reason:
           "Records the member's OK for turns to work in a folder linked on one of their computers.",

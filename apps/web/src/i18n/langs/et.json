@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
+      "user_message": "Saadetud agendi töö ajal",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {

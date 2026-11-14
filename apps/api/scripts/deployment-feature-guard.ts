@@ -182,6 +182,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   ["/v1/me/role", "A member reads their own role on every deployment"],
   [
+    "/v1/chat/threads/:threadId/turns/:turnId/steer",
+    "Steering a turn is mounted on every deployment and reaches only a run the member's local-agents feature let start; any other turn answers unavailable",
+  ],
+  [
     "/v1/me/push-devices",
     "Mobile push device registration is available on every deployment; alerts are sent only where APNs credentials are configured",
   ],

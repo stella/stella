@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
+      "user_message": "Envoyé pendant que l’agent travaillait",
       "web_search": "Recherche web"
     },
     "toolCall": {

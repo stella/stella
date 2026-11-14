@@ -11,7 +11,10 @@ import {
   parseChatLocalRunToolCall,
   parseChatLocalRunToolResult,
 } from "@stll/api-contract/chat-local-run-tool";
-import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_QUESTION_TOOL,
+  CHAT_LOCAL_RUN_STEER_TOOL,
+} from "@stll/api-contract/chat-run-target";
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BuiltInChatToolPolicyKindByName,
@@ -88,6 +91,9 @@ export const HARNESS_TOOL_NAMES = {
   fileChange: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.fileChange),
   webSearch: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.webSearch),
   question: harnessToolName(CHAT_LOCAL_RUN_QUESTION_TOOL),
+  // The API mints it, not an adapter: a message the member steered the
+  // running turn with, where the harness took it.
+  steer: harnessToolName(CHAT_LOCAL_RUN_STEER_TOOL),
   permissions: harnessToolName("request_permissions"),
   nativeTool: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool),
   unsupportedItem: harnessToolName(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),

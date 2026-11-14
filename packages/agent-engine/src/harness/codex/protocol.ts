@@ -105,6 +105,12 @@ const TurnSchema = v.object({
 export const TurnStartResponseSchema = v.object({ turn: TurnSchema });
 
 /**
+ * `turn/steer` adds input to the turn `expectedTurnId` names while it runs;
+ * the server refuses it when that turn is not the active one.
+ */
+export const TurnSteerResponseSchema = v.object({ turnId: v.string() });
+
+/**
  * Every thread item kind the pinned protocol defines. `adapter.test.ts`
  * binds this list to the schema the installed CLI generates; what Stella does
  * with each kind is decided in `items.ts`.
@@ -470,6 +476,7 @@ export type CodexClientRequestMethod =
   | "thread/resume"
   | "thread/unarchive"
   | "turn/start"
+  | "turn/steer"
   | "turn/interrupt"
   | "thread/backgroundTerminals/list"
   | "thread/backgroundTerminals/clean";

@@ -185,6 +185,19 @@ export class HarnessRespondError extends TaggedError("HarnessRespondError")<{
   message: string;
 }> {}
 
+/** A user message that steers a running turn. */
+export type HarnessSteerInput = {
+  /** The runner's input id; `input.settled` names it. */
+  inputId: string;
+  /** What the user wrote; never empty. */
+  text: string;
+};
+
+export class HarnessSteerError extends TaggedError("HarnessSteerError")<{
+  reason: "turn_ended";
+  message: string;
+}> {}
+
 /**
  * One running turn. `events` has a single consumer and ends after exactly one
  * terminal event (`turn.completed`, `turn.interrupted` or `turn.failed`).
@@ -194,6 +207,15 @@ export type HarnessTurn = {
   respond: (
     response: HarnessInteractionResponse,
   ) => Promise<Result<void, HarnessRespondError>>;
+  /**
+   * Hand the running turn a user message without stopping it. Once this
+   * returns `Ok`, `events` carries exactly one `input.settled` for the input
+   * before its terminal event: `accepted` when the harness took the message
+   * into this turn, `rejected` when it did not (it takes no steering, the
+   * turn is ending or between attempts). `turn_ended`: the terminal event
+   * is already out, so nothing more is emitted.
+   */
+  steer: (input: HarnessSteerInput) => Promise<Result<void, HarnessSteerError>>;
   /** Stops the turn; `events` then ends with `turn.interrupted`. */
   interrupt: () => Promise<void>;
   /**

@@ -1,6 +1,11 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  CHAT_LOCAL_RUN_STEER_TOOL,
+  chatLocalRunSteerInputSchema,
+} from "@stll/api-contract/chat-run-target";
+
 import { HarnessStartError } from "./adapter";
 
 /**
@@ -24,10 +29,13 @@ const transcriptMessageSchema = v.object({
   toolCalls: v.optional(
     v.array(
       v.object({
+        id: v.optional(v.string()),
         function: v.object({ name: v.string(), arguments: v.string() }),
       }),
     ),
   ),
+  /** On a tool message: the call it answers. */
+  toolCallId: v.optional(v.string()),
 });
 
 /**
@@ -104,33 +112,95 @@ const typedText = (content: MessageContent): string => {
     .join("\n");
 };
 
+type ToolCall = NonNullable<HarnessTranscriptMessage["toolCalls"]>[number];
+
+const steerArgumentsSchema = v.pipe(
+  v.string(),
+  v.parseJson(),
+  chatLocalRunSteerInputSchema,
+);
+
 /**
- * Text a message contributes to the handoff. Provider reasoning (`thinking`)
- * belongs to the session that produced it and is never handed to another
- * harness.
+ * What the member wrote, when the call is a message they steered a running
+ * turn with (`CHAT_LOCAL_RUN_STEER_TOOL`); `null` for any other call.
  */
-const messageBlock = (message: HarnessTranscriptMessage): string | null => {
+const steeredText = ({ function: call }: ToolCall): string | null => {
+  if (call.name !== CHAT_LOCAL_RUN_STEER_TOOL) {
+    return null;
+  }
+  const parsed = v.safeParse(steerArgumentsSchema, call.arguments);
+  return parsed.success ? parsed.output.text.trim() : null;
+};
+
+/**
+ * Text a message contributes to the handoff, as one or more blocks.
+ * Provider reasoning (`thinking`) belongs to the session that produced it and
+ * is never handed to another harness. A message the member steered the turn
+ * with is theirs, so it reads as a `User:` block where the turn took it,
+ * between what the assistant had done by then and what it did after, not as
+ * a call the assistant made.
+ */
+const messageBlocks = (
+  message: HarnessTranscriptMessage,
+  steerCallIds: ReadonlySet<string>,
+): string[] => {
   const text = contentText(message.content).trim();
   switch (message.role) {
     case "user":
-      return text === "" ? null : `User: ${text}`;
+      return text === "" ? [] : [`User: ${text}`];
     case "assistant": {
-      const calls = (message.toolCalls ?? []).map(
-        ({ function: call }) =>
-          `[tool ${call.name} ${truncateBytes(call.arguments, TOOL_MAX_BYTES)}]`,
-      );
-      const body = [text, ...calls].filter((line) => line !== "").join("\n");
-      return body === "" ? null : `Assistant: ${body}`;
+      const blocks: string[] = [];
+      let lines: string[] = text === "" ? [] : [text];
+      const flush = () => {
+        if (lines.length > 0) {
+          blocks.push(`Assistant: ${lines.join("\n")}`);
+          lines = [];
+        }
+      };
+      for (const toolCall of message.toolCalls ?? []) {
+        const said = steeredText(toolCall);
+        if (said === null) {
+          const { name, arguments: args } = toolCall.function;
+          lines.push(`[tool ${name} ${truncateBytes(args, TOOL_MAX_BYTES)}]`);
+        } else if (said !== "") {
+          flush();
+          blocks.push(`User: ${said}`);
+        }
+      }
+      flush();
+      return blocks;
     }
     case "tool":
+      // A steered message's delivery receipt says nothing the block above
+      // did not.
+      if (
+        message.toolCallId !== undefined &&
+        steerCallIds.has(message.toolCallId)
+      ) {
+        return [];
+      }
       return text === ""
-        ? null
-        : `[tool result ${truncateBytes(text, TOOL_MAX_BYTES)}]`;
+        ? []
+        : [`[tool result ${truncateBytes(text, TOOL_MAX_BYTES)}]`];
     default:
       message.role satisfies never;
       return panic("Unhandled message role in a harness transcript");
   }
 };
+
+/** The ids of every steered-message call in the history. */
+const steerCallIdsOf = (
+  history: readonly HarnessTranscriptMessage[],
+): Set<string> =>
+  new Set(
+    history.flatMap((message) =>
+      (message.toolCalls ?? []).flatMap((toolCall) =>
+        toolCall.id !== undefined && steeredText(toolCall) !== null
+          ? [toolCall.id]
+          : [],
+      ),
+    ),
+  );
 
 const BLOCK_SEPARATOR = "\n\n";
 const OMITTED_MARKER = "[earlier messages omitted]";
@@ -146,20 +216,23 @@ const renderHistory = (
     HANDOFF_MAX_BYTES - byteLength(OMITTED_MARKER) - separatorBytes;
   let used = 0;
   let omitted = false;
+  const steerCallIds = steerCallIdsOf(history);
+  // Rendered newest first, so a long history stops rendering at the budget.
   for (const message of history.toReversed()) {
-    const block = messageBlock(message);
-    if (block === null) {
-      continue;
-    }
-    const bounded = truncateBytes(block, MESSAGE_MAX_BYTES);
-    const size =
-      byteLength(bounded) + (blocks.length === 0 ? 0 : separatorBytes);
-    if (used + size > budget) {
-      omitted = true;
+    if (omitted) {
       break;
     }
-    used += size;
-    blocks.push(bounded);
+    for (const block of messageBlocks(message, steerCallIds).toReversed()) {
+      const bounded = truncateBytes(block, MESSAGE_MAX_BYTES);
+      const size =
+        byteLength(bounded) + (blocks.length === 0 ? 0 : separatorBytes);
+      if (used + size > budget) {
+        omitted = true;
+        break;
+      }
+      used += size;
+      blocks.push(bounded);
+    }
   }
   if (blocks.length === 0) {
     return null;

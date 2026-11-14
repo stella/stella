@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Edit highlight or comment",
       "use-browser": "Using your browser",
       "use_connector_secret": "Using connector credential",
+      "user_message": "Sent while the agent was working",
       "web_search": "Searching the web"
     },
     "toolCall": {

@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/chat";
 import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 import type { LocalRunToolTitleKind } from "@stll/api-contract/chat-local-run-steps";
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   chatToolLabel,
   isKnownChatToolName,
@@ -432,9 +433,18 @@ export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
   REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES[toolName];
 
+/**
+ * A message the member steered the running turn with, shown as theirs. Its
+ * tool name is the API's, not a registered tool: it is never approved, so it
+ * stays out of the shared tool names and the approval tool names.
+ */
+const STEERED_MESSAGE_TITLE_KEY =
+  "chat.tool.user_message" as const satisfies TranslationKey;
+
 export type ChatToolTitleKey =
   | (typeof SHARED_CHAT_TOOL_TITLE_KEYS)[keyof typeof SHARED_CHAT_TOOL_TITLE_KEYS]
-  | ReturnType<typeof toolTitleKey>;
+  | ReturnType<typeof toolTitleKey>
+  | typeof STEERED_MESSAGE_TITLE_KEY;
 
 export const isApprovalToolName = (
   toolName: string,
@@ -471,6 +481,9 @@ export const LOCAL_RUN_TITLE_KEYS = {
 } as const satisfies Record<LocalRunToolTitleKind, TranslationKey>;
 
 export const getChatToolTitleKey = (toolName: string): ChatToolTitleKey => {
+  if (toolName === CHAT_LOCAL_RUN_STEER_TOOL) {
+    return STEERED_MESSAGE_TITLE_KEY;
+  }
   const label = chatToolLabel(toolName);
   return isOwnKey(SHARED_CHAT_TOOL_TITLE_KEYS, label)
     ? SHARED_CHAT_TOOL_TITLE_KEYS[label]

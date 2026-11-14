@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
+      "user_message": "Wysłano podczas pracy agenta",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {

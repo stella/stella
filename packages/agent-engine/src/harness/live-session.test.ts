@@ -174,6 +174,9 @@ const lifecycleKeeping = (session: KeptSession | null) => {
     respond: () => {
       throw new Error("no interaction in this test");
     },
+    steer: () => {
+      throw new Error("no interaction in this test");
+    },
     interrupt: async () => {
       await Promise.resolve();
     },
@@ -245,6 +248,9 @@ describe("a turn's end", () => {
     lifecycle.attach(process);
     const turn = lifecycle.turn({
       respond: () => {
+        throw new Error("no interaction in this test");
+      },
+      steer: () => {
         throw new Error("no interaction in this test");
       },
       interrupt: async () => {

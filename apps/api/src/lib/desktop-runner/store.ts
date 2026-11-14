@@ -22,7 +22,9 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_MAX_BACKGROUND_TASKS,
+  DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
@@ -31,6 +33,7 @@ import {
   type DesktopRunnerLinkedFolder,
   desktopRunnerLinkedFolderSchema,
   type DesktopRunnerReasoningEffort,
+  desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
@@ -2580,6 +2583,103 @@ export const readChatRunForRequest = async (
       )
       .limit(1)
   ).at(0) ?? null;
+
+type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
+
+/** A chat turn's run that is still going, and whether it can be steered. */
+export type SteerableChatRun = {
+  readonly runId: string;
+  /** The run's harness, on its computer, reports `steer`. */
+  readonly steerable: boolean;
+};
+
+/**
+ * The open run of chat turn `chat.turnId`, with what its harness on the
+ * computer running it last reported; `null` when the turn has no run still
+ * going for this member.
+ */
+export const readSteerableChatRun = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chat }: ChatTurnRunOptions,
+): Promise<SteerableChatRun | null> => {
+  const row = (
+    await db
+      .select({
+        runId: runs.runId,
+        harness: runs.harness,
+        harnesses: runner.harnesses,
+      })
+      .from(runs)
+      .innerJoin(
+        runner,
+        and(
+          eq(runner.userId, runs.userId),
+          eq(runner.organizationId, runs.organizationId),
+          eq(runner.desktopId, runs.desktopId),
+          eq(runner.deviceJkt, runs.deviceJkt),
+        ),
+      )
+      .where(
+        and(
+          eq(runs.chatThreadId, chat.threadId),
+          eq(runs.chatTurnId, chat.turnId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      )
+      // A turn starts one run; a paused one is answered on the same run.
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const report = storedHarnessReports(row.harnesses).find(
+    ({ id }) => id === row.harness,
+  );
+  return {
+    runId: row.runId,
+    steerable:
+      report?.state === DESKTOP_RUNNER_HARNESS_STATE.ready &&
+      report.capabilities.includes("steer"),
+  };
+};
+
+type RunInputOptions = { owner: RunOwner; runId: string; inputId: string };
+
+/**
+ * The text the owner's `run.input` `inputId` handed run `runId`, as the API
+ * queued it; `null` when no such input was queued for that run.
+ */
+export const readRunInputText = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId, inputId }: RunInputOptions,
+): Promise<string | null> => {
+  const row = (
+    await db
+      .select({ payload: desktopRunnerCommands.payload })
+      .from(desktopRunnerCommands)
+      .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, "run.input"),
+          eq(desktopRunnerCommands.commandKey, inputId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const parsed = v.safeParse(desktopRunnerServerMessageSchema, row.payload);
+  return parsed.success &&
+    parsed.output.type === DESKTOP_RUNNER_SERVER_MESSAGE.runInput
+    ? parsed.output.message.content
+    : panic("A stored run.input no longer validates");
+};
 
 type ChatReadSeqOptions = { owner: RunOwner; runId: string; seq: number };
 

@@ -1,7 +1,7 @@
 import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
-import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_SEND_MODE, type ChatSendMode } from "@stll/anonymize-chat";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 
 import type {
@@ -116,8 +116,15 @@ export type SendQueueState = {
    * lifts the hold of a newer edit of the same message.
    */
   readonly editSessionIds: readonly string[];
-  /** A turn ended ready while an edit held the queue: the drain it would
-   *  have started runs once the last edit closes. */
+  /**
+   * Queued messages handed to the running turn whose outcome is not known
+   * yet, by entry id. While any is open nothing queued is sent: the turn
+   * may have taken the message, and sending it again would deliver it
+   * twice. The hold lifts with the steer's outcome (`steer-settled`).
+   */
+  readonly steeringIds: readonly string[];
+  /** A turn ended ready while an edit or a steer held the queue: the drain
+   *  it would have started runs once the last hold lifts. */
   readonly drainHeld: boolean;
   /**
    * The turn stopped to wait on the member (an approval, a question) when
@@ -139,18 +146,73 @@ export const createInitialSendQueueState = (
   heldForMember: false,
   isGenerating: false,
   queue: [],
+  steeringIds: [],
   wasGenerating: false,
 });
 
-const isHeldForMessageEdit = (state: SendQueueState): boolean =>
-  state.editSessionIds.length > 0;
+const isQueueHeld = (state: SendQueueState): boolean =>
+  state.editSessionIds.length > 0 || state.steeringIds.length > 0;
 
 /**
  * Whether a new prompt may be sent at once rather than queued: no turn runs
- * and no edit holds the queue. The one rule every send path reads.
+ * and no edit or steer holds the queue. The one rule every send path reads.
  */
 export const canSendWithoutQueueing = (state: SendQueueState): boolean =>
-  !state.isGenerating && !isHeldForMessageEdit(state);
+  !state.isGenerating && !isQueueHeld(state);
+
+/**
+ * How "Send now" sends a queued message:
+ * - `send`: no turn runs, so it goes as the next message at once.
+ * - `steer`: a turn runs; it is handed the message (`text`) and goes on
+ *   with it if it can. Only text can steer a turn, and only a message queued
+ *   to be sent raw: a steer hands the text to the computer's harness as is.
+ * - `stop_and_send`: a turn runs and the message carries more than text, or
+ *   was queued to be sent anonymized; the turn is stopped and the message
+ *   goes once the stop settles, through the send path that keeps its mode.
+ *
+ * A steer that is not taken falls back to `stop_and_send` (see
+ * `steerFallback`).
+ */
+export type SendNowRoute =
+  | { type: "send" }
+  | { type: "steer"; text: string }
+  | { type: "stop_and_send" };
+
+export const sendNowRoute = (
+  state: Pick<SendQueueState, "isGenerating">,
+  entry: Pick<QueuedChatEntry, "fileCount" | "options" | "text">,
+): SendNowRoute => {
+  if (!state.isGenerating) {
+    return { type: "send" };
+  }
+  const text = entry.text.trim();
+  const anonymized =
+    entry.options?.body?.sendMode === CHAT_SEND_MODE.anonymized;
+  return entry.fileCount === 0 && text !== "" && !anonymized
+    ? { type: "steer", text }
+    : { type: "stop_and_send" };
+};
+
+/**
+ * What follows a steer, by what became of it: `steered` leaves the queue
+ * (the running answer holds the message), `refused` stops the turn so the
+ * message goes next, `unsettled` leaves it queued for the turn's end.
+ */
+export const steerFallback = (
+  outcome: "steered" | "refused" | "unsettled",
+): "remove" | "stop" | "keep" => {
+  switch (outcome) {
+    case "steered":
+      return "remove";
+    case "refused":
+      return "stop";
+    case "unsettled":
+      return "keep";
+    default:
+      outcome satisfies never;
+      return panic("Unhandled steer outcome");
+  }
+};
 
 /**
  * Every site in `useChatSession` that used to write one of the four
@@ -177,6 +239,8 @@ export const canSendWithoutQueueing = (state: SendQueueState): boolean =>
  *   message mounting and unmounting (`holdQueueForMessageEdit`)
  * - `message-edit-accepted` — the server accepted an edit's turn
  *   (`editUserMessage`); the queue drains once that turn ends
+ * - `steer-started` / `steer-settled` — "Send now" handed a queued message
+ *   to the running turn, and what became of it (`sendQueuedMessageNow`)
  */
 export type SendQueueEvent =
   | { type: "message-enqueued"; entry: QueuedChatEntry }
@@ -195,7 +259,14 @@ export type SendQueueEvent =
   | { type: "conversation-switched"; conversationId: string }
   | { type: "message-edit-opened"; sessionId: string }
   | { type: "message-edit-closed"; sessionId: string }
-  | { type: "message-edit-accepted"; sessionId: string };
+  | { type: "message-edit-accepted"; sessionId: string }
+  | { type: "steer-started"; id: string }
+  | {
+      type: "steer-settled";
+      id: string;
+      /** `remove`: the turn took it; otherwise it stays queued. */
+      next: "remove" | "stop" | "keep";
+    };
 
 const canDrainQueueAfterTurn = (status: ChatClientState): boolean => {
   switch (status) {
@@ -225,13 +296,25 @@ export type SendQueueTransition = {
 
 const startOldestDispatch = (state: SendQueueState): SendQueueTransition => {
   const [oldest, ...rest] = state.queue;
-  if (!oldest || isHeldForMessageEdit(state)) {
+  if (!oldest || isQueueHeld(state)) {
     return { state, dispatchedEntry: null };
   }
   return {
     state: { ...state, isGenerating: true, queue: rest },
     dispatchedEntry: oldest,
   };
+};
+
+/** A hold lifted: once the last one is gone, the drain a turn's end would
+ *  have started runs now, unless a turn runs again and will start it. */
+const releaseHold = (next: SendQueueState): SendQueueTransition => {
+  if (isQueueHeld(next) || !next.drainHeld) {
+    return { state: next, dispatchedEntry: null };
+  }
+  const released: SendQueueState = { ...next, drainHeld: false };
+  return released.isGenerating
+    ? { state: released, dispatchedEntry: null }
+    : startOldestDispatch(released);
 };
 
 /**
@@ -253,8 +336,7 @@ export const reduceSendQueue = (
           // A prompt sent while an edit holds an idle queue is a manual send
           // waiting only for the edit: it goes once the edit closes.
           drainHeld:
-            state.drainHeld ||
-            (isHeldForMessageEdit(state) && !state.isGenerating),
+            state.drainHeld || (isQueueHeld(state) && !state.isGenerating),
           queue: [...state.queue, event.entry],
         },
         dispatchedEntry: null,
@@ -345,7 +427,7 @@ export const reduceSendQueue = (
       ) {
         return { state: released, dispatchedEntry: null };
       }
-      if (isHeldForMessageEdit(released)) {
+      if (isQueueHeld(released)) {
         return {
           state: { ...released, drainHeld: true },
           dispatchedEntry: null,
@@ -378,21 +460,36 @@ export const reduceSendQueue = (
       if (!state.editSessionIds.includes(event.sessionId)) {
         return { state, dispatchedEntry: null };
       }
-      const next: SendQueueState = {
+      return releaseHold({
         ...state,
         editSessionIds: state.editSessionIds.filter(
           (sessionId) => sessionId !== event.sessionId,
         ),
-      };
-      // The last edit closed: the drain a turn's end would have started
-      // runs now, unless a turn runs again and will start it itself.
-      if (isHeldForMessageEdit(next) || !next.drainHeld) {
-        return { state: next, dispatchedEntry: null };
+      });
+    }
+
+    case "steer-started": {
+      if (state.steeringIds.includes(event.id)) {
+        return { state, dispatchedEntry: null };
       }
-      const released: SendQueueState = { ...next, drainHeld: false };
-      return released.isGenerating
-        ? { state: released, dispatchedEntry: null }
-        : startOldestDispatch(released);
+      return {
+        state: { ...state, steeringIds: [...state.steeringIds, event.id] },
+        dispatchedEntry: null,
+      };
+    }
+
+    case "steer-settled": {
+      if (!state.steeringIds.includes(event.id)) {
+        return { state, dispatchedEntry: null };
+      }
+      return releaseHold({
+        ...state,
+        queue:
+          event.next === "remove"
+            ? state.queue.filter((entry) => entry.id !== event.id)
+            : state.queue,
+        steeringIds: state.steeringIds.filter((id) => id !== event.id),
+      });
     }
 
     case "message-edit-accepted": {

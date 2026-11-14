@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
+      "user_message": "Az ügynök munkája közben elküldve",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {

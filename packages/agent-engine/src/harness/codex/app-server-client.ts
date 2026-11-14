@@ -50,6 +50,9 @@ type StartAppServerOptions = {
   handlers: AppServerHandlers;
 };
 
+/** A request's answer as the server wrote it. */
+type AppServerAnswer = Result<unknown, AppServerRequestError>;
+
 /**
  * Startup requests, which wait on the startup deadline: initialize covers
  * the CLI's first launch (an antivirus scan, a busy computer); starting or
@@ -62,10 +65,16 @@ const STARTUP_REQUESTS: ReadonlySet<CodexClientRequestMethod> = new Set([
 ]);
 
 export type AppServerClient = {
+  /**
+   * Sends a request and settles with its answer. `onAnswer` sees the
+   * server's answer as it is read, before any message written after it is
+   * dispatched; an awaited result only arrives after them.
+   */
   request: (
     method: CodexClientRequestMethod,
     params: unknown,
-  ) => Promise<Result<unknown, AppServerRequestError>>;
+    onAnswer?: (answer: AppServerAnswer) => void,
+  ) => Promise<AppServerAnswer>;
   notify: (method: CodexClientNotificationMethod, params?: unknown) => void;
   respond: (id: CodexRequestId, result: unknown) => void;
   respondError: (id: CodexRequestId, code: number, message: string) => void;
@@ -89,6 +98,10 @@ export const startAppServer = ({
   handlers,
 }: StartAppServerOptions): Result<AppServerClient, HarnessSpawnError> => {
   const state = { nextId: 1 };
+  const answerHooks = new Map<
+    CodexRequestId,
+    (answer: AppServerAnswer) => void
+  >();
 
   const dispatch = (value: unknown) => {
     const parsed = v.safeParse(JsonRpcMessageSchema, value);
@@ -105,8 +118,7 @@ export const startAppServer = ({
       handlers.notification(message.method, message.params);
       return;
     }
-    const answered = server.settle(
-      message.id,
+    const answer: AppServerAnswer =
       "error" in message
         ? Result.err(
             new AppServerRequestError({
@@ -115,8 +127,11 @@ export const startAppServer = ({
               message: message.error.message,
             }),
           )
-        : Result.ok(message.result),
-    );
+        : Result.ok(message.result);
+    const hook = answerHooks.get(message.id);
+    answerHooks.delete(message.id);
+    hook?.(answer);
+    const answered = server.settle(message.id, answer);
     if (!answered) {
       handlers.violation("The harness answered a request that was not sent.");
     }
@@ -143,15 +158,23 @@ export const startAppServer = ({
 
   return Result.ok({
     pid: server.pid,
-    request: async (method, params) => {
+    request: async (method, params, onAnswer) => {
       const id = state.nextId;
       state.nextId += 1;
-      return await server.request(
+      if (onAnswer !== undefined) {
+        answerHooks.set(id, onAnswer);
+      }
+      const answer = await server.request(
         id,
         method,
         { id, method, params },
         STARTUP_REQUESTS.has(method) ? deadlines.startupRequestMs : undefined,
       );
+      // Unanswered (timed out, closed): the hook hears it here instead.
+      if (answerHooks.delete(id)) {
+        onAnswer?.(answer);
+      }
+      return answer;
     },
     notify: (method, params) => {
       server.write(params === undefined ? { method } : { method, params });

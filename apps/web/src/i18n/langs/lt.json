@@ -2311,6 +2311,7 @@
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
+      "user_message": "Išsiųsta agentui dirbant",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {

@@ -33,6 +33,7 @@ const through = async (
       yield* events;
     })(),
     respond: async () => Result.ok(),
+    steer: async () => Result.ok(),
     interrupt: async () => undefined,
     release: async () => null,
     dispose: async () => undefined,
@@ -513,6 +514,7 @@ describe("what a turn reports about its skill folders", () => {
         yield* [];
       })(),
       respond: async () => Result.ok(),
+      steer: async () => Result.ok(),
       interrupt: async () => undefined,
       release: async () => null,
       dispose: async () => undefined,

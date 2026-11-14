@@ -23,7 +23,10 @@ import {
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
-import { CHAT_LOCAL_RUN_REFUSAL } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_REFUSAL,
+  CHAT_LOCAL_RUN_STEER_TOOL,
+} from "@stll/api-contract/chat-run-target";
 import {
   countProcessWork,
   groupProcessParts,
@@ -81,6 +84,7 @@ import {
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
+import { ChatSteeredMessage } from "@/components/chat/chat-steered-message";
 import {
   assistantMessageFallbackText,
   buildMessageTurns,
@@ -217,6 +221,9 @@ type OlderMessagePagingOptions = {
   onLoadOlder: ChatThreadMessagesProps["onLoadOlder"];
   scrollRef: RefObject<HTMLDivElement | null> | null;
 };
+
+/** A steered message's tool call; its name is the API's, not a registered tool. */
+const isSteerToolName = (name: string) => name === CHAT_LOCAL_RUN_STEER_TOOL;
 
 // Pages older messages in from a top sentinel and keeps the viewport
 // anchored when they are prepended.
@@ -2178,6 +2185,25 @@ const openPlaybookAction = ({
   return { label, onClick: () => onOpenPlaybook(playbookId) };
 };
 
+/**
+ * The paused question shows in place of its call while the turn waits on it,
+ * live and after a reload alike: both read the pause from the turn's pending
+ * interrupts.
+ */
+const useLocalRunQuestionPause = (
+  isAwaitingUser: boolean,
+  message: ChatUIMessage,
+) => {
+  const localRunQuestion = use(ChatLocalRunQuestionContext);
+  const localRunQuestionPause =
+    isAwaitingUser && localRunQuestion !== null ? localRunQuestion.pause : null;
+  const localRunQuestionCall =
+    localRunQuestionPause === null
+      ? null
+      : localRunQuestionCallId(message.parts);
+  return { localRunQuestion, localRunQuestionPause, localRunQuestionCall };
+};
+
 const AssistantMessageParts = ({
   threadRef,
   activeFileName,
@@ -2200,16 +2226,8 @@ const AssistantMessageParts = ({
   workspaceId,
 }: AssistantMessagePartsProps) => {
   const label = useTranslations()("knowledge.playbooks.openInPane");
-  const localRunQuestion = use(ChatLocalRunQuestionContext);
-  // The paused question shows in place of its call while the turn waits on
-  // it, live and after a reload alike: both read the pause from the turn's
-  // pending interrupts.
-  const localRunQuestionPause =
-    isAwaitingUser && localRunQuestion !== null ? localRunQuestion.pause : null;
-  const localRunQuestionCall =
-    localRunQuestionPause === null
-      ? null
-      : localRunQuestionCallId(message.parts);
+  const { localRunQuestion, localRunQuestionPause, localRunQuestionCall } =
+    useLocalRunQuestionPause(isAwaitingUser, message);
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -2301,6 +2319,10 @@ const AssistantMessageParts = ({
           pause={localRunQuestionPause}
         />
       );
+    }
+
+    if (part.type === "tool-call" && isSteerToolName(part.name)) {
+      return <ChatSteeredMessage arguments={part.arguments} key={part.id} />;
     }
 
     if (part.type === "tool-call" && isOpaquePersistedChatToolCallPart(part)) {
