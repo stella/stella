@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 95,
+    "count": 94,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -39,8 +39,7 @@
       "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
-      "apps/api/src/mcp/tool-types.ts": 7,
-      "apps/api/src/tests/helpers/provider-wire-contract.ts": 1
+      "apps/api/src/mcp/tool-types.ts": 7
     }
   },
   "apps/desktop": {

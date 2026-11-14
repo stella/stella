@@ -300,7 +300,7 @@ const RUN_DEADLINE_MS = 15_000;
  * is (its abort controller) once the first text delta arrives. The engine
  * is what production reads a cancelled run through.
  */
-export const runCancelledWireScenario = async (options: {
+const runCancelledWireScenario = async (options: {
   apiKey: string;
   model: string;
   provider: ProviderWireProvider;
