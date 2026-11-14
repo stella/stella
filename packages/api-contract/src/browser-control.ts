@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 6 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 7 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
 /**
