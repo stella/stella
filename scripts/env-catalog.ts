@@ -1910,7 +1910,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_COLD_SEARCH_CONTAINER",
   "STELLA_COLD_SEARCH_DROP_PAGE_CACHE",
   "STELLA_COLD_SEARCH_MODE",
+  // The engine container and loopback Postgres metastore of a corpus suite
+  // whose engine keeps its metastore in Postgres, and that metastore's image.
+  "STELLA_CORPUS_ENGINE_TEST_CONTAINER",
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
+  "STELLA_CORPUS_METASTORE_IMAGE",
+  "STELLA_CORPUS_METASTORE_TEST_URL",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_NOW_EPOCH",
   "STELLA_DESKTOP_RELEASE_API_PATH",
