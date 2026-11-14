@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -33,6 +34,7 @@ const factId = (n: number) =>
   toSafeId<"entity">(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`);
 const A = factId(1);
 const B = factId(2);
+const C = factId(3);
 
 const standingArbitrary: fc.Arbitrary<FactStanding> = fc.record({
   scoring: fc.constantFrom(...FACT_SCORING),
@@ -254,16 +256,63 @@ describe("restingFactIds", () => {
     ...patch,
   });
 
-  test("a scored verdict rests on every fact it cites", () => {
+  test("a scored verdict rests on the facts that support or conflict, never on context", () => {
+    for (const state of ["supported", "tension", "contradicted"] as const) {
+      expect(
+        restingFactIds(
+          {
+            verdict: { state, score: 50, recordConflict: null },
+            refs: [
+              { factEntityId: A, rel: "supports" },
+              { factEntityId: B, rel: "record" },
+              { factEntityId: C, rel: "conflicts" },
+            ],
+          },
+          null,
+        ),
+      ).toEqual([A, C]);
+    }
+  });
+
+  // Regression: a document's record cited only as context hid the
+  // testimony-only and unsourced-only qualifiers of a verdict resting on a
+  // witness's account or on knowledge without a source.
+  test("a document cited as context does not hide the footing the verdict rests on", () => {
+    const standing: Record<string, FactStanding> = {
+      [A]: { scoring: "included", tier: "testimony" },
+      [B]: { scoring: "included", tier: "document" },
+      [C]: { scoring: "included", tier: "unsourced" },
+    };
+    const qualifiersFor = (cited: ClaimRef[]) =>
+      kindsOf({
+        graded: [],
+        resting: restingFactIds(
+          {
+            verdict: { state: "supported", score: 80, recordConflict: null },
+            refs: cited,
+          },
+          null,
+        ).map((id) => standing[id] ?? panic("fixture standing")),
+      });
     expect(
-      restingFactIds(
-        {
-          verdict: { state: "supported", score: 90, recordConflict: null },
-          refs,
-        },
-        null,
-      ),
-    ).toEqual([A, B]);
+      qualifiersFor([
+        { factEntityId: A, rel: "supports" },
+        { factEntityId: B, rel: "record" },
+      ]),
+    ).toEqual(["testimony-only"]);
+    expect(
+      qualifiersFor([
+        { factEntityId: C, rel: "supports" },
+        { factEntityId: B, rel: "record" },
+      ]),
+    ).toEqual(["unsourced-only"]);
+    // A document the verdict does rest on still backs it.
+    expect(
+      qualifiersFor([
+        { factEntityId: A, rel: "supports" },
+        { factEntityId: B, rel: "supports" },
+      ]),
+    ).toEqual([]);
   });
 
   test("missing coverage and a set-aside claim rest on nothing", () => {
