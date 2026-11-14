@@ -1640,8 +1640,8 @@ const runChatAttempts = async function* ({
       messages: convertMessagesToModelMessages([...surfaces.messages]),
       instructions: `${surfaces.system}\n\n${LOCAL_RUN_OUTPUTS_INSTRUCTIONS}`,
       resume,
-      // The run's own cut, as the provider gets it: a stop on any task, the
-      // deadline, a lost owner or admission, a failed production.
+      // The run's own cut: a stop on any task, a lost owner or admission, a
+      // failed production. A local run has no deadline (`ChatTurnRunBound`).
       abortSignal: abortController.signal,
     })) {
       if (reportsSessionNotResumed(chunk)) {

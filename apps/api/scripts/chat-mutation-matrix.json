@@ -764,8 +764,8 @@
       "behaviour": "A turn's run does not end when the request that started it ends: only its deadline, a stop, or its response closing cut it short.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
-      "search": "const run = lifecycle.startRun(externalMcpTools);",
-      "replace": "const run = lifecycle.startRun(externalMcpTools); request.signal.addEventListener(\"abort\", () => { run.control.abortController.abort(); });",
+      "search": "const run = lifecycle.startRun(\n                externalMcpTools,\n                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,\n              );",
+      "replace": "const run = lifecycle.startRun(\n                externalMcpTools,\n                body.runTarget?.kind ?? CHAT_RUN_TARGET_KIND.cloud,\n              ); request.signal.addEventListener(\"abort\", () => { run.control.abortController.abort(); });",
       "scenario": {
         "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"
