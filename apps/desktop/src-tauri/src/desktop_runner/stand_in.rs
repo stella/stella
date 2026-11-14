@@ -419,6 +419,9 @@ async fn serve(settings: Settings) -> Result<(), String> {
         retired_dirs: Vec::new(),
       },
       workspaces: data.join("agent-runs"),
+      // The stand-in CLIs are scripts in this checkout and run no commands of
+      // a model's, so nothing beyond the other runs' folders is withheld.
+      unreadable: Vec::new(),
       probe_interval: super::sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(StandInHarnesses {

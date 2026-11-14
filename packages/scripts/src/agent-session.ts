@@ -35,6 +35,8 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyTextWithIdleDeadline } from "@stll/fetch/body-reader";
 import { roles } from "@stll/permissions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -89,7 +91,8 @@ const AGENT_KEY_NAME = "local-agent";
 const UP_TIMEOUT_MS = 20 * 60_000;
 const DOWN_TIMEOUT_MS = 60_000;
 const DOWN_FORCE_TIMEOUT_MS = 2000;
-// One request of the stand-in computer to the stack, body included.
+// The stand-in computer's wait for the stack's headers, and for each part of
+// a body.
 const MEMBER_REQUEST_TIMEOUT_MS = 15_000;
 const POLL_INTERVAL_MS = 1000;
 const HEARTBEAT_MS = 30_000;
@@ -433,15 +436,18 @@ type MemberSession = { apiUrl: string; webUrl: string; cookie: string };
 const memberRequest =
   ({ apiUrl, webUrl, cookie }: MemberSession): StackRequest =>
   async (pathname, method = "GET") => {
-    // Bounds the response and its body, so a stalled API cannot outlast the
-    // stand-in's readiness timeout.
+    // Bounds the wait for the headers and for each part of the body, so a
+    // stalled API cannot outlast the stand-in's readiness timeout.
     const answered = await Result.tryPromise(async () => {
-      const response = await fetch(`${apiUrl}${pathname}`, {
+      const response = await fetchWithTimeout(`${apiUrl}${pathname}`, {
         headers: { cookie, origin: webUrl },
         method,
-        signal: AbortSignal.timeout(MEMBER_REQUEST_TIMEOUT_MS),
+        timeout: { type: "headers", ms: MEMBER_REQUEST_TIMEOUT_MS },
       });
-      return { response, text: await response.text() };
+      const text = await readBodyTextWithIdleDeadline(response, {
+        idleMs: MEMBER_REQUEST_TIMEOUT_MS,
+      });
+      return { response, text };
     });
     if (Result.isError(answered)) {
       return Result.err(`${method} ${pathname}: ${answered.error.message}`);
