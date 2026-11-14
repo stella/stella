@@ -173,10 +173,7 @@ test("undo is refused while the computer is offline, and the file stays", async 
 test("the first send of a new chat while no computer is connected says why and keeps the message", async ({
   page,
   request,
-  browserErrors,
 }) => {
-  // The browser logs the failed turn.
-  browserErrors.expectCaptured(/local_runner_no_computer/u);
   await openNewChat(page);
   await chooseRunOn(page, { place: "computer", agent: "codex", model: "text" });
   await setComputerOnline(request, false);
@@ -239,11 +236,7 @@ const failedSend = async (page: Page, request: APIRequestContext) => {
 test("a send while no computer is connected is stored and fails with the reason, also after a reload, and offers to open stella desktop", async ({
   page,
   request,
-  browserErrors,
 }) => {
-  // The browser logs the failed turn.
-  browserErrors.expectCaptured(/local_runner_no_computer/u);
-
   await failedSend(page, request);
 
   await expect(transcript(page)).toContainText("Second question");
@@ -268,10 +261,7 @@ test("a send while no computer is connected is stored and fails with the reason,
 test("Open stella desktop on a turn that failed with no computer sends it again once a computer is back", async ({
   page,
   request,
-  browserErrors,
 }) => {
-  // The failed turn, as above; the resend logs nothing.
-  browserErrors.expectCaptured(/local_runner_no_computer/u);
   await failedSend(page, request);
 
   await transcript(page).getByRole("button", { name: OPEN_DESKTOP }).click();

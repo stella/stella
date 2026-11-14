@@ -19,7 +19,7 @@ import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 export type LocalRunTarget = Extract<ChatRunTarget, { kind: "local" }>;
 
 /** The computer and harness a new turn runs on, picked as its run starts. */
-export type LocalRunDestination = {
+type LocalRunDestination = {
   desktopId: string;
   harness: ChatLocalRunHarness;
   harnessVersion: string;
