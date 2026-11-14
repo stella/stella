@@ -334,32 +334,6 @@ export const CLAIM_REVIEW_CARRY_RULE = {
   recheck: "never",
 } as const satisfies Record<ClaimReviewEventKind, ClaimReviewCarryRule>;
 
-/**
- * What became of one claim's review when the next run of its document
- * completed. Only claims with at least one action that can follow are
- * recorded. `carried`: every decision followed; `text-changed`: the matching
- * claim's words were edited, so the decisions taken on the old words were
- * withdrawn; `verdict-changed`: the new run gave the matching claim another
- * verdict, so the decisions taken on the old one were withdrawn (in both,
- * notes and links still followed); `unmatched`: no claim of the new run
- * matches; `ambiguous`: more than one could.
- */
-export const CLAIM_CARRY_OUTCOMES = [
-  "carried",
-  "text-changed",
-  "verdict-changed",
-  "unmatched",
-  "ambiguous",
-] as const;
-export type ClaimCarryOutcome = (typeof CLAIM_CARRY_OUTCOMES)[number];
-
-/** Outcomes that leave the new run with a matching claim. */
-export const MATCHED_CLAIM_CARRY_OUTCOMES = [
-  "carried",
-  "text-changed",
-  "verdict-changed",
-] as const satisfies readonly ClaimCarryOutcome[];
-
 /** How a record conflict was resolved: a fact governs (the claim adopts its
  *  verdict), or it went to the evidence team without picking a side. */
 export type RecordConflictResolution =

@@ -1368,7 +1368,6 @@
         "generate:capability-runtime"
       ],
       "inputs": [
-        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1486,6 +1485,7 @@
         "$TURBO_ROOT$/packages/template-packs/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
+        "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/types/**",
         "**",
         "$TURBO_ROOT$/.npmrc",
@@ -1606,7 +1606,6 @@
         "generate:capability-runtime"
       ],
       "inputs": [
-        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1642,7 +1641,6 @@
         "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
-        "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/redis-config/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/sanctions/**",

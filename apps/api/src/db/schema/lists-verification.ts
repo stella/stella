@@ -1,8 +1,11 @@
+import {
+  CARRY_OUTCOMES,
+  MATCHED_CARRY_OUTCOMES,
+} from "@/api/lib/document-review/carry-outcomes";
 import { FACT_DATE_PRECISIONS } from "@/api/lib/lists/fact-details";
 import {
   CLAIM_ANCHOR_TYPES,
   CLAIM_ASSERTED_ON_SOURCES,
-  CLAIM_CARRY_OUTCOMES,
   CLAIM_DATE_SOURCES,
   CLAIM_FRAMINGS,
   CLAIM_REVIEW_EVENT_KINDS,
@@ -10,7 +13,6 @@ import {
   CLAIM_STATE,
   CLAIM_STATES,
   CLAIM_TYPES,
-  MATCHED_CLAIM_CARRY_OUTCOMES,
   PARAGRAPH_NUMBERINGS,
   SCORED_CLAIM_STATES,
   VERIFICATION_LIMITS,
@@ -72,8 +74,8 @@ const CLAIM_FRAMING_SQL_VALUES = quoted(CLAIM_FRAMINGS);
 const CLAIM_STATE_SQL_VALUES = quoted(CLAIM_STATES);
 const SCORED_CLAIM_STATE_SQL_VALUES = quoted(SCORED_CLAIM_STATES);
 const REVIEW_EVENT_KIND_SQL_VALUES = quoted(CLAIM_REVIEW_EVENT_KINDS);
-const CARRY_OUTCOME_SQL_VALUES = quoted(CLAIM_CARRY_OUTCOMES);
-const MATCHED_CARRY_OUTCOME_SQL_VALUES = quoted(MATCHED_CLAIM_CARRY_OUTCOMES);
+const CARRY_OUTCOME_SQL_VALUES = quoted(CARRY_OUTCOMES);
+const MATCHED_CARRY_OUTCOME_SQL_VALUES = quoted(MATCHED_CARRY_OUTCOMES);
 const reviewKindsWhereReason = (rules: readonly ClaimReviewReasonRule[]) =>
   quoted(
     CLAIM_REVIEW_EVENT_KINDS.filter((kind) =>
@@ -687,7 +689,7 @@ export const legalListClaimCarryOutcomes = p.pgTable(
     sourceRunId:
       safeUuid<"legalListVerificationRun">("source_run_id").notNull(),
     sourceClaimId: safeUuid<"legalListClaim">("source_claim_id").notNull(),
-    outcome: p.text("outcome", { enum: CLAIM_CARRY_OUTCOMES }).notNull(),
+    outcome: p.text("outcome", { enum: CARRY_OUTCOMES }).notNull(),
     // The matching claim of this run; null when nothing matched.
     targetClaimId: safeUuid<"legalListClaim">("target_claim_id"),
   },
